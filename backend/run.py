@@ -47,8 +47,13 @@ def prepare_database():
         print(f"Migration error: {e}")
 
 if __name__ == "__main__":
-    print("Preparing Database Infrastructure...")
-    prepare_database()
+    load_dotenv(override=True)
+    
+    if os.getenv("AUTO_SETUP_DB", "False").lower() == "true":
+        print("Preparing Database Infrastructure...")
+        prepare_database()
+    else:
+        print("AUTO_SETUP_DB is False. Skipping automatic database creation and migration.")
     
     print("Starting Akasha Platform Backend on Port 3510...")
     # Run the FastAPI application on host 0.0.0.0 and port 3510
