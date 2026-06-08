@@ -32,9 +32,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-@app.get("/")
-def read_root():
-    return {"message": "Welcome to Akasha Intelligence API"}
 
 # Include Routers
 app.include_router(projects.router)
@@ -48,11 +45,16 @@ app.include_router(dashboard.router)
 # Mount Frontend static files
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(frontend_dist):
-    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
     
-    # Catch-all route to serve index.html for SPA routing
+    # Catch-all route to serve index.html and assets for SPA routing
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
+        # If accessed locally without a proxy, strip the akasha prefix
+        if full_path.startswith("akasha/"):
+            full_path = full_path[len("akasha/"):]
+        elif full_path == "akasha":
+            full_path = ""
+            
         # Prevent API routes from being swallowed if they somehow fall through
         if full_path.startswith("api/"):
             return {"detail": "Not Found"}
@@ -60,4 +62,5 @@ if os.path.isdir(frontend_dist):
         file_path = os.path.join(frontend_dist, full_path)
         if os.path.isfile(file_path):
             return FileResponse(file_path)
+            
         return FileResponse(os.path.join(frontend_dist, "index.html"))
