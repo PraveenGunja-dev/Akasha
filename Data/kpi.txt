@@ -1,0 +1,132 @@
+1. Executive Leadership Dashboard (CEO, CXO, CDO)
+This dashboard provides a high-level strategic overview of the entire portfolio, focusing on financial health, major risks, and overall progress.
+Source Document
+KPI
+Projects 
+MW at Risk of Delay (Next 30/60/90 Days)
+Projects 
+Capex Overrun (%) vs Approved NFA (Project Level)
+Projects 
+Working Capital Locked in Projects (₹ & Days)
+TC 
+TC (ordering) budget vs actual
+Projects 
+Project progress (Actual vs plan) - Time vs physical (Aggregated View)
+Projects 
+Actual time vs plan for Wind Specific KPIs (Aggregated View)
+Projects 
+Critical statutory approvals completion (%)
+TC 
+Inventory Turnover rate - as per ABC
+ 
+2. PMAG Dashboard
+This dashboard is for governance and cross-functional oversight, helping to identify risks, ensure compliance, and monitor project health across the portfolio.
+Source Document
+KPI
+Projects 
+MW at Risk of Delay (Next 30/60/90 Days)
+Projects 
+QA NC count and ageing by site/ contractors
+Projects 
+RFI/NC count and ageing by site/ contractors (Critical to commission/ non-critical)
+Projects 
+Critical statutory approvals completion (%)
+Projects 
+Count of Issues in issue register - weather, financial, land...
+Projects 
+Resource augmentation requirement (MMM) vs availability as per schedule
+TC 
+Procurement Progress Percentage (Plan% Vs Actual %)
+TC 
+PR/SR/NFA to PO/SO cycle time - actual versus SLA
+TC 
+Count of PO amendments
+Projects 
+Ageing of overdue vendor invoices vs contract terms
+Projects 
+Count of Contracts Adhered to policy - Pulse
+ 
+3. Projects Team Dashboard (Solar & Wind)
+This dashboard is focused on execution, providing a detailed, real-time view of construction progress, material readiness, and on-site issue management.
+Source Document
+KPI
+Projects 
+Project progress (Actual vs plan) - Time vs physical (with sub-KPIs for piling, MMS, modules, inverters)
+Projects 
+PSS progress tracking (% completed) - milestone based monitoring
+Projects 
+Progress tracking of Transmission line CKM - solar
+Projects 
+Actual time vs plan for Wind Specific KPIs (with sub-KPIs for WTG Foundation, Erection, etc.)
+Projects 
+WTG Material Set Readiness
+Projects 
+WTG main component supply status (%) (TC and Project)
+Projects 
+Count of Issues in issue register - weather, financial, land...
+Projects 
+Avg Ageing of Open Punch Points - Critical to commission/ non-critical
+Projects 
+Plan vs Actual - Machinery productivity (eg, crane)
+Projects 
+Material reconciliation and theft details
+Projects 
+Robotic Module Cleaning system (Nos)
+ 
+4. Techno-Commercial (Ordering) Dashboard
+This dashboard provides visibility into the procurement lifecycle, from requisition and ordering to cost control and vendor performance.
+Source Document
+KPI
+TC 
+Procurement Progress Percentage (Plan% Vs Actual %)
+TC 
+PR/SR/NFA to PO/SO cycle time - actual versus SLA
+TC 
+TAT for PR/NFA - PO - GRN - invoicing
+TC 
+Order completion rate
+TC 
+Order status (Supply/ Service) + payment status
+TC 
+% Emergency PR, PO, SO, NFA
+TC 
+TC (ordering) budget vs actual
+TC 
+TC (ordering) internal estimate (IE) vs actual
+TC 
+Historical Pricing of materials across vendors
+TC 
+Vendor/SO performance evaluation report
+TC 
+Count of PO amendments
+TC 
+PO Automation/STP Rate
+ 
+5. Techno-Commercial (Stores) Dashboard
+This dashboard focuses on inventory management, material availability at the site, and the efficiency of the stores function.
+Source Document
+KPI
+TC 
+Inventory Turnover rate - as per ABC
+TC 
+Inventory stockout rate
+TC 
+Inventory Ageing
+TC 
+GE to GRN Ageing
+TC 
+Ageing and Value of materials issued to contractors
+TC 
+Return rate of materials - Vendors
+TC 
+Average Milestone Delay Due to Stores (days)
+TC 
+Scrap as % of Inventory Value
+TC 
+Total Inventory - Wind, solar, BESS, H2, etc - plant-wise
+TC 
+Inventory Analysis (VED, FSN and ABC)
+TC 
+Inventory optimisation (Min, max stock label. Reorder label)
+TC 
+Emergency / Spot Procurement Cost %

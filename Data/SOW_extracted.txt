@@ -1,0 +1,195 @@
+                                                  Statement of Work (SOW)
+      Project – Akasha A Cross-Platform Intelligence System 
+1. Executive Summary
+Akasha, is a cross-platform intelligence system that brings together planning, execution, connectivity, logistics, and procurement data into a single dashboard with AI-driven decision support. Unlike traditional dashboards, Akasha includes an AI-powered chatbot that not only provides visibility but also simulates scenarios, recommends actions, and shows potential outcomes before decisions are made. This enables faster decision-making, better coordination, reduced risk, and more efficient project execution.
+2. Background & Strategic Mandate
+Project data is currently spread across multiple enterprise platforms, causing delays and inconsistent reporting. This initiative aims to create a connected ecosystem where essential project data moves seamlessly, giving stakeholders timely and clear visibility across all project stages.
+3. Objective of the Engagement
+The main objective is to eliminate disconnected project execution by integrating planning, site progress, connectivity readiness, DPR reporting, logistics, CAPEX, and SAP financial systems into a centralized, real-time monitoring framework. This will provide leaders with a single view of project health and enable timely operational and financial decisions.
+4. Scope of Work
+4.1 User & Access Model
+User Personas
+Executive Leadership
+PMAG Team
+Project Heads / Site Leads
+Planning & Scheduling Teams
+Techno-Commercial Teams
+Business Development (BD)
+System Administrators
+Access Model
+Role-Based Access Control (RBAC)
+Persona-based dashboards
+Controlled approvals (human-in-the-loop)
+Alerts and notifications
+Authentication
+Enterprise Single Sign-On (SSO)
+4.2 Functional Scope 
+The platform will enable:
+Centralized project monitoring across renewable portfolios 
+Single consolidated, cross-platform view of project data (P6, SAP, DPR, Transmission) 
+AI-powered chatbot for decision support and scenario simulation 
+Scenario-based intelligence to simulate delays, risks, and operational situations 
+Action-oriented recommendations with expected outcomes and impact analysis 
+Automated alerts, triggers, and notifications for delays, risks, and dependencies 
+Derived logistics intelligence using SAP and P6 data 
+Material readiness tracking aligned with project schedules 
+Financial and procurement visibility through SAP integration 
+Cross-functional decision support for PMAG, Projects, Techno-commercial, BD, and Site teams 
+Reduction in manual coordination, follow-ups, and spread communication 
+Executive dashboards for leadership visibility and strategic insights 
+4.3 Data & Integration Systems
+Primavera P6
+Act as the core planning and scheduling engine, supporting work breakdown, activities, baselines, and tracking planned vs actual progress with deviation alerts.
+Manage activity sequencing, milestones, and dependencies, while identifying delays and monitoring the critical path with automated alerts
+Enable resource allocation and utilization tracking, highlighting over/under utilization for better planning.
+Integrate with Digital DPR for real-time updates and ensure continuous alignment between plan and execution.
+Improve overall schedule control, risk visibility, and decision-making.
+Transmission Connectivity Dashboard
+Track grid connectivity, evacuation capacity, and interconnection milestones for overall transmission visibility.
+Use the historical data and analyse past timelines (SCD) to identify delay patterns and improve timeline accuracy.
+Generate realistic, data-driven projections and adjust timelines (e.g., 4 → 9 months) considering approvals, dependencies, and execution challenges.
+Enable execution-based planning (ECOD) by aligning planning and financial decisions with actual timelines.
+Improve forecasting, risk identification, capital alignment, and overall decision-making predictability.
+Digital DPR (Daily Progress Report)
+Centralized Digital DPR system to capture and monitor daily project progress (replacing Excel)
+Data access restricted to only the last 7 days to maintain data integrity; any modification within these last 7 days data requires a mandatory reason
+Seamless integration with Primavera P6 to enable real-time synchronization of approved progress data and ensure alignment between planned schedules and actual execution
+Support role-based access control (Supervisor, Site PM, PMAG Admin) with capabilities for project assignment and controlled cross-project visibility
+Defined approval workflow where Supervisor submits DPR, Site PM approves, and only approved data is pushed to P6
+Provide real-time dashboards and project summaries, along with tracking of delays, issues, and dependencies, supported by automated alerts and notifications
+Improve data accuracy, reduce manual effort, enhance coordination, and enable better decision-making
+Module Tracker
+Provide end-to-end material tracking from manufacturing to site, including production status, shipment visibility, and monitoring of ETA and transit delays
+Ensure alignment with Primavera P6 schedules, highlighting any mismatch between material availability and planned activities
+Integrate with SAP for CAPEX tracking to align material movement with financial planning
+SAP 
+Manage end-to-end procurement lifecycle with real-time updates
+Track PO/SO amendments with full visibility and impact on project timelines and costs
+Enable CAPEX monitoring and approval workflows aligned with project execution
+Provide inventory visibility and material tracking to support planning and reduce shortages
+Support financial decision workflows integrated with project data for better control and decision-making
+Cost breakdown structure for projects.
+CMP (Cash Management Product) (to be excluded)
+Enable quarter-wise cash planning and tracking with actual vs predictive analysis
+Identify and explain cash flow variances, including issues causing deviation from planned targets (e.g., delays, approvals, execution gaps)
+Integrate with SAP and project data (P6/DPR) to align cash flow with project execution
+            Provide predictive forecasting to support financial control, risk                       
+            identification, and decision-making
+Human-in-the-Loop Controls
+Ordering and dispatch approvals
+Site readiness validation by Project Heads
+PO Amendments- Scheduling changes
+Financial approvals (LC/BG/WC decisions)
+4.4 Analytics Scope
+Real-time project progress analytics
+Schedule variance and delay detection
+Critical path impact analysis
+Connectivity readiness risk indicators
+Logistics flow intelligence
+Performance dashboards
+AI driven recommendation based on the analysis of scenarios 
+Executive insights
+5. Technical Architecture & Security
+Architecture Overview
+Web-based centralized dashboard platform
+API-led integration architecture
+Modular microservices-based integration layer
+Central data aggregation and transformation layer
+Near real-time data pipelines
+Integration Approach
+Push APIs for execution and logistics systems
+Pull APIs for planning and reporting systems
+Event-driven update mechanisms
+Infrastructure
+Cloud-hosted or enterprise data center deployment
+Scalable compute and storage architecture
+High-availability environment
+Security Framework
+Encrypted data in transit and at rest
+Role-based and policy-based access controls
+Secure API gateways
+Audit logs and activity monitoring
+Compliance with enterprise IT security policies
+6. Delivery Phases & Milestones    
+7. Deliverables
+Design and deployment of a unified leadership workspace that brings together data from all portfolio systems into a single, easy-to-use environment.
+API-led integration of key systems including Oracle Primavera P6, Transmission Connectivity Dashboard, Digital DPR, and SAP.
+Development of a logistics intelligence layer within Akasha, using SAP and P6 data to track material readiness and movement (in place of Module Tracker).
+Creation of a consolidated data layer that acts as a single source of truth across planning, execution, connectivity, logistics, procurement, and financials.
+Development of a portfolio-level dashboard to support leadership with real-time visibility, performance tracking, and better decision-making.
+Deployment of an AI-powered layer (LLM-based) to enable:o Natural language interaction with project datao Decision support through conversational insightso Context-aware recommendations and next-best actionso Scenario simulation to understand the impact of decisions before execution
+Enablement of role-based AI assistants for different functions such as projects, procurement, logistics, and finance.
+Configuration of alerts, notifications, and risk triggers across systems to keep teams proactively informed.
+Implementation of human-in-the-loop controls for key decisions such as approvals, dispatch, and financial actions.
+Support for cross-system actions through recommendations, reducing manual follow-ups and improving coordination (with execution remaining manual in Drop 1).
+8. Out of Scope & Assumptions
+Out of Scope
+Development of new enterprise source systems
+Hardware procurement and on-site infrastructure setup
+Assumptions
+Existing systems support API integrations
+Source system data accuracy and ownership remain with system owners
+Required stakeholder availability for approvals and testing
+9. Acceptance Criteria, KPIs & SLAs
+Functional Accuracy & Utility
+Dashboard Data Accuracy: Consistent alignment between Primavera P6, Digital DPR, Transmission Connectivity, Module Tracker, and SAP data.
+DPR Submission Completeness: Site progress reports submitted through the digital DPR system and tracked via system submission logs.
+Alert Trigger Accuracy: Reliable automated alerts for delays, connectivity status, logistics movement, and financial updates, monitored through audit logs.
+Critical Path Update Latency: Timely reflection of schedule and milestone updates in Primavera P6 following DPR and connectivity data synchronization, tracked via API timestamps.
+Financial Data Reconciliation: Alignment between SAP CAPEX and procurement data with project execution records, validated through finance reconciliation reports.
+Scenario Simulation Accuracy: System accurately simulates impact of delays and operational changes across schedule, resources, and procurement 
+Recommendation Effectiveness: AI-generated recommendations are relevant, actionable, and aligned with business decisions 
+Chatbot Interaction Quality: Users are able to query project data and receive clear, context-aware insights
+Finance related query- User would be able to get the revenue related answers.
+Performance
+Dashboard Performance: Fast and responsive dashboard experience for project views.
+API Performance: Efficient and stable API communication across integrated systems.
+Data Pipeline Timeliness: Near real-time data synchronization across Primavera P6, Digital DPR, Transmission Connectivity, Module Tracker, and SAP
+Batch Processing Efficiency: Timely completion of scheduled data processing and system jobs 
+Chatbot Response Time: Responses generated within acceptable time for real-time interaction 
+Scenario Processing Time: Simulation outputs generated within defined time limits
+Security & Compliance
+Access Control Enforcement: Role-based access applied across all user personas with periodic access reviews and audit validation.
+Security Testing & Hardening: Platform undergoes security assessments before go-live to identify and remediate vulnerabilities.
+Audit & Activity Logging: End-to-end logging of user actions, data changes, approvals, and cross-platform transactions for traceability.
+API Security Management: Secure API usage across integrated systems with hidden credentials, controlled access tokens, and periodic key rotation.
+Integration Security Controls: Protected data exchange between Primavera P6, DPR, Transmission Connectivity, Logistics, and SAP through encrypted channels and secure gateways.
+Secure AI Interaction: Chatbot access and responses restricted based on user roles and permissions 
+Data Privacy in AI Processing: Sensitive project and financial data handled securely within AI workflows 
+Auditability of AI Actions: All chatbot queries, recommendations, and scenario outputs logged for traceability
+ Reliability
+Platform Stability – The integration platform should always be available and working without interruptions.
+Integration Reliability – The platform keeps data in sync across all connected systems. APIs work reliably and keep data accurate. If a data transfer fails, the system automatically retries to keep information flowing smoothly.
+Data Reliability – The platform prevents duplicate, incomplete, or conflicting data updates. It also makes sure updates across systems are completed correctly.
+Fault Handling & Recovery – The system can detect errors, send alerts, and follow clear steps to fix issues quickly.
+Monitoring– The platform continuously monitors system health and data integrations. System logs help teams quickly find and fix problems.
+AI System Stability: Chatbot and scenario engine remain consistently available without failures
+Adoption
+Reporting Reduction: Reduced manual reporting and follow-ups through automated dashboards and integrated data flows.
+Decision Support Adoption: Teams refer to AI recommendations during planning and execution decisions
+User Satisfaction: Positive user experience and acceptance across leadership and project teams, assessed through periodic feedback and usage reviews.
+10. RACI (Condensed)
+Workstream
+Company
+Vendor
+Data access approvals & governance policies
+R
+C
+Data pipeline architecture & data quality
+A
+R
+LLM deployment approach & model selection
+A/R
+C
+Technology stack selection
+A/R
+C
+Reasoning model design & configuration
+C
+A/R
+Unified platform architecture & setup
+C
+A/R
+System integration & API enablement
+C
+A/R

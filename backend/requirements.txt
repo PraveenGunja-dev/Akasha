@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+pydantic
+SQLAlchemy
+celery
+redis
+python-dotenv
+groq
+langchain
+requests
+psycopg2-binary
+
+msal
+pandas
+openpyxl
+
+alembic

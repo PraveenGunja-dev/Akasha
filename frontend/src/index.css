@@ -1,0 +1,537 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Adani Corporate Font */
+@font-face {
+  font-family: 'Adani';
+  src: url('/adani.ttf') format('truetype');
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+
+@layer base {
+  :root {
+    /* Crisp Elegant Light Theme */
+    --background: 0 0% 100%;
+    --foreground: 222 47% 11%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 47% 11%;
+
+    /* Primary: Blue (#0B74B0) */
+    --primary: 202 88% 37%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Purple (#75479C) */
+    --secondary: 272 37% 45%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 210 40% 96%;
+    --muted-foreground: 215 16% 47%;
+
+    /* Accent: Pink/Red (#BD3861) */
+    --accent: 342 54% 48%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 342 54% 48%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 100% 32%;
+    --warning: 23 90% 54%;
+
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
+    --ring: 202 88% 37%;
+    --radius: 0.5rem; /* slightly less rounded for modern elegance */
+  }
+
+  .dark {
+    /* Deep Navy Dark Theme */
+    --background: 225 25% 7%;
+    --foreground: 210 40% 96%;
+
+    --card: 225 25% 10%;
+    --card-foreground: 210 40% 96%;
+
+    --popover: 225 25% 11%;
+    --popover-foreground: 210 40% 96%;
+
+    /* Primary: Blue (lightened for dark mode) */
+    --primary: 202 88% 60%;
+    --primary-foreground: 0 0% 100%;
+
+    /* Secondary: Purple */
+    --secondary: 272 37% 65%;
+    --secondary-foreground: 0 0% 100%;
+
+    --muted: 225 20% 14%;
+    --muted-foreground: 215 20% 60%;
+
+    /* Accent: Pink/Red */
+    --accent: 342 54% 60%;
+    --accent-foreground: 0 0% 100%;
+
+    --destructive: 342 54% 60%;
+    --destructive-foreground: 0 0% 100%;
+    --success: 152 100% 40%;
+    --warning: 23 90% 60%;
+
+    --border: 225 15% 18%;
+    --input: 225 15% 18%;
+    --ring: 202 88% 60%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Adani', 'Inter', sans-serif;
+  }
+}
+
+/* Custom Utilities for Premium Visionary Look */
+@layer utilities {
+  .glass-card {
+    @apply bg-white dark:bg-card/90 border border-border rounded-xl;
+  }
+  
+  .dark .glass-card {
+    /* Flat dark mode */
+  }
+  
+  .glass-panel {
+    @apply bg-white dark:bg-card/95 border-l border-border;
+  }
+
+  .dark .glass-panel {
+    /* Flat dark mode */
+  }
+
+  .text-gradient {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    color: transparent;
+  }
+  
+  .bg-gradient-premium {
+    background-image: linear-gradient(135deg, hsl(var(--primary)), hsl(var(--accent)));
+  }
+  
+  /* Hide scrollbar completely */
+  .scrollbar-hide::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-hide {
+    -ms-overflow-style: none; /* IE and Edge */
+    scrollbar-width: none; /* Firefox */
+  }
+
+  /* Custom sleek scrollbar for main areas */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, 0.1);
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background-color: rgba(255, 255, 255, 0.2);
+  }
+  /* ── Intelligence Card System (Project 360 Redesign) ── */
+
+  .intelligence-card {
+    @apply relative overflow-hidden rounded-xl border border-border transition-colors duration-200;
+    background: hsl(var(--card));
+  }
+  .dark .intelligence-card {
+    background: hsl(var(--card));
+  }
+
+  .intelligence-card:hover {
+    border-color: hsl(var(--primary));
+  }
+  .dark .intelligence-card:hover {
+    border-color: hsl(var(--primary));
+  }
+
+  .intelligence-card-critical {
+    border-color: hsl(var(--destructive) / 0.3);
+    background: hsl(var(--destructive) / 0.02);
+  }
+  .intelligence-card-critical:hover {
+    border-color: hsl(var(--destructive));
+  }
+  .dark .intelligence-card-critical:hover {
+    border-color: hsl(var(--destructive));
+  }
+
+  .intelligence-card-warning {
+    border-color: hsl(var(--warning) / 0.3);
+    background: hsl(var(--warning) / 0.02);
+  }
+  .intelligence-card-warning:hover {
+    border-color: hsl(var(--warning));
+  }
+  .dark .intelligence-card-warning:hover {
+    border-color: hsl(var(--warning));
+  }
+
+  .intelligence-card-healthy {
+    border-color: hsl(var(--success) / 0.3);
+    background: hsl(var(--success) / 0.02);
+  }
+  .intelligence-card-healthy:hover {
+    border-color: hsl(var(--success));
+  }
+  .dark .intelligence-card-healthy:hover {
+    border-color: hsl(var(--success));
+  }
+
+  /* Health status pulse dots */
+  .status-dot-critical {
+    @apply w-2 h-2 rounded-full;
+    background-color: hsl(var(--destructive));
+  }
+  .status-dot-warning {
+    @apply w-2 h-2 rounded-full;
+    background-color: hsl(var(--warning));
+  }
+  .status-dot-healthy {
+    @apply w-2 h-2 rounded-full;
+    background-color: hsl(var(--success));
+  }
+
+  /* Progress ring */
+  .progress-ring-track {
+    stroke: rgba(255, 255, 255, 0.06);
+    fill: none;
+  }
+  .progress-ring-fill {
+    fill: none;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s ease-in-out;
+  }
+
+  /* Risk score badge */
+  .risk-badge-high {
+    @apply text-xs font-bold px-2 py-0.5 rounded-md;
+    background: rgba(239, 68, 68, 0.12);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+  .risk-badge-medium {
+    @apply text-xs font-bold px-2 py-0.5 rounded-md;
+    background: rgba(245, 158, 11, 0.12);
+    color: #fbbf24;
+    border: 1px solid rgba(245, 158, 11, 0.2);
+  }
+  .risk-badge-low {
+    @apply text-xs font-bold px-2 py-0.5 rounded-md;
+    background: rgba(16, 185, 129, 0.12);
+    color: #34d399;
+    border: 1px solid rgba(16, 185, 129, 0.2);
+  }
+
+  /* Key issue tag */
+  .issue-tag {
+    @apply inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider px-2.5 py-1 rounded-lg;
+    background: rgba(239, 68, 68, 0.08);
+    color: #f87171;
+    border: 1px solid rgba(239, 68, 68, 0.15);
+  }
+  .issue-tag-bottleneck { background: rgba(239, 68, 68, 0.08); color: #f87171; border-color: rgba(239, 68, 68, 0.15); }
+  .issue-tag-slippage { background: rgba(245, 158, 11, 0.08); color: #fbbf24; border-color: rgba(245, 158, 11, 0.15); }
+  .issue-tag-vendor { background: rgba(168, 85, 247, 0.08); color: #c084fc; border-color: rgba(168, 85, 247, 0.15); }
+  .issue-tag-cost { background: rgba(236, 72, 153, 0.08); color: #f472b6; border-color: rgba(236, 72, 153, 0.15); }
+  .issue-tag-ontrack { background: rgba(16, 185, 129, 0.08); color: #34d399; border-color: rgba(16, 185, 129, 0.15); }
+
+  /* Floating Copilot Button */
+  .floating-copilot-btn {
+    @apply fixed z-50 flex items-center justify-center rounded-xl cursor-pointer bg-primary text-primary-foreground border border-border;
+    bottom: 24px;
+    right: 24px;
+    width: 48px;
+    height: 48px;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+  }
+  .floating-copilot-btn:hover {
+    @apply bg-primary/90;
+    transform: translateY(-2px);
+  }
+
+  /* Shimmer loading */
+  .shimmer {
+    background: linear-gradient(90deg, rgba(255,255,255,0.03) 25%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.03) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+  }
+
+  /* Section header label */
+  .section-label {
+    @apply text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50;
+  }
+
+  /* ── Redesigned Project Card ── */
+  .project-card {
+    @apply relative overflow-hidden rounded-xl cursor-pointer transition-colors duration-200 bg-card border border-border;
+  }
+  .project-card:hover {
+    @apply border-primary;
+  }
+  .project-card-accent {
+    @apply absolute left-0 top-0 bottom-0 w-1;
+  }
+
+  /* ── Intelligence Detail Tables ── */
+  .intel-table {
+    @apply w-full text-sm;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+  .intel-table thead th {
+    @apply text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 text-left px-4 py-3;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .intel-table tbody td {
+    @apply px-4 py-2.5 text-[12px] text-foreground/80;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+  .intel-table tbody tr:hover {
+    background: rgba(255, 255, 255, 0.02);
+  }
+  .intel-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+
+  /* ── Detail row (key-value) ── */
+  .detail-row {
+    @apply flex items-center justify-between py-2 text-sm;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+  }
+  .detail-row:last-child {
+    border-bottom: none;
+  }
+  .detail-row-label {
+    @apply text-muted-foreground/50 text-xs;
+  }
+  .detail-row-value {
+    @apply font-mono text-foreground/80 text-right;
+  }
+}
+
+/* ── New Keyframes ── */
+@keyframes pulse-critical {
+  0%, 100% { box-shadow: 0 0 8px rgba(239, 68, 68, 0.6); }
+  50% { box-shadow: 0 0 16px rgba(239, 68, 68, 0.9), 0 0 24px rgba(239, 68, 68, 0.3); }
+}
+
+@keyframes copilot-pulse {
+  0%, 100% { box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4), 0 0 0 0 rgba(59, 130, 246, 0.3); }
+  50% { box-shadow: 0 4px 20px rgba(59, 130, 246, 0.4), 0 0 0 8px rgba(59, 130, 246, 0); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+/* Stagger children entrance */
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+.stagger-children > *:nth-child(7) { animation-delay: 300ms; }
+.stagger-children > *:nth-child(8) { animation-delay: 350ms; }
+.stagger-children > *:nth-child(9) { animation-delay: 400ms; }
+.stagger-children > *:nth-child(10) { animation-delay: 450ms; }
+.stagger-children > *:nth-child(11) { animation-delay: 500ms; }
+.stagger-children > *:nth-child(12) { animation-delay: 550ms; }
+
+/* ── AI Copilot Animations ── */
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slide-in-from-bottom-2 {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slide-in-from-bottom-8 {
+  from { opacity: 0; transform: translateY(32px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-in {
+  animation-fill-mode: both;
+}
+
+.fade-in {
+  animation-name: fade-in;
+}
+
+.slide-in-from-bottom-2 {
+  animation-name: slide-in-from-bottom-2;
+}
+
+.slide-in-from-bottom-8 {
+  animation-name: slide-in-from-bottom-8;
+}
+
+.duration-300 {
+  animation-duration: 300ms;
+}
+
+.duration-500 {
+  animation-duration: 500ms;
+}
+
+.duration-700 {
+  animation-duration: 700ms;
+}
+
+/* ── AKASHA AI Response Styling ── */
+
+/* Scrollable table wrapper */
+.akasha-response {
+  overflow-x: auto;
+}
+
+.akasha-response table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 16px;
+  margin-bottom: 16px;
+  font-size: 13px;
+}
+
+.akasha-response thead th {
+  background: rgba(255, 255, 255, 0.05) !important;
+  font-size: 11px !important;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #9CA3AF !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.akasha-response thead th:last-child {
+  border-right: none;
+}
+
+.akasha-response tbody td {
+  font-size: 13px !important;
+  padding: 12px 16px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.03);
+  color: #D1D5DB !important;
+  line-height: 1.6;
+  vertical-align: top;
+}
+
+.akasha-response tbody td:last-child {
+  border-right: none;
+}
+
+.akasha-response tbody tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.akasha-response tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+/* List styling */
+.akasha-response ul, .akasha-response ol {
+  padding-left: 1.25em;
+  margin: 0.5em 0;
+}
+
+.akasha-response li {
+  margin: 0.35em 0;
+  color: #D1D5DB;
+  font-size: 13.5px;
+  line-height: 1.7;
+}
+
+/* Paragraph spacing */
+.akasha-response p {
+  margin: 0.6em 0;
+  line-height: 1.7;
+}
+
+.akasha-response > :first-child {
+  margin-top: 0 !important;
+}
+
+.akasha-response > :last-child {
+  margin-bottom: 0 !important;
+}
+
+/* Heading styling */
+.akasha-response h1, .akasha-response h2, .akasha-response h3, .akasha-response h4 {
+  color: #fff;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+  font-weight: 600;
+}
+
+.akasha-response h1 { font-size: 1.4em; }
+.akasha-response h2 { font-size: 1.2em; }
+.akasha-response h3 { font-size: 1.05em; }
+
+/* Strong/Bold */
+.akasha-response strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+/* Blockquote */
+.akasha-response blockquote {
+  border-left: 3px solid rgba(59, 130, 246, 0.4);
+  padding-left: 16px;
+  margin: 12px 0;
+  color: #9CA3AF;
+  font-style: italic;
+}
+
+/* Horizontal rule */
+.akasha-response hr {
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  margin: 16px 0;
+}
