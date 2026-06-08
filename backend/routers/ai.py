@@ -23,6 +23,7 @@ def get_ai_client():
     provider = os.environ.get("AI_PROVIDER", "groq").lower()
     
     if provider == "azure":
+        import httpx
         endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
         api_key = os.environ.get("AZURE_OPENAI_API_KEY")
         api_version = os.environ.get("AZURE_OPENAI_API_VERSION")
@@ -31,7 +32,8 @@ def get_ai_client():
         return AzureOpenAI(
             azure_endpoint=endpoint,
             api_key=api_key,
-            api_version=api_version
+            api_version=api_version,
+            http_client=httpx.Client(verify=False)
         ), "azure"
     else:
         api_key = os.environ.get("AKASHA_AI_API_KEY")
