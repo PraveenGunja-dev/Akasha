@@ -6,7 +6,7 @@ import FloatingCopilot from './components/ui/FloatingCopilot';
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename="/akasha">
       <div className="min-h-screen bg-background antialiased text-foreground">
         <Routes>
           <Route path="/" element={<LandingPage />} />
