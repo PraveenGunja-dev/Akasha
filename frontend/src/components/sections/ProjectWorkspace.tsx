@@ -141,7 +141,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex items-center justify-center w-full h-full min-h-[500px] bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="w-8 h-8 text-primary animate-spin" />
           <span className="text-sm text-muted-foreground/60 font-medium tracking-wider uppercase">Loading Intelligence...</span>
@@ -152,7 +152,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
   if (!project) {
     return (
-      <div className="flex items-center justify-center h-screen bg-background">
+      <div className="flex items-center justify-center w-full h-full min-h-[500px] bg-background">
         <div className="text-center">
           <AlertTriangle className="w-12 h-12 text-amber-500/50 mx-auto mb-4" />
           <p className="text-muted-foreground">Project not found.</p>
@@ -241,7 +241,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const tc = detail?.tc;
 
   return (
-    <div className="min-h-screen bg-background text-foreground">
+    <div className="w-full min-h-full bg-background text-foreground pb-12">
       {/* ── Top Bar ── */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-white/[0.06] px-6 py-3">
         <div className="max-w-[1600px] mx-auto flex items-center gap-4">

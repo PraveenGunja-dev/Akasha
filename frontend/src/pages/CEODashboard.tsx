@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useParams, useNavigate } from 'react-router-dom';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
 
@@ -26,6 +27,8 @@ import ProjectWorkspace from '../components/sections/ProjectWorkspace';
 import DataIntegrationHub from '../components/sections/DataIntegrationHub';
 
 export default function CEODashboard() {
+  const { projectId } = useParams();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [previousTab, setPreviousTab] = useState<string>("overview");
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
@@ -34,13 +37,16 @@ export default function CEODashboard() {
   // API Data State
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   const [p6Data, setP6Data] = useState<any[]>([]);
   const [sapData, setSapData] = useState<any[]>([]);
   const [logisticsData, setLogisticsData] = useState<any[]>([]);
   const [finDetails, setFinDetails] = useState<any[]>([]);
   const [logDetails, setLogDetails] = useState<any[]>([]);
+
+  const handleOpenProject = (id: string) => {
+    navigate(`/dashboard/project/${id}`);
+  };
 
   // Fetch Data
   useEffect(() => {
@@ -135,15 +141,17 @@ export default function CEODashboard() {
             <div className="absolute top-0 left-1/4 w-[800px] h-[500px] bg-[#3B82F6] opacity-[0.03] blur-[150px] rounded-full pointer-events-none z-0"></div>
 
             <div className="relative z-10">
-              {selectedProjectId ? (
-                <ProjectWorkspace 
-                  projectId={selectedProjectId} 
-                  onBack={() => setSelectedProjectId(null)} 
-                />
+              {projectId ? (
+                <div className="w-full h-full min-h-[calc(100vh-120px)]">
+                  <ProjectWorkspace 
+                    projectId={projectId} 
+                    onBack={() => navigate('/dashboard')} 
+                  />
+                </div>
               ) : (
                 <>
                   {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} />}
-                  {activeTab === 'project360' && <Project360 onOpenProject={setSelectedProjectId} />}
+                  {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
                   {activeTab === 'data_integration' && <DataIntegrationHub />}
               {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
               {activeTab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
@@ -158,7 +166,7 @@ export default function CEODashboard() {
               
               {/* AI Modules */}
               {activeTab === 'executive_brief' && <ExecutiveBriefing />}
-              {activeTab === 'smart_search' && <SmartSearch />}
+              {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
               {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
               
               {/* Placeholders for unbuilt sections */}
@@ -182,6 +190,7 @@ export default function CEODashboard() {
         <ScenarioSimulationPanel 
           isOpen={isCopilotOpen}
           setIsOpen={setIsCopilotOpen}
+          projectId={projectId}
           onMaximize={() => {
             setActiveTab('ai_copilot');
             setIsCopilotOpen(false);

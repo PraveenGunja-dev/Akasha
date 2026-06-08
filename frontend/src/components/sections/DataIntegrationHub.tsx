@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   Network, Database, ArrowRightLeft, 
   Server, HardDrive, Share2, Search,
@@ -448,8 +449,8 @@ export default function DataIntegrationHub() {
       </div>
 
       {/* ── Edit Modal ── */}
-      {editingProject && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm p-4">
+      {editingProject && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4" style={{ zIndex: 9999 }}>
           <div className="w-full max-w-7xl bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Header */}
@@ -707,12 +708,13 @@ export default function DataIntegrationHub() {
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* ── Password Update Modal ── */}
-      {showPasswordModal && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-in fade-in">
+      {showPasswordModal && createPortal(
+        <div className="fixed inset-0 flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-in fade-in" style={{ zIndex: 9999 }}>
           <div className="w-full max-w-md bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-muted/20">
               <div className="flex items-center gap-2 text-amber-400">
@@ -772,7 +774,8 @@ export default function DataIntegrationHub() {
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
     </div>

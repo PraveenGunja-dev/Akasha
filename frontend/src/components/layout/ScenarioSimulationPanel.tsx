@@ -4,17 +4,21 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 interface Message {
+  id?: number;
   type: 'user' | 'bot';
   content: string;
+  timestamp?: Date | string;
+  sources?: string[];
 }
 
 interface ScenarioSimulationPanelProps {
   isOpen: boolean;
   setIsOpen: (val: boolean) => void;
   onMaximize?: () => void;
+  projectId?: string;
 }
 
-export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize }: ScenarioSimulationPanelProps) {
+export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize, projectId }: ScenarioSimulationPanelProps) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -23,28 +27,96 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize 
 
   useEffect(() => {
     if (isOpen) {
+      const savedActive = localStorage.getItem('akasha_active_thread');
+      if (savedActive) {
+        const tid = parseInt(savedActive);
+        const savedMsgs = localStorage.getItem(`akasha_msgs_${tid}`);
+        if (savedMsgs) {
+          setMessages(JSON.parse(savedMsgs));
+        }
+      }
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
-  }, [messages, isOpen]);
+  }, [isOpen]);
+
+  // Also auto-scroll on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
 
   const sendMessage = async (overrideText?: string) => {
     const textToSend = overrideText || input.trim();
     if (!textToSend || loading) return;
     
     setInput('');
-    setMessages(prev => [...prev, { type: 'user', content: textToSend }]);
+    
+    const userMsg: Message = {
+      id: Date.now(),
+      type: 'user',
+      content: textToSend,
+      timestamp: new Date()
+    };
+    
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    
+    let activeThreadId = localStorage.getItem('akasha_active_thread');
+    let currentThreadId = activeThreadId ? parseInt(activeThreadId) : null;
+    
+    if (!currentThreadId) {
+      currentThreadId = Date.now();
+      localStorage.setItem('akasha_active_thread', String(currentThreadId));
+      
+      const newThread = {
+        id: currentThreadId,
+        title: textToSend.substring(0, 50),
+        preview: textToSend.substring(0, 80),
+        timestamp: new Date(),
+        messageCount: 1
+      };
+      const savedThreadsStr = localStorage.getItem('akasha_threads_v2');
+      const savedThreads = savedThreadsStr ? JSON.parse(savedThreadsStr) : [];
+      localStorage.setItem('akasha_threads_v2', JSON.stringify([newThread, ...savedThreads].slice(0, 20)));
+    } else {
+      const savedThreadsStr = localStorage.getItem('akasha_threads_v2');
+      if (savedThreadsStr) {
+        let savedThreads = JSON.parse(savedThreadsStr);
+        savedThreads = savedThreads.map((t: any) => t.id === currentThreadId ? { ...t, messageCount: t.messageCount + 1 } : t);
+        localStorage.setItem('akasha_threads_v2', JSON.stringify(savedThreads));
+      }
+    }
+    
+    localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(newMessages));
     setLoading(true);
 
     try {
       const res = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend, history: messages.slice(-10) })
+        body: JSON.stringify({ message: textToSend, history: newMessages.slice(-10), projectId })
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { type: 'bot', content: data.response }]);
+      
+      const botMsg: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: res.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`,
+        timestamp: new Date(),
+        sources: ['Simulation Engine']
+      };
+      const finalMessages = [...newMessages, botMsg];
+      setMessages(finalMessages);
+      localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(finalMessages));
     } catch {
-      setMessages(prev => [...prev, { type: 'bot', content: 'Simulation engine error. Please try again.' }]);
+      const errorMsg: Message = {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: 'Simulation engine error. Please try again.',
+        timestamp: new Date()
+      };
+      const finalMessages = [...newMessages, errorMsg];
+      setMessages(finalMessages);
+      localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(finalMessages));
     } finally {
       setLoading(false);
     }

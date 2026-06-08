@@ -1,61 +1,50 @@
 import React, { useState } from 'react';
 import { Search, FileText, Database, ArrowRight, Activity, Command, Package, Building2 } from 'lucide-react';
 
-export default function SmartSearch() {
+export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: string) => void }) {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
 
-  const handleSearch = (e: React.FormEvent) => {
+  const [results, setResults] = useState<any[]>([]);
+
+  const handleSearch = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!query.trim()) return;
     
     setIsSearching(true);
     setHasSearched(true);
     
-    setTimeout(() => {
+    try {
+      const response = await fetch(`/akasha/api/dashboard/search?q=${encodeURIComponent(query)}`);
+      const data = await response.json();
+      setResults(data || []);
+    } catch (err) {
+      console.error('Search failed', err);
+      setResults([]);
+    } finally {
       setIsSearching(false);
-    }, 1500);
+    }
   };
 
-  const results = [
-    {
-      id: 1,
-      type: 'Project',
-      title: 'ACL_A1_FT_125 MW_GROUP_11',
-      snippet: 'Critical status. 0 days schedule variance. 0% Material Availability.',
-      icon: Command,
-      color: 'text-red-500',
-      bg: 'bg-red-500/10'
-    },
-    {
-      id: 2,
-      type: 'Purchase Order',
-      title: 'PO-4910082',
-      snippet: 'Linked to Vendor: GREEN ENERGY SOLUTIONS. Value: $4.2M. Status: In-Transit.',
-      icon: FileText,
-      color: 'text-primary',
-      bg: 'bg-primary/10'
-    },
-    {
-      id: 3,
-      type: 'Material Component',
-      title: 'Solar Modules (425W)',
-      snippet: 'Total Inventory: 12,000 MW across 4 staging yards. Requested by 3 active projects.',
-      icon: Package,
-      color: 'text-emerald-500',
-      bg: 'bg-emerald-500/10'
-    },
-    {
-      id: 4,
-      type: 'Vendor',
-      title: 'ADANI GREEN ENERGY',
-      snippet: 'Primary supplier for 14 active projects. Risk Profile: Low.',
-      icon: Building2,
-      color: 'text-amber-500',
-      bg: 'bg-amber-500/10'
+  const getIconAndColor = (type: string) => {
+    switch(type) {
+      case 'Project': return { icon: Command, color: 'text-red-500', bg: 'bg-red-500/10' };
+      case 'Purchase Order': return { icon: FileText, color: 'text-primary', bg: 'bg-primary/10' };
+      case 'Material Component': return { icon: Package, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
+      case 'Vendor': return { icon: Building2, color: 'text-amber-500', bg: 'bg-amber-500/10' };
+      default: return { icon: Database, color: 'text-muted-foreground', bg: 'bg-muted' };
     }
-  ];
+  };
+
+  const handleResultClick = (result: any) => {
+    if (onOpenProject) {
+      // If it's a project, open it directly. If it's a PO/Material, we could ideally
+      // find its associated project, but for now passing the raw value will either 
+      // open the workspace if it's a valid project ID, or show an empty state.
+      onOpenProject(result.raw);
+    }
+  };
 
   return (
     <div className="flex flex-col items-center min-h-[calc(100vh-100px)] w-full animate-in fade-in duration-500 py-10 px-6 relative">
@@ -127,10 +116,16 @@ export default function SmartSearch() {
              </div>
           ) : (
              <div className="space-y-4">
-               {results.map((result) => (
-                 <div key={result.id} className="group bg-card border border-border/50 hover:border-primary/50 rounded-xl p-5 flex gap-4 cursor-pointer transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.1)]">
-                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${result.bg}`}>
-                     <result.icon className={`w-5 h-5 ${result.color}`} />
+               {results.map((result) => {
+                 const style = getIconAndColor(result.type);
+                 return (
+                 <div 
+                    key={result.id} 
+                    onClick={() => handleResultClick(result)}
+                    className="group bg-card border border-border/50 hover:border-primary/50 rounded-xl p-5 flex gap-4 cursor-pointer transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.1)]"
+                 >
+                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${style.bg}`}>
+                     <style.icon className={`w-5 h-5 ${style.color}`} />
                    </div>
                    <div className="flex-1">
                      <div className="flex items-center gap-2 mb-1">
@@ -143,7 +138,7 @@ export default function SmartSearch() {
                      <ArrowRight className="w-5 h-5 text-muted-foreground/50 group-hover:text-primary transition-colors group-hover:translate-x-1" />
                    </div>
                  </div>
-               ))}
+               )})}
              </div>
           )}
 

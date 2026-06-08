@@ -304,3 +304,119 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
             "rajasthan_edges": tc_r_dicts
         }
     }
+
+@router.get("/search")
+def global_search(q: str, db: Session = Depends(get_db)):
+    if not q or len(q.strip()) < 2:
+        return []
+    
+    q_lower = q.lower().strip()
+    results = []
+    
+    # Search Projects (P6Project)
+    projects = db.query(models.P6Project).filter(
+        func.lower(models.P6Project.name).contains(q_lower) | 
+        func.lower(models.P6Project.project_id).contains(q_lower)
+    ).limit(10).all()
+    
+    for p in projects:
+        results.append({
+            "id": f"proj_{p.id}",
+            "type": "Project",
+            "title": p.name or p.project_id,
+            "snippet": f"Status: {p.status}. Start: {p.start_date.strftime('%Y-%m-%d') if p.start_date else 'N/A'}",
+            "raw": p.project_id
+        })
+        
+    # Search Purchase Orders (MTPOAmount)
+    pos = db.query(models.MTPOAmount).filter(
+        func.lower(models.MTPOAmount.purchasing_document).contains(q_lower) |
+        func.lower(models.MTPOAmount.vendor_name).contains(q_lower) |
+        func.lower(models.MTPOAmount.material_code).contains(q_lower)
+    ).limit(10).all()
+    
+    for po in pos:
+        results.append({
+            "id": f"po_{po.id}",
+            "type": "Purchase Order",
+            "title": f"PO-{po.purchasing_document}",
+            "snippet": f"Vendor: {po.vendor_name}. Value: ${po.net_order_value or 0:,.2f}. Material: {po.material_code}",
+            "raw": po.purchasing_document
+        })
+        
+    # Search Inventory/Materials (MTInventory)
+    materials = db.query(models.MTInventory).filter(
+        func.lower(models.MTInventory.material_code).contains(q_lower) |
+        func.lower(models.MTInventory.vendor_code).contains(q_lower) |
+        func.lower(models.MTInventory.wbs_element).contains(q_lower)
+    ).limit(10).all()
+    
+    for m in materials:
+        results.append({
+            "id": f"mat_{m.id}",
+            "type": "Material Component",
+            "title": m.material_code,
+            "snippet": f"Inventory: {m.quantity_inv} at Plant {m.plant_code}. WBS: {m.wbs_element}",
+            "raw": m.material_code
+        })
+        
+    # Vendors (unique from POs)
+    vendors = db.query(models.MTPOAmount.vendor_name, models.MTPOAmount.vendor_code).filter(
+        func.lower(models.MTPOAmount.vendor_name).contains(q_lower) |
+        func.lower(models.MTPOAmount.vendor_code).contains(q_lower)
+    ).distinct().limit(5).all()
+    
+    for idx, v in enumerate(vendors):
+        results.append({
+            "id": f"vend_{idx}_{v.vendor_code}",
+            "type": "Vendor",
+            "title": v.vendor_name or v.vendor_code,
+            "snippet": f"Vendor Code: {v.vendor_code}",
+            "raw": v.vendor_code
+        })
+        
+    return results
+
+@router.get("/knowledge-graph")
+def get_knowledge_graph(db: Session = Depends(get_db)):
+    nodes = [{"id": "Adani Green Energy", "name": "Adani Green Energy", "category": 0, "symbolSize": 60, "value": "Root Enterprise"}]
+    links = []
+
+    # Get SPVs as Level 1
+    spvs = db.query(models.ProjectMapping.spv_name).filter(models.ProjectMapping.spv_name.isnot(None)).distinct().all()
+    spv_list = [s[0] for s in spvs if s[0]]
+    if not spv_list:
+        spv_list = ["Default SPV"]
+
+    for spv in spv_list:
+        nodes.append({"id": spv, "name": spv, "category": 1, "symbolSize": 45, "value": "SPV Entity"})
+        links.append({"source": "Adani Green Energy", "target": spv})
+
+    # Get Projects and map to SPV
+    projects = db.query(models.ProjectMapping).limit(15).all() # limit to 15 to keep graph clean
+    
+    for p in projects:
+        proj_id = f"Proj_{p.id}"
+        proj_name = p.project_name_from_p6 or p.project
+        spv = p.spv_name or "Default SPV"
+        
+        nodes.append({"id": proj_id, "name": proj_name, "category": 2, "symbolSize": 35, "value": f"{p.capacity_mwac or 0} MW", "raw_id": p.project})
+        links.append({"source": spv, "target": proj_id})
+        
+        # Add Domains (Level 3)
+        p6_node = f"{proj_id}_P6"
+        sap_node = f"{proj_id}_SAP"
+        tc_node = f"{proj_id}_TC"
+        ai_node = f"{proj_id}_AI"
+        
+        nodes.append({"id": p6_node, "name": "P6 Schedule", "category": 3, "symbolSize": 20, "value": "Project Controls", "raw_id": p.project})
+        nodes.append({"id": sap_node, "name": "SAP Material", "category": 4, "symbolSize": 20, "value": "Logistics & PR/PO", "raw_id": p.project})
+        nodes.append({"id": tc_node, "name": "Transmission", "category": 5, "symbolSize": 20, "value": "Substation & Lines", "raw_id": p.project})
+        nodes.append({"id": ai_node, "name": "AI Insight", "category": 6, "symbolSize": 25, "value": "Executive Summary", "raw_id": p.project})
+        
+        links.append({"source": proj_id, "target": p6_node})
+        links.append({"source": proj_id, "target": sap_node})
+        links.append({"source": proj_id, "target": tc_node})
+        links.append({"source": proj_id, "target": ai_node})
+
+    return {"nodes": nodes, "links": links}

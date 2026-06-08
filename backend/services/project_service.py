@@ -311,6 +311,65 @@ def calculate_project_360_metrics(db: Session):
             "remainingDuration": p6_proj.remaining_duration,
             "parentEPS": p6_proj.parent_eps_name,
         })
+    # Add unmapped P6 projects
+    mapped_p6_ids = {m.project_id for m in mappings if m.project_id}
+    unmapped_p6 = db.query(models.P6Project).filter(~models.P6Project.project_id.in_(mapped_p6_ids)).all()
+    
+    for p6_proj in unmapped_p6:
+        progress = (p6_proj.duration_percent_complete or 0) / 100
+        sched_var = p6_proj.finish_date_variance or 0
+        status_tier = "Healthy"
+        if sched_var < -10: status_tier = "Watchlist"
+        if sched_var < -20: status_tier = "High Risk"
+        if sched_var < -30: status_tier = "Critical"
+        if progress >= 0.99: status_tier = "Completed"
+        
+        results.append({
+            "projectId": p6_proj.project_id,
+            "projectName": p6_proj.name,
+            "sapPlantCode": None,
+            "agelCode": None,
+            "capacityMW": 0,
+            "statusTier": status_tier,
+            "primaryIssue": "Unmapped",
+            "impactLines": ["Unmapped Project"],
+            "confidence": 30,
+            "aiRecommendation": "Map project to SAP & TC data for 360 insights.",
+            "aiInsight": "P6 Schedule data available. Other domains unmapped.",
+            "riskCategories": ["Unmapped"],
+            "codAtRisk": False,
+            "delayDays": abs(sched_var) if sched_var < 0 else 0,
+            "progress": round(progress, 3),
+            "spi": round(p6_proj.schedule_performance_index or 1.0, 2),
+            "cpi": round(p6_proj.cost_performance_index or 1.0, 2),
+            "scheduleVariance": round(sched_var),
+            "costVariance": round(p6_proj.total_cost_variance or 0, 2),
+            "poVolumeMW": 0,
+            "inTransitMW": 0,
+            "inventoryMW": 0,
+            "materialAvailability": 0,
+            "riskScore": 0,
+            "healthScore": 100,
+            "tcEdgesCount": 0,
+            "forecastFinish": p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj.scheduled_finish_date else "N/A",
+            "forecastMonth": p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj.scheduled_finish_date else "TBD",
+            "health": status_tier,
+            "keyIssue": "Unmapped",
+            "recommendedAction": "Map project to SAP & TC",
+            "startDate": p6_proj.start_date.strftime("%Y-%m-%d") if p6_proj.start_date else None,
+            "finishDate": p6_proj.finish_date.strftime("%Y-%m-%d") if p6_proj.finish_date else None,
+            "baselineFinishDate": p6_proj.baseline_finish_date.strftime("%Y-%m-%d") if p6_proj.baseline_finish_date else None,
+            "status": p6_proj.status,
+            "durationPercentComplete": p6_proj.duration_percent_complete or 0,
+            "activityCount": p6_proj.activity_count or 0,
+            "completedActivities": p6_proj.completed_activity_count or 0,
+            "inProgressActivities": p6_proj.in_progress_activity_count or 0,
+            "notStartedActivities": p6_proj.not_started_activity_count or 0,
+            "plannedDuration": p6_proj.planned_duration,
+            "actualDuration": p6_proj.actual_duration,
+            "remainingDuration": p6_proj.remaining_duration,
+            "parentEPS": p6_proj.parent_eps_name,
+        })
 
     return sorted(results, key=lambda x: x['riskScore'], reverse=True)
 
@@ -328,18 +387,15 @@ def get_project_360_detail(db: Session, project_id: str):
         models.ProjectMapping.project_id == project_id
     ).first()
     
-    if not mapping:
-        return {"error": "Project not found in mapping"}
-
     p6_proj = db.query(models.P6Project).filter(
         models.P6Project.project_id == project_id
     ).first()
 
     if not p6_proj:
-        return None
+        return {"error": "Project not found"}
 
     # SAP Data
-    codes = [c for c in [mapping.spv_plant_code, mapping.agel] if c]
+    codes = [c for c in [mapping.spv_plant_code if mapping else None, mapping.agel if mapping else None] if c]
     
     # Calculate Total Plant Capacity for Pro-Rata Allocation
     total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
@@ -349,7 +405,7 @@ def get_project_360_detail(db: Session, project_id: str):
         )
     ).scalar() or 1.0
 
-    project_capacity = mapping.capacity_mwac or 0
+    project_capacity = mapping.capacity_mwac if mapping else 0
     allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
 
     # ── SAP: Purchase Orders (ME2M) — POs don't have WBS, always pro-rata ──
@@ -414,11 +470,11 @@ def get_project_360_detail(db: Session, project_id: str):
     vendor_breakdown.sort(key=lambda x: x["totalMW"], reverse=True)
 
     # ── SAP: In-Transit (MIGO) — WBS-filtered if available, else pro-rata ──
-    if mapping.module_wbs:
+    if mapping and mapping.module_wbs:
         transit_records = db.query(models.MTInTransit).filter(
             models.MTInTransit.wbs_element == mapping.module_wbs
         ).all()
-        transit_allocation = 1.0  # exact match, no pro-rata needed
+        transit_allocation = 1.0  # exact match
     else:
         transit_records = db.query(models.MTInTransit).filter(
             models.MTInTransit.plant_code.in_(codes)
@@ -442,7 +498,7 @@ def get_project_360_detail(db: Session, project_id: str):
         })
 
     # ── SAP: Inventory (MB52) — WBS-filtered if available, else pro-rata ──
-    if mapping.module_wbs:
+    if mapping and mapping.module_wbs:
         inv_records = db.query(models.MTInventory).filter(
             models.MTInventory.wbs_element == mapping.module_wbs
         ).all()
@@ -537,38 +593,37 @@ def get_project_360_detail(db: Session, project_id: str):
 
     # ── Mapping info ──
     mapping_info = {
-        "spvPlantCode": mapping.spv_plant_code,
-        "agelCode": mapping.agel,
-        "moduleWBS": mapping.module_wbs,
-        "capacityMW": mapping.capacity_mwac,
-        "p6ProjectName": mapping.project_name_from_p6 or mapping.project,
-        "tcProjectName": mapping.project_name_from_p6 or mapping.project,
+        "capacityMW": mapping.capacity_mwac if mapping else 0,
+        "p6ProjectName": p6_proj.name,
+        "tcProjectName": mapping.project_name_from_p6 or mapping.project if mapping else "Unmapped",
     }
 
     # ── TC Data ──
-    project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == mapping.id).all()
-    phases = set(pe.phase for pe in project_entries if pe.phase)
-    
     tc_network_edges = []
-    if phases:
-        all_edges = db.query(models.TcNetworkEdge).all()
-        filtered_edges = []
-        for edge in all_edges:
-            edge_phases = set()
-            if edge.projects:
-                try:
-                    edge_phases = set(json.loads(edge.projects))
-                except:
-                    pass
-            if phases.intersection(edge_phases):
-                filtered_edges.append(edge)
-                
-        tc_network_edges = filter_tc_edges_by_kps(filtered_edges, project_entries)
+    
+    if mapping:
+        project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == mapping.id).all()
+        phases = set(pe.phase for pe in project_entries if pe.phase)
         
-    # Also include any direct mappings (fallback)
-    direct_tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == mapping.id).all()
-    tc_network_edges.extend(direct_tc_edges)
-    tc_network_edges = list({e.id: e for e in tc_network_edges}.values())
+        if phases:
+            all_edges = db.query(models.TcNetworkEdge).all()
+            filtered_edges = []
+            for edge in all_edges:
+                edge_phases = set()
+                if edge.projects:
+                    try:
+                        edge_phases = set(json.loads(edge.projects))
+                    except:
+                        pass
+                if phases.intersection(edge_phases):
+                    filtered_edges.append(edge)
+                    
+            tc_network_edges = filter_tc_edges_by_kps(filtered_edges, project_entries)
+            
+        # Also include any direct mappings (fallback)
+        direct_tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == mapping.id).all()
+        tc_network_edges.extend(direct_tc_edges)
+        tc_network_edges = list({e.id: e for e in tc_network_edges}.values())
 
     tc_khavda = []
     tc_rajasthan = []
@@ -580,7 +635,7 @@ def get_project_360_detail(db: Session, project_id: str):
             "fromLabel": edge.from_label,
             "toNode": edge.to_node,
             "toLabel": edge.to_label,
-            "project": mapping.project or mapping.project_name_from_p6,
+            "project": mapping.project or mapping.project_name_from_p6 if mapping else "Unmapped",
             "phase": json.loads(edge.projects)[0] if edge.projects and json.loads(edge.projects) else "Unknown Phase",
             "projects": edge.projects,
             "contractor": edge.contractor,
