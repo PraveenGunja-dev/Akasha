@@ -21,7 +21,7 @@ CREDENTIALS = {
 
 def get_auth_token():
     try:
-        res = requests.post(AUTH_URL, json=CREDENTIALS)
+        res = requests.post(AUTH_URL, json=CREDENTIALS, verify=False)
         res.raise_for_status()
         data = res.json()
         if "token" in data: return data["token"]
@@ -34,7 +34,7 @@ def get_auth_token():
 def fetch_data(endpoint: str, token: str):
     headers = {"Authorization": f"Bearer {token}"}
     try:
-        res = requests.get(f"{BASE_URL}{endpoint}", headers=headers)
+        res = requests.get(f"{BASE_URL}{endpoint}", headers=headers, verify=False)
         res.raise_for_status()
         return res.json()
     except Exception as e:

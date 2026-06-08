@@ -241,7 +241,7 @@ class P6Service:
             }
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
             
-            response = requests.post(self.token_url, data=data, headers=headers, timeout=15)
+            response = requests.post(self.token_url, data=data, headers=headers, timeout=15, verify=False)
             response.raise_for_status()
             
             # P6 token endpoint sometimes returns the raw JWT string directly instead of JSON
@@ -271,7 +271,7 @@ class P6Service:
             params["Filter"] = f"Status='{status_filter}'"
 
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60, verify=False)
             response.raise_for_status()
             data = response.json()
             logger.info(f"Fetched {len(data)} projects from P6")
