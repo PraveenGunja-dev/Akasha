@@ -5,6 +5,7 @@ from pydantic import BaseModel
 import os
 import json
 import logging
+from openai import AzureOpenAI
 from groq import Groq
 from database import get_db
 from services.project_service import calculate_project_360_metrics
@@ -16,17 +17,31 @@ class ChatRequest(BaseModel):
     message: str
     history: List[dict] = []
 
-def get_groq_client():
+def get_ai_client():
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    api_key = os.environ.get("AKASHA_AI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="AKASHA_AI_API_KEY environment variable not set.")
-    return Groq(api_key=api_key)
+    provider = os.environ.get("AI_PROVIDER", "groq").lower()
+    
+    if provider == "azure":
+        endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY")
+        api_version = os.environ.get("AZURE_OPENAI_API_VERSION")
+        if not all([endpoint, api_key, api_version]):
+            raise HTTPException(status_code=500, detail="Azure OpenAI credentials missing from environment.")
+        return AzureOpenAI(
+            azure_endpoint=endpoint,
+            api_key=api_key,
+            api_version=api_version
+        ), "azure"
+    else:
+        api_key = os.environ.get("AKASHA_AI_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="AKASHA_AI_API_KEY environment variable not set.")
+        return Groq(api_key=api_key), "groq"
 
 @router.post("/chat")
 def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
-    client = get_groq_client()
+    client, provider = get_ai_client()
     try:
         project_data = calculate_project_360_metrics(db)
         context_str = "Live Portfolio Context (Top 5 Riskiest Projects):\n"
@@ -53,9 +68,10 @@ Live Portfolio Context:
     messages.append({"role": "user", "content": req.message})
 
     try:
+        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME") if provider == "azure" else "llama-3.3-70b-versatile"
         response = client.chat.completions.create(
             messages=messages,
-            model="llama-3.3-70b-versatile",
+            model=model_name,
             temperature=0.3,
             max_tokens=800
         )
@@ -67,7 +83,7 @@ Live Portfolio Context:
 
 @router.get("/generate-briefing")
 def generate_executive_briefing(db: Session = Depends(get_db)):
-    client = get_groq_client()
+    client, provider = get_ai_client()
     try:
         project_data = calculate_project_360_metrics(db)
         context_str = json.dumps(project_data[:10], indent=2)
@@ -102,14 +118,23 @@ Data:
 {context_str}
 """
     try:
-        response = client.chat.completions.create(
-            messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
-            temperature=0.2,
-            max_tokens=1500,
-            response_format={"type": "json_object"}
-        )
-        return json.loads(response.choices[0].message.content)
+        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME") if provider == "azure" else "llama-3.3-70b-versatile"
+        kwargs = {
+            "messages": [{"role": "user", "content": prompt}],
+            "model": model_name,
+            "temperature": 0.2,
+            "max_tokens": 1500
+        }
+        if provider == "groq":
+            kwargs["response_format"] = {"type": "json_object"}
+            
+        response = client.chat.completions.create(**kwargs)
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+        return json.loads(content)
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")
         error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
@@ -117,7 +142,7 @@ Data:
 
 @router.post("/project-diagnostic")
 def generate_project_diagnostic(project: dict):
-    client = get_groq_client()
+    client, provider = get_ai_client()
     prompt = f"""You are an elite AI Project Manager. Analyze the following live project data.
 Provide a concise, highly analytical, 2-3 sentence diagnostic of the project's health. 
 Highlight the biggest risk (e.g., schedule delay, low material availability, bad SPI/CPI) and recommend a mitigation step.
@@ -127,9 +152,10 @@ Project Data:
 {json.dumps(project, indent=2)}
 """
     try:
+        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME") if provider == "azure" else "llama-3.3-70b-versatile"
         response = client.chat.completions.create(
             messages=[{"role": "user", "content": prompt}],
-            model="llama-3.3-70b-versatile",
+            model=model_name,
             temperature=0.2,
             max_tokens=200
         )

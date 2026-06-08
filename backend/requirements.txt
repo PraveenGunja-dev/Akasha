@@ -5,8 +5,9 @@ SQLAlchemy
 celery
 redis
 python-dotenv
+openai
+langchain-openai
 groq
-langchain
 requests
 psycopg2-binary
 
