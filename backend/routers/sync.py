@@ -27,9 +27,14 @@ def sync_sharepoint_data():
                 sp_service.download_file(f["download_url"], save_path)
                 downloaded_files.append(f["name"])
                 
+        from scripts.ingest_sap_data import ingest_data
+        
+        # Run database ingestion
+        ingest_data()
+                
         return {
             "status": "success",
-            "message": f"Downloaded {len(downloaded_files)} files from SharePoint",
+            "message": f"Downloaded and ingested {len(downloaded_files)} files from SharePoint into the Database",
             "files": downloaded_files
         }
     except Exception as e:
