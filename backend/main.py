@@ -23,6 +23,14 @@ app = FastAPI(
     root_path="/akasha"
 )
 
+# Middleware to rewrite /akasha/api to /api for local testing
+from fastapi import Request
+@app.middleware("http")
+async def rewrite_akasha_api(request: Request, call_next):
+    if request.url.path.startswith("/akasha/api/"):
+        request.scope["path"] = request.url.path.replace("/akasha/api/", "/api/", 1)
+    return await call_next(request)
+
 # CORS config to allow frontend
 app.add_middleware(
     CORSMiddleware,

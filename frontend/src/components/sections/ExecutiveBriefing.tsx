@@ -10,7 +10,7 @@ export default function ExecutiveBriefing() {
   useEffect(() => {
     const fetchBriefing = async () => {
       try {
-        const response = await fetch('http://localhost:8000/api/generate-briefing');
+        const response = await fetch('/akasha/api/generate-briefing');
         if (!response.ok) throw new Error('Failed to generate AI Briefing');
         const data = await response.json();
         setBriefing(data);

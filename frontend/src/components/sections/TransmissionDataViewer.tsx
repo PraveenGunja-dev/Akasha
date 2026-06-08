@@ -15,8 +15,8 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
     setError(null);
     try {
       const [kProjectsRes, rNetworkRes] = await Promise.all([
-        fetch('http://localhost:8000/api/tc/khavda/projects').then(r => r.json()).catch(e => ({ error: e.message })),
-        fetch('http://localhost:8000/api/tc/rajasthan/network').then(r => r.json()).catch(e => ({ error: e.message }))
+        fetch('/akasha/api/tc/khavda/projects').then(r => r.json()).catch(e => ({ error: e.message })),
+        fetch('/akasha/api/tc/rajasthan/network').then(r => r.json()).catch(e => ({ error: e.message }))
       ]);
 
       setData({

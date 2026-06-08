@@ -50,12 +50,12 @@ export default function CEODashboard() {
         const query = selectedProject !== 'All' ? `?project_name=${encodeURIComponent(selectedProject)}` : '';
         
         const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
-          fetch(`http://localhost:8000/api/dashboard/summary`),
-          fetch(`http://localhost:8000/api/summary${query}`),
-          fetch(`http://localhost:8000/api/financials${query}`),
-          fetch(`http://localhost:8000/api/logistics${query}`),
-          fetch(`http://localhost:8000/api/financials/details${query}`),
-          fetch(`http://localhost:8000/api/logistics/details${query}`)
+          fetch(`/akasha/api/dashboard/summary`),
+          fetch(`/akasha/api/summary${query}`),
+          fetch(`/akasha/api/financials${query}`),
+          fetch(`/akasha/api/logistics${query}`),
+          fetch(`/akasha/api/financials/details${query}`),
+          fetch(`/akasha/api/logistics/details${query}`)
         ]);
 
         const [dash, p6, sap, log, fDet, lDet] = await Promise.all([

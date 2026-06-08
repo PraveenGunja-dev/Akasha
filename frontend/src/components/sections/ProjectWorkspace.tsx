@@ -97,14 +97,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const res = await fetch("http://localhost:8000/api/project-360");
+        const res = await fetch("/akasha/api/project-360");
         const json = await res.json();
         const found = json.find((p: any) => p.projectId === projectId);
         if (found) {
           setProject(found);
           // Auto-fetch AI diagnostic
           setDiagLoading(true);
-          fetch("http://localhost:8000/api/project-diagnostic", {
+          fetch("/akasha/api/project-diagnostic", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(found)
@@ -123,7 +123,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
     const fetchDetail = async () => {
       try {
-        const res = await fetch(`http://localhost:8000/api/project-360/${encodeURIComponent(projectId || '')}/detail`);
+        const res = await fetch(`/akasha/api/project-360/${encodeURIComponent(projectId || '')}/detail`);
         if (res.ok) {
           const json = await res.json();
           setDetail(json);

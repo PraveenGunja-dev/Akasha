@@ -323,7 +323,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   const navigate = useNavigate();
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/project-360')
+    fetch('/akasha/api/project-360')
       .then(res => res.json())
       .then(json => setData(json))
       .catch(console.error)

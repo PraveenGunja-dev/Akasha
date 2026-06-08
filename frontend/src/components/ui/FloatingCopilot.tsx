@@ -32,7 +32,7 @@ export default function FloatingCopilot() {
     setLoading(true);
 
     try {
-      const res = await fetch('http://localhost:8000/api/chat', {
+      const res = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: userMsg, history: messages.slice(-10) })

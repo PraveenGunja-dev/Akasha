@@ -33,7 +33,7 @@ export default function DataIntegrationHub() {
 
   const fetchIntegrations = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/dashboard/summary');
+      const res = await fetch('/akasha/api/dashboard/summary');
       const json = await res.json();
       setData(json.projects || []);
     } catch (err) {
@@ -47,9 +47,9 @@ export default function DataIntegrationHub() {
     try {
       // Trigger all syncs concurrently
       const [p6Res, spRes, tcRes] = await Promise.all([
-        fetch('http://localhost:8000/api/p6/sync', { method: 'POST' }),
-        fetch('http://localhost:8000/api/sharepoint/sync', { method: 'POST' }),
-        fetch('http://localhost:8000/api/tc/sync', { method: 'POST' })
+        fetch('/akasha/api/p6/sync', { method: 'POST' }),
+        fetch('/akasha/api/sharepoint/sync', { method: 'POST' }),
+        fetch('/akasha/api/tc/sync', { method: 'POST' })
       ]);
 
       const errors = [];
@@ -82,7 +82,7 @@ export default function DataIntegrationHub() {
 
   const fetchP6ConfigStatus = async () => {
     try {
-      const res = await fetch('http://localhost:8000/api/p6/config-status');
+      const res = await fetch('/akasha/api/p6/config-status');
       if (res.ok) {
         const data = await res.json();
         setP6ConfigStatus(data);
@@ -103,7 +103,7 @@ export default function DataIntegrationHub() {
     setPasswordUpdating(true);
     setPasswordUpdateResult(null);
     try {
-      const res = await fetch('http://localhost:8000/api/p6/update-password', {
+      const res = await fetch('/akasha/api/p6/update-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ new_password: newPassword.trim() })
@@ -147,7 +147,7 @@ export default function DataIntegrationHub() {
     if (project.mapping_id) {
       setLoadingDetails(true);
       try {
-        const res = await fetch(`http://localhost:8000/api/dashboard/projects/${project.mapping_id}`);
+        const res = await fetch(`/akasha/api/dashboard/projects/${project.mapping_id}`);
         if (res.ok) {
           const data = await res.json();
           setProjectDetails(data);
@@ -176,7 +176,7 @@ export default function DataIntegrationHub() {
         Object.entries(editForm).map(([k, v]) => [k, v === '' ? null : v])
       );
 
-      const response = await fetch(`http://localhost:8000/api/p6/projects/${p6_id}`, {
+      const response = await fetch(`/akasha/api/p6/projects/${p6_id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -192,7 +192,7 @@ export default function DataIntegrationHub() {
 
       // Also refresh the modal details if it's open
       if (editingProject?.mapping_id) {
-        const res = await fetch(`http://localhost:8000/api/dashboard/projects/${editingProject.mapping_id}`);
+        const res = await fetch(`/akasha/api/dashboard/projects/${editingProject.mapping_id}`);
         if (res.ok) {
           const freshData = await res.json();
           setProjectDetails(freshData);
