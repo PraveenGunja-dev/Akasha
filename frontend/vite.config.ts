@@ -10,4 +10,12 @@ export default defineConfig({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  server: {
+    proxy: {
+      '/akasha/api': {
+        target: 'http://localhost:3510',
+        changeOrigin: true,
+      }
+    }
+  }
 })

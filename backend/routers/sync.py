@@ -64,6 +64,16 @@ def sync_tc_data():
     except Exception as e:
         logger.error(f"TC sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"TC sync failed: {str(e)}")
+
+@router.post("/mapping/sync")
+def sync_mapping_data():
+    from scripts.ingest_mapping import ingest_mapping
+    try:
+        ingest_mapping()
+        return {"status": "success", "message": "Synced Mappings"}
+    except Exception as e:
+        logger.error(f"Mapping sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Mapping sync failed: {str(e)}")
 import base64
 from datetime import datetime
 import dotenv

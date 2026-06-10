@@ -7,6 +7,7 @@ export default function RightCopilot() {
   const [isOpen, setIsOpen] = useState(true);
   const [input, setInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -15,19 +16,21 @@ export default function RightCopilot() {
     }
   ]);
 
-  const handleSend = async () => {
-    if (!input.trim()) return;
+  const handleSend = async (textOverride?: string) => {
+    const textToSend = textOverride || input;
+    if (!textToSend.trim()) return;
     
-    const userMsg = { id: Date.now(), type: 'user', content: input };
+    const userMsg = { id: Date.now(), type: 'user', content: textToSend };
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    setSuggestions([]);
     setIsTyping(true);
 
     try {
       const response = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: input, history: messages })
+        body: JSON.stringify({ message: textToSend, history: messages })
       });
       
       const data = await response.json();
@@ -38,6 +41,10 @@ export default function RightCopilot() {
         type: 'bot',
         content: response.ok ? data.response : `Error: ${data.detail || 'Failed'}`
       }]);
+      
+      if (response.ok && data.suggestions) {
+        setSuggestions(data.suggestions);
+      }
     } catch (error) {
       setIsTyping(false);
       setMessages(prev => [...prev, {
@@ -148,10 +155,15 @@ export default function RightCopilot() {
               </button>
            </div>
         </div>
-        <div className="flex gap-2 mt-2 px-1 overflow-x-auto custom-scrollbar whitespace-nowrap hide-scrollbar">
-           <span onClick={() => setInput("Why is Project A delayed?")} className="text-[10px] text-gray-500 cursor-pointer hover:text-gray-300">"Why is Project A delayed?"</span>
-           <span onClick={() => setInput("Show procurement bottlenecks")} className="text-[10px] text-gray-500 cursor-pointer hover:text-gray-300">"Show procurement bottlenecks"</span>
-        </div>
+        {suggestions.length > 0 && (
+          <div className="flex gap-2 mt-2 px-1 overflow-x-auto custom-scrollbar whitespace-nowrap hide-scrollbar">
+             {suggestions.map((s, idx) => (
+               <span key={idx} onClick={() => handleSend(s)} className="text-[10px] text-gray-400 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 cursor-pointer hover:text-white hover:bg-gray-700 transition-colors">
+                 {s}
+               </span>
+             ))}
+          </div>
+        )}
       </div>
     </aside>
   );

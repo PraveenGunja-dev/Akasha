@@ -47,13 +47,18 @@ export default function DataIntegrationHub() {
     setSyncError(null);
     try {
       // Trigger all syncs concurrently
-      const [p6Res, spRes, tcRes] = await Promise.all([
+      const [mapRes, p6Res, spRes, tcRes] = await Promise.all([
+        fetch('/akasha/api/mapping/sync', { method: 'POST' }),
         fetch('/akasha/api/p6/sync', { method: 'POST' }),
         fetch('/akasha/api/sharepoint/sync', { method: 'POST' }),
         fetch('/akasha/api/tc/sync', { method: 'POST' })
       ]);
 
       const errors = [];
+      if (!mapRes.ok) {
+          const errData = await mapRes.json().catch(() => ({}));
+          errors.push(errData.detail || "Mapping Sync Failed");
+      }
       if (!p6Res.ok) {
           const errData = await p6Res.json().catch(() => ({}));
           errors.push(errData.detail || "P6 Sync Failed");

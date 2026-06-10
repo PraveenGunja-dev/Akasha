@@ -1,5 +1,7 @@
-import React from 'react';
-import { Maximize2, Minimize2, Bot, ChevronRight, Activity } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Maximize2, Minimize2, Bot, ChevronRight, Activity, Loader2 } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 interface AkashaChatProps {
   isOpen: boolean;
@@ -8,7 +10,67 @@ interface AkashaChatProps {
   onToggleFullScreen: () => void;
 }
 
+interface Message {
+  id: number;
+  type: 'user' | 'bot';
+  content: string;
+}
+
 export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFullScreen }: AkashaChatProps) {
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [messages, setMessages] = useState<Message[]>([
+    {
+      id: 1,
+      type: 'bot',
+      content: "Greetings. I am Akasha, your cross-platform project intelligence. I am continuously analyzing the latest SAP CAPEX drops, P6 baseline variances, and Site DPRs.\n\nWould you like to simulate the risk impact on the **Mundra** project timeline based on today's delay reports?"
+    }
+  ]);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const handleSend = async (textOverride?: string) => {
+    const textToSend = textOverride || input;
+    if (!textToSend.trim() || loading) return;
+    
+    const userMsg: Message = { id: Date.now(), type: 'user', content: textToSend.trim() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setSuggestions([]);
+    setLoading(true);
+
+    try {
+      const response = await fetch('/akasha/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: userMsg.content, history: messages })
+      });
+      
+      const data = await response.json();
+      
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: response.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`
+      }]);
+      
+      if (response.ok && data.suggestions) {
+        setSuggestions(data.suggestions);
+      }
+    } catch (error) {
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1,
+        type: 'bot',
+        content: 'System Error: Could not reach the AKASHA AI backend.'
+      }]);
+    } finally {
+      setLoading(false);
+    }
+  };
   return (
     <div 
       className={`absolute top-0 right-0 h-full bg-background/95 backdrop-blur-2xl border-l border-border transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] flex flex-col z-30 shadow-[-20px_0_50px_rgba(11,116,176,0.1)] ${
@@ -51,27 +113,41 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
       <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-8 custom-scrollbar relative">
          <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-[0.03] pointer-events-none"></div>
          
-         {/* AI Message */}
-         <div className="flex gap-4 relative z-10 max-w-[90%]">
-           <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-[#0B74B0] to-[#75479C] flex items-center justify-center shadow-[0_0_10px_rgba(11,116,176,0.3)] mt-1">
-             <Bot className="w-4 h-4 text-white" />
+         {messages.map((msg) => (
+           <div key={msg.id} className={`flex gap-4 relative z-10 max-w-[90%] ${msg.type === 'user' ? 'self-end flex-row-reverse' : ''}`}>
+             <div className={`w-8 h-8 shrink-0 rounded-lg flex items-center justify-center mt-1 ${
+               msg.type === 'bot' 
+                ? 'bg-gradient-to-br from-[#0B74B0] to-[#75479C] shadow-[0_0_10px_rgba(11,116,176,0.3)]' 
+                : 'bg-foreground/10 rounded-full border border-border'
+             }`}>
+               {msg.type === 'bot' ? <Bot className="w-4 h-4 text-white" /> : <span className="text-xs font-bold text-foreground">CEO</span>}
+             </div>
+             <div className={`rounded-2xl p-4 text-sm font-light leading-relaxed border text-foreground ${
+               msg.type === 'bot'
+                ? 'bg-gradient-to-b from-foreground/[0.04] to-transparent rounded-tl-sm border-border shadow-lg backdrop-blur-md'
+                : 'bg-[#0B74B0]/20 rounded-tr-sm border-[#0B74B0]/30 shadow-[0_0_15px_rgba(11,116,176,0.1)]'
+             }`}>
+               {msg.type === 'bot' ? (
+                 <div className="akasha-response prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                 </div>
+               ) : msg.content}
+             </div>
            </div>
-           <div className="bg-gradient-to-b from-foreground/[0.04] to-transparent rounded-2xl rounded-tl-sm p-5 text-sm font-light leading-relaxed border border-border shadow-lg backdrop-blur-md text-foreground">
-             Greetings. I am Akasha, your cross-platform project intelligence. I am continuously analyzing the latest SAP CAPEX drops, P6 baseline variances, and Site DPRs. 
-             <br/><br/>
-             <span className="text-foreground/70">Would you like to simulate the risk impact on the <strong className="text-[#BD3861]">Mundra</strong> project timeline based on today's delay reports?</span>
+         ))}
+         
+         {loading && (
+           <div className="flex gap-4 relative z-10 max-w-[90%]">
+             <div className="w-8 h-8 shrink-0 rounded-lg bg-gradient-to-br from-[#0B74B0] to-[#75479C] flex items-center justify-center shadow-[0_0_10px_rgba(11,116,176,0.3)] mt-1">
+               <Bot className="w-4 h-4 text-white" />
+             </div>
+             <div className="bg-gradient-to-b from-foreground/[0.04] to-transparent rounded-2xl rounded-tl-sm p-4 text-sm font-light leading-relaxed border border-border shadow-lg backdrop-blur-md flex items-center gap-2">
+               <Loader2 className="w-4 h-4 text-[#0B74B0] animate-spin" />
+               <span className="text-muted-foreground animate-pulse">Akasha is thinking...</span>
+             </div>
            </div>
-         </div>
-
-         {/* User Message Mock */}
-         <div className="flex gap-4 relative z-10 max-w-[90%] self-end flex-row-reverse">
-           <div className="w-8 h-8 shrink-0 rounded-full bg-foreground/10 flex items-center justify-center border border-border mt-1">
-             <span className="text-xs font-bold text-foreground">CEO</span>
-           </div>
-           <div className="bg-[#0B74B0]/20 rounded-2xl rounded-tr-sm p-4 text-sm font-light leading-relaxed border border-[#0B74B0]/30 shadow-[0_0_15px_rgba(11,116,176,0.1)] text-foreground">
-             Show me the CAPEX impact if we delay Mundra by 2 months.
-           </div>
-         </div>
+         )}
+         <div ref={messagesEndRef} />
       </div>
 
       {/* Futuristic Chat Input */}
@@ -81,14 +157,38 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
           <div className="relative flex items-center bg-background border border-border rounded-2xl">
             <input 
               type="text" 
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleSend();
+              }}
               placeholder="Initiate scenario analysis or query..." 
               className="w-full bg-transparent py-4 px-6 text-sm text-foreground placeholder-foreground/40 focus:outline-none font-mono"
             />
-            <button className="mr-2 p-2.5 bg-gradient-to-r from-[#0B74B0] to-[#75479C] hover:from-[#0c85c9] hover:to-[#8956b3] text-white rounded-xl transition-all shadow-[0_0_15px_rgba(11,116,176,0.4)] hover:shadow-[0_0_25px_rgba(11,116,176,0.6)]">
+            <button 
+              onClick={handleSend}
+              disabled={!input.trim() || loading}
+              className="mr-2 p-2.5 bg-gradient-to-r from-[#0B74B0] to-[#75479C] hover:from-[#0c85c9] hover:to-[#8956b3] text-white rounded-xl transition-all shadow-[0_0_15px_rgba(11,116,176,0.4)] hover:shadow-[0_0_25px_rgba(11,116,176,0.6)] disabled:opacity-50"
+            >
               <Activity className="w-5 h-5" />
             </button>
           </div>
         </div>
+        
+        {suggestions.length > 0 && (
+          <div className="flex gap-2 mt-3 overflow-x-auto pb-1 custom-scrollbar hide-scrollbar">
+            {suggestions.map((suggestion, idx) => (
+              <button 
+                key={idx} 
+                onClick={() => handleSend(suggestion)}
+                className="whitespace-nowrap px-3 py-1.5 rounded-lg border border-[#0B74B0]/30 bg-[#0B74B0]/10 hover:bg-[#0B74B0]/20 text-[11px] text-[#0B74B0] transition-colors font-medium shadow-sm"
+              >
+                {suggestion}
+              </button>
+            ))}
+          </div>
+        )}
+        
         <div className="flex gap-2 mt-3 justify-center">
            <span className="text-[10px] text-foreground/40 uppercase tracking-widest flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-green-500"></span> Live Data Synced</span>
         </div>

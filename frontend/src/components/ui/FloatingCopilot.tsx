@@ -13,6 +13,7 @@ export default function FloatingCopilot() {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
+  const [suggestions, setSuggestions] = useState<string[]>(['Which projects need attention?', 'Show me critical risks', 'Generate executive summary']);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -24,10 +25,13 @@ export default function FloatingCopilot() {
     if (isOpen) inputRef.current?.focus();
   }, [isOpen]);
 
-  const sendMessage = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = input.trim();
+  const sendMessage = async (overrideText?: string) => {
+    const textToSend = overrideText || input;
+    if (!textToSend.trim() || loading) return;
+    
+    const userMsg = textToSend.trim();
     setInput('');
+    setSuggestions([]);
     setMessages(prev => [...prev, { type: 'user', content: userMsg }]);
     setLoading(true);
 
@@ -39,6 +43,9 @@ export default function FloatingCopilot() {
       });
       const data = await res.json();
       setMessages(prev => [...prev, { type: 'bot', content: data.response }]);
+      if (res.ok && data.suggestions) {
+        setSuggestions(data.suggestions);
+      }
     } catch {
       setMessages(prev => [...prev, { type: 'bot', content: 'Connection error. Please try again.' }]);
     } finally {
@@ -90,14 +97,6 @@ export default function FloatingCopilot() {
                   <Bot className="w-7 h-7 text-primary/50" />
                 </div>
                 <p className="text-sm text-muted-foreground/50 mb-4">Ask me about your projects, risks, or portfolio health.</p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {['Which projects need attention?', 'Show me critical risks', 'Generate executive summary'].map(q => (
-                    <button key={q} onClick={() => { setInput(q); }}
-                      className="text-[10px] text-primary/60 bg-primary/[0.06] border border-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/10 transition-colors">
-                      {q}
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
 
@@ -129,6 +128,18 @@ export default function FloatingCopilot() {
             )}
             <div ref={messagesEndRef} />
           </div>
+
+          {/* Suggestions */}
+          {suggestions.length > 0 && (
+            <div className="px-4 py-2 border-t border-white/[0.06] flex gap-2 overflow-x-auto hide-scrollbar">
+              {suggestions.map((q, idx) => (
+                <button key={idx} onClick={() => sendMessage(q)}
+                  className="whitespace-nowrap text-[10px] text-primary/60 bg-primary/[0.06] border border-primary/10 px-3 py-1.5 rounded-lg hover:bg-primary/10 hover:text-primary transition-colors">
+                  {q}
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Input */}
           <div className="px-4 py-3 border-t border-white/[0.06]">

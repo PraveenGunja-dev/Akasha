@@ -40,24 +40,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
       {/* Center/Right: Project Selector & Status */}
       <div className="flex items-center gap-6">
         
-        {/* Connected Systems Status */}
-        <div className="hidden lg:flex items-center gap-4 text-xs font-medium text-muted-foreground border-r border-border pr-6">
-           <div className="flex items-center gap-1.5">
-             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_theme(colors.emerald.500)]"></div>
-             P6
-           </div>
-           <div className="flex items-center gap-1.5">
-             <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_5px_theme(colors.emerald.500)]"></div>
-             SAP
-           </div>
-           <div className="flex items-center gap-1.5 opacity-50">
-             <div className="w-1.5 h-1.5 rounded-full bg-muted-foreground"></div>
-             ENG
-           </div>
-            <div className="flex items-center gap-1.5 ml-2 text-[10px] text-muted-foreground/70">
-             <Activity className="w-3 h-3 text-emerald-500" /> Real-time Data
-           </div>
-        </div>
+
 
         {/* Project Selector */}
         <div className="flex items-center gap-2 bg-muted border border-border hover:border-muted-foreground rounded-lg px-3 py-1.5 transition-colors cursor-pointer relative group">

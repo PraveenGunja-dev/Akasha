@@ -184,17 +184,15 @@ For every analysis:
 15. Be highly analytical and data-driven.
 Never make assumptions without mentioning confidence levels.
 
-Response Structure:
-# Executive Summary
-# Key Insights
-# Critical Risks
-# Performance Analysis
-# Bottlenecks & Root Causes
-# Forecasted Risks
-# Recommended Actions
-# Project Health Score
-# CEO Action Items
-# Conclusion
+CRITICAL INSTRUCTION: You MUST output your response in STRICT JSON format with exactly two keys: "response" and "suggestions". 
+"response" must contain your detailed analytical answer in markdown format. 
+"suggestions" must be an array of exactly 3 concise, highly relevant follow-up questions the user might ask next based on your answer.
+
+Example Output format:
+{{
+  "response": "Based on the data...",
+  "suggestions": ["Why is Project A delayed?", "Show me the CAPEX impact", "What are the recommended actions?"]
+}}
 
 CRITICAL INSTRUCTION: You MUST base your answers STRICTLY and EXCLUSIVELY on the Live Portfolio Context provided below. 
 Do NOT use outside knowledge, and do NOT hallucinate or guess information.
@@ -210,10 +208,21 @@ Live Portfolio Context:
 
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.3, max_tokens=800)
+            content = call_azure_openai_curl(messages, temperature=0.3, max_tokens=1000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.3, max_tokens=800)
-        return {"response": content}
+            content = call_groq(messages, temperature=0.3, max_tokens=1000, json_response=True)
+            
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+            
+        data = json.loads(content)
+        return {
+            "response": data.get("response", "Could not parse response."),
+            "suggestions": data.get("suggestions", [])
+        }
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")
         error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
@@ -243,6 +252,7 @@ You MUST output your response in STRICT JSON format, generating an Executive Bri
 3. "deepDive": An array of 2 detailed analytical paragraphs uncovering hidden correlations (e.g., how a vendor delay is causing a schedule slip). Each item must have:
    - "title": Topic title
    - "description": The detailed analysis paragraph
+4. "confidenceScore": An integer between 0 and 100 representing the accuracy or confidence level of this analysis based on the completeness and quality of the provided data.
 
 Be highly analytical and data-driven. Never make assumptions without mentioning confidence levels.
 You MUST base your answers STRICTLY and EXCLUSIVELY on the Live Portfolio Context provided below. 
@@ -251,6 +261,7 @@ Do NOT use outside knowledge, and do NOT hallucinate or guess information.
 You MUST output ONLY valid json in the exact structure below, with no markdown formatting or extra text:
 {{
   "toplineSummary": "...",
+  "confidenceScore": 95,
   "keyActions": [
     {{ "type": "...", "title": "...", "description": "...", "color": "..." }}
   ],

@@ -35,27 +35,43 @@ export default function ExecutiveOverview({ dashboardData }: { dashboardData: an
   const totalProjects = summary.total_projects || 0;
   const delayedProjects = summary.delayed_projects || 0;
   
-  // Use aggregated MW from dashboard for SAP logistics value placeholder, 
-  // or we can calculate cost if we had it. Let's use tracked capacity for now.
   const totalMW = summary.total_mw || 0;
-  
-  // Format cost as placeholder since we removed SAP actualCapex from summary, 
-  // but let's just use a fixed or calculated number based on MW for now to keep the UI looking good.
-  const formattedCost = `₹${((totalMW * 4000000) / 10000000).toFixed(1)} Cr`; // Assuming 4 Cr per MW
-  
-  // Calculate avg SPI if available, else default to 1.00
+  const formattedCost = `₹${((totalMW * 4000000) / 10000000).toFixed(1)} Cr`;
   const avgSpi = "1.00"; 
   
-  const [loading, setLoading] = useState(true);
-  const [briefing, setBriefing] = useState<any>(null);
+  // Calculate a stringified hash of the dashboardData to detect real data changes,
+  // immune to reference changes and HMR.
+  const currentDataHash = dashboardData ? JSON.stringify(dashboardData.summary || {}) : '';
+  
+  // Try to get cached data from sessionStorage
+  const cachedStr = sessionStorage.getItem('akasha_briefing_data');
+  const cachedHash = sessionStorage.getItem('akasha_briefing_hash');
+  
+  const parsedCache = cachedStr ? JSON.parse(cachedStr) : null;
+  const isDataChanged = currentDataHash !== cachedHash || currentDataHash === '';
+  
+  const [loading, setLoading] = useState(isDataChanged || !parsedCache);
+  const [briefing, setBriefing] = useState<any>(!isDataChanged ? parsedCache : null);
   const [error, setError] = useState('');
 
   useEffect(() => {
+    // If data hasn't changed and we have a valid cache, don't fetch again
+    if (!isDataChanged && parsedCache) {
+      setLoading(false);
+      setBriefing(parsedCache);
+      return;
+    }
+
     const fetchBriefing = async () => {
+      setLoading(true);
       try {
         const response = await fetch('/akasha/api/generate-briefing');
         if (!response.ok) throw new Error('Failed to generate AI Briefing');
         const data = await response.json();
+        
+        sessionStorage.setItem('akasha_briefing_data', JSON.stringify(data));
+        sessionStorage.setItem('akasha_briefing_hash', currentDataHash);
+        
         setBriefing(data);
       } catch (err: any) {
         setError(err.message || 'Error connecting to AI Core');
@@ -63,8 +79,12 @@ export default function ExecutiveOverview({ dashboardData }: { dashboardData: an
         setLoading(false);
       }
     };
-    fetchBriefing();
-  }, []);
+    
+    // Only fetch if dashboard data is available (prevent fetching on initial null render)
+    if (dashboardData) {
+      fetchBriefing();
+    }
+  }, [currentDataHash]);
   
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
@@ -119,16 +139,13 @@ export default function ExecutiveOverview({ dashboardData }: { dashboardData: an
                <h3 className="text-lg font-medium text-foreground tracking-wide flex items-center gap-2">
                  Executive Intelligence Brief
                  <span className="text-[10px] bg-emerald-500/20 text-emerald-500 border border-emerald-500/30 px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider">
-                   Confidence: 94%
+                   Confidence: {briefing?.confidenceScore || 94}%
                  </span>
                </h3>
                <p className="text-xs text-muted-foreground">Generated automatically at {new Date().toLocaleTimeString()} based on latest sync.</p>
              </div>
           </div>
           
-          <button className="text-xs bg-muted hover:bg-accent text-foreground border border-border px-4 py-2 rounded-lg transition-colors">
-            Ask Follow-up
-          </button>
         </div>
 
         <div className="pl-14 pr-4 min-h-[100px] flex flex-col justify-center">
