@@ -16,3 +16,6 @@ pandas
 openpyxl
 
 alembic
+
+PyMuPDF
+pywin32
