@@ -4,9 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { Moon, Sun } from "lucide-react";
 import adaniLogo from "../assets/adani-dpr-icon.ico";
 import PhotonBeam from "../components/ui/photon-beam";
+import PresentationModal from "../components/ui/PresentationModal";
 
 export default function LandingPage() {
   const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [showPresentation, setShowPresentation] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -90,7 +92,10 @@ export default function LandingPage() {
                 >
                   Login
                 </button>
-                <button className="px-6 py-2 bg-transparent border border-white/20 hover:border-[#75479C] text-foreground rounded-xl font-medium text-lg transition-all duration-300 hover:bg-white/5 backdrop-blur-sm hover:shadow-[0_0_20px_rgba(117,71,156,0.3)] hover:-translate-y-1">
+                <button 
+                  onClick={() => setShowPresentation(true)}
+                  className="px-6 py-2 bg-transparent border border-white/20 hover:border-[#75479C] text-foreground rounded-xl font-medium text-lg transition-all duration-300 hover:bg-white/5 backdrop-blur-sm hover:shadow-[0_0_20px_rgba(117,71,156,0.3)] hover:-translate-y-1 block text-center"
+                >
                   Documentation
                 </button>
               </div>
@@ -98,6 +103,12 @@ export default function LandingPage() {
           </div>
         </div>
       </div>
+      
+      <PresentationModal 
+        isOpen={showPresentation} 
+        onClose={() => setShowPresentation(false)} 
+        totalSlides={10} 
+      />
     </div>
   );
 }

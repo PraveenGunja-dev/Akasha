@@ -4,32 +4,47 @@ import {
   AlertTriangle, ShieldCheck, Zap, Package, Bot, PenTool
 } from 'lucide-react';
 
-const KPICard = ({ title, value, trend, trendValue, icon: Icon, color }: any) => (
-  <div className="bg-card border border-border rounded-xl p-5 relative overflow-hidden group hover:border-primary/50 transition-colors">
-    {/* Background Glow */}
-    <div className={`absolute top-0 right-0 w-24 h-24 bg-${color}-500/10 blur-2xl rounded-full -mr-8 -mt-8 transition-opacity group-hover:opacity-100 opacity-50`}></div>
+const colorToHex: Record<string, string> = {
+  blue: '#3B82F6',
+  emerald: '#10B981',
+  amber: '#F59E0B',
+  red: '#EF4444'
+};
+
+const KPICard = ({ title, value, trend, trendValue, icon: Icon, color }: any) => {
+  const hexColor = colorToHex[color] || colorToHex.blue;
+  return (
+  <div className="bg-card/40 backdrop-blur-md border border-border/60 rounded-2xl p-6 relative overflow-hidden group hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 hover:-translate-y-1">
+    {/* Subtle Colored Glow Overlay on Hover */}
+    <div 
+      className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+      style={{ background: `radial-gradient(circle at top right, ${hexColor}15, transparent 70%)` }}
+    />
     
-    <div className="flex justify-between items-start mb-4 relative z-10">
+    <div className="flex justify-between items-start mb-5 relative z-10">
       <div>
-        <h4 className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">{title}</h4>
+        <h4 className="text-[13px] font-semibold text-muted-foreground uppercase tracking-widest mb-1.5 transition-colors group-hover:text-foreground/80">{title}</h4>
         <div className="text-3xl font-light text-foreground tracking-tight">{value}</div>
       </div>
-      <div className={`p-2.5 rounded-lg bg-muted border border-border`}>
-        <Icon className={`w-5 h-5 text-${color}-400`} />
+      <div 
+        className="p-3 rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm border"
+        style={{ backgroundColor: `${hexColor}15`, borderColor: `${hexColor}30` }}
+      >
+        <Icon className="w-5 h-5 transition-colors duration-300" style={{ color: hexColor }} />
       </div>
     </div>
     
-    <div className="flex items-center gap-2 relative z-10 mt-4">
-      <div className={`flex items-center gap-1 text-xs font-medium ${trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-red-500' : 'text-amber-500'}`}>
-        {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : trend === 'down' ? <TrendingDown className="w-3 h-3" /> : <Activity className="w-3 h-3" />}
+    <div className="flex items-center gap-2 relative z-10 mt-5 pt-4 border-t border-border/40">
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${trend === 'up' ? 'text-emerald-500' : trend === 'down' ? 'text-red-500' : 'text-amber-500'}`}>
+        {trend === 'up' ? <TrendingUp className="w-3.5 h-3.5" /> : trend === 'down' ? <TrendingDown className="w-3.5 h-3.5" /> : <Activity className="w-3.5 h-3.5" />}
         {trendValue}
       </div>
-      <span className="text-xs text-muted-foreground/70">vs last month</span>
+      <span className="text-xs text-muted-foreground/60 font-medium">vs last month</span>
     </div>
   </div>
-);
+)};
 
-export default function ExecutiveOverview({ dashboardData }: { dashboardData: any }) {
+export default function ExecutiveOverview({ dashboardData, briefing, briefingLoading, briefingError }: { dashboardData: any, briefing: any, briefingLoading: boolean, briefingError: string }) {
   const summary = dashboardData?.summary || {};
   
   const totalProjects = summary.total_projects || 0;
@@ -38,53 +53,7 @@ export default function ExecutiveOverview({ dashboardData }: { dashboardData: an
   const totalMW = summary.total_mw || 0;
   const formattedCost = `₹${((totalMW * 4000000) / 10000000).toFixed(1)} Cr`;
   const avgSpi = "1.00"; 
-  
-  // Calculate a stringified hash of the dashboardData to detect real data changes,
-  // immune to reference changes and HMR.
-  const currentDataHash = dashboardData ? JSON.stringify(dashboardData.summary || {}) : '';
-  
-  // Try to get cached data from sessionStorage
-  const cachedStr = sessionStorage.getItem('akasha_briefing_data');
-  const cachedHash = sessionStorage.getItem('akasha_briefing_hash');
-  
-  const parsedCache = cachedStr ? JSON.parse(cachedStr) : null;
-  const isDataChanged = currentDataHash !== cachedHash || currentDataHash === '';
-  
-  const [loading, setLoading] = useState(isDataChanged || !parsedCache);
-  const [briefing, setBriefing] = useState<any>(!isDataChanged ? parsedCache : null);
-  const [error, setError] = useState('');
 
-  useEffect(() => {
-    // If data hasn't changed and we have a valid cache, don't fetch again
-    if (!isDataChanged && parsedCache) {
-      setLoading(false);
-      setBriefing(parsedCache);
-      return;
-    }
-
-    const fetchBriefing = async () => {
-      setLoading(true);
-      try {
-        const response = await fetch('/akasha/api/generate-briefing');
-        if (!response.ok) throw new Error('Failed to generate AI Briefing');
-        const data = await response.json();
-        
-        sessionStorage.setItem('akasha_briefing_data', JSON.stringify(data));
-        sessionStorage.setItem('akasha_briefing_hash', currentDataHash);
-        
-        setBriefing(data);
-      } catch (err: any) {
-        setError(err.message || 'Error connecting to AI Core');
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    // Only fetch if dashboard data is available (prevent fetching on initial null render)
-    if (dashboardData) {
-      fetchBriefing();
-    }
-  }, [currentDataHash]);
   
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
@@ -125,8 +94,9 @@ export default function ExecutiveOverview({ dashboardData }: { dashboardData: an
       </div>
 
       {/* SECTION 2: AI EXECUTIVE BRIEF */}
-      <div className="bg-gradient-to-br from-card to-muted border border-primary/30 rounded-2xl p-6 shadow-[0_8px_32px_rgba(0,0,0,0.4)] relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[100px] rounded-full pointer-events-none"></div>
+      <div className="bg-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/40 rounded-3xl p-7 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] relative overflow-hidden group transition-all duration-300 mt-2">
+        <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-70"></div>
+        <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-50"></div>
         
         <div className="flex justify-between items-start mb-4">
           <div className="flex items-center gap-3">
@@ -149,14 +119,14 @@ export default function ExecutiveOverview({ dashboardData }: { dashboardData: an
         </div>
 
         <div className="pl-14 pr-4 min-h-[100px] flex flex-col justify-center">
-          {loading ? (
+          {briefingLoading ? (
              <div className="flex items-center gap-4 py-4">
                 <div className="w-5 h-5 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                <span className="text-sm text-muted-foreground font-medium animate-pulse">Analyzing live SAP & Oracle P6 portfolio data via Groq...</span>
+                <span className="text-sm text-muted-foreground font-medium animate-pulse">Analyzing live SAP & Oracle P6 portfolio data via Azure OpenAI...</span>
              </div>
-          ) : error ? (
+          ) : briefingError ? (
              <div className="text-sm text-red-500 font-medium py-2 flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4" /> {error}
+                <AlertTriangle className="w-4 h-4" /> {briefingError}
              </div>
           ) : (
             <>

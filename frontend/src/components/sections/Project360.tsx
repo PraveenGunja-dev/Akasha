@@ -58,14 +58,15 @@ const StatusPill = ({ tier, count, active, onClick }: { tier: string; count: num
   const cfg = STATUS_CONFIG[tier] || STATUS_CONFIG['Healthy'];
   return (
     <button onClick={onClick}
-      className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-all duration-200 cursor-pointer ${active
-          ? `${cfg.bgColor} ${cfg.borderColor} shadow-sm`
-          : 'bg-card border-border hover:bg-muted/20'
+      className={`relative flex items-center gap-3 px-5 py-3.5 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden group ${active
+          ? `${cfg.bgColor} ${cfg.borderColor} shadow-[0_8px_30px_rgb(0,0,0,0.06)] -translate-y-1`
+          : `bg-card/40 backdrop-blur-md border-border/60 hover:border-primary/30 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1`
         }`}>
-      {cfg.dotClass && <div className={cfg.dotClass}></div>}
-      <div className="text-left">
-        <div className={`text-xl font-semibold tracking-tight ${active ? cfg.color : 'text-foreground'}`}>{count}</div>
-        <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground">{tier}</div>
+      <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none ${!active ? cfg.bgColor : ''}`} />
+      {cfg.dotClass && <div className={`${cfg.dotClass} relative z-10`}></div>}
+      <div className="text-left relative z-10">
+        <div className={`text-xl font-semibold tracking-tight transition-colors ${active ? cfg.color : 'text-foreground group-hover:text-primary'}`}>{count}</div>
+        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tier}</div>
       </div>
     </button>
   );
@@ -104,69 +105,74 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
   const avgConfidence = Math.round(data.reduce((s, d) => s + (d.confidence || 70), 0) / (data.length || 1));
 
   return (
-    <div className="intelligence-card p-6 mb-6">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-5">
-        <div className="flex items-center gap-4">
-          <div className="w-12 h-12 rounded-2xl bg-gradient-premium flex items-center justify-center shadow-lg shadow-primary/20">
-            <Brain className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h3 className="text-base font-semibold text-foreground flex items-center gap-2 tracking-tight">
-              AI Portfolio Briefing
-              <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-emerald-500/20 flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live
-              </span>
-            </h3>
-            <p className="text-[10px] text-muted-foreground mt-0.5">Powered by AKASHA Intelligence Engine</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-          <span>Confidence:</span>
-          <span className="font-mono font-bold text-primary">{avgConfidence}%</span>
-        </div>
-      </div>
-
-      {/* Briefing Body */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
-        {/* Left: Summary */}
-        <div className="space-y-5">
-          <p className="text-[15px] text-foreground leading-relaxed">
-            <span className="font-semibold text-primary">{needsAttention} of {data.length} projects</span> require attention.
-            {critCount > 0 && <span className="text-red-500 font-medium"> {critCount} are in critical status.</span>}
-            {highRiskCount > 0 && <span className="text-amber-500 font-medium"> {highRiskCount} at high risk.</span>}
-            {watchlistCount > 0 && <span className="text-purple-500 font-medium"> {watchlistCount} on watchlist.</span>}
-          </p>
-
-          {topDrivers.length > 0 && (
-            <div>
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Primary Drivers</div>
-              <div className="flex flex-wrap gap-2">
-                {topDrivers.map(([issue, count]) => {
-                  const cfg = ISSUE_CONFIG[issue] || ISSUE_CONFIG['On Track'];
-                  const IssueIcon = cfg.icon;
-                  return (
-                    <span key={issue} className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-muted/50 border border-border/50 ${cfg.color}`}>
-                      <IssueIcon className="w-3.5 h-3.5" /> {issue} <span className="opacity-60">({count})</span>
-                    </span>
-                  );
-                })}
-              </div>
+    <div className="bg-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/40 rounded-3xl p-7 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] relative overflow-hidden group transition-all duration-300 mb-8">
+      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-70"></div>
+      <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-50"></div>
+      
+      <div className="relative z-10">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-gradient-premium flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+              <Brain className="w-6 h-6 text-white" />
             </div>
-          )}
+            <div>
+              <h3 className="text-base font-semibold text-foreground flex items-center gap-2 tracking-tight">
+                AI Portfolio Briefing
+                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-emerald-500/20 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                </span>
+              </h3>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Powered by AKASHA Intelligence Engine</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
+            <span>Confidence:</span>
+            <span className="font-mono font-bold text-primary">{avgConfidence}%</span>
+          </div>
         </div>
 
-        {/* Right: Impact Metrics */}
-        <div className="space-y-4 lg:border-l lg:border-border/50 lg:pl-8 flex flex-col justify-center">
-          <div className="bg-red-500/5 dark:bg-red-500/10 rounded-xl p-4 border border-red-500/10">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Risk Exposure</div>
-            <div className="text-2xl font-light text-red-500 tracking-tight">{fmtMW(totalSupplyGap)}</div>
-            <div className="text-[11px] text-muted-foreground mt-1">Pending across portfolio</div>
+        {/* Briefing Body */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
+          {/* Left: Summary */}
+          <div className="space-y-5">
+            <p className="text-[15px] text-foreground leading-relaxed">
+              <span className="font-semibold text-primary">{needsAttention} of {data.length} projects</span> require attention.
+              {critCount > 0 && <span className="text-red-500 font-medium"> {critCount} are in critical status.</span>}
+              {highRiskCount > 0 && <span className="text-amber-500 font-medium"> {highRiskCount} at high risk.</span>}
+              {watchlistCount > 0 && <span className="text-purple-500 font-medium"> {watchlistCount} on watchlist.</span>}
+            </p>
+
+            {topDrivers.length > 0 && (
+              <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Primary Drivers</div>
+                <div className="flex flex-wrap gap-2">
+                  {topDrivers.map(([issue, count]) => {
+                    const cfg = ISSUE_CONFIG[issue] || ISSUE_CONFIG['On Track'];
+                    const IssueIcon = cfg.icon;
+                    return (
+                      <span key={issue} className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-card/60 backdrop-blur border border-border/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${cfg.color}`}>
+                        <IssueIcon className="w-3.5 h-3.5" /> {issue} <span className="opacity-60">({count})</span>
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
-          <div className="bg-amber-500/5 dark:bg-amber-500/10 rounded-xl p-4 border border-amber-500/10">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500/70 mb-1">Schedule Slippage</div>
-            <div className="text-2xl font-light text-amber-500 tracking-tight">{avgDelay} <span className="text-sm font-normal text-amber-500/70">days (avg)</span></div>
-            <div className="text-[11px] text-muted-foreground mt-1">Max exposure: {maxDelay} days</div>
+
+          {/* Right: Impact Metrics */}
+          <div className="space-y-4 lg:border-l lg:border-border/50 lg:pl-8 flex flex-col justify-center">
+            <div className="bg-red-500/5 hover:bg-red-500/10 transition-colors duration-300 rounded-2xl p-5 border border-red-500/10 shadow-sm">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Risk Exposure</div>
+              <div className="text-2xl font-light text-red-500 tracking-tight">{fmtMW(totalSupplyGap)}</div>
+              <div className="text-[11px] text-muted-foreground mt-1">Pending across portfolio</div>
+            </div>
+            <div className="bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-300 rounded-2xl p-5 border border-amber-500/10 shadow-sm">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500/70 mb-1">Schedule Slippage</div>
+              <div className="text-2xl font-light text-amber-500 tracking-tight">{avgDelay} <span className="text-sm font-normal text-amber-500/70">days (avg)</span></div>
+              <div className="text-[11px] text-muted-foreground mt-1">Max exposure: {maxDelay} days</div>
+            </div>
           </div>
         </div>
       </div>
@@ -190,10 +196,13 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
   return (
     <div
       onClick={() => onOpen(project.projectId)}
-      className="group relative flex items-center justify-between px-6 py-4 bg-card hover:bg-muted/30 border-b border-border/50 cursor-pointer transition-colors"
+      className="group relative flex items-center justify-between px-6 py-5 bg-card/20 hover:bg-card/60 backdrop-blur-sm border-b border-border/50 cursor-pointer transition-all duration-300"
     >
+      {/* Dynamic Colored Hover Overlay */}
+      <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none" style={{ backgroundColor: accentColor }} />
+      
       {/* Left Accent Line on Hover */}
-      <div className="absolute left-0 top-0 bottom-0 w-[2px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accentColor }}></div>
+      <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accentColor }}></div>
 
       {/* 1. Status & Name */}
       <div className="flex flex-col gap-1 w-[30%] min-w-[250px]">

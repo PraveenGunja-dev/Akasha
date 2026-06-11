@@ -166,7 +166,7 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
               className="w-full bg-transparent py-4 px-6 text-sm text-foreground placeholder-foreground/40 focus:outline-none font-mono"
             />
             <button 
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={!input.trim() || loading}
               className="mr-2 p-2.5 bg-gradient-to-r from-[#0B74B0] to-[#75479C] hover:from-[#0c85c9] hover:to-[#8956b3] text-white rounded-xl transition-all shadow-[0_0_15px_rgba(11,116,176,0.4)] hover:shadow-[0_0_25px_rgba(11,116,176,0.6)] disabled:opacity-50"
             >

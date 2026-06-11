@@ -11,6 +11,20 @@ from datetime import datetime
 # ------------------------------------------
 # P6 Project Model (Construction Tracking)
 # ------------------------------------------
+class P6WBSNode(Base):
+    __tablename__ = "p6_wbs_node"
+
+    id = Column(Integer, primary_key=True, index=True)
+    p6_object_id = Column(BigInteger, unique=True, index=True, nullable=False)
+    project_object_id = Column(BigInteger, index=True, nullable=False)
+    wbs_code = Column(String)
+    wbs_name = Column(String)
+    parent_object_id = Column(BigInteger, index=True, nullable=True)
+    is_block = Column(Boolean, default=False)
+    block_number = Column(Integer, nullable=True)
+    
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
 class P6Project(Base):
     __tablename__ = "p6_project"
 
@@ -182,6 +196,13 @@ class MTInTransit(Base):
     wbs_element = Column(String, index=True)
     mw_multiplication_factor = Column(Float)
     quantity_mw = Column(Float)  # IT_Quantity_MW
+    
+    # New columns from analysis
+    grn_quantity = Column(Float, nullable=True)
+    ibd_creation_date = Column(DateTime, nullable=True)
+    po_quantity = Column(Float, nullable=True)
+    rejected_quantity = Column(Float, nullable=True)
+    
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class MTPOAmount(Base):
@@ -199,6 +220,16 @@ class MTPOAmount(Base):
     mw_multiplication_factor = Column(Float)
     po_quantities_mw = Column(Float)
     net_order_value = Column(Float)
+    
+    # New columns from analysis
+    quantity_received = Column(Float, nullable=True)
+    still_to_be_delivered_qty = Column(Float, nullable=True)
+    delivery_date = Column(DateTime, nullable=True)
+    delivery_completed_flag = Column(String, nullable=True)
+    deletion_indicator = Column(String, nullable=True)
+    document_date = Column(DateTime, nullable=True)
+    short_text = Column(String, nullable=True)
+    
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class MTInventory(Base):
@@ -217,6 +248,28 @@ class MTInventory(Base):
     movement_type_validation = Column(String)
     mw_multiplication_factor = Column(Float)
     quantity_mw = Column(Float)  # Inv_Quantity_MW
+    
+    # New columns from analysis
+    special_stock = Column(String, nullable=True)
+    material_type = Column(String, nullable=True)
+    material_group = Column(String, nullable=True)
+    material_description = Column(String, nullable=True)
+    value_unrestricted = Column(Float, nullable=True)
+    plant_name = Column(String, nullable=True)
+    
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+class MTMaterialDocument(Base):
+    __tablename__ = "mt_materialdocument"
+
+    id = Column(Integer, primary_key=True, index=True)
+    material_code = Column(String, index=True)
+    plant_code = Column(String, index=True)
+    movement_type = Column(String)
+    posting_date = Column(DateTime)
+    quantity = Column(Float)
+    material_document = Column(String)
+    wbs_element = Column(String, index=True)
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class MTUnderConstruction(Base):

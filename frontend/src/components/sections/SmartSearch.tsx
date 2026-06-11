@@ -122,19 +122,21 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
                  <div 
                     key={result.id} 
                     onClick={() => handleResultClick(result)}
-                    className="group bg-card border border-border/50 hover:border-primary/50 rounded-xl p-5 flex gap-4 cursor-pointer transition-all hover:shadow-[0_0_20px_rgba(59,130,246,0.1)]"
+                    className="group bg-card/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 rounded-2xl p-5 flex gap-5 cursor-pointer transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] hover:-translate-y-1 relative overflow-hidden"
                  >
-                   <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${style.bg}`}>
+                   <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-500 pointer-events-none ${style.bg.replace('/10', '')}`} />
+                   
+                   <div className={`relative z-10 w-12 h-12 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm border border-border/40 ${style.bg}`}>
                      <style.icon className={`w-5 h-5 ${style.color}`} />
                    </div>
-                   <div className="flex-1">
-                     <div className="flex items-center gap-2 mb-1">
+                   <div className="flex-1 relative z-10">
+                     <div className="flex items-center gap-3 mb-1.5">
                        <h3 className="text-lg font-semibold text-foreground/90 group-hover:text-primary transition-colors">{result.title}</h3>
-                       <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-muted text-muted-foreground">{result.type}</span>
+                       <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-muted/80 text-muted-foreground border border-border/50">{result.type}</span>
                      </div>
-                     <p className="text-sm text-muted-foreground leading-relaxed">{result.snippet}</p>
+                     <p className="text-[13px] text-muted-foreground leading-relaxed">{result.snippet}</p>
                    </div>
-                   <div className="flex items-center pr-2">
+                   <div className="flex items-center pr-2 relative z-10">
                      <ArrowRight className="w-5 h-5 text-muted-foreground/50 group-hover:text-primary transition-colors group-hover:translate-x-1" />
                    </div>
                  </div>

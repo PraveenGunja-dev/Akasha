@@ -126,17 +126,18 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
     return (
       <button 
         onClick={() => setIsOpen(true)} 
-        className="fixed bottom-6 right-6 w-14 h-14 bg-primary text-primary-foreground rounded-xl flex items-center justify-center hover:bg-primary/90 transition-all hover:-translate-y-1 z-50 animate-in fade-in zoom-in group border border-border"
+        className="fixed bottom-6 right-6 px-4 h-14 bg-primary text-primary-foreground rounded-xl flex items-center justify-center gap-2 hover:bg-primary/90 transition-all hover:-translate-y-1 z-50 animate-in fade-in zoom-in group border border-border shadow-lg"
       >
-        <Sparkles className="w-6 h-6 group-hover:hidden" />
-        <Bot className="w-6 h-6 hidden group-hover:block" />
+        <Sparkles className="w-5 h-5 group-hover:hidden" />
+        <Bot className="w-5 h-5 hidden group-hover:block" />
+        <span className="font-semibold tracking-wide">Ask Akasha</span>
         <span className="absolute -top-1.5 -right-1.5 w-3 h-3 bg-destructive rounded-full animate-pulse border-2 border-background"></span>
       </button>
     );
   }
 
   return (
-    <div className="fixed top-0 right-0 w-[400px] h-screen flex flex-col border-l border-border bg-card z-[100] animate-in slide-in-from-right-8 duration-300 fade-in">
+    <div className="w-[400px] h-full flex flex-col border-l border-border bg-card shrink-0 z-[40] animate-in slide-in-from-right-8 duration-300 fade-in">
       
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-4 border-b border-border bg-muted/20">

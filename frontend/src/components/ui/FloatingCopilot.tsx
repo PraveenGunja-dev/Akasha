@@ -150,7 +150,7 @@ export default function FloatingCopilot() {
                 placeholder="Ask AKASHA..."
                 className="flex-1 bg-transparent text-sm text-foreground/90 placeholder-muted-foreground/30 py-2 focus:outline-none"
               />
-              <button onClick={sendMessage} disabled={!input.trim() || loading}
+              <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
                 className="p-2 rounded-lg text-primary/60 hover:text-primary hover:bg-primary/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
                 <Send className="w-4 h-4" />
               </button>

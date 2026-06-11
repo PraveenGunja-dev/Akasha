@@ -38,6 +38,11 @@ export default function CEODashboard() {
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  // Briefing Data State
+  const [briefing, setBriefing] = useState<any>(null);
+  const [briefingLoading, setBriefingLoading] = useState(true);
+  const [briefingError, setBriefingError] = useState('');
+
   const [p6Data, setP6Data] = useState<any[]>([]);
   const [sapData, setSapData] = useState<any[]>([]);
   const [logisticsData, setLogisticsData] = useState<any[]>([]);
@@ -79,15 +84,34 @@ export default function CEODashboard() {
         setLogisticsData(log);
         setFinDetails(fDet);
         setLogDetails(lDet);
+        // Only fetch briefing once if not loaded
+        if (!briefing && selectedProject === 'All') {
+          try {
+            const bRes = await fetch('/akasha/api/generate-briefing');
+            if (bRes.ok) {
+              const bData = await bRes.json();
+              setBriefing(bData);
+            } else {
+              setBriefingError('Failed to generate AI Briefing');
+            }
+          } catch (e: any) {
+            setBriefingError(e.message || 'Error connecting to AI Core');
+          } finally {
+            setBriefingLoading(false);
+          }
+        } else if (selectedProject !== 'All') {
+           setBriefingLoading(false);
+        }
+
       } catch (error) {
-        console.error("Error fetching dashboard data:", error);
+        console.error("Failed to fetch dashboard data:", error);
       } finally {
         setLoading(false);
       }
     };
 
     fetchData();
-  }, [selectedProject]);
+  }, [selectedProject]); // removed briefing from dependencies so it only runs when project changes
 
   // To cleanly track which modules are implemented
   const implementedModules = [
@@ -106,21 +130,25 @@ export default function CEODashboard() {
   };
 
   return (
-    <div className="flex h-screen w-full bg-background text-foreground overflow-hidden">
+    <div className="flex min-h-screen w-full bg-background text-foreground">
       
       {/* 1. Left Navigation Rail */}
-      <LeftSidebar activeTab={activeTab} setActiveTab={handleTabChange} />
+      <div className="sticky top-0 h-screen shrink-0 z-40">
+        <LeftSidebar activeTab={activeTab} setActiveTab={handleTabChange} />
+      </div>
       
       {/* Middle Area: Header + Scrollable Content */}
       <div className="flex-1 flex flex-col min-w-0 relative bg-background">
         
         {/* 2. Top Global Header (hidden for full-screen Copilot) */}
         {activeTab !== 'ai_copilot' && (
-          <TopHeader 
-            selectedProject={selectedProject} 
-            setSelectedProject={setSelectedProject} 
-            masterProjects={Array.from(new Set(dashboardData?.projects?.map((p:any) => p.project_name) || []))} 
-          />
+          <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
+            <TopHeader 
+              selectedProject={selectedProject} 
+              setSelectedProject={setSelectedProject} 
+              masterProjects={Array.from(new Set(dashboardData?.projects?.map((p:any) => p.project_name) || []))} 
+            />
+          </div>
         )}
         
         {/* 3a. Full-bleed AI Copilot (no padding, no scroll wrapper) */}
@@ -135,7 +163,7 @@ export default function CEODashboard() {
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */
-          <main className="flex-1 overflow-y-auto p-6 scroll-smooth custom-scrollbar relative">
+          <main className="flex-1 p-6 relative">
             
             {/* Subtle Background Elements */}
             <div className="absolute top-0 left-1/4 w-[800px] h-[500px] bg-[#3B82F6] opacity-[0.03] blur-[150px] rounded-full pointer-events-none z-0"></div>
@@ -150,7 +178,7 @@ export default function CEODashboard() {
                 </div>
               ) : (
                 <>
-                  {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} />}
+                  {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
                   {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
                   {activeTab === 'data_integration' && <DataIntegrationHub />}
               {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}

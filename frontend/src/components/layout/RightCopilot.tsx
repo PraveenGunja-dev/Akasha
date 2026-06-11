@@ -150,7 +150,7 @@ export default function RightCopilot() {
               <button className="p-1.5 text-gray-400 hover:text-[#3B82F6] transition-colors rounded-lg">
                 <Mic className="w-4 h-4" />
               </button>
-              <button onClick={handleSend} disabled={!input.trim()} className="p-1.5 bg-[#3B82F6] text-white rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.3)] hover:bg-blue-600 transition-colors disabled:opacity-50">
+              <button onClick={() => handleSend()} disabled={!input.trim()} className="p-1.5 bg-[#3B82F6] text-white rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.3)] hover:bg-blue-600 transition-colors disabled:opacity-50">
                 <Send className="w-4 h-4" />
               </button>
            </div>

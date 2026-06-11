@@ -407,20 +407,29 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                 <button
                   key={i}
                   onClick={() => handleSend(card.prompt)}
-                  className="group text-left p-4 rounded-xl bg-card border border-border/50 hover:border-border/80 hover:bg-accent transition-all duration-200"
+                  className="group text-left p-5 rounded-2xl bg-card/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden"
                 >
-                  <div className="flex items-start gap-3">
+                  {/* Subtle Colored Glow Overlay on Hover */}
+                  <div 
+                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                    style={{ background: `radial-gradient(circle at top right, ${card.color}15, transparent 70%)` }}
+                  />
+                  
+                  <div className="relative z-10 flex items-start gap-4">
                     <div
-                      className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 transition-transform group-hover:scale-110"
-                      style={{ backgroundColor: `${card.color}15`, border: `1px solid ${card.color}25` }}
+                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm"
+                      style={{ backgroundColor: `${card.color}15`, border: `1px solid ${card.color}30` }}
                     >
-                      <card.icon className="w-4 h-4" style={{ color: card.color }} />
+                      <card.icon className="w-5 h-5 transition-colors duration-300" style={{ color: card.color }} />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h3 className="text-[13px] font-medium text-foreground mb-0.5">{card.title}</h3>
-                      <p className="text-[11px] text-muted-foreground/70 leading-relaxed">{card.description}</p>
+                    <div className="flex-1 min-w-0 pt-0.5">
+                      <h3 className="text-[14px] font-semibold text-foreground mb-1 transition-colors duration-300">{card.title}</h3>
+                      <p className="text-[12px] text-muted-foreground/80 leading-relaxed transition-colors duration-300 group-hover:text-foreground/70">{card.description}</p>
                     </div>
-                    <ArrowRight className="w-4 h-4 text-muted-foreground/50 opacity-0 group-hover:opacity-100 group-hover:translate-x-0.5 transition-all shrink-0 mt-1" />
+                    <ArrowRight 
+                      className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 shrink-0 mt-1" 
+                      style={{ color: card.color }}
+                    />
                   </div>
                 </button>
               ))}

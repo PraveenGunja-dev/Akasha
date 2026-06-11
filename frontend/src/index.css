@@ -154,18 +154,17 @@
   /* ── Intelligence Card System (Project 360 Redesign) ── */
 
   .intelligence-card {
-    @apply relative overflow-hidden rounded-xl border border-border transition-colors duration-200;
-    background: hsl(var(--card));
+    @apply relative overflow-hidden rounded-3xl border border-border/60 transition-all duration-300 bg-card/40 backdrop-blur-md;
   }
   .dark .intelligence-card {
-    background: hsl(var(--card));
+    @apply bg-card/40 backdrop-blur-md;
   }
 
   .intelligence-card:hover {
-    border-color: hsl(var(--primary));
+    @apply shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] border-primary/40 bg-card;
   }
   .dark .intelligence-card:hover {
-    border-color: hsl(var(--primary));
+    @apply border-primary/40 bg-card;
   }
 
   .intelligence-card-critical {
