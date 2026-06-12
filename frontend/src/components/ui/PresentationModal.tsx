@@ -79,7 +79,7 @@ export default function PresentationModal({ isOpen, onClose, totalSlides = 10 }:
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ duration: 0.3 }}
-              src={`/slides/slide_${currentSlide}.png`} 
+              src={`${import.meta.env.BASE_URL}slides/slide_${currentSlide}.png`} 
               alt={`Slide ${currentSlide}`} 
               className="max-w-full max-h-full object-contain shadow-[0_0_50px_rgba(0,0,0,0.5)]"
             />

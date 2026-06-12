@@ -311,65 +311,7 @@ def calculate_project_360_metrics(db: Session):
             "remainingDuration": p6_proj.remaining_duration,
             "parentEPS": p6_proj.parent_eps_name,
         })
-    # Add unmapped P6 projects
-    mapped_p6_ids = {m.project_id for m in mappings if m.project_id}
-    unmapped_p6 = db.query(models.P6Project).filter(~models.P6Project.project_id.in_(mapped_p6_ids)).all()
-    
-    for p6_proj in unmapped_p6:
-        progress = (p6_proj.duration_percent_complete or 0) / 100
-        sched_var = p6_proj.finish_date_variance or 0
-        status_tier = "Healthy"
-        if sched_var < -10: status_tier = "Watchlist"
-        if sched_var < -20: status_tier = "High Risk"
-        if sched_var < -30: status_tier = "Critical"
-        if progress >= 0.99: status_tier = "Completed"
-        
-        results.append({
-            "projectId": p6_proj.project_id,
-            "projectName": p6_proj.name,
-            "sapPlantCode": None,
-            "agelCode": None,
-            "capacityMW": 0,
-            "statusTier": status_tier,
-            "primaryIssue": "Unmapped",
-            "impactLines": ["Unmapped Project"],
-            "confidence": 30,
-            "aiRecommendation": "Map project to SAP & TC data for 360 insights.",
-            "aiInsight": "P6 Schedule data available. Other domains unmapped.",
-            "riskCategories": ["Unmapped"],
-            "codAtRisk": False,
-            "delayDays": abs(sched_var) if sched_var < 0 else 0,
-            "progress": round(progress, 3),
-            "spi": round(p6_proj.schedule_performance_index or 1.0, 2),
-            "cpi": round(p6_proj.cost_performance_index or 1.0, 2),
-            "scheduleVariance": round(sched_var),
-            "costVariance": round(p6_proj.total_cost_variance or 0, 2),
-            "poVolumeMW": 0,
-            "inTransitMW": 0,
-            "inventoryMW": 0,
-            "materialAvailability": 0,
-            "riskScore": 0,
-            "healthScore": 100,
-            "tcEdgesCount": 0,
-            "forecastFinish": p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj.scheduled_finish_date else "N/A",
-            "forecastMonth": p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj.scheduled_finish_date else "TBD",
-            "health": status_tier,
-            "keyIssue": "Unmapped",
-            "recommendedAction": "Map project to SAP & TC",
-            "startDate": p6_proj.start_date.strftime("%Y-%m-%d") if p6_proj.start_date else None,
-            "finishDate": p6_proj.finish_date.strftime("%Y-%m-%d") if p6_proj.finish_date else None,
-            "baselineFinishDate": p6_proj.baseline_finish_date.strftime("%Y-%m-%d") if p6_proj.baseline_finish_date else None,
-            "status": p6_proj.status,
-            "durationPercentComplete": p6_proj.duration_percent_complete or 0,
-            "activityCount": p6_proj.activity_count or 0,
-            "completedActivities": p6_proj.completed_activity_count or 0,
-            "inProgressActivities": p6_proj.in_progress_activity_count or 0,
-            "notStartedActivities": p6_proj.not_started_activity_count or 0,
-            "plannedDuration": p6_proj.planned_duration,
-            "actualDuration": p6_proj.actual_duration,
-            "remainingDuration": p6_proj.remaining_duration,
-            "parentEPS": p6_proj.parent_eps_name,
-        })
+    # Add unmapped P6 projects logic removed
 
     return sorted(results, key=lambda x: x['riskScore'], reverse=True)
 

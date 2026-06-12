@@ -80,14 +80,21 @@ def get_ai_provider():
     load_dotenv(override=True)
     return os.environ.get("AI_PROVIDER", "groq").lower()
 
-def call_groq(messages, temperature, max_tokens, json_response=False):
-    api_key = os.environ.get("AKASHA_AI_API_KEY")
-    if not api_key:
-        raise HTTPException(status_code=500, detail="AKASHA_AI_API_KEY environment variable not set.")
-    client = Groq(api_key=api_key)
+def call_ollama(messages, temperature, max_tokens, json_response=False):
+    import openai
+    import os
+    
+    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.56:11434/v1")
+    model_name = os.environ.get("OLLAMA_MODEL", "llama3")
+    
+    client = openai.OpenAI(
+        base_url=endpoint,
+        api_key="ollama" # Ollama doesn't require a strict API key
+    )
+    
     kwargs = {
         "messages": messages,
-        "model": "llama-3.3-70b-versatile",
+        "model": model_name,
         "temperature": temperature,
         "max_tokens": max_tokens
     }
@@ -210,7 +217,7 @@ Live Portfolio Context:
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.3, max_tokens=1000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.3, max_tokens=1000, json_response=True)
+            content = call_ollama(messages, temperature=0.3, max_tokens=1000, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
@@ -279,7 +286,7 @@ Live Portfolio Context:
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
@@ -309,7 +316,7 @@ Project Data:
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=200)
         else:
-            content = call_groq(messages, temperature=0.2, max_tokens=200)
+            content = call_ollama(messages, temperature=0.2, max_tokens=200)
         return {"diagnostic": content}
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")

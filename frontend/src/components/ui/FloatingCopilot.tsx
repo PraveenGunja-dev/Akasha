@@ -55,10 +55,14 @@ export default function FloatingCopilot() {
 
   return (
     <>
-      {/* Floating Button */}
+      {/* Top Nav Button */}
       {!isOpen && (
-        <button onClick={() => setIsOpen(true)} className="floating-copilot-btn" title="Ask AKASHA AI">
-          <Bot className="w-6 h-6 text-white" />
+        <button 
+          onClick={() => setIsOpen(true)} 
+          className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
+          title="Ask AKASHA AI"
+        >
+          <Bot className="w-5 h-5" />
         </button>
       )}
 

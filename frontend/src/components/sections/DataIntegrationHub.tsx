@@ -312,7 +312,7 @@ export default function DataIntegrationHub() {
           name="Transmission Grid (TC)" 
           status="Active Sync" 
           color="purple"
-          metrics={[{label: "Edges", val: data.filter(d => d.tc?.has_data).length}]} 
+          metrics={[{label: "Edges", val: data.reduce((sum, d) => sum + (d.tc?.data?.khavda?.length || 0) + (d.tc?.data?.rajasthan?.length || 0), 0)}]} 
         />
       </div>
 

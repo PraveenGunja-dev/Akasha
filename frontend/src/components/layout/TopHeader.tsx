@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Bell, User, Clock, Activity, ChevronDown, Moon, Sun, Home } from 'lucide-react';
+import { Search, Bell, User, Clock, Activity, ChevronDown, Moon, Sun, LogOut, Bot, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
-export default function TopHeader({ selectedProject, setSelectedProject, masterProjects }: any) {
+export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot }: any) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const navigate = useNavigate();
 
@@ -61,7 +61,17 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         </div>
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pl-2">
+        <div className="flex items-center gap-3 pl-2">
+          {/* Ask Akasha Copilot */}
+          <button 
+            onClick={onOpenCopilot} 
+            className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-gradient-to-r from-primary/10 to-purple-500/10 hover:from-primary/20 hover:to-purple-500/20 border border-primary/20 text-foreground transition-all shadow-sm group"
+            title="Ask AKASHA AI"
+          >
+            <Sparkles className="w-4 h-4 text-primary group-hover:scale-110 transition-transform" />
+            <span className="text-sm font-semibold tracking-wide bg-gradient-to-r from-primary to-purple-400 bg-clip-text text-transparent">Ask Akasha</span>
+          </button>
+
           {/* Theme Toggle */}
           <button 
             onClick={toggleTheme} 
@@ -76,19 +86,21 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
             <Bell className="w-5 h-5" />
             <span className="absolute top-1 right-1.5 w-2 h-2 rounded-full bg-[#EF4444] border-2 border-card"></span>
           </button>
-
-          {/* Home */}
-          <button 
-            onClick={() => navigate('/')} 
-            className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
-            title="Back to Home"
-          >
-            <Home className="w-5 h-5" />
-          </button>
           
-          <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#3B82F6] to-[#75479C] p-[2px] cursor-pointer">
-            <div className="h-full w-full rounded-full bg-card flex items-center justify-center">
-               <User className="w-4 h-4 text-foreground" />
+          {/* Profile / Logout */}
+          <div className="relative group ml-2">
+            <div className="h-8 w-8 rounded-full bg-gradient-to-tr from-[#3B82F6] to-[#75479C] p-[2px] cursor-pointer">
+              <div className="h-full w-full rounded-full bg-card flex items-center justify-center">
+                 <User className="w-4 h-4 text-foreground" />
+              </div>
+            </div>
+            
+            {/* Dropdown Menu */}
+            <div className="absolute right-0 top-full mt-2 w-36 bg-card border border-border rounded-md shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all">
+               <button onClick={() => navigate('/')} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors flex items-center gap-2">
+                 <LogOut className="w-4 h-4 text-red-500" />
+                 <span>Logout</span>
+               </button>
             </div>
           </div>
         </div>

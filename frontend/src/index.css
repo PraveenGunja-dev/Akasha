@@ -13,8 +13,8 @@
 
 @layer base {
   :root {
-    /* Modern Clean Light Theme */
-    --background: 210 40% 98%; /* soft cool gray background */
+    /* Adani Precision Light Theme */
+    --background: 210 40% 98%; /* Slate-50 */
     --foreground: 222 47% 11%;
 
     --card: 0 0% 100%;
@@ -23,67 +23,64 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
 
-    /* Primary: Clean Blue */
+    /* Adani Corporate Blue */
     --primary: 210 100% 45%; 
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary: Slate/Indigo */
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 40% 30%;
+    --secondary: 214 32% 91%;
+    --secondary-foreground: 222 47% 11%;
 
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 10% 45%;
+    --muted: 214 32% 96%;
+    --muted-foreground: 215 16% 47%;
 
-    /* Accent: Soft Blue (no red) */
-    --accent: 210 100% 96%;
-    --accent-foreground: 210 100% 45%;
+    --accent: 214 32% 96%;
+    --accent-foreground: 222 47% 11%;
 
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     --success: 152 70% 40%;
     --warning: 35 90% 50%;
 
-    /* Extremely subtle borders */
-    --border: 220 14% 92%;
-    --input: 220 14% 92%;
+    /* Crisp solid hairlines */
+    --border: 214 32% 91%;
+    --input: 214 32% 91%;
     --ring: 210 100% 45%;
-    --radius: 0.5rem; /* slightly less rounded for modern elegance */
+    
+    /* Strict minimal radius for brutalist precision */
+    --radius: 0.125rem; 
   }
 
   .dark {
-    /* Deep Navy Dark Theme */
-    --background: 225 25% 7%;
-    --foreground: 210 40% 96%;
+    /* Dark Theme fallback */
+    --background: 222 47% 11%;
+    --foreground: 210 40% 98%;
 
-    --card: 225 25% 10%;
-    --card-foreground: 210 40% 96%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 98%;
 
-    --popover: 225 25% 11%;
-    --popover-foreground: 210 40% 96%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 98%;
 
-    /* Primary: Blue (lightened for dark mode) */
-    --primary: 202 88% 60%;
+    --primary: 210 100% 45%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary: Purple */
-    --secondary: 272 37% 65%;
-    --secondary-foreground: 0 0% 100%;
+    --secondary: 217 32% 17%;
+    --secondary-foreground: 210 40% 98%;
 
-    --muted: 225 20% 14%;
-    --muted-foreground: 215 20% 60%;
+    --muted: 217 32% 17%;
+    --muted-foreground: 215 20% 65%;
 
-    /* Accent: Pink/Red */
-    --accent: 342 54% 60%;
-    --accent-foreground: 0 0% 100%;
+    --accent: 217 32% 17%;
+    --accent-foreground: 210 40% 98%;
 
-    --destructive: 342 54% 60%;
-    --destructive-foreground: 0 0% 100%;
-    --success: 152 100% 40%;
-    --warning: 23 90% 60%;
+    --destructive: 0 62% 30%;
+    --destructive-foreground: 210 40% 98%;
+    --success: 152 100% 30%;
+    --warning: 35 90% 40%;
 
-    --border: 225 15% 18%;
-    --input: 225 15% 18%;
-    --ring: 202 88% 60%;
+    --border: 217 32% 17%;
+    --input: 217 32% 17%;
+    --ring: 212 96% 78%;
   }
 }
 
@@ -93,7 +90,14 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: 'Adani', 'Inter', sans-serif;
+    font-family: 'Adani', sans-serif;
+  }
+  
+  /* Disable glassmorphism everywhere for brutalist precision */
+  .backdrop-blur-md,
+  .backdrop-blur-sm,
+  .backdrop-blur-lg {
+    backdrop-filter: none !important;
   }
 }
 
@@ -151,52 +155,43 @@
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background-color: rgba(255, 255, 255, 0.2);
   }
-  /* ── Intelligence Card System (Project 360 Redesign) ── */
+  /* ── Intelligence Card System (Precision Redesign) ── */
 
   .intelligence-card {
-    @apply relative overflow-hidden rounded-3xl border border-border/60 transition-all duration-300 bg-card/40 backdrop-blur-md;
+    @apply relative overflow-hidden border border-border transition-all duration-200 bg-card;
   }
   .dark .intelligence-card {
-    @apply bg-card/40 backdrop-blur-md;
+    @apply bg-card;
   }
 
   .intelligence-card:hover {
-    @apply shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] border-primary/40 bg-card;
+    @apply border-primary shadow-sm bg-card;
   }
   .dark .intelligence-card:hover {
-    @apply border-primary/40 bg-card;
+    @apply border-primary bg-card;
   }
 
   .intelligence-card-critical {
     border-color: hsl(var(--destructive) / 0.3);
-    background: hsl(var(--destructive) / 0.02);
+    border-left: 3px solid hsl(var(--destructive));
   }
   .intelligence-card-critical:hover {
-    border-color: hsl(var(--destructive));
-  }
-  .dark .intelligence-card-critical:hover {
     border-color: hsl(var(--destructive));
   }
 
   .intelligence-card-warning {
     border-color: hsl(var(--warning) / 0.3);
-    background: hsl(var(--warning) / 0.02);
+    border-left: 3px solid hsl(var(--warning));
   }
   .intelligence-card-warning:hover {
-    border-color: hsl(var(--warning));
-  }
-  .dark .intelligence-card-warning:hover {
     border-color: hsl(var(--warning));
   }
 
   .intelligence-card-healthy {
     border-color: hsl(var(--success) / 0.3);
-    background: hsl(var(--success) / 0.02);
+    border-left: 3px solid hsl(var(--success));
   }
   .intelligence-card-healthy:hover {
-    border-color: hsl(var(--success));
-  }
-  .dark .intelligence-card-healthy:hover {
     border-color: hsl(var(--success));
   }
 
@@ -281,7 +276,7 @@
 
   /* Section header label */
   .section-label {
-    @apply text-[10px] font-bold uppercase tracking-[0.2em] text-muted-foreground/50;
+    @apply text-[11px] font-bold uppercase tracking-[0.1em] text-muted-foreground;
   }
 
   /* ── Redesigned Project Card ── */
@@ -302,16 +297,16 @@
     border-spacing: 0;
   }
   .intel-table thead th {
-    @apply text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 text-left px-4 py-3;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-    background: rgba(255, 255, 255, 0.02);
+    @apply text-[11px] font-bold uppercase tracking-[0.05em] text-muted-foreground text-left px-4 py-3;
+    border-bottom: 1px solid hsl(var(--border));
+    background: hsl(var(--muted));
   }
   .intel-table tbody td {
-    @apply px-4 py-2.5 text-[12px] text-foreground/80;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    @apply px-4 py-3 text-[13px] text-foreground;
+    border-bottom: 1px solid hsl(var(--border));
   }
   .intel-table tbody tr:hover {
-    background: rgba(255, 255, 255, 0.02);
+    background: hsl(var(--muted));
   }
   .intel-table tbody tr:last-child td {
     border-bottom: none;
@@ -320,16 +315,16 @@
   /* ── Detail row (key-value) ── */
   .detail-row {
     @apply flex items-center justify-between py-2 text-sm;
-    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+    border-bottom: 1px solid hsl(var(--border));
   }
   .detail-row:last-child {
     border-bottom: none;
   }
   .detail-row-label {
-    @apply text-muted-foreground/50 text-xs;
+    @apply text-muted-foreground text-[13px];
   }
   .detail-row-value {
-    @apply font-mono text-foreground/80 text-right;
+    @apply font-bold text-foreground text-right;
   }
 }
 
@@ -436,15 +431,15 @@
 }
 
 .akasha-response thead th {
-  background: rgba(255, 255, 255, 0.05) !important;
+  background: hsl(var(--muted)) !important;
   font-size: 11px !important;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: #9CA3AF !important;
+  color: hsl(var(--muted-foreground)) !important;
   padding: 12px 16px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  border-right: 1px solid hsl(var(--border));
   text-align: left;
   white-space: nowrap;
 }
@@ -456,9 +451,9 @@
 .akasha-response tbody td {
   font-size: 13px !important;
   padding: 12px 16px !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
-  border-right: 1px solid rgba(255, 255, 255, 0.03);
-  color: #D1D5DB !important;
+  border-bottom: 1px solid hsl(var(--border)) !important;
+  border-right: 1px solid hsl(var(--border));
+  color: inherit !important;
   line-height: 1.6;
   vertical-align: top;
 }
@@ -483,7 +478,7 @@
 
 .akasha-response li {
   margin: 0.35em 0;
-  color: #D1D5DB;
+  color: inherit;
   font-size: 13.5px;
   line-height: 1.7;
 }
@@ -504,7 +499,7 @@
 
 /* Heading styling */
 .akasha-response h1, .akasha-response h2, .akasha-response h3, .akasha-response h4 {
-  color: #fff;
+  color: inherit;
   margin-top: 1em;
   margin-bottom: 0.4em;
   font-weight: 600;
@@ -516,16 +511,16 @@
 
 /* Strong/Bold */
 .akasha-response strong {
-  color: #fff;
+  color: inherit;
   font-weight: 600;
 }
 
 /* Blockquote */
 .akasha-response blockquote {
-  border-left: 3px solid rgba(59, 130, 246, 0.4);
+  border-left: 3px solid hsl(var(--primary) / 0.4);
   padding-left: 16px;
   margin: 12px 0;
-  color: #9CA3AF;
+  color: hsl(var(--muted-foreground));
   font-style: italic;
 }
 

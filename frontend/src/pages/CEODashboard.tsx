@@ -147,6 +147,7 @@ export default function CEODashboard() {
               selectedProject={selectedProject} 
               setSelectedProject={setSelectedProject} 
               masterProjects={Array.from(new Set(dashboardData?.projects?.map((p:any) => p.project_name) || []))} 
+              onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
             />
           </div>
         )}

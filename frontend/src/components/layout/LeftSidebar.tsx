@@ -54,7 +54,7 @@ export default function LeftSidebar({ activeTab, setActiveTab }: SidebarProps) {
       <div className={`p-6 pb-4 flex flex-col justify-center border-b border-border/50 ${isCollapsed ? 'items-center px-0' : ''}`}>
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-primary/20">
-             <img src="/akasha_hero_bg.png" alt="AKASHA" className="w-full h-full object-cover" />
+             <img src={`${import.meta.env.BASE_URL}akasha_hero_bg.png`} alt="AKASHA" className="w-full h-full object-cover" />
           </div>
           {!isCollapsed && (
             <div className="flex flex-col overflow-hidden whitespace-nowrap animate-in fade-in duration-300">
