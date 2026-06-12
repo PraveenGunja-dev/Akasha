@@ -14,6 +14,7 @@ interface GNode {
   p6?: any;
   sap?: any;
   tc?: any;
+  projects_list?: any[];
 }
 
 interface GEdge { src: number; tgt: number; level: number; }
