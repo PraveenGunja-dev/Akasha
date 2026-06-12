@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
 
@@ -35,9 +35,20 @@ export default function CEODashboard() {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("All");
 
-  // API Data State
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  const location = useLocation();
+
+  // Reset tab and project when returning to root dashboard via explicit back button
+  useEffect(() => {
+    if (!projectId && location.state?.reset) {
+      setSelectedProject("All");
+      setActiveTab("overview");
+      // Clear the state so it doesn't trigger again on a simple refresh
+      navigate('/dashboard', { replace: true, state: {} });
+    }
+  }, [projectId, location, navigate]);
 
   // Briefing Data State
   const [briefing, setBriefing] = useState<any>(null);
@@ -114,6 +125,28 @@ export default function CEODashboard() {
     fetchData();
   }, [selectedProject]); // removed briefing from dependencies so it only runs when project changes
 
+  useEffect(() => {
+    const handleOpenSimulation = (e: any) => {
+      if (e.detail?.projectId) {
+        // The projectId from ProjectWorkspace is a P6 ID (e.g. "FY25-P43").
+        // We need to resolve it to the project_name used in the dashboard.
+        const p6Id = e.detail.projectId;
+        const matchedProject = dashboardData?.projects?.find(
+          (p: any) => p.p6?.id === p6Id || p.project_name === p6Id
+        );
+        if (matchedProject) {
+          setSelectedProject(matchedProject.project_name);
+        } else {
+          setSelectedProject(p6Id);
+        }
+      }
+      setActiveTab('simulation_lab');
+      navigate('/dashboard');
+    };
+    window.addEventListener('open-simulation-lab', handleOpenSimulation);
+    return () => window.removeEventListener('open-simulation-lab', handleOpenSimulation);
+  }, [navigate, dashboardData]);
+
   // To cleanly track which modules are implemented
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
@@ -164,7 +197,7 @@ export default function CEODashboard() {
                 }} 
               />
             )}
-            {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} />}
+            {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} initialProject={selectedProject} />}
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */
@@ -178,7 +211,7 @@ export default function CEODashboard() {
                 <div className="w-full h-full min-h-[calc(100vh-120px)]">
                   <ProjectWorkspace 
                     projectId={projectId} 
-                    onBack={() => navigate('/dashboard')} 
+                    onBack={() => navigate('/dashboard', { state: { reset: true } })} 
                   />
                 </div>
               ) : (

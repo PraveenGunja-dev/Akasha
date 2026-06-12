@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Search, ShieldAlert, Activity, AlertTriangle, Zap, CheckCircle2, ChevronRight, BarChart2, Eye, BrainCircuit, PlaySquare, Lightbulb, Sliders, Check, FileText, FastForward, Target } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 
-export default function SimulationLab({ p6Data = [], dashboardData = {} }: any) {
+export default function SimulationLab({ p6Data = [], dashboardData = {}, initialProject = 'All' }: any) {
   const [activeStep, setActiveStep] = useState(1);
   const [isScanning, setIsScanning] = useState(false);
   const [scanProgress, setScanProgress] = useState(0);
@@ -10,9 +10,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {} }: any) 
   
   // Real projects mapping from mapped dashboardData instead of all p6 projects
   const validProjects = dashboardData?.projects || [];
-  const projects = Array.from(new Map(validProjects.map((p: any) => [p.project_name, {
+  const projects: any[] = Array.from(new Map(validProjects.map((p: any) => [p.project_name, {
     id: p.project_name,
-    name: p.project_name,
+    name: p.p6?.id || p.project_name,
     risk: p.p6?.health === 'Delayed' ? 85 : 40,
     spi: p.p6?.spi || p.p6?.schedule_performance_index || 0.85,
     critical: p.p6?.health === 'Delayed' || (p.p6?.spi && p.p6?.spi < 0.8),
@@ -20,8 +20,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {} }: any) 
     progress: p.p6?.progress || 0
   }])).values()).sort((a: any, b: any) => b.risk - a.risk);
 
-  const [selectedProject, setSelectedProject] = useState(projects[0]?.id || 'All');
+  const [selectedProject, setSelectedProject] = useState<string>(initialProject !== 'All' ? initialProject : (projects[0]?.id || 'All'));
   const [simulationData, setSimulationData] = useState<any>(null);
+
+  // Sync with dashboard if initialProject changes dynamically
+  useEffect(() => {
+    if (initialProject && initialProject !== 'All') {
+      setSelectedProject(initialProject);
+    }
+  }, [initialProject]);
 
   // Step 2 States
   const [recoveryPriority, setRecoveryPriority] = useState('Balanced');
@@ -347,7 +354,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {} }: any) 
   };
 
   return (
-    <div className="h-full flex flex-col font-sans overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden">
       
       {/* HEADER & STEPS */}
       <div className="shrink-0 flex flex-col gap-4 pb-4 border-b border-border mb-4">
@@ -1003,9 +1010,47 @@ export default function SimulationLab({ p6Data = [], dashboardData = {} }: any) 
                       </div>
                     </div>
 
-                    <div className="prose prose-sm max-w-none text-foreground/80 space-y-4">
-                      <p className="leading-relaxed">{reportData.summary}</p>
-                      <p className="leading-relaxed">{reportData.impact}</p>
+                    <div className="prose prose-sm max-w-none text-foreground/80 space-y-6">
+                      {reportData.executiveSummary && (
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground mb-2">Executive Summary</h3>
+                          <p className="leading-relaxed">{reportData.executiveSummary}</p>
+                        </div>
+                      )}
+                      {reportData.keyFindings && reportData.keyFindings.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground mb-2">Key Findings</h3>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {reportData.keyFindings.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {reportData.riskAssessment && (
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground mb-2">Risk Assessment</h3>
+                          <p className="leading-relaxed">{reportData.riskAssessment}</p>
+                        </div>
+                      )}
+                      {reportData.rootCauseAnalysis && (
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground mb-2">Root Cause Analysis</h3>
+                          <p className="leading-relaxed">{reportData.rootCauseAnalysis}</p>
+                        </div>
+                      )}
+                      {reportData.recommendedActions && reportData.recommendedActions.length > 0 && (
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground mb-2">Recommended Actions</h3>
+                          <ul className="list-disc pl-5 space-y-1">
+                            {reportData.recommendedActions.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {reportData.expectedOutcome && (
+                        <div>
+                          <h3 className="text-lg font-bold text-foreground mb-2">Expected Outcome</h3>
+                          <p className="leading-relaxed">{reportData.expectedOutcome}</p>
+                        </div>
+                      )}
                     </div>
                   </div>
                 ) : (

@@ -79,6 +79,8 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
   const critCount = data.filter(d => d.statusTier === 'Critical').length;
   const highRiskCount = data.filter(d => d.statusTier === 'High Risk').length;
   const watchlistCount = data.filter(d => d.statusTier === 'Watchlist').length;
+  const healthyCount = data.filter(d => d.statusTier === 'Healthy').length;
+  const completedCount = data.filter(d => d.statusTier === 'Completed').length;
   const needsAttention = critCount + highRiskCount + watchlistCount;
 
   // Aggregate drivers
@@ -88,7 +90,7 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
       issueBreakdown[d.primaryIssue] = (issueBreakdown[d.primaryIssue] || 0) + 1;
     }
   });
-  const topDrivers = Object.entries(issueBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 3);
+  const topDrivers = Object.entries(issueBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
   // Aggregate supply risk
   const totalSupplyGap = data.reduce((sum, d) => {
@@ -104,17 +106,31 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
   // Avg confidence
   const avgConfidence = Math.round(data.reduce((s, d) => s + (d.confidence || 70), 0) / (data.length || 1));
 
+  // Portfolio Health Score (0-100)
+  const healthScore = Math.round(((healthyCount + completedCount) / (data.length || 1)) * 100);
+  const healthColor = healthScore >= 70 ? '#10B981' : healthScore >= 40 ? '#F59E0B' : '#EF4444';
+
+  // COD at risk
+  const codAtRiskCount = data.filter(d => d.codAtRisk).length;
+
+  // Average SPI & CPI
+  const avgSPI = data.length > 0 ? (data.reduce((s, d) => s + (d.spi || 1), 0) / data.length).toFixed(2) : '1.00';
+  const avgCPI = data.length > 0 ? (data.reduce((s, d) => s + (d.cpi || 1), 0) / data.length).toFixed(2) : '1.00';
+
+  // Total capacity
+  const totalCapacity = data.reduce((s, d) => s + (d.capacityMW || 0), 0);
+
   return (
-    <div className="bg-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/40 rounded-3xl p-7 shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] relative overflow-hidden group transition-all duration-300 mb-8">
+    <div className="bg-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/40 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] relative overflow-hidden group transition-all duration-300 mb-8">
       <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-70"></div>
       <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-50"></div>
       
       <div className="relative z-10">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        {/* Header Bar */}
+        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-border/30">
           <div className="flex items-center gap-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-premium flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
-              <Brain className="w-6 h-6 text-white" />
+            <div className="w-11 h-11 rounded-2xl bg-gradient-premium flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+              <Brain className="w-5 h-5 text-white" />
             </div>
             <div>
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2 tracking-tight">
@@ -123,55 +139,160 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live
                 </span>
               </h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Powered by AKASHA Intelligence Engine</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Powered by AKASHA Intelligence Engine · {fmtMW(totalCapacity)} Total Portfolio</p>
             </div>
           </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
-            <span>Confidence:</span>
-            <span className="font-mono font-bold text-primary">{avgConfidence}%</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
+              <span>AI Confidence:</span>
+              <span className="font-mono font-bold text-primary">{avgConfidence}%</span>
+            </div>
           </div>
         </div>
 
-        {/* Briefing Body */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_280px] gap-8">
-          {/* Left: Summary */}
-          <div className="space-y-5">
-            <p className="text-[15px] text-foreground leading-relaxed">
-              <span className="font-semibold text-primary">{needsAttention} of {data.length} projects</span> require attention.
-              {critCount > 0 && <span className="text-red-500 font-medium"> {critCount} are in critical status.</span>}
-              {highRiskCount > 0 && <span className="text-amber-500 font-medium"> {highRiskCount} at high risk.</span>}
-              {watchlistCount > 0 && <span className="text-purple-500 font-medium"> {watchlistCount} on watchlist.</span>}
-            </p>
-
-            {topDrivers.length > 0 && (
-              <div>
-                <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-2.5">Primary Drivers</div>
-                <div className="flex flex-wrap gap-2">
-                  {topDrivers.map(([issue, count]) => {
-                    const cfg = ISSUE_CONFIG[issue] || ISSUE_CONFIG['On Track'];
-                    const IssueIcon = cfg.icon;
-                    return (
-                      <span key={issue} className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-3 py-1.5 rounded-lg bg-card/60 backdrop-blur border border-border/50 hover:shadow-md transition-all duration-200 hover:-translate-y-0.5 ${cfg.color}`}>
-                        <IssueIcon className="w-3.5 h-3.5" /> {issue} <span className="opacity-60">({count})</span>
-                      </span>
-                    );
-                  })}
+        {/* Main Content Grid - 4 Columns */}
+        <div className="grid grid-cols-4 gap-0 divide-x divide-border/30">
+          
+          {/* Column 1: Portfolio Status Breakdown */}
+          <div className="p-5 space-y-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Portfolio Status</div>
+            
+            {/* Health Ring */}
+            <div className="flex items-center gap-4">
+              <div className="relative w-16 h-16">
+                <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
+                  <circle cx="18" cy="18" r="15" fill="none" stroke="var(--border)" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15" fill="none" stroke={healthColor} strokeWidth="3"
+                    strokeDasharray={`${healthScore * 0.94} 100`} strokeLinecap="round" className="transition-all duration-1000" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="text-sm font-bold" style={{ color: healthColor }}>{healthScore}</span>
                 </div>
+              </div>
+              <div className="space-y-1.5 flex-1">
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500"></span> Critical</span>
+                  <span className="font-mono font-bold text-red-500">{critCount}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-500"></span> High Risk</span>
+                  <span className="font-mono font-bold text-orange-500">{highRiskCount}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Watchlist</span>
+                  <span className="font-mono font-bold text-amber-500">{watchlistCount}</span>
+                </div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Healthy</span>
+                  <span className="font-mono font-bold text-emerald-500">{healthyCount}</span>
+                </div>
+              </div>
+            </div>
+
+            {/* Attention Banner */}
+            <div className="bg-red-500/5 border border-red-500/10 rounded-xl px-3 py-2.5">
+              <div className="text-[11px] text-foreground leading-relaxed">
+                <span className="font-bold text-red-500">{needsAttention}</span>
+                <span className="text-muted-foreground"> of </span>
+                <span className="font-bold text-primary">{data.length}</span>
+                <span className="text-muted-foreground"> projects need attention</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 2: Risk Drivers & Issue Heatmap */}
+          <div className="p-5 space-y-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Risk Drivers</div>
+            <div className="space-y-2">
+              {topDrivers.map(([issue, count]) => {
+                const cfg = ISSUE_CONFIG[issue] || ISSUE_CONFIG['On Track'];
+                const IssueIcon = cfg.icon;
+                const pct = Math.round((count / data.length) * 100);
+                return (
+                  <div key={issue} className="group/driver">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${cfg.color}`}>
+                        <IssueIcon className="w-3.5 h-3.5" /> {issue}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-muted-foreground">{count} <span className="opacity-50">({pct}%)</span></span>
+                    </div>
+                    <div className="h-1.5 bg-border/50 rounded-full overflow-hidden">
+                      <div className="h-full rounded-full transition-all duration-700 group-hover/driver:brightness-125" 
+                        style={{ width: `${pct}%`, backgroundColor: cfg.color.includes('red') ? '#EF4444' : cfg.color.includes('purple') ? '#A855F7' : cfg.color.includes('amber') ? '#F59E0B' : cfg.color.includes('pink') ? '#EC4899' : cfg.color.includes('orange') ? '#F97316' : cfg.color.includes('cyan') ? '#06B6D4' : '#EAB308' }}></div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            {topDrivers.length === 0 && (
+              <div className="flex items-center gap-2 text-[11px] text-emerald-500 font-medium">
+                <CheckCircle2 className="w-4 h-4" /> All projects on track
               </div>
             )}
           </div>
 
-          {/* Right: Impact Metrics */}
-          <div className="space-y-4 lg:border-l lg:border-border/50 lg:pl-8 flex flex-col justify-center">
-            <div className="bg-red-500/5 hover:bg-red-500/10 transition-colors duration-300 rounded-2xl p-5 border border-red-500/10 shadow-sm">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Risk Exposure</div>
-              <div className="text-2xl font-light text-red-500 tracking-tight">{fmtMW(totalSupplyGap)}</div>
-              <div className="text-[11px] text-muted-foreground mt-1">Pending across portfolio</div>
+          {/* Column 3: Key Performance Indicators */}
+          <div className="p-5 space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Key Metrics</div>
+            
+            <div className="grid grid-cols-2 gap-2.5">
+              {/* SPI */}
+              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-primary/20 transition-colors">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg SPI</div>
+                <div className={`text-lg font-mono font-bold ${parseFloat(avgSPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgSPI}</div>
+              </div>
+              {/* CPI */}
+              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-primary/20 transition-colors">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg CPI</div>
+                <div className={`text-lg font-mono font-bold ${parseFloat(avgCPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgCPI}</div>
+              </div>
+              {/* COD At Risk */}
+              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-red-500/20 transition-colors">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">COD At Risk</div>
+                <div className={`text-lg font-mono font-bold ${codAtRiskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{codAtRiskCount}</div>
+              </div>
+              {/* Delayed */}
+              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-amber-500/20 transition-colors">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Delayed</div>
+                <div className={`text-lg font-mono font-bold ${delayedProjects.length > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{delayedProjects.length}</div>
+              </div>
             </div>
-            <div className="bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-300 rounded-2xl p-5 border border-amber-500/10 shadow-sm">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-amber-500/70 mb-1">Schedule Slippage</div>
-              <div className="text-2xl font-light text-amber-500 tracking-tight">{avgDelay} <span className="text-sm font-normal text-amber-500/70">days (avg)</span></div>
-              <div className="text-[11px] text-muted-foreground mt-1">Max exposure: {maxDelay} days</div>
+
+            {/* Completed tracker */}
+            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-3 py-2">
+              <div className="flex items-center justify-between text-[10px]">
+                <span className="text-muted-foreground font-medium">Completed</span>
+                <span className="font-mono font-bold text-emerald-500">{completedCount}/{data.length}</span>
+              </div>
+              <div className="h-1.5 bg-border/50 rounded-full overflow-hidden mt-1.5">
+                <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${(completedCount / (data.length || 1)) * 100}%` }}></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 4: Critical Exposures */}
+          <div className="p-5 space-y-3">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Critical Exposure</div>
+            
+            {/* Supply Risk */}
+            <div className="bg-red-500/5 hover:bg-red-500/10 transition-colors duration-300 rounded-xl p-4 border border-red-500/10">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Gap</div>
+              <div className="text-xl font-mono font-bold text-red-500 tracking-tight">{fmtMW(totalSupplyGap)}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Unfulfilled across portfolio</div>
+            </div>
+
+            {/* Schedule Slippage */}
+            <div className="bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-300 rounded-xl p-4 border border-amber-500/10">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-amber-500/70 mb-1">Schedule Slippage</div>
+              <div className="text-xl font-mono font-bold text-amber-500 tracking-tight">{avgDelay} <span className="text-xs font-normal text-amber-500/70">days avg</span></div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">Peak: {maxDelay} days</div>
+            </div>
+
+            {/* Portfolio Capacity */}
+            <div className="bg-primary/5 hover:bg-primary/10 transition-colors duration-300 rounded-xl p-4 border border-primary/10">
+              <div className="text-[9px] font-bold uppercase tracking-widest text-primary/70 mb-1">Total Capacity</div>
+              <div className="text-xl font-mono font-bold text-primary tracking-tight">{fmtMW(totalCapacity)}</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">{data.length} active projects</div>
             </div>
           </div>
         </div>

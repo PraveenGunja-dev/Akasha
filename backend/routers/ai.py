@@ -102,6 +102,7 @@ def call_groq(messages, temperature, max_tokens, json_response=False):
 
 def call_ollama(messages, temperature, max_tokens, json_response=False):
     import openai
+    import httpx
     import os
     
     endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.56:11434/v1")
@@ -109,7 +110,8 @@ def call_ollama(messages, temperature, max_tokens, json_response=False):
     
     client = openai.OpenAI(
         base_url=endpoint,
-        api_key="ollama" # Ollama doesn't require a strict API key
+        api_key="ollama",
+        timeout=httpx.Timeout(120.0, connect=30.0)
     )
     
     kwargs = {
@@ -525,12 +527,45 @@ Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
 def generate_report(req: SimulationExecuteRequest):
     # Generate an executive report based on the executed strategy
     provider = get_ai_provider()
-    prompt = f"""Generate a 2-paragraph executive report summarizing the selected strategy '{req.strategy.get('title')}' for project '{req.project.get('project_name')}'.
-Output valid JSON only:
+    prompt = f"""You are Akasha, an Enterprise Project Intelligence Assistant.
+Your role is to analyze project data and provide insights, not perform core project calculations.
+
+## Important Rules
+1. Never invent project data.
+2. Never assume values that are not provided.
+3. Use only the supplied project information.
+4. If required data is missing, explicitly state it.
+5. Explain risks, delays, trends, and impacts based on the data.
+6. Provide actionable recommendations.
+7. Always justify recommendations using the provided metrics.
+
+CRITICAL INSTRUCTION: Keep all answers highly concise, short, and crisp. Use a maximum of 2 sentences per paragraph or point. Do not provide long explanations.
+
+## What You Must Do
+Analyze the following project summary and the selected strategy:
+Project: '{req.project.get('project_name')}'
+Strategy Applied: {json.dumps(req.strategy, indent=2)}
+
+Provide:
+1. Executive Summary
+2. Key Findings
+3. Risk Assessment
+4. Root Cause Analysis
+5. Recommended Actions
+6. Expected Outcome
+
+## What You Must NOT Do
+Do not calculate: SPI, CPI, Delay Percentage, Project Health Score, Forecast Completion Dates. These values are provided by the platform's business logic engine. Use them only for analysis and recommendations.
+
+Output valid JSON only matching this exact structure:
 {{
    "title": "Executive Execution Report",
-   "summary": "Paragraph 1...",
-   "impact": "Paragraph 2..."
+   "executiveSummary": "...",
+   "keyFindings": ["...", "..."],
+   "riskAssessment": "...",
+   "rootCauseAnalysis": "...",
+   "recommendedActions": ["...", "..."],
+   "expectedOutcome": "..."
 }}
 """
     messages = [{"role": "user", "content": prompt}]
@@ -545,6 +580,61 @@ Output valid JSON only:
         return json.loads(content)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/project-diagnostic")
+def project_diagnostic(project: dict = Body(...), db: Session = Depends(get_db)):
+    provider = get_ai_provider()
+    prompt = f"""You are Akasha, an Enterprise Project Intelligence Assistant.
+Your role is to analyze project data and provide insights, not perform core project calculations.
+
+## Important Rules
+1. Never invent project data.
+2. Never assume values that are not provided.
+3. Use only the supplied project information.
+4. Explain risks, delays, trends, and impacts based on the data.
+5. Provide actionable recommendations.
+6. Always justify recommendations using the provided metrics.
+
+CRITICAL INSTRUCTION: Keep all answers highly concise, short, and crisp. Use a maximum of 2 sentences per paragraph or point. Do not provide long explanations.
+
+## What You Must Do
+Analyze the following project summary:
+{json.dumps(project, indent=2)}
+
+Provide:
+1. Executive Summary
+2. Key Findings
+3. Risk Assessment
+4. Root Cause Analysis
+5. Recommended Actions
+6. Expected Outcome
+
+## What You Must NOT Do
+Do not calculate: SPI, CPI, Delay Percentage, Project Health Score, Forecast Completion Dates. Use the provided metrics only for analysis.
+
+Output valid JSON only matching this exact structure:
+{{
+   "executiveSummary": "...",
+   "keyFindings": ["...", "..."],
+   "riskAssessment": "...",
+   "rootCauseAnalysis": "...",
+   "recommendedActions": ["...", "..."],
+   "expectedOutcome": "..."
+}}
+"""
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if provider == "azure":
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        else:
+            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        content = content.strip()
+        if content.startswith("```json"): content = content[7:-3].strip()
+        elif content.startswith("```"): content = content[3:-3].strip()
+        return json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 
 
