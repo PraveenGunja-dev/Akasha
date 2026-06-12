@@ -30,6 +30,7 @@ export default function LeftSidebar({ activeTab, setActiveTab }: SidebarProps) {
     { id: 'executive_brief', label: 'Executive Briefing', icon: FileText },
     { id: 'smart_search', label: 'Smart Search', icon: Search },
     { id: 'knowledge_graph', label: 'Knowledge Graph', icon: Network },
+    { id: 'simulation_lab', label: 'Simulation Lab', icon: BrainCircuit },
   ];
 
   const adminSections = [

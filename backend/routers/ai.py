@@ -80,6 +80,26 @@ def get_ai_provider():
     load_dotenv(override=True)
     return os.environ.get("AI_PROVIDER", "groq").lower()
 
+def call_groq(messages, temperature, max_tokens, json_response=False):
+    import os
+    from groq import Groq
+    api_key = os.environ.get("AKASHA_AI_API_KEY")
+    if not api_key:
+        raise Exception("Groq API key missing in environment")
+    client = Groq(api_key=api_key)
+    
+    kwargs = {
+        "messages": messages,
+        "model": "llama3-70b-8192",
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+    if json_response:
+        kwargs["response_format"] = {"type": "json_object"}
+        
+    chat_completion = client.chat.completions.create(**kwargs)
+    return chat_completion.choices[0].message.content
+
 def call_ollama(messages, temperature, max_tokens, json_response=False):
     import openai
     import os
@@ -299,26 +319,232 @@ Live Portfolio Context:
         error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
         raise HTTPException(status_code=500, detail=error_msg)
 
-@router.post("/project-diagnostic")
-def generate_project_diagnostic(project: dict):
-    provider = get_ai_provider()
-    prompt = f"""You are an elite AI Project Manager. Analyze the following live project data.
-Provide a concise, highly analytical, 2-3 sentence diagnostic of the project's health. 
-Highlight the biggest risk (e.g., schedule delay, low material availability, bad SPI/CPI) and recommend a mitigation step.
-Be completely factual and strict. No fluff.
+from fastapi import APIRouter, Depends, HTTPException, Body
 
-Project Data:
+@router.post("/simulation-lab")
+def run_simulation_lab(project: dict = Body(...), db: Session = Depends(get_db)):
+    from services.project_service import get_project_360_detail
+    provider = get_ai_provider()
+    
+    project_name = project.get("project_name", "")
+    deep_data = {}
+    if project_name and project_name != 'Entire Portfolio':
+        detail = get_project_360_detail(db, project_name)
+        if detail and "error" not in detail:
+            deep_data = detail
+
+    prompt = f"""You are the AKASHA AI Simulation Engine. You are running a deep diagnostic on the following live project data to detect critical risks and provide strategic recommendations.
+You must analyze the deep data (including P6 schedules, SAP procurement records, and TC engineering data) to identify exact bottlenecks.
+Do not make up generic issues. Identify actual materials that are late, specific labor issues, or specific variance details found in the data.
+
+Project Summary:
 {json.dumps(project, indent=2)}
+
+Deep System Data (P6, SAP, TC):
+{json.dumps(deep_data, indent=2)[:8000]}
+
+You MUST output your response in STRICT JSON format, consisting of:
+1. "issues": An array of exactly 4 AI-Detected issues (at least 2 critical, 2 warning). Each must have:
+   - "title": A detailed description of the issue and its cascading impact referencing REAL data points (e.g. "Transformer delivery delayed by 15 days in SAP").
+   - "severity": Either "Critical" or "Warning"
+2. "suggestions": An array of exactly 2 actionable AI Strategy Recommendations. Each must have:
+   - "title": Strategy title
+   - "description": Detailed strategy and estimated impact.
+3. "scheduleImpact": An array of 3 numbers representing estimated "Days Delayed" for [Foundation, Module Installation, Grid Connection].
+
+You MUST output ONLY valid json in the exact structure below, with no markdown formatting or extra text:
+{{
+  "issues": [
+    {{ "title": "...", "severity": "Critical" }}
+  ],
+  "suggestions": [
+    {{ "title": "...", "description": "..." }}
+  ],
+  "scheduleImpact": [12, 5, 20]
+}}
 """
     messages = [{"role": "user", "content": prompt}]
     
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=200)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=200)
-        return {"diagnostic": content}
+            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            
+        content = content.strip()
+        if content.startswith("```json"):
+            content = content[7:-3].strip()
+        elif content.startswith("```"):
+            content = content[3:-3].strip()
+        return json.loads(content)
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")
-        raise HTTPException(status_code=500, detail="Diagnostic generation failed.")
+        error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
+        raise HTTPException(status_code=500, detail=error_msg)
+
+class StrategiesRequest(BaseModel):
+    project: dict
+    constraints: dict
+
+@router.post("/simulation-lab/strategies")
+def generate_strategies(req: StrategiesRequest, db: Session = Depends(get_db)):
+    from services.project_service import get_project_360_detail
+    provider = get_ai_provider()
+    
+    project_name = req.project.get("project_name", "")
+    deep_data = {}
+    if project_name and project_name != 'Entire Portfolio':
+        detail = get_project_360_detail(db, project_name)
+        if detail and "error" not in detail:
+            deep_data = detail
+
+    prompt = f"""You are the AKASHA AI Strategy Engine. Generate 3 distinct recovery strategies based on the following real project data and user constraints.
+You must ground your strategies in the actual SAP, P6, and TC data below.
+    
+Project Summary:
+{json.dumps(req.project, indent=2)}
+
+Deep System Data (P6, SAP, TC):
+{json.dumps(deep_data, indent=2)[:8000]}
+
+User Constraints:
+{json.dumps(req.constraints, indent=2)}
+
+You MUST output strictly in valid JSON format:
+{{
+  "strategies": [
+    {{
+      "id": "strategy_1",
+      "title": "...",
+      "description": "...",
+      "type": "Selective Acceleration",
+      "cost_impact_cr": 12.0,
+      "time_saved_days": 14,
+      "risk_reduction_pct": 78,
+      "ai_confidence_pct": 87,
+      "recommended": true,
+      "radar_data": [80, 60, 90, 85, 87] 
+    }}
+  ]
+}}
+Note: "radar_data" is an array of 5 integers (0-100) representing [Feasibility, Cost Efficiency, Speed, Risk Reduction, Confidence]. Exactly 3 strategies. Only one should have "recommended": true.
+"""
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if provider == "azure":
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        else:
+            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        content = content.strip()
+        if content.startswith("```json"): content = content[7:-3].strip()
+        elif content.startswith("```"): content = content[3:-3].strip()
+        return json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class SimulationExecuteRequest(BaseModel):
+    project: dict
+    strategy: dict
+
+@router.post("/simulation-lab/simulate")
+def generate_simulation(req: SimulationExecuteRequest):
+    provider = get_ai_provider()
+    prompt = f"""You are the AKASHA AI Simulation Engine. Simulate the trajectory of project completion over the next 5 months.
+    
+Project Context:
+{json.dumps(req.project, indent=2)}
+
+Strategy Applied:
+{json.dumps(req.strategy, indent=2)}
+
+Generate a 5-month completion timeline comparing the "baseline" (if no strategy applied) vs "simulated" (with the strategy applied).
+The project's current completion is {req.project.get('progress', 0)}%.
+Output valid JSON only:
+{{
+  "timeline": [
+    {{"month": "M1", "baseline": 45, "simulated": 50}},
+    {{"month": "M2", "baseline": 50, "simulated": 65}},
+    {{"month": "M3", "baseline": 55, "simulated": 80}},
+    {{"month": "M4", "baseline": 60, "simulated": 95}},
+    {{"month": "M5", "baseline": 65, "simulated": 100}}
+  ]
+}}
+Ensure the simulated values generally outpace baseline values, ending at or near 100 based on the strategy.
+"""
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if provider == "azure":
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        else:
+            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        content = content.strip()
+        if content.startswith("```json"): content = content[7:-3].strip()
+        elif content.startswith("```"): content = content[3:-3].strip()
+        return json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/simulation-lab/execute")
+def execute_strategy(req: SimulationExecuteRequest):
+    provider = get_ai_provider()
+    prompt = f"""You are the AKASHA AI Execution Engine. Generate the automated task directives that will be pushed to integrated systems (SAP, PMAG, Contractor Portal) based on the chosen strategy.
+    
+Project Context:
+{json.dumps(req.project, indent=2)}
+
+Strategy Applied:
+{json.dumps(req.strategy, indent=2)}
+
+Output valid JSON only consisting of 3 to 5 execution tasks:
+{{
+  "tasks": [
+    {{
+      "system": "SAP", 
+      "action": "Generate PR", 
+      "description": "Expedite module procurement...", 
+      "status": "Pending"
+    }}
+  ]
+}}
+Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
+"""
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if provider == "azure":
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        else:
+            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+        content = content.strip()
+        if content.startswith("```json"): content = content[7:-3].strip()
+        elif content.startswith("```"): content = content[3:-3].strip()
+        return json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/simulation-lab/report")
+def generate_report(req: SimulationExecuteRequest):
+    # Generate an executive report based on the executed strategy
+    provider = get_ai_provider()
+    prompt = f"""Generate a 2-paragraph executive report summarizing the selected strategy '{req.strategy.get('title')}' for project '{req.project.get('project_name')}'.
+Output valid JSON only:
+{{
+   "title": "Executive Execution Report",
+   "summary": "Paragraph 1...",
+   "impact": "Paragraph 2..."
+}}
+"""
+    messages = [{"role": "user", "content": prompt}]
+    try:
+        if provider == "azure":
+            content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=1000, json_response=True)
+        else:
+            content = call_ollama(messages, temperature=0.1, max_tokens=1000, json_response=True)
+        content = content.strip()
+        if content.startswith("```json"): content = content[7:-3].strip()
+        elif content.startswith("```"): content = content[3:-3].strip()
+        return json.loads(content)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 

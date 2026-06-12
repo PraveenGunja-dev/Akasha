@@ -23,6 +23,7 @@ import KnowledgeGraph from '../components/sections/KnowledgeGraph';
 
 import TransmissionDataViewer from '../components/sections/TransmissionDataViewer';
 import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPanel';
+import SimulationLab from '../components/sections/SimulationLab';
 import ProjectWorkspace from '../components/sections/ProjectWorkspace';
 import DataIntegrationHub from '../components/sections/DataIntegrationHub';
 
@@ -117,7 +118,7 @@ export default function CEODashboard() {
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data',
-    'ai_copilot', 'executive_brief', 'smart_search', 'knowledge_graph'
+    'ai_copilot', 'executive_brief', 'smart_search', 'knowledge_graph', 'simulation_lab'
   ];
 
   const handleTabChange = (tab: string) => {
@@ -152,15 +153,18 @@ export default function CEODashboard() {
           </div>
         )}
         
-        {/* 3a. Full-bleed AI Copilot (no padding, no scroll wrapper) */}
-        {activeTab === 'ai_copilot' ? (
-          <div className="flex-1 min-h-0 p-4">
-            <AICopilot 
-              onMinimize={() => {
-                setActiveTab(previousTab);
-                setIsCopilotOpen(true);
-              }} 
-            />
+        {/* 3a. Full-bleed AI Copilot or Simulation Lab (no padding, no scroll wrapper) */}
+        {activeTab === 'ai_copilot' || activeTab === 'simulation_lab' ? (
+          <div className="flex-1 min-h-0 p-4 overflow-hidden flex flex-col">
+            {activeTab === 'ai_copilot' && (
+              <AICopilot 
+                onMinimize={() => {
+                  setActiveTab(previousTab);
+                  setIsCopilotOpen(true);
+                }} 
+              />
+            )}
+            {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} />}
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */

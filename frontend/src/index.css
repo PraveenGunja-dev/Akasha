@@ -10,7 +10,7 @@
   font-display: swap;
 }
 
-
+/* Premium UI Typography */
 @layer base {
   :root {
     /* Adani Precision Light Theme */
@@ -47,7 +47,7 @@
     --ring: 210 100% 45%;
     
     /* Strict minimal radius for brutalist precision */
-    --radius: 0.125rem; 
+    --radius: 0.25rem; 
   }
 
   .dark {
