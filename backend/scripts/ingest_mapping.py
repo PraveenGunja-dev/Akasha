@@ -15,7 +15,9 @@ def ingest_mapping():
         # Create table if not exists
         models.Base.metadata.create_all(bind=db.get_bind())
         
-        print("Clearing old mapping data...")
+        print("Clearing old mapping data and unlinking foreign keys...")
+        db.execute(text("UPDATE tc_project_entry SET mapping_id = NULL"))
+        db.execute(text("UPDATE tc_network_edge SET mapping_id = NULL"))
         db.query(models.ProjectMapping).delete()
         db.commit()
 
