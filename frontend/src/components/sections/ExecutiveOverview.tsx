@@ -286,8 +286,8 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         <KPICard title="Total Projects" value={totalProjects} trend="up" trendValue={onTrackProjects} trendLabel="On Track" icon={Activity} color="blue" onClick={() => setActiveKpiModal('Total Projects')} />
         <KPICard title="Portfolio Capacity" value={`${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
         <KPICard title="Delayed Projects" value={delayedProjects} icon={AlertTriangle} color="red" onClick={() => setActiveKpiModal('Delayed Projects')} />
-        <KPICard title="SAP Inventory" value={`${Math.round(totalInventoryMW)} MW`} icon={Package} color="amber" onClick={() => setActiveKpiModal('SAP Inventory')} />
-        <KPICard title="SAP PO Quantity" value={`${Math.round(totalPOMW)} MW`} icon={Layers} color="blue" onClick={() => setActiveKpiModal('SAP PO Quantity')} />
+        <KPICard title="SAP Inventory" value={`${Math.round(totalInventoryMW)}`} icon={Package} color="amber" onClick={() => setActiveKpiModal('SAP Inventory')} />
+        <KPICard title="SAP PO Quantity" value={`${Math.round(totalPOMW)}`} icon={Layers} color="blue" onClick={() => setActiveKpiModal('SAP PO Quantity')} />
         <KPICard title="Cost Variance" value={`₹${Math.abs(costVariance / 10000000).toFixed(1)} Cr`} subtext={costVariance > 0 ? "Over Budget" : costVariance < 0 ? "Under Budget" : "On Budget"} icon={DollarSign} color={costVariance > 0 ? "red" : "emerald"} onClick={() => setActiveKpiModal('Cost Variance')} />
       </div>
 

@@ -612,8 +612,8 @@ def get_project_360_detail(db: Session, project_id: str):
                 "wbsFilter": mapping.module_wbs,
             },
             "summary": {
-                "totalPOs": round(len(po_records_all) * allocation_ratio),
-                "totalVendors": round(len(vendor_breakdown) * allocation_ratio),
+                "totalPOs": len(po_records_all),
+                "totalVendors": len(vendor_breakdown),
                 "totalPOMW": total_po_mw,
                 "totalInTransitMW": total_transit_mw,
                 "totalInventoryMW": total_inv_mw,

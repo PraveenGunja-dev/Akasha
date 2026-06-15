@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import {
@@ -6,7 +6,7 @@ import {
   Package, TrendingUp, AlertTriangle, CheckCircle2,
   Calendar, BarChart3, Truck, Brain, ChevronRight, Loader2,
   Users, DollarSign, Layers, MapPin, Database, FileText,
-  Box, Network, Zap, BrainCircuit, Flag, CalendarClock
+  Box, Network, Zap, BrainCircuit, Flag, CalendarClock, Download
 } from 'lucide-react';
 
 /* ── Circular Gauge ── */
@@ -97,6 +97,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [activeTab, setActiveTab] = useState('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel'>('all');
 
   useEffect(() => {
     setActiveTab('overview');
@@ -146,6 +147,63 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     fetchProject();
     fetchDetail();
   }, [projectId]);
+
+  // ── SAP filtering (must be before early returns — Rules of Hooks) ──
+  const sapRaw = detail?.sap;
+  const filteredSap = useMemo(() => {
+    if (!sapRaw) return null;
+    if (sapFilter === 'all') return sapRaw;
+
+    const targetCode = sapFilter === 'spv' ? project?.sapPlantCode : project?.agelCode;
+    if (!targetCode) return sapRaw;
+
+    const filteredPOs = (sapRaw.purchaseOrders || []).filter((po: any) => po.plantCode === targetCode);
+    const filteredInTransit = (sapRaw.inTransit || []).filter((t: any) => t.plantCode === targetCode);
+    const filteredInventory = (sapRaw.inventory || []).filter((inv: any) => inv.plantCode === targetCode);
+
+    const vendorMap: Record<string, any> = {};
+    for (const po of filteredPOs) {
+      const vName = po.vendorName || 'Unknown';
+      if (!vendorMap[vName]) {
+        vendorMap[vName] = { vendorName: vName, vendorCode: po.vendorCode || '', totalMW: 0, totalValue: 0, poCount: 0, materials: new Set() };
+      }
+      vendorMap[vName].totalMW += po.poQuantityMW || 0;
+      vendorMap[vName].totalValue += po.netOrderValue || 0;
+      vendorMap[vName].poCount += 1;
+      if (po.materialCode) vendorMap[vName].materials.add(po.materialCode);
+    }
+    const filteredVendorBreakdown = Object.values(vendorMap)
+      .map((v: any) => ({ ...v, materialCount: v.materials.size }))
+      .sort((a: any, b: any) => b.totalMW - a.totalMW);
+
+    const matMap: Record<string, any> = {};
+    for (const po of filteredPOs) {
+      const mt = po.materialType || 'Unknown';
+      if (!matMap[mt]) matMap[mt] = { type: mt, totalMW: 0, count: 0 };
+      matMap[mt].totalMW += po.poQuantityMW || 0;
+      matMap[mt].count += 1;
+    }
+    const filteredMaterialBreakdown = Object.values(matMap).sort((a: any, b: any) => b.totalMW - a.totalMW);
+
+    const filteredSummary = {
+      totalPOs: filteredPOs.length,
+      totalVendors: filteredVendorBreakdown.length,
+      totalPOMW: filteredPOs.reduce((sum: number, po: any) => sum + (po.poQuantityMW || 0), 0),
+      totalInTransitMW: filteredInTransit.reduce((sum: number, t: any) => sum + (t.quantityMW || 0), 0),
+      totalInventoryMW: filteredInventory.reduce((sum: number, inv: any) => sum + (inv.quantityMW || 0), 0),
+      totalNetValue: filteredPOs.reduce((sum: number, po: any) => sum + (po.netOrderValue || 0), 0),
+    };
+
+    return {
+      ...sapRaw,
+      purchaseOrders: filteredPOs,
+      inTransit: filteredInTransit,
+      inventory: filteredInventory,
+      vendorBreakdown: filteredVendorBreakdown,
+      materialBreakdown: filteredMaterialBreakdown,
+      summary: filteredSummary,
+    };
+  }, [sapRaw, sapFilter, project?.sapPlantCode, project?.agelCode]);
 
   if (loading) {
     return (
@@ -207,34 +265,43 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     series: [{ type: 'bar', data: supplyData.map(s => ({ value: s.value, itemStyle: { color: s.color, borderRadius: [6, 6, 0, 0] } })), barWidth: '40%' }]
   };
 
-  // SAP vendor chart (from detail)
-  const vendorChartOption = detail?.sap?.vendorBreakdown?.length > 0 ? {
+  // SAP vendor chart and material chart are defined after sap filtering below
+
+
+  // P6 detail data
+  const p6 = detail?.p6;
+  const mapping = detail?.mapping;
+  const sap = filteredSap;
+  const tc = detail?.tc;
+
+  // SAP vendor chart (reactive to toggle filter)
+  const vendorChartOption = sap?.vendorBreakdown?.length > 0 ? {
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a' } },
     grid: { left: '3%', right: '8%', bottom: '3%', top: '8%', containLabel: true },
     xAxis: { type: 'value', name: 'MW', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
     yAxis: {
       type: 'category',
-      data: (detail.sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.vendorName?.substring(0, 22) || 'Unknown').reverse(),
+      data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.vendorName?.substring(0, 22) || 'Unknown').reverse(),
       axisLine: { lineStyle: { color: '#e2e8f0' } },
       axisLabel: { color: '#64748b', fontSize: 10 }
     },
     series: [{
       type: 'bar',
-      data: (detail.sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.totalMW).reverse(),
+      data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.totalMW).reverse(),
       itemStyle: { color: '#3B82F6', borderRadius: [0, 6, 6, 0] },
       barWidth: '50%'
     }]
   } : null;
 
-  // Material type pie chart
-  const materialTypeOption = detail?.sap?.materialBreakdown?.length > 0 ? {
+  // Material type pie chart (reactive to toggle filter)
+  const materialTypeOption = sap?.materialBreakdown?.length > 0 ? {
     tooltip: { trigger: 'item', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a', fontSize: 11 } },
     series: [{
       type: 'pie', radius: ['45%', '72%'], center: ['50%', '50%'],
       avoidLabelOverlap: false,
       itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
       label: { show: false },
-      data: detail.sap.materialBreakdown.map((m: any, i: number) => ({
+      data: sap.materialBreakdown.map((m: any, i: number) => ({
         value: m.totalMW,
         name: m.type,
         itemStyle: { color: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#EC4899'][i % 6] }
@@ -242,11 +309,85 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     }]
   } : null;
 
-  // P6 detail data
-  const p6 = detail?.p6;
-  const mapping = detail?.mapping;
-  const sap = detail?.sap;
-  const tc = detail?.tc;
+  const downloadSAPReport = () => {
+    if (!sap) return;
+    
+    const rows = [];
+    rows.push(['--- SAP Intelligence Report ---']);
+    rows.push(['Project:', p.projectName]);
+    rows.push(['Capacity (MW):', mapping?.capacityMW || '']);
+    rows.push(['']);
+    
+    // Vendor Summary
+    rows.push(['--- Vendor Summary ---']);
+    rows.push(['Vendor Name', 'Vendor Code', 'POs', 'Materials', 'Volume', 'Net Value']);
+    sap.vendorBreakdown?.forEach((v: any) => {
+      rows.push([
+        `"${v.vendorName?.replace(/"/g, '""') || ''}"`, 
+        v.vendorCode || '', 
+        v.poCount, 
+        v.materialCount, 
+        v.totalMW, 
+        v.totalValue
+      ]);
+    });
+    rows.push(['']);
+    
+    // Purchase Orders
+    rows.push(['--- Purchase Orders (ME2M) ---']);
+    rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Material Type', 'Quantity (Units)', 'Net Value', 'Plant Code']);
+    sap.purchaseOrders?.forEach((po: any) => {
+      rows.push([
+        po.poNumber, 
+        `"${po.vendorName?.replace(/"/g, '""') || ''}"`, 
+        po.materialCode, 
+        `"${po.materialType || ''}"`, 
+        po.poQuantity,
+        po.netOrderValue, 
+        po.plantCode
+      ]);
+    });
+    rows.push(['']);
+    
+    // In Transit
+    if (sap.inTransit?.length > 0) {
+      rows.push(['--- In-Transit Shipments (MIGO) ---']);
+      rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Quantity (Units)', 'GR Date']);
+      sap.inTransit.forEach((t: any) => {
+        rows.push([
+          t.poNumber, 
+          `"${t.vendorName?.replace(/"/g, '""') || ''}"`, 
+          t.materialCode, 
+          t.quantity,
+          t.grPostingDate || ''
+        ]);
+      });
+      rows.push(['']);
+    }
+
+    // Inventory
+    if (sap.inventory?.length > 0) {
+      rows.push(['--- Site Inventory (MB52) ---']);
+      rows.push(['Material Code', 'Storage Location', 'Quantity (Units)', 'Posting Date']);
+      sap.inventory.forEach((inv: any) => {
+        rows.push([
+          inv.materialCode, 
+          `"${inv.storageLocation || ''}"`, 
+          inv.quantity,
+          inv.postingDate || ''
+        ]);
+      });
+    }
+
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `SAP_Intelligence_${p.projectId}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   return (
     <div className="w-full min-h-full bg-background text-foreground pb-12">
@@ -586,7 +727,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         <Truck className={`w-5 h-5 ${m.color}`} />
                       </div>
                       <span className="block text-2xl font-bold text-foreground">{m.value}</span>
-                      <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-1">{m.label} (MW)</span>
+                      <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-1">{m.label}</span>
                     </div>
                   ))}
                 </div>
@@ -617,11 +758,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   <div className="mt-auto space-y-3">
                     <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
                       <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Available</span>
-                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{p.inventoryMW} MW</span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{p.inventoryMW}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                       <span className="text-sm font-medium text-red-700 dark:text-red-400">Shortage</span>
-                      <span className="font-bold text-red-700 dark:text-red-400">{Math.max(0, p.poVolumeMW - p.inventoryMW)} MW</span>
+                      <span className="font-bold text-red-700 dark:text-red-400">{Math.max(0, p.poVolumeMW - p.inventoryMW)}</span>
                     </div>
                   </div>
                 </div>
@@ -695,12 +836,46 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               ) : (
                 <>
                   {/* SAP Summary Cards */}
+                  <div className="flex items-center justify-between mb-2">
+                    <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                      <Database className="w-5 h-5 text-primary/70" /> SAP Intelligence
+                    </h2>
+                    <div className="flex items-center gap-3">
+                      {/* SPV / AGEL Toggle */}
+                      <div className="flex items-center bg-muted/40 border border-border rounded-lg p-0.5">
+                        {[
+                          { key: 'all' as const, label: 'All' },
+                          { key: 'spv' as const, label: `SPV (${p.sapPlantCode || '—'})` },
+                          { key: 'agel' as const, label: `AGEL (${p.agelCode || '—'})` },
+                        ].map(opt => (
+                          <button
+                            key={opt.key}
+                            onClick={() => setSapFilter(opt.key)}
+                            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                              sapFilter === opt.key
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))}
+                      </div>
+                      <button
+                        onClick={downloadSAPReport}
+                        className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2 text-sm font-semibold"
+                      >
+                        <Download className="w-4 h-4" />
+                        Export SAP Report
+                      </button>
+                    </div>
+                  </div>
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-blue-400" />
                     <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-400" />
-                    <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalPOMW)} unit="MW" icon={Package} color="text-blue-400" />
-                    <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitMW)} unit="MW" icon={Truck} color="text-amber-400" />
-                    <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryMW)} unit="MW" icon={Box} color="text-emerald-400" />
+                    <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalPOMW)} unit="" icon={Package} color="text-blue-400" />
+                    <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitMW)} unit="" icon={Truck} color="text-amber-400" />
+                    <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryMW)} unit="" icon={Box} color="text-emerald-400" />
                     <HeroMetric label="Net Value" value={fmtCost(sap.summary.totalNetValue)} icon={DollarSign} color="text-pink-400" />
                   </div>
 
@@ -728,7 +903,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     {vendorChartOption && (
                       <div className="intelligence-card p-6">
                         <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-primary/70" /> Top Vendors by Volume (MW)
+                          <Users className="w-4 h-4 text-primary/70" /> Top Vendors by Volume
                         </h3>
                         <div className="h-[280px]">
                           <ReactECharts option={vendorChartOption} style={{ height: '100%', width: '100%' }} />
@@ -736,28 +911,60 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       </div>
                     )}
 
-                    {/* Material Type Distribution */}
-                    {materialTypeOption && (
+                    {sap?.materialBreakdown?.length > 0 && (
                       <div className="intelligence-card p-6">
-                        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                        <h3 className="text-sm font-semibold text-foreground mb-5 flex items-center gap-2">
                           <Box className="w-4 h-4 text-primary/70" /> Material Type Distribution
                         </h3>
-                        <div className="flex items-center gap-6">
-                          <div className="w-[200px] h-[200px]">
-                            <ReactECharts option={materialTypeOption} style={{ height: '100%', width: '100%' }} />
+                        {sap.materialBreakdown.length === 1 ? (
+                          /* Single category — show a clean stat card instead of a pointless donut */
+                          <div className="flex flex-col items-center justify-center py-6">
+                            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4">
+                              <Package className="w-8 h-8 text-blue-400" />
+                            </div>
+                            <span className="text-2xl font-bold text-foreground mb-1">{fmtMW(sap.materialBreakdown[0].totalMW)}</span>
+                            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Units</span>
+                            <div className="mt-3 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20">
+                              <span className="text-xs font-semibold text-blue-400">{sap.materialBreakdown[0].type}</span>
+                            </div>
+                            <span className="text-[10px] text-muted-foreground/40 mt-3">{sap.materialBreakdown[0].count} purchase orders</span>
                           </div>
-                          <div className="flex-1 space-y-2">
-                            {detail.sap.materialBreakdown.map((m: any, i: number) => (
-                              <div key={m.type} className="flex items-center justify-between text-xs">
-                                <div className="flex items-center gap-2">
-                                  <div className="w-2.5 h-2.5 rounded" style={{ background: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#EC4899'][i % 6] }}></div>
-                                  <span className="text-muted-foreground/70 truncate max-w-[120px]">{m.type}</span>
-                                </div>
-                                <span className="font-mono text-foreground/80">{fmtMW(m.totalMW)} MW</span>
+                        ) : (
+                          /* Multi-category — show donut + rich legend */
+                          <div className="flex items-center gap-6">
+                            <div className="w-[180px] h-[180px] shrink-0 relative">
+                              {materialTypeOption && (
+                                <ReactECharts option={materialTypeOption} style={{ height: '100%', width: '100%' }} />
+                              )}
+                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                                <span className="text-lg font-bold text-foreground">{sap.materialBreakdown.length}</span>
+                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-bold">Types</span>
                               </div>
-                            ))}
+                            </div>
+                            <div className="flex-1 space-y-3">
+                              {sap.materialBreakdown.map((m: any, i: number) => {
+                                const maxMW = sap.materialBreakdown[0].totalMW || 1;
+                                const pct = Math.round((m.totalMW / maxMW) * 100);
+                                const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#EC4899'];
+                                const color = colors[i % colors.length];
+                                return (
+                                  <div key={m.type}>
+                                    <div className="flex items-center justify-between mb-1">
+                                      <div className="flex items-center gap-2">
+                                        <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color }}></div>
+                                        <span className="text-xs font-medium text-foreground/80 truncate max-w-[140px]">{m.type}</span>
+                                      </div>
+                                      <span className="font-mono text-xs font-semibold text-foreground/70">{fmtMW(m.totalMW)}</span>
+                                    </div>
+                                    <div className="w-full h-1.5 rounded-full bg-muted/40 overflow-hidden">
+                                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }}></div>
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        </div>
+                        )}
                       </div>
                     )}
                   </div>
@@ -767,27 +974,27 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                       <Users className="w-4 h-4 text-primary/70" /> Vendor Summary
                     </h3>
-                    <div className="overflow-x-auto">
-                      <table className="intel-table">
-                        <thead>
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
+                      <table className="intel-table relative">
+                        <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
                           <tr>
                             <th>Vendor Name</th>
-                            <th>Vendor Code</th>
-                            <th className="text-right">POs</th>
-                            <th className="text-right">Materials</th>
-                            <th className="text-right">Volume (MW)</th>
-                            <th className="text-right">Net Value</th>
+                            <th className="text-center">Vendor Code</th>
+                            <th className="text-center">POs</th>
+                            <th className="text-center">Materials</th>
+                            <th className="text-center">Volume</th>
+                            <th className="text-center">Net Value</th>
                           </tr>
                         </thead>
                         <tbody>
                           {sap.vendorBreakdown.map((v: any, i: number) => (
                             <tr key={i}>
                               <td className="font-medium text-foreground/90 max-w-[200px] truncate">{v.vendorName}</td>
-                              <td className="font-mono text-xs text-muted-foreground/60">{v.vendorCode || '—'}</td>
-                              <td className="text-right font-mono">{v.poCount}</td>
-                              <td className="text-right font-mono">{v.materialCount}</td>
-                              <td className="text-right font-mono font-semibold text-blue-400">{fmtMW(v.totalMW)}</td>
-                              <td className="text-right font-mono text-foreground/70">{fmtCost(v.totalValue)}</td>
+                              <td className="text-center font-mono text-xs text-muted-foreground/60">{v.vendorCode || '—'}</td>
+                              <td className="text-center font-mono">{v.poCount}</td>
+                              <td className="text-center font-mono">{v.materialCount}</td>
+                              <td className="text-center font-mono font-semibold text-blue-400">{fmtMW(v.totalMW)}</td>
+                              <td className="text-center font-mono text-foreground/70">{fmtCost(v.totalValue)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -800,36 +1007,33 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                       <FileText className="w-4 h-4 text-primary/70" /> Purchase Orders (ME2M)
                     </h3>
-                    <div className="overflow-x-auto">
-                      <table className="intel-table">
-                        <thead>
+                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
+                      <table className="intel-table relative">
+                        <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
                           <tr>
                             <th>PO Number</th>
                             <th>Vendor Name</th>
-                            <th>Material Code</th>
+                            <th className="text-center">Material Code</th>
                             <th>Material Type</th>
-                            <th className="text-right">Qty (MW)</th>
-                            <th className="text-right">Net Value</th>
-                            <th>Plant</th>
+                            <th className="text-center">Qty (Units)</th>
+                            <th className="text-center">Net Value</th>
+                            <th className="text-center">Plant</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {sap.purchaseOrders.slice(0, 50).map((po: any, i: number) => (
+                          {sap.purchaseOrders.map((po: any, i: number) => (
                             <tr key={i}>
                               <td className="font-mono text-xs font-medium text-primary/80">{po.poNumber}</td>
                               <td className="max-w-[180px] truncate">{po.vendorName}</td>
-                              <td className="font-mono text-xs text-muted-foreground/60">{po.materialCode}</td>
+                              <td className="text-center font-mono text-xs text-muted-foreground/60">{po.materialCode}</td>
                               <td className="text-muted-foreground/70">{po.materialType || '—'}</td>
-                              <td className="text-right font-mono font-semibold">{fmtMW(po.poQuantityMW)}</td>
-                              <td className="text-right font-mono text-foreground/70">{fmtCost(po.netOrderValue)}</td>
-                              <td className="font-mono text-xs text-muted-foreground/50">{po.plantCode}</td>
+                              <td className="text-center font-mono font-semibold">{po.poQuantity ? Number(po.poQuantity).toLocaleString('en-IN') : '—'}</td>
+                              <td className="text-center font-mono text-foreground/70">{fmtCost(po.netOrderValue)}</td>
+                              <td className="text-center font-mono text-xs text-muted-foreground/50">{po.plantCode}</td>
                             </tr>
                           ))}
                         </tbody>
                       </table>
-                      {sap.purchaseOrders.length > 50 && (
-                        <p className="text-[10px] text-muted-foreground/40 mt-2 text-center">Showing first 50 of {sap.purchaseOrders.length} records</p>
-                      )}
                     </div>
                   </div>
 
@@ -839,26 +1043,26 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Truck className="w-4 h-4 text-primary/70" /> In-Transit Shipments (MIGO)
                       </h3>
-                      <div className="overflow-x-auto">
-                        <table className="intel-table">
-                          <thead>
+                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
+                        <table className="intel-table relative">
+                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
                             <tr>
                               <th>PO Number</th>
                               <th>Vendor Name</th>
                               <th>Material Code</th>
-                              <th className="text-right">Qty (MW)</th>
-                              <th>GR Date</th>
+                              <th className="text-center">Qty (Units)</th>
+                              <th className="text-center">GR Date</th>
                               <th>WBS Element</th>
                               <th>Plant</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {sap.inTransit.slice(0, 50).map((t: any, i: number) => (
+                            {sap.inTransit.map((t: any, i: number) => (
                               <tr key={i}>
                                 <td className="font-mono text-xs font-medium text-primary/80">{t.poNumber || '—'}</td>
                                 <td className="max-w-[180px] truncate">{t.vendorName || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/60">{t.materialCode}</td>
-                                <td className="text-right font-mono font-semibold text-amber-400">{fmtMW(t.quantityMW)}</td>
+                                <td className="text-right font-mono font-semibold text-amber-400">{t.quantity ? Number(t.quantity).toLocaleString('en-IN') : '—'}</td>
                                 <td className="font-mono text-xs">{t.grPostingDate || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/50 max-w-[120px] truncate">{t.wbsElement || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/50">{t.plantCode}</td>
@@ -876,26 +1080,26 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Box className="w-4 h-4 text-primary/70" /> Inventory Records (MB52)
                       </h3>
-                      <div className="overflow-x-auto">
-                        <table className="intel-table">
-                          <thead>
+                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
+                        <table className="intel-table relative">
+                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
                             <tr>
                               <th>Purchase Order</th>
                               <th>Material Code</th>
                               <th>Vendor Code</th>
-                              <th className="text-right">Qty (MW)</th>
+                              <th className="text-right">Qty (Units)</th>
                               <th>Posting Date</th>
                               <th>WBS Element</th>
                               <th>Storage Loc</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {sap.inventory.slice(0, 50).map((inv: any, i: number) => (
+                            {sap.inventory.map((inv: any, i: number) => (
                               <tr key={i}>
                                 <td className="font-mono text-xs font-medium text-primary/80">{inv.purchaseOrder || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/60">{inv.materialCode}</td>
                                 <td className="font-mono text-xs text-muted-foreground/60">{inv.vendorCode || '—'}</td>
-                                <td className="text-right font-mono font-semibold text-emerald-400">{fmtMW(inv.quantityMW)}</td>
+                                <td className="text-right font-mono font-semibold text-emerald-400">{inv.quantity ? Number(inv.quantity).toLocaleString('en-IN') : '—'}</td>
                                 <td className="font-mono text-xs">{inv.postingDate || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/50 max-w-[120px] truncate">{inv.wbsElement || '—'}</td>
                                 <td className="text-muted-foreground/60 text-xs">{inv.storageLocation || '—'}</td>

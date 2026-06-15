@@ -80,7 +80,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
     if (activeKpi === 'SAP Inventory') {
       const topInventory = [...projects].sort((a, b) => (b.sap?.inventory_mw || 0) - (a.sap?.inventory_mw || 0)).slice(0, 15);
       return {
-        title: 'Top Projects by Inventory (MW)',
+        title: 'Top Projects by Inventory',
         type: 'bar',
         data: topInventory.map(p => ({
           name: p.project_name?.substring(0, 20) + '...',
@@ -92,7 +92,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
     if (activeKpi === 'SAP PO Quantity') {
       const topPO = [...projects].sort((a, b) => (b.sap?.po_mw || 0) - (a.sap?.po_mw || 0)).slice(0, 15);
       return {
-        title: 'Top Projects by PO Quantity (MW)',
+        title: 'Top Projects by PO Quantity',
         type: 'bar',
         data: topPO.map(p => ({
           name: p.project_name?.substring(0, 20) + '...',
@@ -138,13 +138,13 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
     if (activeKpi === 'SAP Inventory') {
       list = list.filter(p => p.sap?.inventory_mw > 0).sort((a, b) => b.sap.inventory_mw - a.sap.inventory_mw);
       if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${p.sap?.inventory_mw} MW` }));
+      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${p.sap?.inventory_mw}` }));
     }
 
     if (activeKpi === 'SAP PO Quantity') {
       list = list.filter(p => p.sap?.po_mw > 0).sort((a, b) => b.sap.po_mw - a.sap.po_mw);
       if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${p.sap?.po_mw} MW` }));
+      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${p.sap?.po_mw}` }));
     }
 
     if (activeKpi === 'Cost Variance') {

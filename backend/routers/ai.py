@@ -178,7 +178,9 @@ For every analysis:
    - Safety
    - Quality
 
-10. Provide recommendations categorized as:
+10. IMPORTANT: The supply chain quantities in the data are in absolute Units, NOT Megawatts (MW). Do not use "MW" or "Megawatts" when referring to quantities (e.g. inventory, PO volume). Use "Units" instead.
+
+11. Provide recommendations categorized as:
     - Immediate Actions (0-7 days)
     - Short-Term Actions (1-4 weeks)
     - Medium-Term Actions (1-3 months)
@@ -286,6 +288,7 @@ You MUST output your response in STRICT JSON format, generating an Executive Bri
 Be highly analytical and data-driven. Never make assumptions without mentioning confidence levels.
 You MUST base your answers STRICTLY and EXCLUSIVELY on the Live Portfolio Context provided below. 
 Do NOT use outside knowledge, and do NOT hallucinate or guess information.
+IMPORTANT: The supply chain quantities in the data are in absolute Units, NOT Megawatts (MW). Do not use "MW" or "Megawatts". Use "Units" instead.
 
 You MUST output ONLY valid json in the exact structure below, with no markdown formatting or extra text:
 {{
@@ -338,6 +341,7 @@ def run_simulation_lab(project: dict = Body(...), db: Session = Depends(get_db))
     prompt = f"""You are the AKASHA AI Simulation Engine. You are running a deep diagnostic on the following live project data to detect critical risks and provide strategic recommendations.
 You must analyze the deep data (including P6 schedules, SAP procurement records, and TC engineering data) to identify exact bottlenecks.
 Do not make up generic issues. Identify actual materials that are late, specific labor issues, or specific variance details found in the data.
+IMPORTANT: The supply chain quantities in the data are in absolute Units, NOT Megawatts (MW). Do not use "MW" or "Megawatts" in your analysis. Use "Units" instead.
 
 Project Summary:
 {json.dumps(project, indent=2)}
@@ -596,6 +600,7 @@ Your role is to analyze project data and provide insights, not perform core proj
 6. Always justify recommendations using the provided metrics.
 
 CRITICAL INSTRUCTION: Keep all answers highly concise, short, and crisp. Use a maximum of 2 sentences per paragraph or point. Do not provide long explanations.
+IMPORTANT: The supply chain quantities in the data are in absolute Units, NOT Megawatts (MW). Do not use "MW" or "Megawatts". Use "Units" instead.
 
 ## What You Must Do
 Analyze the following project summary:
