@@ -1,27 +1,35 @@
 import React from 'react';
 import { FileText, Printer, Download, Share2 } from 'lucide-react';
 
-export default function ReportsInsights({ p6Data, sapData, finDetails }: any) {
+export default function ReportsInsights({ p6Data, sapData, finDetails, dashboardData }: any) {
+
+  // Filter raw data to only include explicitly mapped/required projects
+  const includedP6Ids = new Set(dashboardData?.projects?.map((p: any) => p.p6?.id).filter(Boolean) || []);
+  const validP6 = (p6Data || []).filter((p: any) => includedP6Ids.has(p.project_id));
+  
+  const includedPlantCodes = new Set(dashboardData?.projects?.map((p: any) => p.sap?.plant_code).filter(Boolean) || []);
+  const validSap = (sapData || []).filter((s: any) => includedPlantCodes.has(s.plant_code));
+  const validFin = (finDetails || []).filter((f: any) => includedPlantCodes.has(f.plant_code));
 
   // Executive Overview Aggregates
-  const totalProjects = p6Data?.length || 0;
-  const delayedProjects = (p6Data || []).filter((p: any) => (p.finishDateVariance || 0) < -30).length;
-  const criticalProjects = (p6Data || []).filter((p: any) => (p.finishDateVariance || 0) < -60).length;
+  const totalProjects = validP6.length || 0;
+  const delayedProjects = validP6.filter((p: any) => (p.finishDateVariance || 0) < -30).length;
+  const criticalProjects = validP6.filter((p: any) => (p.finishDateVariance || 0) < -60).length;
   
-  const avgCPI = (p6Data || []).reduce((acc: number, p: any) => acc + (p.costPerformanceIndex || 1), 0) / (totalProjects || 1);
-  const avgSPI = (p6Data || []).reduce((acc: number, p: any) => acc + (p.schedulePerformanceIndex || 1), 0) / (totalProjects || 1);
-  const overallProgress = (p6Data || []).reduce((acc: number, p: any) => acc + (p.durationPercentComplete || 0), 0) / (totalProjects || 1);
+  const avgCPI = validP6.reduce((acc: number, p: any) => acc + (p.costPerformanceIndex || 1), 0) / (totalProjects || 1);
+  const avgSPI = validP6.reduce((acc: number, p: any) => acc + (p.schedulePerformanceIndex || 1), 0) / (totalProjects || 1);
+  const overallProgress = validP6.reduce((acc: number, p: any) => acc + (p.durationPercentComplete || 0), 0) / (totalProjects || 1);
 
   // Financial Aggregates
-  const totalActualCapex = (sapData || []).reduce((acc: number, curr: any) => acc + (curr.actualCapex || 0), 0);
-  const totalPlannedCapex = (sapData || []).reduce((acc: number, curr: any) => acc + (curr.plannedCapex || 0), 0);
+  const totalActualCapex = validSap.reduce((acc: number, curr: any) => acc + (curr.actualCapex || 0), 0);
+  const totalPlannedCapex = validSap.reduce((acc: number, curr: any) => acc + (curr.plannedCapex || 0), 0);
   const budgetVariance = totalPlannedCapex > 0 ? ((totalActualCapex - totalPlannedCapex) / totalPlannedCapex) * 100 : 0;
 
   // Supply Chain Aggregates
   const vendorMap: any = {};
   const vendorValueMap: any = {};
   let totalPoValue = 0;
-  (finDetails || []).forEach((po: any) => {
+  validFin.forEach((po: any) => {
     const v = po.vendor_name || 'Unknown Vendor';
     vendorMap[v] = (vendorMap[v] || 0) + (po.po_quantities_mw || 0);
     vendorValueMap[v] = (vendorValueMap[v] || 0) + (po.net_order_value || 0);
