@@ -160,6 +160,9 @@ export default function CEODashboard() {
     } else {
       setPreviousTab(tab);
       setActiveTab(tab);
+      if (projectId) {
+        navigate('/dashboard');
+      }
     }
   };
 
