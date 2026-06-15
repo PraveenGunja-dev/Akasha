@@ -46,9 +46,11 @@ export default function DataIntegrationHub() {
     setLoading(true);
     setSyncError(null);
     try {
-      // Trigger all syncs concurrently
-      const [mapRes, p6Res, spRes, tcRes] = await Promise.all([
-        fetch('/akasha/api/mapping/sync', { method: 'POST' }),
+      // Trigger mapping sync first, because TC and SAP depend on the ProjectMapping table being fully populated
+      const mapRes = await fetch('/akasha/api/mapping/sync', { method: 'POST' });
+      
+      // Then trigger the other syncs
+      const [p6Res, spRes, tcRes] = await Promise.all([
         fetch('/akasha/api/p6/sync', { method: 'POST' }),
         fetch('/akasha/api/sharepoint/sync', { method: 'POST' }),
         fetch('/akasha/api/tc/sync', { method: 'POST' })
