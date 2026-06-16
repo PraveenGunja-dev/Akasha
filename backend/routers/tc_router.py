@@ -38,8 +38,15 @@ def get_rajasthan_network(db: Session = Depends(get_db)):
             "stringing": e.stringing,
             "expected_date": e.expected_date,
             "mapping_id": e.mapping_id,
-            "projects": json.loads(e.projects) if e.projects else []
+            "projects": []
         }
+        
+        if e.projects:
+            try:
+                edge_dict["projects"] = json.loads(e.projects)
+            except Exception:
+                pass
+                
         processed_edges.append(edge_dict)
         
     processed_nodes = [

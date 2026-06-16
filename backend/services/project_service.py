@@ -570,6 +570,15 @@ def get_project_360_detail(db: Session, project_id: str):
     tc_rajasthan = []
     
     for edge in tc_network_edges:
+        edge_phase = "Unknown Phase"
+        if edge.projects:
+            try:
+                parsed = json.loads(edge.projects)
+                if parsed:
+                    edge_phase = parsed[0]
+            except:
+                pass
+
         edge_data = {
             "edgeId": edge.edge_id,
             "fromNode": edge.from_node,
@@ -577,7 +586,7 @@ def get_project_360_detail(db: Session, project_id: str):
             "toNode": edge.to_node,
             "toLabel": edge.to_label,
             "project": mapping.project or mapping.project_name_from_p6 if mapping else "Unmapped",
-            "phase": json.loads(edge.projects)[0] if edge.projects and json.loads(edge.projects) else "Unknown Phase",
+            "phase": edge_phase,
             "projects": edge.projects,
             "contractor": edge.contractor,
             "voltage": edge.voltage,

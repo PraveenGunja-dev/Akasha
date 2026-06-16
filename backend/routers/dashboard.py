@@ -1,13 +1,24 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import json
 import time
 
 from database import get_db
 import models
 from services.project_service import filter_tc_edges_by_kps
+
+def _safe_parse_phase(projects_json):
+    if not projects_json:
+        return "Unknown Phase"
+    try:
+        parsed = json.loads(projects_json)
+        if parsed and isinstance(parsed, list):
+            return parsed[0]
+    except Exception:
+        pass
+    return "Unknown Phase"
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
@@ -225,8 +236,8 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
                 "status": tc_summary,
                 "has_data": bool(tc_khavda or tc_rajasthan),
                 "data": {
-                    "khavda": [{"project": m.project or m.project_name_from_p6, "phase": json.loads(t.projects)[0] if t.projects and json.loads(t.projects) else "Unknown Phase", "voltage": t.voltage, "status": t.status} for t in tc_khavda],
-                    "rajasthan": [{"project": m.project or m.project_name_from_p6, "phase": json.loads(t.projects)[0] if t.projects and json.loads(t.projects) else "Unknown Phase", "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
+                    "khavda": [{"project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
+                    "rajasthan": [{"project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
                 }
             }
         })
@@ -314,14 +325,14 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
     for t in tc_khavda:
         d = {c: getattr(t, c) for c in t.__table__.columns.keys()}
         d["project"] = m.project or m.project_name_from_p6
-        d["phase"] = json.loads(t.projects)[0] if t.projects and json.loads(t.projects) else "Unknown Phase"
+        d["phase"] = _safe_parse_phase(t.projects)
         tc_k_dicts.append(d)
         
     tc_r_dicts = []
     for t in tc_rajasthan:
         d = {c: getattr(t, c) for c in t.__table__.columns.keys()}
         d["project"] = m.project or m.project_name_from_p6
-        d["phase"] = json.loads(t.projects)[0] if t.projects and json.loads(t.projects) else "Unknown Phase"
+        d["phase"] = _safe_parse_phase(t.projects)
         tc_r_dicts.append(d)
     
     return {
