@@ -239,9 +239,9 @@ Live Portfolio Context:
 
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.3, max_tokens=1000, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.3, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.3, max_tokens=1000, json_response=True)
+            content = call_ollama(messages, temperature=0.3, max_tokens=4000, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
@@ -249,9 +249,16 @@ Live Portfolio Context:
         elif content.startswith("```"):
             content = content[3:-3].strip()
             
-        data = json.loads(content)
+        try:
+            data = json.loads(content)
+        except Exception:
+            data = {
+                "response": content,
+                "suggestions": []
+            }
+            
         return {
-            "response": data.get("response", "Could not parse response."),
+            "response": data.get("response", content),
             "suggestions": data.get("suggestions", [])
         }
     except Exception as e:
@@ -309,16 +316,24 @@ Live Portfolio Context:
     
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
             content = content[7:-3].strip()
         elif content.startswith("```"):
             content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {
+                "toplineSummary": "Failed to parse AI response.",
+                "confidenceScore": 0,
+                "keyActions": [],
+                "deepDive": [{"title": "Raw Output", "description": content}]
+            }
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")
         error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
@@ -373,16 +388,23 @@ You MUST output ONLY valid json in the exact structure below, with no markdown f
     
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
             content = content[7:-3].strip()
         elif content.startswith("```"):
             content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {
+                "issues": [{"title": "Raw Output: " + content[:200], "severity": "Warning"}],
+                "suggestions": [],
+                "scheduleImpact": [0,0,0]
+            }
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")
         error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
@@ -438,13 +460,16 @@ Note: "radar_data" is an array of 5 integers (0-100) representing [Feasibility, 
     messages = [{"role": "user", "content": prompt}]
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"strategies": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -480,13 +505,16 @@ Ensure the simulated values generally outpace baseline values, ending at or near
     messages = [{"role": "user", "content": prompt}]
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"timeline": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -517,13 +545,16 @@ Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
     messages = [{"role": "user", "content": prompt}]
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"tasks": []}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -575,13 +606,16 @@ Output valid JSON only matching this exact structure:
     messages = [{"role": "user", "content": prompt}]
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=1000, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.1, max_tokens=1000, json_response=True)
+            content = call_ollama(messages, temperature=0.1, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"title": "Error", "executiveSummary": content, "keyFindings": [], "riskAssessment": "", "rootCauseAnalysis": "", "recommendedActions": [], "expectedOutcome": ""}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -630,13 +664,16 @@ Output valid JSON only matching this exact structure:
     messages = [{"role": "user", "content": prompt}]
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=1500, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
-        return json.loads(content)
+        try:
+            return json.loads(content)
+        except Exception:
+            return {"executiveSummary": content, "keyFindings": [], "riskAssessment": "", "rootCauseAnalysis": "", "recommendedActions": [], "expectedOutcome": ""}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
