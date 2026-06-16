@@ -88,7 +88,7 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
         parsed_edge_phases[edge.id] = set()
         if edge.projects:
             try:
-                parsed_edge_phases[edge.id] = set(json.loads(edge.projects))
+                parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in json.loads(edge.projects))
             except:
                 pass
     
@@ -153,7 +153,7 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
 
         # TC Data
         project_entries = [pe for pe in all_tc_entries if pe.mapping_id == m.id]
-        phases = set(pe.phase for pe in project_entries if pe.phase)
+        phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
         
         tc_khavda = []
         tc_rajasthan = []
@@ -451,7 +451,7 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
         parsed_edge_phases[edge.id] = set()
         if edge.projects:
             try:
-                parsed_edge_phases[edge.id] = set(json.loads(edge.projects))
+                parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in json.loads(edge.projects))
             except:
                 pass
     
@@ -557,7 +557,7 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
         tc_data = None
         if m.id:
             project_entries = [pe for pe in all_tc_project_entries if pe.mapping_id == m.id]
-            phases = set(pe.phase for pe in project_entries if pe.phase)
+            phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
             
             project_edges = []
             if phases:

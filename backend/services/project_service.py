@@ -48,7 +48,7 @@ def calculate_project_360_metrics(db: Session):
         parsed_edge_phases[edge.id] = set()
         if edge.projects:
             try:
-                parsed_edge_phases[edge.id] = set(json.loads(edge.projects))
+                parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in json.loads(edge.projects))
             except:
                 pass
                 
@@ -57,14 +57,12 @@ def calculate_project_360_metrics(db: Session):
     for m in mappings:
         # 1. P6 Data
         p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
-        if not p6_proj:
-            continue
             
-        spi = p6_proj.schedule_performance_index or 1.0
-        cpi = p6_proj.cost_performance_index or 1.0
-        sched_var = p6_proj.finish_date_variance or 0
-        cost_var = p6_proj.total_cost_variance or 0
-        progress = p6_proj.duration_percent_complete or 0
+        spi = p6_proj.schedule_performance_index if p6_proj and p6_proj.schedule_performance_index is not None else 1.0
+        cpi = p6_proj.cost_performance_index if p6_proj and p6_proj.cost_performance_index is not None else 1.0
+        sched_var = p6_proj.finish_date_variance if p6_proj and p6_proj.finish_date_variance is not None else 0
+        cost_var = p6_proj.total_cost_variance if p6_proj and p6_proj.total_cost_variance is not None else 0
+        progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
         
         # 2. SAP Data
         codes = [c for c in [m.spv_plant_code, m.agel] if c]
@@ -110,13 +108,13 @@ def calculate_project_360_metrics(db: Session):
         # ─────────────────────────────────────────────────
 
         # Fallback for sched_var if None
-        if sched_var == 0 and p6_proj.baseline_finish_date:
+        if p6_proj and sched_var == 0 and p6_proj.baseline_finish_date:
             compare_date = p6_proj.scheduled_finish_date or p6_proj.finish_date
             if compare_date:
                 sched_var = (p6_proj.baseline_finish_date - compare_date).days
 
         # Fallback for SPI if None
-        if spi == 1.0 and p6_proj.schedule_performance_index is None:
+        if p6_proj and spi == 1.0 and p6_proj.schedule_performance_index is None:
             if p6_proj.actual_duration and p6_proj.planned_duration and p6_proj.actual_duration > 0:
                 spi = p6_proj.planned_duration / p6_proj.actual_duration
 
@@ -204,12 +202,13 @@ def calculate_project_360_metrics(db: Session):
 
         # ── Confidence Score ──
         # Higher confidence when we have more data points
-        confidence = 70
-        if p6_proj.schedule_performance_index is not None: confidence += 8
-        if p6_proj.cost_performance_index is not None: confidence += 5
-        if p6_proj.baseline_finish_date is not None: confidence += 5
+        confidence = 50 if not p6_proj else 70
+        if p6_proj:
+            if p6_proj.schedule_performance_index is not None: confidence += 8
+            if p6_proj.cost_performance_index is not None: confidence += 5
+            if p6_proj.baseline_finish_date is not None: confidence += 5
+            if p6_proj.activity_count and p6_proj.activity_count > 0: confidence += 5
         if po_vol > 0: confidence += 7
-        if p6_proj.activity_count and p6_proj.activity_count > 0: confidence += 5
         confidence = min(98, confidence)
 
         # ── AI Recommendation ──
@@ -242,7 +241,7 @@ def calculate_project_360_metrics(db: Session):
 
         # ── Exact TC Data Summary ──
         project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == m.id).all()
-        phases = set(pe.phase for pe in project_entries if pe.phase)
+        phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
         
         tc_network_edges = []
         if phases:
@@ -257,13 +256,13 @@ def calculate_project_360_metrics(db: Session):
         tc_network_edges.extend(direct_tc_edges)
         tc_edges_count = len({e.id: e for e in tc_network_edges})
 
-        forecast_finish = p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj.scheduled_finish_date else "N/A"
-        forecast_month = p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj.scheduled_finish_date else "TBD"
+        forecast_finish = p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.scheduled_finish_date else "N/A"
+        forecast_month = p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj and p6_proj.scheduled_finish_date else "TBD"
 
         results.append({
             # Identifiers
-            "projectId": p6_proj.project_id,
-            "projectName": p6_proj.name,
+            "projectId": p6_proj.project_id if p6_proj else (m.project_id or ""),
+            "projectName": p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "Unmapped Project"),
             "sapPlantCode": m.spv_plant_code,
             "agelCode": m.agel,
             "capacityMW": project_capacity,
@@ -296,20 +295,20 @@ def calculate_project_360_metrics(db: Session):
             "keyIssue": primary_issue,  # alias for backward compat
             "recommendedAction": ai_recommendation,  # alias for backward compat
             # Date & Duration
-            "startDate": p6_proj.start_date.strftime("%Y-%m-%d") if p6_proj.start_date else None,
-            "finishDate": p6_proj.finish_date.strftime("%Y-%m-%d") if p6_proj.finish_date else None,
-            "baselineFinishDate": p6_proj.baseline_finish_date.strftime("%Y-%m-%d") if p6_proj.baseline_finish_date else None,
-            "status": p6_proj.status,
+            "startDate": p6_proj.start_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.start_date else None,
+            "finishDate": p6_proj.finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.finish_date else None,
+            "baselineFinishDate": p6_proj.baseline_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.baseline_finish_date else None,
+            "status": p6_proj.status if p6_proj else "Not Started",
             "durationPercentComplete": round(pct_complete, 1),
             # Activity
-            "activityCount": p6_proj.activity_count or 0,
-            "completedActivities": p6_proj.completed_activity_count or 0,
-            "inProgressActivities": p6_proj.in_progress_activity_count or 0,
-            "notStartedActivities": p6_proj.not_started_activity_count or 0,
-            "plannedDuration": p6_proj.planned_duration,
-            "actualDuration": p6_proj.actual_duration,
-            "remainingDuration": p6_proj.remaining_duration,
-            "parentEPS": p6_proj.parent_eps_name,
+            "activityCount": p6_proj.activity_count if p6_proj else 0,
+            "completedActivities": p6_proj.completed_activity_count if p6_proj else 0,
+            "inProgressActivities": p6_proj.in_progress_activity_count if p6_proj else 0,
+            "notStartedActivities": p6_proj.not_started_activity_count if p6_proj else 0,
+            "plannedDuration": p6_proj.planned_duration if p6_proj else 0,
+            "actualDuration": p6_proj.actual_duration if p6_proj else 0,
+            "remainingDuration": p6_proj.remaining_duration if p6_proj else 0,
+            "parentEPS": p6_proj.parent_eps_name if p6_proj else "",
         })
     # Add unmapped P6 projects logic removed
 
