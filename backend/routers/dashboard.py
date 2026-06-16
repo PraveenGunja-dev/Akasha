@@ -17,13 +17,13 @@ _SUMMARY_CACHE = {"data": None, "timestamp": 0}
 _CACHE_TTL = 300  # 5 minutes
 
 @router.get("/summary")
-def get_dashboard_summary(db: Session = Depends(get_db)):
+def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a global portfolio summary and a unified list of all mapped projects
     with data from P6, SAP, and Transmission. Includes all P6 projects even if unmapped.
     """
     global _SUMMARY_CACHE
-    if _SUMMARY_CACHE["data"] and time.time() - _SUMMARY_CACHE["timestamp"] < _CACHE_TTL:
+    if not nocache and _SUMMARY_CACHE["data"] and time.time() - _SUMMARY_CACHE["timestamp"] < _CACHE_TTL:
         return _SUMMARY_CACHE["data"]
         
     raw_mappings = db.query(models.ProjectMapping).all()
@@ -67,6 +67,31 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     project_list = []
     mapped_p6_ids = set()
     
+    # --- PRE-FETCH DATA FOR N+1 OPTIMIZATION ---
+    cap_data = db.query(models.ProjectMapping.spv_plant_code, func.sum(models.ProjectMapping.capacity_mwac)).group_by(models.ProjectMapping.spv_plant_code).all()
+    capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
+    
+    inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_mw)).group_by(models.MTInventory.plant_code).all() if r[0]}
+    req_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTRequirement.spv_plant_code, func.sum(models.MTRequirement.budgeted_units_mw)).group_by(models.MTRequirement.spv_plant_code).all() if r[0]}
+    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInTransit.plant_code, func.sum(models.MTInTransit.quantity_mw)).group_by(models.MTInTransit.plant_code).all() if r[0]}
+    po_mw_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.po_quantities_mw)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+
+    all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_mw)).group_by(models.MTInventory.wbs_element).all()
+    all_it_wbs = db.query(models.MTInTransit.wbs_element, func.sum(models.MTInTransit.quantity_mw)).group_by(models.MTInTransit.wbs_element).all()
+
+    all_tc_entries = db.query(models.TcProjectEntry).all()
+    all_tc_edges = db.query(models.TcNetworkEdge).all()
+    
+    parsed_edge_phases = {}
+    for edge in all_tc_edges:
+        parsed_edge_phases[edge.id] = set()
+        if edge.projects:
+            try:
+                parsed_edge_phases[edge.id] = set(json.loads(edge.projects))
+            except:
+                pass
+    
     for m in mappings:
         portfolio_summary["total_mw"] += (m.capacity_mwac or 0)
         
@@ -98,80 +123,57 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
                 portfolio_summary["on_track_projects"] += 1
                 
         # SAP Data Mapping
-        # 1. Inventory Mapping (MB52)
-        inv_query = db.query(func.sum(models.MTInventory.quantity_mw))
-        req_query = db.query(func.sum(models.MTRequirement.budgeted_units_mw))
-        it_query = db.query(func.sum(models.MTInTransit.quantity_mw))
+        plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""
         
-        # Priority: Map strictly by WBS if provided in Master Mapping
-        if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-            clean_wbs = str(m.module_wbs).strip()
-            inv_query = inv_query.filter(models.MTInventory.wbs_element.ilike(f"%{clean_wbs}%"))
-            it_query = it_query.filter(models.MTInTransit.wbs_element.ilike(f"%{clean_wbs}%"))
-            # Requirement usually only has plant code or project name
-            req_query = req_query.filter(models.MTRequirement.spv_plant_code == str(m.spv_plant_code).strip())
-        else:
-            # Fallback to Plant Code mapping if no WBS is mapped
-            inv_query = inv_query.filter(models.MTInventory.plant_code == str(m.spv_plant_code).strip())
-            it_query = it_query.filter(models.MTInTransit.plant_code == str(m.spv_plant_code).strip())
-            req_query = req_query.filter(models.MTRequirement.spv_plant_code == str(m.spv_plant_code).strip())
-            
-        # Calculate allocation ratio
-        plant_code_str = str(m.spv_plant_code).strip()
-        total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
-            models.ProjectMapping.spv_plant_code == plant_code_str
-        ).scalar() or 1.0
-        
+        total_capacity = capacity_by_plant.get(plant_code_str, 1.0)
         project_capacity = m.capacity_mwac or 0
         allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
 
-        inv_mw = (inv_query.scalar() or 0) * (1.0 if m.module_wbs else allocation_ratio)
-        it_mw = (it_query.scalar() or 0) * (1.0 if m.module_wbs else allocation_ratio)
-        req_mw = (req_query.scalar() or 0) * allocation_ratio
+        req_mw = req_by_plant.get(plant_code_str, 0)
         
-        # 2. PO Amount Mapping (ME2M) - only has Plant Code available
-        po_mw = (db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
-            models.MTPOAmount.plant_code == plant_code_str
-        ).scalar() or 0) * allocation_ratio
-        
-        po_value = (db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
-            models.MTPOAmount.plant_code == plant_code_str
-        ).scalar() or 0) * allocation_ratio
-        
+        if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
+            clean_wbs = str(m.module_wbs).strip().lower()
+            inv_mw = sum(qty for wbs, qty in all_inv_wbs if wbs and qty and clean_wbs in str(wbs).lower())
+            it_mw = sum(qty for wbs, qty in all_it_wbs if wbs and qty and clean_wbs in str(wbs).lower())
+            allocation_ratio_inv = 1.0
+        else:
+            inv_mw = inv_by_plant.get(plant_code_str, 0) or 0
+            it_mw = it_by_plant.get(plant_code_str, 0) or 0
+            allocation_ratio_inv = allocation_ratio
+            
+        inv_mw *= allocation_ratio_inv
+        it_mw *= allocation_ratio_inv
+        req_mw = (req_mw or 0) * allocation_ratio
+
+        po_mw = (po_mw_by_plant.get(plant_code_str, 0) or 0) * allocation_ratio
+        po_value = (po_val_by_plant.get(plant_code_str, 0) or 0) * allocation_ratio
+
         portfolio_summary["total_inventory_mw"] += inv_mw
         portfolio_summary["total_po_mw"] += po_mw
-        
+
         # TC Data
-        # A master mapping is linked to TcProjectEntry, which has a "phase".
-        # We need to find TcNetworkEdges that contain this phase in their "projects" JSON array.
-        project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == m.id).all()
+        project_entries = [pe for pe in all_tc_entries if pe.mapping_id == m.id]
         phases = set(pe.phase for pe in project_entries if pe.phase)
         
         tc_khavda = []
         tc_rajasthan = []
         
         if phases:
-            for p in phases:
-                # Search Khavda
-                edges_k = db.query(models.TcNetworkEdge).filter(
-                    models.TcNetworkEdge.region == "Khavda",
-                    models.TcNetworkEdge.projects.like(f'%"{p}"%')
-                ).all()
-                tc_khavda.extend(edges_k)
-                
-                # Search Rajasthan
-                edges_r = db.query(models.TcNetworkEdge).filter(
-                    models.TcNetworkEdge.region == "Rajasthan",
-                    models.TcNetworkEdge.projects.like(f'%"{p}"%')
-                ).all()
-                tc_rajasthan.extend(edges_r)
-        
-        # Also include any direct mappings (fallback)
-        direct_tc_khavda = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id, models.TcNetworkEdge.region == "Khavda").all()
-        direct_tc_rajasthan = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id, models.TcNetworkEdge.region == "Rajasthan").all()
-        tc_khavda.extend(direct_tc_khavda)
-        tc_rajasthan.extend(direct_tc_rajasthan)
-        
+            for edge in all_tc_edges:
+                if phases.intersection(parsed_edge_phases.get(edge.id, set())):
+                    if edge.region == "Khavda":
+                        tc_khavda.append(edge)
+                    elif edge.region == "Rajasthan":
+                        tc_rajasthan.append(edge)
+                        
+        # Direct mappings (fallback)
+        for edge in all_tc_edges:
+            if edge.mapping_id == m.id:
+                if edge.region == "Khavda":
+                    tc_khavda.append(edge)
+                elif edge.region == "Rajasthan":
+                    tc_rajasthan.append(edge)
+
         # Deduplicate
         tc_khavda = list({e.id: e for e in tc_khavda}.values())
         tc_rajasthan = list({e.id: e for e in tc_rajasthan}.values())
@@ -418,13 +420,13 @@ def global_search(q: str, db: Session = Depends(get_db)):
     return results
 
 @router.get("/knowledge-graph")
-def get_knowledge_graph(db: Session = Depends(get_db)):
+def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a single unified knowledge graph with rich detail data per project:
     Root → EPS Regions → Projects (with P6/SAP/TC details) → Key Vendors
     """
     global _KG_CACHE
-    if _KG_CACHE["data"] and time.time() - _KG_CACHE["timestamp"] < _CACHE_TTL:
+    if not nocache and _KG_CACHE["data"] and time.time() - _KG_CACHE["timestamp"] < _CACHE_TTL:
         return _KG_CACHE["data"]
         
     nodes = []

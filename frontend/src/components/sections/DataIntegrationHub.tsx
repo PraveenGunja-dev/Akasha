@@ -32,9 +32,10 @@ export default function DataIntegrationHub() {
   const [passwordUpdating, setPasswordUpdating] = useState(false);
   const [passwordUpdateResult, setPasswordUpdateResult] = useState<{success?: string, error?: string} | null>(null);
 
-  const fetchIntegrations = async () => {
+  const fetchIntegrations = async (nocache = false) => {
     try {
-      const res = await fetch('/akasha/api/dashboard/summary');
+      const url = nocache ? '/akasha/api/dashboard/summary?nocache=true' : '/akasha/api/dashboard/summary';
+      const res = await fetch(url);
       const json = await res.json();
       setData(json.projects || []);
     } catch (err) {
@@ -78,8 +79,8 @@ export default function DataIntegrationHub() {
         setSyncError(errors.join(" | "));
       }
       
-      // Fetch the updated dashboard summary
-      await fetchIntegrations();
+      // Fetch the updated dashboard summary bypassing cache
+      await fetchIntegrations(true);
     } catch (err: any) {
       console.error("Failed to sync:", err);
       setSyncError(err.message || "Failed to connect to backend");
