@@ -49,7 +49,7 @@ def normalize_p6_name(name):
         clean = clean[:-13]
     return clean
 
-def find_mapping_id(db: Session, project_names, edge_data=None):
+def find_mapping_id(db: Session, project_names, p6_map=None):
     """Attempt to find a mapping ID using a 3-level strategy"""
     if not project_names:
         return None
@@ -67,7 +67,6 @@ def find_mapping_id(db: Session, project_names, edge_data=None):
         "AGEL Hybrid Merchant (Wind)": "AGEL Hybrid Merchant"
     }
     
-    # Cache mappings for level 3 to avoid N+1 queries
     all_maps = None
     
     for name in names:
@@ -88,21 +87,15 @@ def find_mapping_id(db: Session, project_names, edge_data=None):
             if mapping:
                 return mapping.id
                 
-        # LEVEL 3: P6 Name Fallback via table5Entries
-        if edge_data and "table5Entries" in edge_data:
-            entries = edge_data["table5Entries"]
-            for entry in entries:
-                p6_val = entry.get("p6project")
-                if not p6_val:
-                    continue
-                norm_p6 = normalize_p6_name(p6_val)
+        # LEVEL 3: P6 Name Fallback via p6_map
+        if p6_map and name in p6_map:
+            norm_p6 = normalize_p6_name(p6_map[name])
+            if all_maps is None:
+                all_maps = db.query(ProjectMapping).all()
                 
-                if all_maps is None:
-                    all_maps = db.query(ProjectMapping).all()
-                    
-                for m in all_maps:
-                    if m.project_name_from_p6 and normalize_p6_name(m.project_name_from_p6) == norm_p6:
-                        return m.id
+            for m in all_maps:
+                if m.project_name_from_p6 and normalize_p6_name(m.project_name_from_p6) == norm_p6:
+                    return m.id
                         
     return None
 
@@ -136,13 +129,16 @@ def sync_khavda_data(db: Session, token: str):
     projectEntries = filters.get("projectEntries", [])
     all_entries = table5 if len(table5) > 0 else projectEntries
     
+    p6_map = {}
+    for entry in all_entries:
+        if entry.get("project") and entry.get("p6project"):
+            p6_map[entry.get("project")] = entry.get("p6project")
+    
     for entry in all_entries:
         project_name = entry.get("project")
         if not project_name: continue
         
-        # Mock edge_data structure for find_mapping_id Level 3 fallback
-        mock_edge = {"table5Entries": [entry]}
-        mapping_id = find_mapping_id(db, [project_name], edge_data=mock_edge)
+        mapping_id = find_mapping_id(db, [project_name], p6_map=p6_map)
         
         pe = TcProjectEntry(
             region="Khavda",
@@ -173,7 +169,7 @@ def sync_khavda_data(db: Session, token: str):
         
     for e in network.get("edges", []):
         projects = e.get("project", [])
-        mapping_id = find_mapping_id(db, projects, edge_data=e)
+        mapping_id = find_mapping_id(db, projects, p6_map=p6_map)
         
         edge = TcNetworkEdge(
             region="Khavda",
@@ -182,7 +178,7 @@ def sync_khavda_data(db: Session, token: str):
             from_label=e.get("from_label"),
             to_node=e.get("to"),
             to_label=e.get("to_label"),
-            projects=json.dumps(projects),
+            projects=json.dumps({"projects": projects, "phases": e.get("phases", [])}),
             contractor=e.get("contractor"),
             voltage=e.get("voltage"),
             length=str(e.get("length")),
@@ -229,12 +225,16 @@ def sync_rajasthan_data(db: Session, token: str):
     projectEntries = filters.get("projectEntries", [])
     all_entries = table5 if len(table5) > 0 else projectEntries
     
+    p6_map = {}
+    for entry in all_entries:
+        if entry.get("project") and entry.get("p6project"):
+            p6_map[entry.get("project")] = entry.get("p6project")
+    
     for entry in all_entries:
         project_name = entry.get("project")
         if not project_name: continue
         
-        mock_edge = {"table5Entries": [entry]}
-        mapping_id = find_mapping_id(db, [project_name], edge_data=mock_edge)
+        mapping_id = find_mapping_id(db, [project_name], p6_map=p6_map)
         
         pe = TcProjectEntry(
             region="Rajasthan",
@@ -265,7 +265,7 @@ def sync_rajasthan_data(db: Session, token: str):
         
     for e in network.get("edges", []):
         projects = e.get("project", [])
-        mapping_id = find_mapping_id(db, projects, edge_data=e)
+        mapping_id = find_mapping_id(db, projects, p6_map=p6_map)
         
         edge = TcNetworkEdge(
             region="Rajasthan",
@@ -274,7 +274,7 @@ def sync_rajasthan_data(db: Session, token: str):
             from_label=e.get("from_label"),
             to_node=e.get("to"),
             to_label=e.get("to_label"),
-            projects=json.dumps(projects),
+            projects=json.dumps({"projects": projects, "phases": e.get("phases", [])}),
             contractor=e.get("contractor"),
             voltage=e.get("voltage"),
             length=str(e.get("length")),

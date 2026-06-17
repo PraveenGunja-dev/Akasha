@@ -211,7 +211,7 @@ class MTPOAmount(Base):
     id = Column(Integer, primary_key=True, index=True)
     company_code = Column(String)
     plant_code = Column(String, index=True)
-    purchasing_document = Column(String, unique=True, index=True)
+    purchasing_document = Column(String, unique=False, index=True)
     material_code = Column(String)
     vendor_code = Column(String)
     vendor_name = Column(String)
@@ -229,6 +229,18 @@ class MTPOAmount(Base):
     deletion_indicator = Column(String, nullable=True)
     document_date = Column(DateTime, nullable=True)
     short_text = Column(String, nullable=True)
+    
+    # New columns from material logic update
+    material_name = Column(String, nullable=True)
+    order_quantity = Column(Float, nullable=True)
+    net_order_value_inr = Column(Float, nullable=True)
+    still_to_deliver_qty = Column(Float, nullable=True)
+    still_to_deliver_inr = Column(Float, nullable=True)
+    delivered_qty = Column(Float, nullable=True)
+    delivered_value_inr_cr = Column(Float, nullable=True)
+    storage_location = Column(String, nullable=True)
+    block_plot_name = Column(String, nullable=True)
+    currency = Column(String, nullable=True)
     
     upload_time = Column(DateTime, default=datetime.utcnow)
 
@@ -257,6 +269,10 @@ class MTInventory(Base):
     value_unrestricted = Column(Float, nullable=True)
     plant_name = Column(String, nullable=True)
     
+    # New columns from material logic update
+    material_name = Column(String, nullable=True)
+    unrestricted_qty = Column(Float, nullable=True)
+    
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class MTMaterialDocument(Base):
@@ -270,6 +286,16 @@ class MTMaterialDocument(Base):
     quantity = Column(Float)
     material_document = Column(String)
     wbs_element = Column(String, index=True)
+    
+    # New columns from material logic update
+    material_name = Column(String, nullable=True)
+    material_description = Column(String, nullable=True)
+    amount_in_lc = Column(Float, nullable=True)
+    amount_in_lc_cr = Column(Float, nullable=True)
+    storage_location = Column(String, nullable=True)
+    block_plot_name = Column(String, nullable=True)
+    purchase_order = Column(String, nullable=True)
+    base_unit = Column(String, nullable=True)
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class MTUnderConstruction(Base):
@@ -308,7 +334,9 @@ class ProjectMapping(Base):
     module_wbs = Column(String, index=True)         # 'Module WBS' (SAP mapping key 2)
     age6l = Column(String)                          # 'AGE6L'
     cluster = Column(String)                        # 'Cluster'
-    not_allocated = Column(String)                  # 'Not Allocated'# ------------------------------------------
+    not_allocated = Column(String)                  # 'Not Allocated'
+    source_of_origin = Column(String, nullable=True)
+    priority = Column(String, nullable=True)# ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------
 

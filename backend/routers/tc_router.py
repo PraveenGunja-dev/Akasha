@@ -43,7 +43,11 @@ def get_rajasthan_network(db: Session = Depends(get_db)):
         
         if e.projects:
             try:
-                edge_dict["projects"] = json.loads(e.projects)
+                parsed = json.loads(e.projects)
+                if isinstance(parsed, dict):
+                    edge_dict["projects"] = parsed.get("projects", [])
+                elif isinstance(parsed, list):
+                    edge_dict["projects"] = parsed
             except Exception:
                 pass
                 

@@ -4,7 +4,7 @@ import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Sparkles, Activity, Clock, Shield, Target,
   Package, TrendingUp, AlertTriangle, CheckCircle2,
-  Calendar, BarChart3, Truck, Brain, ChevronRight, Loader2,
+  Calendar, BarChart3, Truck, Brain, ChevronRight, ChevronDown, ChevronUp, Loader2,
   Users, DollarSign, Layers, MapPin, Database, FileText,
   Box, Network, Zap, BrainCircuit, Flag, CalendarClock, Download
 } from 'lucide-react';
@@ -32,16 +32,25 @@ const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
 };
 
 /* ── Hero Metric Card ── */
-const HeroMetric = ({ label, value, unit, color, icon: Icon }: any) => (
-  <div className="intelligence-card p-5 flex flex-col gap-3">
+const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, hasBreakdown }: any) => (
+  <div 
+    onClick={onClick} 
+    className={`bg-muted/20 hover:bg-muted/40 transition-all duration-300 border rounded-xl p-5 flex flex-col gap-3 group relative overflow-hidden shadow-sm hover:shadow-md ${
+      active ? 'border-primary/60 ring-1 ring-primary/30 bg-primary/5' : 'border-border/50 hover:border-primary/20'
+    } ${hasBreakdown ? 'cursor-pointer' : ''}`}
+  >
+    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
     <div className="flex items-center justify-between">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</span>
-      <Icon className={`w-4 h-4 ${color}`} />
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">{label}</span>
+      <Icon className={`w-4 h-4 ${color} transition-transform duration-300 group-hover:scale-110`} />
     </div>
-    <div className="flex items-baseline gap-1.5">
+    <div className="flex items-baseline gap-1.5 relative z-10">
       <span className={`text-2xl font-light tracking-tight ${color}`}>{value}</span>
       {unit && <span className="text-xs text-muted-foreground/50">{unit}</span>}
     </div>
+    {hasBreakdown && (
+      <div className={`absolute bottom-1.5 right-2 text-[9px] font-medium transition-colors ${active ? 'text-primary' : 'text-muted-foreground/30 group-hover:text-muted-foreground/50'}`}>▾ details</div>
+    )}
   </div>
 );
 
@@ -98,6 +107,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel'>('all');
+  const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
+  const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
+  const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
 
   useEffect(() => {
     setActiveTab('overview');
@@ -160,38 +172,43 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     const filteredPOs = (sapRaw.purchaseOrders || []).filter((po: any) => po.plantCode === targetCode);
     const filteredInTransit = (sapRaw.inTransit || []).filter((t: any) => t.plantCode === targetCode);
     const filteredInventory = (sapRaw.inventory || []).filter((inv: any) => inv.plantCode === targetCode);
+    const filteredConsumption = (sapRaw.consumption || []).filter((c: any) => c.plantCode === targetCode);
 
     const vendorMap: Record<string, any> = {};
     for (const po of filteredPOs) {
       const vName = po.vendorName || 'Unknown';
       if (!vendorMap[vName]) {
-        vendorMap[vName] = { vendorName: vName, vendorCode: po.vendorCode || '', totalMW: 0, totalValue: 0, poCount: 0, materials: new Set() };
+        vendorMap[vName] = { vendorName: vName, vendorCode: po.vendorCode || '', totalOrderedQty: 0, totalBudgetINR: 0, poCount: 0, materials: new Set() };
       }
-      vendorMap[vName].totalMW += po.poQuantityMW || 0;
-      vendorMap[vName].totalValue += po.netOrderValue || 0;
+      vendorMap[vName].totalOrderedQty += po.orderedQty || 0;
+      vendorMap[vName].totalBudgetINR += po.budgetINR || 0;
       vendorMap[vName].poCount += 1;
       if (po.materialCode) vendorMap[vName].materials.add(po.materialCode);
     }
     const filteredVendorBreakdown = Object.values(vendorMap)
       .map((v: any) => ({ ...v, materialCount: v.materials.size }))
-      .sort((a: any, b: any) => b.totalMW - a.totalMW);
+      .sort((a: any, b: any) => b.totalOrderedQty - a.totalOrderedQty);
 
     const matMap: Record<string, any> = {};
     for (const po of filteredPOs) {
       const mt = po.materialType || 'Unknown';
-      if (!matMap[mt]) matMap[mt] = { type: mt, totalMW: 0, count: 0 };
-      matMap[mt].totalMW += po.poQuantityMW || 0;
+      if (!matMap[mt]) matMap[mt] = { type: mt, totalQty: 0, count: 0 };
+      matMap[mt].totalQty += po.orderedQty || 0;
       matMap[mt].count += 1;
     }
-    const filteredMaterialBreakdown = Object.values(matMap).sort((a: any, b: any) => b.totalMW - a.totalMW);
+    const filteredMaterialBreakdown = Object.values(matMap).sort((a: any, b: any) => b.totalQty - a.totalQty);
 
     const filteredSummary = {
       totalPOs: filteredPOs.length,
       totalVendors: filteredVendorBreakdown.length,
-      totalPOMW: filteredPOs.reduce((sum: number, po: any) => sum + (po.poQuantityMW || 0), 0),
-      totalInTransitMW: filteredInTransit.reduce((sum: number, t: any) => sum + (t.quantityMW || 0), 0),
-      totalInventoryMW: filteredInventory.reduce((sum: number, inv: any) => sum + (inv.quantityMW || 0), 0),
-      totalNetValue: filteredPOs.reduce((sum: number, po: any) => sum + (po.netOrderValue || 0), 0),
+      totalOrderedQty: filteredPOs.reduce((sum: number, po: any) => sum + (po.orderedQty || 0), 0),
+      totalInTransitQty: filteredInTransit.reduce((sum: number, t: any) => sum + (t.inTransitQty || 0), 0),
+      totalInventoryQty: filteredInventory.reduce((sum: number, inv: any) => sum + (inv.inventoryQty || 0), 0),
+      totalInventoryValueINR: filteredInventory.reduce((sum: number, inv: any) => sum + (inv.inventoryValueINR || 0), 0),
+      totalBudgetINR: filteredPOs.reduce((sum: number, po: any) => sum + (po.budgetINR || 0), 0),
+      totalDeliveredINR: filteredPOs.reduce((sum: number, po: any) => sum + (po.deliveredINR || 0), 0),
+      totalConsumedQty: filteredConsumption.reduce((sum: number, c: any) => sum - (c.quantity || 0), 0),
+      totalExpenditureINR: filteredConsumption.reduce((sum: number, c: any) => sum - (c.amountINR || 0), 0),
     };
 
     return {
@@ -199,11 +216,105 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       purchaseOrders: filteredPOs,
       inTransit: filteredInTransit,
       inventory: filteredInventory,
+      consumption: filteredConsumption,
       vendorBreakdown: filteredVendorBreakdown,
       materialBreakdown: filteredMaterialBreakdown,
       summary: filteredSummary,
     };
   }, [sapRaw, sapFilter, project?.sapPlantCode, project?.agelCode]);
+
+  const unifiedMaterials = useMemo(() => {
+    if (!filteredSap) return [];
+    const matMap: Record<string, any> = {};
+
+    const initMat = (code: string, desc: string) => {
+      const cleanDesc = desc === 'nan' || !desc ? '—' : desc;
+      if (!matMap[code]) {
+        matMap[code] = {
+          materialCode: code,
+          materialDescription: cleanDesc,
+          orderedQty: 0,
+          consumedQty: 0,
+          budgetINR: 0,
+          deliveredINR: 0,
+          consumedAmountINR: 0,
+          inventoryQty: 0,
+          inventoryValueINR: 0,
+          inTransitQty: 0,
+          pos: [],
+          consumptions: [],
+          inventories: [],
+          inTransits: [],
+          wbsElements: new Set<string>()
+        };
+      } else if (cleanDesc !== '—' && matMap[code].materialDescription === '—') {
+        matMap[code].materialDescription = cleanDesc;
+      }
+    };
+
+    // 1. POs
+    (filteredSap.purchaseOrders || []).forEach((po: any) => {
+      if (inventoryFilter === 'COMPANY' && po.storageLocation !== 'CS01') return;
+      if (inventoryFilter === 'PROJECT' && po.storageLocation !== 'PS01') return;
+      const code = po.materialCode;
+      if (!code) return;
+      initMat(code, po.materialName || po.materialType);
+      const m = matMap[code];
+      m.orderedQty += Number(po.orderedQty || 0);
+      m.budgetINR += Number(po.budgetINR || 0);
+      m.deliveredINR += Number(po.deliveredINR || 0);
+      m.pos.push(po);
+    });
+
+    // 2. Consumption
+    (filteredSap.consumption || []).forEach((c: any) => {
+      const code = c.materialCode;
+      if (!code) return;
+      initMat(code, c.materialDescription || '—');
+      const m = matMap[code];
+      const qty = Number(c.quantity || 0);
+      const amt = Number(c.amountINR || 0);
+      m.consumedQty -= qty;
+      m.consumedAmountINR -= amt;
+      m.consumptions.push(c);
+      if (c.wbsElement && c.wbsElement.trim() && c.wbsElement !== 'nan') m.wbsElements.add(c.wbsElement);
+      if (c.blockPlotName && c.blockPlotName.trim() && c.blockPlotName !== 'nan') m.wbsElements.add(c.blockPlotName);
+    });
+
+    // 3. Inventory
+    (filteredSap.inventory || []).forEach((inv: any) => {
+      if (inventoryFilter === 'COMPANY' && inv.storageLocation !== 'CS01') return;
+      if (inventoryFilter === 'PROJECT' && inv.storageLocation !== 'PS01') return;
+      const code = inv.materialCode;
+      if (!code) return;
+      initMat(code, '—');
+      const m = matMap[code];
+      m.inventoryQty += Number(inv.inventoryQty || 0);
+      m.inventoryValueINR += Number(inv.inventoryValueINR || 0);
+      m.inventories.push(inv);
+      if (inv.wbsElement && inv.wbsElement.trim() && inv.wbsElement !== 'nan') m.wbsElements.add(inv.wbsElement);
+    });
+
+    // 4. InTransit
+    (filteredSap.inTransit || []).forEach((t: any) => {
+      const code = t.materialCode;
+      if (!code) return;
+      initMat(code, '—');
+      const m = matMap[code];
+      m.inTransitQty += Number(t.inTransitQty || 0);
+      m.inTransits.push(t);
+      if (t.wbsElement && t.wbsElement.trim() && t.wbsElement !== 'nan') m.wbsElements.add(t.wbsElement);
+    });
+
+    const result = Object.values(matMap).map((m: any) => {
+      m.remainingQty = m.orderedQty - m.consumedQty;
+      m.remainingBalanceINR = m.budgetINR - m.deliveredINR;
+      m.wbsList = Array.from(m.wbsElements).filter(Boolean);
+      return m;
+    });
+
+    return result.sort((a: any, b: any) => b.orderedQty - a.orderedQty);
+  }, [filteredSap, inventoryFilter]);
 
   if (loading) {
     return (
@@ -253,15 +364,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
   // Supply chain pipeline
   const supplyData = [
-    { name: 'PO Volume', value: p.poVolumeMW, color: '#3B82F6' },
-    { name: 'In Transit', value: p.inTransitMW, color: '#F59E0B' },
-    { name: 'Inventory', value: p.inventoryMW, color: '#10B981' },
+    { name: 'Ordered Qty', value: p.orderedQty, color: '#3B82F6' },
+    { name: 'In Transit Qty', value: p.inTransitQty, color: '#F59E0B' },
+    { name: 'Inventory Qty', value: p.inventoryQty, color: '#10B981' },
   ];
   const supplyOption = {
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a' } },
     grid: { left: '3%', right: '4%', bottom: '3%', top: '8%', containLabel: true },
     xAxis: { type: 'category', data: supplyData.map(s => s.name), axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 10 } },
-    yAxis: { type: 'value', name: 'MW', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+    yAxis: { type: 'value', name: 'Units', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
     series: [{ type: 'bar', data: supplyData.map(s => ({ value: s.value, itemStyle: { color: s.color, borderRadius: [6, 6, 0, 0] } })), barWidth: '40%' }]
   };
 
@@ -277,20 +388,37 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   // SAP vendor chart (reactive to toggle filter)
   const vendorChartOption = sap?.vendorBreakdown?.length > 0 ? {
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a' } },
-    grid: { left: '3%', right: '8%', bottom: '3%', top: '8%', containLabel: true },
-    xAxis: { type: 'value', name: 'MW', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-    yAxis: {
+    legend: { data: ['Ordered Qty', 'Net Value (INR)'], bottom: 0, textStyle: { fontSize: 10, color: '#64748b' } },
+    grid: { left: '3%', right: '8%', bottom: '15%', top: '8%', containLabel: true },
+    xAxis: {
       type: 'category',
-      data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.vendorName?.substring(0, 22) || 'Unknown').reverse(),
+      data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.vendorName?.substring(0, 22) || 'Unknown'),
       axisLine: { lineStyle: { color: '#e2e8f0' } },
-      axisLabel: { color: '#64748b', fontSize: 10 }
+      axisLabel: { color: '#64748b', fontSize: 10, rotate: 15 }
     },
-    series: [{
-      type: 'bar',
-      data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.totalMW).reverse(),
-      itemStyle: { color: '#3B82F6', borderRadius: [0, 6, 6, 0] },
-      barWidth: '50%'
-    }]
+    yAxis: [
+      { type: 'value', name: 'Units', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+      { type: 'value', name: 'Value', position: 'right', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10, formatter: (v: number) => `₹${(v/100000).toFixed(0)}L` }, splitLine: { show: false } }
+    ],
+    series: [
+      {
+        name: 'Ordered Qty',
+        type: 'bar',
+        data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.totalOrderedQty),
+        itemStyle: { color: '#3B82F6', borderRadius: [6, 6, 0, 0] },
+        barWidth: '40%'
+      },
+      {
+        name: 'Net Value (INR)',
+        type: 'line',
+        yAxisIndex: 1,
+        data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.totalBudgetINR),
+        itemStyle: { color: '#10B981' },
+        lineStyle: { width: 3 },
+        symbol: 'circle',
+        symbolSize: 8
+      }
+    ]
   } : null;
 
   // Material type pie chart (reactive to toggle filter)
@@ -302,7 +430,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       itemStyle: { borderRadius: 4, borderColor: '#fff', borderWidth: 2 },
       label: { show: false },
       data: sap.materialBreakdown.map((m: any, i: number) => ({
-        value: m.totalMW,
+        value: m.totalQty,
         name: m.type,
         itemStyle: { color: ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#EC4899'][i % 6] }
       }))
@@ -318,16 +446,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     rows.push(['Capacity (MW):', mapping?.capacityMW || '']);
     rows.push(['']);
     
-    // Vendor Summary
     rows.push(['--- Vendor Summary ---']);
-    rows.push(['Vendor Name', 'Vendor Code', 'POs', 'Materials', 'Volume', 'Net Value']);
+    rows.push(['Vendor Name', 'Vendor Code', 'POs', 'Materials', 'Ordered Qty', 'Budget INR']);
     sap.vendorBreakdown?.forEach((v: any) => {
       rows.push([
         `"${v.vendorName?.replace(/"/g, '""') || ''}"`, 
         v.vendorCode || '', 
         v.poCount, 
         v.materialCount, 
-        v.totalMW, 
+        v.totalQty, 
         v.totalValue
       ]);
     });
@@ -335,15 +462,16 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     
     // Purchase Orders
     rows.push(['--- Purchase Orders (ME2M) ---']);
-    rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Material Type', 'Quantity (Units)', 'Net Value', 'Plant Code']);
+    rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Material Name', 'Material Type', 'Ordered Qty', 'Budget INR', 'Plant Code']);
     sap.purchaseOrders?.forEach((po: any) => {
       rows.push([
         po.poNumber, 
         `"${po.vendorName?.replace(/"/g, '""') || ''}"`, 
         po.materialCode, 
+        `"${po.materialName?.replace(/"/g, '""') || ''}"`, 
         `"${po.materialType || ''}"`, 
-        po.poQuantity,
-        po.netOrderValue, 
+        po.orderedQty,
+        po.budgetINR, 
         po.plantCode
       ]);
     });
@@ -352,14 +480,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     // In Transit
     if (sap.inTransit?.length > 0) {
       rows.push(['--- In-Transit Shipments (MIGO) ---']);
-      rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Quantity (Units)', 'GR Date']);
+      rows.push(['PO Number', 'Vendor Name', 'Material Code', 'In Transit Qty']);
       sap.inTransit.forEach((t: any) => {
         rows.push([
           t.poNumber, 
           `"${t.vendorName?.replace(/"/g, '""') || ''}"`, 
           t.materialCode, 
-          t.quantity,
-          t.grPostingDate || ''
+          t.inTransitQty
         ]);
       });
       rows.push(['']);
@@ -368,13 +495,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     // Inventory
     if (sap.inventory?.length > 0) {
       rows.push(['--- Site Inventory (MB52) ---']);
-      rows.push(['Material Code', 'Storage Location', 'Quantity (Units)', 'Posting Date']);
+      rows.push(['Material Code', 'Storage Location', 'Inventory Qty', 'Inventory Value']);
       sap.inventory.forEach((inv: any) => {
         rows.push([
           inv.materialCode, 
           `"${inv.storageLocation || ''}"`, 
-          inv.quantity,
-          inv.postingDate || ''
+          inv.inventoryQty,
+          inv.inventoryValueINR
         ]);
       });
     }
@@ -718,9 +845,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-3 gap-4">
                   {[
-                    { label: 'PO Volume', value: p.poVolumeMW, color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                    { label: 'In Transit', value: p.inTransitMW, color: 'text-amber-500', bg: 'bg-amber-500/10' },
-                    { label: 'Inventory', value: p.inventoryMW, color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                    { label: 'Ordered Qty', value: p.orderedQty ? Math.round(p.orderedQty).toLocaleString() : '0', color: 'text-blue-500', bg: 'bg-blue-500/10' },
+                    { label: 'In Transit Qty', value: p.inTransitQty ? Math.round(p.inTransitQty).toLocaleString() : '0', color: 'text-amber-500', bg: 'bg-amber-500/10' },
+                    { label: 'Inventory Qty', value: p.inventoryQty ? Math.round(p.inventoryQty).toLocaleString() : '0', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
                   ].map(m => (
                     <div key={m.label} className="intelligence-card p-4 flex flex-col items-center text-center justify-center">
                       <div className={`w-10 h-10 rounded-full ${m.bg} flex items-center justify-center mb-3`}>
@@ -757,12 +884,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                   <div className="mt-auto space-y-3">
                     <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Available</span>
-                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{p.inventoryMW}</span>
+                      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Inventory</span>
+                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{p.inventoryQty?.toLocaleString()}</span>
                     </div>
                     <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20">
                       <span className="text-sm font-medium text-red-700 dark:text-red-400">Shortage</span>
-                      <span className="font-bold text-red-700 dark:text-red-400">{Math.max(0, p.poVolumeMW - p.inventoryMW)}</span>
+                      <span className="font-bold text-red-700 dark:text-red-400">{Math.max(0, p.orderedQty - p.inventoryQty).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>
@@ -827,34 +954,39 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <span className="text-sm text-muted-foreground/60">Loading SAP data...</span>
                   </div>
                 </div>
-              ) : !sap || sap.summary.totalPOs === 0 ? (
-                <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
-                  <Database className="w-10 h-10 text-muted-foreground/20 mb-3" />
-                  <p className="text-muted-foreground/60 text-sm">No SAP procurement data found for this project.</p>
-                  <p className="text-muted-foreground/40 text-xs mt-1">Plant code: {mapping?.sapPlantCode || '—'} · SPV: {mapping?.agelCode || '—'}</p>
-                </div>
               ) : (
-                <>
-                  {/* SAP Summary Cards */}
+                <div className="space-y-6">
+                  {/* SAP Summary Header */}
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <Database className="w-5 h-5 text-primary/70" /> SAP Intelligence
                     </h2>
                     <div className="flex items-center gap-3">
-                      {/* SPV / AGEL Toggle */}
                       <div className="flex items-center bg-muted/40 border border-border rounded-lg p-0.5">
                         {[
-                          { key: 'all' as const, label: 'All' },
-                          { key: 'spv' as const, label: `SPV (${p.sapPlantCode || '—'})` },
-                          { key: 'agel' as const, label: `AGEL (${p.agelCode || '—'})` },
+                          { key: 'all' as const, label: 'All', disabled: false },
+                          { 
+                            key: 'spv' as const, 
+                            label: `SPV (${project?.sapPlantCode || '—'})`, 
+                            disabled: project?.sapPlantCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => x.plantCode === project.sapPlantCode)) : true 
+                          },
+                          { 
+                            key: 'agel' as const, 
+                            label: `AGEL (${project?.agelCode || '—'})`, 
+                            disabled: project?.agelCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => x.plantCode === project.agelCode)) : true 
+                          },
                         ].map(opt => (
                           <button
                             key={opt.key}
-                            onClick={() => setSapFilter(opt.key)}
+                            onClick={() => !opt.disabled && setSapFilter(opt.key)}
+                            disabled={opt.disabled}
+                            title={opt.disabled ? 'No procurement data found for this plant code' : ''}
                             className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${
-                              sapFilter === opt.key
-                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                              opt.disabled 
+                                ? 'opacity-40 cursor-not-allowed border border-dashed border-muted-foreground/30 text-muted-foreground'
+                                : sapFilter === opt.key
+                                  ? 'bg-primary text-primary-foreground shadow-sm'
+                                  : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                             }`}
                           >
                             {opt.label}
@@ -870,14 +1002,231 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       </button>
                     </div>
                   </div>
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-blue-400" />
-                    <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-400" />
-                    <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalPOMW)} unit="" icon={Package} color="text-blue-400" />
-                    <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitMW)} unit="" icon={Truck} color="text-amber-400" />
-                    <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryMW)} unit="" icon={Box} color="text-emerald-400" />
-                    <HeroMetric label="Net Value" value={fmtCost(sap.summary.totalNetValue)} icon={DollarSign} color="text-pink-400" />
+
+                  {!sap || sap.summary.totalPOs === 0 ? (
+                    <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
+                      <Database className="w-10 h-10 text-muted-foreground/20 mb-3" />
+                      <p className="text-muted-foreground/60 text-sm">No SAP procurement data found for this plant code.</p>
+                      <p className="text-muted-foreground/40 text-xs mt-1">Plant code: {sapFilter === 'spv' ? project?.sapPlantCode : sapFilter === 'agel' ? project?.agelCode : '—'}</p>
+                    </div>
+                  ) : (
+                    <>
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
+                    <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
+                    <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-indigo-500 dark:text-indigo-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} />
+                    <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="" icon={Package} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />
+                    <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="" icon={Box} color="text-emerald-500 dark:text-emerald-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
+                    
+                    <HeroMetric label="Total Budget" value={fmtCost(sap.summary.totalBudgetINR)} icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
+                    <HeroMetric label="Utilized Amt" value={fmtCost(sap.summary.totalDeliveredINR)} icon={Activity} color="text-orange-500 dark:text-orange-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
+                    <HeroMetric label="Remaining Bal" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalDeliveredINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
+                    <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalDeliveredINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalDeliveredINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-red-500 dark:text-red-400' : 'text-emerald-500 dark:text-emerald-400'} />
+                    <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="" icon={Truck} color="text-amber-500 dark:text-amber-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
                   </div>
+
+                  {/* ── Interactive Breakdown Panel ── */}
+                  {expandedMetric && (
+                    <div className="intelligence-card p-5 animate-in slide-in-from-top-2 duration-300 border-primary/20">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                          <Zap className="w-3.5 h-3.5" />
+                          {expandedMetric === 'pos' && 'Purchase Order Breakdown'}
+                          {expandedMetric === 'vendors' && 'Vendor Breakdown'}
+                          {expandedMetric === 'materials' && 'Material Type Breakdown'}
+                          {expandedMetric === 'volume' && 'PO Volume by Material'}
+                          {expandedMetric === 'inventory' && 'Inventory Breakdown (Qty & Value)'}
+                          {expandedMetric === 'budget' && 'Budget Allocation by Material'}
+                          {expandedMetric === 'utilized' && 'Utilization by Material'}
+                          {expandedMetric === 'remaining' && 'Remaining Balance by Material'}
+                          {expandedMetric === 'transit' && 'In-Transit Breakdown'}
+                        </h4>
+                        <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted/50 transition-colors">✕ Close</button>
+                      </div>
+                      <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin">
+                        <table className="intel-table w-full text-xs">
+                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+                            {/* ── PO Breakdown ── */}
+                            {expandedMetric === 'pos' && (
+                              <tr>
+                                <th className="text-left">PO Number</th>
+                                <th className="text-left">Material</th>
+                                <th className="text-left">Vendor</th>
+                                <th className="text-right">Ordered Qty</th>
+                                <th className="text-right">Budget (INR)</th>
+                                <th className="text-right">Delivered Value</th>
+                                <th className="text-center">Storage</th>
+                              </tr>
+                            )}
+                            {/* ── Vendor Breakdown ── */}
+                            {expandedMetric === 'vendors' && (
+                              <tr>
+                                <th className="text-left">Vendor Name</th>
+                                <th className="text-center">PO Count</th>
+                                <th className="text-center">Materials</th>
+                                <th className="text-right">Total Ordered Qty</th>
+                                <th className="text-right">Total Budget (INR)</th>
+                              </tr>
+                            )}
+                            {/* ── Material Type Breakdown ── */}
+                            {expandedMetric === 'materials' && (
+                              <tr>
+                                <th className="text-left">Material Code</th>
+                                <th className="text-left">Description</th>
+                                <th className="text-right">Ordered</th>
+                                <th className="text-right">Consumed</th>
+                                <th className="text-right">Inventory</th>
+                                <th className="text-right">In Transit</th>
+                              </tr>
+                            )}
+                            {/* ── Volume Breakdown ── */}
+                            {expandedMetric === 'volume' && (
+                              <tr>
+                                <th className="text-left">Material Code</th>
+                                <th className="text-left">Description</th>
+                                <th className="text-right">Ordered Qty</th>
+                                <th className="text-right">% of Total</th>
+                                <th className="text-left">Distribution</th>
+                              </tr>
+                            )}
+                            {/* ── Inventory Breakdown ── */}
+                            {expandedMetric === 'inventory' && (
+                              <tr>
+                                <th className="text-left">Material Code</th>
+                                <th className="text-left">Description</th>
+                                <th className="text-right">Inventory Qty</th>
+                                <th className="text-right">Inventory Value (INR)</th>
+                                <th className="text-center">Storage Location</th>
+                              </tr>
+                            )}
+                            {/* ── Budget / Utilized / Remaining ── */}
+                            {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && (
+                              <tr>
+                                <th className="text-left">Material Code</th>
+                                <th className="text-left">Description</th>
+                                <th className="text-right">Total Budget</th>
+                                <th className="text-right">Delivered Amt</th>
+                                <th className="text-right">Remaining</th>
+                                <th className="text-left">Utilization</th>
+                              </tr>
+                            )}
+                            {/* ── Transit Breakdown ── */}
+                            {expandedMetric === 'transit' && (
+                              <tr>
+                                <th className="text-left">Material Code</th>
+                                <th className="text-left">Vendor</th>
+                                <th className="text-right">In-Transit Qty</th>
+                                <th className="text-left">WBS Element</th>
+                              </tr>
+                            )}
+                          </thead>
+                          <tbody className="divide-y divide-border/30">
+                            {/* ── PO Rows ── */}
+                            {expandedMetric === 'pos' && (sap.purchaseOrders || []).slice(0, 50).map((po: any, i: number) => (
+                              <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                <td className="text-left font-mono font-medium text-primary/80">{po.poNumber}</td>
+                                <td className="text-left text-foreground/70 max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
+                                <td className="text-left text-foreground/70 max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
+                                <td className="text-right font-mono font-semibold text-blue-400">{Number(po.orderedQty || 0).toLocaleString('en-IN')}</td>
+                                <td className="text-right font-mono text-foreground/70">{fmtCost(po.budgetINR)}</td>
+                                <td className="text-right font-mono text-emerald-500">{fmtCost(po.deliveredINR)}</td>
+                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
+                              </tr>
+                            ))}
+                            {/* ── Vendor Rows ── */}
+                            {expandedMetric === 'vendors' && (sap.vendorBreakdown || []).map((v: any, i: number) => (
+                              <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={v.vendorName}>{v.vendorName}</td>
+                                <td className="text-center font-mono font-semibold text-blue-400">{v.poCount}</td>
+                                <td className="text-center font-mono text-purple-400">{v.materialCount}</td>
+                                <td className="text-right font-mono font-semibold text-foreground">{Number(v.totalOrderedQty || 0).toLocaleString('en-IN')}</td>
+                                <td className="text-right font-mono text-pink-400">{fmtCost(v.totalBudgetINR)}</td>
+                              </tr>
+                            ))}
+                            {/* ── Materials Rows ── */}
+                            {expandedMetric === 'materials' && unifiedMaterials.slice(0, 50).map((mat: any, i: number) => (
+                              <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
+                                <td className="text-left text-foreground/70 max-w-[180px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                <td className="text-right font-mono text-blue-400">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
+                                <td className="text-right font-mono text-emerald-500">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
+                                <td className="text-right font-mono text-purple-400">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
+                                <td className="text-right font-mono text-amber-400">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
+                              </tr>
+                            ))}
+                            {/* ── Volume Rows ── */}
+                            {expandedMetric === 'volume' && unifiedMaterials.filter((m: any) => m.orderedQty > 0).slice(0, 30).map((mat: any, i: number) => {
+                              const pct = sap.summary.totalOrderedQty ? (mat.orderedQty / sap.summary.totalOrderedQty) * 100 : 0;
+                              return (
+                                <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
+                                  <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                  <td className="text-right font-mono font-semibold text-blue-400">{Number(mat.orderedQty).toLocaleString('en-IN')}</td>
+                                  <td className="text-right font-mono text-foreground/60">{pct.toFixed(1)}%</td>
+                                  <td className="text-left"><div className="w-full h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${Math.min(pct, 100)}%` }}></div></div></td>
+                                </tr>
+                              );
+                            })}
+                            {/* ── Inventory Rows ── */}
+                            {expandedMetric === 'inventory' && (sap.inventory || []).filter((inv: any) => (inv.inventoryQty || 0) > 0).slice(0, 50).map((inv: any, i: number) => (
+                              <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                <td className="text-left font-mono text-primary/80">{inv.materialCode}</td>
+                                <td className="text-left text-foreground/70 max-w-[150px] truncate">{inv.materialName || '—'}</td>
+                                <td className="text-right font-mono font-semibold text-emerald-400">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')}</td>
+                                <td className="text-right font-mono text-purple-400">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
+                              </tr>
+                            ))}
+                            {/* ── Budget / Utilized / Remaining Rows ── */}
+                            {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && unifiedMaterials.filter((m: any) => m.budgetINR > 0).slice(0, 50).map((mat: any, i: number) => {
+                              const utilPct = mat.budgetINR ? (mat.deliveredINR / mat.budgetINR) * 100 : 0;
+                              return (
+                                <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
+                                  <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                  <td className="text-right font-mono text-pink-400">{fmtCost(mat.budgetINR)}</td>
+                                  <td className="text-right font-mono text-orange-400">{fmtCost(mat.deliveredINR)}</td>
+                                  <td className="text-right font-mono text-teal-400">{fmtCost(mat.remainingBalanceINR)}</td>
+                                  <td className="text-left">
+                                    <div className="flex items-center gap-2">
+                                      <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${utilPct > 90 ? 'bg-red-500' : utilPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(utilPct, 100)}%` }}></div></div>
+                                      <span className={`text-[10px] font-mono font-bold ${utilPct > 90 ? 'text-red-400' : utilPct > 60 ? 'text-amber-400' : 'text-emerald-400'}`}>{utilPct.toFixed(0)}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                            {/* ── Transit Rows ── */}
+                            {expandedMetric === 'transit' && (sap.inTransit || []).filter((t: any) => (t.inTransitQty || 0) > 0).slice(0, 50).map((t: any, i: number) => (
+                              <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                <td className="text-left font-mono text-primary/80">{t.materialCode}</td>
+                                <td className="text-left text-foreground/70 max-w-[150px] truncate" title={t.vendorName}>{t.vendorName || '—'}</td>
+                                <td className="text-right font-mono font-semibold text-amber-400">{Number(t.inTransitQty || 0).toLocaleString('en-IN')}</td>
+                                <td className="text-left font-mono text-foreground/50 text-[10px]">{t.wbsElement || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Summary footer */}
+                      {expandedMetric === 'inventory' && (
+                        <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
+                          <span className="text-muted-foreground">Total Inventory Value:</span>
+                          <span className="font-mono font-bold text-purple-400">{fmtCost(sap.summary.totalInventoryValueINR)}</span>
+                          <span className="text-muted-foreground ml-4">Total Inventory Qty:</span>
+                          <span className="font-mono font-bold text-emerald-400">{fmtMW(sap.summary.totalInventoryQty)}</span>
+                        </div>
+                      )}
+                      {expandedMetric === 'transit' && (
+                        <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
+                          <span className="text-muted-foreground">Total In-Transit Qty:</span>
+                          <span className="font-mono font-bold text-amber-400">{fmtMW(sap.summary.totalInTransitQty)}</span>
+                          <span className="text-muted-foreground ml-4">Unique Materials in Transit:</span>
+                          <span className="font-mono font-bold text-amber-400">{new Set((sap.inTransit || []).map((t: any) => t.materialCode)).size}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Allocation Context */}
                   {sap.allocation && (
@@ -898,222 +1247,222 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Vendor Breakdown Chart */}
-                    {vendorChartOption && (
-                      <div className="intelligence-card p-6">
-                        <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                          <Users className="w-4 h-4 text-primary/70" /> Top Vendors by Volume
-                        </h3>
-                        <div className="h-[280px]">
-                          <ReactECharts option={vendorChartOption} style={{ height: '100%', width: '100%' }} />
-                        </div>
-                      </div>
-                    )}
+                  {/* Unified Material Tracking & Chart */}
+                  <div className="space-y-6">
 
-                    {sap?.materialBreakdown?.length > 0 && (
-                      <div className="intelligence-card p-6">
-                        <h3 className="text-sm font-semibold text-foreground mb-5 flex items-center gap-2">
-                          <Box className="w-4 h-4 text-primary/70" /> Material Type Distribution
-                        </h3>
-                        {sap.materialBreakdown.length === 1 ? (
-                          /* Single category — show a clean stat card instead of a pointless donut */
-                          <div className="flex flex-col items-center justify-center py-6">
-                            <div className="w-16 h-16 rounded-2xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center mb-4">
-                              <Package className="w-8 h-8 text-blue-400" />
-                            </div>
-                            <span className="text-2xl font-bold text-foreground mb-1">{fmtMW(sap.materialBreakdown[0].totalMW)}</span>
-                            <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/50">Units</span>
-                            <div className="mt-3 px-3 py-1.5 rounded-full bg-blue-500/10 border border-blue-500/20">
-                              <span className="text-xs font-semibold text-blue-400">{sap.materialBreakdown[0].type}</span>
-                            </div>
-                            <span className="text-[10px] text-muted-foreground/40 mt-3">{sap.materialBreakdown[0].count} purchase orders</span>
+                    {/* Analytics Line Chart */}
+                    <div className="intelligence-card p-6 flex flex-col h-[400px]">
+                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                        <BarChart3 className="w-4 h-4 text-primary/70" /> Consumption Trends
+                      </h3>
+                      <div className="flex-1">
+                        {!sap.consumption || sap.consumption.length === 0 ? (
+                          <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted/5">
+                            <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-3" />
+                            <p className="text-sm font-medium text-muted-foreground/70">No Consumption Data</p>
+                            <p className="text-xs text-muted-foreground/40 mt-1 max-w-[250px] text-center">There are no MB51 material consumption records for this selection.</p>
                           </div>
                         ) : (
-                          /* Multi-category — show donut + rich legend */
-                          <div className="flex items-center gap-6">
-                            <div className="w-[180px] h-[180px] shrink-0 relative">
-                              {materialTypeOption && (
-                                <ReactECharts option={materialTypeOption} style={{ height: '100%', width: '100%' }} />
-                              )}
-                              <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                                <span className="text-lg font-bold text-foreground">{sap.materialBreakdown.length}</span>
-                                <span className="text-[9px] uppercase tracking-widest text-muted-foreground/50 font-bold">Types</span>
-                              </div>
-                            </div>
-                            <div className="flex-1 space-y-3">
-                              {sap.materialBreakdown.map((m: any, i: number) => {
-                                const maxMW = sap.materialBreakdown[0].totalMW || 1;
-                                const pct = Math.round((m.totalMW / maxMW) * 100);
-                                const colors = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#EF4444', '#EC4899'];
-                                const color = colors[i % colors.length];
-                                return (
-                                  <div key={m.type}>
-                                    <div className="flex items-center justify-between mb-1">
-                                      <div className="flex items-center gap-2">
-                                        <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: color }}></div>
-                                        <span className="text-xs font-medium text-foreground/80 truncate max-w-[140px]">{m.type}</span>
-                                      </div>
-                                      <span className="font-mono text-xs font-semibold text-foreground/70">{fmtMW(m.totalMW)}</span>
-                                    </div>
-                                    <div className="w-full h-1.5 rounded-full bg-muted/40 overflow-hidden">
-                                      <div className="h-full rounded-full transition-all duration-700" style={{ width: `${pct}%`, background: color }}></div>
-                                    </div>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
+                          <ReactECharts
+                            option={{
+                              tooltip: { trigger: 'axis', backgroundColor: 'rgba(9,9,11,0.9)', borderColor: '#27272a', textStyle: { color: '#e4e4e7' } },
+                              legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
+                              grid: { top: 30, right: 10, bottom: 40, left: 40 },
+                              xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
+                              yAxis: [
+                                { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: '#27272a' } } },
+                                { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
+                              ],
+                              series: [
+                                { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => String(c.movementType) === '221' ? -c.quantity : 0).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
+                                { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => String(c.movementType) === '222' ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
+                                { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => -c.amountINR).slice(0, 40), itemStyle: { color: '#3b82f6' } }
+                              ]
+                            }}
+                            style={{ height: '100%', width: '100%' }}
+                          />
                         )}
                       </div>
-                    )}
-                  </div>
-
-                  {/* Vendor Breakdown Table */}
-                  <div className="intelligence-card p-6">
-                    <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <Users className="w-4 h-4 text-primary/70" /> Vendor Summary
-                    </h3>
-                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
-                      <table className="intel-table relative">
-                        <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
-                          <tr>
-                            <th>Vendor Name</th>
-                            <th className="text-center">Vendor Code</th>
-                            <th className="text-center">POs</th>
-                            <th className="text-center">Materials</th>
-                            <th className="text-center">Volume</th>
-                            <th className="text-center">Net Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sap.vendorBreakdown.map((v: any, i: number) => (
-                            <tr key={i}>
-                              <td className="font-medium text-foreground/90 max-w-[200px] truncate">{v.vendorName}</td>
-                              <td className="text-center font-mono text-xs text-muted-foreground/60">{v.vendorCode || '—'}</td>
-                              <td className="text-center font-mono">{v.poCount}</td>
-                              <td className="text-center font-mono">{v.materialCount}</td>
-                              <td className="text-center font-mono font-semibold text-blue-400">{fmtMW(v.totalMW)}</td>
-                              <td className="text-center font-mono text-foreground/70">{fmtCost(v.totalValue)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
                     </div>
-                  </div>
-
-                  {/* Purchase Order Detail Table */}
-                  <div className="intelligence-card p-6">
-                    <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-primary/70" /> Purchase Orders (ME2M)
-                    </h3>
-                    <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
-                      <table className="intel-table relative">
-                        <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
-                          <tr>
-                            <th>PO Number</th>
-                            <th>Vendor Name</th>
-                            <th className="text-center">Material Code</th>
-                            <th>Material Type</th>
-                            <th className="text-center">Qty (Units)</th>
-                            <th className="text-center">Net Value</th>
-                            <th className="text-center">Plant</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sap.purchaseOrders.map((po: any, i: number) => (
-                            <tr key={i}>
-                              <td className="font-mono text-xs font-medium text-primary/80">{po.poNumber}</td>
-                              <td className="max-w-[180px] truncate">{po.vendorName}</td>
-                              <td className="text-center font-mono text-xs text-muted-foreground/60">{po.materialCode}</td>
-                              <td className="text-muted-foreground/70">{po.materialType || '—'}</td>
-                              <td className="text-center font-mono font-semibold">{po.poQuantity ? Number(po.poQuantity).toLocaleString('en-IN') : '—'}</td>
-                              <td className="text-center font-mono text-foreground/70">{fmtCost(po.netOrderValue)}</td>
-                              <td className="text-center font-mono text-xs text-muted-foreground/50">{po.plantCode}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* In-Transit Table */}
-                  {sap.inTransit.length > 0 && (
+                    
+                    {/* Unified Table */}
                     <div className="intelligence-card p-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Truck className="w-4 h-4 text-primary/70" /> In-Transit Shipments (MIGO)
-                      </h3>
-                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
-                        <table className="intel-table relative">
-                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          <Box className="w-4 h-4 text-primary/70" /> Material Lifecycle & Tracking
+                        </h3>
+                        <div className="flex bg-muted/40 p-1 rounded-md border border-border/50">
+                          <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>All Stock</button>
+                          <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>Company (CS01)</button>
+                          <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>Project (PS01)</button>
+                        </div>
+                      </div>
+                      
+                      <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin">
+                        <table className="intel-table relative w-full text-xs">
+                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm text-[10px] uppercase tracking-wider whitespace-nowrap">
                             <tr>
-                              <th>PO Number</th>
-                              <th>Vendor Name</th>
-                              <th>Material Code</th>
-                              <th className="text-center">Qty (Units)</th>
-                              <th className="text-center">GR Date</th>
-                              <th>WBS Element</th>
-                              <th>Plant</th>
+                              <th className="w-8"></th>
+                              <th className="text-center">Material Code</th>
+                              <th className="text-left">Material Description</th>
+                              <th className="text-left">WBS Tracking</th>
+                              <th className="text-center">Ordered</th>
+                              <th className="text-center">Consumed</th>
+                              <th className="text-center">Remaining Qty</th>
+                              <th className="text-center">Inventory Qty</th>
+                              <th className="text-center">Inventory Value</th>
+                              <th className="text-center">In Transit</th>
+                              <th className="text-center">Total Budget</th>
+                              <th className="text-center">Delivered Amt</th>
+                              <th className="text-center">Remaining Bal</th>
                             </tr>
                           </thead>
                           <tbody>
-                            {sap.inTransit.map((t: any, i: number) => (
-                              <tr key={i}>
-                                <td className="font-mono text-xs font-medium text-primary/80">{t.poNumber || '—'}</td>
-                                <td className="max-w-[180px] truncate">{t.vendorName || '—'}</td>
-                                <td className="font-mono text-xs text-muted-foreground/60">{t.materialCode}</td>
-                                <td className="text-right font-mono font-semibold text-amber-400">{t.quantity ? Number(t.quantity).toLocaleString('en-IN') : '—'}</td>
-                                <td className="font-mono text-xs">{t.grPostingDate || '—'}</td>
-                                <td className="font-mono text-xs text-muted-foreground/50 max-w-[120px] truncate">{t.wbsElement || '—'}</td>
-                                <td className="font-mono text-xs text-muted-foreground/50">{t.plantCode}</td>
-                              </tr>
-                            ))}
+                            {unifiedMaterials.map((mat: any, i: number) => {
+                              const isExpanded = expandedMaterial === mat.materialCode;
+                              return (
+                                <React.Fragment key={i}>
+                                  {/* Master Row */}
+                                  <tr className={`cursor-pointer transition-colors ${isExpanded ? 'bg-primary/5' : 'hover:bg-primary/5'}`} onClick={() => setExpandedMaterial(isExpanded ? null : mat.materialCode)}>
+                                    <td className="text-center text-muted-foreground">
+                                      {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                                    </td>
+                                    <td className="text-center font-mono font-medium text-primary/90">{mat.materialCode}</td>
+                                    <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                    <td className="text-left">
+                                      {mat.wbsList && mat.wbsList.length > 0 ? (
+                                        <div className="flex items-center gap-1 flex-wrap max-w-[150px]">
+                                          <span className="px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] font-mono whitespace-nowrap truncate max-w-[100px]" title={mat.wbsList[0]}>{mat.wbsList[0]}</span>
+                                          {mat.wbsList.length > 1 && (
+                                            <span className="text-[9px] text-muted-foreground font-medium" title={mat.wbsList.slice(1).join(', ')}>+{mat.wbsList.length - 1}</span>
+                                          )}
+                                        </div>
+                                      ) : <span className="text-muted-foreground/40">—</span>}
+                                    </td>
+                                    <td className="text-center font-mono font-semibold text-blue-400">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
+                                    <td className="text-center font-mono font-semibold text-emerald-500">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
+                                    <td className="text-center font-mono font-semibold text-amber-500">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
+                                    <td className="text-center font-mono text-purple-400">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
+                                    <td className="text-center font-mono text-purple-400/80">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                    <td className="text-center font-mono text-orange-400">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
+                                    <td className="text-center font-mono text-foreground/70">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                    <td className="text-center font-mono text-emerald-500/80">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
+                                    <td className="text-center font-mono text-amber-500/80">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
+                                  </tr>
+                                  
+                                  {/* Drill-down Detail Row */}
+                                  {isExpanded && (
+                                    <tr className="bg-muted/30 border-b border-border/50">
+                                      <td colSpan={12} className="p-0">
+                                        <div className="p-6 space-y-6">
+                                          
+                                          {/* PO Details */}
+                                          {mat.pos.length > 0 && (
+                                            <div>
+                                              <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><FileText className="w-3.5 h-3.5"/> Purchase Orders</h4>
+                                              <div className="rounded-md border border-border/50 bg-background/50 overflow-hidden shadow-sm">
+                                                <table className="intel-table w-full text-xs">
+                                                  <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                    <tr>
+                                                      <th className="text-left font-semibold py-2 px-4">PO Number</th>
+                                                      <th className="text-right font-semibold py-2 px-4">Ordered Qty</th>
+                                                      <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-border/30">
+                                                    {mat.pos.map((po: any, j: number) => (
+                                                      <tr key={j} className="hover:bg-muted/50 transition-colors">
+                                                        <td className="text-left font-mono font-medium text-foreground py-2 px-4">{po.poNumber}</td>
+                                                        <td className="text-right font-mono font-semibold text-blue-500 dark:text-blue-400 py-2 px-4">{po.orderedQty} Unit</td>
+                                                        <td className="text-center py-2 px-4">
+                                                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                        </td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Consumption Details */}
+                                          {mat.consumptions.length > 0 && (
+                                            <div>
+                                              <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Activity className="w-3.5 h-3.5"/> Consumptions</h4>
+                                              <div className="rounded-md border border-border/50 bg-background/50 overflow-hidden shadow-sm">
+                                                <table className="intel-table w-full text-xs">
+                                                  <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                    <tr>
+                                                      <th className="text-center font-semibold py-2 px-4 w-24">Movement</th>
+                                                      <th className="text-left font-semibold py-2 px-4">WBS Element / Date</th>
+                                                      <th className="text-right font-semibold py-2 px-4">Quantity</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-border/30">
+                                                    {mat.consumptions.slice(0, 50).map((c: any, j: number) => (
+                                                      <tr key={j} className="hover:bg-muted/50 transition-colors">
+                                                        <td className="text-center py-2 px-4">
+                                                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>{c.movementType}</span>
+                                                        </td>
+                                                        <td className="text-left text-foreground/80 font-medium py-2 px-4">{c.wbsElement || c.postingDate}</td>
+                                                        <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                          {/* Inventory Details */}
+                                          {mat.inventories.length > 0 && (
+                                            <div>
+                                              <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Package className="w-3.5 h-3.5"/> Inventory Storage</h4>
+                                              <div className="rounded-md border border-border/50 bg-background/50 overflow-hidden shadow-sm">
+                                                <table className="intel-table w-full text-xs">
+                                                  <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                    <tr>
+                                                      <th className="text-left font-semibold py-2 px-4">WBS Element</th>
+                                                      <th className="text-right font-semibold py-2 px-4">Inventory Qty</th>
+                                                      <th className="text-right font-semibold py-2 px-4">Value (INR)</th>
+                                                      <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
+                                                    </tr>
+                                                  </thead>
+                                                  <tbody className="divide-y divide-border/30">
+                                                    {mat.inventories.map((inv: any, j: number) => (
+                                                      <tr key={j} className="hover:bg-muted/50 transition-colors">
+                                                        <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
+                                                        <td className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400 py-2 px-4">{inv.inventoryQty}</td>
+                                                        <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
+                                                        <td className="text-center py-2 px-4">
+                                                          <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
+                                                        </td>
+                                                      </tr>
+                                                    ))}
+                                                  </tbody>
+                                                </table>
+                                              </div>
+                                            </div>
+                                          )}
+
+                                        </div>
+                                      </td>
+                                    </tr>
+                                  )}
+                                </React.Fragment>
+                              );
+                            })}
                           </tbody>
                         </table>
                       </div>
                     </div>
-                  )}
-
-                  {/* Inventory Table */}
-                  {sap.inventory.length > 0 && (
-                    <div className="intelligence-card p-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Box className="w-4 h-4 text-primary/70" /> Inventory Records (MB52)
-                      </h3>
-                      <div className="overflow-x-auto max-h-[400px] overflow-y-auto scrollbar-thin">
-                        <table className="intel-table relative">
-                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
-                            <tr>
-                              <th>Purchase Order</th>
-                              <th>Material Code</th>
-                              <th>Vendor Code</th>
-                              <th className="text-right">Qty (Units)</th>
-                              <th>Posting Date</th>
-                              <th>WBS Element</th>
-                              <th>Storage Loc</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {sap.inventory.map((inv: any, i: number) => (
-                              <tr key={i}>
-                                <td className="font-mono text-xs font-medium text-primary/80">{inv.purchaseOrder || '—'}</td>
-                                <td className="font-mono text-xs text-muted-foreground/60">{inv.materialCode}</td>
-                                <td className="font-mono text-xs text-muted-foreground/60">{inv.vendorCode || '—'}</td>
-                                <td className="text-right font-mono font-semibold text-emerald-400">{inv.quantity ? Number(inv.quantity).toLocaleString('en-IN') : '—'}</td>
-                                <td className="font-mono text-xs">{inv.postingDate || '—'}</td>
-                                <td className="font-mono text-xs text-muted-foreground/50 max-w-[120px] truncate">{inv.wbsElement || '—'}</td>
-                                <td className="text-muted-foreground/60 text-xs">{inv.storageLocation || '—'}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
+                  </div>
                 </>
               )}
             </div>
           )}
+        </div>
+      )}
 
           {/* ════════ P6 DEEP DIVE TAB (NEW) ════════ */}
           {activeTab === 'p6' && (
@@ -1311,6 +1660,33 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           {/* ════════ TRANSMISSION TAB ════════ */}
           {activeTab === 'transmission' && (
             <div className="space-y-6">
+              {/* Transmission Portal Link Banner */}
+              <div className="intelligence-card p-6 flex flex-col md:flex-row items-center justify-between gap-6 border-primary/20 bg-primary/[0.02]">
+                <div className="flex items-start gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
+                    <Network className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-foreground">Live Transmission Commissioning Portal</h3>
+                    <p className="text-sm text-muted-foreground mt-1">Access the live Adani Transmission dashboard for deep-dive real-time metrics.</p>
+                    
+                    <div className="flex items-center gap-2 mt-3 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-md w-fit">
+                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                      <span><strong>Login Required:</strong> Email: <code className="bg-amber-500/20 font-mono px-1.5 py-0.5 rounded ml-1">Zaid@unada.io</code> Password: <code className="bg-amber-500/20 font-mono px-1.5 py-0.5 rounded ml-1">Demo@123</code></span>
+                    </div>
+                  </div>
+                </div>
+                
+                <a 
+                  href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${projectId}&email=Zaid@unada.io&password=Demo@123`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all whitespace-nowrap shrink-0 group"
+                >
+                  Open Portal <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                </a>
+              </div>
+
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="flex items-center gap-3">
@@ -1321,7 +1697,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               ) : !tc || !tc.summary.hasData ? (
                 <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
                   <Network className="w-10 h-10 text-muted-foreground/20 mb-3" />
-                  <p className="text-muted-foreground/60 text-sm">No Transmission data linked to this project.</p>
+                  <p className="text-muted-foreground/60 text-sm">No synchronized Transmission data linked to this project internally.</p>
                   <p className="text-muted-foreground/40 text-xs mt-1">TC Project: {mapping?.tcProjectName || '—'}</p>
                 </div>
               ) : (
@@ -1436,6 +1812,51 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs text-muted-foreground/70">{edge.foundation || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/70">{edge.stringing || '—'}</td>
                                 <td className="font-mono text-xs">{edge.expectedDate || '—'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Transmission Substations & Nodes Table */}
+                  {tc.nodes && tc.nodes.length > 0 && (
+                    <div className="intelligence-card p-6">
+                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                        <MapPin className="w-4 h-4 text-emerald-400" /> Transmission Substations & Nodes
+                      </h3>
+                      <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin">
+                        <table className="intel-table relative w-full">
+                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
+                            <tr>
+                              <th>Node ID</th>
+                              <th>Label</th>
+                              <th>Type</th>
+                              <th>Region</th>
+                              <th>Status</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {tc.nodes.map((n: any, i: number) => (
+                              <tr key={i}>
+                                <td className="font-mono text-xs text-muted-foreground/80">{n.nodeId}</td>
+                                <td className="font-bold text-foreground/90">{n.label || '—'}</td>
+                                <td>
+                                  <span className="px-2 py-0.5 rounded-full text-[10px] bg-primary/10 text-primary border border-primary/20">
+                                    {n.type || 'Unknown'}
+                                  </span>
+                                </td>
+                                <td className="text-muted-foreground/70 text-xs">{n.region || '—'}</td>
+                                <td>
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${
+                                    n.status === 'Completed' || n.status === 'charged' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                    n.status === 'In Progress' || n.status === 'in_progress' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                    'bg-muted/50 text-muted-foreground border border-border'
+                                  }`}>
+                                    {n.status || '—'}
+                                  </span>
+                                </td>
                               </tr>
                             ))}
                           </tbody>

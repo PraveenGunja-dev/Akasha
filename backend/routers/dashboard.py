@@ -14,8 +14,13 @@ def _safe_parse_phase(projects_json):
         return "Unknown Phase"
     try:
         parsed = json.loads(projects_json)
-        if parsed and isinstance(parsed, list):
-            return parsed[0]
+        if isinstance(parsed, dict):
+            phases = parsed.get("phases", [])
+            if phases:
+                return phases[0]
+        elif isinstance(parsed, list):
+            if parsed:
+                return parsed[0]
     except Exception:
         pass
     return "Unknown Phase"
@@ -99,7 +104,11 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
         parsed_edge_phases[edge.id] = set()
         if edge.projects:
             try:
-                parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in json.loads(edge.projects))
+                parsed = json.loads(edge.projects)
+                if isinstance(parsed, dict):
+                    parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in parsed.get("phases", []))
+                elif isinstance(parsed, list):
+                    parsed_edge_phases[edge.id] = set()
             except:
                 pass
     
@@ -184,6 +193,13 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
                     tc_khavda.append(edge)
                 elif edge.region == "Rajasthan":
                     tc_rajasthan.append(edge)
+            elif edge.projects:
+                proj_str = str(edge.projects)
+                if (m.project and f'"{m.project}"' in proj_str) or (m.project_name_from_p6 and f'"{m.project_name_from_p6}"' in proj_str):
+                    if edge.region == "Khavda":
+                        tc_khavda.append(edge)
+                    elif edge.region == "Rajasthan":
+                        tc_rajasthan.append(edge)
 
         # Deduplicate
         tc_khavda = list({e.id: e for e in tc_khavda}.values())
@@ -313,6 +329,19 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
     direct_tc_rajasthan = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id, models.TcNetworkEdge.region == "Rajasthan").all()
     tc_khavda.extend(direct_tc_khavda)
     tc_rajasthan.extend(direct_tc_rajasthan)
+    
+    # Second Fallback: JSON explicit match
+    if m.project:
+        json_k = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Khavda", models.TcNetworkEdge.projects.like(f'%"{m.project}"%')).all()
+        json_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like(f'%"{m.project}"%')).all()
+        tc_khavda.extend(json_k)
+        tc_rajasthan.extend(json_r)
+        
+    if m.project_name_from_p6:
+        json_p6_k = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Khavda", models.TcNetworkEdge.projects.like(f'%"{m.project_name_from_p6}"%')).all()
+        json_p6_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like(f'%"{m.project_name_from_p6}"%')).all()
+        tc_khavda.extend(json_p6_k)
+        tc_rajasthan.extend(json_p6_r)
     
     tc_khavda = list({e.id: e for e in tc_khavda}.values())
     tc_rajasthan = list({e.id: e for e in tc_rajasthan}.values())
@@ -462,7 +491,11 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
         parsed_edge_phases[edge.id] = set()
         if edge.projects:
             try:
-                parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in json.loads(edge.projects))
+                parsed = json.loads(edge.projects)
+                if isinstance(parsed, dict):
+                    parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in parsed.get("phases", []))
+                elif isinstance(parsed, list):
+                    parsed_edge_phases[edge.id] = set()
             except:
                 pass
     

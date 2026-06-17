@@ -94,7 +94,7 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
 
   // Aggregate supply risk
   const totalSupplyGap = data.reduce((sum, d) => {
-    const gap = (d.poVolumeMW || 0) - (d.inventoryMW || 0) - (d.inTransitMW || 0);
+    const gap = (d.orderedQty || 0) - (d.inventoryQty || 0) - (d.inTransitQty || 0);
     return sum + (gap > 0 ? gap : 0);
   }, 0);
 
@@ -277,7 +277,7 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
             {/* Supply Risk */}
             <div className="bg-red-500/5 hover:bg-red-500/10 transition-colors duration-300 rounded-xl p-4 border border-red-500/10">
               <div className="text-[9px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Gap</div>
-              <div className="text-xl font-mono font-bold text-red-500 tracking-tight">{fmtMW(totalSupplyGap)}</div>
+              <div className="text-xl font-mono font-bold text-red-500 tracking-tight">{fmtNum(totalSupplyGap)} Units</div>
               <div className="text-[10px] text-muted-foreground mt-0.5">Unfulfilled across portfolio</div>
             </div>
 
@@ -312,7 +312,7 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         project.statusTier === 'Watchlist' ? '#F59E0B' :
           project.statusTier === 'Completed' ? '#3B82F6' : '#10B981';
 
-  const supplyGap = Math.max(0, (project.poVolumeMW || 0) - (project.inventoryMW || 0) - (project.inTransitMW || 0));
+  const supplyGap = Math.max(0, (project.orderedQty || 0) - (project.inventoryQty || 0) - (project.inTransitQty || 0));
 
   return (
     <div
@@ -374,21 +374,21 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
       {/* 3. SAP Supply & Transmission Breakdown */}
       <div className="w-[30%] min-w-[250px] grid grid-cols-2 gap-x-4 gap-y-3 border-l border-border pl-5">
         <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">PO Volume</span>
+          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered Qty</span>
           <span className="text-[13px] font-mono font-semibold text-foreground/80">
-            {project.poVolumeMW > 0 ? `${project.poVolumeMW} MW` : '--'}
+            {project.orderedQty > 0 ? `${fmtNum(project.orderedQty)} Units` : '--'}
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">In-Transit</span>
           <span className="text-[13px] font-mono font-semibold text-amber-500">
-            {project.inTransitMW > 0 ? `${project.inTransitMW} MW` : '--'}
+            {project.inTransitQty > 0 ? `${fmtNum(project.inTransitQty)} Units` : '--'}
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Inventory</span>
           <span className="text-[13px] font-mono font-semibold text-emerald-500">
-            {project.inventoryMW > 0 ? `${project.inventoryMW} MW` : '--'}
+            {project.inventoryQty > 0 ? `${fmtNum(project.inventoryQty)} Units` : '--'}
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
@@ -478,7 +478,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         case 'delay': return b.delayDays - a.delayDays;
         case 'cost': return a.costVariance - b.costVariance;
         case 'supply': return a.materialAvailability - b.materialAvailability;
-        case 'vendor': return (b.inTransitMW === 0 && b.poVolumeMW > 0 ? 1 : 0) - (a.inTransitMW === 0 && a.poVolumeMW > 0 ? 1 : 0);
+        case 'vendor': return (b.inTransitQty === 0 && b.orderedQty > 0 ? 1 : 0) - (a.inTransitQty === 0 && a.orderedQty > 0 ? 1 : 0);
         case 'cod': return (b.codAtRisk ? 1 : 0) - (a.codAtRisk ? 1 : 0);
         case 'critical': return b.riskScore - a.riskScore;
         default: return b.riskScore - a.riskScore;

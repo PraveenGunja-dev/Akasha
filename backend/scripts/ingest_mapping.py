@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 def ingest_mapping():
     db = SessionLocal()
-    mapping_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master (1).xlsx")
+    mapping_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")
     
     try:
         # Create table if not exists
@@ -34,12 +34,16 @@ def ingest_mapping():
             category = str(row.get('Category', '')).strip()
             mms_type = str(row.get('MMS Type', '')).strip()
             ol = str(row.get('OL', '')).strip()
-            plant_code = str(row.get('SPVPlantCode', '')).strip()
-            agel = str(row.get('AGEL', '')).strip()
+            plant_code = str(row.get('SPVPlantCode -  machinery', '')).strip()
+            if plant_code.lower() == 'nan': plant_code = ""
+            agel = str(row.get('AGEL - Supplay material', '')).strip()
+            if agel.lower() == 'nan': agel = ""
             wbs = str(row.get('Module WBS', '')).strip()
-            age6l = str(row.get('AGE6L', '')).strip()
+            age6l = str(row.get('AGE6L - ', '')).strip()
             cluster = str(row.get('Cluster', '')).strip()
             not_allocated = str(row.get('Not Allocated', '')).strip()
+            priority = str(row.get('Priority', '')).strip()
+            source_of_origin = str(row.get('SourceOfOrigin', '')).strip()
             
             # Safely parse capacity
             def parse_float(val):
@@ -51,7 +55,7 @@ def ingest_mapping():
             cap_ac = parse_float(row.get('Capacity\n(MWac)', ''))
             cap_dc = parse_float(row.get('Capacity (MWdc)', ''))
             
-            if project_id and plant_code:
+            if project_id:  # Removed plant_code check since some projects don't have it
                 mapping = models.ProjectMapping(
                     project=project,
                     spv_name=spv_name,
@@ -68,7 +72,9 @@ def ingest_mapping():
                     module_wbs=wbs,
                     age6l=age6l,
                     cluster=cluster,
-                    not_allocated=not_allocated
+                    not_allocated=not_allocated,
+                    priority=priority,
+                    source_of_origin=source_of_origin
                 )
                 mappings.append(mapping)
                 
