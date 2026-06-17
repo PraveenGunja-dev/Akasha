@@ -1670,15 +1670,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h3 className="text-lg font-bold text-foreground">Live Transmission Commissioning Portal</h3>
                     <p className="text-sm text-muted-foreground mt-1">Access the live Adani Transmission dashboard for deep-dive real-time metrics.</p>
                     
-                    <div className="flex items-center gap-2 mt-3 text-xs bg-amber-500/10 border border-amber-500/20 text-amber-700 dark:text-amber-400 px-3 py-1.5 rounded-md w-fit">
-                      <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                      <span><strong>Login Required:</strong> Email: <code className="bg-amber-500/20 font-mono px-1.5 py-0.5 rounded ml-1">Zaid@unada.io</code> Password: <code className="bg-amber-500/20 font-mono px-1.5 py-0.5 rounded ml-1">Demo@123</code></span>
+                    <div className="flex items-center gap-2 mt-3 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-md w-fit">
+                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                      <span><strong>Auto-Login Enabled:</strong> You will be securely authenticated automatically.</span>
                     </div>
                   </div>
                 </div>
                 
                 <a 
-                  href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${projectId}&email=Zaid@unada.io&password=Demo@123`}
+                  href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${projectId}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all whitespace-nowrap shrink-0 group"
