@@ -56,6 +56,10 @@ def calculate_project_360_metrics(db: Session):
             except:
                 pass
                 
+    # Pre-calculate capacity by plant for pro-rata allocation
+    cap_data = db.query(models.ProjectMapping.spv_plant_code, func.sum(models.ProjectMapping.capacity_mwac)).group_by(models.ProjectMapping.spv_plant_code).all()
+    capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
+
     results = []
 
     for m in mappings:
@@ -78,13 +82,18 @@ def calculate_project_360_metrics(db: Session):
         inventory_qty = 0.0
         in_transit_qty = 0.0
         
-        po_vol = 0  # Legacy field fallback
-        inv_vol = 0 # Legacy field fallback
-        transit_vol = 0 # Legacy field fallback
+        po_vol = 0.0
+        inv_vol = 0.0
+        transit_vol = 0.0
         
         if m.module_wbs:
             wbs_prefix = m.module_wbs[:6]
             plant_codes = [c for c in [m.spv_plant_code, m.agel] if c]
+            
+            plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""
+            total_capacity = capacity_by_plant.get(plant_code_str, 1.0)
+            project_capacity = m.capacity_mwac or 0
+            allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
             
             # --- STEP A: MB51 Consumption ---
             mb51_records = db.query(models.MTMaterialDocument).filter(
@@ -122,28 +131,27 @@ def calculate_project_360_metrics(db: Session):
                     inventory_value_inr += (rec.value_unrestricted or 0.0)
 
             # --- STEP C: ME2M Purchase Orders ---
-            if plant_codes and mb51_materials:
+            if plant_codes:
                 me2m_records = db.query(models.MTPOAmount).filter(
                     models.MTPOAmount.plant_code.in_(plant_codes)
                 ).all()
                 
                 for rec in me2m_records:
-                    if rec.material_code:
-                        mat_str = str(rec.material_code).strip().lstrip('0')
-                        if mat_str in mb51_materials:
-                            ordered_qty += (rec.order_quantity or 0.0)
-                            budget_inr += (rec.net_order_value_inr or 0.0)
+                    ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
+                    budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio
 
             # --- STEP D: ZIBDSESREP In-Transit ---
-            if plant_codes and mb51_materials:
+            if plant_codes:
                 transit_records = db.query(models.MTInTransit).filter(
                     models.MTInTransit.plant_code.in_(plant_codes)
                 ).all()
                 for rec in transit_records:
-                    if rec.material_code:
-                        mat_str = str(rec.material_code).strip().lstrip('0')
-                        if mat_str in mb51_materials:
-                            in_transit_qty += (rec.inbound_delivery_quantity or 0.0)
+                    in_transit_qty += (rec.inbound_delivery_quantity or 0.0) * allocation_ratio
+
+        # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
+        po_vol = ordered_qty
+        inv_vol = inventory_qty
+        transit_vol = in_transit_qty
 
         # Pending Dispatch Formula: Ordered - Consumed - Inventory - InTransit
         pending_dispatch_qty = max(0.0, ordered_qty - consumed_qty - inventory_qty - in_transit_qty)
@@ -211,19 +219,19 @@ def calculate_project_360_metrics(db: Session):
         # ── Primary Issue (intelligence-first labeling) ──
         primary_issue = "On Track"
         if mat_avail < 50 and ordered_qty > 0:
-            primary_issue = "Supply Chain Risk"
+            primary_issue = "Material Bottleneck"
         elif in_transit_qty == 0 and ordered_qty > 0:
-            primary_issue = "Vendor Execution Risk"
+            primary_issue = "Vendor Delay"
         elif sched_var < -30:
-            primary_issue = "Schedule Variance"
+            primary_issue = "Schedule Slippage"
         elif cost_var < -1000000:
-            primary_issue = "Budget Variance"
+            primary_issue = "Cost Overrun"
         elif has_procurement_risk:
-            primary_issue = "Procurement Delay"
+            primary_issue = "Procurement Gap"
         elif spi < 0.9:
-            primary_issue = "Resource Constraint"
+            primary_issue = "Resource Shortage"
         elif sched_var < -10:
-            primary_issue = "Schedule Variance"
+            primary_issue = "Schedule Slippage"
 
         # ── Risk Categories (for smart filters) ──
         risk_categories = []
@@ -456,10 +464,7 @@ def get_project_360_detail(db: Session, project_id: str):
 
     for po in po_records_all:
         mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
-        # Only keep POs that have materials consumed in MB51
-        if mb51_materials and mat_str not in mb51_materials:
-            continue
-            
+        
         vendor_name = po.vendor_name or "Unknown Vendor"
         vendor_code = po.vendor_code or ""
         
@@ -476,22 +481,22 @@ def get_project_360_detail(db: Session, project_id: str):
             "materialCode": po.material_code,
             "materialName": po.material_name,
             "materialType": po.material_type,
-            "orderedQty": po.order_quantity,
-            "budgetINR": po.net_order_value_inr,
+            "orderedQty": (po.order_quantity or 0) * allocation_ratio,
+            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio,
             "companyCode": po.company_code,
             "plantCode": po.plant_code,
-            "deliveredQty": getattr(po, "delivered_qty", 0.0),
-            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0),
-            "deliveredINR": getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0,
-            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0),
+            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio,
+            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio,
+            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio,
+            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
             "storageLocation": getattr(po, "storage_location", None),
         })
         
-        total_po_qty += (po.order_quantity or 0.0)
-        total_budget_inr += (po.net_order_value_inr or 0.0)
+        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
+        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
         
         del_cr = getattr(po, "delivered_value_inr_cr", 0.0)
-        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0)
+        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0) * allocation_ratio
         
         if vendor_name not in vendor_summary:
             vendor_summary[vendor_name] = {
@@ -502,8 +507,8 @@ def get_project_360_detail(db: Session, project_id: str):
                 "poCount": 0,
                 "materials": set(),
             }
-        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0)
-        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0)
+        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0) * allocation_ratio
+        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0) * allocation_ratio
         vendor_summary[vendor_name]["poCount"] += 1
         if po.material_code:
             vendor_summary[vendor_name]["materials"].add(po.material_code)
@@ -529,19 +534,16 @@ def get_project_360_detail(db: Session, project_id: str):
     total_transit_qty = 0.0
     for t in transit_records:
         mat_str = str(t.material_code).strip().lstrip('0') if t.material_code else ''
-        if mb51_materials and mat_str not in mb51_materials:
-            continue
-            
         sap_intransit.append({
             "materialCode": t.material_code,
             "vendorCode": t.vendor_code,
             "vendorName": t.vendor_name,
             "poNumber": t.po_number,
-            "inTransitQty": t.inbound_delivery_quantity,
+            "inTransitQty": (t.inbound_delivery_quantity or 0) * allocation_ratio,
             "wbsElement": t.wbs_element,
             "plantCode": t.plant_code,
         })
-        total_transit_qty += (t.inbound_delivery_quantity or 0.0)
+        total_transit_qty += (t.inbound_delivery_quantity or 0.0) * allocation_ratio
 
     # ── Inventory (MB52) ──
     if mapping and mapping.module_wbs:

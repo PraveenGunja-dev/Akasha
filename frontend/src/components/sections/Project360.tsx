@@ -27,12 +27,12 @@ const fmtMW = (n: number): string => {
    STATUS TIER CONFIGURATION
    ═══════════════════════════════════════════════════════════ */
 const STATUS_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; dotClass: string; icon: any; label: string }> = {
-  All: { color: 'text-foreground', bgColor: 'bg-muted/30', borderColor: 'border-border', dotClass: '', icon: Layers, label: 'All' },
-  Critical: { color: 'text-red-400', bgColor: 'bg-red-500/10', borderColor: 'border-red-500/20', dotClass: 'status-dot-critical', icon: XCircle, label: 'Critical' },
-  'High Risk': { color: 'text-orange-400', bgColor: 'bg-orange-500/10', borderColor: 'border-orange-500/15', dotClass: 'status-dot-warning', icon: AlertTriangle, label: 'High Risk' },
-  Watchlist: { color: 'text-amber-400', bgColor: 'bg-amber-500/10', borderColor: 'border-amber-500/12', dotClass: 'status-dot-warning', icon: Eye, label: 'Watchlist' },
-  Healthy: { color: 'text-emerald-400', bgColor: 'bg-emerald-500/10', borderColor: 'border-emerald-500/10', dotClass: 'status-dot-healthy', icon: Shield, label: 'Healthy' },
-  Completed: { color: 'text-blue-400', bgColor: 'bg-blue-500/10', borderColor: 'border-blue-500/10', dotClass: 'status-dot-healthy', icon: CheckCircle2, label: 'Completed' },
+  All: { color: 'text-gray-900', bgColor: 'bg-gray-100', borderColor: 'border-gray-200', dotClass: '', icon: Layers, label: 'All' },
+  Critical: { color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-100', dotClass: 'status-dot-critical', icon: XCircle, label: 'Critical' },
+  'High Risk': { color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-100', dotClass: 'status-dot-warning', icon: AlertTriangle, label: 'High Risk' },
+  Watchlist: { color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-100', dotClass: 'status-dot-warning', icon: Eye, label: 'Watchlist' },
+  Healthy: { color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100', dotClass: 'status-dot-healthy', icon: Shield, label: 'Healthy' },
+  Completed: { color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-100', dotClass: 'status-dot-healthy', icon: CheckCircle2, label: 'Completed' },
 };
 
 const ISSUE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
@@ -59,8 +59,8 @@ const StatusPill = ({ tier, count, active, onClick }: { tier: string; count: num
   return (
     <button onClick={onClick}
       className={`relative flex items-center gap-3 px-5 py-3.5 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden group ${active
-          ? `${cfg.bgColor} ${cfg.borderColor} shadow-[0_8px_30px_rgb(0,0,0,0.06)] -translate-y-1`
-          : `bg-card/40 backdrop-blur-md border-border/60 hover:border-primary/30 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] hover:-translate-y-1`
+          ? `${cfg.bgColor} ${cfg.borderColor} shadow-sm ring-1 ring-primary/20 -translate-y-1`
+          : `bg-white border-gray-200 hover:border-primary/30 hover:shadow-sm hover:-translate-y-1`
         }`}>
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none ${!active ? cfg.bgColor : ''}`} />
       {cfg.dotClass && <div className={`${cfg.dotClass} relative z-10`}></div>}
@@ -121,15 +121,13 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
   const totalCapacity = data.reduce((s, d) => s + (d.capacityMW || 0), 0);
 
   return (
-    <div className="bg-card/40 backdrop-blur-xl border border-primary/20 hover:border-primary/40 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:shadow-[0_8px_30px_rgba(59,130,246,0.1)] relative overflow-hidden group transition-all duration-300 mb-8">
-      <div className="absolute top-0 right-0 w-64 h-64 bg-primary/10 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-70"></div>
-      <div className="absolute bottom-0 left-0 w-48 h-48 bg-purple-500/10 blur-[80px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-50"></div>
+    <div className="bento-card relative overflow-hidden group transition-all duration-300 mb-8 p-0">
       
       <div className="relative z-10">
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-7 pt-6 pb-4 border-b border-border/30">
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-4">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-premium flex items-center justify-center shadow-lg shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
+            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center shadow-md shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
               <Brain className="w-5 h-5 text-white" />
             </div>
             <div>
@@ -150,8 +148,8 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
           </div>
         </div>
 
-        {/* Main Content Grid - 4 Columns */}
-        <div className="grid grid-cols-4 gap-0 divide-x divide-border/30">
+        {/* Main Content Grid - Responsive */}
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0 md:divide-x divide-y md:divide-y-0 xl:divide-y-0 divide-border/30">
           
           {/* Column 1: Portfolio Status Breakdown */}
           <div className="p-5 space-y-4">
@@ -235,25 +233,25 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
           <div className="p-5 space-y-3">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Key Metrics</div>
             
-            <div className="grid grid-cols-2 gap-2.5">
+            <div className="grid grid-cols-2 gap-3">
               {/* SPI */}
-              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-primary/20 transition-colors">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg SPI</div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg SPI</div>
                 <div className={`text-lg font-mono font-bold ${parseFloat(avgSPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgSPI}</div>
               </div>
               {/* CPI */}
-              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-primary/20 transition-colors">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg CPI</div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg CPI</div>
                 <div className={`text-lg font-mono font-bold ${parseFloat(avgCPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgCPI}</div>
               </div>
               {/* COD At Risk */}
-              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-red-500/20 transition-colors">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">COD At Risk</div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">COD At Risk</div>
                 <div className={`text-lg font-mono font-bold ${codAtRiskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{codAtRiskCount}</div>
               </div>
               {/* Delayed */}
-              <div className="bg-muted/30 rounded-xl p-3 border border-border/30 hover:border-amber-500/20 transition-colors">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Delayed</div>
+              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Delayed</div>
                 <div className={`text-lg font-mono font-bold ${delayedProjects.length > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{delayedProjects.length}</div>
               </div>
             </div>
@@ -317,7 +315,7 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
   return (
     <div
       onClick={() => onOpen(project.projectId)}
-      className="group relative flex items-center justify-between px-6 py-5 bg-card/20 hover:bg-card/60 backdrop-blur-sm border-b border-border/50 cursor-pointer transition-all duration-300"
+      className="group relative flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors duration-200"
     >
       {/* Dynamic Colored Hover Overlay */}
       <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none" style={{ backgroundColor: accentColor }} />
@@ -420,21 +418,41 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
 /* ═══════════════════════════════════════════════════════════
    SKELETON LOADER
    ═══════════════════════════════════════════════════════════ */
-const SkeletonCard = () => (
-  <div className="intelligence-card p-5">
-    <div className="flex items-center justify-between mb-4">
-      <div className="w-2/3 h-4 rounded shimmer"></div>
-      <div className="w-16 h-6 rounded-lg shimmer"></div>
+const SkeletonRow = () => (
+  <div className="flex items-stretch border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 animate-pulse">
+    {/* Project Details */}
+    <div className="w-[30%] min-w-[250px] p-4 flex items-start gap-3">
+      <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 shrink-0"></div>
+      <div className="flex-1 mt-1">
+        <div className="w-20 h-3 bg-gray-200 dark:bg-gray-800 rounded mb-2"></div>
+        <div className="w-3/4 h-5 bg-gray-200 dark:bg-gray-800 rounded mb-2"></div>
+        <div className="w-1/2 h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      </div>
     </div>
-    <div className="w-28 h-7 rounded-lg shimmer mb-4"></div>
-    <div className="space-y-2 mb-4">
-      <div className="w-3/4 h-4 rounded shimmer"></div>
-      <div className="w-1/2 h-4 rounded shimmer"></div>
+    
+    {/* Health & AI Driver */}
+    <div className="w-[25%] min-w-[200px] border-l border-border p-4 flex flex-col justify-center">
+      <div className="w-24 h-6 bg-gray-200 dark:bg-gray-800 rounded-full mb-3"></div>
+      <div className="w-full h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
     </div>
-    <div className="w-full h-12 rounded-lg shimmer mb-4"></div>
-    <div className="flex justify-between pt-2 border-t border-border">
-      <div className="w-1/3 h-3 rounded shimmer"></div>
-      <div className="w-16 h-3 rounded shimmer"></div>
+    
+    {/* SAP Supply */}
+    <div className="w-[30%] min-w-[250px] border-l border-border p-4 flex flex-col justify-center">
+      <div className="w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full mb-3"></div>
+      <div className="flex gap-4">
+        <div className="w-1/3 h-10 bg-gray-200 dark:bg-gray-800 rounded"></div>
+        <div className="w-1/3 h-10 bg-gray-200 dark:bg-gray-800 rounded"></div>
+        <div className="w-1/3 h-10 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      </div>
+    </div>
+    
+    {/* Forecast COD */}
+    <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
+      <div className="flex flex-col gap-2">
+        <div className="w-16 h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+        <div className="w-12 h-5 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      </div>
+      <div className="w-10 h-10 bg-gray-200 dark:bg-gray-800 rounded-full"></div>
     </div>
   </div>
 );
@@ -607,8 +625,16 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
 
       {/* ── Intelligence Card Grid ── */}
       {loading ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[...Array(6)].map((_, i) => <SkeletonCard key={i} />)}
+        <div className="bento-card overflow-hidden mb-8 p-0">
+          <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
+            <div className="w-[30%] min-w-[250px]">Project Details</div>
+            <div className="w-[25%] min-w-[200px]">Health & AI Driver</div>
+            <div className="w-[30%] min-w-[250px] pl-5">SAP Supply & Transmission</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Forecast COD</div>
+          </div>
+          <div className="flex flex-col">
+            {[...Array(6)].map((_, i) => <SkeletonRow key={i} />)}
+          </div>
         </div>
       ) : filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-[400px] border border-dashed border-border rounded-2xl bg-card">
@@ -620,8 +646,8 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
           </button>
         </div>
       ) : (
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden mb-8">
-          <div className="flex items-center px-6 py-4 bg-muted/20 border-b border-border/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+        <div className="bento-card overflow-hidden mb-8 p-0">
+          <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
             <div className="w-[30%] min-w-[250px]">Project Details</div>
             <div className="w-[25%] min-w-[200px]">Health & AI Driver</div>
             <div className="w-[30%] min-w-[250px] pl-5">SAP Supply & Transmission</div>

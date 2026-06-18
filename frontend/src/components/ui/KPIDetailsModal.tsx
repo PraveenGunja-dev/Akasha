@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom';
 import { X, Layers, BarChart2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
+import { useNavigate } from 'react-router-dom';
 
 interface KPIDetailsModalProps {
   isOpen: boolean;
@@ -13,6 +14,7 @@ interface KPIDetailsModalProps {
 
 export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }: KPIDetailsModalProps) {
   const [filterCategory, setFilterCategory] = React.useState<string | null>(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
     if (isOpen) {
@@ -77,38 +79,54 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
       };
     }
 
-    if (activeKpi === 'SAP Inventory') {
-      const topInventory = [...projects].sort((a, b) => (b.sap?.inventory_mw || 0) - (a.sap?.inventory_mw || 0)).slice(0, 15);
+    if (activeKpi === 'Average Progress') {
+      const topProgress = [...projects].filter(p => p.p6?.progress > 0).sort((a, b) => b.p6.progress - a.p6.progress).slice(0, 15);
       return {
-        title: 'Top Projects by Inventory',
+        title: 'Top Projects by Progress (%)',
         type: 'bar',
-        data: topInventory.map(p => ({
-          name: p.project_name?.substring(0, 20) + '...',
-          value: Math.round(p.sap?.inventory_mw || 0)
+        data: topProgress.map(p => ({
+          name: p.p6_project_name?.substring(0, 20) + '...',
+          value: Math.round(p.p6.progress * 100)
         }))
       };
     }
 
-    if (activeKpi === 'SAP PO Quantity') {
-      const topPO = [...projects].sort((a, b) => (b.sap?.po_mw || 0) - (a.sap?.po_mw || 0)).slice(0, 15);
+    if (activeKpi === 'Total PO Value') {
+      const topPO = [...projects].filter(p => p.sap?.po_value > 0).sort((a, b) => b.sap.po_value - a.sap.po_value).slice(0, 15);
       return {
-        title: 'Top Projects by PO Quantity',
+        title: 'Top Projects by PO Value (Cr)',
         type: 'bar',
         data: topPO.map(p => ({
           name: p.project_name?.substring(0, 20) + '...',
-          value: Math.round(p.sap?.po_mw || 0)
+          value: parseFloat((p.sap.po_value / 10000000).toFixed(2))
         }))
+      };
+    }
+
+    if (activeKpi === 'Completed Projects') {
+      const completed = [...projects].filter(p => p.p6?.progress >= 1);
+      const epsCounts: Record<string, number> = {};
+      completed.forEach(p => {
+        const eps = p.p6?.parent_eps_name || 'Unmapped';
+        epsCounts[eps] = (epsCounts[eps] || 0) + 1;
+      });
+      return {
+        title: 'Completed Projects by Region',
+        type: 'pie',
+        data: Object.entries(epsCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value)
       };
     }
 
     if (activeKpi === 'Cost Variance') {
       const topVariance = [...projects].map(p => {
-        const variance = (p.p6?.current_budget || 0) - (p.p6?.planned_cost || 0);
+        const poValCr = (p.sap?.po_value || 0) / 10000000;
+        const deliveredCr = p.sap?.po_delivered_cr || 0;
+        const variance = deliveredCr - poValCr;
         return { name: p.project_name?.substring(0, 20) + '...', value: variance };
       }).sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 15);
 
       return {
-        title: 'Largest Cost Variances',
+        title: 'Largest Cost Variances (SAP PO)',
         type: 'barh',
         data: topVariance.reverse()
       };
@@ -126,31 +144,46 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
       if (filterCategory) {
         list = list.filter(p => (p.p6?.parent_eps_name || 'Unmapped') === filterCategory);
       }
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${Math.round((p.p6?.progress || 0) * 100)}% Complete` }));
+      return list.map(p => ({ id: p.project_id, name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${Math.round((p.p6?.progress || 0) * 100)}% Complete` }));
     }
 
     if (activeKpi === 'Delayed Projects') {
       list = list.filter(p => p.p6?.health === 'Delayed');
       if (filterCategory) list = list.filter(p => ((p.p6_project_name || p.project_name || '').substring(0, 20) + '...') === filterCategory);
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${getDelayDays(p)} Days Delayed` })).sort((a, b) => parseInt(b.value) - parseInt(a.value));
+      return list.map(p => ({ id: p.project_id, name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${getDelayDays(p)} Days Delayed` })).sort((a: any, b: any) => parseInt(b.value) - parseInt(a.value));
     }
 
-    if (activeKpi === 'SAP Inventory') {
-      list = list.filter(p => p.sap?.inventory_mw > 0).sort((a, b) => b.sap.inventory_mw - a.sap.inventory_mw);
+    if (activeKpi === 'Average Progress') {
+      list = list.filter(p => p.p6?.progress > 0).sort((a, b) => b.p6.progress - a.p6.progress);
       if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${p.sap?.inventory_mw}` }));
+      return list.map(p => ({ id: p.project_id, name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${Math.round(p.p6.progress * 100)}%` }));
     }
 
-    if (activeKpi === 'SAP PO Quantity') {
-      list = list.filter(p => p.sap?.po_mw > 0).sort((a, b) => b.sap.po_mw - a.sap.po_mw);
+    if (activeKpi === 'Total PO Value') {
+      list = list.filter(p => p.sap?.po_value > 0).sort((a, b) => b.sap.po_value - a.sap.po_value);
       if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `${p.sap?.po_mw}` }));
+      return list.map(p => ({ id: p.project_id, name: p.p6_project_name || p.project_name || 'Unknown Project', value: `₹${(p.sap.po_value / 10000000).toFixed(2)} Cr` }));
+    }
+
+    if (activeKpi === 'Completed Projects') {
+      list = list.filter(p => p.p6?.progress >= 1);
+      if (filterCategory) list = list.filter(p => (p.p6?.parent_eps_name || 'Unmapped') === filterCategory);
+      return list.map(p => ({ id: p.project_id, name: p.p6_project_name || p.project_name || 'Unknown Project', value: `100% Complete` }));
     }
 
     if (activeKpi === 'Cost Variance') {
-      list = list.filter(p => (p.p6?.current_budget || 0) - (p.p6?.planned_cost || 0) !== 0);
+      list = list.filter(p => {
+        const poValCr = (p.sap?.po_value || 0) / 10000000;
+        const deliveredCr = p.sap?.po_delivered_cr || 0;
+        return (deliveredCr - poValCr) !== 0;
+      });
       if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
-      return list.map(p => ({ name: p.p6_project_name || p.project_name || 'Unknown Project', value: `₹${(((p.p6?.current_budget || 0) - (p.p6?.planned_cost || 0)) / 10000000).toFixed(1)} Cr` }));
+      return list.map(p => {
+        const poValCr = (p.sap?.po_value || 0) / 10000000;
+        const deliveredCr = p.sap?.po_delivered_cr || 0;
+        const variance = deliveredCr - poValCr;
+        return { id: p.project_id, name: p.p6_project_name || p.project_name || 'Unknown Project', value: `₹${variance.toFixed(1)} Cr` };
+      });
     }
 
     return [];
@@ -209,6 +242,19 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
       if (activeKpi === 'Cost Variance') {
         options.series[0].itemStyle.color = (params: any) => params.value > 0 ? '#ef4444' : '#10b981';
       }
+    } else if (chartData.type === 'pie' && activeKpi === 'Completed Projects') {
+        options = {
+          ...options,
+          tooltip: { trigger: 'item' },
+          series: [{
+            type: 'pie',
+            radius: ['35%', '55%'],
+            center: ['50%', '55%'],
+            itemStyle: { borderColor: '#ffffff', borderWidth: 3, borderRadius: 4 },
+            data: chartData.data,
+            label: { color: '#0f172a', fontFamily: 'Adani', fontWeight: 'bold' }
+          }]
+        };
     }
 
     return (
@@ -284,9 +330,18 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
                       {filteredProjectsList.slice(0, 50).map((item: any, idx: number) => {
                         const isRed = item.value.includes('Delayed') || item.value.includes('-');
                         return (
-                          <div key={idx} className="flex justify-between items-center px-4 py-3 rounded-xl hover:bg-muted/50 transition-colors cursor-default">
+                          <div 
+                            key={idx} 
+                            onClick={() => {
+                              if (item.id) {
+                                onClose();
+                                navigate(`/akasha/dashboard/project/${encodeURIComponent(item.id)}${activeKpi === 'Cost Variance' || activeKpi === 'Total PO Value' ? '?tab=sap' : ''}`);
+                              }
+                            }}
+                            className={`flex justify-between items-center px-4 py-3 rounded-xl hover:bg-muted/50 transition-colors ${item.id ? 'cursor-pointer hover:shadow-sm hover:border-primary/20 border border-transparent' : 'cursor-default'}`}
+                          >
                             <div className="flex flex-col pr-4 overflow-hidden">
-                              <span className="text-sm font-semibold text-foreground truncate" title={item.name}>{item.name}</span>
+                              <span className="text-sm font-semibold text-foreground truncate group-hover:text-primary transition-colors" title={item.name}>{item.name}</span>
                             </div>
                             <div className="shrink-0 text-right">
                               <span className={`text-sm font-bold ${isRed ? 'text-red-500' : 'text-primary'}`}>

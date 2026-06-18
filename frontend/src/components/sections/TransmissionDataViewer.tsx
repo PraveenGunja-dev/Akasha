@@ -61,7 +61,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
       {/* SECTION: UNIFIED PROJECT EXPLORER (Moved from Executive Overview) */}
       <div className="mt-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-premium flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0b74b1] to-[#76489d] flex items-center justify-center shadow-sm">
             <h3 className="text-white font-bold text-lg">M</h3>
           </div>
           <h2 className="text-xl font-medium text-foreground tracking-wide">Transmission Mapping Details</h2>

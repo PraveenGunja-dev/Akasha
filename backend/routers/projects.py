@@ -4,6 +4,7 @@ from typing import Optional
 from database import get_db
 import models
 from services.project_service import calculate_project_360_metrics, get_project_360_detail
+import time
 
 router = APIRouter(prefix="/api")
 
@@ -57,9 +58,19 @@ def get_project_summary(project_name: Optional[str] = None, db: Session = Depend
         
     return result
 
+_P360_CACHE = {"data": None, "timestamp": 0}
+_CACHE_TTL = 300  # 5 minutes
+
 @router.get("/project-360")
-def get_project_360(db: Session = Depends(get_db)):
-    return calculate_project_360_metrics(db)
+def get_project_360(nocache: bool = False, db: Session = Depends(get_db)):
+    global _P360_CACHE
+    if not nocache and _P360_CACHE["data"] and time.time() - _P360_CACHE["timestamp"] < _CACHE_TTL:
+        return _P360_CACHE["data"]
+        
+    data = calculate_project_360_metrics(db)
+    _P360_CACHE["data"] = data
+    _P360_CACHE["timestamp"] = time.time()
+    return data
 
 @router.get("/project-360/{project_id}/detail")
 def get_project_360_detail_endpoint(project_id: str, db: Session = Depends(get_db)):

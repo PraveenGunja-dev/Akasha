@@ -369,11 +369,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     { name: 'Inventory Qty', value: p.inventoryQty, color: '#10B981' },
   ];
   const supplyOption = {
-    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a' } },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '8%', containLabel: true },
-    xAxis: { type: 'category', data: supplyData.map(s => s.name), axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 10 } },
-    yAxis: { type: 'value', name: 'Units', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
-    series: [{ type: 'bar', data: supplyData.map(s => ({ value: s.value, itemStyle: { color: s.color, borderRadius: [6, 6, 0, 0] } })), barWidth: '40%' }]
+    tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a', fontSize: 11 } },
+    grid: { left: '3%', right: '4%', bottom: '5%', top: '8%', containLabel: true },
+    xAxis: { type: 'category', data: supplyData.map(s => s.name), axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 10, fontWeight: 'bold' } },
+    yAxis: { type: 'value', name: 'Units', nameTextStyle: { fontSize: 10, color: '#64748b', fontWeight: 'bold' }, axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } } },
+    series: [{ type: 'bar', data: supplyData.map(s => ({ value: s.value, itemStyle: { color: s.color, borderRadius: [4, 4, 0, 0] } })), barWidth: '35%' }]
   };
 
   // SAP vendor chart and material chart are defined after sap filtering below
@@ -830,66 +830,70 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
           {/* ════════ SUPPLY CHAIN TAB ════════ */}
           {activeTab === 'supply' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
               {/* Left Column: Visual Pipeline */}
-              <div className="lg:col-span-8 flex flex-col gap-6">
-                <div className="intelligence-card p-6 flex flex-col">
-                  <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
-                    <Package className="w-4 h-4 text-primary" /> Supply Chain Pipeline
-                  </h3>
-                  <div className="h-[280px] w-full">
-                    <ReactECharts option={supplyOption} style={{ height: '100%', width: '100%' }} />
-                  </div>
-                </div>
+              <div className="lg:col-span-8 flex flex-col gap-4">
                 
                 {/* Metrics Grid */}
                 <div className="grid grid-cols-3 gap-4">
                   {[
-                    { label: 'Ordered Qty', value: p.orderedQty ? Math.round(p.orderedQty).toLocaleString() : '0', color: 'text-blue-500', bg: 'bg-blue-500/10' },
-                    { label: 'In Transit Qty', value: p.inTransitQty ? Math.round(p.inTransitQty).toLocaleString() : '0', color: 'text-amber-500', bg: 'bg-amber-500/10' },
-                    { label: 'Inventory Qty', value: p.inventoryQty ? Math.round(p.inventoryQty).toLocaleString() : '0', color: 'text-emerald-500', bg: 'bg-emerald-500/10' },
+                    { label: 'Ordered Qty', value: p.orderedQty ? Math.round(p.orderedQty).toLocaleString() : '0', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+                    { label: 'In Transit', value: p.inTransitQty ? Math.round(p.inTransitQty).toLocaleString() : '0', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+                    { label: 'Inventory Qty', value: p.inventoryQty ? Math.round(p.inventoryQty).toLocaleString() : '0', color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
                   ].map(m => (
-                    <div key={m.label} className="intelligence-card p-4 flex flex-col items-center text-center justify-center">
-                      <div className={`w-10 h-10 rounded-full ${m.bg} flex items-center justify-center mb-3`}>
-                        <Truck className={`w-5 h-5 ${m.color}`} />
+                    <div key={m.label} className={`bento-card p-4 flex flex-col items-center justify-center border ${m.border}`}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className={`w-6 h-6 rounded-md ${m.bg} flex items-center justify-center`}>
+                          <Truck className={`w-3.5 h-3.5 ${m.color}`} />
+                        </div>
+                        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">{m.label}</span>
                       </div>
-                      <span className="block text-2xl font-bold text-foreground">{m.value}</span>
-                      <span className="block text-[11px] font-bold uppercase tracking-wider text-muted-foreground mt-1">{m.label}</span>
+                      <span className="text-[22px] leading-tight font-bold text-gray-900 dark:text-white">{m.value}</span>
                     </div>
                   ))}
                 </div>
+
+                <div className="bento-card p-5 flex flex-col">
+                  <h3 className="text-[13px] font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <Package className="w-4 h-4 text-primary" /> Supply Chain Pipeline
+                  </h3>
+                  <div className="h-[240px] w-full">
+                    <ReactECharts option={supplyOption} style={{ height: '100%', width: '100%' }} />
+                  </div>
+                </div>
+
               </div>
               
               {/* Right Column: Material Status */}
-              <div className="lg:col-span-4 flex flex-col gap-6">
-                <div className="intelligence-card p-6 flex-1 flex flex-col">
-                  <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                <div className="bento-card p-5 flex-1 flex flex-col">
+                  <h3 className="text-[13px] font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
                     <Database className="w-4 h-4 text-primary" /> Material Availability
                   </h3>
                   
-                  <div className="flex flex-col items-center justify-center flex-1 py-8">
-                    <div className="relative w-40 h-40">
+                  <div className="flex flex-col items-center justify-center flex-1 py-4">
+                    <div className="relative w-36 h-36">
                       <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-muted/30" />
-                        <circle cx="80" cy="80" r="70" stroke="currentColor" strokeWidth="12" fill="transparent"
-                          strokeDasharray={440} strokeDashoffset={440 - (p.materialAvailability / 100) * 440}
+                        <circle cx="72" cy="72" r="62" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-gray-100 dark:text-gray-800" />
+                        <circle cx="72" cy="72" r="62" stroke="currentColor" strokeWidth="12" fill="transparent"
+                          strokeDasharray={390} strokeDashoffset={390 - (p.materialAvailability / 100) * 390}
                           className={p.materialAvailability >= 80 ? 'text-emerald-500' : p.materialAvailability >= 50 ? 'text-amber-500' : 'text-red-500'} />
                       </svg>
                       <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-bold text-foreground">{Math.round(p.materialAvailability)}%</span>
-                        <span className="text-xs font-semibold text-muted-foreground uppercase tracking-widest mt-1">Ready</span>
+                        <span className="text-3xl font-bold text-gray-900 dark:text-white">{Math.round(p.materialAvailability)}%</span>
+                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Ready</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-auto space-y-3">
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-                      <span className="text-sm font-medium text-emerald-700 dark:text-emerald-400">Inventory</span>
-                      <span className="font-bold text-emerald-700 dark:text-emerald-400">{p.inventoryQty?.toLocaleString()}</span>
+                  <div className="mt-auto space-y-2">
+                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Inventory</span>
+                      <span className="text-[14px] font-bold text-emerald-700 dark:text-emerald-300">{p.inventoryQty?.toLocaleString()}</span>
                     </div>
-                    <div className="flex items-center justify-between p-3 rounded-lg bg-red-500/10 border border-red-500/20">
-                      <span className="text-sm font-medium text-red-700 dark:text-red-400">Shortage</span>
-                      <span className="font-bold text-red-700 dark:text-red-400">{Math.max(0, p.orderedQty - p.inventoryQty).toLocaleString()}</span>
+                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Shortage</span>
+                      <span className="text-[14px] font-bold text-red-700 dark:text-red-300">{Math.max(0, p.orderedQty - p.inventoryQty).toLocaleString()}</span>
                     </div>
                   </div>
                 </div>

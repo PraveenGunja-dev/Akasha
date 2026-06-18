@@ -64,7 +64,12 @@ def find_mapping_id(db: Session, project_names, p6_map=None):
         "MLP T3 PPA - AP": "MLP T3 AP",
         "MLP  PPA - AP New": "MLP AP New",
         "Group - Cement (Hybrid - Solar)": "ACL",
-        "AGEL Hybrid Merchant (Wind)": "AGEL Hybrid Merchant"
+        "AGEL Hybrid Merchant (Wind)": "AGEL Hybrid Merchant",
+        "AESL PPA (C&I) - Asahi, Wilmar, Airport": "AESL PPA (C&I) - Solar",
+        "AESL PPA (C&I) - Asahi, Wilmar, Airport, Shantigram": "AESL PPA (C&I) - Solar",
+        "AESL PPA (C&I) - Asahi, Wilmar, Nestle": "AESL PPA (C&I) - Solar",
+        "AESL PPA (C&I) - Asahi, Wilmar,Nestle": "AESL PPA (C&I) - Solar",
+        "AESL PPA (C&I) - Wind - RSWM": "AESL PPA (C&I) - Solar"
     }
     
     all_maps = None

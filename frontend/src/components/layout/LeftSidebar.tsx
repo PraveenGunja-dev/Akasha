@@ -1,228 +1,178 @@
 import React, { useState } from 'react';
 import { 
-  Home, PieChart, Activity, Calendar, DollarSign, PenTool, 
-  ShoppingCart, Truck, Users, ShieldAlert, TrendingUp, 
-  Bot, FileText, Settings, Search, Network, BrainCircuit,
-  ChevronLeft, ChevronRight, User, Bell, Command, Zap
+  Home, Command, Network, Bot, FileText, Search, BrainCircuit,
+  Settings, Zap, X, ChevronLeft, ChevronRight
 } from 'lucide-react';
 
 interface SidebarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
+  isMobileOpen?: boolean;
+  onCloseMobile?: () => void;
 }
 
-export default function LeftSidebar({ activeTab, setActiveTab }: SidebarProps) {
-  const [isCollapsed, setIsCollapsed] = useState(false);
+export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = false, onCloseMobile }: SidebarProps) {
+  const [collapsed, setCollapsed] = useState(false);
 
   const menuSections = [
     {
-      title: "Core Dashboard",
+      title: "Dashboard",
       items: [
-        { id: 'overview', label: 'Executive Overview', icon: Home },
+        { id: 'overview', label: 'Overview', icon: Home },
         { id: 'project360', label: 'Project 360', icon: Command },
-        { id: 'data_integration', label: 'Data Integration', icon: Network },
+        { id: 'data_integration', label: 'Data Hub', icon: Network },
       ]
     }
   ];
 
   const aiSections = [
     { id: 'ai_copilot', label: 'AI Copilot', icon: Bot },
-    { id: 'executive_brief', label: 'Executive Briefing', icon: FileText },
-    { id: 'smart_search', label: 'Smart Search', icon: Search },
-    { id: 'knowledge_graph', label: 'Knowledge Graph', icon: Network },
-    { id: 'simulation_lab', label: 'Simulation Lab', icon: BrainCircuit },
+    { id: 'executive_brief', label: 'Briefing', icon: FileText },
+    { id: 'smart_search', label: 'Search', icon: Search },
+    { id: 'knowledge_graph', label: 'Knowledge', icon: Network },
+    { id: 'simulation_lab', label: 'Simulation', icon: BrainCircuit },
   ];
 
   const adminSections = [
-    { id: 'reports', label: 'Reports & Insights', icon: FileText },
-    { id: 'admin', label: 'Administration', icon: Settings },
+    { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'admin', label: 'Admin', icon: Settings },
   ];
 
-  return (
-    <aside 
-      className={`relative flex flex-col h-full bg-background border-r border-border transition-all duration-300 ease-in-out z-50
-        ${isCollapsed ? 'w-20' : 'w-[280px]'}`}
-    >
-      {/* Collapse Toggle */}
-      <button 
-        onClick={() => setIsCollapsed(!isCollapsed)}
-        className="absolute -right-3 top-8 bg-card border border-border hover:bg-primary hover:border-primary hover:text-primary-foreground text-muted-foreground p-1 rounded-full z-50 transition-colors flex items-center justify-center"
-      >
-        {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
-      </button>
+  const handleTabClick = (id: string) => {
+    setActiveTab(id);
+    if (onCloseMobile) onCloseMobile();
+  };
 
-      {/* Header / Brand */}
-      <div className={`p-6 pb-4 flex flex-col justify-center border-b border-border/50 ${isCollapsed ? 'items-center px-0' : ''}`}>
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 border border-primary/20">
-             <img src={`${import.meta.env.BASE_URL}akasha_hero_bg.png`} alt="AKASHA" className="w-full h-full object-cover" />
+  // Whether we show labels (expanded desktop or mobile drawer)
+  const showLabel = !collapsed || isMobileOpen;
+
+  const NavItem = ({ item, accent = false }: { item: { id: string; label: string; icon: any }; accent?: boolean }) => {
+    const isActive = activeTab === item.id;
+    return (
+      <div className="relative group">
+        {/* Tooltip when collapsed */}
+        {collapsed && !isMobileOpen && (
+          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-md bg-slate-800 text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-[60] shadow-lg">
+            {item.label}
           </div>
-          {!isCollapsed && (
-            <div className="flex flex-col overflow-hidden whitespace-nowrap animate-in fade-in duration-300">
-              <h1 className="text-xl font-bold text-foreground tracking-wide">AKASHA</h1>
-              <span className="text-[9px] font-semibold text-primary uppercase tracking-[0.2em]">Intelligence Platform</span>
+        )}
+        <button
+          onClick={() => handleTabClick(item.id)}
+          title={collapsed ? item.label : undefined}
+          className={`w-full flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
+            ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}
+            ${isActive 
+              ? 'bg-[#0b74b1] text-white shadow-sm shadow-[#0b74b1]/25' 
+              : accent
+                ? 'text-slate-600 dark:text-slate-300 hover:bg-[#0b74b1]/5 dark:hover:bg-[#0b74b1]/20 hover:text-[#0b74b1] dark:hover:text-[#38bdf8]'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+            }`}
+        >
+          <item.icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-white' : accent ? 'text-[#0b74b1]/70 dark:text-[#38bdf8]/70 group-hover:text-[#0b74b1] dark:group-hover:text-[#38bdf8]' : 'text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300'}`} />
+          {showLabel && <span className="truncate leading-none">{item.label}</span>}
+        </button>
+      </div>
+    );
+  };
+
+  const sidebarInner = (
+    <div className="flex flex-col h-full">
+      {/* ─── Brand Bar ─── */}
+      <div className={`flex items-center shrink-0 border-b border-slate-100 dark:border-slate-800 h-[73px] ${collapsed && !isMobileOpen ? 'justify-center px-2' : 'px-4 justify-between'}`}>
+        <div className="flex items-center overflow-hidden">
+          {!showLabel && (
+             <span className="text-[22px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-[#0b74b1] via-[#76489d] to-[#bc3860] text-transparent bg-clip-text mx-auto">A</span>
+          )}
+          {showLabel && (
+            <div className="flex flex-col min-w-0 py-1">
+              <span className="text-[24px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-[#0b74b1] via-[#76489d] to-[#bc3860] text-transparent bg-clip-text">AKASHA</span>
+              <span className="text-[9px] font-bold text-[#0b74b1] uppercase tracking-[0.25em] mt-0.5">Execution Platform</span>
             </div>
           )}
         </div>
-        {!isCollapsed && (
-           <div className="mt-4 flex items-center gap-2 px-2 py-1 bg-muted rounded text-[10px] font-mono text-muted-foreground border border-border w-fit">
-             <div className="w-1.5 h-1.5 rounded-full bg-success"></div>
-             ENV: ENTERPRISE PROD
-           </div>
+        {/* Mobile close */}
+        {isMobileOpen && (
+          <button onClick={onCloseMobile} className="md:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded">
+            <X className="w-4 h-4" />
+          </button>
         )}
       </div>
 
-      {/* Navigation Scroll Area */}
-      <div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-hide py-4 px-3 flex flex-col gap-6">
+      {/* ─── Nav items ─── */}
+      <nav className="flex-1 overflow-y-auto custom-scrollbar px-2.5 py-3 flex flex-col gap-4">
         
-        {/* Standard Sections */}
+        {/* Core */}
         {menuSections.map((section, idx) => (
-          <div key={idx} className="flex flex-col gap-1">
-            {!isCollapsed && (
-              <h3 className="px-3 text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 mb-2 truncate">
+          <div key={idx} className="flex flex-col gap-0.5">
+            {showLabel && (
+              <h3 className="px-3 mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
                 {section.title}
               </h3>
             )}
-            
-            {section.items.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <div key={item.id} className="relative group">
-                  {/* Tooltip for Collapsed State */}
-                  {isCollapsed && (
-                    <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-card border border-border text-foreground text-xs px-3 py-1.5 rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl">
-                      {item.label}
-                    </div>
-                  )}
-                  
-                  <button
-                    onClick={() => setActiveTab(item.id)}
-                    className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                      ${isActive 
-                        ? 'bg-primary/10 text-foreground' 
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }
-                      ${isCollapsed ? 'justify-center px-0' : 'justify-start'}
-                    `}
-                  >
-                    {/* Active Indicator Bar */}
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-md"></div>
-                    )}
-                    
-                    <item.icon className={`shrink-0 transition-transform duration-200 ${isActive ? 'text-primary' : ''} ${!isCollapsed && 'group-hover:translate-x-1'} ${isCollapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
-                    
-                    {!isCollapsed && (
-                      <span className="text-sm font-medium tracking-wide truncate">{item.label}</span>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
+            {section.items.map((item) => <NavItem key={item.id} item={item} />)}
           </div>
         ))}
 
-        {/* AI Section */}
-        <div className="flex flex-col gap-1 relative">
-           {!isCollapsed && (
-              <div className="px-3 mb-2 flex items-center gap-2">
-                 <Zap className="w-3 h-3 text-primary" />
-                 <h3 className="text-[10px] font-bold uppercase tracking-widest text-primary truncate">
-                   Akasha AI
-                 </h3>
-              </div>
-           )}
-           
-           {aiSections.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <div key={item.id} className="relative group z-10">
-                  {isCollapsed && (
-                    <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-primary border border-primary/50 text-primary-foreground text-xs font-semibold px-3 py-1.5 rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50">
-                      {item.label}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setActiveTab(item.id)}
-                    className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                      ${isActive 
-                        ? 'bg-primary/10 text-foreground border border-primary/30' 
-                        : 'text-primary hover:bg-primary/5 hover:text-foreground'
-                      }
-                      ${isCollapsed ? 'justify-center px-0' : 'justify-start'}
-                    `}
-                  >
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-md"></div>
-                    )}
-                    <item.icon className={`shrink-0 transition-transform duration-200 ${isActive ? 'text-primary' : 'text-primary'} ${!isCollapsed && 'group-hover:translate-x-1'} ${isCollapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
-                    {!isCollapsed && (
-                      <span className="text-sm font-medium tracking-wide truncate">{item.label}</span>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-        </div>
-
-        {/* Administration */}
-        <div className="flex flex-col gap-1 mt-4 pt-4 border-t border-border/50">
-           {adminSections.map((item) => {
-              const isActive = activeTab === item.id;
-              return (
-                <div key={item.id} className="relative group">
-                  {isCollapsed && (
-                    <div className="absolute left-14 top-1/2 -translate-y-1/2 bg-card border border-border text-foreground text-xs px-3 py-1.5 rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity whitespace-nowrap z-50 shadow-xl">
-                      {item.label}
-                    </div>
-                  )}
-                  <button
-                    onClick={() => setActiveTab(item.id)}
-                    className={`relative w-full flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200
-                      ${isActive 
-                        ? 'bg-primary/10 text-foreground' 
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                      }
-                      ${isCollapsed ? 'justify-center px-0' : 'justify-start'}
-                    `}
-                  >
-                    {isActive && (
-                      <div className="absolute left-0 top-1/2 -translate-y-1/2 w-1 h-5 bg-primary rounded-r-md"></div>
-                    )}
-                    <item.icon className={`shrink-0 transition-transform duration-200 ${isActive ? 'text-primary' : ''} ${!isCollapsed && 'group-hover:rotate-45'} ${isCollapsed ? 'w-5 h-5' : 'w-4 h-4'}`} />
-                    {!isCollapsed && (
-                      <span className="text-sm font-medium tracking-wide truncate">{item.label}</span>
-                    )}
-                  </button>
-                </div>
-              );
-            })}
-        </div>
-      </div>
-
-      {/* Footer / User Profile */}
-      <div className={`p-4 border-t border-border/50 bg-muted/30 ${isCollapsed ? 'flex justify-center' : ''}`}>
-        <div className={`flex items-center gap-3 ${isCollapsed ? 'justify-center' : 'justify-start'}`}>
-          <div className="relative shrink-0">
-             <div className="w-9 h-9 rounded-full bg-card flex items-center justify-center border border-border">
-               <User className="w-5 h-5 text-muted-foreground" />
-             </div>
-             <div className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-success rounded-full border-2 border-background"></div>
-          </div>
-          {!isCollapsed && (
-            <div className="flex flex-col flex-1 truncate">
-              <span className="text-sm font-medium text-foreground truncate">Executive Office</span>
-              <span className="text-xs text-muted-foreground/70 truncate">ceo@adani.com</span>
+        {/* AI */}
+        <div className="flex flex-col gap-0.5">
+          {showLabel ? (
+            <div className="px-3 mb-1 flex items-center gap-1.5">
+               <Zap className="w-3 h-3 text-[#0b74b1] dark:text-[#38bdf8]" />
+               <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#0b74b1] dark:text-[#38bdf8]">Akasha AI</h3>
+            </div>
+          ) : (
+            <div className="flex justify-center my-1">
+              <div className="w-5 h-px bg-[#0b74b1]/30" />
             </div>
           )}
-          {!isCollapsed && (
-             <button className="text-muted-foreground hover:text-foreground transition-colors p-1">
-               <Bell className="w-4 h-4" />
-             </button>
-          )}
+          {aiSections.map((item) => <NavItem key={item.id} item={item} accent />)}
         </div>
-      </div>
 
-    </aside>
+        {/* Admin */}
+        <div className="flex flex-col gap-0.5 mt-auto pt-3 border-t border-slate-100 dark:border-slate-800">
+          {adminSections.map((item) => <NavItem key={item.id} item={item} />)}
+        </div>
+      </nav>
+
+      {/* ─── Collapse toggle (desktop only) ─── */}
+      <div className="hidden md:flex shrink-0 border-t border-slate-100 dark:border-slate-800 px-2.5 py-2">
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-medium"
+        >
+          {collapsed ? <ChevronRight className="w-4 h-4" /> : (
+            <>
+              <ChevronLeft className="w-4 h-4" />
+              <span>Collapse</span>
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside
+        className={`hidden md:block h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 shrink-0 transition-[width] duration-200 ease-in-out
+          ${collapsed ? 'w-[60px]' : 'w-[210px]'}`}
+      >
+        {sidebarInner}
+      </aside>
+
+      {/* Mobile overlay */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 bg-black/30 z-[100] md:hidden" onClick={onCloseMobile} />
+      )}
+
+      {/* Mobile drawer */}
+      <aside
+        className={`fixed inset-y-0 left-0 w-[250px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-[101] transform transition-transform duration-200 ease-in-out md:hidden
+          ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}
+      >
+        {sidebarInner}
+      </aside>
+    </>
   );
 }

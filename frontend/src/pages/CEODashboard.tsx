@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { motion, AnimatePresence } from 'framer-motion';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
 
@@ -33,6 +34,7 @@ export default function CEODashboard() {
   const [activeTab, setActiveTab] = useState<string>("overview");
   const [previousTab, setPreviousTab] = useState<string>("overview");
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("All");
 
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -167,24 +169,30 @@ export default function CEODashboard() {
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-background text-foreground">
+    <div className="flex min-h-screen w-full bg-[var(--background)]">
       
       {/* 1. Left Navigation Rail */}
-      <div className="sticky top-0 h-screen shrink-0 z-40">
-        <LeftSidebar activeTab={activeTab} setActiveTab={handleTabChange} />
+      <div className="sticky top-0 h-screen shrink-0 z-50">
+        <LeftSidebar 
+          activeTab={activeTab} 
+          setActiveTab={handleTabChange} 
+          isMobileOpen={isSidebarOpen}
+          onCloseMobile={() => setIsSidebarOpen(false)}
+        />
       </div>
       
       {/* Middle Area: Header + Scrollable Content */}
-      <div className="flex-1 flex flex-col min-w-0 relative bg-background">
+      <div className="flex-1 flex flex-col min-w-0">
         
         {/* 2. Top Global Header (hidden for full-screen Copilot) */}
         {activeTab !== 'ai_copilot' && (
-          <div className="sticky top-0 z-40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 border-b border-border">
+          <div className="sticky top-0 z-40">
             <TopHeader 
               selectedProject={selectedProject} 
               setSelectedProject={setSelectedProject} 
-              masterProjects={Array.from(new Set(dashboardData?.projects?.map((p:any) => p.project_name) || []))} 
+              masterProjects={dashboardData?.projects || []} 
               onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
+              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             />
           </div>
         )}
@@ -204,12 +212,8 @@ export default function CEODashboard() {
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */
-          <main className="flex-1 p-6 relative">
-            
-            {/* Subtle Background Elements */}
-            <div className="absolute top-0 left-1/4 w-[800px] h-[500px] bg-[#3B82F6] opacity-[0.03] blur-[150px] rounded-full pointer-events-none z-0"></div>
-
-            <div className="relative z-10">
+          <main className="flex-1 p-4">
+            <div className="w-full">
               {projectId ? (
                 <div className="w-full h-full min-h-[calc(100vh-120px)]">
                   <ProjectWorkspace 
@@ -218,36 +222,44 @@ export default function CEODashboard() {
                   />
                 </div>
               ) : (
-                <>
-                  {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
-                  {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
-                  {activeTab === 'data_integration' && <DataIntegrationHub />}
-              {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
-              {activeTab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
-              {activeTab === 'financial' && <SAPView sapData={sapData} logisticsData={logisticsData} finDetails={finDetails} logDetails={logDetails} loading={loading} />}
-              {activeTab === 'procurement' && <ProcurementIntelligence finDetails={finDetails} />}
-              {activeTab === 'material' && <MaterialIntelligence logDetails={logDetails} logisticsData={logisticsData} />}
-              {activeTab === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
-              {activeTab === 'risk' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} />}
-              {activeTab === 'predictive' && <PredictiveAnalytics p6Data={p6Data} />}
-              {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
-              {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
-              
-              {/* AI Modules */}
-              {activeTab === 'executive_brief' && <ExecutiveBriefing />}
-              {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
-              {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
-              
-              {/* Placeholders for unbuilt sections */}
-              {!implementedModules.includes(activeTab) && (
-                <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-border rounded-2xl bg-card/50 backdrop-blur-sm">
-                  <div className="text-center">
-                    <h2 className="text-2xl font-light text-muted-foreground mb-2 uppercase tracking-widest">{activeTab.replace('_', ' ')} Module</h2>
-                    <p className="text-sm text-muted-foreground/70">This module is currently in development (Awaiting Database Integration).</p>
-                  </div>
-                </div>
-              )}
-                </>
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={activeTab}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    transition={{ duration: 0.2 }}
+                  >
+                    {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
+                    {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
+                    {activeTab === 'data_integration' && <DataIntegrationHub />}
+                    {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
+                    {activeTab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
+                    {activeTab === 'financial' && <SAPView sapData={sapData} logisticsData={logisticsData} finDetails={finDetails} logDetails={logDetails} loading={loading} />}
+                    {activeTab === 'procurement' && <ProcurementIntelligence finDetails={finDetails} />}
+                    {activeTab === 'material' && <MaterialIntelligence logDetails={logDetails} logisticsData={logisticsData} />}
+                    {activeTab === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
+                    {activeTab === 'risk' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} />}
+                    {activeTab === 'predictive' && <PredictiveAnalytics p6Data={p6Data} />}
+                    {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
+                    {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
+                    
+                    {/* AI Modules */}
+                    {activeTab === 'executive_brief' && <ExecutiveBriefing />}
+                    {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
+                    {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
+                    
+                    {/* Placeholders for unbuilt sections */}
+                    {!implementedModules.includes(activeTab) && (
+                      <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-900/50">
+                        <div className="text-center">
+                          <h2 className="text-2xl font-semibold text-slate-400 mb-2">{activeTab.replace('_', ' ')} Module</h2>
+                          <p className="text-sm text-slate-500">This module is currently in development.</p>
+                        </div>
+                      </div>
+                    )}
+                  </motion.div>
+                </AnimatePresence>
               )}
             </div>
           </main>

@@ -37,14 +37,32 @@ def prepare_database():
     except Exception as e:
         print(f"Could not automatically ensure database exists: {e}")
 
-    # Run Alembic migrations automatically
+    # Run automatic schema migrations
     try:
-        import alembic.config
-        print("Applying database migrations...")
-        alembic.config.main(argv=['--raiseerr', 'upgrade', 'head'])
-        print("Migrations complete!")
+        from database import engine, Base
+        import models
+        from sqlalchemy import inspect
+        
+        print("Auto-migrating database schema...")
+        # 1. Create missing tables
+        Base.metadata.create_all(bind=engine)
+        
+        # 2. Add missing columns to existing tables
+        inspector = inspect(engine)
+        with engine.begin() as conn:
+            for table_name, table in Base.metadata.tables.items():
+                if not inspector.has_table(table_name):
+                    continue
+                
+                existing_columns = [col['name'] for col in inspector.get_columns(table_name)]
+                for column in table.columns:
+                    if column.name not in existing_columns:
+                        col_type = column.type.compile(engine.dialect)
+                        print(f"Adding missing column: {table_name}.{column.name} ({col_type})")
+                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}"))
+        print("Schema auto-migration complete!")
     except Exception as e:
-        print(f"Migration error: {e}")
+        print(f"Auto-migration error: {e}")
 
 if __name__ == "__main__":
     load_dotenv(override=True)
