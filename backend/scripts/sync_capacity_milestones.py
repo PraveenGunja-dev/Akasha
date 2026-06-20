@@ -8,6 +8,9 @@ from sqlalchemy import create_engine
 
 # Setup paths and environment
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import dotenv
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+dotenv.load_dotenv(os.path.join(base_dir, '.env'))
 
 from database import SessionLocal
 from models import P6Project, ProjectMapping, MTTrialRun

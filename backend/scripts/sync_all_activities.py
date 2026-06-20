@@ -1,7 +1,8 @@
 import sys, os, time
-sys.path.append(os.path.abspath('backend'))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import dotenv
-dotenv.load_dotenv('backend/.env')
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+dotenv.load_dotenv(os.path.join(base_dir, '.env'))
 from database import SessionLocal
 from models import P6Project
 from services.p6_service import P6Service
