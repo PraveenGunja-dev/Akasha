@@ -140,9 +140,9 @@ def calculate_project_360_metrics(db: Session):
                 for rec in me2k_records:
                     ordered_qty += (rec.order_quantity or 0.0)
                     budget_inr += (rec.net_order_value_inr or 0.0)
+                    in_transit_qty += (rec.still_to_deliver_qty or 0.0)
 
-            # --- STEP D: ZIBDSESREP In-Transit (Removed) ---
-            # In-Transit logic removed as per data source changes.
+            # --- STEP D: In-Transit (ME2K Still to Deliver) ---
 
         # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
         po_vol = ordered_qty

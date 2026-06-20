@@ -84,13 +84,13 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
     
     inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.plant_code).all() if r[0]}
     req_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTRequirement.spv_plant_code, func.sum(models.MTRequirement.budgeted_units_mw)).group_by(models.MTRequirement.spv_plant_code).all() if r[0]}
-    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInTransit.plant_code, func.sum(models.MTInTransit.inbound_delivery_quantity)).group_by(models.MTInTransit.plant_code).all() if r[0]}
+    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_mw_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.po_quantities)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
 
     all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
-    all_it_wbs = db.query(models.MTInTransit.wbs_element, func.sum(models.MTInTransit.inbound_delivery_quantity)).group_by(models.MTInTransit.wbs_element).all()
+    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
 
     all_tc_entries = db.query(models.TcProjectEntry).all()
     all_tc_edges = db.query(models.TcNetworkEdge).all()
@@ -357,17 +357,8 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
         (models.MTPOAmount.plant_code == str(m.agel).strip())
     ).all()
     
-    # 3. In-Transit Mapping (ZIBDSESREP)
-    in_transit_query = db.query(models.MTInTransit)
-    if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        clean_wbs = str(m.module_wbs).strip()
-        in_transit_query = in_transit_query.filter(models.MTInTransit.wbs_element.ilike(f"%{clean_wbs}%"))
-    else:
-        in_transit_query = in_transit_query.filter(
-            (models.MTInTransit.plant_code == str(m.spv_plant_code).strip()) |
-            (models.MTInTransit.plant_code == str(m.agel).strip())
-        )
-    in_transit = in_transit_query.all()
+    # 3. In-Transit Mapping (ME2K Still to Deliver)
+    in_transit = [po for po in po_items if (po.still_to_deliver_qty or 0) > 0]
     
     # TC
     project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == m.id).all()
@@ -646,20 +637,24 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
             
             if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
                 inv_count = db.query(models.MTInventory).filter(models.MTInventory.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%")).count()
-                transit_count = db.query(models.MTInTransit).filter(models.MTInTransit.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%")).count()
-                transit_mw = db.query(func.sum(models.MTInTransit.quantity_mw)).filter(
-                    models.MTInTransit.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%")
+                transit_count = db.query(models.MTPOAmount).filter(
+                    models.MTPOAmount.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%"),
+                    models.MTPOAmount.still_to_deliver_qty > 0
+                ).count()
+                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty)).filter(
+                    models.MTPOAmount.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%")
                 ).scalar() or 0
                 inv_alloc = 1.0
             else:
                 inv_count = db.query(models.MTInventory).filter(
                     (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code)
                 ).count()
-                transit_count = db.query(models.MTInTransit).filter(
-                    (models.MTInTransit.plant_code == plant_code) | (models.MTInTransit.plant_code == agel_code)
+                transit_count = db.query(models.MTPOAmount).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.still_to_deliver_qty > 0
                 ).count()
-                transit_mw = db.query(func.sum(models.MTInTransit.quantity_mw)).filter(
-                    (models.MTInTransit.plant_code == plant_code) | (models.MTInTransit.plant_code == agel_code)
+                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty)).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
                 ).scalar() or 0
                 inv_alloc = allocation_ratio
             
