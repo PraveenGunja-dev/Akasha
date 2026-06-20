@@ -350,7 +350,7 @@ def calculate_project_360_metrics(db: Session):
             "riskScore": risk_score,
             "healthScore": health_score,
             "tcEdgesCount": tc_edges_count,
-            "integrationCount": sum([1 if p6_proj else 0, 1 if ordered_qty > 0 else 0, 1 if tc_edges_count > 0 else 0]),
+            "integrationCount": sum([1 if p6_proj else 0, 1 if ordered_qty > 0 or inventory_qty > 0 or consumed_qty > 0 else 0, 1 if tc_edges_count > 0 else 0]),
             "forecastFinish": forecast_finish,
             "forecastMonth": forecast_month,
             "health": status_tier,  # alias for backward compat

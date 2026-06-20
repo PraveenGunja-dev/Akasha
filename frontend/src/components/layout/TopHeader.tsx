@@ -55,12 +55,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
               {[...(masterProjects || [])].sort((a: any, b: any) => {
                 let scoreA = 0;
                 if (a.p6?.id) scoreA++;
-                if (a.sap?.po_mw > 0) scoreA++;
+                if (a.sap?.po_mw > 0 || a.sap?.inventory_mw > 0) scoreA++;
                 if (a.tc?.has_data) scoreA++;
 
                 let scoreB = 0;
                 if (b.p6?.id) scoreB++;
-                if (b.sap?.po_mw > 0) scoreB++;
+                if (b.sap?.po_mw > 0 || b.sap?.inventory_mw > 0) scoreB++;
                 if (b.tc?.has_data) scoreB++;
 
                 return scoreB - scoreA;
