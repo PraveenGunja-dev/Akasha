@@ -234,11 +234,25 @@ export default function DataIntegrationHub() {
     }
   };
 
-  const filteredData = data.filter(p => 
-    p.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.p6?.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (p.spv_plant_code || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredData = data
+    .filter(p => 
+      p.project_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.p6?.id || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (p.spv_plant_code || '').toLowerCase().includes(searchTerm.toLowerCase())
+    )
+    .sort((a, b) => {
+      let scoreA = 0;
+      if (a.p6?.id) scoreA++;
+      if (a.sap?.po_mw > 0) scoreA++;
+      if (a.tc?.has_data) scoreA++;
+
+      let scoreB = 0;
+      if (b.p6?.id) scoreB++;
+      if (b.sap?.po_mw > 0) scoreB++;
+      if (b.tc?.has_data) scoreB++;
+
+      return scoreB - scoreA;
+    });
 
   return (
     <div className="flex flex-col h-full w-full max-w-[1800px] mx-auto animate-in fade-in duration-500 pb-8">

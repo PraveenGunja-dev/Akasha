@@ -54,10 +54,7 @@ export default function LandingPage() {
   };
 
   const openLogin = () => {
-    setShowLogin(true);
-    setUsername('');
-    setPassword('');
-    setError('');
+    navigate('/dashboard', { replace: true });
   };
 
   return (
