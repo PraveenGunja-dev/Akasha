@@ -240,6 +240,11 @@ class P6Service:
         self.auth_token_b64 = os.getenv("ORACLE_P6_AUTH_TOKEN")
         self.token_url = os.getenv("ORACLE_P6_TOKEN_URL", "https://sin1.p6.oraclecloud.com/adani/p6ws/oauth/token")
         
+        self.proxies = {
+            "http": os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or "http://cloudproxy.adani.com:8080",
+            "https": os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or "http://cloudproxy.adani.com:8080"
+        }
+        
         # We need to fetch an OAuth token using the basic auth credentials
         self.access_token = self._get_oauth_token()
         
@@ -273,7 +278,7 @@ class P6Service:
             }
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
             
-            response = requests.post(self.token_url, data=data, headers=headers, timeout=15, verify=False)
+            response = requests.post(self.token_url, data=data, headers=headers, timeout=15, verify=False, proxies=self.proxies)
             response.raise_for_status()
             
             # P6 token endpoint sometimes returns the raw JWT string directly instead of JSON
@@ -303,7 +308,8 @@ class P6Service:
             params["Filter"] = f"Status='{status_filter}'"
 
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60, verify=False)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60, verify=False, proxies=self.proxies)
+
             response.raise_for_status()
             data = response.json()
             logger.info(f"Fetched {len(data)} projects from P6")
@@ -330,7 +336,7 @@ class P6Service:
             params["Filter"] = f"OriginalProjectObjectId={project_object_id}"
 
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60, verify=False, proxies=self.proxies)
             response.raise_for_status()
             data = response.json()
             logger.info(f"Fetched {len(data)} baseline projects from P6")
@@ -354,7 +360,7 @@ class P6Service:
         }
 
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60, verify=False, proxies=self.proxies)
             response.raise_for_status()
             data = response.json()
             logger.info(f"Fetched {len(data)} activities for project {project_object_id}")
@@ -487,7 +493,7 @@ class P6Service:
             params["Filter"] = f"ProjectObjectId={project_object_id}"
         
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=30, verify=False)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=30, verify=False, proxies=self.proxies)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
