@@ -130,23 +130,19 @@ def calculate_project_360_metrics(db: Session):
                     inventory_qty += (rec.quantity_inv or 0.0)
                     inventory_value_inr += (rec.value_unrestricted or 0.0)
 
-            # --- STEP C: ME2M Purchase Orders ---
+            # --- STEP C: ME2K Purchase Orders ---
             if plant_codes:
-                me2m_records = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.plant_code.in_(plant_codes)
+                me2k_records = db.query(models.MTPOAmount).filter(
+                    models.MTPOAmount.plant_code.in_(plant_codes),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
                 ).all()
                 
-                for rec in me2m_records:
-                    ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
-                    budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio
+                for rec in me2k_records:
+                    ordered_qty += (rec.order_quantity or 0.0)
+                    budget_inr += (rec.net_order_value_inr or 0.0)
 
-            # --- STEP D: ZIBDSESREP In-Transit ---
-            if plant_codes:
-                transit_records = db.query(models.MTInTransit).filter(
-                    models.MTInTransit.plant_code.in_(plant_codes)
-                ).all()
-                for rec in transit_records:
-                    in_transit_qty += (rec.inbound_delivery_quantity or 0.0) * allocation_ratio
+            # --- STEP D: ZIBDSESREP In-Transit (Removed) ---
+            # In-Transit logic removed as per data source changes.
 
         # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
         po_vol = ordered_qty
@@ -354,6 +350,7 @@ def calculate_project_360_metrics(db: Session):
             "riskScore": risk_score,
             "healthScore": health_score,
             "tcEdgesCount": tc_edges_count,
+            "integrationCount": sum([1 if p6_proj else 0, 1 if ordered_qty > 0 or inventory_qty > 0 else 0, 1 if tc_edges_count > 0 else 0]),
             "forecastFinish": forecast_finish,
             "forecastMonth": forecast_month,
             "health": status_tier,  # alias for backward compat
@@ -377,7 +374,7 @@ def calculate_project_360_metrics(db: Session):
         })
     # Add unmapped P6 projects logic removed
 
-    return sorted(results, key=lambda x: x['riskScore'], reverse=True)
+    return sorted(results, key=lambda x: (x.get('integrationCount', 0), x['riskScore']), reverse=True)
 
 
 def get_project_360_detail(db: Session, project_id: str):
@@ -451,10 +448,15 @@ def get_project_360_detail(db: Session, project_id: str):
                 if mat_str:
                     mb51_materials.add(mat_str)
                     
-    # ── Purchase Orders (ME2M) ──
-    po_records_all = db.query(models.MTPOAmount).filter(
-        models.MTPOAmount.plant_code.in_(codes)
-    ).all() if codes else []
+    # ── Purchase Orders (ME2K) ──
+    if mapping and mapping.module_wbs:
+        wbs_prefix = mapping.module_wbs[:6]
+        po_records_all = db.query(models.MTPOAmount).filter(
+            models.MTPOAmount.plant_code.in_(codes),
+            models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+        ).all() if codes else []
+    else:
+        po_records_all = []
     
     sap_vendors = []
     vendor_summary = {}
@@ -481,22 +483,22 @@ def get_project_360_detail(db: Session, project_id: str):
             "materialCode": po.material_code,
             "materialName": po.material_name,
             "materialType": po.material_type,
-            "orderedQty": (po.order_quantity or 0) * allocation_ratio,
-            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio,
+            "orderedQty": (po.order_quantity or 0),
+            "budgetINR": (po.net_order_value_inr or 0),
             "companyCode": po.company_code,
             "plantCode": po.plant_code,
-            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio,
-            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio,
-            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio,
-            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
+            "deliveredQty": getattr(po, "delivered_qty", 0.0),
+            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0),
+            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0),
+            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0),
             "storageLocation": getattr(po, "storage_location", None),
         })
         
-        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
-        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
+        total_po_qty += (po.order_quantity or 0.0)
+        total_budget_inr += (po.net_order_value_inr or 0.0)
         
         del_cr = getattr(po, "delivered_value_inr_cr", 0.0)
-        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0) * allocation_ratio
+        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0)
         
         if vendor_name not in vendor_summary:
             vendor_summary[vendor_name] = {
@@ -507,8 +509,8 @@ def get_project_360_detail(db: Session, project_id: str):
                 "poCount": 0,
                 "materials": set(),
             }
-        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0) * allocation_ratio
-        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0) * allocation_ratio
+        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0)
+        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0)
         vendor_summary[vendor_name]["poCount"] += 1
         if po.material_code:
             vendor_summary[vendor_name]["materials"].add(po.material_code)
@@ -526,24 +528,9 @@ def get_project_360_detail(db: Session, project_id: str):
     vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
 
     # ── In-Transit (ZIBDSESREP) ──
-    transit_records = db.query(models.MTInTransit).filter(
-        models.MTInTransit.plant_code.in_(codes)
-    ).all() if codes else []
-
+    # Removed as per new data requirements.
     sap_intransit = []
     total_transit_qty = 0.0
-    for t in transit_records:
-        mat_str = str(t.material_code).strip().lstrip('0') if t.material_code else ''
-        sap_intransit.append({
-            "materialCode": t.material_code,
-            "vendorCode": t.vendor_code,
-            "vendorName": t.vendor_name,
-            "poNumber": t.po_number,
-            "inTransitQty": (t.inbound_delivery_quantity or 0) * allocation_ratio,
-            "wbsElement": t.wbs_element,
-            "plantCode": t.plant_code,
-        })
-        total_transit_qty += (t.inbound_delivery_quantity or 0.0) * allocation_ratio
 
     # ── Inventory (MB52) ──
     if mapping and mapping.module_wbs:
@@ -623,6 +610,92 @@ def get_project_360_detail(db: Session, project_id: str):
         # Metadata
         "lastSyncedAt": p6_proj.last_synced_at.strftime("%Y-%m-%d %H:%M") if p6_proj.last_synced_at else None,
     }
+
+    # ── Delayed Activities & MW Capacity ──
+    delayed_activities = []
+    
+    WIND_MW_PER_WTG = {
+        "3074": 5.2, "4707": 5.0, "3075": 5.2, "3076": 5.2,
+        "3072": 5.2, "3073": 5.2, "6733": 5.2, "3105": 3.3,
+    }
+    DEFAULT_WIND_MW = 3.3
+
+    p_type = 'Solar'
+    name_check = (p6_proj.name or "").lower() + " " + (mapping.project_name_from_p6 if mapping and mapping.project_name_from_p6 else "").lower()
+    if "wind" in name_check:
+        p_type = 'Wind'
+        
+    wtg_mw = WIND_MW_PER_WTG.get(str(p6_proj.p6_object_id), DEFAULT_WIND_MW)
+
+    if p6_proj.data_date:
+        for act in p6_proj.activities:
+            # Filter for construction activities only
+            act_name = (act.name or "").lower()
+            wbs_name = (act.wbs_name or "").lower()
+            
+            # Allow if it's explicitly construction, or if it's a WTG/Block activity (which are construction by nature)
+            is_construction = "construction" in act_name or "construction" in wbs_name or "wtg" in act_name or "wtg" in wbs_name or "block" in act_name or "block" in wbs_name
+            if not is_construction:
+                continue
+
+            is_delayed = False
+            delay_days = 0
+            
+            if act.status == "In Progress" and act.planned_finish_date:
+                if p6_proj.data_date > act.planned_finish_date:
+                    is_delayed = True
+                    delay_days = (p6_proj.data_date - act.planned_finish_date).days
+            elif act.status == "Not Started" and act.planned_start_date:
+                if p6_proj.data_date > act.planned_start_date:
+                    is_delayed = True
+                    delay_days = (p6_proj.data_date - act.planned_start_date).days
+                    
+            if is_delayed:
+                mw_capacity = 0
+                act_name = (act.name or "").lower()
+                wbs_name = (act.wbs_name or "").lower()
+                
+                if p_type == 'Wind' and ('wtg' in act_name or 'wtg' in wbs_name):
+                    mw_capacity = wtg_mw
+                elif p_type == 'Solar' and ('block' in act_name or 'block' in wbs_name):
+                    mw_capacity = 12.5 # Default block allocation as per capacity_overview
+                    
+                delayed_activities.append({
+                    "activityId": act.activity_id,
+                    "name": act.name,
+                    "status": act.status,
+                    "plannedStartDate": act.planned_start_date.strftime("%Y-%m-%d") if act.planned_start_date else None,
+                    "plannedFinishDate": act.planned_finish_date.strftime("%Y-%m-%d") if act.planned_finish_date else None,
+                    "dataDate": p6_proj.data_date.strftime("%Y-%m-%d"),
+                    "delayDays": delay_days,
+                    "mwCapacity": mw_capacity,
+                    "wbsName": act.wbs_name
+                })
+                
+    delayed_activities.sort(key=lambda x: x["delayDays"], reverse=True)
+    p6_full["delayedActivities"] = delayed_activities
+
+    # ── Milestones Extraction ──
+    p6_milestones = []
+    if p6_proj.activities:
+        for act in p6_proj.activities:
+            act_type = (act.type or "").lower()
+            act_name = (act.name or "").lower()
+            wbs_name = (act.wbs_name or "").lower()
+            if "milestone" in act_type or "milestone" in act_name or "milestone" in wbs_name:
+                p6_milestones.append({
+                    "activityId": act.activity_id,
+                    "name": act.name,
+                    "status": act.status,
+                    "type": act.type,
+                    "plannedStartDate": act.planned_start_date.strftime("%Y-%m-%d") if act.planned_start_date else None,
+                    "plannedFinishDate": act.planned_finish_date.strftime("%Y-%m-%d") if act.planned_finish_date else None,
+                    "actualStartDate": act.actual_start_date.strftime("%Y-%m-%d") if act.actual_start_date else None,
+                    "actualFinishDate": act.actual_finish_date.strftime("%Y-%m-%d") if act.actual_finish_date else None,
+                    "wbsName": act.wbs_name
+                })
+    p6_milestones.sort(key=lambda x: x["plannedFinishDate"] or x["plannedStartDate"] or "9999-12-31")
+    p6_full["milestones"] = p6_milestones
 
     # ── Mapping info ──
     mapping_info = {

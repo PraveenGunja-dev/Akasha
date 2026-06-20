@@ -4,6 +4,22 @@ from database import Base
 from datetime import datetime
 
 # ==========================================
+# User Authentication Model
+# ==========================================
+class AkashaUser(Base):
+    __tablename__ = "akasha_user"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    display_name = Column(String, nullable=False)
+    role = Column(String, nullable=False, index=True)  # executive, pmag, projects, tc_ordering, tc_stores
+    email = Column(String, nullable=True)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==========================================
 # SQLAlchemy Database Models (PostgreSQL)
 # ==========================================
 
@@ -212,6 +228,7 @@ class MTPOAmount(Base):
     company_code = Column(String)
     plant_code = Column(String, index=True)
     purchasing_document = Column(String, unique=False, index=True)
+    wbs_element = Column(String, index=True)
     material_code = Column(String)
     vendor_code = Column(String)
     vendor_name = Column(String)
@@ -403,3 +420,38 @@ class TcNetworkEdge(Base):
     mapping_id = Column(Integer, ForeignKey("project_mapping.id"), nullable=True)
     
     upload_time = Column(DateTime, default=datetime.utcnow)
+
+class P6Activity(Base):
+    __tablename__ = "p6_activity"
+
+    id = Column(Integer, primary_key=True, index=True)
+    p6_object_id = Column(BigInteger, unique=True, index=True, nullable=False)
+    activity_id = Column(String, index=True)
+    name = Column(String)
+    status = Column(String)
+    type = Column(String)
+    
+    start_date = Column(DateTime, nullable=True)
+    finish_date = Column(DateTime, nullable=True)
+    planned_start_date = Column(DateTime, nullable=True)
+    planned_finish_date = Column(DateTime, nullable=True)
+    actual_start_date = Column(DateTime, nullable=True)
+    actual_finish_date = Column(DateTime, nullable=True)
+    
+    planned_duration = Column(Float, nullable=True)
+    actual_duration = Column(Float, nullable=True)
+    remaining_duration = Column(Float, nullable=True)
+    
+    percent_complete = Column(Float, nullable=True)
+    
+    total_float = Column(Float, nullable=True)
+    
+    wbs_object_id = Column(BigInteger, nullable=True)
+    wbs_name = Column(String, nullable=True)
+    wbs_code = Column(String, nullable=True)
+    
+    project_object_id = Column(BigInteger, ForeignKey("p6_project.p6_object_id"), index=True)
+    
+    last_synced_at = Column(DateTime, default=datetime.utcnow)
+    
+    project = relationship("P6Project", backref="activities")

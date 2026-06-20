@@ -67,45 +67,68 @@ def ingest_data():
     else:
         print(f"File not found: {mb52_path}")
 
-    # Process ME2M (PO Amount) from Local
-    me2m_path = os.path.join(data_dir, "ME2M_Khavda_Po_List 3.XLSX")
-    if os.path.exists(me2m_path):
+    # Process ME2K (PO Amount) from Local
+    me2k_path = os.path.join(data_dir, "ME2K (1).xlsx")
+    if os.path.exists(me2k_path):
         try:
-            print(f"Processing {os.path.basename(me2m_path)}...")
-            df = pd.read_excel(me2m_path)
+            print(f"Processing {os.path.basename(me2k_path)}...")
+            df = pd.read_excel(me2k_path)
             po_amounts = []
             for _, row in df.iterrows():
-                po_doc = str(row.get('Purchasing_Document', ''))
-                qty = safe_float(row.get('Order_Quantity', 0))
+                po_doc = str(row.get('Purchasing Document', ''))
+                qty = safe_float(row.get('Order Quantity', 0))
                 if po_doc and po_doc.lower() != 'nan':
+                    # Support user adding Net_Order_Value_IN_INR_Cr column
+                    net_order_value_cr = safe_float(row.get('Net_Order_Value_IN_INR_Cr', 0))
+                    
+                    still_qty = safe_float(row.get('Still to be delivered (qty)', 0))
+                    still_inr = safe_float(row.get('Still to be delivered in INR', 0))
+                    
+                    # Robust calculation of Net Order Value
+                    if net_order_value_cr > 0:
+                        net_value_inr = net_order_value_cr * 10000000
+                    else:
+                        # Compute using unit price
+                        if still_qty > 0 and still_inr > 0:
+                            unit_price = still_inr / still_qty
+                        else:
+                            # Fallback if no pending items: use Net price
+                            unit_price = safe_float(row.get('Net Price in INR', safe_float(row.get('Net price', 0))))
+                        net_value_inr = qty * unit_price
+
+                    del_qty = qty - still_qty if qty >= still_qty else 0
+                    del_val_inr = net_value_inr - still_inr if net_value_inr >= still_inr else 0
+                    del_val_cr = del_val_inr / 10000000
+
                     po = models.MTPOAmount(
                         purchasing_document=po_doc,
+                        wbs_element=str(row.get('WBS Element', '')).strip(),
                         plant_code=str(row.get('Plant', '')),
                         material_code=str(row.get('Material', '')),
-                        material_name=str(row.get('Materail_Name', '')),
-                        vendor_name=str(row.get('Vendor_Name', '')),
-                        short_text=str(row.get('Short_Text', '')),
+                        material_name=str(row.get('Short Text', '')),
+                        vendor_name=str(row.get('Name of Vendor', '')),
+                        short_text=str(row.get('Short Text', '')),
                         order_quantity=qty,
                         po_quantities=qty,  # Legacy field
-                        net_order_value=safe_float(row.get('Net_Order_Value_IN_INR_Cr', 0)) * 10000000,
-                        net_order_value_inr=safe_float(row.get('Net_Order_Value_IN_INR_Cr', 0)) * 10000000,
-                        still_to_deliver_qty=safe_float(row.get('Still_to_be_delivered_qty_', 0)),
-                        still_to_deliver_inr=safe_float(row.get('Still_to_be_delivered_IN_INR_Cr', 0)) * 10000000,
-                        delivered_qty=safe_float(row.get('Delivered_QTY', 0)),
-                        delivered_value_inr_cr=safe_float(row.get('Delivered_Value_IN_Cr', 0)),
-                        storage_location=str(row.get('Storage_Location', '')),
+                        net_order_value=net_value_inr,
+                        net_order_value_inr=net_value_inr,
+                        still_to_deliver_qty=still_qty,
+                        still_to_deliver_inr=still_inr,
+                        delivered_qty=del_qty,
+                        delivered_value_inr_cr=del_val_cr,
+                        storage_location=str(row.get('Storage Location', '')),
                         block_plot_name=str(row.get('Block_Plot_Name', '')),
                         currency=str(row.get('Currency', ''))
                     )
                     po_amounts.append(po)
             db.add_all(po_amounts)
             db.commit()
-            print(f"Inserted {len(po_amounts)} ME2M PO Amount records.")
+            print(f"Inserted {len(po_amounts)} ME2K PO Amount records.")
         except Exception as e:
             db.rollback()
-            print(f"Error processing ME2M: {e}")
+            print(f"Error processing ME2K: {e}")
     else:
-        print(f"File not found: {me2m_path}")
+        print(f"File not found: {me2k_path}")
 
     # Process MB51 (Material Documents/Consumption) from Local
     mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 2 (2).XLSX")
@@ -147,41 +170,7 @@ def ingest_data():
     else:
         print(f"File not found: {mb51_path}")
 
-    # Process ZIBDSESREP (In-Transit) from SharePoint
-    try:
-        sp = SharePointService()
-        files = sp.list_files_in_target_folder()
-        download_dir = os.path.join(backend_dir, "downloads")
-        os.makedirs(download_dir, exist_ok=True)
-        
-        zib_file = next((f for f in files if f['name'] == 'ZIBDSESREP.csv'), None)
-        if zib_file:
-            save_path = os.path.join(download_dir, 'ZIBDSESREP.csv')
-            if not os.path.exists(save_path):
-                print("Downloading ZIBDSESREP.csv from SharePoint...")
-                sp.download_file(zib_file['download_url'], save_path)
-            
-            print("Processing ZIBDSESREP.csv...")
-            df = pd.read_csv(save_path, low_memory=False).fillna(0)
-            in_transits = []
-            for _, row in df.iterrows():
-                pending = safe_float(row.get('Inbound Delivery Quantity', 0))
-                po_doc = str(row.get('PO Number', ''))
-                if pending > 0:
-                    transit = models.MTInTransit(
-                        material_code=str(row.get('Material Number', '')),
-                        plant_code=str(row.get('Plant', '')),
-                        inbound_delivery_quantity=pending,
-                        vendor_name=str(row.get('Vendor Name', '')),
-                        po_number=po_doc,
-                        wbs_element=str(row.get('WBS Element', '')).strip()
-                    )
-                    in_transits.append(transit)
-            db.add_all(in_transits)
-            db.commit()
-            print(f"Inserted {len(in_transits)} ZIBDSESREP In-Transit records.")
-    except Exception as e:
-        print(f"Error processing SharePoint ZIBDSESREP: {e}")
+    # ZIBDSESREP ingestion removed as requested.
 
     db.close()
     print("Ingestion complete!")

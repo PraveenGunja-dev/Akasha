@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Bot, Send, Sparkles, Loader2, FastForward, Sliders, X, Maximize2, MoreVertical, Search, Lightbulb, Plus, Settings2, PictureInPicture } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { useAuth } from '../../context/AuthContext';
 
 interface Message {
   id?: number;
@@ -19,12 +20,38 @@ interface ScenarioSimulationPanelProps {
 }
 
 export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize, projectId }: ScenarioSimulationPanelProps) {
+  const { user } = useAuth();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [threads, setThreads] = useState<any[]>([]);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (showHistory) {
+      const savedThreadsStr = localStorage.getItem('akasha_threads_v2');
+      if (savedThreadsStr) setThreads(JSON.parse(savedThreadsStr));
+    }
+  }, [showHistory]);
+
+  const loadThread = (tid: number) => {
+    localStorage.setItem('akasha_active_thread', String(tid));
+    const savedMsgs = localStorage.getItem(`akasha_msgs_${tid}`);
+    if (savedMsgs) {
+      setMessages(JSON.parse(savedMsgs));
+    } else {
+      setMessages([]);
+    }
+    setShowHistory(false);
+  };
+
+  const startNewChat = () => {
+    localStorage.removeItem('akasha_active_thread');
+    setMessages([]);
+    setInput('');
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -131,19 +158,28 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
     <div className="fixed top-[88px] right-6 w-[420px] h-[calc(100vh-110px)] flex flex-col bg-card border border-border/50 z-[60] shadow-2xl rounded-2xl animate-in slide-in-from-right-8 duration-300 fade-in overflow-hidden">
       
       {/* Header */}
-      <div className="flex items-center justify-end px-3 py-2">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 bg-muted/20">
+        <button onClick={startNewChat} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted text-sm font-medium transition-colors text-foreground">
+          <Plus className="w-4 h-4" /> New Chat
+        </button>
         <div className="flex items-center gap-1 relative">
           <button onClick={() => setShowHistory(!showHistory)} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="History">
             <MoreVertical className="w-5 h-5" />
           </button>
           
           {showHistory && (
-             <div className="absolute top-full right-20 mt-1 w-64 bg-card border border-border rounded-xl shadow-xl py-2 z-50">
+             <div className="absolute top-full right-16 mt-1 w-64 bg-card border border-border rounded-xl shadow-xl py-2 z-50">
                <div className="px-4 py-2 text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50 mb-1">Recent History</div>
                <div className="max-h-48 overflow-y-auto custom-scrollbar">
-                 <button className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors truncate">What if SAP delivery slips?</button>
-                 <button className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors truncate">Show critical path risks</button>
-                 <button className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors truncate">Analyze budget variance</button>
+                 {threads.length === 0 ? (
+                   <div className="px-4 py-3 text-sm text-muted-foreground italic">No recent chats</div>
+                 ) : (
+                   threads.map(t => (
+                     <button key={t.id} onClick={() => loadThread(t.id)} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors truncate">
+                       {t.title}
+                     </button>
+                   ))
+                 )}
                </div>
              </div>
           )}
@@ -163,7 +199,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 custom-scrollbar overscroll-contain" data-lenis-prevent="true">
         {messages.length === 0 && (
           <div className="flex flex-col justify-end h-full px-2 pb-6 animate-fade-up">
-            <h2 className="text-[28px] font-medium bg-gradient-to-r from-[#4285f4] via-[#ea4335] to-[#fbbc04] bg-clip-text text-transparent mb-1">Hello, Praveen</h2>
+            <h2 className="text-[28px] font-medium bg-gradient-to-r from-[#4285f4] via-[#ea4335] to-[#fbbc04] bg-clip-text text-transparent mb-1">Hello, {user?.display_name?.split(' ')[0] || 'there'}</h2>
             <h3 className="text-[28px] font-medium text-foreground/70 mb-10">How can I help you today?</h3>
             
             <div className="flex flex-col gap-3 w-full">

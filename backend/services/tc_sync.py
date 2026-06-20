@@ -50,53 +50,30 @@ def normalize_p6_name(name):
     return clean
 
 def find_mapping_id(db: Session, project_names, p6_map=None):
-    """Attempt to find a mapping ID using a 3-level strategy"""
+    """Attempt to find a mapping ID using a 2-level strategy (Direct and P6 fallback)"""
     if not project_names:
         return None
         
     names = project_names if isinstance(project_names, list) else [project_names]
-    
-    ALIAS_MAP = {
-        "MLP T1  PPA - J&K": "MLP T1 J&K",
-        "MLP T1  PPA - CG": "MLP T1 CG",
-        "MLP T1  PPA - TN": "MLP T1 TN",
-        "MLP T1  PPA - OR": "MLP T1 OR",
-        "MLP T3 PPA - AP": "MLP T3 AP",
-        "MLP  PPA - AP New": "MLP AP New",
-        "Group - Cement (Hybrid - Solar)": "ACL",
-        "AGEL Hybrid Merchant (Wind)": "AGEL Hybrid Merchant",
-        "AESL PPA (C&I) - Asahi, Wilmar, Airport": "AESL PPA (C&I) - Solar",
-        "AESL PPA (C&I) - Asahi, Wilmar, Airport, Shantigram": "AESL PPA (C&I) - Solar",
-        "AESL PPA (C&I) - Asahi, Wilmar, Nestle": "AESL PPA (C&I) - Solar",
-        "AESL PPA (C&I) - Asahi, Wilmar,Nestle": "AESL PPA (C&I) - Solar",
-        "AESL PPA (C&I) - Wind - RSWM": "AESL PPA (C&I) - Solar"
-    }
     
     all_maps = None
     
     for name in names:
         if not name: continue
         
-        # LEVEL 1: Exact Match
-        mapping = db.query(ProjectMapping).filter(ProjectMapping.project == name).first()
-        if mapping:
-            return mapping.id
+        # LEVEL 1: Match inside comma-separated database values
+        if all_maps is None:
+            all_maps = db.query(ProjectMapping).all()
             
-        # LEVEL 2: Alias Lookup
-        if name in ALIAS_MAP:
-            target = ALIAS_MAP[name]
-            q = db.query(ProjectMapping).filter(ProjectMapping.project == target)
-            if target == "ACL":
-                q = q.filter(ProjectMapping.spv_name == "ACL")
-            mapping = q.first()
-            if mapping:
-                return mapping.id
+        for m in all_maps:
+            if m.project:
+                tc_names = [t.strip() for t in m.project.split(',')]
+                if name in tc_names:
+                    return m.id
                 
-        # LEVEL 3: P6 Name Fallback via p6_map
+        # LEVEL 2: P6 Name Fallback via p6_map
         if p6_map and name in p6_map:
             norm_p6 = normalize_p6_name(p6_map[name])
-            if all_maps is None:
-                all_maps = db.query(ProjectMapping).all()
                 
             for m in all_maps:
                 if m.project_name_from_p6 and normalize_p6_name(m.project_name_from_p6) == norm_p6:

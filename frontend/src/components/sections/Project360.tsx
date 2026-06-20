@@ -466,7 +466,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('All');
   const [riskFilters, setRiskFilters] = useState<string[]>([]);
-  const [sortBy, setSortBy] = useState<string>('impact');
+  const [sortBy, setSortBy] = useState<string>('integration');
   const [showFilters, setShowFilters] = useState(false);
   const navigate = useNavigate();
 
@@ -492,6 +492,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
     })
     .sort((a, b) => {
       switch (sortBy) {
+        case 'integration': return (b.integrationCount || 0) - (a.integrationCount || 0) || b.riskScore - a.riskScore;
         case 'impact': return b.riskScore - a.riskScore;
         case 'delay': return b.delayDays - a.delayDays;
         case 'cost': return a.costVariance - b.costVariance;
@@ -499,7 +500,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         case 'vendor': return (b.inTransitQty === 0 && b.orderedQty > 0 ? 1 : 0) - (a.inTransitQty === 0 && a.orderedQty > 0 ? 1 : 0);
         case 'cod': return (b.codAtRisk ? 1 : 0) - (a.codAtRisk ? 1 : 0);
         case 'critical': return b.riskScore - a.riskScore;
-        default: return b.riskScore - a.riskScore;
+        default: return (b.integrationCount || 0) - (a.integrationCount || 0) || b.riskScore - a.riskScore;
       }
     });
 
@@ -563,6 +564,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
             <SlidersHorizontal className="w-3.5 h-3.5 text-muted-foreground" />
             <select value={sortBy} onChange={e => setSortBy(e.target.value)}
               className="bg-transparent text-[11px] font-semibold text-muted-foreground focus:outline-none cursor-pointer py-1.5">
+              <option value="integration">Most Integrated</option>
               <option value="impact">Highest Impact</option>
               <option value="delay">Highest Delay Risk</option>
               <option value="cost">Highest Cost Risk</option>

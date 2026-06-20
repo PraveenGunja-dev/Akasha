@@ -8,7 +8,7 @@ import os
 from database import engine
 
 # Import Routers
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -60,6 +60,9 @@ app.include_router(ai.router)
 app.include_router(sync.router)
 app.include_router(tc_router.router)
 app.include_router(dashboard.router)
+app.include_router(mappings.router)
+app.include_router(auth.router)
+app.include_router(pmag.router)
 
 # Mount Frontend static files
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

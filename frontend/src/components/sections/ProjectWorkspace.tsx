@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
-import {
-  ArrowLeft, Sparkles, Activity, Clock, Shield, Target,
-  Package, TrendingUp, AlertTriangle, CheckCircle2,
-  Calendar, BarChart3, Truck, Brain, ChevronRight, ChevronDown, ChevronUp, Loader2,
-  Users, DollarSign, Layers, MapPin, Database, FileText,
-  Box, Network, Zap, BrainCircuit, Flag, CalendarClock, Download
+import { 
+  ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
+  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network,
+  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight
 } from 'lucide-react';
 
 /* ── Circular Gauge ── */
@@ -103,9 +101,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'sap' | 'p6' | 'transmission'>('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
+  const [showDelayedModal, setShowDelayedModal] = useState(false);
   const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel'>('all');
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
@@ -537,13 +536,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
         {/* ── Hero Section ── */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
           <HeroMetric label="Health Score" value={p.healthScore} unit="/100" icon={Shield} color={p.healthScore > 70 ? 'text-emerald-400' : p.healthScore > 40 ? 'text-amber-400' : 'text-red-400'} />
           <HeroMetric label="SPI" value={p.spi.toFixed(2)} icon={TrendingUp} color={p.spi >= 0.95 ? 'text-emerald-400' : 'text-red-400'} />
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} />
           <HeroMetric label="Forecast COD" value={p.forecastMonth} icon={Calendar} color="text-primary" />
           <HeroMetric label="Risk Score" value={p.riskScore} unit="/100" icon={AlertTriangle} color={p.riskScore > 50 ? 'text-red-400' : p.riskScore > 25 ? 'text-amber-400' : 'text-emerald-400'} />
+          <HeroMetric label="Delayed Activities" value={detail?.p6?.delayedActivities?.length || 0} icon={AlertTriangle} color={(detail?.p6?.delayedActivities?.length || 0) > 0 ? 'text-red-400' : 'text-emerald-400'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
         </div>
 
         {/* ── AI Project Summary ── */}
@@ -661,8 +661,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         <div className="flex items-center gap-2 border-b border-border bg-card/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
           <TabBtn active={activeTab === 'overview'} label="Overview" icon={BarChart3} onClick={() => setActiveTab('overview')} />
           <TabBtn active={activeTab === 'schedule'} label="Schedule" icon={Calendar} onClick={() => setActiveTab('schedule')} />
-          <TabBtn active={activeTab === 'supply'} label="Supply Chain" icon={Truck} onClick={() => setActiveTab('supply')} />
-          <TabBtn active={activeTab === 'risk'} label="Risk" icon={Shield} onClick={() => setActiveTab('risk')} />
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'p6'} label="P6 Deep Dive" icon={Layers} onClick={() => setActiveTab('p6')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
@@ -751,32 +749,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           {/* ════════ SCHEDULE TAB ════════ */}
           {activeTab === 'schedule' && (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Left Column: Key Indices */}
-              <div className="lg:col-span-4 flex flex-col gap-6">
-                <div className="intelligence-card p-6 flex-1 flex flex-col justify-center items-center relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-400 to-emerald-600" />
-                  <Gauge value={p.spi * 100} label="SPI" color={p.spi >= 0.95 ? '#10B981' : '#EF4444'} size={120} stroke={8} />
-                  <div className="mt-4 text-center">
-                    <span className="block text-sm font-bold text-foreground">Schedule Performance Index</span>
-                    <span className="block text-[11px] text-muted-foreground mt-1">
-                      {p.spi >= 1.0 ? 'Ahead of schedule' : p.spi >= 0.95 ? 'Marginally on track' : 'Behind schedule'}
-                    </span>
-                  </div>
-                </div>
-                <div className="intelligence-card p-6 flex-1 flex flex-col justify-center items-center relative overflow-hidden">
-                  <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-400 to-blue-600" />
-                  <Gauge value={p.cpi * 100} label="CPI" color={p.cpi >= 0.95 ? '#3B82F6' : '#F59E0B'} size={120} stroke={8} />
-                  <div className="mt-4 text-center">
-                    <span className="block text-sm font-bold text-foreground">Cost Performance Index</span>
-                    <span className="block text-[11px] text-muted-foreground mt-1">
-                      {p.cpi >= 1.0 ? 'Under budget' : p.cpi >= 0.95 ? 'On budget' : 'Over budget'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
               {/* Right Column: Timeline & Variance */}
-              <div className="lg:col-span-8 flex flex-col gap-6">
+              <div className="lg:col-span-12 flex flex-col gap-6">
                 <div className="intelligence-card p-6">
                   <h4 className="text-xs font-bold uppercase tracking-widest text-foreground mb-6 flex items-center gap-2">
                     <Calendar className="w-4 h-4 text-primary" /> Schedule Timeline
@@ -823,126 +797,20 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
                     <Target className="w-8 h-8 text-primary opacity-20" />
                   </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ════════ SUPPLY CHAIN TAB ════════ */}
-          {activeTab === 'supply' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-              {/* Left Column: Visual Pipeline */}
-              <div className="lg:col-span-8 flex flex-col gap-4">
-                
-                {/* Metrics Grid */}
-                <div className="grid grid-cols-3 gap-4">
-                  {[
-                    { label: 'Ordered Qty', value: p.orderedQty ? Math.round(p.orderedQty).toLocaleString() : '0', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-                    { label: 'In Transit', value: p.inTransitQty ? Math.round(p.inTransitQty).toLocaleString() : '0', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-                    { label: 'Inventory Qty', value: p.inventoryQty ? Math.round(p.inventoryQty).toLocaleString() : '0', color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20' },
-                  ].map(m => (
-                    <div key={m.label} className={`bento-card p-4 flex flex-col items-center justify-center border ${m.border}`}>
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className={`w-6 h-6 rounded-md ${m.bg} flex items-center justify-center`}>
-                          <Truck className={`w-3.5 h-3.5 ${m.color}`} />
-                        </div>
-                        <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-gray-500">{m.label}</span>
-                      </div>
-                      <span className="text-[22px] leading-tight font-bold text-gray-900 dark:text-white">{m.value}</span>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="bento-card p-5 flex flex-col">
-                  <h3 className="text-[13px] font-bold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <Package className="w-4 h-4 text-primary" /> Supply Chain Pipeline
-                  </h3>
-                  <div className="h-[240px] w-full">
-                    <ReactECharts option={supplyOption} style={{ height: '100%', width: '100%' }} />
-                  </div>
-                </div>
-
-              </div>
-              
-              {/* Right Column: Material Status */}
-              <div className="lg:col-span-4 flex flex-col gap-4">
-                <div className="bento-card p-5 flex-1 flex flex-col">
-                  <h3 className="text-[13px] font-bold text-gray-900 dark:text-white mb-6 flex items-center gap-2">
-                    <Database className="w-4 h-4 text-primary" /> Material Availability
-                  </h3>
                   
-                  <div className="flex flex-col items-center justify-center flex-1 py-4">
-                    <div className="relative w-36 h-36">
-                      <svg className="w-full h-full transform -rotate-90">
-                        <circle cx="72" cy="72" r="62" stroke="currentColor" strokeWidth="12" fill="transparent" className="text-gray-100 dark:text-gray-800" />
-                        <circle cx="72" cy="72" r="62" stroke="currentColor" strokeWidth="12" fill="transparent"
-                          strokeDasharray={390} strokeDashoffset={390 - (p.materialAvailability / 100) * 390}
-                          className={p.materialAvailability >= 80 ? 'text-emerald-500' : p.materialAvailability >= 50 ? 'text-amber-500' : 'text-red-500'} />
-                      </svg>
-                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <span className="text-3xl font-bold text-gray-900 dark:text-white">{Math.round(p.materialAvailability)}%</span>
-                        <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest mt-0.5">Ready</span>
+                  {p6?.delayedActivities && p6.delayedActivities.length > 0 && (
+                    <div 
+                      onClick={() => setShowDelayedModal(true)}
+                      className="intelligence-card p-4 flex items-center justify-between bg-red-500/10 border-red-500/30 cursor-pointer hover:bg-red-500/20 transition-colors"
+                    >
+                      <div>
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-red-500">Delayed Activities</span>
+                        <span className="block text-2xl font-mono font-bold text-red-500 mt-1">{p6.delayedActivities.length}</span>
+                        <span className="block text-xs text-red-500/80 mt-1 underline decoration-red-500/30 underline-offset-2">View details</span>
                       </div>
+                      <AlertTriangle className="w-10 h-10 text-red-500 opacity-80" />
                     </div>
-                  </div>
-
-                  <div className="mt-auto space-y-2">
-                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-100 dark:border-emerald-500/20">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-emerald-600 dark:text-emerald-400">Inventory</span>
-                      <span className="text-[14px] font-bold text-emerald-700 dark:text-emerald-300">{p.inventoryQty?.toLocaleString()}</span>
-                    </div>
-                    <div className="flex items-center justify-between px-3 py-2.5 rounded-lg bg-red-50 dark:bg-red-500/10 border border-red-100 dark:border-red-500/20">
-                      <span className="text-[11px] font-bold uppercase tracking-wider text-red-600 dark:text-red-400">Shortage</span>
-                      <span className="text-[14px] font-bold text-red-700 dark:text-red-300">{Math.max(0, p.orderedQty - p.inventoryQty).toLocaleString()}</span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ════════ RISK TAB ════════ */}
-          {activeTab === 'risk' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              <div className="lg:col-span-4 intelligence-card p-8 flex flex-col items-center justify-center text-center">
-                <div className="w-full h-2 bg-gradient-to-r from-red-500 to-amber-500 absolute top-0 left-0" />
-                <AlertTriangle className={`w-16 h-16 mb-4 ${p.riskScore > 50 ? 'text-red-500' : p.riskScore > 25 ? 'text-amber-500' : 'text-emerald-500'}`} />
-                <span className="text-6xl font-bold tracking-tight text-foreground">{p.riskScore}</span>
-                <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground mt-2">Overall Risk Score</span>
-                
-                <div className={`mt-6 px-4 py-2 rounded-full border ${p.riskScore > 50 ? 'bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400' : p.riskScore > 25 ? 'bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400' : 'bg-emerald-500/10 border-emerald-500/20 text-emerald-600 dark:text-emerald-400'}`}>
-                  <span className="text-sm font-semibold">
-                    {p.riskScore > 50 ? 'Immediate Intervention Required' : p.riskScore > 25 ? 'Close Monitoring Needed' : 'Standard Monitoring'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="lg:col-span-8 intelligence-card p-6">
-                <h3 className="text-sm font-semibold text-foreground mb-6 flex items-center gap-2">
-                  <Shield className="w-4 h-4 text-primary" /> Risk Breakdown
-                </h3>
-                <div className="space-y-6">
-                  {[
-                    { factor: 'Schedule Delay', score: Math.min(40, Math.abs(p.scheduleVariance < 0 ? p.scheduleVariance : 0)), max: 40, icon: CalendarClock },
-                    { factor: 'Cost Overrun (SPI/CPI)', score: Math.round(p.spi < 1 ? (1 - p.spi) * 100 : 0), max: 100, icon: Target },
-                    { factor: 'Material Availability', score: Math.round(p.materialAvailability < 100 ? (100 - p.materialAvailability) * 0.5 : 0), max: 50, icon: Package },
-                  ].map(rf => (
-                    <div key={rf.factor} className="bg-muted/20 p-4 rounded-xl border border-border/50 hover:bg-muted/40 transition-colors">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          <rf.icon className="w-4 h-4 text-muted-foreground" />
-                          <span className="font-semibold text-foreground text-sm">{rf.factor}</span>
-                        </div>
-                        <span className="text-sm font-bold text-foreground">
-                          {rf.score} <span className="text-muted-foreground font-normal">/ {rf.max} impact</span>
-                        </span>
-                      </div>
-                      <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
-                        <div className="h-full rounded-full transition-all duration-1000"
-                          style={{ width: `${(rf.score / rf.max) * 100}%`, background: rf.score > rf.max * 0.6 ? '#EF4444' : rf.score > rf.max * 0.3 ? '#F59E0B' : '#10B981' }}></div>
-                      </div>
-                    </div>
-                  ))}
+                  )}
                 </div>
               </div>
             </div>
@@ -1516,30 +1384,52 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       </div>
                     </div>
 
-                    {/* Cost Analysis */}
-                    <div className="intelligence-card p-6">
+                    {/* Project Milestones */}
+                    <div className="intelligence-card p-6 flex flex-col max-h-[400px]">
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <DollarSign className="w-4 h-4 text-primary/70" /> Cost Analysis
+                        <Flag className="w-4 h-4 text-primary/70" /> Project Milestones
                       </h3>
-                      <div className="space-y-1">
-                        {[
-                          ['Actual Total Cost', fmtCost(p6.actualTotalCost)],
-                          ['Planned Cost', fmtCost(p6.plannedCost)],
-                          ['Current Budget', fmtCost(p6.currentBudget)],
-                          ['Cost Variance', fmtCost(p6.totalCostVariance)],
-                          ['Baseline Total Cost', fmtCost(p6.baselineTotalCost)],
-                          ['CPI', p6.cpi != null ? p6.cpi.toFixed(3) : '—'],
-                          ['SPI', p6.spi != null ? p6.spi.toFixed(3) : '—'],
-                        ].map(([label, val]) => (
-                          <div key={label as string} className="detail-row">
-                            <span className="detail-row-label">{label}</span>
-                            <span className={`detail-row-value ${
-                              label === 'Cost Variance' && p6.totalCostVariance && p6.totalCostVariance < 0 ? 'text-red-400' :
-                              label === 'CPI' && p6.cpi && p6.cpi < 0.95 ? 'text-amber-400' :
-                              label === 'SPI' && p6.spi && p6.spi < 0.95 ? 'text-red-400' : ''
-                            }`}>{val}</span>
+                      <div className="flex-1 overflow-auto custom-scrollbar pr-2 py-2">
+                        {(p6.milestones || []).length > 0 ? (
+                          <div className="relative border-l border-border/60 ml-2 space-y-5">
+                            {(p6.milestones || []).map((m: any, i: number) => {
+                              const isCompleted = m.status === 'Completed';
+                              const isInProgress = m.status === 'In Progress';
+                              const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
+                              return (
+                                <div key={i} className="relative pl-6">
+                                  {/* Stepper Dot */}
+                                  <div className={`absolute -left-[5px] top-1 w-2 h-2 rounded-full ring-4 ring-card bg-card border-2 ${
+                                    isCompleted ? 'border-emerald-500 bg-emerald-500' :
+                                    isInProgress ? 'border-amber-500' :
+                                    'border-muted-foreground'
+                                  }`}></div>
+                                  
+                                  <div className="flex flex-col gap-1 -mt-1">
+                                    <div className="flex items-start justify-between gap-2">
+                                      <span className={`text-xs font-bold line-clamp-2 leading-tight ${isCompleted ? 'text-muted-foreground' : 'text-foreground'}`} title={m.name}>{m.name}</span>
+                                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap border ${
+                                        isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' : 
+                                        isInProgress ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' : 
+                                        'bg-muted text-muted-foreground border-border'
+                                      }`}>
+                                        {m.status}
+                                      </span>
+                                    </div>
+                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
+                                      <span className="truncate max-w-[150px]" title={m.type || 'Milestone'}>{m.type || 'Milestone'}</span>
+                                      <span className="font-mono bg-muted/50 px-1.5 py-0.5 rounded text-[9px] font-medium">{dateStr}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              );
+                            })}
                           </div>
-                        ))}
+                        ) : (
+                          <div className="text-xs text-muted-foreground italic py-8 text-center bg-muted/30 rounded-xl border border-border/50">
+                            No milestones tracked in P6 for this EPS
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -1874,6 +1764,169 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           )}
         </div>
       </main>
+
+      {/* ── Delayed Activities Modal ── */}
+      {showDelayedModal && p6?.delayedActivities && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-card w-full max-w-5xl max-h-[90vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-foreground">Delayed Activities</h3>
+                  <p className="text-xs text-muted-foreground">Activities falling behind schedule based on Data Date ({p6.dataDate})</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowDelayedModal(false)}
+                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto bg-background/50 flex-1 scrollbar-thin">
+              <table className="intel-table w-full text-sm">
+                <thead className="bg-muted/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
+                  <tr>
+                    <th className="text-left font-semibold text-muted-foreground px-4 py-3">Activity ID</th>
+                    <th className="text-left font-semibold text-muted-foreground px-4 py-3">Name</th>
+                    <th className="text-left font-semibold text-muted-foreground px-4 py-3">WBS Name</th>
+                    <th className="text-center font-semibold text-muted-foreground px-4 py-3">Planned Finish</th>
+                    <th className="text-right font-semibold text-red-500 px-4 py-3">Delay (Days)</th>
+                    <th className="text-right font-semibold text-muted-foreground px-4 py-3">MW Impact</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/50">
+                  {p6.delayedActivities.map((act: any, idx: number) => (
+                    <tr key={idx} className="hover:bg-muted/30 transition-colors group">
+                      <td className="px-4 py-3 font-mono text-xs text-primary/80 font-medium">{act.activityId}</td>
+                      <td className="px-4 py-3 text-foreground/90 font-medium max-w-[300px] truncate" title={act.name}>{act.name}</td>
+                      <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
+                      <td className="px-4 py-3 text-center text-xs font-mono">{act.plannedFinishDate || act.plannedStartDate || '—'}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 text-red-500 font-bold text-xs border border-red-500/20">
+                          <Clock className="w-3.5 h-3.5" />
+                          {act.delayDays}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-right font-mono font-semibold text-emerald-500/90 bg-emerald-500/[0.02]">
+                        {act.mwCapacity > 0 ? `${act.mwCapacity.toFixed(2)} MW` : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {(!p6.delayedActivities || p6.delayedActivities.length === 0) && (
+                <div className="py-12 flex flex-col items-center justify-center text-center">
+                  <CheckCircle className="w-12 h-12 text-emerald-500/50 mb-3" />
+                  <p className="text-emerald-500/80 font-medium text-lg">No delayed activities detected</p>
+                  <p className="text-muted-foreground text-sm mt-1">All activities are on track according to the current data date.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="p-4 border-t border-border bg-muted/20 flex justify-end">
+              <button 
+                onClick={() => setShowDelayedModal(false)}
+                className="px-6 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 font-medium text-sm transition-colors"
+              >
+                Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── Modals ── */}
+      {showDelayedModal && detail?.p6?.delayedActivities && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowDelayedModal(false)}>
+          <div className="bg-card border border-border rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-border bg-muted">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-500" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-card-foreground tracking-tight">Delayed Construction Activities</h3>
+                  <p className="text-xs text-muted-foreground mt-0.5">Live from Primavera P6 • Auto-filtered to Construction Scope</p>
+                </div>
+              </div>
+              <button onClick={() => setShowDelayedModal(false)} className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="flex-1 overflow-auto p-6 space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Delayed</div>
+                    <div className="text-3xl font-light text-card-foreground">{detail.p6.delayedActivities.length}</div>
+                  </div>
+                  <AlertTriangle className="w-8 h-8 text-red-500/20" />
+                </div>
+                <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Impacted Capacity</div>
+                    <div className="text-3xl font-light text-card-foreground">{detail.p6.delayedActivities.reduce((acc: number, cur: any) => acc + (cur.mwCapacity || 0), 0).toFixed(1)} <span className="text-sm">MW</span></div>
+                  </div>
+                  <Zap className="w-8 h-8 text-amber-500/20" />
+                </div>
+                <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
+                  <div>
+                    <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Critical Delays (&gt;30d)</div>
+                    <div className="text-3xl font-light text-red-500">{detail.p6.delayedActivities.filter((a: any) => a.delayDays > 30).length}</div>
+                  </div>
+                  <Clock className="w-8 h-8 text-red-500/20" />
+                </div>
+              </div>
+
+              <div className="border border-border rounded-xl overflow-hidden bg-background">
+                <table className="w-full text-sm text-left whitespace-nowrap">
+                  <thead className="bg-muted text-[10px] uppercase font-bold tracking-widest text-muted-foreground border-b border-border">
+                    <tr>
+                      <th className="px-4 py-3">Activity ID & Name</th>
+                      <th className="px-4 py-3">WBS</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Planned Date</th>
+                      <th className="px-4 py-3">Delay</th>
+                      <th className="px-4 py-3">MW Impact</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border/50">
+                    {detail.p6.delayedActivities.map((act: any, i: number) => (
+                      <tr key={i} className="hover:bg-muted/50 transition-colors">
+                        <td className="px-4 py-3">
+                          <div className="text-xs font-mono text-muted-foreground mb-0.5">{act.activityId}</div>
+                          <div className="font-medium text-card-foreground max-w-[300px] truncate" title={act.name}>{act.name}</div>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
+                        <td className="px-4 py-3">
+                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${act.status === 'In Progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-500' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-500'}`}>
+                            {act.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-3 text-muted-foreground">
+                          {act.status === 'In Progress' ? act.plannedFinishDate : act.plannedStartDate}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-1.5 text-red-500 font-medium">
+                            <ArrowLeft className="w-3 h-3 text-red-500/50" />
+                            {act.delayDays} days
+                          </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          {act.mwCapacity > 0 ? <span className="text-amber-500 font-medium">{act.mwCapacity.toFixed(1)} MW</span> : <span className="text-muted-foreground/40">—</span>}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -159,6 +159,35 @@ DATE_FIELDS_PROJECT = {
     "baseline_start_date", "baseline_finish_date",
 }
 
+
+ACTIVITY_FIELD_MAP: Dict[str, str] = {
+    'ObjectId': 'p6_object_id',
+    'Id': 'activity_id',
+    'Name': 'name',
+    'Status': 'status',
+    'Type': 'type',
+    'StartDate': 'start_date',
+    'FinishDate': 'finish_date',
+    'PlannedStartDate': 'planned_start_date',
+    'PlannedFinishDate': 'planned_finish_date',
+    'ActualStartDate': 'actual_start_date',
+    'ActualFinishDate': 'actual_finish_date',
+    'PlannedDuration': 'planned_duration',
+    'ActualDuration': 'actual_duration',
+    'RemainingDuration': 'remaining_duration',
+    'PercentComplete': 'percent_complete',
+    'TotalFloat': 'total_float',
+    'WBSObjectId': 'wbs_object_id',
+    'WBSName': 'wbs_name',
+    'WBSCode': 'wbs_code',
+    'ProjectObjectId': 'project_object_id'
+}
+
+DATE_FIELDS_ACTIVITY = {
+    'start_date', 'finish_date', 'planned_start_date', 'planned_finish_date',
+    'actual_start_date', 'actual_finish_date'
+}
+
 DATE_FIELDS_BASELINE = {
     "planned_start_date", "finish_date", "scheduled_finish_date", "start_date",
 }
@@ -227,6 +256,9 @@ class P6Service:
 
     def _get_oauth_token(self) -> str:
         """Fetches a fresh OAuth access token from P6."""
+        if self.auth_token_b64 and self.auth_token_b64.startswith("eyJ"):
+            return self.auth_token_b64
+            
         import base64
         try:
             # Decode base64 token to get username and password
@@ -444,7 +476,60 @@ class P6Service:
         return synced_count
 
     # ------------------------------------------
-    # 6. Full Sync: Projects + Baselines
+    # 8. Map & Store Activities to DB
+    # ------------------------------------------
+    def fetch_activities(self, project_object_id: int = None) -> List[Dict[str, Any]]:
+        endpoint = f"{self.base_url}/activity"
+        params = {
+            "Fields": ACTIVITY_FIELDS
+        }
+        if project_object_id:
+            params["Filter"] = f"ProjectObjectId={project_object_id}"
+        
+        try:
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=30, verify=False)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Error fetching activities from P6: {e}")
+            return []
+
+    def sync_activities_to_db(self, db: Session, project_object_id: int = None) -> int:
+        from models import P6Activity
+
+        raw_activities = self.fetch_activities(project_object_id)
+        if not raw_activities:
+            return 0
+
+        synced_count = 0
+        for raw in raw_activities:
+            mapped = _map_p6_response(raw, ACTIVITY_FIELD_MAP, DATE_FIELDS_ACTIVITY)
+            p6_object_id = mapped.get("p6_object_id")
+
+            if not p6_object_id:
+                continue
+
+            existing = db.query(P6Activity).filter(P6Activity.p6_object_id == p6_object_id).first()
+
+            if existing:
+                for key, value in mapped.items():
+                    setattr(existing, key, value)
+                existing.last_synced_at = datetime.utcnow()
+            else:
+                mapped["last_synced_at"] = datetime.utcnow()
+                new_activity = P6Activity(**mapped)
+                db.add(new_activity)
+
+            synced_count += 1
+            if synced_count % 100 == 0:
+                db.flush()
+
+        db.commit()
+        logger.info(f"Successfully synced {synced_count} activities to database")
+        return synced_count
+
+    # ------------------------------------------
+    # 6. Full Sync: Projects + Baselines + Activities
     # ------------------------------------------
     def full_sync(self, db: Session) -> Dict[str, int]:
         """
@@ -455,10 +540,12 @@ class P6Service:
 
         projects_synced = self.sync_projects_to_db(db)
         baselines_synced = self.sync_baselines_to_db(db)
+        activities_synced = self.sync_activities_to_db(db)
 
         result = {
             "projects_synced": projects_synced,
             "baselines_synced": baselines_synced,
+            "activities_synced": activities_synced,
             "synced_at": datetime.utcnow().isoformat()
         }
         logger.info(f"Full P6 sync complete: {result}")

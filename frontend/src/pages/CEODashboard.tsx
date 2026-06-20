@@ -15,6 +15,7 @@ import RiskCommandCenter from '../components/sections/RiskCommandCenter';
 import PredictiveAnalytics from '../components/sections/PredictiveAnalytics';
 import DecisionCenter from '../components/sections/DecisionCenter';
 import ReportsInsights from '../components/sections/ReportsInsights';
+import CapacityOverview from '../components/sections/CapacityOverview';
 
 // Phase 6 AI Modules
 import AICopilot from '../components/sections/AICopilot';
@@ -31,7 +32,9 @@ import DataIntegrationHub from '../components/sections/DataIntegrationHub';
 export default function CEODashboard() {
   const { projectId } = useParams();
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<string>("overview");
+  const [activeTab, setActiveTab] = useState<string>(() => {
+    return sessionStorage.getItem('ceoActiveTab') || "overview";
+  });
   const [previousTab, setPreviousTab] = useState<string>("overview");
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -42,11 +45,10 @@ export default function CEODashboard() {
 
   const location = useLocation();
 
-  // Reset tab and project when returning to root dashboard via explicit back button
+  // Reset project when returning to root dashboard via explicit back button
   useEffect(() => {
     if (!projectId && location.state?.reset) {
       setSelectedProject("All");
-      setActiveTab("overview");
       // Clear the state so it doesn't trigger again on a simple refresh
       navigate('/dashboard', { replace: true, state: {} });
     }
@@ -143,6 +145,7 @@ export default function CEODashboard() {
         }
       }
       setActiveTab('simulation_lab');
+      sessionStorage.setItem('ceoActiveTab', 'simulation_lab');
       navigate('/dashboard');
     };
     window.addEventListener('open-simulation-lab', handleOpenSimulation);
@@ -152,7 +155,7 @@ export default function CEODashboard() {
   // To cleanly track which modules are implemented
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
-    'risk', 'predictive', 'admin', 'reports', 'transmission_data',
+    'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
     'ai_copilot', 'executive_brief', 'smart_search', 'knowledge_graph', 'simulation_lab'
   ];
 
@@ -160,8 +163,9 @@ export default function CEODashboard() {
     if (tab === 'ai_copilot') {
       setIsCopilotOpen(true);
     } else {
-      setPreviousTab(tab);
+      setPreviousTab(activeTab);
       setActiveTab(tab);
+      sessionStorage.setItem('ceoActiveTab', tab);
       if (projectId) {
         navigate('/dashboard');
       }
@@ -204,6 +208,7 @@ export default function CEODashboard() {
               <AICopilot 
                 onMinimize={() => {
                   setActiveTab(previousTab);
+                  sessionStorage.setItem('ceoActiveTab', previousTab);
                   setIsCopilotOpen(true);
                 }} 
               />
@@ -244,6 +249,7 @@ export default function CEODashboard() {
                     {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
                     {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
                     
+                    {activeTab === 'capacity_overview' && <CapacityOverview />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
