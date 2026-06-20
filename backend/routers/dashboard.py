@@ -4,6 +4,7 @@ from sqlalchemy import func
 from typing import List, Dict, Any, Optional
 import json
 import time
+from datetime import datetime
 
 from database import get_db
 import models
@@ -579,7 +580,28 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
         p6_data = None
         if p6:
             progress = round((p6.duration_percent_complete or 0) * 100)
-            health = "delayed" if (p6.finish_date_variance and p6.finish_date_variance < 0) else "on_track"
+            # Multi-signal delay detection:
+            # 1. finish_date_variance < 0 (if available)
+            # 2. scheduled finish date has passed and project is not complete
+            # 3. significant number of delayed activities
+            is_delayed = False
+            if p6.finish_date_variance and p6.finish_date_variance < 0:
+                is_delayed = True
+            elif p6.scheduled_finish_date and p6.scheduled_finish_date < datetime.now() and (p6.duration_percent_complete or 0) < 1.0:
+                is_delayed = True
+            else:
+                # Check for delayed activities (in progress past planned finish)
+                delayed_act_count = db.query(models.P6Activity).filter(
+                    models.P6Activity.project_object_id == p6.p6_object_id,
+                    models.P6Activity.status == 'In Progress',
+                    models.P6Activity.planned_finish_date < datetime.now()
+                ).count()
+                total_act_count = db.query(models.P6Activity).filter(
+                    models.P6Activity.project_object_id == p6.p6_object_id
+                ).count()
+                if total_act_count > 0 and delayed_act_count / total_act_count > 0.05:
+                    is_delayed = True
+            health = "delayed" if is_delayed else "on_track"
             p6_data = {
                 "start_date": str(p6.start_date) if p6.start_date else None,
                 "finish_date": str(p6.finish_date) if p6.finish_date else None,

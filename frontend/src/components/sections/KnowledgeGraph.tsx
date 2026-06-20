@@ -599,7 +599,7 @@ export default function KnowledgeGraph() {
       <div className="absolute bottom-4 left-4 z-20 flex items-center gap-4 bg-card/80 backdrop-blur-md px-4 py-2 rounded-lg border border-border shadow-sm">
         {[
           { c: STYLE.root.fill, l: 'Akasha' }, { c: STYLE.eps.fill, l: 'EPS Region' },
-          { c: STYLE.ok.fill, l: 'On Track' }, { c: STYLE.delayed.fill, l: 'Delayed' },
+          { c: STYLE.ok.fill, l: 'Project (On Track)' }, { c: STYLE.delayed.fill, l: 'Project (Delayed)' },
           { c: STYLE.vendor.fill, l: 'Vendor' }
         ].map(i => (
           <div key={i.l} className="flex items-center gap-1.5">
@@ -635,14 +635,25 @@ function drawNode(ctx: CanvasRenderingContext2D, node: GNode, alpha: number, sc:
     ctx.fillRect(x - r * 3.5, y - r * 3.5, r * 7, r * 7);
   }
 
-  // 3D sphere
-  const sp = ctx.createRadialGradient(x - r * 0.25, y - r * 0.3, r * 0.05, x, y, r);
-  sp.addColorStop(0, '#ffffff');
-  sp.addColorStop(0.2, lighten(color, 40));
-  sp.addColorStop(0.55, color);
-  sp.addColorStop(1, darken(color, 35));
-  ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = sp; ctx.fill();
+  // Flat modern design instead of 3D sphere
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fillStyle = color;
+  ctx.fill();
+  
+  // Crisp inner ring
+  ctx.beginPath();
+  ctx.arc(x, y, Math.max(1, r - 1.5), 0, Math.PI * 2);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.stroke();
+  
+  // Clean outer border
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = darken(color, 20);
+  ctx.stroke();
 
   // Shadow (light theme)
   ctx.beginPath(); ctx.arc(x, y + r * 0.3, r * 0.9, 0, Math.PI * 2);

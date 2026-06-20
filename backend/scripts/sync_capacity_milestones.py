@@ -70,7 +70,7 @@ def fetch_capacity_milestones():
             p6_proj = all_p6_by_name.get(wind_id.lower())
             
         if p6_proj:
-            projects_to_sync.append({"type": "Wind", "p6_id": p6_proj.p6_object_id, "name": p6_proj.name, "mw_multiplier": mw, "spv": ""})
+            projects_to_sync.append({"type": "Wind", "p6_id": p6_proj.p6_object_id, "name": p6_proj.name, "mw_multiplier": mw, "spv": "", "p6_proj_id_str": str(p6_proj.project_id)})
             
     logger.info(f"Identified {len(projects_to_sync)} projects for capacity tracking.")
     
@@ -80,6 +80,29 @@ def fetch_capacity_milestones():
         p6_obj_id = proj["p6_id"]
         logger.info(f"Syncing Project: {proj['name']} (ID: {p6_obj_id}) - {proj['type']}")
         
+        if proj["type"] == "Wind":
+            # Automatically insert into ProjectMapping if missing
+            pm = db.query(ProjectMapping).filter(ProjectMapping.project_name_from_p6 == proj["p6_proj_id_str"]).first()
+            if not pm:
+                import re
+                locs = re.findall(r'(\d+)\s*Loc', proj["name"], flags=re.IGNORECASE)
+                mw_cap = sum(int(l) for l in locs) * proj["mw_multiplier"] if locs else proj["mw_multiplier"] * 10
+                
+                pm = ProjectMapping(
+                    project="Wind - " + proj["name"],
+                    project_name_from_p6=proj["p6_proj_id_str"],
+                    capacity_mwac=mw_cap,
+                    spv_name=proj["name"].split(" ")[0] if " " in proj["name"] else proj["name"],
+                    category="Wind",
+                    mms_type="Wind",
+                    module_wbs="Wind",
+                    spv_plant_code="WIND_"+str(p6_obj_id),
+                    project_id=proj["p6_proj_id_str"]
+                )
+                db.add(pm)
+                db.commit()
+                logger.info(f"Automatically added Wind project {proj['name']} to ProjectMapping with {mw_cap} MW")
+
         try:
             # Fetch WBS
             wbs_endpoint = f"{p6.base_url}/wbs?Fields=ObjectId,Code,Name,ParentObjectId&Filter=ProjectObjectId={p6_obj_id}"

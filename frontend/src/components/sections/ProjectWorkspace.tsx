@@ -1868,7 +1868,24 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Impacted Capacity</div>
-                    <div className="text-3xl font-light text-card-foreground">{detail.p6.delayedActivities.reduce((acc: number, cur: any) => acc + (cur.mwCapacity || 0), 0).toFixed(1)} <span className="text-sm">MW</span></div>
+                    <div className="text-3xl font-light text-card-foreground">
+                      {(() => {
+                        const uniqueBlocks = new Set();
+                        return detail.p6.delayedActivities.reduce((acc: number, cur: any) => {
+                          if (cur.mwCapacity > 0) {
+                            if (cur.wbsName) {
+                              if (!uniqueBlocks.has(cur.wbsName)) {
+                                uniqueBlocks.add(cur.wbsName);
+                                return acc + cur.mwCapacity;
+                              }
+                            } else {
+                              return acc + cur.mwCapacity;
+                            }
+                          }
+                          return acc;
+                        }, 0).toFixed(1);
+                      })()} <span className="text-sm">MW</span>
+                    </div>
                   </div>
                   <Zap className="w-8 h-8 text-amber-500/20" />
                 </div>
@@ -1894,7 +1911,21 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
-                    {detail.p6.delayedActivities.map((act: any, i: number) => (
+                    {(() => {
+                      const renderedBlocks = new Set();
+                      return detail.p6.delayedActivities.map((act: any, i: number) => {
+                        let showMW = false;
+                        if (act.mwCapacity > 0) {
+                          if (act.wbsName) {
+                            if (!renderedBlocks.has(act.wbsName)) {
+                              renderedBlocks.add(act.wbsName);
+                              showMW = true;
+                            }
+                          } else {
+                            showMW = true;
+                          }
+                        }
+                        return (
                       <tr key={i} className="hover:bg-muted/50 transition-colors">
                         <td className="px-4 py-3">
                           <div className="text-xs font-mono text-muted-foreground mb-0.5">{act.activityId}</div>
@@ -1916,10 +1947,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           </div>
                         </td>
                         <td className="px-4 py-3">
-                          {act.mwCapacity > 0 ? <span className="text-amber-500 font-medium">{act.mwCapacity.toFixed(1)} MW</span> : <span className="text-muted-foreground/40">—</span>}
+                          {showMW ? <span className="text-amber-500 font-medium">{act.mwCapacity.toFixed(1)} MW</span> : <span className="text-muted-foreground/40 italic text-[10px]">grouped</span>}
                         </td>
                       </tr>
-                    ))}
+                    );
+                      });
+                    })()}
                   </tbody>
                 </table>
               </div>
