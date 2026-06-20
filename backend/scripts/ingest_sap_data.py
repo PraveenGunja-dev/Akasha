@@ -85,7 +85,10 @@ def ingest_data():
                     still_inr = safe_float(row.get('Still to be delivered in INR', 0))
                     
                     # Robust calculation of Net Order Value
-                    if net_order_value_cr > 0:
+                    po_value_local = safe_float(row.get('PO Value in Local Currency', 0))
+                    if po_value_local > 0:
+                        net_value_inr = po_value_local
+                    elif net_order_value_cr > 0:
                         net_value_inr = net_order_value_cr * 10000000
                     else:
                         # Compute using unit price
