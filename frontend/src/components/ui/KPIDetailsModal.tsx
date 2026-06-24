@@ -105,7 +105,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
       const windData = epsList.map(eps => Math.round(epsWind[eps] || 0));
 
       return {
-        title: activeKpi === 'Total Projects' ? 'Projects by Region (Solar vs Wind)' : 'Capacity (MW) by Region (Solar vs Wind)',
+        title: 'Capacity (MW) by Region (Solar vs Wind)',
         type: 'stacked-bar',
         xAxisData: epsList,
         seriesData: [
@@ -346,9 +346,9 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
       options = {
         ...options,
         grid: { left: '2%', right: '4%', bottom: '2%', top: '12%', containLabel: true },
-        xAxis: { type: 'category', data: chartData.data.map((d: any) => d.name), axisLabel: { color: textSubColor, interval: 0, rotate: 25, fontFamily: 'Adani', fontWeight: 'bold' }, axisLine: { lineStyle: { color: splitLineColor } }, axisTick: { show: false } },
+        xAxis: { type: 'category', data: (chartData.data || []).map((d: any) => d.name), axisLabel: { color: textSubColor, interval: 0, rotate: 25, fontFamily: 'Adani', fontWeight: 'bold' }, axisLine: { lineStyle: { color: splitLineColor } }, axisTick: { show: false } },
         yAxis: { type: 'value', axisLabel: { color: axisLabelColor, fontFamily: 'Adani' }, splitLine: { lineStyle: { color: splitLineColor, type: 'dashed', opacity: 0.6 } } },
-        series: [{ type: 'bar', data: chartData.data.map((d: any) => d.value), itemStyle: { color: barGradient, borderRadius: [6, 6, 0, 0] }, barMaxWidth: 40 }]
+        series: [{ type: 'bar', data: (chartData.data || []).map((d: any) => d.value), itemStyle: { color: barGradient, borderRadius: [6, 6, 0, 0] }, barMaxWidth: 40 }]
       };
     } else if (chartData.type === 'stacked-bar') {
       options = {
@@ -361,9 +361,9 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
           textStyle: { color: tooltipTextColor }
         },
         grid: { left: '2%', right: '4%', bottom: '2%', top: '12%', containLabel: true },
-        xAxis: { type: 'category', data: chartData.xAxisData, axisLabel: { color: textSubColor, interval: 0, rotate: 25, fontFamily: 'Adani', fontWeight: 'bold' }, axisLine: { lineStyle: { color: splitLineColor } }, axisTick: { show: false } },
+        xAxis: { type: 'category', data: chartData.xAxisData || [], axisLabel: { color: textSubColor, interval: 0, rotate: 25, fontFamily: 'Adani', fontWeight: 'bold' }, axisLine: { lineStyle: { color: splitLineColor } }, axisTick: { show: false } },
         yAxis: { type: 'value', axisLabel: { color: axisLabelColor, fontFamily: 'Adani' }, splitLine: { lineStyle: { color: splitLineColor, type: 'dashed', opacity: 0.6 } } },
-        series: chartData.seriesData.map((series: any) => ({
+        series: (chartData.seriesData || []).map((series: any) => ({
           name: series.name,
           type: 'bar',
           stack: 'total',
@@ -380,10 +380,10 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
         ...options,
         grid: { left: '1%', right: '10%', bottom: '2%', top: '5%', containLabel: true },
         xAxis: { type: 'value', axisLabel: { color: axisLabelColor, fontFamily: 'Adani' }, splitLine: { lineStyle: { color: splitLineColor, type: 'dashed', opacity: 0.6 } } },
-        yAxis: { type: 'category', data: chartData.data.map((d: any) => d.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textMainColor, fontFamily: 'Adani', fontWeight: 'bold', width: 140, overflow: 'truncate' } },
+        yAxis: { type: 'category', data: (chartData.data || []).map((d: any) => d.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textMainColor, fontFamily: 'Adani', fontWeight: 'bold', width: 140, overflow: 'truncate' } },
         series: [{ 
           type: 'bar', 
-          data: chartData.data.map((d: any) => d.value), 
+          data: (chartData.data || []).map((d: any) => d.value), 
           itemStyle: { color: barhGradient, borderRadius: [0, 6, 6, 0] },
           label: { show: true, position: 'right', fontFamily: 'Adani', fontWeight: 'bold', color: textMainColor },
           barMaxWidth: 30
