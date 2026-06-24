@@ -547,11 +547,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         {/* ── Hero Section ── */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
-          <HeroMetric label="Health Score" value={p.healthScore} unit="/100" icon={Shield} color={p.healthScore > 70 ? 'text-emerald-400' : p.healthScore > 40 ? 'text-amber-400' : 'text-red-400'} />
-          <HeroMetric label="SPI" value={p.spi.toFixed(2)} icon={TrendingUp} color={p.spi >= 0.95 ? 'text-emerald-400' : 'text-red-400'} />
+          <HeroMetric label="SAP PO Budget" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-blue-400" />
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} />
           <HeroMetric label="Forecast COD" value={p.forecastMonth} icon={Calendar} color="text-primary" />
-          <HeroMetric label="Risk Score" value={p.riskScore} unit="/100" icon={AlertTriangle} color={p.riskScore > 50 ? 'text-red-400' : p.riskScore > 25 ? 'text-amber-400' : 'text-emerald-400'} />
+          {((detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)) > 0 && (
+            <HeroMetric label="Transmission Lines" value={(detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)} icon={MapPin} color="text-indigo-400" />
+          )}
+          {(detail?.tc?.summary?.totalNodes || 0) > 0 && (
+            <HeroMetric label="Substations" value={detail?.tc?.summary?.totalNodes || 0} icon={Zap} color="text-amber-400" />
+          )}
           <HeroMetric label="Delayed Activities" value={detail?.p6?.delayedActivities?.length || 0} icon={AlertTriangle} color={(detail?.p6?.delayedActivities?.length || 0) > 0 ? 'text-red-400' : 'text-emerald-400'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
         </div>
 
