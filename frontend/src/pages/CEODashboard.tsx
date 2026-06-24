@@ -64,70 +64,88 @@ export default function CEODashboard() {
   const [logisticsData, setLogisticsData] = useState<any[]>([]);
   const [finDetails, setFinDetails] = useState<any[]>([]);
   const [logDetails, setLogDetails] = useState<any[]>([]);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const handleOpenProject = (id: string) => {
     navigate(`/dashboard/project/${id}`);
   };
 
   // Fetch Data
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const query = selectedProject !== 'All' ? `?project_name=${encodeURIComponent(selectedProject)}` : '';
-        
-        const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
-          fetch(`/akasha/api/dashboard/summary`),
-          fetch(`/akasha/api/summary${query}`),
-          fetch(`/akasha/api/financials${query}`),
-          fetch(`/akasha/api/logistics${query}`),
-          fetch(`/akasha/api/financials/details${query}`),
-          fetch(`/akasha/api/logistics/details${query}`)
-        ]);
+  const loadAllData = async () => {
+    setLoading(true);
+    try {
+      const query = selectedProject !== 'All' ? `?project_name=${encodeURIComponent(selectedProject)}` : '';
+      
+      const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
+        fetch(`/akasha/api/dashboard/summary`),
+        fetch(`/akasha/api/summary${query}`),
+        fetch(`/akasha/api/financials${query}`),
+        fetch(`/akasha/api/logistics${query}`),
+        fetch(`/akasha/api/financials/details${query}`),
+        fetch(`/akasha/api/logistics/details${query}`)
+      ]);
 
-        const [dash, p6, sap, log, fDet, lDet] = await Promise.all([
-          dashRes.json(),
-          p6Res.json(),
-          sapRes.json(),
-          logRes.json(),
-          finDetRes.json(),
-          logDetRes.json()
-        ]);
+      const [dash, p6, sap, log, fDet, lDet] = await Promise.all([
+        dashRes.json(),
+        p6Res.json(),
+        sapRes.json(),
+        logRes.json(),
+        finDetRes.json(),
+        logDetRes.json()
+      ]);
 
-        setDashboardData(dash);
-        setP6Data(p6);
-        setSapData(sap);
-        setLogisticsData(log);
-        setFinDetails(fDet);
-        setLogDetails(lDet);
-        // Only fetch briefing once if not loaded
-        if (!briefing && selectedProject === 'All') {
-          try {
-            const bRes = await fetch('/akasha/api/generate-briefing');
-            if (bRes.ok) {
-              const bData = await bRes.json();
-              setBriefing(bData);
-            } else {
-              setBriefingError('Failed to generate AI Briefing');
-            }
-          } catch (e: any) {
-            setBriefingError(e.message || 'Error connecting to AI Core');
-          } finally {
-            setBriefingLoading(false);
+      setDashboardData(dash);
+      setP6Data(p6);
+      setSapData(sap);
+      setLogisticsData(log);
+      setFinDetails(fDet);
+      setLogDetails(lDet);
+      // Only fetch briefing once if not loaded
+      if (!briefing && selectedProject === 'All') {
+        try {
+          const bRes = await fetch('/akasha/api/generate-briefing');
+          if (bRes.ok) {
+            const bData = await bRes.json();
+            setBriefing(bData);
+          } else {
+            setBriefingError('Failed to generate AI Briefing');
           }
-        } else if (selectedProject !== 'All') {
-           setBriefingLoading(false);
+        } catch (e: any) {
+          setBriefingError(e.message || 'Error connecting to AI Core');
+        } finally {
+          setBriefingLoading(false);
         }
-
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
-      } finally {
-        setLoading(false);
+      } else if (selectedProject !== 'All') {
+         setBriefingLoading(false);
       }
-    };
 
-    fetchData();
-  }, [selectedProject]); // removed briefing from dependencies so it only runs when project changes
+    } catch (error) {
+      console.error("Failed to fetch dashboard data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadAllData();
+  }, [selectedProject]);
+
+  const handleSyncData = async () => {
+    setIsSyncing(true);
+    try {
+      await Promise.allSettled([
+        fetch('/akasha/api/sharepoint/sync', { method: 'POST' }),
+        fetch('/akasha/api/tc/sync', { method: 'POST' }),
+        fetch('/akasha/api/mapping/sync', { method: 'POST' }),
+        fetch('/akasha/api/p6/sync', { method: 'POST' }),
+        fetch('/akasha/api/capacity/sync', { method: 'POST' })
+      ]);
+    } catch (error) {
+      console.error("Sync failed:", error);
+    }
+    await loadAllData();
+    setIsSyncing(false);
+  };
 
   useEffect(() => {
     const handleOpenSimulation = (e: any) => {
@@ -197,6 +215,8 @@ export default function CEODashboard() {
               masterProjects={dashboardData?.projects || []} 
               onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
               onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+              onSyncData={handleSyncData}
+              isSyncing={isSyncing}
             />
           </div>
         )}

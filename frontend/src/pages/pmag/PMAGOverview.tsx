@@ -1,8 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import {
   Activity, TrendingUp, AlertTriangle, Layers, Wifi, Bell,
-  CheckCircle2, Clock, Calendar, XCircle, ArrowUpRight, ArrowDownRight, Minus, Shield, LayoutDashboard
+  CheckCircle2, Clock, Calendar, XCircle, ArrowUpRight, ArrowDownRight, Minus, Shield, LayoutDashboard, ChevronDown, ChevronRight
 } from 'lucide-react';
 
 export default function PMAGOverview({
@@ -16,6 +16,44 @@ export default function PMAGOverview({
   theme
 }: any) {
   const isDark = theme === 'dark';
+
+  const [expandedGroups, setExpandedGroups] = useState<string[]>([]);
+
+  const toggleGroup = (eps: string) => {
+    setExpandedGroups(prev => 
+      prev.includes(eps) ? prev.filter(g => g !== eps) : [...prev, eps]
+    );
+  };
+
+  const groupedProjects = React.useMemo(() => {
+    const groups: Record<string, any> = {};
+    filteredProjects.forEach((p: any) => {
+      const eps = p.eps || 'Unknown EPS';
+      if (!groups[eps]) {
+        groups[eps] = {
+          eps,
+          projects: [],
+          total: 0,
+          total_pct: 0,
+          on_track: 0,
+          at_risk: 0,
+          delayed: 0
+        };
+      }
+      groups[eps].projects.push(p);
+      groups[eps].total += 1;
+      groups[eps].total_pct += (p.pct_complete || 0);
+      
+      if (p.rag === 'green') groups[eps].on_track += 1;
+      else if (p.rag === 'amber') groups[eps].at_risk += 1;
+      else groups[eps].delayed += 1;
+    });
+
+    return Object.values(groups).map((g: any) => ({
+      ...g,
+      avg_pct: g.total > 0 ? (g.total_pct / g.total).toFixed(1) : 0
+    })).sort((a: any, b: any) => b.total - a.total);
+  }, [filteredProjects]);
 
   const svChartOption = {
     tooltip: { trigger: 'axis', backgroundColor: isDark ? 'rgba(17,24,39,0.95)' : 'rgba(255,255,255,0.95)', borderColor: isDark ? '#374151' : '#e5e7eb', textStyle: { color: isDark ? '#f1f5f9' : '#374151', fontSize: 11 }, borderRadius: 8, extraCssText: 'box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);' },
@@ -78,39 +116,91 @@ export default function PMAGOverview({
           <span className="text-[11px] font-bold text-gray-400">{filteredProjects.length} Projects</span>
         </div>
         <div className="overflow-x-auto max-h-[600px] overflow-y-auto custom-scrollbar">
-          <table className="intel-table">
-            <thead>
+          <table className="intel-table relative w-full">
+            <thead className="sticky top-0 z-10 bg-card shadow-sm">
               <tr>
-                {['Project Name', 'Type', '% Complete', 'Baseline Finish', 'Actual Finish', 'SV (Days)', 'SPI', 'Status'].map(h => (
-                  <th key={h}>{h}</th>
-                ))}
+                <th className="w-8"></th>
+                <th>Project Name / EPS</th>
+                <th>Type</th>
+                <th>% Complete</th>
+                <th>Baseline Finish</th>
+                <th>Actual Finish</th>
+                <th>SV (Days)</th>
+                <th>SPI</th>
+                <th>Status</th>
               </tr>
             </thead>
             <tbody>
-              {filteredProjects.map((p: any, i: number) => (
-                <tr key={i} className="cursor-pointer">
-                  <td><span className="font-bold text-gray-900 dark:text-white truncate max-w-[200px] block">{p.name}</span></td>
-                  <td className="font-medium text-gray-500">{p.type}</td>
-                  <td>
-                    <div className="flex items-center gap-2">
-                      <div className="w-14 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${p.rag === 'green' ? 'bg-emerald-500' : p.rag === 'amber' ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min(p.pct_complete, 100)}%` }} />
-                      </div>
-                      <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300">{p.pct_complete}%</span>
-                    </div>
-                  </td>
-                  <td className="text-gray-500">{p.baseline_finish || '-'}</td>
-                  <td className="text-gray-500">{p.actual_finish || '-'}</td>
-                  <td>
-                    <span className={`font-bold flex items-center gap-1 ${p.sv_days === null ? 'text-gray-400' : p.sv_days >= 0 ? 'text-emerald-600' : p.sv_days >= -7 ? 'text-amber-600' : 'text-red-600'}`}>
-                      {p.sv_days === null ? <Minus className="w-3 h-3" /> : p.sv_days >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                      {p.sv_days !== null ? `${p.sv_days > 0 ? '+' : ''}${p.sv_days}d` : '-'}
-                    </span>
-                  </td>
-                  <td className="font-bold text-gray-600 dark:text-gray-300">{p.spi || '-'}</td>
-                  <td>{ragBadge(p.rag)}</td>
+              {groupedProjects.map((group: any) => {
+                const isExpanded = expandedGroups.includes(group.eps);
+                return (
+                  <React.Fragment key={`group-${group.eps}`}>
+                    {/* Parent Row */}
+                    <tr 
+                      className="cursor-pointer bg-slate-50 dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors border-y border-gray-200 dark:border-gray-700 font-bold"
+                      onClick={() => toggleGroup(group.eps)}
+                    >
+                      <td className="text-center w-8 text-gray-500">
+                        {isExpanded ? <ChevronDown className="w-4 h-4 inline" /> : <ChevronRight className="w-4 h-4 inline" />}
+                      </td>
+                      <td colSpan={2} className="py-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-gray-900 dark:text-white uppercase tracking-wider text-[11px]">{group.eps}</span>
+                          <span className="text-[10px] bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded text-gray-500">{group.total} Projects</span>
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex items-center gap-2">
+                          <div className="w-14 h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
+                            <div className="h-full rounded-full bg-[#0b74b1]" style={{ width: `${Math.min(group.avg_pct, 100)}%` }} />
+                          </div>
+                          <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300">{group.avg_pct}%</span>
+                        </div>
+                      </td>
+                      <td colSpan={4}></td>
+                      <td>
+                        <div className="flex gap-1">
+                          {group.on_track > 0 && <span className="risk-badge-low !px-1.5" title="On Track">{group.on_track}</span>}
+                          {group.at_risk > 0 && <span className="risk-badge-medium !px-1.5" title="At Risk">{group.at_risk}</span>}
+                          {group.delayed > 0 && <span className="risk-badge-high !px-1.5" title="Delayed">{group.delayed}</span>}
+                        </div>
+                      </td>
+                    </tr>
+                    
+                    {/* Child Rows */}
+                    {isExpanded && group.projects.map((p: any, i: number) => (
+                      <tr key={`child-${group.eps}-${i}`} className="cursor-pointer hover:bg-gray-50/50 dark:hover:bg-gray-800/30">
+                        <td></td>
+                        <td className="pl-6"><span className="font-semibold text-gray-700 dark:text-gray-300 truncate max-w-[200px] block" title={p.name}>{p.name}</span></td>
+                        <td className="font-medium text-gray-500">{p.type}</td>
+                        <td>
+                          <div className="flex items-center gap-2">
+                            <div className="w-14 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                              <div className={`h-full rounded-full ${p.rag === 'green' ? 'bg-emerald-500' : p.rag === 'amber' ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${Math.min(p.pct_complete, 100)}%` }} />
+                            </div>
+                            <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300">{p.pct_complete}%</span>
+                          </div>
+                        </td>
+                        <td className="text-gray-500">{p.baseline_finish || '-'}</td>
+                        <td className="text-gray-500">{p.actual_finish || '-'}</td>
+                        <td>
+                          <span className={`font-bold flex items-center gap-1 ${p.sv_days === null ? 'text-gray-400' : p.sv_days >= 0 ? 'text-emerald-600' : p.sv_days >= -7 ? 'text-amber-600' : 'text-red-600'}`}>
+                            {p.sv_days === null ? <Minus className="w-3 h-3" /> : p.sv_days >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                            {p.sv_days !== null ? `${p.sv_days > 0 ? '+' : ''}${p.sv_days}d` : '-'}
+                          </span>
+                        </td>
+                        <td className="font-bold text-gray-600 dark:text-gray-300">{p.spi || '-'}</td>
+                        <td>{ragBadge(p.rag)}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+              {groupedProjects.length === 0 && (
+                <tr>
+                  <td colSpan={9} className="text-center py-6 text-gray-500">No projects found.</td>
                 </tr>
-              ))}
+              )}
             </tbody>
           </table>
         </div>

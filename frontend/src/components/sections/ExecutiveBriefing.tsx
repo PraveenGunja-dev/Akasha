@@ -73,7 +73,7 @@ export default function ExecutiveBriefing() {
         <div className="space-y-6 animate-in slide-in-from-bottom-8 duration-700">
           
           {/* Executive Summary Card */}
-          <div className="bg-muted border-l-4 border-l-primary border-y border-r border-border/50 rounded-xl p-8 shadow-2xl relative overflow-hidden">
+          <div className="bg-muted border-l-4 border-l-primary border-y border-r border-border rounded-xl p-8 shadow-2xl relative overflow-hidden">
              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-[80px] pointer-events-none"></div>
              
              <h3 className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest mb-4">AI Topline Summary</h3>
@@ -85,7 +85,7 @@ export default function ExecutiveBriefing() {
           {/* Grid of Key Actions */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {briefing.keyActions?.map((action: any, idx: number) => (
-              <div key={idx} className="bg-card border border-border/50 rounded-xl p-6 hover:border-border transition-colors group cursor-pointer relative overflow-hidden">
+              <div key={idx} className="bg-card border border-border rounded-xl p-6 hover:border-border transition-colors group cursor-pointer relative overflow-hidden">
                 <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity`} style={{ backgroundColor: action.color }}></div>
                 <div className="flex items-center gap-3 mb-4">
                   <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0" style={{ backgroundColor: `${action.color}15`, border: `1px solid ${action.color}30` }}>
@@ -105,8 +105,8 @@ export default function ExecutiveBriefing() {
           </div>
           
           {/* Detailed Narrative */}
-          <div className="bg-card border border-border/50 rounded-xl p-8">
-             <h3 className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest mb-6 border-b border-border/50 pb-4">Deep Dive Analysis</h3>
+          <div className="bg-card border border-border rounded-xl p-8">
+             <h3 className="text-xs font-bold text-muted-foreground/70 uppercase tracking-widest mb-6 border-b border-border pb-4">Deep Dive Analysis</h3>
              
              <div className="space-y-6">
                 {briefing.deepDive?.map((item: any, idx: number) => (

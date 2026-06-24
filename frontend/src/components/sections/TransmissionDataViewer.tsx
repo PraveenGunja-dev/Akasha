@@ -38,7 +38,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex justify-between items-center bg-card/40 border border-border/50 p-6 rounded-2xl backdrop-blur-xl">
+      <div className="flex justify-between items-center bg-card/40 border border-border p-6 rounded-2xl backdrop-blur-xl">
         <div>
           <h2 className="text-2xl font-light tracking-wide text-foreground">Transmission Data Explorer</h2>
           <p className="text-sm text-muted-foreground mt-1">Raw API Data from Rajasthan & Khavda Endpoints</p>
@@ -70,7 +70,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
         <div className="glass-card rounded-2xl overflow-hidden shadow-lg border border-white/20">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-muted/50 text-muted-foreground uppercase tracking-widest text-[10px] font-bold border-b border-border/50">
+              <thead className="bg-muted/50 text-muted-foreground uppercase tracking-widest text-[10px] font-bold border-b border-border">
                 <tr>
                   <th className="px-6 py-4">Project Name</th>
                   <th className="px-6 py-4">Capacity</th>

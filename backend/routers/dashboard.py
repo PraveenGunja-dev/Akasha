@@ -46,25 +46,8 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
     raw_mappings = db.query(models.ProjectMapping).all()
     raw_p6_projects = db.query(models.P6Project).all()
     
-    def is_valid_project(name: str, proj_id: str, eps: str) -> bool:
-        name_lower = (name or "").lower()
-        id_lower = (proj_id or "").lower()
-        
-        # Display all Khavda/Other projects without hiding any (so all 54 show up)
-        if "fy" in id_lower or "fy" in name_lower or eps in ("Other (Outside Khavda)", "Khavda"):
-            return True
-        return False
-
-    p6_projects = [p for p in raw_p6_projects if is_valid_project(p.name, p.project_id, p.parent_eps_name)]
-    valid_p6_ids = {p.project_id for p in p6_projects}
-    
-    mappings = []
-    for m in raw_mappings:
-        if m.project_id in valid_p6_ids:
-            mappings.append(m)
-        else:
-            if is_valid_project(m.project_name_from_p6 or m.project, m.project_id, "Unassigned"):
-                mappings.append(m)
+    mappings = raw_mappings
+    p6_projects = raw_p6_projects
     
     portfolio_summary = {
         "total_mw": 0,
@@ -113,13 +96,22 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
         
         # P6 Data
         p6_data = next((p for p in p6_projects if p.project_id == m.project_id), None)
+        if not p6_data and m.project_name_from_p6:
+            clean_name = str(m.project_name_from_p6).strip().lower()
+            p6_data = next((p for p in p6_projects if p.name and clean_name == str(p.name).strip().lower()), None)
+            if not p6_data:
+                p6_data = next((p for p in p6_projects if p.name and clean_name in str(p.name).strip().lower()), None)
+
         is_delayed = False
         schedule_health = "Unknown"
         progress = 0
         
         if p6_data:
             mapped_p6_ids.add(p6_data.project_id)
-            progress = p6_data.duration_percent_complete or 0
+            p6_pct = p6_data.duration_percent_complete or 0
+            if p6_pct <= 1.0 and p6_pct > 0:
+                p6_pct *= 100
+            progress = p6_pct
             is_delayed_proj = False
             
             if p6_data.finish_date_variance and p6_data.finish_date_variance < 0:
@@ -137,6 +129,9 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
             else:
                 schedule_health = "On Track"
                 portfolio_summary["on_track_projects"] += 1
+        else:
+            schedule_health = "On Track"
+            portfolio_summary["on_track_projects"] += 1
                 
         # SAP Data Mapping
         plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""

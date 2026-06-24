@@ -238,13 +238,13 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const StageIcon = currentStage.icon;
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background border-t border-border/50">
+    <div className="flex h-full w-full overflow-hidden bg-background border-t border-border">
 
       {/* ── Collapsible History Panel ── */}
       <div
         className={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0`}
       >
-        <div className="w-72 h-full flex flex-col bg-card border-r border-border/50">
+        <div className="w-72 h-full flex flex-col bg-card border-r border-border">
           {/* Panel Header */}
           <div className="p-4 flex items-center justify-between">
             <span className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-[0.15em]">History</span>
@@ -259,7 +259,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
           {/* Search */}
           <div className="px-4 pb-3">
-            <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border/50">
+            <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border">
               <Search className="w-3.5 h-3.5 text-muted-foreground/70" />
               <input
                 type="text"
@@ -306,7 +306,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           </div>
 
           {/* Data Sources */}
-          <div className="p-4 border-t border-border/50">
+          <div className="p-4 border-t border-border">
             <div className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em] mb-3">Connected Sources</div>
             <div className="space-y-2">
               <div className="flex items-center gap-2.5">
@@ -339,7 +339,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
         </div>
 
         {/* Top Bar */}
-        <div className="h-14 flex items-center justify-between px-5 border-b border-border/50 bg-background/80 backdrop-blur-xl z-20 shrink-0">
+        <div className="h-14 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl z-20 shrink-0">
           <div className="flex items-center gap-3">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
@@ -366,7 +366,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border/50">
+            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border">
               <Cpu className="w-3 h-3 text-muted-foreground/70" />
               <span className="text-[10px] text-muted-foreground/70 font-mono">GPT-OSS-120B</span>
             </div>
@@ -458,7 +458,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
                       </div>
 
-                      <div className="akasha-response prose dark:prose-invert max-w-none prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-strong:text-foreground prose-code:text-blue-400 prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border/50 prose-a:text-blue-400">
+                      <div className="akasha-response prose dark:prose-invert max-w-none prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-strong:text-foreground prose-code:text-blue-400 prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border prose-a:text-blue-400">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                           {msg.content}
                         </ReactMarkdown>
@@ -469,7 +469,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                         <div className="flex items-center gap-2 mt-4 flex-wrap">
                           <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">Sources:</span>
                           {msg.sources.map((src, i) => (
-                            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border/50 text-[10px] text-muted-foreground/70">
+                            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] text-muted-foreground/70">
                               <Globe className="w-2.5 h-2.5" />
                               {src}
                             </span>
@@ -483,7 +483,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                           <button
                             key={i}
                             onClick={() => handleSend(followup)}
-                            className="px-3 py-1.5 rounded-lg bg-card border border-border/50 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border/80 transition-all"
+                            className="px-3 py-1.5 rounded-lg bg-card border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border/80 transition-all"
                           >
                             {followup}
                           </button>
@@ -504,7 +504,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
                   </div>
 
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border border-border/50">
+                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border border-border">
                     {/* Animated Bars */}
                     <div className="flex items-end gap-[3px] h-5">
                       <div className="w-[3px] bg-primary rounded-full animate-pulse" style={{ height: '60%', animationDelay: '0ms' }}></div>

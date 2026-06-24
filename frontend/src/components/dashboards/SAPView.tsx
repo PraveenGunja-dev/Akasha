@@ -130,8 +130,11 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
             <thead className="text-xs uppercase bg-muted text-muted-foreground/70 border-b border-border">
               <tr>
                 <th className="px-4 py-3">PO Number</th>
+                <th className="px-4 py-3">Buyer Name</th>
                 <th className="px-4 py-3">Vendor Name</th>
                 <th className="px-4 py-3">Material Code</th>
+                <th className="px-4 py-3">PO Date</th>
+                <th className="px-4 py-3">Status</th>
                 <th className="px-4 py-3 text-right">Quantity (MW)</th>
               </tr>
             </thead>
@@ -139,8 +142,19 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
               {(finDetails || []).map((po: any, idx: number) => (
                 <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
                   <td className="px-4 py-3 font-medium text-foreground">{po.purchasing_document}</td>
+                  <td className="px-4 py-3 text-foreground">{po.buyer_name || '-'}</td>
                   <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]">{po.vendor_name || 'Unknown'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-primary">{po.material_code}</td>
+                  <td className="px-4 py-3 text-muted-foreground">
+                    {po.document_date ? new Date(po.document_date).toLocaleDateString() : '-'}
+                  </td>
+                  <td className="px-4 py-3">
+                    {po.delivery_completed_flag === 'X' ? (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Delivered</span>
+                    ) : (
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Pending</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 text-right font-medium">{po.po_quantities_mw?.toFixed(2)}</td>
                 </tr>
               ))}

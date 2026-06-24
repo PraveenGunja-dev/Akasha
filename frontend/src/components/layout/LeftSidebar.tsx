@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { 
+import {
   Home, Command, Network, Bot, FileText, Search, BrainCircuit,
   Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2
 } from 'lucide-react';
@@ -62,8 +62,8 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
           title={collapsed ? item.label : undefined}
           className={`w-full flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
             ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}
-            ${isActive 
-              ? 'bg-[#0b74b1] text-white shadow-sm shadow-[#0b74b1]/25' 
+            ${isActive
+              ? 'bg-[#0b74b1] text-white shadow-sm shadow-[#0b74b1]/25'
               : accent
                 ? 'text-slate-600 dark:text-slate-300 hover:bg-[#0b74b1]/5 dark:hover:bg-[#0b74b1]/20 hover:text-[#0b74b1] dark:hover:text-[#38bdf8]'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
@@ -82,7 +82,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
       <div className={`flex items-center shrink-0 border-b border-slate-100 dark:border-slate-800 h-[73px] ${collapsed && !isMobileOpen ? 'justify-center px-2' : 'px-4 justify-between'}`}>
         <div className="flex items-center overflow-hidden">
           {!showLabel && (
-             <span className="text-[22px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-[#0b74b1] via-[#76489d] to-[#bc3860] text-transparent bg-clip-text mx-auto">A</span>
+            <span className="text-[22px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-[#0b74b1] via-[#76489d] to-[#bc3860] text-transparent bg-clip-text mx-auto">A</span>
           )}
           {showLabel && (
             <div className="flex flex-col min-w-0 py-1">
@@ -101,7 +101,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
 
       {/* ─── Nav items ─── */}
       <nav className="flex-1 overflow-y-auto custom-scrollbar px-2.5 py-3 flex flex-col gap-4">
-        
+
         {/* Core */}
         {menuSections.map((section, idx) => (
           <div key={idx} className="flex flex-col gap-0.5">
@@ -118,8 +118,8 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
         <div className="flex flex-col gap-0.5">
           {showLabel ? (
             <div className="px-3 mb-1 flex items-center gap-1.5">
-               <Zap className="w-3 h-3 text-[#0b74b1] dark:text-[#38bdf8]" />
-               <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#0b74b1] dark:text-[#38bdf8]">Akasha AI</h3>
+              <Zap className="w-3 h-3 text-[#0b74b1] dark:text-[#38bdf8]" />
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#0b74b1] dark:text-[#38bdf8]">Akasha AI</h3>
             </div>
           ) : (
             <div className="flex justify-center my-1">

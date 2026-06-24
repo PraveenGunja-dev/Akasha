@@ -63,7 +63,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
         {/* Search Bar */}
         <form onSubmit={handleSearch} className="w-full max-w-2xl relative group">
           <div className="absolute -inset-1 bg-gradient-to-r from-primary to-blue-400 rounded-2xl blur opacity-20 group-hover:opacity-40 transition duration-500"></div>
-          <div className="relative bg-card border border-border/50 rounded-xl flex items-center p-2 shadow-2xl">
+          <div className="relative bg-card border border-border rounded-xl flex items-center p-2 shadow-2xl">
             <Search className="w-5 h-5 text-muted-foreground/70 ml-4" />
             <input 
               type="text" 
@@ -85,7 +85,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
         {!hasSearched && (
           <div className="mt-10 flex gap-4 animate-in slide-in-from-bottom-4 duration-700 delay-200">
             {['All Entities', 'Projects', 'Purchase Orders', 'Materials', 'Vendors'].map((filter, i) => (
-              <button key={i} className="px-4 py-1.5 rounded-full border border-border/50 text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
+              <button key={i} className="px-4 py-1.5 rounded-full border border-border text-xs font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
                 {filter}
               </button>
             ))}
@@ -97,7 +97,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
       {hasSearched && (
         <div className="w-full max-w-4xl mt-12 animate-in slide-in-from-bottom-8 duration-500">
           
-          <div className="flex items-center justify-between border-b border-border/50 pb-4 mb-6">
+          <div className="flex items-center justify-between border-b border-border pb-4 mb-6">
             <span className="text-sm text-muted-foreground">Found {results.length} results for "<span className="text-foreground font-medium">{query}</span>"</span>
             <span className="text-xs font-mono text-muted-foreground/70 bg-muted px-2 py-1 rounded">0.043s</span>
           </div>
@@ -105,7 +105,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
           {isSearching ? (
              <div className="space-y-4">
                {[1, 2, 3].map((skeleton) => (
-                 <div key={skeleton} className="w-full h-24 bg-card border border-border/50 rounded-xl animate-pulse flex p-5 gap-4">
+                 <div key={skeleton} className="w-full h-24 bg-card border border-border rounded-xl animate-pulse flex p-5 gap-4">
                    <div className="w-10 h-10 rounded-lg bg-muted"></div>
                    <div className="flex-1 space-y-3 py-1">
                      <div className="h-4 bg-muted rounded w-1/3"></div>
@@ -132,7 +132,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
                    <div className="flex-1 relative z-10">
                      <div className="flex items-center gap-3 mb-1.5">
                        <h3 className="text-lg font-semibold text-foreground/90 group-hover:text-primary transition-colors">{result.title}</h3>
-                       <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-muted/80 text-muted-foreground border border-border/50">{result.type}</span>
+                       <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-muted/80 text-muted-foreground border border-border">{result.type}</span>
                      </div>
                      <p className="text-[13px] text-muted-foreground leading-relaxed">{result.snippet}</p>
                    </div>

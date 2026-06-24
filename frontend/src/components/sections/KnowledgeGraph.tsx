@@ -544,7 +544,7 @@ export default function KnowledgeGraph() {
                     <div className="mt-2">
                       <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold mb-2">Top Vendors</div>
                       {selectedNode.sap.top_vendors.map((v: any, i: number) => (
-                        <div key={i} className="flex justify-between items-center py-1.5 border-b border-border/50 last:border-0">
+                        <div key={i} className="flex justify-between items-center py-1.5 border-b border-border last:border-0">
                           <span className="text-xs text-foreground font-medium truncate pr-2">{v.name}</span>
                           <span className="text-[11px] text-muted-foreground font-mono shrink-0">₹{v.value_cr} Cr</span>
                         </div>
@@ -568,7 +568,7 @@ export default function KnowledgeGraph() {
                   
                   {selectedNode.tc.lines?.length > 0 && (
                     <div className="mt-4 space-y-2">
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold border-b border-border/50 pb-1.5 mb-2">Lines Progress</div>
+                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold border-b border-border pb-1.5 mb-2">Lines Progress</div>
                       {selectedNode.tc.lines.map((l: any, i: number) => {
                         const isDone = ['completed', 'charged'].includes(l.status?.toLowerCase());
                         return (
@@ -730,7 +730,7 @@ function DetailRow({ label, value, highlight }: { label: string; value: any; hig
 
 function MiniCard({ label, value, sub }: { label: string; value: any; sub: string }) {
   return (
-    <div className="bg-muted/50 rounded-lg p-2 text-center border border-border/50">
+    <div className="bg-muted/50 rounded-lg p-2 text-center border border-border">
       <div className="text-sm font-bold text-foreground">{value}</div>
       <div className="text-[8px] text-muted-foreground uppercase font-bold tracking-wider">{label}</div>
       <div className="text-[8px] text-muted-foreground">{sub}</div>

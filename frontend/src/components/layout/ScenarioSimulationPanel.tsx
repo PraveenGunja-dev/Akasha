@@ -155,7 +155,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
   }
 
   return (
-    <div className="fixed top-[88px] right-6 w-[420px] h-[calc(100vh-110px)] flex flex-col bg-card border border-border/50 z-[60] shadow-2xl rounded-2xl animate-in slide-in-from-right-8 duration-300 fade-in overflow-hidden">
+    <div className="fixed top-[88px] right-6 w-[420px] h-[calc(100vh-110px)] flex flex-col bg-card border border-border z-[60] shadow-2xl rounded-2xl animate-in slide-in-from-right-8 duration-300 fade-in overflow-hidden">
       
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 bg-muted/20">
@@ -169,7 +169,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
           
           {showHistory && (
              <div className="absolute top-full right-16 mt-1 w-64 bg-card border border-border rounded-xl shadow-xl py-2 z-50">
-               <div className="px-4 py-2 text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border/50 mb-1">Recent History</div>
+               <div className="px-4 py-2 text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-border mb-1">Recent History</div>
                <div className="max-h-48 overflow-y-auto custom-scrollbar">
                  {threads.length === 0 ? (
                    <div className="px-4 py-3 text-sm text-muted-foreground italic">No recent chats</div>
@@ -259,7 +259,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
 
       {/* Input */}
       <div className="p-4 pt-0">
-        <div className="flex flex-col bg-muted/30 rounded-[24px] p-1.5 border border-border/50 focus-within:bg-muted/60 focus-within:border-border transition-all">
+        <div className="flex flex-col bg-muted/30 rounded-[24px] p-1.5 border border-border focus-within:bg-muted/60 focus-within:border-border transition-all">
           <div className="flex items-center px-3 pt-2 pb-1">
             <input ref={inputRef} type="text" value={input}
               onChange={e => setInput(e.target.value)}

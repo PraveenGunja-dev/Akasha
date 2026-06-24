@@ -16,7 +16,7 @@ const ROLE_ROUTES: Record<string, string> = {
 };
 
 export default function LandingPage() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useState<"light" | "dark">("light");
   const [showPresentation, setShowPresentation] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();

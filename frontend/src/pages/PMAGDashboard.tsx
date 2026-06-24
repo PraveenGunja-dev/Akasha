@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
   Home, Activity, TrendingUp, AlertTriangle, Layers, Wifi, Bell,
-  Search, ChevronLeft, ChevronRight, LogOut,
+  Search, ChevronLeft, ChevronRight, LogOut, RefreshCw,
   Zap, X, Menu, LayoutDashboard, CheckCircle2, Clock,
   Calendar, XCircle, ArrowUpRight, ArrowDownRight, Minus, Shield,
   Moon, Sun, User, Sparkles, Network, FileText, BrainCircuit
@@ -24,6 +24,11 @@ import CapacityOverview from '../components/sections/CapacityOverview';
 
 import PMAGOverview from './pmag/PMAGOverview';
 import PMAGDPRTracker from './pmag/PMAGDPRTracker';
+import GridStatus from './pmag/GridStatus';
+import ReportsAnalytics from './pmag/ReportsAnalytics';
+import TeamManagement from './pmag/TeamManagement';
+import SiteMonitoring from './pmag/SiteMonitoring';
+import ProjectWorkspace from '../components/sections/ProjectWorkspace';
 
 interface DashboardData {
   summary: {
@@ -52,6 +57,7 @@ export default function PMAGDashboard() {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
 
   // Additional data for integrated AI/Report components
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -59,11 +65,17 @@ export default function PMAGDashboard() {
   const [sapData, setSapData] = useState<any[]>([]);
   const [finDetails, setFinDetails] = useState<any[]>([]);
 
+  const [reportsData, setReportsData] = useState<any>(null);
+  const [teamData, setTeamData] = useState<any>(null);
+  const [siteMonitoringData, setSiteMonitoringData] = useState<any>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  useEffect(() => {
+  const loadAllData = () => {
+    setLoading(true);
     fetch('/akasha/api/pmag/dashboard')
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
@@ -81,7 +93,38 @@ export default function PMAGDashboard() {
       setSapData(await sapRes.json());
       setFinDetails(await finDetRes.json());
     }).catch(console.error);
+
+    Promise.all([
+      fetch('/akasha/api/pmag/reports'),
+      fetch('/akasha/api/pmag/team'),
+      fetch('/akasha/api/pmag/site-monitoring')
+    ]).then(async ([repRes, teamRes, siteRes]) => {
+      setReportsData(await repRes.json());
+      setTeamData(await teamRes.json());
+      setSiteMonitoringData(await siteRes.json());
+    }).catch(console.error);
+  };
+
+  useEffect(() => {
+    loadAllData();
   }, []);
+
+  const handleSyncData = async () => {
+    setIsSyncing(true);
+    try {
+      await Promise.allSettled([
+        fetch('/akasha/api/sharepoint/sync', { method: 'POST' }),
+        fetch('/akasha/api/tc/sync', { method: 'POST' }),
+        fetch('/akasha/api/mapping/sync', { method: 'POST' }),
+        fetch('/akasha/api/p6/sync', { method: 'POST' }),
+        fetch('/akasha/api/capacity/sync', { method: 'POST' })
+      ]);
+    } catch (error) {
+      console.error("Sync failed:", error);
+    }
+    loadAllData();
+    setIsSyncing(false);
+  };
 
   const handleLogout = () => { logout(); navigate('/', { replace: true }); };
 
@@ -90,20 +133,9 @@ export default function PMAGDashboard() {
     {
       title: "DASHBOARD",
       items: [
-        { id: 'overview', label: 'Overview', icon: Home },
-        { id: 'health', label: 'Project Health', icon: Activity },
-        { id: 'schedule', label: 'Schedule', icon: TrendingUp },
-        { id: 'critical', label: 'Critical Path', icon: AlertTriangle },
-        { id: 'dpr', label: 'DPR Tracker', icon: Layers },
-        { id: 'connectivity', label: 'Connectivity', icon: Wifi },
-        { id: 'alerts', label: 'Alerts', icon: Bell },
-      ]
-    },
-    {
-      title: "DATA & MAPPING",
-      items: [
-        { id: 'data_integration', label: 'Data Hub', icon: Network },
-        { id: 'transmission_data', label: 'Transmission Data', icon: Zap },
+        { id: 'overview', label: 'Portfolio', icon: Home },
+        { id: 'site_monitoring', label: 'Site Monitoring', icon: Activity },
+        { id: 'grid_status', label: 'Grid Status', icon: Network },
       ]
     },
     {
@@ -118,6 +150,7 @@ export default function PMAGDashboard() {
       title: "ADMINISTRATION",
       items: [
         { id: 'reports', label: 'Reports', icon: FileText },
+        { id: 'team', label: 'Team', icon: User },
       ]
     }
   ];
@@ -141,6 +174,7 @@ export default function PMAGDashboard() {
             } else {
               setPreviousSection(activeSection);
               setActiveSection(item.id);
+              setSelectedProjectId(null); // Clear selected project when navigating sidebar
               sessionStorage.setItem('pmagActiveSection', item.id);
               if (isMobileOpen) setIsMobileOpen(false);
             }
@@ -261,6 +295,15 @@ export default function PMAGDashboard() {
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
             
+            <button 
+              onClick={handleSyncData}
+              disabled={isSyncing}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#0b74b1]' : ''}`} />
+              <span className="hidden lg:inline">{isSyncing ? 'Syncing...' : 'Sync All Data'}</span>
+            </button>
+
             {/* Ask Akasha Button */}
             <button 
               onClick={() => setIsCopilotOpen(!isCopilotOpen)} 
@@ -304,6 +347,20 @@ export default function PMAGDashboard() {
         {/* Dashboard Content */}
         <main className="flex-1 p-4">
           <AnimatePresence mode="wait">
+            {selectedProjectId ? (
+              <motion.div
+                key="workspace"
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                exit={{ opacity: 0, x: -20 }}
+                transition={{ duration: 0.2 }}
+                className="h-[calc(100vh-100px)] bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden relative"
+              >
+                <div className="absolute inset-0 overflow-y-auto">
+                  <ProjectWorkspace projectId={selectedProjectId} onBack={() => setSelectedProjectId(null)} />
+                </div>
+              </motion.div>
+            ) : (
             <motion.div
               key={activeSection}
               initial={{ opacity: 0, y: 10 }}
@@ -326,22 +383,30 @@ export default function PMAGDashboard() {
                 />
               )}
 
-              {/* ─── FULL PAGE COMPONENTS ─── */}
-              {activeSection === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={[]} />}
-              {activeSection === 'schedule' && <Project360 onOpenProject={() => {}} />}
-              {activeSection === 'critical' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} />}
-              {activeSection === 'connectivity' && <CapacityOverview />}
-              {activeSection === 'dpr' && <PMAGDPRTracker dpr_tracker={dpr_tracker} />}
+              {/* ─── NEW PMAG TABS ─── */}
+              {activeSection === 'site_monitoring' && (
+                <SiteMonitoring data={siteMonitoringData} theme={theme} />
+              )}
+              {activeSection === 'grid_status' && (
+                <GridStatus connectivity={connectivity} critical_path={critical_path} theme={theme} />
+              )}
+              {activeSection === 'reports' && (
+                <ReportsAnalytics data={reportsData} theme={theme} />
+              )}
+              {activeSection === 'team' && (
+                <TeamManagement data={teamData} theme={theme} />
+              )}
 
-            {/* ─── EXTRA MODULES ─── */}
-            {activeSection === 'data_integration' && <DataIntegrationHub />}
-            {activeSection === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
-            {activeSection === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
-            {activeSection === 'smart_search' && <SmartSearch onOpenProject={() => {}} />}
-            {activeSection === 'knowledge_graph' && <KnowledgeGraph />}
-            {activeSection === 'executive_brief' && <ExecutiveBriefing />}
+              {/* ─── FULL PAGE COMPONENTS ─── */}
+              {activeSection === 'project360' && <Project360 onOpenProject={(id) => setSelectedProjectId(id)} />}
+
+              {/* ─── EXTRA MODULES ─── */}
+              {activeSection === 'smart_search' && <SmartSearch onOpenProject={(id) => setSelectedProjectId(id)} />}
+              {activeSection === 'knowledge_graph' && <KnowledgeGraph />}
+              {activeSection === 'executive_brief' && <ExecutiveBriefing />}
 
             </motion.div>
+            )}
           </AnimatePresence>
         </main>
       </div>

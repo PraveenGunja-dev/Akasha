@@ -1,4 +1,8 @@
-[
+import json
+from database import SessionLocal
+from models import ProjectMapping
+
+user_mapping_str = """[
     {
       "Sr_no": 1,
       "Project": "MLP T1  PPA - J&K",
@@ -84,4 +88,34 @@
       "Project": "Group - Port (Hybrid)",
       "P6_Project_Name": "APSEZ_A01- D_HSAT_25 MW_GROUP"
     }
-]
+]"""
+
+user_mapping = json.loads(user_mapping_str)
+valid_p6_names = {item['P6_Project_Name'].strip() for item in user_mapping if item.get('P6_Project_Name')}
+
+db = SessionLocal()
+all_mappings = db.query(ProjectMapping).all()
+deleted = 0
+kept = 0
+
+for m in all_mappings:
+    if m.category == 'Wind':
+        kept += 1
+        continue
+        
+    is_valid = False
+    if m.project_name_from_p6 and m.project_name_from_p6.strip() in valid_p6_names:
+        is_valid = True
+    elif m.project and m.project.strip() in valid_p6_names:
+        is_valid = True
+    elif m.project_id and m.project_id.strip() in valid_p6_names:
+        is_valid = True
+        
+    if is_valid:
+        kept += 1
+    else:
+        db.delete(m)
+        deleted += 1
+
+db.commit()
+print(f'Kept {kept} required projects (including Wind). Deleted {deleted} unrequired projects.')

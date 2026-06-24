@@ -211,7 +211,6 @@ def sync_rajasthan_data(db: Session, token: str):
     for entry in all_entries:
         if entry.get("project") and entry.get("p6project"):
             p6_map[entry.get("project")] = entry.get("p6project")
-    
     for entry in all_entries:
         project_name = entry.get("project")
         if not project_name: continue

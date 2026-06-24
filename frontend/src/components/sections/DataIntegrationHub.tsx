@@ -334,9 +334,9 @@ export default function DataIntegrationHub() {
       </div>
 
       {/* ── Master Projects Table ── */}
-      <div className="glass-card rounded-2xl overflow-hidden shadow-lg border border-border/50 flex flex-col flex-1 min-h-[500px]">
+      <div className="glass-card rounded-2xl overflow-hidden shadow-lg border border-border flex flex-col flex-1 min-h-[500px]">
         {/* Toolbar */}
-        <div className="p-4 border-b border-border/50 flex justify-between items-center bg-card/30">
+        <div className="p-4 border-b border-border flex justify-between items-center bg-card/30">
           <div className="relative w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input 
@@ -476,7 +476,7 @@ export default function DataIntegrationHub() {
           <div className="w-full max-w-7xl bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-muted/20">
+            <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-muted/20">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center text-primary">
                   <Database className="w-4 h-4" />
@@ -507,8 +507,8 @@ export default function DataIntegrationHub() {
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                   
                   {/* Column 1: Primavera P6 */}
-                  <div className="col-span-1 lg:col-span-1 border border-border/50 rounded-xl p-4 bg-muted/5 flex flex-col">
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-border/50">
+                  <div className="col-span-1 lg:col-span-1 border border-border rounded-xl p-4 bg-muted/5 flex flex-col">
+                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-border">
                       <div className="flex items-center gap-2 text-blue-400">
                         <Database className="w-4 h-4" />
                         <h4 className="font-bold uppercase tracking-wider text-xs">Primavera P6</h4>
@@ -626,19 +626,19 @@ export default function DataIntegrationHub() {
                   </div>
 
                   {/* Column 2: SAP */}
-                  <div className="col-span-1 lg:col-span-1 border border-border/50 rounded-xl p-4 bg-muted/5 flex flex-col">
-                    <div className="flex items-center gap-2 text-emerald-400 mb-4 pb-2 border-b border-border/50">
+                  <div className="col-span-1 lg:col-span-1 border border-border rounded-xl p-4 bg-muted/5 flex flex-col">
+                    <div className="flex items-center gap-2 text-emerald-400 mb-4 pb-2 border-b border-border">
                       <Server className="w-4 h-4" />
                       <h4 className="font-bold uppercase tracking-wider text-xs">SAP Logistics & Finance</h4>
                     </div>
                     {projectDetails?.sap && (projectDetails.sap.inventory?.length > 0 || projectDetails.sap.po?.length > 0 || projectDetails.sap.inventory_summary > 0) ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="p-3 bg-card border border-border/50 rounded-lg">
+                          <div className="p-3 bg-card border border-border rounded-lg">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Inventory (MW)</div>
                             <div className="text-lg font-light text-foreground">{projectDetails.sap.inventory_summary?.toFixed(1) || 0}</div>
                           </div>
-                          <div className="p-3 bg-card border border-border/50 rounded-lg">
+                          <div className="p-3 bg-card border border-border rounded-lg">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">PO Quantity (MW)</div>
                             <div className="text-lg font-light text-foreground">{projectDetails.sap.po_summary?.toFixed(1) || 0}</div>
                           </div>
@@ -649,7 +649,7 @@ export default function DataIntegrationHub() {
                             <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Recent POs</h5>
                             <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
                               {projectDetails.sap.po.map((po: any, i: number) => (
-                                <div key={i} className="flex justify-between items-center p-2 rounded bg-background border border-border/50 text-xs">
+                                <div key={i} className="flex justify-between items-center p-2 rounded bg-background border border-border text-xs">
                                   <span className="font-mono text-emerald-400">{po.purchasing_document}</span>
                                   <span className="text-muted-foreground truncate max-w-[100px] text-right" title={po.vendor_name}>{po.vendor_name}</span>
                                 </div>
@@ -667,19 +667,19 @@ export default function DataIntegrationHub() {
                   </div>
 
                   {/* Column 3: Transmission */}
-                  <div className="col-span-1 lg:col-span-1 border border-border/50 rounded-xl p-4 bg-muted/5 flex flex-col">
-                    <div className="flex items-center gap-2 text-purple-400 mb-4 pb-2 border-b border-border/50">
+                  <div className="col-span-1 lg:col-span-1 border border-border rounded-xl p-4 bg-muted/5 flex flex-col">
+                    <div className="flex items-center gap-2 text-purple-400 mb-4 pb-2 border-b border-border">
                       <Share2 className="w-4 h-4" />
                       <h4 className="font-bold uppercase tracking-wider text-xs">Transmission Network</h4>
                     </div>
                     {projectDetails?.tc && (projectDetails.tc.khavda_edges?.length > 0 || projectDetails.tc.rajasthan_edges?.length > 0) ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
-                          <div className="p-3 bg-card border border-border/50 rounded-lg">
+                          <div className="p-3 bg-card border border-border rounded-lg">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Khavda Edges</div>
                             <div className="text-lg font-light text-foreground">{projectDetails.tc.khavda_edges?.length || 0}</div>
                           </div>
-                          <div className="p-3 bg-card border border-border/50 rounded-lg">
+                          <div className="p-3 bg-card border border-border rounded-lg">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-widest mb-1">Rajasthan Edges</div>
                             <div className="text-lg font-light text-foreground">{projectDetails.tc.rajasthan_edges?.length || 0}</div>
                           </div>
@@ -690,7 +690,7 @@ export default function DataIntegrationHub() {
                            <h5 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Network Paths</h5>
                            <div className="space-y-2 max-h-[200px] overflow-y-auto pr-2">
                              {[...(projectDetails.tc.khavda_edges || []), ...(projectDetails.tc.rajasthan_edges || [])].map((edge: any, i: number) => (
-                               <div key={i} className="flex flex-col p-2.5 rounded bg-background border border-border/50 text-xs gap-1.5 hover:bg-muted/30 transition-colors">
+                               <div key={i} className="flex flex-col p-2.5 rounded bg-background border border-border text-xs gap-1.5 hover:bg-muted/30 transition-colors">
                                  <div className="flex justify-between items-center text-purple-400 font-mono text-[10px] font-bold">
                                    <span className="truncate max-w-[200px]" title={edge.project}>{edge.project}</span>
                                    <div className="flex gap-1.5 shrink-0">
@@ -738,7 +738,7 @@ export default function DataIntegrationHub() {
       {showPasswordModal && createPortal(
         <div className="fixed inset-0 flex items-center justify-center bg-background/80 backdrop-blur-md p-4 animate-in fade-in" style={{ zIndex: 9999 }}>
           <div className="w-full max-w-md bg-card border border-border shadow-2xl rounded-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="px-6 py-4 border-b border-border/50 flex justify-between items-center bg-muted/20">
+            <div className="px-6 py-4 border-b border-border flex justify-between items-center bg-muted/20">
               <div className="flex items-center gap-2 text-amber-400">
                 <Database className="w-5 h-5" />
                 <h3 className="font-semibold text-lg">Update P6 Credentials</h3>
@@ -778,7 +778,7 @@ export default function DataIntegrationHub() {
                 </div>
               )}
 
-              <div className="pt-4 flex justify-end gap-3 border-t border-border/50">
+              <div className="pt-4 flex justify-end gap-3 border-t border-border">
                 <button 
                   onClick={() => setShowPasswordModal(false)}
                   className="px-4 py-2 rounded-lg text-sm font-medium hover:bg-muted transition-colors text-muted-foreground"

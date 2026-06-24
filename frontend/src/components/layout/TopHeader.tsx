@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard } from 'lucide-react';
+import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 
-export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar }: any) {
+export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing }: any) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const navigate = useNavigate();
   const { projectId } = useParams();
@@ -19,7 +19,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   }, [theme]);
 
   return (
-    <header className="h-[73px] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-2 sm:px-4 shrink-0 z-40">
+    <header className="h-[73px] bg-background/80 backdrop-blur-xl border-b border-border/50 flex items-center justify-between px-2 sm:px-4 shrink-0 z-40">
       
       {/* Left: hamburger (mobile) & Title */}
       <div className="flex items-center gap-3 flex-1">
@@ -31,73 +31,57 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
           <Menu className="w-5 h-5" />
         </button>
         <div className="hidden md:flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-[#0b74b1]/10 flex items-center justify-center">
-            <LayoutDashboard className="w-4 h-4 text-[#0b74b1]" />
+          <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center border border-sky-500/20 shadow-[0_0_10px_rgba(14,165,233,0.15)]">
+            <LayoutDashboard className="w-4 h-4 text-sky-500" />
           </div>
-          <span className="font-bold text-gray-900 dark:text-white text-sm tracking-tight">Akasha Execution Platform</span>
+          <span className="font-bold text-foreground text-sm tracking-tight">Akasha Execution Platform</span>
         </div>
       </div>
 
       {/* Right: project selector + actions */}
       <div className="flex items-center gap-1 sm:gap-2">
         
-        {/* Project Selector */}
-        <div className="flex items-center gap-2 bg-muted border border-border hover:border-muted-foreground rounded-lg px-3 py-1.5 transition-colors cursor-pointer relative group">
-           <div className="w-5 h-5 rounded bg-[#3B82F6]/20 flex items-center justify-center">
-             <Activity className="w-3 h-3 text-[#3B82F6]" />
-           </div>
-           <select 
-              value={selectedProject}
-              onChange={(e) => setSelectedProject(e.target.value)}
-              className="appearance-none bg-transparent text-sm font-semibold text-foreground focus:outline-none pr-6 cursor-pointer max-w-[150px] truncate"
-            >
-              <option value="All" className="bg-background text-foreground py-2">Global Portfolio</option>
-              {[...(masterProjects || [])].sort((a: any, b: any) => {
-                let scoreA = 0;
-                if (a.p6?.id) scoreA++;
-                if (a.sap?.po_mw > 0 || a.sap?.inventory_mw > 0) scoreA++;
-                if (a.tc?.has_data) scoreA++;
+        {/* Project Selector - Removed per request */}
 
-                let scoreB = 0;
-                if (b.p6?.id) scoreB++;
-                if (b.sap?.po_mw > 0 || b.sap?.inventory_mw > 0) scoreB++;
-                if (b.tc?.has_data) scoreB++;
-
-                return scoreB - scoreA;
-              }).map((proj: any, idx: number) => (
-                  <option key={idx} value={proj.project_name} className="bg-background text-foreground py-2">{proj.project_name}</option>
-              ))}
-            </select>
-            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none group-hover:text-foreground transition-colors" />
-        </div>
+        {/* Sync Data Button */}
+        {onSyncData && (
+          <button 
+            onClick={onSyncData}
+            disabled={isSyncing}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-500/20 bg-background hover:bg-sky-500/5 text-foreground text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-500' : ''}`} />
+            <span className="hidden lg:inline">{isSyncing ? 'Syncing...' : 'Sync All Data'}</span>
+          </button>
+        )}
 
         {/* Ask Akasha */}
         <button 
           onClick={onOpenCopilot} 
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0b74b1] hover:bg-[#0966a0] text-white text-[12px] font-semibold transition-colors shadow-sm shadow-[#0b74b1]/20"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[12px] font-semibold transition-colors shadow-[0_0_15px_rgba(14,165,233,0.3)] border border-sky-400/50"
         >
           <Sparkles className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline">Ask Akasha</span>
+          <span className="hidden lg:inline text-shadow-sm">Ask Akasha</span>
         </button>
 
         <button 
           onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} 
-          className="hidden sm:block p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+          className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Bell */}
-        <button className="relative p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+        <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
           <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />
+          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />
         </button>
         
         {/* Avatar */}
         <div className="relative group ml-0.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0b74b1] to-[#76489d] p-[1.5px] cursor-pointer">
-            <div className="w-full h-full rounded-full bg-white dark:bg-gray-900 flex items-center justify-center">
-               <User className="w-3.5 h-3.5 text-gray-500" />
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-purple-500 p-[1.5px] cursor-pointer shadow-[0_0_10px_rgba(14,165,233,0.2)]">
+            <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
+               <User className="w-3.5 h-3.5 text-muted-foreground" />
             </div>
           </div>
           <div className="absolute right-0 top-full mt-1.5 w-44 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">

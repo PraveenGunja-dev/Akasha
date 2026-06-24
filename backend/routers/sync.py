@@ -74,6 +74,16 @@ def sync_mapping_data():
     except Exception as e:
         logger.error(f"Mapping sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Mapping sync failed: {str(e)}")
+
+@router.post("/capacity/sync")
+def sync_capacity_data():
+    from scripts.sync_capacity_milestones import fetch_capacity_milestones
+    try:
+        fetch_capacity_milestones()
+        return {"status": "success", "message": "Synced Capacity Milestones"}
+    except Exception as e:
+        logger.error(f"Capacity sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Capacity sync failed: {str(e)}")
 import base64
 from datetime import datetime
 import dotenv

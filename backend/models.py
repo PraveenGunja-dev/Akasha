@@ -258,6 +258,7 @@ class MTPOAmount(Base):
     storage_location = Column(String, nullable=True)
     block_plot_name = Column(String, nullable=True)
     currency = Column(String, nullable=True)
+    buyer_name = Column(String, nullable=True)
     
     upload_time = Column(DateTime, default=datetime.utcnow)
 
@@ -289,6 +290,7 @@ class MTInventory(Base):
     # New columns from material logic update
     material_name = Column(String, nullable=True)
     unrestricted_qty = Column(Float, nullable=True)
+    base_unit = Column(String, nullable=True)
     
     upload_time = Column(DateTime, default=datetime.utcnow)
 
@@ -437,6 +439,9 @@ class P6Activity(Base):
     planned_finish_date = Column(DateTime, nullable=True)
     actual_start_date = Column(DateTime, nullable=True)
     actual_finish_date = Column(DateTime, nullable=True)
+    # Baseline dates (per-activity baseline from P6)
+    baseline_start_date = Column(DateTime, nullable=True)
+    baseline_finish_date = Column(DateTime, nullable=True)
     
     planned_duration = Column(Float, nullable=True)
     actual_duration = Column(Float, nullable=True)

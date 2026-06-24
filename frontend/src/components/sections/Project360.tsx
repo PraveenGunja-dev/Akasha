@@ -141,7 +141,7 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border/50">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border">
               <span>AI Confidence:</span>
               <span className="font-mono font-bold text-primary">{avgConfidence}%</span>
             </div>
@@ -201,23 +201,19 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
           {/* Column 2: Risk Drivers & Issue Heatmap */}
           <div className="p-5 space-y-4">
             <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Risk Drivers</div>
-            <div className="space-y-2">
+            <div className="space-y-2.5 mt-2">
               {topDrivers.map(([issue, count]) => {
                 const cfg = ISSUE_CONFIG[issue] || ISSUE_CONFIG['On Track'];
                 const IssueIcon = cfg.icon;
                 const pct = Math.round((count / data.length) * 100);
                 return (
-                  <div key={issue} className="group/driver">
-                    <div className="flex items-center justify-between mb-1">
-                      <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold ${cfg.color}`}>
-                        <IssueIcon className="w-3.5 h-3.5" /> {issue}
-                      </span>
-                      <span className="text-[10px] font-mono font-bold text-muted-foreground">{count} <span className="opacity-50">({pct}%)</span></span>
-                    </div>
-                    <div className="h-1.5 bg-border/50 rounded-full overflow-hidden">
-                      <div className="h-full rounded-full transition-all duration-700 group-hover/driver:brightness-125" 
-                        style={{ width: `${pct}%`, backgroundColor: cfg.color.includes('red') ? '#EF4444' : cfg.color.includes('purple') ? '#A855F7' : cfg.color.includes('amber') ? '#F59E0B' : cfg.color.includes('pink') ? '#EC4899' : cfg.color.includes('orange') ? '#F97316' : cfg.color.includes('cyan') ? '#06B6D4' : '#EAB308' }}></div>
-                    </div>
+                  <div key={issue} className="flex items-center justify-between text-[11px]">
+                    <span className={`flex items-center gap-2 font-medium ${cfg.color}`}>
+                      <IssueIcon className="w-3.5 h-3.5" /> {issue}
+                    </span>
+                    <span className="font-mono font-bold text-muted-foreground">
+                      {count} <span className="opacity-50 font-normal">({pct}%)</span>
+                    </span>
                   </div>
                 );
               })}

@@ -108,10 +108,10 @@ def fetch_capacity_milestones():
             wbs_endpoint = f"{p6.base_url}/wbs?Fields=ObjectId,Code,Name,ParentObjectId&Filter=ProjectObjectId={p6_obj_id}"
             import requests
             proxies = {
-                "http": os.getenv("HTTP_PROXY") or os.getenv("http_proxy") or "http://cloudproxy.adani.com:8080",
-                "https": os.getenv("HTTPS_PROXY") or os.getenv("https_proxy") or "http://cloudproxy.adani.com:8080"
+                "http": os.getenv("HTTP_PROXY") or os.getenv("http_proxy"),
+                "https": os.getenv("HTTPS_PROXY") or os.getenv("https_proxy")
             }
-            res = requests.get(wbs_endpoint, headers=p6.headers, proxies=proxies, verify=False)
+            res = requests.get(wbs_endpoint, headers=p6.headers, proxies=proxies, verify=False, timeout=180)
             res.raise_for_status()
             wbs_data = res.json()
             wbs_map = {w['ObjectId']: w for w in wbs_data}
@@ -121,7 +121,7 @@ def fetch_capacity_milestones():
             
             # Fetch Resource Assignments
             assignments_endpoint = f"{p6.base_url}/resourceAssignment?Fields=ObjectId,ActivityObjectId,ActivityId,ActivityName,ResourceId,ResourceName,ResourceType,PlannedUnits,AtCompletionUnits,ActualUnits&Filter=ProjectObjectId={p6_obj_id} and ResourceType='Material'"
-            res = requests.get(assignments_endpoint, headers=p6.headers, proxies=proxies, verify=False)
+            res = requests.get(assignments_endpoint, headers=p6.headers, proxies=proxies, verify=False, timeout=180)
             res.raise_for_status()
             assignments = res.json()
             res_map = {}

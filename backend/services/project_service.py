@@ -555,6 +555,7 @@ def get_project_360_detail(db: Session, project_id: str):
             "wbsElement": inv.wbs_element,
             "storageLocation": inv.storage_location_mapping,
             "plantCode": inv.plant_code,
+            "baseUnit": getattr(inv, "base_unit", None),
         })
         total_inv_qty += (inv.quantity_inv or 0.0)
         total_inv_inr += (inv.value_unrestricted or 0.0)
@@ -575,7 +576,7 @@ def get_project_360_detail(db: Session, project_id: str):
         "dataDate": p6_proj.data_date.strftime("%Y-%m-%d") if p6_proj.data_date else None,
         "mustFinishByDate": p6_proj.must_finish_by_date.strftime("%Y-%m-%d") if p6_proj.must_finish_by_date else None,
         # Progress & Duration
-        "durationPercentComplete": p6_proj.duration_percent_complete,
+        "durationPercentComplete": (p6_proj.duration_percent_complete * 100) if p6_proj.duration_percent_complete is not None and p6_proj.duration_percent_complete <= 1.0 and p6_proj.duration_percent_complete > 0 else p6_proj.duration_percent_complete,
         "plannedDuration": p6_proj.planned_duration,
         "actualDuration": p6_proj.actual_duration,
         "remainingDuration": p6_proj.remaining_duration,
@@ -609,6 +610,24 @@ def get_project_360_detail(db: Session, project_id: str):
         "baselineNotStartedActivities": p6_proj.baseline_not_started_activity_count,
         # Metadata
         "lastSyncedAt": p6_proj.last_synced_at.strftime("%Y-%m-%d %H:%M") if p6_proj.last_synced_at else None,
+        "allActivities": [
+            {
+                "activityId": act.activity_id,
+                "name": act.name,
+                "status": act.status,
+                "type": act.type,
+                "forecastStartDate": act.start_date.strftime("%Y-%m-%d") if act.start_date else None,
+                "forecastFinishDate": act.finish_date.strftime("%Y-%m-%d") if act.finish_date else None,
+                "plannedStartDate": act.planned_start_date.strftime("%Y-%m-%d") if act.planned_start_date else None,
+                "plannedFinishDate": act.planned_finish_date.strftime("%Y-%m-%d") if act.planned_finish_date else None,
+                "actualStartDate": act.actual_start_date.strftime("%Y-%m-%d") if act.actual_start_date else None,
+                "actualFinishDate": act.actual_finish_date.strftime("%Y-%m-%d") if act.actual_finish_date else None,
+                "baselineStartDate": act.baseline_start_date.strftime("%Y-%m-%d") if act.baseline_start_date else None,
+                "baselineFinishDate": act.baseline_finish_date.strftime("%Y-%m-%d") if act.baseline_finish_date else None,
+                "wbsName": act.wbs_name
+            }
+            for act in p6_proj.activities
+        ] if p6_proj.activities else []
     }
 
     # ── Delayed Activities & MW Capacity ──
