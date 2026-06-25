@@ -91,6 +91,105 @@ const fmtDays = (v: number | null | undefined): string => {
   return `${Math.round(v)} days`;
 };
 
+/* ── P6 Sync Editor Component ── */
+const P6SyncEditor = ({ p6 }: { p6: any }) => {
+  const [editMode, setEditMode] = React.useState(false);
+  const [saving, setSaving] = React.useState(false);
+  const [saveMsg, setSaveMsg] = React.useState<string | null>(null);
+  const [editFields, setEditFields] = React.useState<Record<string, string>>({});
+
+  const editableFields = [
+    { key: 'start_date', label: 'Start Date', current: p6.startDate },
+    { key: 'finish_date', label: 'Finish Date', current: p6.finishDate },
+    { key: 'planned_start_date', label: 'Planned Start', current: p6.plannedStartDate },
+    { key: 'scheduled_finish_date', label: 'Scheduled Finish', current: p6.scheduledFinishDate },
+    { key: 'data_date', label: 'Data Date', current: p6.dataDate },
+    { key: 'must_finish_by_date', label: 'Must Finish By', current: p6.mustFinishByDate },
+    { key: 'baseline_start_date', label: 'Baseline Start', current: p6.baselineStartDate },
+    { key: 'baseline_finish_date', label: 'Baseline Finish', current: p6.baselineFinishDate },
+  ];
+
+  const handleSave = async () => {
+    setSaving(true);
+    setSaveMsg(null);
+    try {
+      const payload: Record<string, string> = {};
+      for (const [k, v] of Object.entries(editFields)) {
+        if (v && v.trim()) payload[k] = new Date(v).toISOString();
+      }
+      if (Object.keys(payload).length === 0) {
+        setSaveMsg('No changes to save.');
+        setSaving(false);
+        return;
+      }
+      const res = await fetch(`/akasha/api/p6/projects/${encodeURIComponent(p6.projectId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const result = await res.json();
+      if (res.ok && result.success) {
+        setSaveMsg('✓ Synced to P6 successfully');
+        setEditMode(false);
+        setEditFields({});
+      } else {
+        setSaveMsg(`⚠ ${result.detail || result.message || 'Sync failed'}`);
+      }
+    } catch (err) {
+      setSaveMsg('⚠ Network error — could not reach P6.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="intelligence-card p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+          <RefreshCcw className="w-4 h-4 text-primary/70" /> 2-Way P6 Sync
+          <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ml-2">Live</span>
+        </h3>
+        <div className="flex items-center gap-2">
+          {saveMsg && (
+            <span className={`text-xs font-medium ${saveMsg.startsWith('✓') ? 'text-emerald-500' : 'text-amber-500'}`}>{saveMsg}</span>
+          )}
+          {editMode ? (
+            <>
+              <button onClick={() => { setEditMode(false); setEditFields({}); setSaveMsg(null); }}
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border">Cancel</button>
+              <button onClick={handleSave} disabled={saving}
+                className="text-xs font-bold text-primary-foreground bg-primary hover:bg-primary/90 px-4 py-1.5 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1.5">
+                {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+                Push to P6
+              </button>
+            </>
+          ) : (
+            <button onClick={() => setEditMode(true)}
+              className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 px-4 py-1.5 rounded-lg transition-all">
+              Edit Dates
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {editableFields.map(f => (
+          <div key={f.key} className="bg-muted/30 border border-border rounded-lg p-3">
+            <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1.5">{f.label}</div>
+            {editMode ? (
+              <input type="date" defaultValue={f.current || ''}
+                onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                className="w-full bg-background border border-border rounded px-2 py-1 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40" />
+            ) : (
+              <div className="text-sm font-mono text-foreground/80">{f.current || '—'}</div>
+            )}
+          </div>
+        ))}
+      </div>
+      <p className="text-[10px] text-muted-foreground/40 mt-3">Changes are pushed directly to Oracle Primavera P6 via the SOAP API.</p>
+    </div>
+  );
+};
+
 export default function ProjectWorkspace({ projectId: propProjectId, onBack }: { projectId?: string, onBack?: () => void }) {
   const params = useParams();
   const projectId = propProjectId || params.projectId;
@@ -1604,103 +1703,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   })()}
 
                   {/* ═══ 2-WAY SYNC: EDIT PROJECT DATES ═══ */}
-                  {(() => {
-                    const [editMode, setEditMode] = React.useState(false);
-                    const [saving, setSaving] = React.useState(false);
-                    const [saveMsg, setSaveMsg] = React.useState<string | null>(null);
-                    const [editFields, setEditFields] = React.useState<Record<string, string>>({});
-
-                    const editableFields = [
-                      { key: 'start_date', label: 'Start Date', current: p6.startDate },
-                      { key: 'finish_date', label: 'Finish Date', current: p6.finishDate },
-                      { key: 'planned_start_date', label: 'Planned Start', current: p6.plannedStartDate },
-                      { key: 'scheduled_finish_date', label: 'Scheduled Finish', current: p6.scheduledFinishDate },
-                      { key: 'data_date', label: 'Data Date', current: p6.dataDate },
-                      { key: 'must_finish_by_date', label: 'Must Finish By', current: p6.mustFinishByDate },
-                      { key: 'baseline_start_date', label: 'Baseline Start', current: p6.baselineStartDate },
-                      { key: 'baseline_finish_date', label: 'Baseline Finish', current: p6.baselineFinishDate },
-                    ];
-
-                    const handleSave = async () => {
-                      setSaving(true);
-                      setSaveMsg(null);
-                      try {
-                        const payload: Record<string, string> = {};
-                        for (const [k, v] of Object.entries(editFields)) {
-                          if (v && v.trim()) payload[k] = new Date(v).toISOString();
-                        }
-                        if (Object.keys(payload).length === 0) {
-                          setSaveMsg('No changes to save.');
-                          setSaving(false);
-                          return;
-                        }
-                        const res = await fetch(`/akasha/api/p6/projects/${encodeURIComponent(p6.projectId)}`, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify(payload),
-                        });
-                        const result = await res.json();
-                        if (res.ok && result.success) {
-                          setSaveMsg('✓ Synced to P6 successfully');
-                          setEditMode(false);
-                          setEditFields({});
-                        } else {
-                          setSaveMsg(`⚠ ${result.detail || result.message || 'Sync failed'}`);
-                        }
-                      } catch (err) {
-                        setSaveMsg('⚠ Network error — could not reach P6.');
-                      } finally {
-                        setSaving(false);
-                      }
-                    };
-
-                    return (
-                      <div className="intelligence-card p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <RefreshCcw className="w-4 h-4 text-primary/70" /> 2-Way P6 Sync
-                            <span className="text-[9px] bg-primary/10 text-primary border border-primary/20 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ml-2">Live</span>
-                          </h3>
-                          <div className="flex items-center gap-2">
-                            {saveMsg && (
-                              <span className={`text-xs font-medium ${saveMsg.startsWith('✓') ? 'text-emerald-500' : 'text-amber-500'}`}>{saveMsg}</span>
-                            )}
-                            {editMode ? (
-                              <>
-                                <button onClick={() => { setEditMode(false); setEditFields({}); setSaveMsg(null); }}
-                                  className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5 rounded-lg border border-border">Cancel</button>
-                                <button onClick={handleSave} disabled={saving}
-                                  className="text-xs font-bold text-primary-foreground bg-primary hover:bg-primary/90 px-4 py-1.5 rounded-lg transition-all disabled:opacity-50 flex items-center gap-1.5">
-                                  {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-                                  Push to P6
-                                </button>
-                              </>
-                            ) : (
-                              <button onClick={() => setEditMode(true)}
-                                className="text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 px-4 py-1.5 rounded-lg transition-all">
-                                Edit Dates
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                          {editableFields.map(f => (
-                            <div key={f.key} className="bg-muted/30 border border-border rounded-lg p-3">
-                              <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1.5">{f.label}</div>
-                              {editMode ? (
-                                <input type="date" defaultValue={f.current || ''}
-                                  onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
-                                  className="w-full bg-background border border-border rounded px-2 py-1 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40" />
-                              ) : (
-                                <div className="text-sm font-mono text-foreground/80">{f.current || '—'}</div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                        <p className="text-[10px] text-muted-foreground/40 mt-3">Changes are pushed directly to Oracle Primavera P6 via the SOAP API.</p>
-                      </div>
-                    );
-                  })()}
+                  <P6SyncEditor p6={p6} />
 
                   {/* Mapping Info */}
                   {mapping && (

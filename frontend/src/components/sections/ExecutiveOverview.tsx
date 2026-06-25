@@ -82,14 +82,23 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     projects.forEach((p: any) => {
       poVal += (p.sap?.po_value || 0);
       deliveredCr += (p.sap?.po_delivered_cr || 0);
-      if (p.p6?.progress !== undefined && p.p6?.progress > 0) {
-        progSum += p.p6.progress;
+      
+      let prog = 0;
+      const rawProg = p.p6?.progress;
+      if (typeof rawProg === 'string' && rawProg.includes('%')) {
+        prog = parseFloat(rawProg.replace('%', ''));
+      } else {
+        prog = Number(rawProg) || 0;
+      }
+
+      if (prog > 0) {
+        progSum += prog;
         validProg++;
       }
     });
     return {
       totalPOValue: poVal,
-      avgProgress: validProg ? (progSum / validProg) * 100 : 0,
+      avgProgress: validProg ? (progSum / validProg) : 0,
       poDeliveredCr: deliveredCr
     };
   }, [projects]);
