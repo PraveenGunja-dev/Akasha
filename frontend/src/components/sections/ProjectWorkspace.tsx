@@ -344,8 +344,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           wbsElements: new Set<string>(),
           baseUnit: '—'
         };
-      } else if (cleanDesc !== '—' && matMap[code].materialDescription === '—') {
-        matMap[code].materialDescription = cleanDesc;
+      } else if (cleanDesc !== '—') {
+        if (matMap[code].materialDescription === '—' || cleanDesc.length > matMap[code].materialDescription.length) {
+          matMap[code].materialDescription = cleanDesc;
+        }
       }
     };
 
@@ -385,7 +387,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       if (inventoryFilter === 'PROJECT' && inv.storageLocation !== 'PS01') return;
       const code = inv.materialCode;
       if (!code) return;
-      initMat(code, '—');
+      initMat(code, inv.materialName || '—');
       const m = matMap[code];
       m.inventoryQty += Number(inv.inventoryQty || 0);
       m.inventoryValueINR += Number(inv.inventoryValueINR || 0);
@@ -1032,7 +1034,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 {expandedMetric === 'pos' && (
                                   <tr>
                                     <th className="text-left">PO Number</th>
-                                    <th className="text-left">Material</th>
+                                    <th className="text-left">Material Description</th>
                                     <th className="text-left">Vendor</th>
                                     <th className="text-right">Ordered Qty</th>
                                     <th className="text-right">Budget (INR)</th>
@@ -1054,7 +1056,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 {expandedMetric === 'materials' && (
                                   <tr>
                                     <th className="text-left">Material Code</th>
-                                    <th className="text-left">Description</th>
+                                    <th className="text-left">Material Description</th>
                                     <th className="text-right">Ordered</th>
                                     <th className="text-right">Consumed</th>
                                     <th className="text-right">Inventory</th>
@@ -1065,7 +1067,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 {expandedMetric === 'volume' && (
                                   <tr>
                                     <th className="text-left">Material Code</th>
-                                    <th className="text-left">Description</th>
+                                    <th className="text-left">Material Description</th>
                                     <th className="text-right">Ordered Qty</th>
                                     <th className="text-right">% of Total</th>
                                     <th className="text-left">Distribution</th>
@@ -1075,7 +1077,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 {expandedMetric === 'inventory' && (
                                   <tr>
                                     <th className="text-left">Material Code</th>
-                                    <th className="text-left">Description</th>
+                                    <th className="text-left">Material Description</th>
                                     <th className="text-right">Inventory Qty</th>
                                     <th className="text-right">Inventory Value (INR)</th>
                                     <th className="text-center">Storage Location</th>
@@ -1085,7 +1087,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && (
                                   <tr>
                                     <th className="text-left">Material Code</th>
-                                    <th className="text-left">Description</th>
+                                    <th className="text-left">Material Description</th>
                                     <th className="text-right">Supply PO Amount</th>
                                     <th className="text-right">Consumed Amt</th>
                                     <th className="text-right">Remaining</th>

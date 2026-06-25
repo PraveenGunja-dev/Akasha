@@ -609,7 +609,7 @@ def get_project_360_detail(db: Session, project_id: str):
         if mat_str in po_materials:
             sap_inventory.append({
                 "materialCode": inv.material_code,
-                "materialName": inv.material_name,
+                "materialName": inv.material_description or inv.material_name,
                 "purchaseOrder": inv.purchase_order,
                 "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio_sap,
                 "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio_sap,
