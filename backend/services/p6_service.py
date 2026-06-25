@@ -300,7 +300,7 @@ class P6Service:
     # ------------------------------------------
     # 1. Fetch Projects from P6 API
     # ------------------------------------------
-    def fetch_projects(self, status_filter: str = None) -> List[Dict[str, Any]]:
+    def fetch_projects(self, status_filter: str = None, project_object_id: int = None) -> List[Dict[str, Any]]:
         """
         Fetch construction projects from P6 with all 39 fields.
         Returns raw P6 API response as list of dicts.
@@ -308,8 +308,14 @@ class P6Service:
         endpoint = f"{self.base_url}/project"
         params = {"Fields": PROJECT_FIELDS}
 
+        filters = []
         if status_filter:
-            params["Filter"] = f"Status='{status_filter}'"
+            filters.append(f"Status='{status_filter}'")
+        if project_object_id:
+            filters.append(f"ObjectId={project_object_id}")
+
+        if filters:
+            params["Filter"] = " and ".join(filters)
 
         try:
             response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
@@ -352,41 +358,18 @@ class P6Service:
             logger.error(f"Error fetching P6 baseline projects: {e}")
             return []
 
-    # ------------------------------------------
-    # 3. Fetch Activities for a Project
-    # ------------------------------------------
-    def fetch_activities(self, project_object_id: int) -> List[Dict[str, Any]]:
-        """Fetch activities for a specific project with construction-relevant fields."""
-        endpoint = f"{self.base_url}/activity"
-        params = {
-            "Fields": ACTIVITY_FIELDS,
-            "Filter": f"ProjectObjectId={project_object_id}"
-        }
-
-        try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
-            response.raise_for_status()
-            data = response.json()
-            logger.info(f"Fetched {len(data)} activities for project {project_object_id}")
-            return data
-        except requests.exceptions.HTTPError as e:
-            logger.error(f"P6 HTTP Error fetching activities: {e}")
-            return []
-        except Exception as e:
-            logger.error(f"Error fetching P6 activities for project {project_object_id}: {e}")
-            return []
 
     # ------------------------------------------
     # 4. Map & Store Projects to Database
     # ------------------------------------------
-    def sync_projects_to_db(self, db: Session) -> int:
+    def sync_projects_to_db(self, db: Session, project_object_id: int = None) -> int:
         """
         Fetch all projects from P6, map fields, and upsert into the database.
         Returns the number of projects synced.
         """
         from models import P6Project
 
-        raw_projects_list = self.fetch_projects()
+        raw_projects_list = self.fetch_projects(project_object_id=project_object_id)
         if not raw_projects_list:
             logger.warning("No projects returned from P6 API")
             return 0
@@ -559,6 +542,29 @@ class P6Service:
             "synced_at": datetime.utcnow().isoformat()
         }
         logger.info(f"Full P6 sync complete: {result}")
+        return result
+
+    # ------------------------------------------
+    # 6.5. Individual Sync: Project + Baseline + Activities
+    # ------------------------------------------
+    def individual_sync(self, db: Session, project_object_id: int) -> Dict[str, int]:
+        """
+        Run an individual sync of Project, Baseline Project, and Activities for a specific project.
+        Returns a summary dict with counts.
+        """
+        logger.info(f"Starting individual P6 sync for project {project_object_id}...")
+
+        projects_synced = self.sync_projects_to_db(db, project_object_id=project_object_id)
+        baselines_synced = self.sync_baselines_to_db(db, project_object_id=project_object_id)
+        activities_synced = self.sync_activities_to_db(db, project_object_id=project_object_id)
+
+        result = {
+            "projects_synced": projects_synced,
+            "baselines_synced": baselines_synced,
+            "activities_synced": activities_synced,
+            "synced_at": datetime.utcnow().isoformat()
+        }
+        logger.info(f"Individual P6 sync complete for project {project_object_id}: {result}")
         return result
 
     # ------------------------------------------

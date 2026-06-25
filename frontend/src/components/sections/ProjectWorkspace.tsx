@@ -206,6 +206,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
+  const [actFilter, setActFilter] = useState<string>('All');
+  const [syncingP6, setSyncingP6] = useState(false);
 
   useEffect(() => {
     setActiveTab('overview');
@@ -640,7 +642,32 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             <div className={dotClass}></div>
             <span className="text-sm font-semibold text-foreground truncate max-w-[400px]">{p.projectName}</span>
           </div>
-          <span className="text-[10px] font-mono text-muted-foreground/40 ml-auto">{p.projectId}</span>
+          <div className="ml-auto flex items-center gap-4">
+            <span className="text-[10px] font-mono text-muted-foreground/40">{p.projectId}</span>
+            {detail?.p6?.p6ObjectId && (
+              <button
+                onClick={async () => {
+                  setSyncingP6(true);
+                  try {
+                    const res = await fetch(`/akasha/api/p6/sync/${detail.p6.p6ObjectId}`, { method: 'POST' });
+                    if (res.ok) {
+                      window.location.reload();
+                    }
+                  } catch (e) {
+                    console.error(e);
+                  } finally {
+                    setSyncingP6(false);
+                  }
+                }}
+                disabled={syncingP6}
+                title="Pull latest data from P6 for this project"
+                className="flex items-center gap-2 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+              >
+                {syncingP6 ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
+                Sync from P6
+              </button>
+            )}
+          </div>
         </div>
       </header>
 
@@ -649,7 +676,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
           <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-blue-400" />
-          <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} />
+          <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
           <HeroMetric label="Forecast COD" value={p.forecastMonth} icon={Calendar} color="text-primary" />
           {((detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)) > 0 && (
             <HeroMetric label="Transmission Lines" value={(detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)} icon={MapPin} color="text-indigo-400" />
@@ -657,7 +684,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           {(detail?.tc?.summary?.totalNodes || 0) > 0 && (
             <HeroMetric label="Substations" value={detail?.tc?.summary?.totalNodes || 0} icon={Zap} color="text-amber-400" />
           )}
-          <HeroMetric label="Delayed Activities" value={detail?.p6?.delayedActivities?.length || 0} icon={AlertTriangle} color={(detail?.p6?.delayedActivities?.length || 0) > 0 ? 'text-red-400' : 'text-emerald-400'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
+          <HeroMetric label="Baseline COD" value={p6?.baselineFinishDate || 'Not Set'} icon={CalendarClock} color="text-teal-500 dark:text-teal-400" />
         </div>
 
         {/* ── AI Project Summary ── */}
@@ -1641,7 +1668,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                   {/* ═══ ALL ACTIVITIES TABLE ═══ */}
                   {p6.allActivities && p6.allActivities.length > 0 && (() => {
-                    const [actFilter, setActFilter] = React.useState<string>('All');
                     const statuses = ['All', 'Completed', 'In Progress', 'Not Started'];
                     const filtered = actFilter === 'All' ? p6.allActivities : p6.allActivities.filter((a: any) => a.status === actFilter);
                     return (
@@ -1699,10 +1725,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               ))}
                             </tbody>
                           </table>
-                        </div>
                       </div>
-                    );
-                  })()}
+                    </div>
+                  ); })()}
 
                   {/* ═══ 2-WAY SYNC: EDIT PROJECT DATES ═══ */}
                   <P6SyncEditor p6={p6} />
@@ -1945,80 +1970,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         </div>
       </main>
 
-      {/* ── Delayed Activities Modal ── */}
-      {showDelayedModal && p6?.delayedActivities && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card w-full max-w-5xl max-h-[90vh] rounded-2xl border border-border shadow-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-border bg-muted/30">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center border border-red-500/20">
-                  <AlertTriangle className="w-5 h-5 text-red-500" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-foreground">Delayed Activities</h3>
-                  <p className="text-xs text-muted-foreground">Activities falling behind schedule based on Data Date ({p6.dataDate})</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowDelayedModal(false)}
-                className="w-8 h-8 flex items-center justify-center rounded-lg hover:bg-muted/80 text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-6 overflow-y-auto bg-background/50 flex-1 scrollbar-thin">
-              <table className="intel-table w-full text-sm">
-                <thead className="bg-muted/50 text-[10px] uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
-                  <tr>
-                    <th className="text-left font-semibold text-muted-foreground px-4 py-3">Activity ID</th>
-                    <th className="text-left font-semibold text-muted-foreground px-4 py-3">Name</th>
-                    <th className="text-left font-semibold text-muted-foreground px-4 py-3">WBS Name</th>
-                    <th className="text-center font-semibold text-muted-foreground px-4 py-3">Planned Finish</th>
-                    <th className="text-right font-semibold text-red-500 px-4 py-3">Delay (Days)</th>
-                    <th className="text-right font-semibold text-muted-foreground px-4 py-3">MW Impact</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/50">
-                  {p6.delayedActivities.map((act: any, idx: number) => (
-                    <tr key={idx} className="hover:bg-muted/30 transition-colors group">
-                      <td className="px-4 py-3 font-mono text-xs text-primary/80 font-medium">{act.activityId}</td>
-                      <td className="px-4 py-3 text-foreground/90 font-medium max-w-[300px] truncate" title={act.name}>{act.name}</td>
-                      <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
-                      <td className="px-4 py-3 text-center text-xs font-mono">{act.plannedFinishDate || act.plannedStartDate || '—'}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-red-500/10 text-red-500 font-bold text-xs border border-red-500/20">
-                          <Clock className="w-3.5 h-3.5" />
-                          {act.delayDays}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right font-mono font-semibold text-emerald-500/90 bg-emerald-500/[0.02]">
-                        {act.mwCapacity > 0 ? `${act.mwCapacity.toFixed(2)} MW` : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {(!p6.delayedActivities || p6.delayedActivities.length === 0) && (
-                <div className="py-12 flex flex-col items-center justify-center text-center">
-                  <CheckCircle className="w-12 h-12 text-emerald-500/50 mb-3" />
-                  <p className="text-emerald-500/80 font-medium text-lg">No delayed activities detected</p>
-                  <p className="text-muted-foreground text-sm mt-1">All activities are on track according to the current data date.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="p-4 border-t border-border bg-muted/20 flex justify-end">
-              <button
-                onClick={() => setShowDelayedModal(false)}
-                className="px-6 py-2 rounded-lg bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 font-medium text-sm transition-colors"
-              >
-                Close View
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {/* ── Modals ── */}
       {showDelayedModal && detail?.p6?.delayedActivities && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowDelayedModal(false)}>
@@ -2036,7 +1987,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               <button onClick={() => setShowDelayedModal(false)} className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
             </div>
 
-            <div className="flex-1 overflow-auto p-6 space-y-6">
+            <div className="flex-1 overflow-auto p-6 space-y-6" data-lenis-prevent="true">
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
                   <div>

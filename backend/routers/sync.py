@@ -55,6 +55,20 @@ def sync_p6_data(db: Session = Depends(get_db)):
         logger.error(f"P6 sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"P6 sync failed: {str(e)}")
 
+@router.post("/p6/sync/{project_object_id}")
+def sync_individual_p6_data(project_object_id: int, db: Session = Depends(get_db)):
+    p6 = P6Service()
+    try:
+        result = p6.individual_sync(db, project_object_id)
+        return {
+            "status": "success",
+            "message": f"Synced project {project_object_id}",
+            **result
+        }
+    except Exception as e:
+        logger.error(f"P6 individual sync failed for project {project_object_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"P6 individual sync failed: {str(e)}")
+
 @router.post("/tc/sync")
 def sync_tc_data():
     from services.tc_sync import run_sync

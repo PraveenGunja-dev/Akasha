@@ -495,8 +495,8 @@ def get_project_360_detail(db: Session, project_id: str):
             "materialCode": rec.material_code,
             "materialDescription": rec.material_description,
             "movementType": m_type,
-            "quantity": qty,
-            "amountINR": cost,
+            "quantity": qty * allocation_ratio,
+            "amountINR": cost * allocation_ratio,
             "wbsElement": rec.wbs_element,
             "plantCode": rec.plant_code,
             "postingDate": rec.posting_date.isoformat() if rec.posting_date else None,
@@ -514,6 +514,8 @@ def get_project_360_detail(db: Session, project_id: str):
     total_po_qty = 0.0
     total_budget_inr = 0.0
     total_delivered_inr = 0.0
+    sap_intransit = []
+    total_transit_qty = 0.0
 
     for po in po_records_all:
         mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
@@ -544,6 +546,19 @@ def get_project_360_detail(db: Session, project_id: str):
             "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
             "storageLocation": getattr(po, "storage_location", None),
         })
+        
+        transit_qty = getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio
+        if transit_qty > 0:
+            sap_intransit.append({
+                "poNumber": po.purchasing_document,
+                "materialCode": po.material_code,
+                "materialName": po.material_name,
+                "inTransitQty": transit_qty,
+                "inTransitINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
+                "plantCode": po.plant_code,
+                "vendorName": vendor_name,
+            })
+            total_transit_qty += transit_qty
         
         total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
         total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
@@ -578,9 +593,7 @@ def get_project_360_detail(db: Session, project_id: str):
         })
     vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
 
-    # ── In-Transit (ZIBDSESREP) ──
-    sap_intransit = []
-    total_transit_qty = 0.0
+    # ── In-Transit (Calculated from PO still_to_deliver) ──
 
     # ── Inventory (MB52) ──
     inv_records = []
