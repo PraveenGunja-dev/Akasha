@@ -479,7 +479,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a', fontSize: 11 } },
     grid: { left: '3%', right: '4%', bottom: '5%', top: '8%', containLabel: true },
     xAxis: { type: 'category', data: supplyData.map(s => s.name), axisLine: { lineStyle: { color: '#e2e8f0' } }, axisLabel: { color: '#64748b', fontSize: 10, fontWeight: 'bold' } },
-    yAxis: { type: 'value', name: 'Units', nameTextStyle: { fontSize: 10, color: '#64748b', fontWeight: 'bold' }, axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } } },
+    yAxis: { type: 'value', name: 'No', nameTextStyle: { fontSize: 10, color: '#64748b', fontWeight: 'bold' }, axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } } },
     series: [{ type: 'bar', data: supplyData.map(s => ({ value: s.value, itemStyle: { color: s.color, borderRadius: [4, 4, 0, 0] } })), barWidth: '35%' }]
   };
 
@@ -504,7 +504,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       axisLabel: { color: '#64748b', fontSize: 10, rotate: 15 }
     },
     yAxis: [
-      { type: 'value', name: 'Units', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
+      { type: 'value', name: 'No', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10 }, splitLine: { lineStyle: { color: '#f1f5f9' } } },
       { type: 'value', name: 'Value', position: 'right', axisLine: { show: false }, axisLabel: { color: '#64748b', fontSize: 10, formatter: (v: number) => `₹${(v / 100000).toFixed(0)}L` }, splitLine: { show: false } }
     ],
     series: [
@@ -646,7 +646,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         {/* ── Hero Section ── */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
-          <HeroMetric label="SAP PO Budget" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-blue-400" />
+          <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-blue-400" />
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} />
           <HeroMetric label="Forecast COD" value={p.forecastMonth} icon={Calendar} color="text-primary" />
           {((detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)) > 0 && (
@@ -997,14 +997,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
                         <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
                         <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-indigo-500 dark:text-indigo-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} />
-                        <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="Units" icon={Package} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />
-                        <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="Units" icon={Box} color="text-emerald-500 dark:text-emerald-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
+                        <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="No" icon={Package} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />
+                        <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="No" icon={Box} color="text-emerald-500 dark:text-emerald-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
 
-                        <HeroMetric label="Total Budget" value={fmtCost(sap.summary.totalBudgetINR)} icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
-                        <HeroMetric label="Utilized Amt" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-orange-500 dark:text-orange-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
-                        <HeroMetric label="Remaining Bal" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
+                        <HeroMetric label="Supply PO Amount" value={fmtCost(sap.summary.totalBudgetINR)} icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
+                        <HeroMetric label="Utilized Supply PO Amount" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-orange-500 dark:text-orange-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
+                        <HeroMetric label="Remaining Supply PO Amount" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
                         <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-red-500 dark:text-red-400' : 'text-emerald-500 dark:text-emerald-400'} />
-                        <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="Units" icon={Truck} color="text-amber-500 dark:text-amber-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
+                        <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="No" icon={Truck} color="text-amber-500 dark:text-amber-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
                       </div>
 
                       {/* ── Interactive Breakdown Panel ── */}
@@ -1047,7 +1047,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                     <th className="text-center">PO Count</th>
                                     <th className="text-center">Materials</th>
                                     <th className="text-right">Total Ordered Qty</th>
-                                    <th className="text-right">Total Budget (INR)</th>
+                                    <th className="text-right">Supply PO Amount (INR)</th>
                                   </tr>
                                 )}
                                 {/* ── Material Type Breakdown ── */}
@@ -1086,7 +1086,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   <tr>
                                     <th className="text-left">Material Code</th>
                                     <th className="text-left">Description</th>
-                                    <th className="text-right">Total Budget</th>
+                                    <th className="text-right">Supply PO Amount</th>
                                     <th className="text-right">Consumed Amt</th>
                                     <th className="text-right">Remaining</th>
                                     <th className="text-left">Utilization</th>
@@ -1299,9 +1299,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   <th className="text-center">Inventory Qty</th>
                                   <th className="text-center">Inventory Value</th>
                                   <th className="text-center">In Transit</th>
-                                  <th className="text-center">Total Budget</th>
-                                  <th className="text-center">Delivered Amt</th>
-                                  <th className="text-center">Remaining Bal</th>
+                                  <th className="text-center">Supply PO Amount</th>
+                                  <th className="text-center">Utilized Supply PO Amount</th>
+                                  <th className="text-center">Remaining Supply PO Amount</th>
                                 </tr>
                               </thead>
                               <tbody>

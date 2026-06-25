@@ -132,6 +132,28 @@ def calculate_project_360_metrics(db: Session):
                     mb51_materials.add(mat_str)
         
         # --- STEP B: MB52 Inventory ---
+        # First gather materials from ME2J to filter inventory
+        po_materials = set()
+        if plant_codes:
+            if m.module_wbs:
+                me2j_records = db.query(models.MTPOAmount).filter(
+                    models.MTPOAmount.plant_code.in_(plant_codes),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+                ).all()
+            else:
+                me2j_records = db.query(models.MTPOAmount).filter(
+                    models.MTPOAmount.plant_code.in_(plant_codes)
+                ).all()
+            
+            for rec in me2j_records:
+                ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio_sap
+                budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio_sap
+                in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio_sap
+                if rec.material_code:
+                    mat_str = str(rec.material_code).strip().lstrip('0')
+                    if mat_str:
+                        po_materials.add(mat_str)
+
         if plant_codes:
             if m.module_wbs:
                 mb52_records = db.query(models.MTInventory).filter(
@@ -145,27 +167,16 @@ def calculate_project_360_metrics(db: Session):
                     models.MTInventory.quantity_inv > 0
                 ).all()
             for rec in mb52_records:
-                inventory_qty += (rec.quantity_inv or 0.0) * allocation_ratio_sap
-                inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio_sap
+                mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
+                # Only include inventory for materials that exist in the POs
+                if mat_str in po_materials:
+                    inventory_qty += (rec.quantity_inv or 0.0) * allocation_ratio_sap
+                    inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio_sap
 
-        # --- STEP C: ME2K Purchase Orders ---
-        if plant_codes:
-            if m.module_wbs:
-                me2k_records = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.plant_code.in_(plant_codes),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).all()
-            else:
-                me2k_records = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.plant_code.in_(plant_codes)
-                ).all()
-            
-            for rec in me2k_records:
-                ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio_sap
-                budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio_sap
-                in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio_sap
+        # --- STEP C: ME2J Purchase Orders ---
+        # Already processed above to get po_materials
 
-        # --- STEP D: In-Transit (ME2K Still to Deliver) ---
+        # --- STEP D: In-Transit (ME2J Still to Deliver) ---
 
         # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
         po_vol = ordered_qty
@@ -480,7 +491,7 @@ def get_project_360_detail(db: Session, project_id: str):
                 if mat_str:
                     mb51_materials.add(mat_str)
                     
-    # ── Purchase Orders (ME2K) ──
+    # ── Purchase Orders (ME2J) ──
     if mapping and mapping.module_wbs:
         wbs_prefix = mapping.module_wbs[:6]
         po_records_all = db.query(models.MTPOAmount).filter(
@@ -584,20 +595,31 @@ def get_project_360_detail(db: Session, project_id: str):
     sap_inventory = []
     total_inv_qty = 0.0
     total_inv_inr = 0.0
+    
+    # Extract material codes from POs
+    po_materials = set()
+    for po in po_records_all:
+        mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
+        if mat_str:
+            po_materials.add(mat_str)
+            
     for inv in inv_records:
-        sap_inventory.append({
-            "materialCode": inv.material_code,
-            "materialName": inv.material_name,
-            "purchaseOrder": inv.purchase_order,
-            "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio_sap,
-            "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio_sap,
-            "wbsElement": inv.wbs_element,
-            "storageLocation": inv.storage_location_mapping,
-            "plantCode": inv.plant_code,
-            "baseUnit": getattr(inv, "base_unit", None),
-        })
-        total_inv_qty += (inv.quantity_inv or 0.0) * allocation_ratio_sap
-        total_inv_inr += (inv.value_unrestricted or 0.0) * allocation_ratio_sap
+        mat_str = str(inv.material_code).strip().lstrip('0') if inv.material_code else ''
+        # Filter inventory to only materials that are in POs
+        if mat_str in po_materials:
+            sap_inventory.append({
+                "materialCode": inv.material_code,
+                "materialName": inv.material_name,
+                "purchaseOrder": inv.purchase_order,
+                "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio_sap,
+                "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio_sap,
+                "wbsElement": inv.wbs_element,
+                "storageLocation": inv.storage_location_mapping,
+                "plantCode": inv.plant_code,
+                "baseUnit": getattr(inv, "base_unit", None),
+            })
+            total_inv_qty += (inv.quantity_inv or 0.0) * allocation_ratio_sap
+            total_inv_inr += (inv.value_unrestricted or 0.0) * allocation_ratio_sap
 
     material_breakdown = []
 

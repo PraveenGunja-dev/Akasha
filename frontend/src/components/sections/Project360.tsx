@@ -271,7 +271,7 @@ const AIBriefingCard = ({ data }: { data: any[] }) => {
             {/* Supply Risk */}
             <div className="bg-red-500/5 hover:bg-red-500/10 transition-colors duration-300 rounded-xl p-4 border border-red-500/10">
               <div className="text-[9px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Gap</div>
-              <div className="text-xl font-mono font-bold text-red-500 tracking-tight">{fmtNum(totalSupplyGap)} Units</div>
+              <div className="text-xl font-mono font-bold text-red-500 tracking-tight">{fmtNum(totalSupplyGap)} No</div>
               <div className="text-[10px] text-muted-foreground mt-0.5">Unfulfilled across portfolio</div>
             </div>
 
@@ -370,19 +370,19 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered Qty</span>
           <span className="text-[13px] font-mono font-semibold text-foreground/80">
-            {project.orderedQty > 0 ? `${fmtNum(project.orderedQty)} Units` : '--'}
+            {project.orderedQty > 0 ? `${fmtNum(project.orderedQty)} No` : '--'}
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">In-Transit</span>
           <span className="text-[13px] font-mono font-semibold text-amber-500">
-            {project.inTransitQty > 0 ? `${fmtNum(project.inTransitQty)} Units` : '--'}
+            {project.inTransitQty > 0 ? `${fmtNum(project.inTransitQty)} No` : '--'}
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
           <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Inventory</span>
           <span className="text-[13px] font-mono font-semibold text-emerald-500">
-            {project.inventoryQty > 0 ? `${fmtNum(project.inventoryQty)} Units` : '--'}
+            {project.inventoryQty > 0 ? `${fmtNum(project.inventoryQty)} No` : '--'}
           </span>
         </div>
         <div className="flex flex-col gap-0.5">
