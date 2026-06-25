@@ -71,8 +71,14 @@ def calculate_project_360_metrics(db: Session):
         sched_var = p6_proj.finish_date_variance if p6_proj and p6_proj.finish_date_variance is not None else 0
         cost_var = p6_proj.total_cost_variance if p6_proj and p6_proj.total_cost_variance is not None else 0
         progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
-        
         # 2. SAP Data - Direct Material Reverse Engineering
+        plant_codes = [c for c in [str(m.spv_plant_code).strip() if m.spv_plant_code else None, str(m.agel).strip() if m.agel else None] if c]
+        
+        # Calculate Plant Capacity for pro-rata allocation
+        total_plant_capacity = sum(capacity_by_plant.get(c, 1.0) for c in plant_codes) if plant_codes else 1.0
+        project_capacity = m.capacity_mwac or 0
+        allocation_ratio = project_capacity / total_plant_capacity if total_plant_capacity > 0 else 1.0
+
         budget_inr = 0.0
         expenditure_inr = 0.0
         inventory_value_inr = 0.0
@@ -86,56 +92,11 @@ def calculate_project_360_metrics(db: Session):
         inv_vol = 0.0
         transit_vol = 0.0
         
-        allocation_ratio_sap = 1.0
-        if m.module_wbs:
-            wbs_prefix = m.module_wbs[:6]
-            plant_codes = [c for c in [m.spv_plant_code, m.agel] if c]
-            
-            plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""
-            total_capacity = capacity_by_plant.get(plant_code_str, 1.0)
-            project_capacity = m.capacity_mwac or 0
-            allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
-            
-            # --- STEP A: MB51 Consumption ---
-            mb51_records = db.query(models.MTMaterialDocument).filter(
-                models.MTMaterialDocument.wbs_element.startswith(wbs_prefix)
-            ).all()
-        else:
-            plant_codes = [c for c in [m.spv_plant_code, m.agel] if c]
-            plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""
-            total_capacity = capacity_by_plant.get(plant_code_str, 1.0)
-            project_capacity = m.capacity_mwac or 0
-            allocation_ratio_sap = project_capacity / total_capacity if total_capacity > 0 else 1.0
-            
-            # Fallback to plant level
-            mb51_records = db.query(models.MTMaterialDocument).filter(
-                models.MTMaterialDocument.plant_code.in_(plant_codes)
-            ).all() if plant_codes else []
-            
-        mb51_materials = set()
-        for rec in mb51_records:
-            qty = rec.quantity or 0.0
-            cost = rec.amount_in_lc or 0.0
-            m_type = str(rec.movement_type).strip()
-            if m_type == '221':
-                consumed_qty += (qty * allocation_ratio_sap)
-                expenditure_inr += (cost * allocation_ratio_sap)
-            elif m_type == '222':
-                consumed_qty -= (qty * allocation_ratio_sap)
-                expenditure_inr -= abs(cost * allocation_ratio_sap)
-            
-            # Strip leading zeros for material match
-            if rec.material_code:
-                mat_str = str(rec.material_code).strip()
-                mat_str = mat_str.lstrip('0')
-                if mat_str:
-                    mb51_materials.add(mat_str)
-        
-        # --- STEP B: MB52 Inventory ---
-        # First gather materials from ME2J to filter inventory
         po_materials = set()
+        me2j_records = []
         if plant_codes:
             if m.module_wbs:
+                wbs_prefix = m.module_wbs[:5]
                 me2j_records = db.query(models.MTPOAmount).filter(
                     models.MTPOAmount.plant_code.in_(plant_codes),
                     models.MTPOAmount.wbs_element.startswith(wbs_prefix)
@@ -146,16 +107,50 @@ def calculate_project_360_metrics(db: Session):
                 ).all()
             
             for rec in me2j_records:
-                ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio_sap
-                budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio_sap
-                in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio_sap
+                ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
+                budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio
+                in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio
                 if rec.material_code:
                     mat_str = str(rec.material_code).strip().lstrip('0')
                     if mat_str:
                         po_materials.add(mat_str)
-
+        
+        # --- STEP A: MB51 Consumption ---
+        mb51_records = []
         if plant_codes:
             if m.module_wbs:
+                wbs_prefix = m.module_wbs[:5]
+                mb51_records = db.query(models.MTMaterialDocument).filter(
+                    models.MTMaterialDocument.plant_code.in_(plant_codes),
+                    models.MTMaterialDocument.wbs_element.startswith(wbs_prefix)
+                ).all()
+            else:
+                mb51_records = db.query(models.MTMaterialDocument).filter(
+                    models.MTMaterialDocument.plant_code.in_(plant_codes)
+                ).all()
+        
+        mb51_materials = set()
+        for rec in mb51_records:
+            # If falling back to plant, strictly require material to be in POs
+            mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
+            if not m.module_wbs and mat_str not in po_materials:
+                continue
+                
+            qty = rec.quantity or 0.0
+            cost = rec.amount_in_lc or 0.0
+            m_type = str(rec.movement_type).strip()
+            consumed_qty -= (qty * allocation_ratio)
+            expenditure_inr -= (cost * allocation_ratio)
+            
+            if mat_str:
+                mb51_materials.add(mat_str)
+        
+        # (Moved to before MB51 for material matching)
+
+        mb52_records = []
+        if plant_codes:
+            if m.module_wbs:
+                wbs_prefix = m.module_wbs[:5]
                 mb52_records = db.query(models.MTInventory).filter(
                     models.MTInventory.plant_code.in_(plant_codes),
                     models.MTInventory.wbs_element.startswith(wbs_prefix),
@@ -170,8 +165,8 @@ def calculate_project_360_metrics(db: Session):
                 mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
                 # Only include inventory for materials that exist in the POs
                 if mat_str in po_materials:
-                    inventory_qty += (rec.quantity_inv or 0.0) * allocation_ratio_sap
-                    inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio_sap
+                    inventory_qty += (rec.quantity_inv or 0.0) * allocation_ratio
+                    inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio
 
         # --- STEP C: ME2J Purchase Orders ---
         # Already processed above to get po_materials
@@ -445,64 +440,74 @@ def get_project_360_detail(db: Session, project_id: str):
     project_capacity = mapping.capacity_mwac if mapping else 0
     allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
 
-    # ── SAP: Reverse Engineering Logic ──
-    # Gather materials consumed in MB51 for this WBS prefix
+    # ── Purchase Orders (ME2J) ──
+    po_records_all = []
+    if mapping and mapping.module_wbs:
+        wbs_prefix = mapping.module_wbs[:5]
+        if codes:
+            po_records_all = db.query(models.MTPOAmount).filter(
+                models.MTPOAmount.plant_code.in_(codes),
+                models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+            ).all()
+    else:
+        if codes:
+            po_records_all = db.query(models.MTPOAmount).filter(
+                models.MTPOAmount.plant_code.in_(codes)
+            ).all()
+            
+    po_materials = set()
+    for po in po_records_all:
+        if po.material_code:
+            mat_str = str(po.material_code).strip().lstrip('0')
+            if mat_str:
+                po_materials.add(mat_str)
+                
+    # ── SAP: Reverse Engineering Logic (MB51) ──
     mb51_materials = set()
     consumed_qty = 0.0
     expenditure_inr = 0.0
     sap_consumption = []
 
-    allocation_ratio_sap = 1.0
+    mb51_records = []
     if mapping and mapping.module_wbs:
-        wbs_prefix = mapping.module_wbs[:6]
-        mb51_records = db.query(models.MTMaterialDocument).filter(
-            models.MTMaterialDocument.wbs_element.startswith(wbs_prefix)
-        ).all()
-    elif codes:
-        # Fallback to plant level prorata if no WBS
-        mb51_records = db.query(models.MTMaterialDocument).filter(
-            models.MTMaterialDocument.plant_code.in_(codes)
-        ).all()
-        allocation_ratio_sap = allocation_ratio
+        wbs_prefix = mapping.module_wbs[:5]
+        if codes:
+            mb51_records = db.query(models.MTMaterialDocument).filter(
+               models.MTMaterialDocument.plant_code.in_(codes),
+               models.MTMaterialDocument.wbs_element.startswith(wbs_prefix)
+            ).all()
     else:
-        mb51_records = []
-        for rec in mb51_records:
-            qty = rec.quantity or 0.0
-            cost = rec.amount_in_lc or 0.0
-            m_type = str(rec.movement_type).strip()
+        if codes:
+            mb51_records = db.query(models.MTMaterialDocument).filter(
+               models.MTMaterialDocument.plant_code.in_(codes)
+            ).all()
+
+    for rec in mb51_records:
+        mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
+        if not (mapping and mapping.module_wbs) and mat_str not in po_materials:
+            continue
             
-            sap_consumption.append({
-                "materialCode": rec.material_code,
-                "materialDescription": rec.material_description,
-                "movementType": m_type,
-                "quantity": qty,
-                "amountINR": cost,
-                "wbsElement": rec.wbs_element,
-                "plantCode": rec.plant_code,
-                "postingDate": rec.posting_date.isoformat() if rec.posting_date else None,
-                "baseUnit": getattr(rec, "base_unit", None),
-            })
-            
-            consumed_qty -= (qty * allocation_ratio_sap)
-            expenditure_inr -= (cost * allocation_ratio_sap)
-            
-            if rec.material_code:
-                mat_str = str(rec.material_code).strip().lstrip('0')
-                if mat_str:
-                    mb51_materials.add(mat_str)
-                    
-    # ── Purchase Orders (ME2J) ──
-    if mapping and mapping.module_wbs:
-        wbs_prefix = mapping.module_wbs[:6]
-        po_records_all = db.query(models.MTPOAmount).filter(
-            models.MTPOAmount.plant_code.in_(codes),
-            models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-        ).all() if codes else []
-    else:
-        # Fallback to plant level prorata
-        po_records_all = db.query(models.MTPOAmount).filter(
-            models.MTPOAmount.plant_code.in_(codes)
-        ).all() if codes else []
+        qty = rec.quantity or 0.0
+        cost = rec.amount_in_lc or 0.0
+        m_type = str(rec.movement_type).strip()
+        
+        sap_consumption.append({
+            "materialCode": rec.material_code,
+            "materialDescription": rec.material_description,
+            "movementType": m_type,
+            "quantity": qty,
+            "amountINR": cost,
+            "wbsElement": rec.wbs_element,
+            "plantCode": rec.plant_code,
+            "postingDate": rec.posting_date.isoformat() if rec.posting_date else None,
+            "baseUnit": getattr(rec, "base_unit", None),
+        })
+        
+        consumed_qty -= (qty * allocation_ratio)
+        expenditure_inr -= (cost * allocation_ratio)
+        
+        if mat_str:
+            mb51_materials.add(mat_str)
     
     sap_vendors = []
     vendor_summary = {}
@@ -529,19 +534,19 @@ def get_project_360_detail(db: Session, project_id: str):
             "materialCode": po.material_code,
             "materialName": po.material_name,
             "materialType": po.material_type,
-            "orderedQty": (po.order_quantity or 0) * allocation_ratio_sap,
-            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio_sap,
+            "orderedQty": (po.order_quantity or 0) * allocation_ratio,
+            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio,
             "companyCode": po.company_code,
             "plantCode": po.plant_code,
-            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio_sap,
-            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio_sap,
-            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio_sap,
-            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio_sap,
+            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio,
+            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio,
+            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio,
+            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
             "storageLocation": getattr(po, "storage_location", None),
         })
         
-        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio_sap
-        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio_sap
+        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
+        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
         
         del_cr = getattr(po, "delivered_value_inr_cr", 0.0)
         total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0)
@@ -574,34 +579,29 @@ def get_project_360_detail(db: Session, project_id: str):
     vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
 
     # ── In-Transit (ZIBDSESREP) ──
-    # Removed as per new data requirements.
     sap_intransit = []
     total_transit_qty = 0.0
 
     # ── Inventory (MB52) ──
+    inv_records = []
     if mapping and mapping.module_wbs:
-        wbs_prefix = mapping.module_wbs[:6]
-        inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.plant_code.in_(codes),
-            models.MTInventory.wbs_element.startswith(wbs_prefix)
-        ).all() if codes else []
+        wbs_prefix = mapping.module_wbs[:5]
+        if codes:
+            inv_records = db.query(models.MTInventory).filter(
+                models.MTInventory.plant_code.in_(codes),
+                models.MTInventory.wbs_element.startswith(wbs_prefix)
+            ).all()
     else:
-        # Fallback to plant level prorata
-        inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.plant_code.in_(codes),
-            models.MTInventory.quantity_inv > 0
-        ).all() if codes else []
+        if codes:
+            inv_records = db.query(models.MTInventory).filter(
+                models.MTInventory.plant_code.in_(codes),
+                models.MTInventory.quantity_inv > 0
+            ).all()
 
     sap_inventory = []
     total_inv_qty = 0.0
     total_inv_inr = 0.0
     
-    # Extract material codes from POs
-    po_materials = set()
-    for po in po_records_all:
-        mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
-        if mat_str:
-            po_materials.add(mat_str)
             
     for inv in inv_records:
         mat_str = str(inv.material_code).strip().lstrip('0') if inv.material_code else ''
@@ -611,15 +611,15 @@ def get_project_360_detail(db: Session, project_id: str):
                 "materialCode": inv.material_code,
                 "materialName": inv.material_description or inv.material_name,
                 "purchaseOrder": inv.purchase_order,
-                "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio_sap,
-                "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio_sap,
+                "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio,
+                "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio,
                 "wbsElement": inv.wbs_element,
                 "storageLocation": inv.storage_location_mapping,
                 "plantCode": inv.plant_code,
                 "baseUnit": getattr(inv, "base_unit", None),
             })
-            total_inv_qty += (inv.quantity_inv or 0.0) * allocation_ratio_sap
-            total_inv_inr += (inv.value_unrestricted or 0.0) * allocation_ratio_sap
+            total_inv_qty += (inv.quantity_inv or 0.0) * allocation_ratio
+            total_inv_inr += (inv.value_unrestricted or 0.0) * allocation_ratio
 
     material_breakdown = []
 

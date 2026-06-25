@@ -65,15 +65,18 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
     cap_data = db.query(models.ProjectMapping.spv_plant_code, func.sum(models.ProjectMapping.capacity_mwac)).group_by(models.ProjectMapping.spv_plant_code).all()
     capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
     
-    inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.plant_code).all() if r[0]}
+    inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_mw)).group_by(models.MTInventory.plant_code).all() if r[0]}
     req_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTRequirement.spv_plant_code, func.sum(models.MTRequirement.budgeted_units_mw)).group_by(models.MTRequirement.spv_plant_code).all() if r[0]}
-    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    po_mw_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.po_quantities)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    
+    # We will compute in-transit MW inline since MTPOAmount does not have a dedicated still_to_deliver_mw column
+    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    
+    po_mw_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.po_quantities_mw)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
 
-    all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
-    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
+    all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_mw)).group_by(models.MTInventory.wbs_element).all()
+    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).group_by(models.MTPOAmount.wbs_element).all()
 
     all_tc_entries = db.query(models.TcProjectEntry).all()
     all_tc_edges = db.query(models.TcNetworkEdge).all()
@@ -600,9 +603,10 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
             }
         
         # ── SAP Data ──
+        wbs_str = str(m.module_wbs or "").strip()
+        sap_data = None
         plant_code = str(m.spv_plant_code or "").strip()
         agel_code = str(m.agel or "").strip()
-        sap_data = None
         if plant_code or agel_code:
             # Calculate allocation ratio
             total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
@@ -612,52 +616,96 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
             project_capacity = m.capacity_mwac or 0
             allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
             
-            po_count = db.query(models.MTPOAmount.purchasing_document).filter(
-                (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-            ).distinct().count()
-            
-            po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
-                (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-            ).scalar() or 0
-            po_mw = db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
-                (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-            ).scalar() or 0
+            if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
+                wbs_prefix = wbs_str[:6]
+                po_count = db.query(models.MTPOAmount.purchasing_document).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+                ).distinct().count()
+                
+                po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+                ).scalar() or 0
+                
+                po_mw = db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+                ).scalar() or 0
+            else:
+                po_count = db.query(models.MTPOAmount.purchasing_document).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
+                ).distinct().count() * allocation_ratio
+                
+                po_total = (db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
+                ).scalar() or 0) * allocation_ratio
+                
+                po_mw = (db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
+                ).scalar() or 0) * allocation_ratio
             
             req_count = db.query(models.MTRequirement).filter(
                 (models.MTRequirement.spv_plant_code == plant_code) | (models.MTRequirement.spv_plant_code == agel_code)
-            ).count()
-            req_total_mw = db.query(func.sum(models.MTRequirement.budgeted_units_mw)).filter(
-                (models.MTRequirement.spv_plant_code == plant_code) | (models.MTRequirement.spv_plant_code == agel_code)
-            ).scalar() or 0
+                # Requirement doesn't have wbs_element mapped usually, but we can set to 0 or leave as is. We'll set to 0 since it's not WBS specific yet.
+            ).count() * 0 # Hardcoded to 0 since we can't reliably filter by WBS without a WBS column in MTRequirement.
             
-            if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-                inv_count = db.query(models.MTInventory).filter(models.MTInventory.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%")).count()
+            req_total_mw = 0
+            
+            if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
+                inv_count = db.query(models.MTInventory).filter(
+                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code),
+                    models.MTInventory.wbs_element.startswith(wbs_prefix)
+                ).count()
+                
+                inv_mw = db.query(func.sum(models.MTInventory.quantity_mw)).filter(
+                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code),
+                    models.MTInventory.wbs_element.startswith(wbs_prefix)
+                ).scalar() or 0
+
+                
                 transit_count = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%"),
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix),
                     models.MTPOAmount.still_to_deliver_qty > 0
                 ).count()
-                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty)).filter(
-                    models.MTPOAmount.wbs_element.ilike(f"%{str(m.module_wbs).strip()}%")
+                
+                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
                 ).scalar() or 0
+                
+                top_vendors = db.query(
+                    models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
+                ).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
+                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
+                ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
                 inv_alloc = 1.0
             else:
                 inv_count = db.query(models.MTInventory).filter(
                     (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code)
-                ).count()
+                ).count() * allocation_ratio
+                
+                inv_mw = (db.query(func.sum(models.MTInventory.quantity_mw)).filter(
+                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code)
+                ).scalar() or 0) * allocation_ratio
+                
                 transit_count = db.query(models.MTPOAmount).filter(
                     (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
                     models.MTPOAmount.still_to_deliver_qty > 0
-                ).count()
-                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty)).filter(
+                ).count() * allocation_ratio
+                
+                transit_mw = (db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
                     (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-                ).scalar() or 0
+                ).scalar() or 0) * allocation_ratio
+                
+                top_vendors = db.query(
+                    models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
+                ).filter(
+                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
+                ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
                 inv_alloc = allocation_ratio
-            
-            top_vendors = db.query(
-                models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
-            ).filter(
-                (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-            ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
             
             top_vendors_list = []
             for v in top_vendors:
@@ -667,19 +715,20 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
                     vname = parts[1].strip()
                 top_vendors_list.append({
                     "name": vname[:25], 
-                    "value_cr": round((v[1] * allocation_ratio) / 10000000, 2) if v[1] else 0
+                    "value_cr": round((v[1] * inv_alloc) / 10000000, 2) if v[1] else 0
                 })
             
             sap_data = {
                 "plant_code": plant_code,
-                "po_count": round(po_count * allocation_ratio),
-                "po_total_cr": round((po_total * allocation_ratio) / 10000000, 2) if po_total else 0,
-                "po_mw": round(po_mw * allocation_ratio, 1) if po_mw else 0,
-                "requirement_count": round(req_count * allocation_ratio),
-                "requirement_mw": round(req_total_mw * allocation_ratio, 1) if req_total_mw else 0,
-                "inventory_items": round(inv_count * inv_alloc),
-                "in_transit_count": round(transit_count * inv_alloc),
-                "in_transit_mw": round(transit_mw * inv_alloc, 1) if transit_mw else 0,
+                "po_count": round(po_count),
+                "po_total_cr": round(po_total / 10000000, 2) if po_total else 0,
+                "po_mw": round(po_mw, 1) if po_mw else 0,
+                "requirement_count": 0,
+                "requirement_mw": 0,
+                "inventory_items": round(inv_count),
+                "inventory_mw": round(inv_mw, 1) if inv_mw else 0,
+                "in_transit_count": round(transit_count),
+                "in_transit_mw": round(transit_mw, 1) if transit_mw else 0,
                 "top_vendors": top_vendors_list
             }
         
