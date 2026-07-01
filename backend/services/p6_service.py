@@ -771,8 +771,7 @@ class P6Service:
                 if date_changes:
                     name_lower = (existing.name or "").lower()
                     is_cod = "cod" in name_lower or "scod" in name_lower
-                    is_trial_cert = "trial run certificate" in name_lower or "trail run certificate" in name_lower
-                    is_critical = is_cod or is_trial_cert
+                    is_critical = is_cod
                     
                     # Skip notifications for non-critical activities
                     if is_critical:
