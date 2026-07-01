@@ -90,10 +90,7 @@ def sync_region_data(db: Session, token: str, region: str):
         e.edge_id: {
             "status": e.status, 
             "expected_date": e.expected_date, 
-            "contractor": e.contractor,
-            "foundation": e.foundation,
-            "erection": e.erection,
-            "stringing": e.stringing
+            "contractor": e.contractor
         } for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()
     }
     
@@ -117,14 +114,6 @@ def sync_region_data(db: Session, token: str, region: str):
         
     # 2. Iterate over all mapped projects for precise Edge and Block mapping
     mappings = db.query(ProjectMapping).filter(ProjectMapping.project_id.isnot(None)).all()
-    
-    def is_completed(progress_str):
-        if not progress_str or '/' not in str(progress_str): return False
-        try:
-            parts = str(progress_str).split('/')
-            return float(parts[0].strip()) >= float(parts[1].strip()) and float(parts[1].strip()) > 0
-        except:
-            return False
     
     for pm in mappings:
         pid = pm.project_id
@@ -167,10 +156,6 @@ def sync_region_data(db: Session, token: str, region: str):
             new_date = e.get("expected_date")
             new_contractor = e.get("contractor")
             
-            new_foundation = e.get("foundation")
-            new_erection = e.get("erection")
-            new_stringing = e.get("stringing")
-            
             old_edge = existing_edges.get(edge_id)
             if old_edge:
                 if old_edge["status"] and old_edge["status"] != new_status:
@@ -195,29 +180,6 @@ def sync_region_data(db: Session, token: str, region: str):
                         module="Transmission",
                         change_type="Contractor Change",
                         message=f"Line '{e.get('from_label')} to {e.get('to_label')}' contractor changed from '{old_edge['contractor']}' to '{new_contractor}'"
-                    ))
-                
-                # Milestone Completion Alerts
-                if is_completed(new_foundation) and not is_completed(old_edge["foundation"]):
-                    db.add(Notification(
-                        project_name=pm.project,
-                        module="Transmission",
-                        change_type="Milestone Reached",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' has completed Foundation work ({new_foundation})!"
-                    ))
-                if is_completed(new_erection) and not is_completed(old_edge["erection"]):
-                    db.add(Notification(
-                        project_name=pm.project,
-                        module="Transmission",
-                        change_type="Milestone Reached",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' has completed Erection work ({new_erection})!"
-                    ))
-                if is_completed(new_stringing) and not is_completed(old_edge["stringing"]):
-                    db.add(Notification(
-                        project_name=pm.project,
-                        module="Transmission",
-                        change_type="Milestone Reached",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' has completed Stringing work ({new_stringing})!"
                     ))
                 
             edge = TcNetworkEdge(
