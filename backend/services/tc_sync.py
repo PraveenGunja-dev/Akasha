@@ -37,6 +37,12 @@ def fetch_data(endpoint: str, token: str):
         res = requests.get(f"{BASE_URL}{endpoint}", headers=headers, verify=False)
         res.raise_for_status()
         return res.json()
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            # 404 is expected for unmapped or non-existent projects
+            return None
+        logger.error(f"Failed to fetch {endpoint}: {e}")
+        return None
     except Exception as e:
         logger.error(f"Failed to fetch {endpoint}: {e}")
         return None
