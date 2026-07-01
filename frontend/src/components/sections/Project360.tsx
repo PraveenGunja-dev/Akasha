@@ -133,13 +133,7 @@ const MetricBreakdownModal = ({
                     <th className="px-6 py-3 font-semibold text-right">Delay Impact</th>
                   </>
                 )}
-                {type === 'activity' && (
-                  <>
-                    <th className="px-6 py-3 font-semibold text-right">TC Lines</th>
-                    <th className="px-6 py-3 font-semibold text-right">In-Progress</th>
-                    <th className="px-6 py-3 font-semibold text-right">Completed</th>
-                  </>
-                )}
+
                 {type === 'supply' && (
                   <>
                     <th className="px-6 py-3 font-semibold text-right">Availability</th>
@@ -177,13 +171,7 @@ const MetricBreakdownModal = ({
                       <td className={`px-6 py-3 font-mono text-xs text-right ${p.delayDays > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>{p.delayDays || 0}d</td>
                     </>
                   )}
-                  {type === 'activity' && (
-                    <>
-                      <td className="px-6 py-3 font-mono text-xs text-right text-blue-500">{p.integrationCount || p.tcEdgesCount || 0}</td>
-                      <td className="px-6 py-3 font-mono text-xs text-right text-emerald-500">{p.inProgressActivities || 0}</td>
-                      <td className="px-6 py-3 font-mono text-xs text-right text-foreground/80">{p.completedActivities || 0}</td>
-                    </>
-                  )}
+
                   {type === 'supply' && (
                     <>
                       <td className={`px-6 py-3 font-mono text-xs text-right ${p.materialAvailability < 80 ? 'text-amber-500 font-bold' : 'text-emerald-500'}`}>{Math.round(p.materialAvailability || 0)}%</td>
@@ -283,8 +271,8 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           </div>
         </div>
 
-        {/* 4-Column Performance Matrix */}
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0 md:divide-x divide-y md:divide-y-0 xl:divide-y-0 divide-border/30">
+        {/* 3-Column Performance Matrix */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-0 md:divide-x divide-y md:divide-y-0 xl:divide-y-0 divide-border/30">
           
           {/* Column 1: Schedule & Progress */}
           <div className="p-5 space-y-4">
@@ -320,36 +308,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             </div>
           </div>
 
-          {/* Column 2: Activity & Transmission */}
-          <div className="p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Activity & Transmission</div>
-              <button onClick={() => setActiveModal('activity')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
-                <Info className="w-3.5 h-3.5" />
-              </button>
-            </div>
-            
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
-              <div className="flex flex-col gap-1.5">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Transmission Integrations</div>
-                <div className="text-2xl font-mono font-bold tracking-tight text-blue-500">
-                  {fmtNum(totalIntegration)}
-                </div>
-                <div className="text-[10px] text-muted-foreground">Mapped transmission edges</div>
-              </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
-                <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">In-Progress</div>
-                  <div className="text-xl font-mono font-bold text-emerald-500">{fmtNum(totalInProgress)}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Delayed</div>
-                  <div className={`text-xl font-mono font-bold ${delayedProjects.length > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{fmtNum(delayedProjects.length)}</div>
-                </div>
-              </div>
-            </div>
-          </div>
 
           {/* Column 3: Material & Supply Chain */}
           <div className="p-5 space-y-4">
@@ -444,8 +403,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
       <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none" style={{ backgroundColor: accentColor }} />
       <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accentColor }}></div>
 
-      {/* 1. Project Details (30%) */}
-      <div className="flex flex-col gap-1.5 w-[30%] min-w-[250px] pr-4">
+      {/* 1. Project Details (35%) */}
+      <div className="flex flex-col gap-1.5 w-[35%] min-w-[250px] pr-4">
         <div className="flex items-center gap-2">
           <h3 className="text-[14px] font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate">
             {project.projectName}
@@ -459,24 +418,10 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-      {/* 2. Activity & Transmission (20%) */}
-      <div className="w-[20%] min-w-[180px] flex flex-col gap-1 border-l border-border pl-4 pr-4 py-0.5">
-        <div className="flex justify-between items-center text-[10px]">
-          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Transmission Lines</span>
-          <span className="font-mono font-semibold text-blue-500">{project.integrationCount || project.tcEdgesCount || 0}</span>
-        </div>
-        <div className="flex justify-between items-center text-[10px]">
-          <span className="text-muted-foreground uppercase tracking-widest font-semibold">In-Progress Act.</span>
-          <span className="font-mono font-semibold text-emerald-500">{project.inProgressActivities || 0}</span>
-        </div>
-        <div className="flex justify-between items-center text-[10px]">
-          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Completed Act.</span>
-          <span className="font-mono font-semibold text-foreground/80">{project.completedActivities || 0}</span>
-        </div>
-      </div>
 
-      {/* 3. Schedule Performance (15%) */}
-      <div className="w-[15%] min-w-[150px] flex flex-col gap-1.5 border-l border-border pl-4 pr-4">
+
+      {/* 2. Schedule Performance (25%) */}
+      <div className="w-[25%] min-w-[150px] flex flex-col gap-1.5 border-l border-border pl-4 pr-4">
         <div className="flex flex-col gap-1 w-full max-w-[120px]">
           <div className="flex justify-between text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
             <span>Progress</span>
@@ -493,8 +438,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-      {/* 4. Supply Funnel (20%) */}
-      <div className="w-[20%] min-w-[180px] flex flex-col justify-center border-l border-border pl-4 pr-4 py-0.5">
+      {/* 3. Supply Funnel (25%) */}
+      <div className="w-[25%] min-w-[180px] flex flex-col justify-center border-l border-border pl-4 pr-4 py-0.5">
         <div className="flex justify-between items-center text-[10px] mb-0.5">
           <span className="text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
           <span className="font-mono font-semibold text-foreground/80">{fmtNum(project.orderedQty)}</span>
