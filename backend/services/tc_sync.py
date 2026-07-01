@@ -47,45 +47,6 @@ def fetch_data(endpoint: str, token: str):
         logger.error(f"Failed to fetch {endpoint}: {e}")
         return None
 
-def normalize_p6_name(name):
-    if not name:
-        return ""
-    clean = str(name).strip().replace(" ", "").lower()
-    if clean.endswith("_commissioned"):
-        clean = clean[:-13]
-    return clean
-
-def find_mapping_id(db: Session, project_names, p6_map=None):
-    """Attempt to find a mapping ID using a 2-level strategy (Direct and P6 fallback)"""
-    if not project_names:
-        return None
-        
-    names = project_names if isinstance(project_names, list) else [project_names]
-    
-    all_maps = None
-    
-    for name in names:
-        if not name: continue
-        
-        # LEVEL 1: Match inside comma-separated database values
-        if all_maps is None:
-            all_maps = db.query(ProjectMapping).all()
-            
-        for m in all_maps:
-            if m.project:
-                tc_names = [t.strip() for t in m.project.split(',')]
-                if name in tc_names:
-                    return m.id
-                
-        # LEVEL 2: P6 Name Fallback via p6_map
-        if p6_map and name in p6_map:
-            norm_p6 = normalize_p6_name(p6_map[name])
-                
-            for m in all_maps:
-                if m.project_name_from_p6 and normalize_p6_name(m.project_name_from_p6) == norm_p6:
-                    return m.id
-                        
-    return None
 
 def get_global_topology(token: str, region: str):
     """Fetches the global snapshot to get accurate node coordinates and edge from/to links"""
