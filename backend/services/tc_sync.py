@@ -81,65 +81,55 @@ def find_mapping_id(db: Session, project_names, p6_map=None):
                         
     return None
 
-def sync_khavda_data(db: Session, token: str):
-    # 1. Get projects list
-    proj_data = fetch_data("/api/khavda/projects", token)
+def get_global_topology(token: str, region: str):
+    """Fetches the global snapshot to get accurate node coordinates and edge from/to links"""
+    proj_data = fetch_data(f"/api/{region}/projects", token)
     if not proj_data or "projects" not in proj_data:
-        logger.error("No khavda projects found")
-        return
+        logger.error(f"No {region} global projects found")
+        return None
         
     current_proj = next((p for p in proj_data["projects"] if p.get("is_current")), None)
     if not current_proj:
-        logger.error("No current khavda project found")
-        return
+        logger.error(f"No current {region} global project found")
+        return None
         
-    proj_id = current_proj["id"]
-    logger.info(f"Fetching Khavda snapshot: {proj_id}")
-    
-    # 2. Get data for the current project
-    data = fetch_data(f"/api/khavda/projects/{proj_id}", token)
+    data = fetch_data(f"/api/{region}/projects/{current_proj['id']}", token)
     if not data or "data" not in data or "network" not in data["data"]:
-        logger.error("Invalid Khavda network data")
-        return
-        
-    db.query(TcNetworkEdge).filter(TcNetworkEdge.region == "Khavda").delete()
-    db.query(TcNetworkNode).filter(TcNetworkNode.region == "Khavda").delete()
-    db.query(TcProjectEntry).filter(TcProjectEntry.region == "Khavda").delete()
-    
-    filters = data["data"].get("filters", {})
-    table5 = filters.get("table5Entries", [])
-    projectEntries = filters.get("projectEntries", [])
-    all_entries = table5 if len(table5) > 0 else projectEntries
-    
-    p6_map = {}
-    for entry in all_entries:
-        if entry.get("project") and entry.get("p6project"):
-            p6_map[entry.get("project")] = entry.get("p6project")
-    
-    for entry in all_entries:
-        project_name = entry.get("project")
-        if not project_name: continue
-        
-        mapping_id = find_mapping_id(db, [project_name], p6_map=p6_map)
-        
-        pe = TcProjectEntry(
-            region="Khavda",
-            project=project_name,
-            phase=entry.get("phase"),
-            kps=entry.get("kps"),
-            pss=entry.get("pss"),
-            block=entry.get("block"),
-            breakup=str(entry.get("breakup")),
-            mw=str(entry.get("mw")),
-            mapping_id=mapping_id
-        )
-        db.add(pe)
+        logger.error(f"Invalid {region} global network data")
+        return None
         
     network = data["data"]["network"]
     
-    for n in network.get("nodes", []):
+    # Map edges by ID to retrieve their topology later
+    global_edges = {}
+    for e in network.get("edges", []):
+        global_edges[e.get("id")] = e
+        
+    return {
+        "nodes": network.get("nodes", []),
+        "edges": global_edges
+    }
+
+def sync_region_data(db: Session, token: str, region: str):
+    logger.info(f"Syncing {region} data...")
+    
+    # 1. Fetch Global Topology (Provides nodes, and from/to for edges)
+    topology = get_global_topology(token, region.lower())
+    if not topology:
+        return
+        
+    # Get existing edges to track status changes (for notifications)
+    existing_edges = {e.edge_id: e.status for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()}
+    
+    # Clear region data for full reload
+    db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).delete()
+    db.query(TcNetworkNode).filter(TcNetworkNode.region == region).delete()
+    db.query(TcProjectEntry).filter(TcProjectEntry.region == region).delete()
+    
+    # Insert unique global nodes
+    for n in topology["nodes"]:
         node = TcNetworkNode(
-            region="Khavda",
+            region=region,
             node_id=n.get("id"),
             label=n.get("label"),
             type=n.get("type"),
@@ -149,128 +139,79 @@ def sync_khavda_data(db: Session, token: str):
         )
         db.add(node)
         
-    for e in network.get("edges", []):
-        projects = e.get("project", [])
-        mapping_id = find_mapping_id(db, projects, p6_map=p6_map)
+    # 2. Iterate over all mapped projects for precise Edge and Block mapping
+    mappings = db.query(ProjectMapping).filter(ProjectMapping.project_id.isnot(None)).all()
+    
+    for pm in mappings:
+        pid = pm.project_id
+        if not pid: continue
         
-        edge = TcNetworkEdge(
-            region="Khavda",
-            edge_id=e.get("id"),
-            from_node=e.get("from"),
-            from_label=e.get("from_label"),
-            to_node=e.get("to"),
-            to_label=e.get("to_label"),
-            projects=json.dumps({"projects": projects, "phases": e.get("phases", [])}),
-            contractor=e.get("contractor"),
-            voltage=e.get("voltage"),
-            length=str(e.get("length")),
-            status=e.get("status"),
-            normalized_status=e.get("normalized_status"),
-            erection=e.get("erection"),
-            foundation=e.get("foundation"),
-            stringing=e.get("stringing"),
-            expected_date=e.get("expected_date"),
-            mapping_id=mapping_id
-        )
-        db.add(edge)
-
+        # Targeted project API Call
+        p_data = fetch_data(f"/api/{region.lower()}/project-details?project_id={pid}", token)
+        if not p_data:
+            continue
+            
+        # Insert precisely mapped project entries (blocks)
+        metadata = p_data.get("metadata", {})
+        all_entries = metadata.get("rows", [])
+        
+        for entry in all_entries:
+            pe = TcProjectEntry(
+                region=region,
+                project=entry.get("project"),
+                phase=entry.get("phase"),
+                kps=entry.get("kps"),
+                pss=entry.get("pss"),
+                block=entry.get("block"),
+                breakup=str(entry.get("breakup")),
+                mw=str(entry.get("mw")),
+                mapping_id=pm.id
+            )
+            db.add(pe)
+            
+        # Insert precisely mapped edges (lines), utilizing global topology for from/to
+        lines = p_data.get("lines", [])
+        for e in lines:
+            edge_id = e.get("id")
+            
+            # Lookup topology from global fetch
+            global_edge = topology["edges"].get(edge_id, {})
+            
+            new_status = e.get("status")
+            old_status = existing_edges.get(edge_id)
+            if old_status and old_status != new_status:
+                from models import Notification
+                notif = Notification(
+                    project_name=pm.project,
+                    module="Transmission",
+                    change_type="Status Update",
+                    message=f"Transmission line '{e.get('from_label')} to {e.get('to_label')}' status updated from '{old_status}' to '{new_status}'"
+                )
+                db.add(notif)
+                
+            edge = TcNetworkEdge(
+                region=region,
+                edge_id=edge_id,
+                from_node=global_edge.get("from"),
+                from_label=e.get("from_label"),
+                to_node=global_edge.get("to"),
+                to_label=e.get("to_label"),
+                projects=json.dumps({"projects": global_edge.get("project", []), "phases": global_edge.get("phases", [])}),
+                contractor=e.get("contractor"),
+                voltage=e.get("voltage"),
+                length=str(e.get("length") or global_edge.get("length")),
+                status=new_status,
+                normalized_status=e.get("normalized_status"),
+                erection=e.get("erection"),
+                foundation=e.get("foundation"),
+                stringing=e.get("stringing"),
+                expected_date=e.get("expected_date"),
+                mapping_id=pm.id
+            )
+            db.add(edge)
+            
     db.commit()
-    logger.info("Synced Khavda Data")
-
-def sync_rajasthan_data(db: Session, token: str):
-    # 1. Get projects list
-    proj_data = fetch_data("/api/rajasthan/projects", token)
-    if not proj_data or "projects" not in proj_data:
-        logger.error("No rajasthan projects found")
-        return
-        
-    current_proj = next((p for p in proj_data["projects"] if p.get("is_current")), None)
-    if not current_proj:
-        logger.error("No current rajasthan project found")
-        return
-        
-    proj_id = current_proj["id"]
-    logger.info(f"Fetching Rajasthan snapshot: {proj_id}")
-    
-    # 2. Get data for the current project
-    data = fetch_data(f"/api/rajasthan/projects/{proj_id}", token)
-    if not data or "data" not in data or "network" not in data["data"]:
-        logger.error("Invalid Rajasthan network data")
-        return
-        
-    db.query(TcNetworkEdge).filter(TcNetworkEdge.region == "Rajasthan").delete()
-    db.query(TcNetworkNode).filter(TcNetworkNode.region == "Rajasthan").delete()
-    db.query(TcProjectEntry).filter(TcProjectEntry.region == "Rajasthan").delete()
-    
-    filters = data["data"].get("filters", {})
-    table5 = filters.get("table5Entries", [])
-    projectEntries = filters.get("projectEntries", [])
-    all_entries = table5 if len(table5) > 0 else projectEntries
-    
-    p6_map = {}
-    for entry in all_entries:
-        if entry.get("project") and entry.get("p6project"):
-            p6_map[entry.get("project")] = entry.get("p6project")
-    for entry in all_entries:
-        project_name = entry.get("project")
-        if not project_name: continue
-        
-        mapping_id = find_mapping_id(db, [project_name], p6_map=p6_map)
-        
-        pe = TcProjectEntry(
-            region="Rajasthan",
-            project=project_name,
-            phase=entry.get("phase"),
-            kps=entry.get("kps"),
-            pss=entry.get("pss"),
-            block=entry.get("block"),
-            breakup=str(entry.get("breakup")),
-            mw=str(entry.get("mw")),
-            mapping_id=mapping_id
-        )
-        db.add(pe)
-        
-    network = data["data"]["network"]
-    
-    for n in network.get("nodes", []):
-        node = TcNetworkNode(
-            region="Rajasthan",
-            node_id=n.get("id"),
-            label=n.get("label"),
-            type=n.get("type"),
-            status=n.get("status"),
-            x=n.get("x"),
-            y=n.get("y")
-        )
-        db.add(node)
-        
-    for e in network.get("edges", []):
-        projects = e.get("project", [])
-        mapping_id = find_mapping_id(db, projects, p6_map=p6_map)
-        
-        edge = TcNetworkEdge(
-            region="Rajasthan",
-            edge_id=e.get("id"),
-            from_node=e.get("from"),
-            from_label=e.get("from_label"),
-            to_node=e.get("to"),
-            to_label=e.get("to_label"),
-            projects=json.dumps({"projects": projects, "phases": e.get("phases", [])}),
-            contractor=e.get("contractor"),
-            voltage=e.get("voltage"),
-            length=str(e.get("length")),
-            status=e.get("status"),
-            normalized_status=e.get("normalized_status"),
-            erection=e.get("erection"),
-            foundation=e.get("foundation"),
-            stringing=e.get("stringing"),
-            expected_date=e.get("expected_date"),
-            mapping_id=mapping_id
-        )
-        db.add(edge)
-
-    db.commit()
-    logger.info("Synced Rajasthan Data")
+    logger.info(f"Synced {region} Data")
 
 def run_sync():
     logger.info("Starting Transmission Data Sync...")
@@ -281,8 +222,8 @@ def run_sync():
 
     db = SessionLocal()
     try:
-        sync_khavda_data(db, token)
-        sync_rajasthan_data(db, token)
+        sync_region_data(db, token, "Khavda")
+        sync_region_data(db, token, "Rajasthan")
         logger.info("Transmission Data Sync Complete!")
     except Exception as e:
         logger.error(f"Error during sync: {e}")

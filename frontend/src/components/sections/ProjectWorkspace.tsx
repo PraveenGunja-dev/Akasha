@@ -6,6 +6,7 @@ import {
   Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network,
   Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight
 } from 'lucide-react';
+import { ProjectWBS } from './ProjectWBS';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -207,6 +208,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
   const [actFilter, setActFilter] = useState<string>('All');
+  const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
+  const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
+  const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [syncingP6, setSyncingP6] = useState(false);
 
   useEffect(() => {
@@ -677,7 +681,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
           <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-blue-400" />
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
-          <HeroMetric label="Forecast COD" value={p.forecastMonth} icon={Calendar} color="text-primary" />
+          <HeroMetric label="Forecast COD" value={p.forecastFinish || p.forecastMonth} icon={Calendar} color="text-primary" />
           {((detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)) > 0 && (
             <HeroMetric label="Transmission Lines" value={(detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)} icon={MapPin} color="text-indigo-400" />
           )}
@@ -693,16 +697,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
           <div className="flex items-start gap-4 mb-4 relative z-10">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center shrink-0 border border-primary/10">
-              <Brain className="w-5 h-5 text-primary/80" />
+              <BarChart3 className="w-5 h-5 text-primary/80" />
             </div>
             <div className="flex-1">
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-                AI Project Intelligence
-                <span className="text-[9px] bg-primary/10 text-primary px-2 py-0.5 rounded-full font-bold uppercase tracking-wider border border-primary/20">
-                  Live Analysis
-                </span>
+                Project Insights
               </h3>
-              <p className="text-[10px] text-muted-foreground/50 mt-0.5">Powered by AKASHA AI Engine</p>
             </div>
           </div>
 
@@ -714,7 +714,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 {diagLoading ? (
                   <div className="flex items-center gap-3">
                     <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                    <span className="text-sm text-muted-foreground/60 animate-pulse">Analyzing project intelligence...</span>
+                    <span className="text-sm text-muted-foreground/60 animate-pulse">Analyzing project data...</span>
                   </div>
                 ) : diagnostic ? (
                   <div className="columns-1 md:columns-2 gap-8 prose prose-sm max-w-none text-foreground/80">
@@ -789,8 +789,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   onClick={() => window.dispatchEvent(new CustomEvent('open-simulation-lab', { detail: { projectId } }))}
                   className="w-full flex items-center justify-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2.5 text-sm font-semibold"
                 >
-                  <BrainCircuit className="w-4 h-4" />
-                  Run AI Simulation
+                  <Activity className="w-4 h-4" />
+                  Run Scenario Analysis
                 </button>
               </div>
             </div>
@@ -1666,68 +1666,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
                   </div>
 
-                  {/* ═══ ALL ACTIVITIES TABLE ═══ */}
-                  {p6.allActivities && p6.allActivities.length > 0 && (() => {
-                    const statuses = ['All', 'Completed', 'In Progress', 'Not Started'];
-                    const filtered = actFilter === 'All' ? p6.allActivities : p6.allActivities.filter((a: any) => a.status === actFilter);
-                    return (
-                      <div className="intelligence-card p-6">
-                        <div className="flex items-center justify-between mb-4">
-                          <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                            <Layers className="w-4 h-4 text-primary/70" /> All Activities
-                            <span className="text-[10px] font-mono text-muted-foreground ml-2 bg-muted px-2 py-0.5 rounded">{filtered.length} / {p6.allActivities.length}</span>
-                          </h3>
-                          <div className="flex gap-1 bg-muted/40 border border-border rounded-lg p-0.5">
-                            {statuses.map(s => (
-                              <button key={s} onClick={() => setActFilter(s)}
-                                className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${actFilter === s ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
-                                  }`}>{s}</button>
-                            ))}
-                          </div>
-                        </div>
-                        <div className="rounded-xl border border-border overflow-hidden max-h-[400px] overflow-y-auto custom-scrollbar">
-                          <table className="intel-table w-full text-xs">
-                            <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider sticky top-0 z-10">
-                              <tr>
-                                <th className="text-left font-semibold py-2.5 px-4">Activity</th>
-                                <th className="text-left font-semibold py-2.5 px-4">WBS</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Status</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Forecast Start</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Forecast Finish</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Planned Start</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Planned Finish</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Baseline Start</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Baseline Finish</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Actual Start</th>
-                                <th className="text-center font-semibold py-2.5 px-4">Actual Finish</th>
-                              </tr>
-                            </thead>
-                            <tbody className="divide-y divide-border/30">
-                              {filtered.map((act: any, i: number) => (
-                                <tr key={act.activityId || i} className="hover:bg-muted/30 transition-colors">
-                                  <td className="text-left font-medium text-foreground/80 py-2 px-4 max-w-[250px] truncate" title={act.name}>{act.name}</td>
-                                  <td className="text-left text-muted-foreground py-2 px-4 max-w-[150px] truncate font-mono text-[10px]" title={act.wbsName}>{act.wbsName || '—'}</td>
-                                  <td className="text-center py-2 px-4">
-                                    <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider border ${act.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
-                                      act.status === 'In Progress' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/10 dark:text-blue-400 dark:border-blue-500/20' :
-                                        'bg-muted text-muted-foreground border-border'
-                                      }`}>{act.status}</span>
-                                  </td>
-                                  <td className="text-center font-mono text-blue-500/80 py-2 px-4">{act.forecastStartDate || '—'}</td>
-                                  <td className="text-center font-mono text-blue-500/80 py-2 px-4">{act.forecastFinishDate || '—'}</td>
-                                  <td className="text-center font-mono text-foreground/70 py-2 px-4">{act.plannedStartDate || '—'}</td>
-                                  <td className="text-center font-mono text-foreground/70 py-2 px-4">{act.plannedFinishDate || '—'}</td>
-                                  <td className="text-center font-mono text-amber-500/80 py-2 px-4">{act.baselineStartDate || '—'}</td>
-                                  <td className="text-center font-mono text-amber-500/80 py-2 px-4">{act.baselineFinishDate || '—'}</td>
-                                  <td className="text-center font-mono text-emerald-500 py-2 px-4">{act.actualStartDate || '—'}</td>
-                                  <td className="text-center font-mono text-emerald-500 py-2 px-4">{act.actualFinishDate || '—'}</td>
-                                </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                      </div>
-                    </div>
-                  ); })()}
+                  {/* ═══ ALL ACTIVITIES HIERARCHY ═══ */}
+                  <ProjectWBS p6Data={p6} />
 
                   {/* ═══ 2-WAY SYNC: EDIT PROJECT DATES ═══ */}
                   <P6SyncEditor p6={p6} />

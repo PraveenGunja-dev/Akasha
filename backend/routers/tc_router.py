@@ -19,9 +19,17 @@ def get_rajasthan_network(db: Session = Depends(get_db)):
     nodes = db.query(TcNetworkNode).filter(TcNetworkNode.region == "Rajasthan").all()
     edges = db.query(TcNetworkEdge).filter(TcNetworkEdge.region == "Rajasthan").all()
     
+    # Deduplicate edges by edge_id since they are duplicated per mapping_id in DB
+    seen_edges = set()
+    unique_edges = []
+    for e in edges:
+        if e.edge_id not in seen_edges:
+            seen_edges.add(e.edge_id)
+            unique_edges.append(e)
+            
     # Parse the projects JSON back into lists for the frontend
     processed_edges = []
-    for e in edges:
+    for e in unique_edges:
         edge_dict = {
             "id": e.edge_id,
             "from": e.from_node,

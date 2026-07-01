@@ -73,220 +73,171 @@ const StatusPill = ({ tier, count, active, onClick }: { tier: string; count: num
 };
 
 /* ═══════════════════════════════════════════════════════════
-   AI EXECUTIVE BRIEFING CARD
+   PORTFOLIO BRIEFING CARD
    ═══════════════════════════════════════════════════════════ */
-const AIBriefingCard = ({ data }: { data: any[] }) => {
-  const critCount = data.filter(d => d.statusTier === 'Critical').length;
-  const highRiskCount = data.filter(d => d.statusTier === 'High Risk').length;
-  const watchlistCount = data.filter(d => d.statusTier === 'Watchlist').length;
-  const healthyCount = data.filter(d => d.statusTier === 'Healthy').length;
-  const completedCount = data.filter(d => d.statusTier === 'Completed').length;
-  const needsAttention = critCount + highRiskCount + watchlistCount;
+const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
+  if (!data || data.length === 0) return null;
 
-  // Aggregate drivers
-  const issueBreakdown: Record<string, number> = {};
-  data.forEach(d => {
-    if (d.primaryIssue !== 'On Track') {
-      issueBreakdown[d.primaryIssue] = (issueBreakdown[d.primaryIssue] || 0) + 1;
-    }
-  });
-  const topDrivers = Object.entries(issueBreakdown).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  // Exact Metrics without fallbacks
+  const totalCapacity = data.reduce((s, d) => s + d.capacityMW, 0);
+  const avgSPI = (data.reduce((s, d) => s + d.spi, 0) / data.length).toFixed(2);
+  const avgCPI = (data.reduce((s, d) => s + d.cpi, 0) / data.length).toFixed(2);
+  const totalCostVariance = data.reduce((s, d) => s + d.costVariance, 0);
+  
+  const avgMaterial = Math.round(data.reduce((s, d) => s + d.materialAvailability, 0) / data.length);
+  const totalOrdered = data.reduce((s, d) => s + d.orderedQty, 0);
+  const totalInTransit = data.reduce((s, d) => s + d.inTransitQty, 0);
+  const totalInventory = data.reduce((s, d) => s + d.inventoryQty, 0);
 
-  // Aggregate supply risk
-  const totalSupplyGap = data.reduce((sum, d) => {
-    const gap = (d.orderedQty || 0) - (d.inventoryQty || 0) - (d.inTransitQty || 0);
-    return sum + (gap > 0 ? gap : 0);
-  }, 0);
+  const avgRisk = Math.round(data.reduce((s, d) => s + d.riskScore, 0) / data.length);
+  const totalIntegration = data.reduce((s, d) => s + (d.integrationCount || d.tcEdgesCount), 0);
+  const avgConfidence = Math.round(data.reduce((s, d) => s + d.confidence, 0) / data.length);
 
-  // Average delay
+  const avgProgress = Math.round(data.reduce((s, d) => s + d.progress, 0) / data.length);
   const delayedProjects = data.filter(d => d.delayDays > 0);
-  const avgDelay = delayedProjects.length > 0 ? Math.round(delayedProjects.reduce((s, d) => s + d.delayDays, 0) / delayedProjects.length) : 0;
-  const maxDelay = delayedProjects.length > 0 ? Math.max(...delayedProjects.map(d => d.delayDays)) : 0;
-
-  // Avg confidence
-  const avgConfidence = Math.round(data.reduce((s, d) => s + (d.confidence || 70), 0) / (data.length || 1));
-
-  // Portfolio Health Score (0-100)
-  const healthScore = Math.round(((healthyCount + completedCount) / (data.length || 1)) * 100);
-  const healthColor = healthScore >= 70 ? '#10B981' : healthScore >= 40 ? '#F59E0B' : '#EF4444';
-
-  // COD at risk
+  const totalDelayDays = delayedProjects.reduce((s, d) => s + d.delayDays, 0);
   const codAtRiskCount = data.filter(d => d.codAtRisk).length;
-
-  // Average SPI & CPI
-  const avgSPI = data.length > 0 ? (data.reduce((s, d) => s + (d.spi || 1), 0) / data.length).toFixed(2) : '1.00';
-  const avgCPI = data.length > 0 ? (data.reduce((s, d) => s + (d.cpi || 1), 0) / data.length).toFixed(2) : '1.00';
-
-  // Total capacity
-  const totalCapacity = data.reduce((s, d) => s + (d.capacityMW || 0), 0);
 
   return (
     <div className="bento-card relative overflow-hidden group transition-all duration-300 mb-8 p-0">
-      
       <div className="relative z-10">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center shadow-md shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
-              <Brain className="w-5 h-5 text-white" />
+              <Target className="w-5 h-5 text-white" />
             </div>
             <div>
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2 tracking-tight">
-                AI Portfolio Briefing
+                Portfolio Briefing
                 <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-emerald-500/20 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live
                 </span>
               </h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Powered by AKASHA Intelligence Engine · {fmtMW(totalCapacity)} Total Portfolio</p>
+              <p className="text-[10px] text-muted-foreground mt-0.5">Powered by Akasha Platform · {fmtMW(totalCapacity)} Total Portfolio</p>
             </div>
           </div>
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border">
-              <span>AI Confidence:</span>
+              <span>Confidence:</span>
               <span className="font-mono font-bold text-primary">{avgConfidence}%</span>
             </div>
           </div>
         </div>
 
-        {/* Main Content Grid - Responsive */}
+        {/* 4-Column Performance Matrix */}
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0 md:divide-x divide-y md:divide-y-0 xl:divide-y-0 divide-border/30">
           
-          {/* Column 1: Portfolio Status Breakdown */}
+          {/* Column 1: Schedule & Progress */}
           <div className="p-5 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Portfolio Status</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Schedule & Progress</div>
             
-            {/* Health Ring */}
-            <div className="flex items-center gap-4">
-              <div className="relative w-16 h-16">
-                <svg viewBox="0 0 36 36" className="w-16 h-16 -rotate-90">
-                  <circle cx="18" cy="18" r="15" fill="none" stroke="var(--border)" strokeWidth="3" />
-                  <circle cx="18" cy="18" r="15" fill="none" stroke={healthColor} strokeWidth="3"
-                    strokeDasharray={`${healthScore * 0.94} 100`} strokeLinecap="round" className="transition-all duration-1000" />
-                </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <span className="text-sm font-bold" style={{ color: healthColor }}>{healthScore}</span>
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+              {/* Overall Progress */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <span>Overall Progress</span>
+                  <span className="text-foreground">{avgProgress}%</span>
+                </div>
+                <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
+                  <div className="h-full bg-primary" style={{ width: `${avgProgress}%` }}></div>
                 </div>
               </div>
-              <div className="space-y-1.5 flex-1">
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-red-500"></span> Critical</span>
-                  <span className="font-mono font-bold text-red-500">{critCount}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-orange-500"></span> High Risk</span>
-                  <span className="font-mono font-bold text-orange-500">{highRiskCount}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-amber-500"></span> Watchlist</span>
-                  <span className="font-mono font-bold text-amber-500">{watchlistCount}</span>
-                </div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <span className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-full bg-emerald-500"></span> Healthy</span>
-                  <span className="font-mono font-bold text-emerald-500">{healthyCount}</span>
-                </div>
-              </div>
-            </div>
 
-            {/* Attention Banner */}
-            <div className="bg-red-500/5 border border-red-500/10 rounded-xl px-3 py-2.5">
-              <div className="text-[11px] text-foreground leading-relaxed">
-                <span className="font-bold text-red-500">{needsAttention}</span>
-                <span className="text-muted-foreground"> of </span>
-                <span className="font-bold text-primary">{data.length}</span>
-                <span className="text-muted-foreground"> projects need attention</span>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg SPI</div>
+                  <div className={`text-xl font-mono font-bold ${parseFloat(avgSPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgSPI}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Delay Impact</div>
+                  <div className={`text-xl font-mono font-bold ${totalDelayDays > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{totalDelayDays}d</div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Column 2: Risk Drivers & Issue Heatmap */}
+          {/* Column 2: Financial Performance */}
           <div className="p-5 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Risk Drivers</div>
-            <div className="space-y-2.5 mt-2">
-              {topDrivers.map(([issue, count]) => {
-                const cfg = ISSUE_CONFIG[issue] || ISSUE_CONFIG['On Track'];
-                const IssueIcon = cfg.icon;
-                const pct = Math.round((count / data.length) * 100);
-                return (
-                  <div key={issue} className="flex items-center justify-between text-[11px]">
-                    <span className={`flex items-center gap-2 font-medium ${cfg.color}`}>
-                      <IssueIcon className="w-3.5 h-3.5" /> {issue}
-                    </span>
-                    <span className="font-mono font-bold text-muted-foreground">
-                      {count} <span className="opacity-50 font-normal">({pct}%)</span>
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-            {topDrivers.length === 0 && (
-              <div className="flex items-center gap-2 text-[11px] text-emerald-500 font-medium">
-                <CheckCircle2 className="w-4 h-4" /> All projects on track
-              </div>
-            )}
-          </div>
-
-          {/* Column 3: Key Performance Indicators */}
-          <div className="p-5 space-y-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Key Metrics</div>
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Financial Performance</div>
             
-            <div className="grid grid-cols-2 gap-3">
-              {/* SPI */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg SPI</div>
-                <div className={`text-lg font-mono font-bold ${parseFloat(avgSPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgSPI}</div>
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Cost Variance</div>
+                <div className={`text-2xl font-mono font-bold tracking-tight ${totalCostVariance > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  {totalCostVariance > 0 ? '+' : ''}{fmtNum(totalCostVariance)}
+                </div>
+                <div className="text-[10px] text-muted-foreground">Aggregated budget deviation</div>
               </div>
-              {/* CPI */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg CPI</div>
-                <div className={`text-lg font-mono font-bold ${parseFloat(avgCPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgCPI}</div>
-              </div>
-              {/* COD At Risk */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">COD At Risk</div>
-                <div className={`text-lg font-mono font-bold ${codAtRiskCount > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{codAtRiskCount}</div>
-              </div>
-              {/* Delayed */}
-              <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-3 border border-gray-100 dark:border-gray-800">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Delayed</div>
-                <div className={`text-lg font-mono font-bold ${delayedProjects.length > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{delayedProjects.length}</div>
-              </div>
-            </div>
 
-            {/* Completed tracker */}
-            <div className="bg-emerald-500/5 border border-emerald-500/10 rounded-xl px-3 py-2">
-              <div className="flex items-center justify-between text-[10px]">
-                <span className="text-muted-foreground font-medium">Completed</span>
-                <span className="font-mono font-bold text-emerald-500">{completedCount}/{data.length}</span>
-              </div>
-              <div className="h-1.5 bg-border/50 rounded-full overflow-hidden mt-1.5">
-                <div className="h-full bg-emerald-500 rounded-full transition-all duration-700" style={{ width: `${(completedCount / (data.length || 1)) * 100}%` }}></div>
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg CPI</div>
+                  <div className={`text-xl font-mono font-bold ${parseFloat(avgCPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgCPI}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">COD At Risk</div>
+                  <div className={`text-xl font-mono font-bold ${codAtRiskCount > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{codAtRiskCount}</div>
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Column 4: Critical Exposures */}
-          <div className="p-5 space-y-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Critical Exposure</div>
+          {/* Column 3: Material & Supply Chain */}
+          <div className="p-5 space-y-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Material & Supply Chain</div>
             
-            {/* Supply Risk */}
-            <div className="bg-red-500/5 hover:bg-red-500/10 transition-colors duration-300 rounded-xl p-4 border border-red-500/10">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-red-500/70 mb-1">Supply Gap</div>
-              <div className="text-xl font-mono font-bold text-red-500 tracking-tight">{fmtNum(totalSupplyGap)} No</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">Unfulfilled across portfolio</div>
-            </div>
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <span>Material Availability</span>
+                  <span className="text-foreground">{avgMaterial}%</span>
+                </div>
+                <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
+                  <div className={`h-full ${avgMaterial < 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${avgMaterial}%` }}></div>
+                </div>
+              </div>
 
-            {/* Schedule Slippage */}
-            <div className="bg-amber-500/5 hover:bg-amber-500/10 transition-colors duration-300 rounded-xl p-4 border border-amber-500/10">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-amber-500/70 mb-1">Schedule Slippage</div>
-              <div className="text-xl font-mono font-bold text-amber-500 tracking-tight">{avgDelay} <span className="text-xs font-normal text-amber-500/70">days avg</span></div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">Peak: {maxDelay} days</div>
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
+                  <span className="text-sm font-mono font-semibold text-foreground/80">{fmtNum(totalOrdered)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Transit</span>
+                  <span className="text-sm font-mono font-semibold text-amber-500">{fmtNum(totalInTransit)}</span>
+                </div>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Inventory</span>
+                  <span className="text-sm font-mono font-semibold text-emerald-500">{fmtNum(totalInventory)}</span>
+                </div>
+              </div>
             </div>
+          </div>
 
-            {/* Portfolio Capacity */}
-            <div className="bg-primary/5 hover:bg-primary/10 transition-colors duration-300 rounded-xl p-4 border border-primary/10">
-              <div className="text-[9px] font-bold uppercase tracking-widest text-primary/70 mb-1">Total Capacity</div>
-              <div className="text-xl font-mono font-bold text-primary tracking-tight">{fmtMW(totalCapacity)}</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">{data.length} active projects</div>
+          {/* Column 4: Risk & Complexity */}
+          <div className="p-5 space-y-4">
+            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Risk & Complexity</div>
+            
+            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+              <div className="flex flex-col gap-1.5">
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg Risk Score</div>
+                <div className={`text-2xl font-mono font-bold tracking-tight ${avgRisk > 70 ? 'text-red-500' : avgRisk > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                  {avgRisk}/100
+                </div>
+                <div className="text-[10px] text-muted-foreground">Aggregated portfolio risk</div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Integrations</div>
+                  <div className="text-xl font-mono font-bold text-purple-500">{fmtNum(totalIntegration)}</div>
+                </div>
+                <div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Confidence</div>
+                  <div className="text-xl font-mono font-bold text-primary">{avgConfidence}%</div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -306,106 +257,97 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         project.statusTier === 'Watchlist' ? '#F59E0B' :
           project.statusTier === 'Completed' ? '#3B82F6' : '#10B981';
 
-  const supplyGap = Math.max(0, (project.orderedQty || 0) - (project.inventoryQty || 0) - (project.inTransitQty || 0));
-
   return (
     <div
       onClick={() => onOpen(project.projectId)}
       className="group relative flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors duration-200"
     >
-      {/* Dynamic Colored Hover Overlay */}
       <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none" style={{ backgroundColor: accentColor }} />
-      
-      {/* Left Accent Line on Hover */}
       <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accentColor }}></div>
 
-      {/* 1. Status & Name */}
-      <div className="flex flex-col gap-1 w-[30%] min-w-[250px]">
+      {/* 1. Project Details (30%) */}
+      <div className="flex flex-col gap-1.5 w-[30%] min-w-[250px] pr-4">
         <div className="flex items-center gap-2">
           <h3 className="text-[14px] font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate">
             {project.projectName}
           </h3>
           <div className={`w-2 h-2 rounded-full shrink-0 ${statusCfg.bgColor}`} style={{ backgroundColor: accentColor, boxShadow: `0 0 6px ${accentColor}80` }}></div>
         </div>
-        <div className="flex items-center gap-3 text-[10px] font-mono text-muted-foreground mt-1">
-           {project.capacityMW > 0 && <span className="bg-muted px-1.5 py-0.5 rounded text-foreground/80">{project.capacityMW} MW</span>}
-           {project.sapPlantCode && <span className="opacity-80 border-l border-border pl-3">SPV: {project.sapPlantCode}</span>}
-           {project.projectId && <span className="opacity-80 border-l border-border pl-3">P6: {project.projectId}</span>}
+        <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+           <span className="bg-muted px-1.5 py-0.5 rounded text-foreground/80 font-semibold">{project.capacityMW} MW</span>
+           <span className="opacity-80 border-l border-border pl-2">SPV: {project.sapPlantCode}</span>
+           <span className="opacity-80 border-l border-border pl-2">P6: {project.projectId}</span>
         </div>
       </div>
 
-      {/* 2. Project Health & AI Driver */}
-      <div className="w-[25%] min-w-[200px] flex flex-col gap-2 pr-4">
-        <div className={`flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider ${issueCfg.color}`}>
-           <IssueIcon className="w-3.5 h-3.5" />
-           {project.primaryIssue}
+      {/* 2. Financials (20%) */}
+      <div className="w-[20%] min-w-[180px] flex flex-col gap-1 border-l border-border pl-4 pr-4 py-0.5">
+        <div className="flex justify-between items-center text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Supply PO</span>
+          <span className="font-mono font-semibold text-foreground/80">₹{(project.budgetINR / 10000000).toFixed(1)} Cr</span>
         </div>
-        <div className="flex items-center gap-4 text-[10px] mt-0.5">
-          {/* Progress Bar */}
-          <div className="flex flex-col gap-1 w-full max-w-[90px]">
-            <div className="flex justify-between text-muted-foreground font-semibold uppercase tracking-wider">
-              <span>Progress</span>
-              <span className="text-foreground">{project.durationPercentComplete || project.progress}%</span>
-            </div>
-            <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
-              <div className="h-full bg-primary" style={{ width: `${project.durationPercentComplete || project.progress}%` }}></div>
-            </div>
+        <div className="flex justify-between items-center text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Utilized Supply</span>
+          <span className="font-mono font-semibold text-amber-500">₹{(project.expenditureINR / 10000000).toFixed(1)} Cr</span>
+        </div>
+        <div className="flex justify-between items-center text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Remaining PO</span>
+          <span className="font-mono font-semibold text-emerald-500">₹{(project.costRemainingINR / 10000000).toFixed(1)} Cr</span>
+        </div>
+      </div>
+
+      {/* 3. Schedule Performance (15%) */}
+      <div className="w-[15%] min-w-[150px] flex flex-col gap-1.5 border-l border-border pl-4 pr-4">
+        <div className="flex flex-col gap-1 w-full max-w-[120px]">
+          <div className="flex justify-between text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+            <span>Progress</span>
+            <span className="text-foreground">{Math.round((project.progress || 0) * 100)}%</span>
           </div>
-          {/* SPI & CPI */}
-          <div className="flex items-center gap-3 border-l border-border pl-3">
-             <div className="flex flex-col">
-               <span className="text-muted-foreground font-semibold uppercase tracking-wider">SPI</span>
-               <span className={`font-mono font-bold text-[11px] ${project.spi < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{project.spi}</span>
-             </div>
-             <div className="flex flex-col">
-               <span className="text-muted-foreground font-semibold uppercase tracking-wider">CPI</span>
-               <span className={`font-mono font-bold text-[11px] ${project.cpi < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{project.cpi}</span>
-             </div>
+          <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
+            <div className="h-full bg-primary" style={{ width: `${Math.round((project.progress || 0) * 100)}%` }}></div>
           </div>
         </div>
-      </div>
-
-      {/* 3. SAP Supply & Transmission Breakdown */}
-      <div className="w-[30%] min-w-[250px] grid grid-cols-2 gap-x-4 gap-y-3 border-l border-border pl-5">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered Qty</span>
-          <span className="text-[13px] font-mono font-semibold text-foreground/80">
-            {project.orderedQty > 0 ? `${fmtNum(project.orderedQty)} No` : '--'}
-          </span>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">In-Transit</span>
-          <span className="text-[13px] font-mono font-semibold text-amber-500">
-            {project.inTransitQty > 0 ? `${fmtNum(project.inTransitQty)} No` : '--'}
-          </span>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Inventory</span>
-          <span className="text-[13px] font-mono font-semibold text-emerald-500">
-            {project.inventoryQty > 0 ? `${fmtNum(project.inventoryQty)} No` : '--'}
-          </span>
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Transmission</span>
-          <span className="text-[13px] font-mono font-semibold text-purple-500">
-            {project.tcEdgesCount > 0 ? `${project.tcEdgesCount} Assets` : 'N/A'}
-          </span>
+        <div className="flex items-center gap-2 text-[9px] mt-0.5 text-muted-foreground font-mono">
+           <span>P:{Math.round((project.plannedDuration || 0) / 8)}d</span>
+           <span>A:{Math.round((project.actualDuration || 0) / 8)}d</span>
+           <span>R:{Math.round((project.remainingDuration || 0) / 8)}d</span>
         </div>
       </div>
 
-      {/* 4. Forecast COD & Confidence */}
+      {/* 4. Supply Funnel (20%) */}
+      <div className="w-[20%] min-w-[180px] flex flex-col justify-center border-l border-border pl-4 pr-4 py-0.5">
+        <div className="flex justify-between items-center text-[10px] mb-0.5">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
+          <span className="font-mono font-semibold text-foreground/80">{fmtNum(project.orderedQty)}</span>
+        </div>
+        <div className="flex justify-between items-center text-[10px] mb-0.5">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Consumed</span>
+          <span className="font-mono font-semibold text-emerald-500">{fmtNum(project.consumedQty)}</span>
+        </div>
+        <div className="flex justify-between items-center text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Pending</span>
+          <span className="font-mono font-semibold text-amber-500">{fmtNum(project.pendingDispatchQty)}</span>
+        </div>
+      </div>
+
+      {/* 5. Timeline Forecast (15%) */}
       <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
-        <div className="flex flex-col gap-1">
-          <span className={`text-[10px] uppercase tracking-widest font-semibold ${project.codAtRisk ? 'text-red-500/70' : 'text-muted-foreground'}`}>Forecast COD</span>
-          <span className={`text-[15px] font-mono font-semibold ${project.codAtRisk ? 'text-red-500' : 'text-foreground/80'}`}>{project.forecastMonth}</span>
+        <div className="flex flex-col gap-0.5">
+          <div className="flex items-center gap-2">
+            <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold w-12">Base</span>
+            <span className="text-[11px] font-mono font-semibold text-foreground/60">{project.baselineMonth || 'N/A'}</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-[9px] uppercase tracking-widest font-semibold w-12 ${project.codAtRisk ? 'text-red-500/70' : 'text-primary/70'}`}>Fcst</span>
+            <span className={`text-[13px] font-mono font-bold ${project.codAtRisk ? 'text-red-500' : 'text-foreground/90'}`}>{project.forecastMonth}</span>
+          </div>
         </div>
-        <div className="flex flex-col items-end gap-1">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold">AI Conf</span>
-          <span className="text-[15px] font-mono font-bold text-primary">{project.confidence}%</span>
+        <div className="flex flex-col items-end gap-0.5 ml-2">
+          <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Conf</span>
+          <span className="text-[13px] font-mono font-bold text-primary">{project.confidence}%</span>
         </div>
       </div>
 
-      {/* Action Chevron */}
       <ChevronRight className="w-5 h-5 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity absolute right-4" />
     </div>
   );
@@ -416,39 +358,31 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
    ═══════════════════════════════════════════════════════════ */
 const SkeletonRow = () => (
   <div className="flex items-stretch border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 animate-pulse">
-    {/* Project Details */}
     <div className="w-[30%] min-w-[250px] p-4 flex items-start gap-3">
-      <div className="w-10 h-10 rounded-lg bg-gray-200 dark:bg-gray-800 shrink-0"></div>
       <div className="flex-1 mt-1">
-        <div className="w-20 h-3 bg-gray-200 dark:bg-gray-800 rounded mb-2"></div>
         <div className="w-3/4 h-5 bg-gray-200 dark:bg-gray-800 rounded mb-2"></div>
         <div className="w-1/2 h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
       </div>
     </div>
-    
-    {/* Health & AI Driver */}
-    <div className="w-[25%] min-w-[200px] border-l border-border p-4 flex flex-col justify-center">
-      <div className="w-24 h-6 bg-gray-200 dark:bg-gray-800 rounded-full mb-3"></div>
-      <div className="w-full h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
+    <div className="w-[20%] min-w-[180px] border-l border-border p-4 flex flex-col justify-center gap-2">
+      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
     </div>
-    
-    {/* SAP Supply */}
-    <div className="w-[30%] min-w-[250px] border-l border-border p-4 flex flex-col justify-center">
+    <div className="w-[15%] min-w-[150px] border-l border-border p-4 flex flex-col justify-center">
       <div className="w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full mb-3"></div>
-      <div className="flex gap-4">
-        <div className="w-1/3 h-10 bg-gray-200 dark:bg-gray-800 rounded"></div>
-        <div className="w-1/3 h-10 bg-gray-200 dark:bg-gray-800 rounded"></div>
-        <div className="w-1/3 h-10 bg-gray-200 dark:bg-gray-800 rounded"></div>
-      </div>
+      <div className="w-20 h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
     </div>
-    
-    {/* Forecast COD */}
+    <div className="w-[20%] min-w-[180px] border-l border-border p-4 flex flex-col justify-center gap-2">
+      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+    </div>
     <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
       <div className="flex flex-col gap-2">
         <div className="w-16 h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-        <div className="w-12 h-5 bg-gray-200 dark:bg-gray-800 rounded"></div>
+        <div className="w-16 h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
       </div>
-      <div className="w-10 h-10 bg-gray-200 dark:bg-gray-800 rounded-full"></div>
     </div>
   </div>
 );
@@ -480,15 +414,15 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       const matchesSearch =
         d.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         d.projectId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (d.sapPlantCode || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (d.primaryIssue || '').toLowerCase().includes(searchTerm.toLowerCase());
+        d.sapPlantCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        d.primaryIssue.toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'All' || d.statusTier === statusFilter;
-      const matchesRisk = riskFilters.length === 0 || riskFilters.some(rf => (d.riskCategories || []).includes(rf));
+      const matchesRisk = riskFilters.length === 0 || riskFilters.some(rf => d.riskCategories.includes(rf));
       return matchesSearch && matchesStatus && matchesRisk;
     })
     .sort((a, b) => {
       switch (sortBy) {
-        case 'integration': return (b.integrationCount || 0) - (a.integrationCount || 0) || b.riskScore - a.riskScore;
+        case 'integration': return b.integrationCount - a.integrationCount || b.riskScore - a.riskScore;
         case 'impact': return b.riskScore - a.riskScore;
         case 'delay': return b.delayDays - a.delayDays;
         case 'cost': return a.costVariance - b.costVariance;
@@ -496,7 +430,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         case 'vendor': return (b.inTransitQty === 0 && b.orderedQty > 0 ? 1 : 0) - (a.inTransitQty === 0 && a.orderedQty > 0 ? 1 : 0);
         case 'cod': return (b.codAtRisk ? 1 : 0) - (a.codAtRisk ? 1 : 0);
         case 'critical': return b.riskScore - a.riskScore;
-        default: return (b.integrationCount || 0) - (a.integrationCount || 0) || b.riskScore - a.riskScore;
+        default: return b.integrationCount - a.integrationCount || b.riskScore - a.riskScore;
       }
     });
 
@@ -520,7 +454,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       {/* ── Page Header ── */}
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
-          <div className="section-label mb-1">AI-POWERED INTELLIGENCE</div>
+          <div className="section-label mb-1">PORTFOLIO INTELLIGENCE</div>
           <h2 className="text-2xl font-light text-foreground tracking-wide flex items-center gap-3">
             <Target className="w-6 h-6 text-primary" />
             Project Intelligence
@@ -531,8 +465,8 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         </span>
       </div>
 
-      {/* ── AI Executive Briefing ── */}
-      {!loading && data.length > 0 && <AIBriefingCard data={data} />}
+      {/* ── Executive Briefing ── */}
+      {!loading && data.length > 0 && <PortfolioBriefingCard data={data} />}
 
       {/* ── Status Tier Distribution ── */}
       <div className="flex flex-wrap gap-2.5 mb-5">
@@ -625,10 +559,11 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       {loading ? (
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
-            <div className="w-[30%] min-w-[250px]">Project Details</div>
-            <div className="w-[25%] min-w-[200px]">Health & AI Driver</div>
-            <div className="w-[30%] min-w-[250px] pl-5">SAP Supply & Transmission</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Forecast COD</div>
+            <div className="w-[30%] min-w-[250px] pr-4">Project Details</div>
+            <div className="w-[20%] min-w-[180px] pl-4">Financials</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Schedule</div>
+            <div className="w-[20%] min-w-[180px] pl-4">Supply Chain</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
           </div>
           <div className="flex flex-col">
             {[...Array(6)].map((_, i) => <SkeletonRow key={i} />)}
@@ -646,10 +581,11 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       ) : (
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
-            <div className="w-[30%] min-w-[250px]">Project Details</div>
-            <div className="w-[25%] min-w-[200px]">Health & AI Driver</div>
-            <div className="w-[30%] min-w-[250px] pl-5">SAP Supply & Transmission</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Forecast COD</div>
+            <div className="w-[30%] min-w-[250px] pr-4">Project Details</div>
+            <div className="w-[20%] min-w-[180px] pl-4">Financials</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Schedule</div>
+            <div className="w-[20%] min-w-[180px] pl-4">Supply Chain</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
           </div>
           <div className="flex flex-col">
             {filtered.map((project, index) => (

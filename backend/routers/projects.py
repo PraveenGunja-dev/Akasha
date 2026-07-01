@@ -208,3 +208,72 @@ def update_project(project_id: str, update_data: ProjectUpdate, db: Session = De
         raise HTTPException(status_code=404, detail=result.get("message"))
         
     return result
+class ActivityUpdate(BaseModel):
+    name: Optional[str] = None
+    status: Optional[str] = None
+    start_date: Optional[datetime] = None
+    finish_date: Optional[datetime] = None
+    planned_start_date: Optional[datetime] = None
+    planned_finish_date: Optional[datetime] = None
+    actual_start_date: Optional[datetime] = None
+    actual_finish_date: Optional[datetime] = None
+    baseline_start_date: Optional[datetime] = None
+    baseline_finish_date: Optional[datetime] = None
+    
+    # Resources mapping (dictionary by resource type e.g. "Labor", "Material", "Nonlabor")
+    resources: Optional[dict] = None
+
+@router.put("/p6/activities/{p6_object_id}")
+def update_activity(p6_object_id: int, update_data: ActivityUpdate, db: Session = Depends(get_db)):
+    p6_service = P6Service()
+    
+    update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+    
+    if not update_dict:
+        raise HTTPException(status_code=400, detail="No valid update fields provided.")
+        
+    result = p6_service.update_activity_in_p6(db, p6_object_id, update_dict)
+    
+    if not result.get("success"):
+        raise HTTPException(status_code=400, detail=result.get("message"))
+        
+    return result
+
+@router.get("/tc-network/project/{project_id}")
+def get_project_tc_network(project_id: str, db: Session = Depends(get_db)):
+    # 1. Lookup mapping ID and project name
+    mappings = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).all()
+    mapping_ids = [m.id for m in mappings]
+    project_names = [m.project_name_from_p6 for m in mappings if m.project_name_from_p6]
+
+    if not mapping_ids and not project_names:
+        return {"edges": []}
+
+    # 2. Query tc_network_edge
+    query = db.query(models.TcNetworkEdge)
+    filters = []
+    
+    if mapping_ids:
+        filters.append(models.TcNetworkEdge.mapping_id.in_(mapping_ids))
+        
+    for name in project_names:
+        filters.append(models.TcNetworkEdge.projects.ilike(f'%"{name}"%'))
+        
+    from sqlalchemy import or_
+    edges = query.filter(or_(*filters)).all()
+
+    result = []
+    for e in edges:
+        result.append({
+            "id": e.id,
+            "edge_id": e.edge_id,
+            "region": e.region,
+            "from_label": e.from_label,
+            "to_label": e.to_label,
+            "voltage": e.voltage,
+            "status": e.status,
+            "length": e.length,
+            "projects": e.projects
+        })
+        
+    return {"edges": result}

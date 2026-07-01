@@ -57,8 +57,6 @@ def calculate_project_360_metrics(db: Session):
                 pass
                 
     # Pre-calculate capacity by plant for pro-rata allocation
-    cap_data = db.query(models.ProjectMapping.spv_plant_code, func.sum(models.ProjectMapping.capacity_mwac)).group_by(models.ProjectMapping.spv_plant_code).all()
-    capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
 
     results = []
 
@@ -71,13 +69,8 @@ def calculate_project_360_metrics(db: Session):
         sched_var = p6_proj.finish_date_variance if p6_proj and p6_proj.finish_date_variance is not None else 0
         cost_var = p6_proj.total_cost_variance if p6_proj and p6_proj.total_cost_variance is not None else 0
         progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
-        # 2. SAP Data - Direct Material Reverse Engineering
-        plant_codes = [c for c in [str(m.spv_plant_code).strip() if m.spv_plant_code else None, str(m.agel).strip() if m.agel else None] if c]
-        
-        # Calculate Plant Capacity for pro-rata allocation
-        total_plant_capacity = sum(capacity_by_plant.get(c, 1.0) for c in plant_codes) if plant_codes else 1.0
-        project_capacity = m.capacity_mwac or 0
-        allocation_ratio = project_capacity / total_plant_capacity if total_plant_capacity > 0 else 1.0
+        # 2. SAP Data - WBS Only Mapping
+        allocation_ratio = 1.0
 
         budget_inr = 0.0
         expenditure_inr = 0.0
@@ -94,17 +87,12 @@ def calculate_project_360_metrics(db: Session):
         
         po_materials = set()
         me2j_records = []
-        if plant_codes:
-            if m.module_wbs:
-                wbs_prefix = m.module_wbs[:5]
-                me2j_records = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.plant_code.in_(plant_codes),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).all()
-            else:
-                me2j_records = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.plant_code.in_(plant_codes)
-                ).all()
+        wbs_exact = None
+        if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
+            wbs_exact = str(m.module_wbs).strip()
+            me2j_records = db.query(models.MTPOAmount).filter(
+                models.MTPOAmount.wbs_element == wbs_exact
+            ).all()
             
             for rec in me2j_records:
                 ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
@@ -117,17 +105,10 @@ def calculate_project_360_metrics(db: Session):
         
         # --- STEP A: MB51 Consumption ---
         mb51_records = []
-        if plant_codes:
-            if m.module_wbs:
-                wbs_prefix = m.module_wbs[:5]
-                mb51_records = db.query(models.MTMaterialDocument).filter(
-                    models.MTMaterialDocument.plant_code.in_(plant_codes),
-                    models.MTMaterialDocument.wbs_element.startswith(wbs_prefix)
-                ).all()
-            else:
-                mb51_records = db.query(models.MTMaterialDocument).filter(
-                    models.MTMaterialDocument.plant_code.in_(plant_codes)
-                ).all()
+        if wbs_exact:
+            mb51_records = db.query(models.MTMaterialDocument).filter(
+                models.MTMaterialDocument.wbs_element == wbs_exact
+            ).all()
         
         mb51_materials = set()
         for rec in mb51_records:
@@ -148,19 +129,11 @@ def calculate_project_360_metrics(db: Session):
         # (Moved to before MB51 for material matching)
 
         mb52_records = []
-        if plant_codes:
-            if m.module_wbs:
-                wbs_prefix = m.module_wbs[:5]
-                mb52_records = db.query(models.MTInventory).filter(
-                    models.MTInventory.plant_code.in_(plant_codes),
-                    models.MTInventory.wbs_element.startswith(wbs_prefix),
-                    models.MTInventory.quantity_inv > 0
-                ).all()
-            else:
-                mb52_records = db.query(models.MTInventory).filter(
-                    models.MTInventory.plant_code.in_(plant_codes),
-                    models.MTInventory.quantity_inv > 0
-                ).all()
+        if wbs_exact:
+            mb52_records = db.query(models.MTInventory).filter(
+                models.MTInventory.wbs_element == wbs_exact,
+                models.MTInventory.quantity_inv > 0
+            ).all()
             for rec in mb52_records:
                 mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
                 # Only include inventory for materials that exist in the POs
@@ -426,34 +399,17 @@ def get_project_360_detail(db: Session, project_id: str):
     if not p6_proj:
         return {"error": "Project not found"}
 
-    # SAP Data
-    codes = [c for c in [mapping.spv_plant_code if mapping else None, mapping.agel if mapping else None] if c]
-    
-    # Calculate Total Plant Capacity for Pro-Rata Allocation
-    total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
-        or_(
-            models.ProjectMapping.spv_plant_code.in_(codes),
-            models.ProjectMapping.agel.in_(codes)
-        )
-    ).scalar() or 1.0
-
-    project_capacity = mapping.capacity_mwac if mapping else 0
-    allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
+    # SAP Data - WBS Only Mapping
+    allocation_ratio = 1.0
 
     # ── Purchase Orders (ME2J) ──
     po_records_all = []
-    if mapping and mapping.module_wbs:
-        wbs_prefix = mapping.module_wbs[:5]
-        if codes:
-            po_records_all = db.query(models.MTPOAmount).filter(
-                models.MTPOAmount.plant_code.in_(codes),
-                models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-            ).all()
-    else:
-        if codes:
-            po_records_all = db.query(models.MTPOAmount).filter(
-                models.MTPOAmount.plant_code.in_(codes)
-            ).all()
+    wbs_exact = None
+    if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
+        wbs_exact = str(mapping.module_wbs).strip()
+        po_records_all = db.query(models.MTPOAmount).filter(
+            models.MTPOAmount.wbs_element == wbs_exact
+        ).all()
             
     po_materials = set()
     for po in po_records_all:
@@ -469,18 +425,10 @@ def get_project_360_detail(db: Session, project_id: str):
     sap_consumption = []
 
     mb51_records = []
-    if mapping and mapping.module_wbs:
-        wbs_prefix = mapping.module_wbs[:5]
-        if codes:
-            mb51_records = db.query(models.MTMaterialDocument).filter(
-               models.MTMaterialDocument.plant_code.in_(codes),
-               models.MTMaterialDocument.wbs_element.startswith(wbs_prefix)
-            ).all()
-    else:
-        if codes:
-            mb51_records = db.query(models.MTMaterialDocument).filter(
-               models.MTMaterialDocument.plant_code.in_(codes)
-            ).all()
+    if wbs_exact:
+        mb51_records = db.query(models.MTMaterialDocument).filter(
+           models.MTMaterialDocument.wbs_element == wbs_exact
+        ).all()
 
     for rec in mb51_records:
         mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
@@ -597,19 +545,11 @@ def get_project_360_detail(db: Session, project_id: str):
 
     # ── Inventory (MB52) ──
     inv_records = []
-    if mapping and mapping.module_wbs:
-        wbs_prefix = mapping.module_wbs[:5]
-        if codes:
-            inv_records = db.query(models.MTInventory).filter(
-                models.MTInventory.plant_code.in_(codes),
-                models.MTInventory.wbs_element.startswith(wbs_prefix)
-            ).all()
-    else:
-        if codes:
-            inv_records = db.query(models.MTInventory).filter(
-                models.MTInventory.plant_code.in_(codes),
-                models.MTInventory.quantity_inv > 0
-            ).all()
+    if wbs_exact:
+        inv_records = db.query(models.MTInventory).filter(
+            models.MTInventory.wbs_element == wbs_exact,
+            models.MTInventory.quantity_inv > 0
+        ).all()
 
     sap_inventory = []
     total_inv_qty = 0.0
@@ -698,10 +638,30 @@ def get_project_360_detail(db: Session, project_id: str):
                 "actualFinishDate": act.actual_finish_date.strftime("%Y-%m-%d") if act.actual_finish_date else None,
                 "baselineStartDate": act.baseline_start_date.strftime("%Y-%m-%d") if act.baseline_start_date else None,
                 "baselineFinishDate": act.baseline_finish_date.strftime("%Y-%m-%d") if act.baseline_finish_date else None,
-                "wbsName": act.wbs_name
+                "wbsName": act.wbs_name,
+                "wbsObjectId": act.wbs_object_id,
+                "p6ObjectId": act.p6_object_id,
+                "resources": {
+                    ass.resource_type: {
+                        "p6ObjectId": ass.p6_object_id,
+                        "resourceName": ass.resource_name,
+                        "plannedUnits": ass.planned_units,
+                        "actualUnits": ass.actual_units
+                    }
+                    for ass in act.resource_assignments
+                } if act.resource_assignments else {}
             }
             for act in p6_proj.activities
-        ] if p6_proj.activities else []
+        ] if p6_proj.activities else [],
+        "wbsNodes": [
+            {
+                "wbsObjectId": node.p6_object_id,
+                "parentObjectId": node.parent_object_id,
+                "name": node.wbs_name,
+                "code": node.wbs_code
+            }
+            for node in db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == p6_proj.p6_object_id).all()
+        ]
     }
 
     # ── Delayed Activities & MW Capacity ──
@@ -906,10 +866,10 @@ def get_project_360_detail(db: Session, project_id: str):
                 "totalInTransitQty": total_transit_qty,
                 "totalInventoryQty": total_inv_qty,
                 "totalConsumedQty": consumed_qty,
-                "totalBudgetINR": total_budget_inr,
+                "totalBudgetINR": next((x.get("budgetINR", total_budget_inr) for x in calculate_project_360_metrics(db) if x["projectId"] == project_id), total_budget_inr),
                 "totalDeliveredINR": total_delivered_inr,
                 "totalInventoryValueINR": total_inv_inr,
-                "totalExpenditureINR": expenditure_inr,
+                "totalExpenditureINR": next((x.get("expenditureINR", expenditure_inr) for x in calculate_project_360_metrics(db) if x["projectId"] == project_id), expenditure_inr),
             }
         },
         "tc": {

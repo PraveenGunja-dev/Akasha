@@ -2,12 +2,38 @@ import React, { useState, useEffect } from 'react';
 import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard, RefreshCw } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import { toast } from 'sonner';
+import NotificationDropdown from './NotificationDropdown';
+import PMAGThreadPanel from './PMAGThreadPanel';
 
 export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing }: any) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const navigate = useNavigate();
   const { projectId } = useParams();
   const { user, logout } = useAuth();
+
+  const [notifications, setNotifications] = useState<any[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
+  const unreadCount = notifications.filter(n => n.action_status === 'Pending').length;
+
+  const fetchNotifications = async () => {
+    try {
+      const res = await fetch('/akasha/api/notifications/');
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+      }
+    } catch (e) {
+      console.error('Failed to fetch notifications:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const handleSignOut = () => {
     logout();
@@ -19,6 +45,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   }, [theme]);
 
   return (
+    <>
     <header className="h-[73px] bg-background/80 backdrop-blur-xl border-b border-border/50 flex items-center justify-between px-2 sm:px-4 shrink-0 z-40">
       
       {/* Left: hamburger (mobile) & Title */}
@@ -41,8 +68,6 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
       {/* Right: project selector + actions */}
       <div className="flex items-center gap-1 sm:gap-2">
         
-        {/* Project Selector - Removed per request */}
-
         {/* Sync Data Button */}
         {onSyncData && (
           <button 
@@ -72,10 +97,23 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         </button>
 
         {/* Bell */}
-        <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-          <Bell className="w-4 h-4" />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />
-        </button>
+        <div className="relative">
+            <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+            <Bell className="w-4 h-4" />
+            {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />}
+            </button>
+            
+            {showNotifications && (
+                <NotificationDropdown 
+                    notifications={notifications}
+                    onClose={() => setShowNotifications(false)}
+                    onSelectNotification={(n: any) => {
+                        setSelectedNotification(n);
+                        setShowNotifications(false);
+                    }}
+                />
+            )}
+        </div>
         
         {/* Avatar */}
         <div className="relative group ml-0.5">
@@ -97,5 +135,17 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         </div>
       </div>
     </header>
+
+    {selectedNotification && (
+      <PMAGThreadPanel 
+        notification={selectedNotification} 
+        onClose={() => setSelectedNotification(null)}
+        onResolved={() => {
+          fetchNotifications();
+          setSelectedNotification(null);
+        }}
+      />
+    )}
+    </>
   );
 }

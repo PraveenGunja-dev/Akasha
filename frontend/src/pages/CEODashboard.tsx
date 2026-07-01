@@ -22,12 +22,12 @@ import AICopilot from '../components/sections/AICopilot';
 import ExecutiveBriefing from '../components/sections/ExecutiveBriefing';
 import SmartSearch from '../components/sections/SmartSearch';
 import KnowledgeGraph from '../components/sections/KnowledgeGraph';
+import ProjectMap from '../components/sections/ProjectMap';
 
 import TransmissionDataViewer from '../components/sections/TransmissionDataViewer';
 import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPanel';
 import SimulationLab from '../components/sections/SimulationLab';
 import ProjectWorkspace from '../components/sections/ProjectWorkspace';
-import DataIntegrationHub from '../components/sections/DataIntegrationHub';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -174,7 +174,7 @@ export default function CEODashboard() {
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
-    'ai_copilot', 'executive_brief', 'smart_search', 'knowledge_graph', 'simulation_lab'
+    'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab'
   ];
 
   const handleTabChange = (tab: string) => {
@@ -208,11 +208,12 @@ export default function CEODashboard() {
         
         {/* 2. Top Global Header (hidden for full-screen Copilot) */}
         {activeTab !== 'ai_copilot' && (
-          <div className="sticky top-0 z-40">
+          <div className="sticky top-0 z-[60]">
             <TopHeader 
               selectedProject={selectedProject} 
               setSelectedProject={setSelectedProject} 
               masterProjects={dashboardData?.projects || []} 
+
               onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
               onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               onSyncData={handleSyncData}
@@ -257,7 +258,6 @@ export default function CEODashboard() {
                   >
                     {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
                     {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
-                    {activeTab === 'data_integration' && <DataIntegrationHub />}
                     {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
                     {activeTab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
                     {activeTab === 'financial' && <SAPView sapData={sapData} logisticsData={logisticsData} finDetails={finDetails} logDetails={logDetails} loading={loading} />}
@@ -273,6 +273,7 @@ export default function CEODashboard() {
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
+                    {activeTab === 'project_map' && <ProjectMap projects={dashboardData?.project_health || []} onOpenProject={handleOpenProject} />}
                     {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
                     
                     {/* Placeholders for unbuilt sections */}

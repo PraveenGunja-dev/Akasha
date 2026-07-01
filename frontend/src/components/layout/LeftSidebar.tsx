@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
-  Home, Command, Network, Bot, FileText, Search, BrainCircuit,
-  Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2
+  Home, Command, Network, MessageSquare, FileText, Search, Activity,
+  Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2, Share2
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,17 +21,17 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
         { id: 'overview', label: 'Overview', icon: Home },
         { id: 'capacity_overview', label: 'Capacity Overview', icon: BarChart2 },
         { id: 'project360', label: 'Project 360', icon: Command },
-        // { id: 'data_integration', label: 'Data Hub', icon: Network },
       ]
     }
   ];
 
   const aiSections = [
-    { id: 'ai_copilot', label: 'AI Copilot', icon: Bot },
+    { id: 'ai_copilot', label: 'Ask Akasha', icon: MessageSquare },
     { id: 'executive_brief', label: 'Briefing', icon: FileText },
     { id: 'smart_search', label: 'Search', icon: Search },
-    { id: 'knowledge_graph', label: 'Knowledge', icon: Network },
-    { id: 'simulation_lab', label: 'Simulation', icon: BrainCircuit },
+    { id: 'project_map', label: 'Project Map', icon: Network },
+    { id: 'knowledge_graph', label: 'Knowledge Graph', icon: Share2 },
+    { id: 'simulation_lab', label: 'Simulation', icon: Activity },
   ];
 
   const adminSections = [
@@ -119,7 +119,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
           {showLabel ? (
             <div className="px-3 mb-1 flex items-center gap-1.5">
               <Zap className="w-3 h-3 text-[#0b74b1] dark:text-[#38bdf8]" />
-              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#0b74b1] dark:text-[#38bdf8]">Akasha AI</h3>
+              <h3 className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#0b74b1] dark:text-[#38bdf8]">Platform Tools</h3>
             </div>
           ) : (
             <div className="flex justify-center my-1">

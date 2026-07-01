@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, X, Send, Sparkles, Loader2 } from 'lucide-react';
+import { MessageSquare, X, Send, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -60,9 +60,9 @@ export default function FloatingCopilot() {
         <button 
           onClick={() => setIsOpen(true)} 
           className="p-2 rounded-full hover:bg-accent text-muted-foreground hover:text-accent-foreground transition-colors"
-          title="Ask AKASHA AI"
+          title="Ask Akasha"
         >
-          <Bot className="w-5 h-5" />
+          <MessageSquare className="w-5 h-5" />
         </button>
       )}
 
@@ -80,11 +80,11 @@ export default function FloatingCopilot() {
             style={{ background: 'linear-gradient(90deg, rgba(59,130,246,0.06), rgba(139,92,246,0.04))' }}>
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary/30 to-purple-600/30 flex items-center justify-center border border-primary/20">
-                <Sparkles className="w-4 h-4 text-primary" />
+                <MessageSquare className="w-4 h-4 text-primary" />
               </div>
               <div>
-                <h3 className="text-sm font-semibold text-foreground">AKASHA Copilot</h3>
-                <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest">AI Intelligence Assistant</p>
+                <h3 className="text-sm font-semibold text-foreground">Ask Akasha</h3>
+                <p className="text-[9px] text-muted-foreground/50 uppercase tracking-widest">Data Query Assistant</p>
               </div>
             </div>
             <button onClick={() => setIsOpen(false)}
@@ -98,7 +98,7 @@ export default function FloatingCopilot() {
             {messages.length === 0 && (
               <div className="flex flex-col items-center justify-center h-full text-center px-4">
                 <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-primary/10 to-purple-600/10 flex items-center justify-center mb-4 border border-primary/10">
-                  <Bot className="w-7 h-7 text-primary/50" />
+                  <MessageSquare className="w-7 h-7 text-primary/50" />
                 </div>
                 <p className="text-sm text-muted-foreground/50 mb-4">Ask me about your projects, risks, or portfolio health.</p>
               </div>

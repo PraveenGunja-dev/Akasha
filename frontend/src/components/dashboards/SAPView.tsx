@@ -15,7 +15,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
       axisLabel: { color: 'var(--foreground)' } 
     },
     yAxis: [
-      { type: 'value', name: 'Millions ($)', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
+      { type: 'value', name: 'Crores (₹)', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
       { type: 'value', name: 'Variance (%)', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { show: false } }
     ],
     series: [
@@ -56,9 +56,9 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
   const vendorMap: any = {};
   (finDetails || []).forEach((po: any) => {
       const v = po.vendor_name || 'Unknown Vendor';
-      vendorMap[v] = (vendorMap[v] || 0) + po.po_quantities_mw;
+      vendorMap[v] = (vendorMap[v] || 0) + ((po.net_order_value_inr || po.net_order_value || 0) / 10000000);
   });
-  const topVendors = Object.keys(vendorMap).map(k => ({name: k.substring(0,25), value: vendorMap[k]})).sort((a,b) => b.value - a.value).slice(0, 5);
+  const topVendors = Object.keys(vendorMap).map(k => ({name: k.substring(0,25), value: parseFloat(vendorMap[k].toFixed(2))})).sort((a,b) => b.value - a.value).slice(0, 5);
 
   const vendorOption = {
     tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
@@ -66,10 +66,11 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
     xAxis: { type: 'value', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
     yAxis: { type: 'category', data: topVendors.map(v => v.name).reverse(), axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' } },
     series: [
-      { name: 'Order Volume (MW)', type: 'bar', data: topVendors.map(v => v.value).reverse(), itemStyle: { color: '#0B74B0', borderRadius: [0, 4, 4, 0] } }
+      { name: 'PO Value (₹ Cr)', type: 'bar', data: topVendors.map(v => v.value).reverse(), itemStyle: { color: '#0B74B0', borderRadius: [0, 4, 4, 0] } }
     ]
   };
 
+  // actualCapex is already in Crores from the backend
   const totalCapex = sapData.reduce((acc: number, curr: any) => acc + (curr.actualCapex || 0), 0);
 
   return (
@@ -78,7 +79,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Actual CAPEX (YTD)</h3>
-           <p className="text-4xl font-light text-foreground">${totalCapex > 1000 ? (totalCapex/1000).toFixed(2) + 'B' : totalCapex.toFixed(1) + 'M'}</p>
+           <p className="text-4xl font-light text-foreground">₹{totalCapex.toFixed(2)} Cr</p>
          </div>
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Deliveries Completed</h3>
@@ -110,7 +111,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
           <div className="col-span-1 bg-card border border-border rounded-2xl p-6 min-h-[350px] shadow-sm">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-purple-500/10 rounded-lg"><Users className="w-5 h-5 text-purple-500" /></div>
-              <h2 className="text-lg font-medium tracking-wide text-foreground">Top Vendors by Volume</h2>
+              <h2 className="text-lg font-medium tracking-wide text-foreground">Top Vendors by PO Value</h2>
             </div>
             <div className="w-full h-[250px]">
               <ReactECharts option={vendorOption} style={{ height: '100%', width: '100%' }} />
@@ -135,7 +136,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
                 <th className="px-4 py-3">Material Code</th>
                 <th className="px-4 py-3">PO Date</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">Quantity (MW)</th>
+                <th className="px-4 py-3 text-right">PO Value (₹ Cr)</th>
               </tr>
             </thead>
             <tbody>
@@ -155,7 +156,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Pending</span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium">{po.po_quantities_mw?.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-medium">{((po.net_order_value_inr || po.net_order_value || 0) / 10000000).toFixed(2)}</td>
                 </tr>
               ))}
               {(!finDetails || finDetails.length === 0) && (

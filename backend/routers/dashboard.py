@@ -242,6 +242,9 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
                     tc_names = [t.strip() for t in m.project.split(',')]
                     matched = any(f'"{t_name}"' in proj_str for t_name in tc_names if t_name)
                 
+                if not matched and m.project_name_from_p6 and "BANDHA" in m.project_name_from_p6.upper() and "Siyambar" in proj_str:
+                    matched = True
+                
                 if matched or (m.project_name_from_p6 and f'"{m.project_name_from_p6}"' in proj_str):
                     if edge.region == "Khavda":
                         tc_khavda.append(edge)
@@ -399,6 +402,12 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
         json_p6_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like(f'%"{m.project_name_from_p6}"%')).all()
         tc_khavda.extend(json_p6_k)
         tc_rajasthan.extend(json_p6_r)
+        
+        if "BANDHA" in m.project_name_from_p6.upper():
+            siyam_k = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Khavda", models.TcNetworkEdge.projects.like('%"Siyambar%')).all()
+            siyam_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like('%"Siyambar%')).all()
+            tc_khavda.extend(siyam_k)
+            tc_rajasthan.extend(siyam_r)
     
     tc_khavda = list({e.id: e for e in tc_khavda}.values())
     tc_rajasthan = list({e.id: e for e in tc_rajasthan}.values())
@@ -881,45 +890,85 @@ def get_capacity_overview(db: Session = Depends(get_db)):
 
     import re
 
-    # Source 1: ProjectMapping for solar total capacity
+    # Source 1: ProjectMapping for source of truth (Total 60 tracked projects)
     mappings = db.query(models.ProjectMapping).all()
-    proj_info = {}
+    project_map = {}
     for pm in mappings:
         name = pm.project_name_from_p6 or pm.project
-        if name:
-            proj_info[name] = {
-                'project_id': pm.project_id or '-',
-                'capacity': float(pm.capacity_mwac or 0)
-            }
+        if not name: continue
+        
+        # Determine type
+        p_type = 'Wind' if 'wind' in str(pm.project).lower() else 'Solar'
+        total_cap = float(pm.capacity_mwac or 0)
+        
+        project_map[name] = {
+            'project_id': pm.project_id or '-',
+            'project_name': name,
+            'type': p_type,
+            'total_capacity': total_cap,
+            'total_blocks': 0,
+            'tr_blocks': 0,
+            'tr_mw': 0,
+            'cod_blocks': 0,
+            'cod_mw': 0,
+            '_wtg_mw': 0
+        }
 
     # Source 2: P6Project for wind p6_object_id lookup
     p6_projs = db.query(models.P6Project).all()
     p6_obj_id_map = {p.name: str(p.p6_object_id) for p in p6_projs if p.name and p.p6_object_id}
+    obj_id_to_p_name = {str(p.p6_object_id): p.name for p in p6_projs if p.name and p.p6_object_id}
 
-    # Source 3: All block/WTG data from P6 (MTTrialRun)
-    milestones = db.query(models.MTTrialRun).all()
+    # Pre-assign Wind WTG multipliers
+    for p_name, data in project_map.items():
+        if data['type'] == 'Wind':
+            obj_id = p6_obj_id_map.get(p_name)
+            data['_wtg_mw'] = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW)
+
+    # Source 3: All block/WTG data from P6 (P6Activity table)
+    from models import P6Activity
+    activities = db.query(P6Activity).filter(
+        (
+            (P6Activity.name.ilike('%trial run certificate%')) |
+            (P6Activity.name.ilike('%trail run certificate%')) |
+            (P6Activity.name.ilike('%WTG Trial Run%')) |
+            (P6Activity.name.ilike('%Trial Operation%')) |
+            (P6Activity.name.ilike('%cod%')) |
+            (P6Activity.name.ilike('%scod%'))
+        )
+    ).all()
 
     # Step 1: Group into unique blocks per project
     block_map = {}
-    for m in milestones:
-        p_name = m.project_name or m.project_name_p6 or "Unknown Project"
-        b_name = m.project_name_block or "Unknown Block"
+    for act in activities:
+        p_name = obj_id_to_p_name.get(str(act.project_object_id))
+        
+        # CRUCIAL: ONLY process activities for tracked projects in ProjectMapping
+        if not p_name or p_name not in project_map: 
+            continue
+            
+        act_name = (act.name or "").lower()
+        
+        # Parse Block/WTG name
+        b_name = "Unknown Block"
+        block_match = re.search(r'(Block-\d+|WTG\d+)', act.name, re.IGNORECASE)
+        if block_match:
+            b_name = block_match.group(1).upper()
+        else:
+            continue # Skip project-level CODs that aren't tied to a specific block/WTG
+            
         b_key = f"{p_name}::{b_name}"
-
-        cap = float(m.tr_quantity_mw or 0)
-        activity = (m.activity_name or "").lower()
-        is_cod = "cod" in activity
-        is_tr = "trial" in activity
-        is_solar = m.unit_of_measure == "Solar"
-        p_type = 'Solar' if is_solar else 'Wind'
-        actual_dt = m.trial_run_finish or m.trial_run_start
-
+        actual_dt = act.actual_finish_date or act.actual_start_date or act.start_date
+        is_cod = "cod" in act_name
+        is_tr = "trial" in act_name or "trail" in act_name
+        is_completed = (act.status == 'Completed')
+        
         if b_key not in block_map:
             block_map[b_key] = {
                 "project": p_name,
                 "block": b_name,
-                "type": p_type,
-                "capacity": cap,
+                "type": project_map[p_name]['type'],
+                "capacity": 0, # Distributed later
                 "has_tr": False,
                 "has_cod": False,
                 "tr_start": None,
@@ -930,19 +979,17 @@ def get_capacity_overview(db: Session = Depends(get_db)):
             }
 
         b = block_map[b_key]
-        if cap > b["capacity"]:
-            b["capacity"] = cap
         if actual_dt and (b["latest_date"] is None or actual_dt > b["latest_date"]):
             b["latest_date"] = actual_dt
 
-        if is_cod and actual_dt:
+        if is_cod and is_completed and actual_dt:
             b["has_cod"] = True
-            b["cod_start"] = m.trial_run_start
-            b["cod_finish"] = m.trial_run_finish
-        if is_tr and actual_dt:
+            b["cod_start"] = act.actual_start_date or actual_dt
+            b["cod_finish"] = act.actual_finish_date or actual_dt
+        elif is_tr and is_completed and actual_dt:
             b["has_tr"] = True
-            b["tr_start"] = m.trial_run_start
-            b["tr_finish"] = m.trial_run_finish
+            b["tr_start"] = act.actual_start_date or actual_dt
+            b["tr_finish"] = act.actual_finish_date or actual_dt
 
     # Group blocks by project to distribute capacity
     projects_blocks = {}
@@ -953,22 +1000,16 @@ def get_capacity_overview(db: Session = Depends(get_db)):
         projects_blocks[p_name].append(b)
 
     # Step 2: Aggregate into project-level and FY-level data
-    project_map = {}
     fy_data = {}
     recent = []
     
     for p_name, blocks in projects_blocks.items():
-        p_type = blocks[0]["type"]
         blocks.sort(key=lambda x: x["block"])
+        pm = project_map[p_name]
 
-        if p_type == 'Solar':
-            total_cap = proj_info.get(p_name, {}).get('capacity', 0)
-            if total_cap == 0:
-                match = re.search(r'(\d+(?:\.\d+)?)\s*MW', p_name, re.IGNORECASE)
-                if match:
-                    total_cap = float(match.group(1))
-                    
-            remaining_cap = total_cap
+        # Distribute capacity to blocks
+        if pm['type'] == 'Solar':
+            remaining_cap = pm['total_capacity']
             for i, b in enumerate(blocks):
                 if remaining_cap <= 0:
                     b["capacity"] = 0
@@ -981,44 +1022,12 @@ def get_capacity_overview(db: Session = Depends(get_db)):
                     remaining_cap -= assigned
                     remaining_cap = round(remaining_cap, 2)
         else:
-            obj_id = p6_obj_id_map.get(p_name)
-            wtg_mw = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW)
             for b in blocks:
-                b["capacity"] = wtg_mw
+                b["capacity"] = pm['_wtg_mw']
                 
         # Now process the blocks for aggregation
         for b in blocks:
             cap = b["capacity"]
-
-            if p_name not in project_map:
-                p_id = proj_info.get(p_name, {}).get('project_id', '-')
-    
-                if p_type == 'Solar':
-                    total_cap = proj_info.get(p_name, {}).get('capacity', 0)
-                    if total_cap == 0:
-                        match = re.search(r'(\d+(?:\.\d+)?)\s*MW', p_name, re.IGNORECASE)
-                        if match:
-                            total_cap = float(match.group(1))
-                else:
-                    total_cap = 0  # Will be calculated after counting all WTGs
-    
-                obj_id = p6_obj_id_map.get(p_name)
-                wtg_mw = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW) if p_type == 'Wind' else 0
-    
-                project_map[p_name] = {
-                    'project_id': p_id,
-                    'project_name': p_name,
-                    'type': p_type,
-                    'total_capacity': total_cap,
-                    'total_blocks': 0,
-                    'tr_blocks': 0,
-                    'tr_mw': 0,
-                    'cod_blocks': 0,
-                    'cod_mw': 0,
-                    '_wtg_mw': wtg_mw
-                }
-
-            pm = project_map[p_name]
             pm['total_blocks'] += 1
 
             # Determine the FY for this block based on its milestone date
@@ -1033,7 +1042,7 @@ def get_capacity_overview(db: Session = Depends(get_db)):
                     fy = f"FY{str(actual_dt.year)[-2:]}" if actual_dt.month >= 4 else f"FY{str(actual_dt.year - 1)[-2:]}"
                     if fy not in fy_data:
                         fy_data[fy] = {"name": fy, "solar_cod": 0, "solar_tr": 0, "wind_cod": 0, "wind_tr": 0}
-                    if p_type == 'Solar':
+                    if pm['type'] == 'Solar':
                         fy_data[fy]["solar_cod"] += cap
                     else:
                         fy_data[fy]["wind_cod"] += cap
@@ -1047,7 +1056,7 @@ def get_capacity_overview(db: Session = Depends(get_db)):
                     fy = f"FY{str(actual_dt.year)[-2:]}" if actual_dt.month >= 4 else f"FY{str(actual_dt.year - 1)[-2:]}"
                     if fy not in fy_data:
                         fy_data[fy] = {"name": fy, "solar_cod": 0, "solar_tr": 0, "wind_cod": 0, "wind_tr": 0}
-                    if p_type == 'Solar':
+                    if pm['type'] == 'Solar':
                         fy_data[fy]["solar_tr"] += cap
                     else:
                         fy_data[fy]["wind_tr"] += cap
@@ -1085,10 +1094,12 @@ def get_capacity_overview(db: Session = Depends(get_db)):
                 "raw_date": b["latest_date"]
             })
 
-    # Post-processing: calculate wind total capacity
+    # Post-processing: Calculate capacity and clean up
     for p in project_map.values():
-        if p['type'] == 'Wind':
+        # For wind projects with parsed blocks, update total capacity based on WTG count dynamically
+        if p['type'] == 'Wind' and p['total_blocks'] > 0:
             p['total_capacity'] = round(p['total_blocks'] * p['_wtg_mw'], 2)
+            
         p['remaining_capacity'] = max(0, round(p['total_capacity'] - p['cod_mw'] - p['tr_mw'], 2))
         p['remaining_blocks'] = p['total_blocks'] - p['cod_blocks'] - p['tr_blocks']
         del p['_wtg_mw']

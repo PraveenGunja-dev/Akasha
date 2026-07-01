@@ -3,18 +3,18 @@ import ReactECharts from 'echarts-for-react';
 import { Truck, Map, List, PackageSearch } from 'lucide-react';
 
 export default function MaterialIntelligence({ logDetails, logisticsData }: any) {
-  
+
   // Material Transit Status (Mocked geo data for supply chain map feel, backed by real volumes)
   const inTransitVolume = logDetails?.reduce((acc: number, val: any) => acc + val.quantity_mw, 0) || 0;
-  
+
   // Aggregate by plant code to see which plants have the most incoming material
   const plantMap: any = {};
   (logDetails || []).forEach((item: any) => {
-      const p = item.plant_code || 'Unknown';
-      plantMap[p] = (plantMap[p] || 0) + item.quantity_mw;
+    const p = item.plant_code || 'Unknown';
+    plantMap[p] = (plantMap[p] || 0) + item.quantity_mw;
   });
-  
-  const plantList = Object.keys(plantMap).map(k => ({name: `Plant ${k}`, value: plantMap[k]}));
+
+  const plantList = Object.keys(plantMap).map(k => ({ name: `Plant ${k}`, value: plantMap[k] }));
 
   const supplyChainOption = {
     tooltip: { trigger: 'item', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
@@ -34,20 +34,20 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
-      
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
-           <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Material In-Transit (MW)</h3>
-           <p className="text-4xl font-light text-foreground">{inTransitVolume.toFixed(2)}</p>
-         </div>
-         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
-           <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Active Shipments</h3>
-           <p className="text-4xl font-light text-amber-500">{logDetails?.length || 0}</p>
-         </div>
-         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
-           <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Delivered (Historical)</h3>
-           <p className="text-4xl font-light text-emerald-500">{logisticsData.find((l:any) => l.category === 'Delivered')?.count || 0}</p>
-         </div>
+        <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
+          <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Material In-Transit (MW)</h3>
+          <p className="text-4xl font-light text-foreground">{inTransitVolume.toFixed(2)}</p>
+        </div>
+        <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
+          <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Active Shipments</h3>
+          <p className="text-4xl font-light text-amber-500">{logDetails?.length || 0}</p>
+        </div>
+        <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
+          <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Delivered (Historical)</h3>
+          <p className="text-4xl font-light text-emerald-500">{logisticsData.find((l: any) => l.category === 'Delivered')?.count || 0}</p>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
@@ -66,7 +66,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
           <div className="p-2 bg-emerald-500/10 rounded-lg"><PackageSearch className="w-5 h-5 text-emerald-500" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Live In-Transit Ledger</h2>
         </div>
-        
+
         <div className="overflow-x-auto h-[400px] custom-scrollbar">
           <table className="w-full text-sm text-left text-foreground/90">
             <thead className="text-xs uppercase bg-muted text-muted-foreground/70 border-b border-border sticky top-0 z-10">
@@ -87,9 +87,9 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
                 </tr>
               ))}
               {(!logDetails || logDetails.length === 0) && (
-                  <tr>
-                      <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground/70">No active materials in transit.</td>
-                  </tr>
+                <tr>
+                  <td colSpan={4} className="px-4 py-8 text-center text-muted-foreground/70">No active materials in transit.</td>
+                </tr>
               )}
             </tbody>
           </table>

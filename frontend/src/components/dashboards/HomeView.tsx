@@ -5,8 +5,9 @@ import { RefreshCw, Activity, Box, BarChart3 } from 'lucide-react';
 export default function HomeView({ p6Data, logisticsData, sapData, loading }: any) {
   const totalActiveProjects = p6Data.length || 0;
   const criticalDelays = p6Data.filter((p: any) => p.status === 'Critical').length || 0;
+  // actualCapex is already in Crores from the backend
   const totalCapex = sapData.reduce((acc: number, curr: any) => acc + (curr.actualCapex || 0), 0);
-  const formattedCapex = totalCapex > 1000 ? `$${(totalCapex / 1000).toFixed(1)}B` : `$${totalCapex.toFixed(1)}M`;
+  const formattedCapex = `₹${totalCapex.toFixed(2)} Cr`;
 
   const p6Option = {
     tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
@@ -58,7 +59,7 @@ export default function HomeView({ p6Data, logisticsData, sapData, loading }: an
         </div>
         <div className="bg-card text-card-foreground border border-border rounded-2xl p-6 shadow-sm relative overflow-hidden">
           {loading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center backdrop-blur-sm z-10"><RefreshCw className="w-5 h-5 animate-spin text-[#75479C]" /></div>}
-          <h3 className="text-muted-foreground text-sm font-medium mb-2 uppercase tracking-wider">Total SAP PO / CAPEX</h3>
+          <h3 className="text-muted-foreground text-sm font-medium mb-2 uppercase tracking-wider">Total SAP PO / CAPEX (₹)</h3>
           <p className="text-4xl font-light">{formattedCapex}</p>
         </div>
         <div className="bg-card text-card-foreground border border-border rounded-2xl p-6 shadow-sm relative overflow-hidden">

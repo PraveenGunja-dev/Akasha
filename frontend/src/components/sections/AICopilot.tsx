@@ -28,10 +28,10 @@ interface Thread {
 
 // Typing status stages for the animated indicator
 const TYPING_STAGES = [
-  { text: 'Interpreting query...', icon: BrainCircuit },
+  { text: 'Interpreting query...', icon: Search },
   { text: 'Scanning P6 schedules...', icon: Calendar },
   { text: 'Cross-referencing SAP data...', icon: Database },
-  { text: 'Synthesizing intelligence...', icon: Sparkles },
+  { text: 'Aggregating results...', icon: Activity },
 ];
 
 interface AICopilotProps {
@@ -352,10 +352,10 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-md">
-                <BrainCircuit className="w-3.5 h-3.5 text-primary-foreground" />
+                <MessageSquare className="w-3.5 h-3.5 text-primary-foreground" />
               </div>
               <div>
-                <h1 className="text-[13px] font-semibold text-foreground tracking-wide">AKASHA Intelligence</h1>
+                <h1 className="text-[13px] font-semibold text-foreground tracking-wide">Ask Akasha</h1>
               </div>
             </div>
 
@@ -390,7 +390,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
             {/* Hero */}
             <div className="text-center mb-12">
               <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-md">
-                <BrainCircuit className="w-8 h-8 text-primary-foreground" />
+                <MessageSquare className="w-8 h-8 text-primary-foreground" />
               </div>
               <h2 className="text-3xl font-light text-foreground tracking-tight mb-3">
                 What can I analyze for you<span className="text-primary">?</span>
@@ -453,7 +453,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                     <div className="py-5">
                       <div className="flex items-center gap-2.5 mb-3">
                         <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
-                          <Sparkles className="w-3 h-3 text-primary-foreground" />
+                          <MessageSquare className="w-3 h-3 text-primary-foreground" />
                         </div>
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
                       </div>
@@ -499,7 +499,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                 <div className="py-5 animate-in fade-in duration-300">
                   <div className="flex items-center gap-2.5 mb-3">
                     <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
-                      <Sparkles className="w-3 h-3 text-primary-foreground animate-pulse" />
+                      <MessageSquare className="w-3 h-3 text-primary-foreground animate-pulse" />
                     </div>
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
                   </div>
@@ -576,14 +576,14 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                     <span className="text-[10px] hidden sm:inline">Deep Analysis</span>
                   </button>
                 </div>
-                <span className="text-[10px] text-muted-foreground/30 hidden sm:inline">AKASHA AI · Enterprise Intelligence</span>
+                <span className="text-[10px] text-muted-foreground/30 hidden sm:inline">Akasha Platform · Enterprise Data</span>
               </div>
             </div>
 
             {/* Disclaimer */}
             {!isLanding && (
               <div className="text-center mt-2">
-                <span className="text-[10px] text-muted-foreground/30">AI-generated analysis. Verify critical executive decisions independently.</span>
+                <span className="text-[10px] text-muted-foreground/30">Automated analysis. Verify critical executive decisions independently.</span>
               </div>
             )}
           </div>

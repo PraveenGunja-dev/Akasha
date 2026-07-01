@@ -460,3 +460,65 @@ class P6Activity(Base):
     last_synced_at = Column(DateTime, default=datetime.utcnow)
     
     project = relationship("P6Project", backref="activities")
+
+class P6ResourceAssignment(Base):
+    __tablename__ = "p6_resource_assignment"
+
+    id = Column(Integer, primary_key=True, index=True)
+    p6_object_id = Column(BigInteger, unique=True, index=True, nullable=False)
+    activity_object_id = Column(BigInteger, ForeignKey("p6_activity.p6_object_id"), index=True)
+    project_object_id = Column(BigInteger, ForeignKey("p6_project.p6_object_id"), index=True)
+    
+    resource_type = Column(String)  # Labor, Nonlabor, Material
+    resource_name = Column(String, nullable=True)
+    
+    planned_units = Column(Float, nullable=True)
+    actual_units = Column(Float, nullable=True)
+    
+    last_synced_at = Column(DateTime, default=datetime.utcnow)
+
+    activity = relationship("P6Activity", backref="resource_assignments")
+
+# ==========================================
+# Notification Model
+# ==========================================
+class Notification(Base):
+    __tablename__ = "notification"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_name = Column(String, index=True, nullable=True)
+    module = Column(String, index=True)  # P6 / Transmission
+    change_type = Column(String)  # Date Change / Budget Exceeded / Status Update / Critical Date Slip
+    message = Column(String)
+    
+    # Structured Data
+    block = Column(String, nullable=True)
+    activity_name = Column(String, nullable=True)
+    old_value = Column(String, nullable=True)
+    new_value = Column(String, nullable=True)
+    reason = Column(String, nullable=True)
+    
+    # Action & Category
+    action_status = Column(String, default="Pending") # Pending, Acknowledged, Resolved
+    category = Column(String, index=True, default="Other") # Budgets, COD, Trials, Dates
+    
+    # P6 Linking for Push
+    p6_object_id = Column(BigInteger, nullable=True)
+    p6_type = Column(String, nullable=True) # Activity, Project, ResourceAssignment
+    
+    is_read = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    threads = relationship("NotificationThread", back_populates="notification", cascade="all, delete-orphan")
+
+
+class NotificationThread(Base):
+    __tablename__ = "notification_thread"
+
+    id = Column(Integer, primary_key=True, index=True)
+    notification_id = Column(Integer, ForeignKey("notification.id", ondelete="CASCADE"), index=True)
+    sender = Column(String)  # e.g. "PMAG", "User"
+    message = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    notification = relationship("Notification", back_populates="threads")

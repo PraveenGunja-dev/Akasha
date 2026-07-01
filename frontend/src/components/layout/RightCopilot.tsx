@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bot, Send, Mic, Sparkles, X, ChevronRight, AlertCircle, TrendingUp } from 'lucide-react';
+import { MessageSquare, Send, Mic, X, ChevronRight, AlertCircle, TrendingUp } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -61,7 +61,7 @@ export default function RightCopilot() {
         onClick={() => setIsOpen(true)}
         className="absolute right-0 top-1/2 -translate-y-1/2 bg-[#1F2937] border-l border-t border-b border-[#3B82F6]/30 p-2 rounded-l-xl text-[#3B82F6] hover:bg-[#3B82F6]/10 transition-colors shadow-[-4px_0_15px_rgba(0,0,0,0.5)] z-50"
       >
-        <Bot className="w-6 h-6" />
+        <MessageSquare className="w-6 h-6" />
       </button>
     );
   }
@@ -73,14 +73,14 @@ export default function RightCopilot() {
         <div className="flex items-center gap-2">
            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#3B82F6] to-[#75479C] p-[1px]">
               <div className="w-full h-full bg-[#0B1020] rounded-lg flex items-center justify-center">
-                 <Bot className="w-4 h-4 text-white" />
+                 <MessageSquare className="w-4 h-4 text-white" />
               </div>
            </div>
            <div>
              <h2 className="text-sm font-semibold text-white flex items-center gap-1">
-               Akasha Copilot <Sparkles className="w-3 h-3 text-[#F59E0B]" />
+               Ask Akasha
              </h2>
-             <p className="text-[10px] text-gray-400">Enterprise AI Assistant</p>
+             <p className="text-[10px] text-gray-400">Data Query Assistant</p>
            </div>
         </div>
         <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-[#1F2937] rounded text-gray-400 hover:text-white transition-colors">
@@ -97,7 +97,7 @@ export default function RightCopilot() {
          {messages.map((msg) => (
            <div key={msg.id} className={`flex gap-3 ${msg.type === 'user' ? 'flex-row-reverse' : ''}`}>
              <div className={`w-6 h-6 rounded flex items-center justify-center shrink-0 mt-1 ${msg.type === 'user' ? 'bg-[#374151]' : 'bg-[#3B82F6]/20'}`}>
-                {msg.type === 'user' ? <span className="text-[10px] font-bold text-white">CEO</span> : <Bot className="w-3 h-3 text-[#3B82F6]" />}
+                {msg.type === 'user' ? <span className="text-[10px] font-bold text-white">CEO</span> : <MessageSquare className="w-3 h-3 text-[#3B82F6]" />}
              </div>
              <div className={`flex-1 space-y-2 ${msg.type === 'user' ? 'text-right' : ''}`}>
                 <div className={`text-xs p-3 rounded-2xl border shadow-sm leading-relaxed prose prose-invert max-w-full ${
@@ -116,7 +116,7 @@ export default function RightCopilot() {
          {isTyping && (
            <div className="flex gap-3">
              <div className="w-6 h-6 rounded bg-[#3B82F6]/20 flex items-center justify-center shrink-0 mt-1">
-                <Bot className="w-3 h-3 text-[#3B82F6]" />
+                <MessageSquare className="w-3 h-3 text-[#3B82F6]" />
              </div>
              <div className="flex-1">
                 <p className="text-xs p-3 rounded-2xl rounded-tl-none bg-[#1F2937] text-gray-400 border border-gray-800 flex items-center gap-2 w-fit">
@@ -142,7 +142,7 @@ export default function RightCopilot() {
                  handleSend();
                }
              }}
-             placeholder="Ask Copilot..."
+             placeholder="Ask Akasha..."
              className="w-full bg-[#1F2937] border border-gray-700 focus:border-[#3B82F6] rounded-xl py-3 pl-4 pr-20 text-sm text-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-[#3B82F6] transition-all resize-none overflow-hidden"
              style={{ minHeight: '44px' }}
            />

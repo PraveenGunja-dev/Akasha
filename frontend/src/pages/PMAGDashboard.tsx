@@ -15,7 +15,7 @@ import DataIntegrationHub from '../components/sections/DataIntegrationHub';
 import TransmissionDataViewer from '../components/sections/TransmissionDataViewer';
 import ReportsInsights from '../components/sections/ReportsInsights';
 import SmartSearch from '../components/sections/SmartSearch';
-import KnowledgeGraph from '../components/sections/KnowledgeGraph';
+import ProjectMap from '../components/sections/ProjectMap';
 import ExecutiveBriefing from '../components/sections/ExecutiveBriefing';
 import PortfolioHealth from '../components/sections/PortfolioHealth';
 import Project360 from '../components/sections/Project360';
@@ -139,11 +139,11 @@ export default function PMAGDashboard() {
       ]
     },
     {
-      title: "AI & INTELLIGENCE",
+      title: "DATA & INSIGHTS",
       items: [
         { id: 'executive_brief', label: 'Briefing', icon: FileText },
         { id: 'smart_search', label: 'Search', icon: Search },
-        { id: 'knowledge_graph', label: 'Knowledge', icon: BrainCircuit },
+        { id: 'project_map', label: 'Project Map', icon: BrainCircuit },
       ]
     },
     {
@@ -402,7 +402,7 @@ export default function PMAGDashboard() {
 
               {/* ─── EXTRA MODULES ─── */}
               {activeSection === 'smart_search' && <SmartSearch onOpenProject={(id) => setSelectedProjectId(id)} />}
-              {activeSection === 'knowledge_graph' && <KnowledgeGraph />}
+              {activeSection === 'project_map' && <ProjectMap projects={project_health} onOpenProject={(id) => setSelectedProjectId(id)} theme={theme} />}
               {activeSection === 'executive_brief' && <ExecutiveBriefing />}
 
             </motion.div>

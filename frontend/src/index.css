@@ -492,3 +492,45 @@
   background: #1e293b;
   color: #94a3b8;
 }
+
+
+/* ═══════════════════════════════════════════════
+   OIM-STYLE MAP INFRASTRUCTURE LABELS
+   ═══════════════════════════════════════════════ */
+
+/* Voltage labels along lines */
+.voltage-label-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  color: #475569 !important;
+  text-shadow:
+    -1px -1px 0 #fff,
+     1px -1px 0 #fff,
+    -1px  1px 0 #fff,
+     1px  1px 0 #fff,
+     0   -1px 0 #fff,
+     0    1px 0 #fff,
+    -1px  0   0 #fff,
+     1px  0   0 #fff !important;
+  white-space: nowrap !important;
+}
+
+.voltage-label-tooltip::before {
+  display: none !important;
+}
+
+/* Substation label markers */
+.substation-label-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+/* Generator icons */
+.generator-icon {
+  background: transparent !important;
+  border: none !important;
+}

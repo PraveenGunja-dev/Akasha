@@ -9,10 +9,12 @@ import FloatingCopilot from './components/ui/FloatingCopilot';
 import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
 import AdminDashboard from './pages/AdminDashboard';
 import PMAGDashboard from './pages/PMAGDashboard';
+import { Toaster } from 'sonner';
 
 function App() {
   return (
     <AuthProvider>
+      <Toaster richColors position="bottom-right" />
       <BrowserRouter basename="/akasha">
         <ReactLenis root options={{ lerp: 0.08, smoothWheel: true }}>
           <div className="min-h-screen bg-background antialiased text-foreground flex flex-col">
