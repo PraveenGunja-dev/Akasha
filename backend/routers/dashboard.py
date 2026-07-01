@@ -184,13 +184,81 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
                     elif edge.region == "Rajasthan":
                         tc_rajasthan.append(edge)
                         
-        # Direct mappings
+        # Manual Fallback Mapping for projects missing TC Project Entry
+        MANUAL_PSS_MAPPING = {
+            "ACL_A01- E_FT_25MW_GROUP NEW": ["PSS-04"],
+            "AE2L_S03_HSAT_150MW_MERCHANT": ["PSS-11"],
+            "AGE24AL_S09_HSAT_400MW": ["PSS-07"],
+            "AGE24L_A14_HSAT_150MW_MERCHANT_Commissioned": ["PSS-05"],
+            "AGE25CL_A06_FT_425MW_PPA": ["PSS-11", "PSS-14"],
+            "AGE25CL_A06_HSAT_75 MW_PPA_Commissioned": ["PSS-08"],
+            "AGE26AL_A16_FT_50MW_PPA_Commissioned": ["PSS-12", "PSS-14"],
+            "AGE26AL_A16_FT_200MW_PPA": ["PSS-12", "PSS-14"],
+            "AGE26AL_A16c_FT_167MW_PPA": ["PSS-12", "PSS-14"],
+            "AGE26AL_A16_FT_333MW_PPA": ["PSS-12", "PSS-14"],
+            "AGE26AL_A10a_FT_50MW_PPA_Commissioned": ["PSS-12", "PSS-14"],
+            "AGE26AL_S06A_FT_234MW": ["PSS-12", "PSS-14"],
+            "AGE26BL_A03_HSAT_250 MW_MLP T4 AP NEW": ["PSS-06"],
+            "AGEL_S1_100_MW_HSAT": ["PSS-12"],
+            "AGEL_S1_200_MW_HSAT": ["PSS-12"],
+            "AGEL_SE14_HSAT_500MW_HILD": ["PSS-14"],
+            "AHEJ5L_A15a_HSAT_150MW_MERCHANT_Commissioned": ["PSS-08"],
+            "ARE41L_A01- C_HSAT_25 MW_MERCHANT": ["PSS-04"],
+            "ARE41L_A15b_HSAT_50MW": ["PSS-08"],
+            "ARE55L_A01_HSAT_150MW_Group_NEW": ["PSS-04"],
+            "ARE55L_A02_HSAT_125MW": ["PSS-04"],
+            "ARE55L_A18_HSAT_600MW": ["PSS-07"],
+            "ARE55L_S03_HSAT_500MW_MERCHANT": ["PSS-11"],
+            "ARE55L_S10_HSAT_50 MW_PPA": ["PSS-07"],
+            "ASEJ6PL_A06_HSAT_35MW_MERCHANT_Commissioned": ["PSS-08"],
+            "ASEJ6PL_S07_FT_300MW_PPA": ["PSS-09"],
+            "NHPC EPC 200 MW Khavda-Internal": ["NHPC"]
+        }
+        
+        project_pss_list = []
+        if project_entries:
+            for pe in project_entries:
+                if pe.pss:
+                    project_pss_list.append(str(pe.pss).strip())
+                    
+        # Add manual PSS
+        if m.project_name_from_p6 in MANUAL_PSS_MAPPING:
+            project_pss_list.extend(MANUAL_PSS_MAPPING[m.project_name_from_p6])
+            
+        # Deduplicate PSS list
+        project_pss_list = list(set(project_pss_list))
+
+        # Direct mappings (fallback)
         for edge in all_tc_edges:
             if edge.mapping_id == m.id:
                 if edge.region == "Khavda":
                     tc_khavda.append(edge)
                 elif edge.region == "Rajasthan":
                     tc_rajasthan.append(edge)
+            elif edge.projects:
+                proj_str = str(edge.projects)
+                matched = False
+                if m.project:
+                    tc_names = [t.strip() for t in m.project.split(',')]
+                    matched = any(f'"{t_name}"' in proj_str for t_name in tc_names if t_name)
+                
+                if not matched and m.project_name_from_p6 and "BANDHA" in m.project_name_from_p6.upper() and "Siyambar" in proj_str:
+                    matched = True
+                
+                if matched or (m.project_name_from_p6 and f'"{m.project_name_from_p6}"' in proj_str):
+                    if edge.region == "Khavda":
+                        tc_khavda.append(edge)
+                    elif edge.region == "Rajasthan":
+                        tc_rajasthan.append(edge)
+            
+            # Map by PSS logic
+            if project_pss_list:
+                for pss_val in project_pss_list:
+                    if str(edge.from_label).strip() == pss_val or str(edge.to_label).strip() == pss_val:
+                        if edge.region == "Khavda":
+                            tc_khavda.append(edge)
+                        elif edge.region == "Rajasthan":
+                            tc_rajasthan.append(edge)
 
         # Deduplicate
         tc_khavda = list({e.id: e for e in tc_khavda}.values())
