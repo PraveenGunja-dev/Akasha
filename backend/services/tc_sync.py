@@ -47,45 +47,6 @@ def fetch_data(endpoint: str, token: str):
         logger.error(f"Failed to fetch {endpoint}: {e}")
         return None
 
-def normalize_p6_name(name):
-    if not name:
-        return ""
-    clean = str(name).strip().replace(" ", "").lower()
-    if clean.endswith("_commissioned"):
-        clean = clean[:-13]
-    return clean
-
-def find_mapping_id(db: Session, project_names, p6_map=None):
-    """Attempt to find a mapping ID using a 2-level strategy (Direct and P6 fallback)"""
-    if not project_names:
-        return None
-        
-    names = project_names if isinstance(project_names, list) else [project_names]
-    
-    all_maps = None
-    
-    for name in names:
-        if not name: continue
-        
-        # LEVEL 1: Match inside comma-separated database values
-        if all_maps is None:
-            all_maps = db.query(ProjectMapping).all()
-            
-        for m in all_maps:
-            if m.project:
-                tc_names = [t.strip() for t in m.project.split(',')]
-                if name in tc_names:
-                    return m.id
-                
-        # LEVEL 2: P6 Name Fallback via p6_map
-        if p6_map and name in p6_map:
-            norm_p6 = normalize_p6_name(p6_map[name])
-                
-            for m in all_maps:
-                if m.project_name_from_p6 and normalize_p6_name(m.project_name_from_p6) == norm_p6:
-                    return m.id
-                        
-    return None
 
 def get_global_topology(token: str, region: str):
     """Fetches the global snapshot to get accurate node coordinates and edge from/to links"""
@@ -124,8 +85,14 @@ def sync_region_data(db: Session, token: str, region: str):
     if not topology:
         return
         
-    # Get existing edges to track status changes (for notifications)
-    existing_edges = {e.edge_id: e.status for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()}
+    # Get existing edges to track changes (for notifications)
+    existing_edges = {
+        e.edge_id: {
+            "status": e.status, 
+            "expected_date": e.expected_date, 
+            "contractor": e.contractor
+        } for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()
+    }
     
     # Clear region data for full reload
     db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).delete()
@@ -177,6 +144,8 @@ def sync_region_data(db: Session, token: str, region: str):
             
         # Insert precisely mapped edges (lines), utilizing global topology for from/to
         lines = p_data.get("lines", [])
+        from models import Notification
+        
         for e in lines:
             edge_id = e.get("id")
             
@@ -184,16 +153,34 @@ def sync_region_data(db: Session, token: str, region: str):
             global_edge = topology["edges"].get(edge_id, {})
             
             new_status = e.get("status")
-            old_status = existing_edges.get(edge_id)
-            if old_status and old_status != new_status:
-                from models import Notification
-                notif = Notification(
-                    project_name=pm.project,
-                    module="Transmission",
-                    change_type="Status Update",
-                    message=f"Transmission line '{e.get('from_label')} to {e.get('to_label')}' status updated from '{old_status}' to '{new_status}'"
-                )
-                db.add(notif)
+            new_date = e.get("expected_date")
+            new_contractor = e.get("contractor")
+            
+            old_edge = existing_edges.get(edge_id)
+            if old_edge:
+                if old_edge["status"] and old_edge["status"] != new_status:
+                    db.add(Notification(
+                        project_name=pm.project,
+                        module="Transmission",
+                        change_type="Status Update",
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' status changed from '{old_edge['status']}' to '{new_status}'"
+                    ))
+                
+                if old_edge["expected_date"] and old_edge["expected_date"] != new_date:
+                    db.add(Notification(
+                        project_name=pm.project,
+                        module="Transmission",
+                        change_type="Date Delay",
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' expected date changed from '{old_edge['expected_date']}' to '{new_date}'"
+                    ))
+                    
+                if old_edge["contractor"] and old_edge["contractor"] != new_contractor:
+                    db.add(Notification(
+                        project_name=pm.project,
+                        module="Transmission",
+                        change_type="Contractor Change",
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' contractor changed from '{old_edge['contractor']}' to '{new_contractor}'"
+                    ))
                 
             edge = TcNetworkEdge(
                 region=region,
