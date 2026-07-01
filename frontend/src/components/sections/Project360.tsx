@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Sparkles, ChevronRight, AlertTriangle, Shield,
   Clock, Package, CheckCircle2, XCircle, Eye,
-  Zap, Target, Layers,
+  Zap, Target, Layers, Info,
   Brain, Truck, DollarSign, Users,
   CalendarClock, Factory, SlidersHorizontal, X
 } from 'lucide-react';
@@ -73,9 +73,147 @@ const StatusPill = ({ tier, count, active, onClick }: { tier: string; count: num
 };
 
 /* ═══════════════════════════════════════════════════════════
+   METRIC BREAKDOWN MODAL
+   ═══════════════════════════════════════════════════════════ */
+const MetricBreakdownModal = ({ 
+  isOpen, onClose, title, description, data, type 
+}: { 
+  isOpen: boolean; onClose: () => void; title: string; description: React.ReactNode; data: any[]; type: string; 
+}) => {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'unset';
+    }
+    return () => {
+      document.body.style.overflow = 'unset';
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+  
+  const sorted = [...data].sort((a, b) => {
+    if (type === 'schedule') return (b.delayDays || 0) - (a.delayDays || 0);
+    if (type === 'activity') return (b.integrationCount || 0) - (a.integrationCount || 0);
+    if (type === 'supply') return (a.materialAvailability || 0) - (b.materialAvailability || 0);
+    if (type === 'risk') return (b.riskScore || 0) - (a.riskScore || 0);
+    return 0;
+  });
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-4xl bg-card border border-border shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
+        
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-border bg-muted/30">
+          <div>
+            <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
+              <Info className="w-5 h-5 text-primary" />
+              {title}
+            </h3>
+            <p className="text-xs text-muted-foreground mt-1">{description}</p>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-muted rounded-full transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
+          </button>
+        </div>
+
+        {/* Table Content */}
+        <div className="flex-1 min-h-0 overflow-auto p-0 custom-scrollbar" data-lenis-prevent="true">
+          <table className="w-full text-left text-sm whitespace-nowrap">
+            <thead className="bg-muted/50 sticky top-0 z-10 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <tr>
+                <th className="px-6 py-3 font-semibold w-full">Project</th>
+                {type === 'schedule' && (
+                  <>
+                    <th className="px-6 py-3 font-semibold text-right">Progress</th>
+                    <th className="px-6 py-3 font-semibold text-right">SPI</th>
+                    <th className="px-6 py-3 font-semibold text-right">Delay Impact</th>
+                  </>
+                )}
+                {type === 'activity' && (
+                  <>
+                    <th className="px-6 py-3 font-semibold text-right">TC Lines</th>
+                    <th className="px-6 py-3 font-semibold text-right">In-Progress</th>
+                    <th className="px-6 py-3 font-semibold text-right">Completed</th>
+                  </>
+                )}
+                {type === 'supply' && (
+                  <>
+                    <th className="px-6 py-3 font-semibold text-right">Availability</th>
+                    <th className="px-6 py-3 font-semibold text-right">Ordered</th>
+                    <th className="px-6 py-3 font-semibold text-right">Inventory</th>
+                  </>
+                )}
+                {type === 'risk' && (
+                  <>
+                    <th className="px-6 py-3 font-semibold text-right">Risk Score</th>
+                    <th className="px-6 py-3 font-semibold text-right">Confidence</th>
+                    <th className="px-6 py-3 font-semibold text-right">Primary Issue</th>
+                  </>
+                )}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-border">
+              {sorted.map((p) => (
+                <tr key={p.projectId} className="hover:bg-muted/30 transition-colors">
+                  <td className="px-6 py-3 w-full max-w-[250px] sm:max-w-xs md:max-w-md">
+                    <div className="font-semibold text-foreground truncate">{p.projectName}</div>
+                    <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{p.projectId}</div>
+                  </td>
+                  {type === 'schedule' && (
+                    <>
+                      <td className="px-6 py-3 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                           <div className="w-16 h-1.5 bg-muted rounded-full overflow-hidden shrink-0">
+                             <div className="h-full bg-primary" style={{ width: `${Math.round((p.progress || 0) * 100)}%` }} />
+                           </div>
+                           <span className="font-mono text-xs">{Math.round((p.progress || 0) * 100)}%</span>
+                        </div>
+                      </td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.spi < 0.95 ? 'text-amber-500 font-bold' : 'text-emerald-500'}`}>{(p.spi || 0).toFixed(2)}</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.delayDays > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>{p.delayDays || 0}d</td>
+                    </>
+                  )}
+                  {type === 'activity' && (
+                    <>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-blue-500">{p.integrationCount || p.tcEdgesCount || 0}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-emerald-500">{p.inProgressActivities || 0}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-foreground/80">{p.completedActivities || 0}</td>
+                    </>
+                  )}
+                  {type === 'supply' && (
+                    <>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.materialAvailability < 80 ? 'text-amber-500 font-bold' : 'text-emerald-500'}`}>{Math.round(p.materialAvailability || 0)}%</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right">{fmtNum(p.orderedQty || 0)}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-emerald-500">{fmtNum(p.inventoryQty || 0)}</td>
+                    </>
+                  )}
+                  {type === 'risk' && (
+                    <>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.riskScore > 70 ? 'text-red-500 font-bold' : p.riskScore > 40 ? 'text-amber-500' : 'text-emerald-500'}`}>{Math.round(p.riskScore || 0)}/100</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-primary">{Math.round(p.confidence || 0)}%</td>
+                      <td className="px-6 py-3 text-right"><span className="bg-muted px-2 py-1 rounded text-[10px] font-semibold text-foreground">{p.primaryIssue || 'On Track'}</span></td>
+                    </>
+                  )}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════════════════════════
    PORTFOLIO BRIEFING CARD
    ═══════════════════════════════════════════════════════════ */
 const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+
   if (!data || data.length === 0) return null;
 
   // Exact Metrics without fallbacks
@@ -83,6 +221,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const avgSPI = (data.reduce((s, d) => s + d.spi, 0) / data.length).toFixed(2);
   const avgCPI = (data.reduce((s, d) => s + d.cpi, 0) / data.length).toFixed(2);
   const totalCostVariance = data.reduce((s, d) => s + d.costVariance, 0);
+  const totalInProgress = data.reduce((s, d) => s + (d.inProgressActivities || 0), 0);
   
   const avgMaterial = Math.round(data.reduce((s, d) => s + d.materialAvailability, 0) / data.length);
   const totalOrdered = data.reduce((s, d) => s + d.orderedQty, 0);
@@ -93,13 +232,32 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const totalIntegration = data.reduce((s, d) => s + (d.integrationCount || d.tcEdgesCount), 0);
   const avgConfidence = Math.round(data.reduce((s, d) => s + d.confidence, 0) / data.length);
 
-  const avgProgress = Math.round(data.reduce((s, d) => s + d.progress, 0) / data.length);
+  const avgProgress = Math.round((data.reduce((s, d) => s + (d.progress || 0), 0) / data.length) * 100);
   const delayedProjects = data.filter(d => d.delayDays > 0);
   const totalDelayDays = delayedProjects.reduce((s, d) => s + d.delayDays, 0);
   const codAtRiskCount = data.filter(d => d.codAtRisk).length;
 
   return (
-    <div className="bento-card relative overflow-hidden group transition-all duration-300 mb-8 p-0">
+    <>
+      <MetricBreakdownModal 
+        isOpen={activeModal !== null} 
+        onClose={() => setActiveModal(null)}
+        type={activeModal || 'schedule'}
+        data={data}
+        title={
+          activeModal === 'schedule' ? 'Schedule & Progress Breakdown' :
+          activeModal === 'activity' ? 'Activity & Transmission Breakdown' :
+          activeModal === 'supply' ? 'Material & Supply Chain Breakdown' :
+          'Risk & Complexity Breakdown'
+        }
+        description={
+          activeModal === 'schedule' ? 'Calculated by aggregating Primavera P6 baseline vs actual schedule variances.' :
+          activeModal === 'activity' ? 'Aggregated Transmission lines, delayed projects, and in-progress activities.' :
+          activeModal === 'supply' ? 'Aggregated from SAP logistics data (PO Ordered vs Transit vs Site Inventory).' :
+          'Calculated via Akasha AI Risk Engine based on schedule, cost, and historical supplier performance.'
+        }
+      />
+      <div className="bento-card relative overflow-hidden group transition-all duration-300 mb-8 p-0">
       <div className="relative z-10">
         {/* Header Bar */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
@@ -130,7 +288,12 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           
           {/* Column 1: Schedule & Progress */}
           <div className="p-5 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Schedule & Progress</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Schedule & Progress</div>
+              <button onClick={() => setActiveModal('schedule')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
             
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
               {/* Overall Progress */}
@@ -157,27 +320,32 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             </div>
           </div>
 
-          {/* Column 2: Financial Performance */}
+          {/* Column 2: Activity & Transmission */}
           <div className="p-5 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Financial Performance</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Activity & Transmission</div>
+              <button onClick={() => setActiveModal('activity')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
             
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
               <div className="flex flex-col gap-1.5">
-                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Cost Variance</div>
-                <div className={`text-2xl font-mono font-bold tracking-tight ${totalCostVariance > 0 ? 'text-red-500' : 'text-emerald-500'}`}>
-                  {totalCostVariance > 0 ? '+' : ''}{fmtNum(totalCostVariance)}
+                <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Transmission Integrations</div>
+                <div className="text-2xl font-mono font-bold tracking-tight text-blue-500">
+                  {fmtNum(totalIntegration)}
                 </div>
-                <div className="text-[10px] text-muted-foreground">Aggregated budget deviation</div>
+                <div className="text-[10px] text-muted-foreground">Mapped transmission edges</div>
               </div>
 
               <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg CPI</div>
-                  <div className={`text-xl font-mono font-bold ${parseFloat(avgCPI) < 0.95 ? 'text-amber-500' : 'text-emerald-500'}`}>{avgCPI}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">In-Progress</div>
+                  <div className="text-xl font-mono font-bold text-emerald-500">{fmtNum(totalInProgress)}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">COD At Risk</div>
-                  <div className={`text-xl font-mono font-bold ${codAtRiskCount > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{codAtRiskCount}</div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Delayed</div>
+                  <div className={`text-xl font-mono font-bold ${delayedProjects.length > 0 ? 'text-amber-500' : 'text-emerald-500'}`}>{fmtNum(delayedProjects.length)}</div>
                 </div>
               </div>
             </div>
@@ -185,7 +353,12 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
 
           {/* Column 3: Material & Supply Chain */}
           <div className="p-5 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Material & Supply Chain</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Material & Supply Chain</div>
+              <button onClick={() => setActiveModal('supply')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
             
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
               <div className="flex flex-col gap-1.5">
@@ -217,7 +390,12 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
 
           {/* Column 4: Risk & Complexity */}
           <div className="p-5 space-y-4">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Risk & Complexity</div>
+            <div className="flex items-center justify-between">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Risk & Complexity</div>
+              <button onClick={() => setActiveModal('risk')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+                <Info className="w-3.5 h-3.5" />
+              </button>
+            </div>
             
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
               <div className="flex flex-col gap-1.5">
@@ -242,7 +420,8 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   );
 };
 
@@ -280,19 +459,19 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-      {/* 2. Financials (20%) */}
+      {/* 2. Activity & Transmission (20%) */}
       <div className="w-[20%] min-w-[180px] flex flex-col gap-1 border-l border-border pl-4 pr-4 py-0.5">
         <div className="flex justify-between items-center text-[10px]">
-          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Supply PO</span>
-          <span className="font-mono font-semibold text-foreground/80">₹{(project.budgetINR / 10000000).toFixed(1)} Cr</span>
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Transmission Lines</span>
+          <span className="font-mono font-semibold text-blue-500">{project.integrationCount || project.tcEdgesCount || 0}</span>
         </div>
         <div className="flex justify-between items-center text-[10px]">
-          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Utilized Supply</span>
-          <span className="font-mono font-semibold text-amber-500">₹{(project.expenditureINR / 10000000).toFixed(1)} Cr</span>
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">In-Progress Act.</span>
+          <span className="font-mono font-semibold text-emerald-500">{project.inProgressActivities || 0}</span>
         </div>
         <div className="flex justify-between items-center text-[10px]">
-          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Remaining PO</span>
-          <span className="font-mono font-semibold text-emerald-500">₹{(project.costRemainingINR / 10000000).toFixed(1)} Cr</span>
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Completed Act.</span>
+          <span className="font-mono font-semibold text-foreground/80">{project.completedActivities || 0}</span>
         </div>
       </div>
 
@@ -560,7 +739,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
             <div className="w-[30%] min-w-[250px] pr-4">Project Details</div>
-            <div className="w-[20%] min-w-[180px] pl-4">Financials</div>
+            <div className="w-[20%] min-w-[180px] pl-4">Activity & Trans.</div>
             <div className="w-[15%] min-w-[150px] pl-4">Schedule</div>
             <div className="w-[20%] min-w-[180px] pl-4">Supply Chain</div>
             <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
@@ -582,7 +761,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
             <div className="w-[30%] min-w-[250px] pr-4">Project Details</div>
-            <div className="w-[20%] min-w-[180px] pl-4">Financials</div>
+            <div className="w-[20%] min-w-[180px] pl-4">Activity & Trans.</div>
             <div className="w-[15%] min-w-[150px] pl-4">Schedule</div>
             <div className="w-[20%] min-w-[180px] pl-4">Supply Chain</div>
             <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>

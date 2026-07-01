@@ -6,6 +6,12 @@
       "sourceType": "github",
       "skillPath": "skills/data-engineer/SKILL.md",
       "computedHash": "6de2de0bf8f6952fbb4136896c0856dbaabded85c32e288ce5d30a3b2fe157a7"
+    },
+    "humanizer-zh": {
+      "source": "op7418/humanizer-zh",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "dede9681d9fea5caed2fb9d88656af3024c9ec0136fc833415ffc6e16d762429"
     }
   }
 }

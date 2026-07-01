@@ -1,0 +1,62 @@
+P6 PROJECT ID        | PROJECT NAME (P6)                                  | PROJECT ENTITY (MAPPING)
+--------------------------------------------------------------------------------------------------------------
+AGE25CL              | AGE25CL                                            | Wind - AGE25CL PSS-11 (36 Loc.) & PSS-14 (13 Loc.)
+AGE25CL (PH-4)       | AGE25CL (PH-4)                                     | Wind - AGE25CL PSS-18 (49 Loc.) - Phase-4
+AGE26AL              | AGE26AL                                            | Wind - AGE26AL PSS-12 (27 Loc.) & PSS-14 (60 Loc.)
+AHEJ5L               | AHEJ5L                                             | Wind - AHEJ5L PSS-05 (39 Loc.)
+ARE3L                | ARE3L                                              | Wind - ARE3L PSS-08 (05 Loc.)
+ASEJ6PL              | ASEJ6PL                                            | Wind - ASEJ6PL PSS-08 (12 Loc.)
+Demo DPR Wind        | Demo DPR Wind                                      | Wind - Digital DPR - Demo AGE26AL PSS-12 (27 Loc.) & PSS-14 (60 Loc.)
+FY25-BAIYA_600MW     | ASEB1PL_BAIYA_FT_600MW_PPA                         | NHPC BOO
+FY25-BANDHA_500MW    | AGE25BL_BANDHA_FT_500MW_PPA                        | MLP T1
+FY25-P01             | ARE3L_A06_HSAT_25 MW_MERCHANT_Commissioned         | AGEL Merchant
+FY25-P02             | ASEJ6PL_A06_HSAT_35MW_MERCHANT_Commissioned        | AGEL Merchant
+FY25-P03             | ARE48L_S08_HSAT_100MW_MERCHANT_Commissioned        | AGEL Merchant
+FY25-P04             | AHEJ5L_A15a_HSAT_150MW_MERCHANT_Commissioned       | AGEL Merchant
+FY25-P05             | AGE26BL_S05_HSAT_292MW_MERCHANT_HYBRID_Commissioned | AGEL Hybrid Merchant
+FY25-P06             | AGE24L_S05_HSAT_150MW_MERCHANT                     | AGEL Merchant
+FY25-P07             | AGE24L_A14_HSAT_150MW_MERCHANT_Commissioned        | AGEL Merchant
+FY25-P08             | ACL_A1_FT_125 MW_GROUP_Commissioned                | ACL
+FY25-P09             | AGE25CL_A06_HSAT_75 MW_PPA_Commissioned            | MLP T3 AP
+FY25-P10             | AGE26AL_A16_FT_50MW_PPA_Commissioned               | MLP T1 J&K
+FY25-P11             | AGE26AL_A16_FT_200MW_PPA                           | MLP T1 CG
+FY25-P12             | AGE26AL_A16c_FT_167MW_PPA                          | MLP T1 TN
+FY25-P13             | AGE26AL_A16_FT_333MW_PPA                           | MLP T1 OR
+FY25-P14             | AGE26AL_A10a_FT_50MW_PPA_Commissioned              | MLP T1 TR
+FY25-P15             | AGE25CL_A06_FT_425MW_PPA                           | MLP T3 AP
+FY25-P18             | KCTL_A15a_HSAT_12.5 MW_MERCHANT (Back up)          | KCTL
+FY25-P18&19&20       | AGE25BL_A15a_HSAT_50 MW_MERCHANT                   | AGEL Merchant
+FY25-P19             | ASEJ06PL_A15a_HSAT_25 MW_MERCHANT (Back up)        | MCIPL
+FY26- P07            | ARE41L_A15b_HSAT_50MW                              | MSEDCL PPA Ph-1
+FY26-P01             | ARE41L_A01- C_HSAT_25 MW_MERCHANT                  | AESL PPA (C&I) - Solar
+FY26-P02             | AHEJ5L_S04_HSAT_300 MW_MERCHANT_HYBRID (Backup)    | AGEL Hybrid Merchant
+FY26-P02             | APSEZ_A01- D_HSAT_25 MW_GROUP                      | Group - Port (Hybrid - Solar)
+FY26-P03             | ACL_A01- E_FT_25MW_GROUP NEW                       | Group - Cement (Hybrid - Solar)
+FY26-P04             | ARE57L_A12_HSAT_350MW_PPA                          | MLP AP New
+FY26-P05             | AHEJ5L_S04_HSAT_300 MW_MERCHANT_HYBRID             | AGEL Merchant (Solar)
+FY26-P06             | ACL_A01_HSAT_50MW_Group_NEW                        | Group - Cement (Hybrid - Solar)
+FY26-P08             | ARE8L_A02_HSAT_150MW_Merc                          | TPL-D PPA
+FY26-P09             | ARE55L_A01_HSAT_150MW_Group_NEW                    | MSEDCL PPA Ph-1
+FY26-P10             | ARE55L_A02_HSAT_125MW                              | MSEDCL PPA Ph-1
+FY26-P11             | AGE26BL_A03_HSAT_250 MW_MLP T4 AP NEW              | MLP T4 PPA - AP
+FY26-P12             | AGE24L_A03_HSAT_250 MW                             | MLP T4 PPA - AP
+FY26-P14             | ASEJ6PL_S07_FT_300MW                               | SECI VIII PPA
+FY26-P16             | NHPC EPC 200 MW Khavda-Internal                    | NHPC EPC 600
+FY26-P17             | AGEL_S2A_175_MW_HSAT                               | MSEDCL PPA Ph-1
+FY26-P18             | AGE26AL_S06A_FT_234MW                              | MLP T1  PPA - BEST
+FY26-P19             | AGEL_S1_100_MW_HSAT                                | MSEDCL PPA Ph-1
+FY26-P20             | AGEL_S2A_50_MW_HSAT                                | MSEDCL PPA Ph-2
+FY26-P21             | AE2L_S03_HSAT_150MW_MERCHANT                       | AGEL Merchant (Solar) - TTE
+FY26-P22             | AGEL_S1_200_MW_HSAT                                | MSEDCL PPA Ph-2
+FY26-P24             | AGEL_S2B_112.5_MW_HSAT                             | MSEDCL PPA Ph-3
+FY26-P25             | AGEL_S1_75_MW_HSAT                                 | AGEL Merchant (Solar) - TTE
+FY26-P26             | ARE55L_S10_HSAT_50 MW_PPA                          | MSEDCL PPA Ph-3
+FY27-P01&P02         | ARE55L_S03_HSAT_500MW_MERCHANT                     | MSEDCL PPA Ph-3
+FY27-P03&04          | AGEL_SE14_HSAT_500MW_HILD                          | MSEDCL PPA Ph-3
+FY27-P05             | AGEL_S10_287.5_MW_HSAT                             | MSEDCL PPA Ph-3
+FY27-P06&07          | ARE55L_S02A_HSAT_250 MW_PPA                        | MSEDCL PPA Ph-2 & MSEDCL PPA Ph-3
+FY27-P13             | ASEJ6PL_S07_FT_300MW_PPA                           | SECI VIII PPA
+FY27-P15             | AGE24AL_S09_HSAT_400MW                             | MSEDCL PPA Ph-1
+FY27-P16             | NHPC EPC 400 MW Khavda-Internal                    | NHPC EPC 600
+FY27-P23             | ARE41L_A18_HSAT_600MW                              | MSEDCL PPA Ph-2
+MDW                  | MDW                                                | Wind - MANDVI
