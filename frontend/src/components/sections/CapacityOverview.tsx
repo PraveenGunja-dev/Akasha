@@ -61,6 +61,7 @@ interface CapacityData {
     wind_tr: number;
   };
   projects: ProjectBreakdown[];
+  monthly_trends?: any[];
 }
 
 const KPICard = ({ title, value, unit, icon: Icon, color, trend, trendValue, sparklineData, onClick }: any) => {
@@ -353,7 +354,7 @@ export default function CapacityOverview() {
 
   const monthlyEchartOption = {
     ...commonChartOptions,
-    xAxis: { ...commonChartOptions.xAxis, data: cumulativeMonthlyData.map(d => d.name) },
+    xAxis: { ...commonChartOptions.xAxis, data: cumulativeMonthlyData.map((d: any) => d.name) },
     series: [
       getSeries(cumulativeMonthlyData, "Solar COD", "#f59e0b", "Solar COD"),
       getSeries(cumulativeMonthlyData, "Solar Trial Run", "#fde047", "Solar TR"),
