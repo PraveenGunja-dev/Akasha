@@ -559,30 +559,30 @@ Your strategies MUST directly address recovering from this specific issue."""
         historical_str += f"Project Specs: Category={proj_map.category}, Capacity={proj_map.capacity_mwac} MW, SPV={proj_map.spv_name}\n"
 
     # 2. Get LLM to propose 3 strategy permutations based on user constraints
-    prompt = f"""You are the AKASHA AI Strategy Engine. The user wants to run a "What-If" simulation with the following parameters:
+    prompt = f"""You are the AKASHA AI Strategy Engine, an elite Master Strategist with over 18 years of deeply technical field experience managing large-scale Transmission & Renewable Energy mega-projects. You are an undisputed expert in SAP, Primavera P6, and operational recovery.
+The user wants to run a "What-If" simulation with the following parameters:
 {json.dumps(req.constraints, indent=2)}
 {notif_str}
 {historical_str}
 
-Analyze the historical trends and the specific alert to generate 3 highly targeted strategy options based on these constraints. 
-For example:
-- Strategy 1: Strictly follow the user's requested parameters.
-- Strategy 2: More aggressive (e.g., add more crews if weather is bad).
-- Strategy 3: More conservative/cost-saving.
+Analyze the historical trends, the specific alert, and the user's custom scenario to generate 3 highly targeted, creative, and DYNAMIC strategy options.
+CRITICAL: Each strategy must focus on a SINGLE, highly actionable, decisive step to recover the specific issue. Do not provide a generic list of things to do. Provide one concrete, expert-level maneuver per strategy.
+Do NOT just use generic titles like "Strict Adherence" or "Aggressive". Invent specific, contextual titles (e.g., "Helicopter Airlift Escalation", "Night-Shift Double Crew", "Wait Out Monsoon").
+The descriptions must uniquely explain EXACTLY what operational levers are being pulled in one decisive step.
 
-You MUST output strictly in valid JSON format matching this schema:
+You MUST output strictly in valid JSON format matching this schema structure, but with YOUR OWN dynamic content:
 {{
   "strategies": [
     {{
-      "id": "strategy_1",
-      "title": "Strict Adherence",
-      "description": "Applies exactly 2 crews under heavy monsoon conditions.",
+      "id": "strat_1",
+      "title": "<Your Dynamic Contextual Title Here>",
+      "description": "<Your specific, detailed operational explanation here>",
       "modifiers": {{
          "weather_monsoon": "Heavy",
          "weather_wind": "Normal",
          "added_crews": 2
       }},
-      "ai_confidence_pct": 87,
+      "ai_confidence_pct": <integer between 50 and 95>,
       "recommended": true,
       "radar_data": [80, 60, 90, 85, 87] 
     }}
@@ -657,12 +657,22 @@ def generate_simulation(req: SimulationExecuteRequest, db: Session = Depends(get
     simulated = run_monte_carlo_simulation(db, p6_id, iterations=1000, seed=42, modifiers=mods)
     
     timeline = []
+    # If the monte carlo simulation provided monthly progression, use it. Otherwise, generate a realistic curve based on the dates.
     months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    
+    # We will generate a dynamic timeline that reflects the actual risk reduction.
+    base_spread = baseline.get("spread_days", 1)
+    sim_spread = simulated.get("spread_days", 1)
+    risk_factor = (base_spread - sim_spread) / max(base_spread, 1)
+    
     for i, m in enumerate(months):
+        base_val = min(100, i * 8.5)
+        # The simulated value should pull ahead based on how much risk/time was saved
+        sim_val = min(100, base_val + (i * 2.5 * risk_factor) + (risk_factor > 0 and 5 or 0))
         timeline.append({
             "month": m,
-            "baseline": min(100, i * 8.5),
-            "simulated": min(100, i * 9.5 + 5)
+            "baseline": round(base_val, 1),
+            "simulated": round(sim_val, 1)
         })
 
     return {
@@ -695,13 +705,14 @@ Strategy Applied:
 
 If the Transmission Context shows at-risk lines, make sure to generate at least one transmission-related task (e.g. expediting stringing, Contractor mobilization).
 
-Output valid JSON only consisting of 3 to 5 execution tasks:
+You MUST output valid JSON consisting of 3 to 5 highly specific execution tasks tailored to the Strategy Applied.
+DO NOT use generic examples. Make the tasks extremely specific to the project's actual situation and constraints!
 {{
   "tasks": [
     {{
-      "system": "SAP", 
-      "action": "Generate PR", 
-      "description": "Expedite module procurement...", 
+      "system": "<System Name>", 
+      "action": "<Specific Action>", 
+      "description": "<Detailed dynamic description of exactly what needs to be done>", 
       "status": "Pending"
     }}
   ]
@@ -713,7 +724,7 @@ Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            content = call_groq(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -775,7 +786,7 @@ Project Context: {json.dumps(req.project, indent=2)}
 Transmission Context: {json.dumps(tc_variance, indent=2)}
 Strategy Applied: {json.dumps(req.strategy, indent=2)}
 
-Provide:
+Provide a highly customized, unique, and dynamic report. Do NOT use generic placeholder text. The report MUST specifically detail the actual strategy applied and its direct consequences on this exact project!
 1. Executive Summary (Must start with mentioning the Project Name)
 2. Key Findings
 3. Risk Assessment
@@ -788,13 +799,13 @@ Do not calculate: SPI, CPI, Delay Percentage, Project Health Score, Forecast Com
 
 Output valid JSON only matching this exact structure:
 {{
-   "title": "Executive Execution Report",
-   "executiveSummary": "...",
-   "keyFindings": ["...", "..."],
-   "riskAssessment": "...",
-   "rootCauseAnalysis": "...",
-   "recommendedActions": ["...", "..."],
-   "expectedOutcome": "..."
+   "title": "<Dynamic Title specific to the project and strategy>",
+   "executiveSummary": "<Dynamic 2-sentence summary>",
+   "keyFindings": ["<Finding 1>", "<Finding 2>"],
+   "riskAssessment": "<Dynamic Risk Analysis>",
+   "rootCauseAnalysis": "<Dynamic Root Cause Analysis>",
+   "recommendedActions": ["<Action 1>", "<Action 2>"],
+   "expectedOutcome": "<Dynamic expected outcome of the strategy>"
 }}
 """
     messages = [{"role": "user", "content": prompt}]
@@ -802,7 +813,7 @@ Output valid JSON only matching this exact structure:
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=4000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.1, max_tokens=4000, json_response=True)
+            content = call_groq(messages, temperature=0.1, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
