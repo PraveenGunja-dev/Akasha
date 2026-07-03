@@ -10,6 +10,10 @@ from database import SessionLocal
 from models import TcProjectEntry, TcNetworkEdge, TcNetworkNode, ProjectMapping
 from datetime import datetime
 
+import urllib3
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 logger = logging.getLogger(__name__)
 
 AUTH_URL = "https://powerback-api.unada.in/api/v1/user/login"
