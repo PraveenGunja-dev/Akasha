@@ -599,7 +599,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-20 pr-2">
+      <div className="flex-1 overflow-y-auto pb-20 pr-2" data-lenis-prevent="true">
         <div className="w-full space-y-6">
 
           {/* ========================================== */}
