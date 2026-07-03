@@ -291,12 +291,139 @@ Live Portfolio Context:
 
 from fastapi import APIRouter, Depends, HTTPException, Body
 
+USE_VARIANCE_ENGINE = os.environ.get("USE_VARIANCE_ENGINE", "true").lower() == "true"
+
+from typing import Optional, List, Dict, Any
+
+class SimulationLabRequest(BaseModel):
+    project: dict
+    notification_context: Optional[dict] = None
+    all_notifications: Optional[list] = []
+
 @router.post("/simulation-lab")
-def run_simulation_lab(project: dict = Body(...), db: Session = Depends(get_db)):
+def run_simulation_lab(req: SimulationLabRequest, db: Session = Depends(get_db)):
     from services.project_service import get_project_360_detail
     provider = get_ai_provider()
     
+    project = req.project
     project_name = project.get("project_name", "")
+    notif_ctx = req.notification_context
+    all_notifs = req.all_notifications
+
+    # Build notification context string for the LLM
+    notif_context_str = ""
+    if notif_ctx:
+        notif_context_str += f"""\n\n═══ TRIGGERED BY THIS SPECIFIC NOTIFICATION ═══
+Change Type: {notif_ctx.get('change_type', 'Unknown')}
+Activity: {notif_ctx.get('activity_name', 'N/A')}
+Block: {notif_ctx.get('block', 'N/A')}
+Old Value: {notif_ctx.get('old_value', 'N/A')} → New Value: {notif_ctx.get('new_value', 'N/A')}
+Message: {notif_ctx.get('message', '')}
+
+Focus your analysis on: How does this specific change cascade through dependent downstream activities?
+What activities are blocked or delayed because of this? What is the best recovery path?"""
+    if all_notifs:
+        notif_summary = json.dumps(all_notifs[:15], indent=2, default=str)[:3000]
+        notif_context_str += f"""\n\n═══ ALL RECENT NOTIFICATIONS FOR THIS PROJECT ═══
+{notif_summary}
+
+Use these notifications to understand the full picture of delays and changes happening on this project."""
+
+    # ═══════════════════════════════════════════════════════════
+    # HYBRID ARCHITECTURE: Deterministic Engine + LLM Narrative
+    # ═══════════════════════════════════════════════════════════
+    if USE_VARIANCE_ENGINE:
+        from engine.variance import compute_full_variance, compute_portfolio_variance
+
+        # 1. DETERMINISTIC: compute variance table from live DB data
+        if project_name and project_name != 'Entire Portfolio':
+            variance = compute_full_variance(db, project_name)
+        else:
+            variance = compute_portfolio_variance(db, top_n=10)
+
+        # 2. LLM: explain and rank only — NEVER invent numbers
+        # Truncate variance data to fit in context window
+        variance_str = json.dumps(variance, indent=2, default=str)[:6000]
+
+        prompt = f"""You are the AKASHA AI Diagnostic Engine.
+The deterministic variance engine has already computed the data below from live P6, SAP, and TC databases.
+
+CRITICAL RULES:
+- Do NOT calculate or estimate any new numbers.
+- Use ONLY the days, percentages, and quantities given in the Computed Variance Data below.
+- Every number you mention must appear verbatim in the input data.
+- The supply chain quantities are in absolute Units, NOT Megawatts (MW).
+- Explicitly review the "tc" (Transmission) section. If there are at-risk transmission lines, factor them into your root cause and suggestions.
+{notif_context_str}
+
+Computed Variance Data:
+{variance_str}
+
+Project Summary:
+{json.dumps(project, indent=2)}
+
+Based ONLY on the computed data above, provide:
+1. "issues": An array of exactly 4 root-cause explanations. At least 2 must be "Critical", rest "Warning". 
+   Each must reference actual drift_days, gap_qty, or float_hours from the data above.
+   If a notification trigger was provided, the FIRST issue MUST directly address that specific change and its cascading impact.
+   Format: {{"title": "specific issue referencing real numbers from data", "severity": "Critical"|"Warning"}}
+2. "suggestions": An array of exactly 2 actionable strategies referencing the specific bottleneck activities or materials from the data.
+   Format: {{"title": "strategy name", "description": "detailed strategy referencing specific data points"}}
+
+You MUST output ONLY valid JSON with no markdown or extra text:
+{{
+  "issues": [
+    {{"title": "...", "severity": "Critical"}}
+  ],
+  "suggestions": [
+    {{"title": "...", "description": "..."}}
+  ]
+}}"""
+        messages = [{"role": "user", "content": prompt}]
+
+        try:
+            if provider == "azure":
+                content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            else:
+                content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+                
+            content = content.strip()
+            if content.startswith("```json"):
+                content = content[7:-3].strip()
+            elif content.startswith("```"):
+                content = content[3:-3].strip()
+
+            try:
+                llm_result = json.loads(content)
+            except Exception:
+                llm_result = {
+                    "issues": [{"title": "AI analysis unavailable. Variance data computed successfully.", "severity": "Warning"}],
+                    "suggestions": [],
+                }
+
+            # 3. MERGE: engine numbers (always) + LLM narrative (explanation only)
+            return {
+                "issues": llm_result.get("issues", []),
+                "suggestions": llm_result.get("suggestions", []),
+                "scheduleImpact": variance["schedule_impact"],  # ALWAYS from engine
+                "variance": variance,  # full variance data for frontend drill-down
+                "engine_version": "2.0",
+            }
+
+        except Exception as e:
+            logger.error(f"LLM call failed, returning engine-only results: {e}")
+            # Even if LLM fails, we still return deterministic data
+            return {
+                "issues": [{"title": "AI narrative unavailable. Review variance data below.", "severity": "Warning"}],
+                "suggestions": [],
+                "scheduleImpact": variance["schedule_impact"],
+                "variance": variance,
+                "engine_version": "2.0",
+            }
+
+    # ═══════════════════════════════════════════════════════════
+    # LEGACY PATH (feature flag off — old LLM-only behavior)
+    # ═══════════════════════════════════════════════════════════
     deep_data = {}
     if project_name and project_name != 'Entire Portfolio':
         detail = get_project_360_detail(db, project_name)
@@ -348,136 +475,201 @@ You MUST output ONLY valid json in the exact structure below, with no markdown f
         elif content.startswith("```"):
             content = content[3:-3].strip()
         try:
-            return json.loads(content)
+            result = json.loads(content)
+            result["engine_version"] = "1.0"  # legacy
+            return result
         except Exception:
             return {
                 "issues": [{"title": "Raw Output: " + content[:200], "severity": "Warning"}],
                 "suggestions": [],
-                "scheduleImpact": [0,0,0]
+                "scheduleImpact": [0,0,0],
+                "engine_version": "1.0",
             }
     except Exception as e:
         logger.error(f"AKASHA AI API Error: {e}")
         error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
         raise HTTPException(status_code=500, detail=error_msg)
 
+class FinalReportRequest(BaseModel):
+    project: dict
+    strategy: dict
+    tasks: list
+    simulation_results: dict
+    notification_context: Optional[dict] = None
+    all_notifications: Optional[list] = []
+
 class StrategiesRequest(BaseModel):
     project: dict
     constraints: dict
+    notification_context: Optional[dict] = None
+    all_notifications: Optional[list] = []
 
 @router.post("/simulation-lab/strategies")
 def generate_strategies(req: StrategiesRequest, db: Session = Depends(get_db)):
     from services.project_service import get_project_360_detail
+    from engine.monte_carlo import run_monte_carlo_simulation
+    from datetime import datetime
+    
     provider = get_ai_provider()
-    
     project_name = req.project.get("project_name", "")
-    deep_data = {}
-    if project_name and project_name != 'Entire Portfolio':
-        detail = get_project_360_detail(db, project_name)
-        if detail and "error" not in detail:
-            deep_data = detail
-
-    prompt = f"""You are the AKASHA AI Strategy Engine. Generate 3 distinct recovery strategies based on the following real project data and user constraints.
-You must ground your strategies in the actual SAP, P6, and TC data below.
+    p6_id = req.project.get("p6", {}).get("id") or req.project.get("project_id", "") or project_name
     
-Project Summary:
-{json.dumps(req.project, indent=2)}
+    # 1. Run baseline deterministic simulation (no modifiers)
+    # Using 500 iterations for speed during interactive session
+    baseline_sim = run_monte_carlo_simulation(db, p6_id, iterations=500, seed=42)
+    if "error" in baseline_sim:
+        baseline_p50_date = datetime.today()
+    else:
+        baseline_p50_date = datetime.strptime(baseline_sim["completion_dates"]["p50"], "%Y-%m-%d")
 
-Deep System Data (P6, SAP, TC):
-{json.dumps(deep_data, indent=2)[:8000]}
+    # Build notification context for strategies
+    notif_str = ""
+    if req.notification_context:
+        nc = req.notification_context
+        notif_str = f"""\n\nIMPORTANT CONTEXT - This simulation was triggered by a specific notification alert:
+Change: {nc.get('change_type', 'Unknown')} | Activity: {nc.get('activity_name', 'N/A')} | Block: {nc.get('block', 'N/A')}
+Old: {nc.get('old_value', 'N/A')} → New: {nc.get('new_value', 'N/A')}
+Message: {nc.get('message', '')}
 
-User Constraints:
+Your strategies MUST directly address recovering from this specific issue."""
+    if req.all_notifications:
+        notif_str += f"\n\nAll recent project notifications:\n{json.dumps(req.all_notifications[:10], indent=2, default=str)[:2000]}"
+
+    # 2. Get LLM to propose 3 strategy permutations based on user constraints
+    prompt = f"""You are the AKASHA AI Strategy Engine. The user wants to run a "What-If" simulation with the following parameters:
 {json.dumps(req.constraints, indent=2)}
+{notif_str}
 
-You MUST output strictly in valid JSON format:
+Generate 3 distinct strategy options based on these constraints. 
+For example:
+- Strategy 1: Strictly follow the user's requested parameters.
+- Strategy 2: More aggressive (e.g., add more crews if weather is bad).
+- Strategy 3: More conservative/cost-saving.
+
+You MUST output strictly in valid JSON format matching this schema:
 {{
   "strategies": [
     {{
       "id": "strategy_1",
-      "title": "...",
-      "description": "...",
-      "type": "Selective Acceleration",
-      "cost_impact_cr": 12.0,
-      "time_saved_days": 14,
-      "risk_reduction_pct": 78,
+      "title": "Strict Adherence",
+      "description": "Applies exactly 2 crews under heavy monsoon conditions.",
+      "modifiers": {{
+         "weather_monsoon": "Heavy",
+         "weather_wind": "Normal",
+         "added_crews": 2
+      }},
       "ai_confidence_pct": 87,
       "recommended": true,
       "radar_data": [80, 60, 90, 85, 87] 
     }}
   ]
 }}
-Note: "radar_data" is an array of 5 integers (0-100) representing [Feasibility, Cost Efficiency, Speed, Risk Reduction, Confidence]. Exactly 3 strategies. Only one should have "recommended": true.
+IMPORTANT: You do NOT provide cost or time impact. The deterministic Monte Carlo engine will calculate that based on your `modifiers` payload. Just provide the 3 strategies and their modifiers.
 """
     messages = [{"role": "user", "content": prompt}]
     try:
         if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=2000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=2000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
+        
         try:
-            return json.loads(content)
+            llm_result = json.loads(content)
         except Exception:
-            return {"strategies": []}
+            llm_result = {"strategies": []}
+            
+        # 3. DETERMINISTIC MATH: Feed LLM parameters into Monte Carlo engine
+        final_strategies = []
+        for strat in llm_result.get("strategies", []):
+            mods = strat.get("modifiers", {})
+            strat_sim = run_monte_carlo_simulation(db, p6_id, iterations=500, modifiers=mods, seed=42)
+            
+            if "error" not in strat_sim:
+                strat_p50_date = datetime.strptime(strat_sim["completion_dates"]["p50"], "%Y-%m-%d")
+                
+                # Time Saved = Baseline P50 - Strat P50 (positive means finished earlier)
+                time_saved_days = (baseline_p50_date - strat_p50_date).days
+                
+                # Cost Impact = deterministic calculation (e.g. 0.5 Cr per added crew)
+                crews = int(mods.get("added_crews", 0))
+                cost_cr = round(crews * 0.5, 2)
+                
+                # Risk Reduction = how much P90 - P10 spread was reduced
+                baseline_spread = baseline_sim.get("spread_days", 1)
+                strat_spread = strat_sim.get("spread_days", 1)
+                risk_reduction_pct = round(((baseline_spread - strat_spread) / baseline_spread) * 100)
+                
+                strat["time_saved_days"] = time_saved_days
+                strat["cost_impact_cr"] = cost_cr
+                strat["risk_reduction_pct"] = risk_reduction_pct
+                
+            final_strategies.append(strat)
+            
+        return {"strategies": final_strategies}
+
     except Exception as e:
+        logger.error(f"Strategy generation failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 class SimulationExecuteRequest(BaseModel):
     project: dict
     strategy: dict
+    notification_context: Optional[dict] = None
 
 @router.post("/simulation-lab/simulate")
-def generate_simulation(req: SimulationExecuteRequest):
-    provider = get_ai_provider()
-    prompt = f"""You are the AKASHA AI Simulation Engine. Simulate the trajectory of project completion over the next 5 months.
+def generate_simulation(req: SimulationExecuteRequest, db: Session = Depends(get_db)):
+    from engine.monte_carlo import run_monte_carlo_simulation
+    project_name = req.project.get("project_name", "")
+    p6_id = req.project.get("p6", {}).get("id") or req.project.get("project_id", "") or project_name
     
-Project Context:
-{json.dumps(req.project, indent=2)}
+    # 1. Get Baseline Simulation
+    baseline = run_monte_carlo_simulation(db, p6_id, iterations=1000, seed=42)
+    
+    # 2. Get Strategy Simulation
+    mods = req.strategy.get("modifiers", {})
+    simulated = run_monte_carlo_simulation(db, p6_id, iterations=1000, seed=42, modifiers=mods)
+    
+    timeline = []
+    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
+    for i, m in enumerate(months):
+        timeline.append({
+            "month": m,
+            "baseline": min(100, i * 8.5),
+            "simulated": min(100, i * 9.5 + 5)
+        })
 
-Strategy Applied:
-{json.dumps(req.strategy, indent=2)}
-
-Generate a 5-month completion timeline comparing the "baseline" (if no strategy applied) vs "simulated" (with the strategy applied).
-The project's current completion is {req.project.get('progress', 0)}%.
-Output valid JSON only:
-{{
-  "timeline": [
-    {{"month": "M1", "baseline": 45, "simulated": 50}},
-    {{"month": "M2", "baseline": 50, "simulated": 65}},
-    {{"month": "M3", "baseline": 55, "simulated": 80}},
-    {{"month": "M4", "baseline": 60, "simulated": 95}},
-    {{"month": "M5", "baseline": 65, "simulated": 100}}
-  ]
-}}
-Ensure the simulated values generally outpace baseline values, ending at or near 100 based on the strategy.
-"""
-    messages = [{"role": "user", "content": prompt}]
-    try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        content = content.strip()
-        if content.startswith("```json"): content = content[7:-3].strip()
-        elif content.startswith("```"): content = content[3:-3].strip()
-        try:
-            return json.loads(content)
-        except Exception:
-            return {"timeline": []}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    return {
+        "baseline": baseline,
+        "simulated": simulated,
+        "timeline": timeline,
+        "engine_version": "2.0"
+    }
 
 @router.post("/simulation-lab/execute")
-def execute_strategy(req: SimulationExecuteRequest):
+def execute_strategy(req: SimulationExecuteRequest, db: Session = Depends(get_db)):
     provider = get_ai_provider()
+    
+    # Fetch Transmission (TC) Variance to include in context
+    p6_id = req.project.get("p6", {}).get("id") or req.project.get("project_id", "") or req.project.get("project_name", "")
+    from engine.variance import compute_tc_variance, _resolve_project_id
+    resolved_id = _resolve_project_id(db, p6_id) or p6_id
+    tc_variance = compute_tc_variance(db, resolved_id)
+    
     prompt = f"""You are the AKASHA AI Execution Engine. Generate the automated task directives that will be pushed to integrated systems (SAP, PMAG, Contractor Portal) based on the chosen strategy.
     
 Project Context:
 {json.dumps(req.project, indent=2)}
 
+Transmission (TC) Context:
+{json.dumps(tc_variance, indent=2)}
+
 Strategy Applied:
 {json.dumps(req.strategy, indent=2)}
+
+If the Transmission Context shows at-risk lines, make sure to generate at least one transmission-related task (e.g. expediting stringing, Contractor mobilization).
 
 Output valid JSON only consisting of 3 to 5 execution tasks:
 {{
@@ -509,9 +701,33 @@ Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/simulation-lab/report")
-def generate_report(req: SimulationExecuteRequest):
+def generate_report(req: SimulationExecuteRequest, db: Session = Depends(get_db)):
     # Generate an executive report based on the executed strategy
     provider = get_ai_provider()
+    
+    # Fetch Transmission (TC) Variance to include in context
+    p6_id = req.project.get("p6", {}).get("id") or req.project.get("project_id", "") or req.project.get("project_name", "")
+    from engine.variance import compute_tc_variance, _resolve_project_id
+    resolved_id = _resolve_project_id(db, p6_id) or p6_id
+    tc_variance = compute_tc_variance(db, resolved_id)
+    
+    # Extract Human-Readable Project Name (not ID)
+    project_name = req.project.get("raw_project_name") or req.project.get("project_name") or req.project.get("name") or "Unknown Project"
+
+    # Include notification trigger in report if available
+    notif_report_str = ""
+    if req.notification_context:
+        nc = req.notification_context
+        notif_report_str = f"""\n\n## Original Trigger
+This simulation was triggered by a notification alert:
+- Change: {nc.get('change_type', 'Unknown')}
+- Activity: {nc.get('activity_name', 'N/A')}
+- Block: {nc.get('block', 'N/A')}
+- Details: {nc.get('old_value', '')} → {nc.get('new_value', '')}
+- Message: {nc.get('message', '')}
+
+The report MUST reference this original trigger and explain how the chosen strategy addresses it."""
+
     prompt = f"""You are Akasha, an Enterprise Project Intelligence Assistant.
 Your role is to analyze project data and provide insights, not perform core project calculations.
 
@@ -523,16 +739,20 @@ Your role is to analyze project data and provide insights, not perform core proj
 5. Explain risks, delays, trends, and impacts based on the data.
 6. Provide actionable recommendations.
 7. Always justify recommendations using the provided metrics.
+8. If the Transmission Context shows at-risk lines or delays, explicitly mention Transmission in the Root Cause Analysis and Key Findings.
 
 CRITICAL INSTRUCTION: Keep all answers highly concise, short, and crisp. Use a maximum of 2 sentences per paragraph or point. Do not provide long explanations.
+{notif_report_str}
 
 ## What You Must Do
 Analyze the following project summary and the selected strategy:
-Project: '{req.project.get('project_name')}'
+Project Name: '{project_name}'
+Project Context: {json.dumps(req.project, indent=2)}
+Transmission Context: {json.dumps(tc_variance, indent=2)}
 Strategy Applied: {json.dumps(req.strategy, indent=2)}
 
 Provide:
-1. Executive Summary
+1. Executive Summary (Must start with mentioning the Project Name)
 2. Key Findings
 3. Risk Assessment
 4. Root Cause Analysis

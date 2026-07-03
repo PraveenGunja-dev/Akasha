@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
+import { createPortal } from "react-dom";
 import ReactECharts from "echarts-for-react";
 import { Activity, Zap, Sun, Wind, Calendar, ServerCrash, RefreshCw, TrendingUp, TrendingDown, Info, Layers } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
@@ -170,10 +171,10 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
   const totalTr = filteredProjects.reduce((s, p) => s + p.tr_mw, 0);
   const totalRemaining = filteredProjects.reduce((s, p) => s + p.remaining_capacity, 0);
 
-  return (
+  return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6" data-lenis-prevent="true">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" data-lenis-prevent="true">
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/40 backdrop-blur-md" 
@@ -243,10 +244,9 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
                                 <span className="text-[10px] font-bold text-gray-400">{pct.toFixed(0)}% Done</span>
                                 <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{p.remaining_capacity.toFixed(1)} MW Left</span>
                               </div>
-                              <div className="w-full h-1.5 bg-gray-200/50 dark:bg-gray-700/50 rounded-full overflow-hidden shadow-inner">
-                                <div className="h-full bg-gradient-to-r from-primary to-emerald-500 rounded-full transition-all duration-700 ease-out relative" style={{ width: `${Math.min(pct, 100)}%` }}>
-                                  <div className="absolute inset-0 bg-white/20 w-full h-full skeleton-shimmer"></div>
-                                </div>
+                              <div className="w-full h-1.5 bg-gray-200/50 dark:bg-gray-700/50 rounded-full overflow-hidden shadow-inner flex">
+                                {p.cod_mw > 0 && <div className="h-full bg-primary transition-all duration-700 ease-out" style={{ width: `${Math.min((p.cod_mw / p.total_capacity) * 100, 100)}%` }}></div>}
+                                {p.tr_mw > 0 && <div className="h-full bg-emerald-500 transition-all duration-700 ease-out" style={{ width: `${Math.min((p.tr_mw / p.total_capacity) * 100, 100)}%` }}></div>}
                               </div>
                             </div>
                           </td>
@@ -261,7 +261,8 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
           </motion.div>
         </div>
       )}
-    </AnimatePresence>
+    </AnimatePresence>,
+    document.body
   );
 };
 
@@ -297,7 +298,7 @@ export default function CapacityOverview() {
 
   if (error || !data) return <div className="text-red-500 flex justify-center items-center h-64 font-bold">{error || "No data available"}</div>;
 
-  const { financial_years, recent_milestones, totals, projects } = data;
+  const { financial_years, monthly_trends, recent_milestones, totals, projects } = data;
 
   // FY Chart Data
   const fyDataObj = financial_years.map(fy => ({
@@ -309,43 +310,8 @@ export default function CapacityOverview() {
     total: fy.solar_cod + fy.solar_tr + fy.wind_cod + fy.wind_tr
   })).filter(d => d.total > 0);
 
-  // Monthly Chart Data Generation
-  const monthlyDataMap: Record<string, any> = {};
-  recent_milestones.forEach(m => {
-    let dt: string | null = null;
-    let typeKey = '';
-    if (m.status === 'COD') {
-      dt = m.cod_finish || m.cod_start;
-      typeKey = m.type === 'Solar' ? 'Solar COD' : 'Wind COD';
-    } else if (m.status === 'Trial Run') {
-      dt = m.tr_finish || m.tr_start;
-      typeKey = m.type === 'Solar' ? 'Solar Trial Run' : 'Wind Trial Run';
-    }
-    if (dt && typeKey) {
-      const monthStr = dt.substring(0, 7);
-      if (!monthlyDataMap[monthStr]) {
-        monthlyDataMap[monthStr] = { "Solar COD": 0, "Solar Trial Run": 0, "Wind COD": 0, "Wind Trial Run": 0 };
-      }
-      monthlyDataMap[monthStr][typeKey] += m.capacity;
-    }
-  });
-
-  // Calculate Cumulative Monthly Data for the Trajectory
-  const sortedMonths = Object.keys(monthlyDataMap).sort();
-  let cumSolarCod = 0, cumSolarTr = 0, cumWindCod = 0, cumWindTr = 0;
-  const cumulativeMonthlyData = sortedMonths.map(month => {
-     cumSolarCod += monthlyDataMap[month]["Solar COD"];
-     cumSolarTr += monthlyDataMap[month]["Solar Trial Run"];
-     cumWindCod += monthlyDataMap[month]["Wind COD"];
-     cumWindTr += monthlyDataMap[month]["Wind Trial Run"];
-     return {
-       name: month,
-       "Solar COD": cumSolarCod,
-       "Solar Trial Run": cumSolarTr,
-       "Wind COD": cumWindCod,
-       "Wind Trial Run": cumWindTr
-     };
-  });
+  // Read Monthly Chart Data generated by backend (across full historical dataset)
+  const cumulativeMonthlyData = monthly_trends || [];
 
   const totalCod = projects.reduce((s, p) => s + p.cod_mw, 0);
   const totalTr = projects.reduce((s, p) => s + p.tr_mw, 0);

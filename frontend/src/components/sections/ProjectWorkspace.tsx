@@ -34,17 +34,17 @@ const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
 const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, hasBreakdown }: any) => (
   <div
     onClick={onClick}
-    className={`bg-muted/20 hover:bg-muted/40 transition-all duration-300 border rounded-xl p-5 flex flex-col gap-3 group relative overflow-hidden shadow-sm hover:shadow-md ${active ? 'border-primary/60 ring-1 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/20'
+    className={`bg-muted/20 hover:bg-muted/40 transition-all duration-300 border rounded-xl p-4 flex flex-col gap-2 group relative overflow-hidden shadow-sm hover:shadow-md ${active ? 'border-primary/60 ring-1 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/20'
       } ${hasBreakdown ? 'cursor-pointer' : ''}`}
   >
     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
     <div className="flex items-center justify-between">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 group-hover:text-muted-foreground transition-colors">{label}</span>
-      <Icon className={`w-4 h-4 ${color} transition-transform duration-300 group-hover:scale-110`} />
+      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 group-hover:text-muted-foreground transition-colors truncate pr-2">{label}</span>
+      <Icon className={`w-4 h-4 shrink-0 ${color} transition-transform duration-300 group-hover:scale-110`} />
     </div>
-    <div className="flex items-baseline gap-1.5 relative z-10">
-      <span className={`text-2xl font-light tracking-tight ${color}`}>{value}</span>
-      {unit && <span className="text-xs text-muted-foreground/50">{unit}</span>}
+    <div className="flex items-baseline gap-1.5 relative z-10 w-full overflow-hidden">
+      <span title={typeof value === 'string' ? value : undefined} className={`text-xl md:text-2xl font-light tracking-tight truncate ${color}`}>{value}</span>
+      {unit && <span className="text-xs text-muted-foreground/50 shrink-0">{unit}</span>}
     </div>
     {hasBreakdown && (
       <div className={`absolute bottom-1.5 right-2 text-[9px] font-medium transition-colors ${active ? 'text-primary' : 'text-muted-foreground/30 group-hover:text-muted-foreground/50'}`}>▾ details</div>
@@ -66,6 +66,43 @@ const TabBtn = ({ active, label, icon: Icon, onClick }: any) => (
     )}
   </button>
 );
+
+const ECODCell = ({ edge }: { edge: any }) => {
+  const scod = edge.scd;
+  const ecod = edge.expectedDate;
+  const status = (edge.normalizedStatus || edge.status || '').toLowerCase();
+  const inProgress = status === 'in_progress' || status === 'in progress';
+  
+  let delayMonths = 0;
+  if (inProgress && scod && ecod && scod !== '—' && ecod !== '—' && scod !== 'TBD' && ecod !== 'TBD') {
+    const parse = (s: string) => {
+      const parts = s.split('-');
+      if (parts.length !== 2) return null;
+      const m = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].indexOf(parts[0]);
+      if (m === -1) return null;
+      let y = parseInt(parts[1]);
+      if (y < 100) y += 2000;
+      return new Date(y, m, 1);
+    };
+    const d1 = parse(scod);
+    const d2 = parse(ecod);
+    if (d1 && d2) {
+      delayMonths = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
+    }
+  }
+  
+  const isDelayed = delayMonths > 0 && inProgress;
+  
+  return (
+    <td className="text-xs font-mono whitespace-nowrap">
+      {isDelayed && <AlertTriangle className="w-3 h-3 text-red-500 inline mr-1" />}
+      <span className={isDelayed ? "text-red-400 font-semibold" : ""}>
+        {ecod || '—'} 
+        {isDelayed && <span className="text-[10px] ml-1 bg-red-500/10 px-1.5 py-0.5 rounded-sm border border-red-500/20 text-red-500 font-bold">+{delayMonths}m</span>}
+      </span>
+    </td>
+  );
+};
 
 /* ── Format helpers ── */
 const fmtCost = (v: number | null | undefined): string => {
@@ -207,8 +244,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
+  const [expandedTcMetric, setExpandedTcMetric] = useState<string | null>(null);
   const [actFilter, setActFilter] = useState<string>('All');
-  const [expandedPhase, setExpandedPhase] = useState<string | null>(null);
   const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [syncingP6, setSyncingP6] = useState(false);
@@ -653,8 +690,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 onClick={async () => {
                   setSyncingP6(true);
                   try {
-                    const res = await fetch(`/akasha/api/p6/sync/${detail.p6.p6ObjectId}`, { method: 'POST' });
-                    if (res.ok) {
+                    const p6Promise = fetch(`/akasha/api/p6/sync/${detail.p6.p6ObjectId}`, { method: 'POST' });
+                    const tcPromise = fetch(`/akasha/api/tc/sync`, { method: 'POST' });
+                    
+                    const [p6Res, tcRes] = await Promise.all([p6Promise, tcPromise]);
+                    
+                    if (p6Res.ok || tcRes.ok) {
                       window.location.reload();
                     }
                   } catch (e) {
@@ -664,11 +705,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   }
                 }}
                 disabled={syncingP6}
-                title="Pull latest data from P6 for this project"
+                title="Pull latest data from P6 and Transmission Portal for this project"
                 className="flex items-center gap-2 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
               >
                 {syncingP6 ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                Sync from P6
+                Sync P6 & TC
               </button>
             )}
           </div>
@@ -1745,12 +1786,85 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               ) : (
                 <>
                   {/* TC Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <HeroMetric label="Khavda Edges" value={tc.summary.totalKhavdaEdges} icon={Zap} color="text-purple-400" />
-                    <HeroMetric label="Rajasthan Edges" value={tc.summary.totalRajasthanEdges} icon={Network} color="text-blue-400" />
-                    <HeroMetric label="Total Mapped MW" value={tc.summary.totalMW ? `${tc.summary.totalMW}` : '—'} unit="MW" icon={Target} color="text-emerald-400" />
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+                    <HeroMetric label="Total Lines" value={tc.summary.totalLines} icon={Network} color="text-purple-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'total' ? null : 'total')} active={expandedTcMetric === 'total'} />
+                    <HeroMetric label="Charged" value={tc.summary.chargedLines} icon={Zap} color="text-emerald-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'charged' ? null : 'charged')} active={expandedTcMetric === 'charged'} />
+                    <HeroMetric label="In Progress" value={tc.summary.inProgressLines} icon={Activity} color="text-blue-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'in_progress' ? null : 'in_progress')} active={expandedTcMetric === 'in_progress'} />
+                    <HeroMetric label="Delayed" value={tc.summary.delayedLines} icon={AlertTriangle} color="text-red-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'delayed' ? null : 'delayed')} active={expandedTcMetric === 'delayed'} />
+                    <HeroMetric label="Mapped MW" value={tc.summary.totalMW ? `${tc.summary.totalMW}` : '—'} unit="MW" icon={Target} color="text-emerald-400" />
                     <HeroMetric label="TC Project" value={mapping?.tcProjectName || '—'} icon={MapPin} color="text-amber-400" />
                   </div>
+
+                  {/* ── Interactive Breakdown Panel ── */}
+                  {expandedTcMetric && (
+                    <div className="intelligence-card p-5 animate-in slide-in-from-top-2 duration-300 border-primary/20 mt-4">
+                      <div className="flex items-center justify-between mb-4">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                          <Network className="w-3.5 h-3.5" />
+                          {expandedTcMetric === 'total' && 'All Transmission Lines'}
+                          {expandedTcMetric === 'charged' && 'Charged Lines'}
+                          {expandedTcMetric === 'in_progress' && 'Lines In Progress'}
+                          {expandedTcMetric === 'delayed' && 'Delayed Lines'}
+                        </h4>
+                        <button onClick={() => setExpandedTcMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted/50 transition-colors">✕ Close</button>
+                      </div>
+                      <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin">
+                        <table className="intel-table relative w-full">
+                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+                            <tr>
+                              <th className="whitespace-nowrap">Project / Phase</th>
+                              <th>From</th>
+                              <th>To</th>
+                              <th>Voltage</th>
+                              <th>Length</th>
+                              <th>Contractor</th>
+                              <th>Status</th>
+                              <th>Erection</th>
+                              <th>Foundation</th>
+                              <th>Stringing</th>
+                              <th>SCOD</th>
+                              <th className="whitespace-nowrap">ECOD</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {[...(tc.khavdaEdges || []), ...(tc.rajasthanEdges || [])]
+                              .filter((edge: any) => {
+                                if (expandedTcMetric === 'total') return true;
+                                if (expandedTcMetric === 'charged') return edge.normalizedStatus === 'charged';
+                                if (expandedTcMetric === 'in_progress') return edge.normalizedStatus === 'in_progress';
+                                if (expandedTcMetric === 'delayed') return edge.isDelayed;
+                                return true;
+                              })
+                              .map((edge: any, i: number) => (
+                                <tr key={i} className="hover:bg-muted/50 transition-colors">
+                                  <td className="font-bold text-purple-400 font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
+                                    {edge.project} <span className="text-muted-foreground ml-1 font-normal lowercase tracking-normal">({edge.phase})</span>
+                                  </td>
+                                  <td className="font-medium text-foreground/90 max-w-[150px] truncate" title={edge.fromLabel || edge.fromNode}>{edge.fromLabel || edge.fromNode}</td>
+                                  <td className="font-medium text-foreground/90 max-w-[150px] truncate" title={edge.toLabel || edge.toNode}>{edge.toLabel || edge.toNode}</td>
+                                  <td className="font-mono text-xs">{edge.voltage || '—'}</td>
+                                  <td className="font-mono text-xs">{edge.length || '—'}</td>
+                                  <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
+                                  <td>
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
+                                      edge.normalizedStatus === 'in_progress' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                        'bg-muted text-muted-foreground border border-border'
+                                      }`}>
+                                      {edge.status || '—'}
+                                    </span>
+                                  </td>
+                                  <td className="text-xs text-muted-foreground/80">{edge.erection || '—'}</td>
+                                  <td className="text-xs text-muted-foreground/80">{edge.foundation || '—'}</td>
+                                  <td className="text-xs text-muted-foreground/80">{edge.stringing || '—'}</td>
+                                  <td className="text-xs font-mono">{edge.scd || '—'}</td>
+                                  <ECODCell edge={edge} />
+                                </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Khavda Transmission Lines Table */}
                   {tc.khavdaEdges.length > 0 && (
@@ -1772,7 +1886,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <th>Erection</th>
                               <th>Foundation</th>
                               <th>Stringing</th>
-                              <th>Expected Date</th>
+                              <th>SCOD</th>
+                              <th>ECOD</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1797,7 +1912,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="text-xs text-muted-foreground/80">{edge.erection || '—'}</td>
                                 <td className="text-xs text-muted-foreground/80">{edge.foundation || '—'}</td>
                                 <td className="text-xs text-muted-foreground/80">{edge.stringing || '—'}</td>
-                                <td className="text-xs font-mono">{edge.expectedDate || '—'}</td>
+                                <td className="text-xs font-mono">{edge.scd || '—'}</td>
+                                <ECODCell edge={edge} />
                               </tr>
                             ))}
                           </tbody>
@@ -1826,7 +1942,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <th>Erection</th>
                               <th>Foundation</th>
                               <th>Stringing</th>
-                              <th>Expected Date</th>
+                              <th>SCOD</th>
+                              <th>ECOD</th>
                             </tr>
                           </thead>
                           <tbody>
@@ -1851,7 +1968,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs text-muted-foreground/70">{edge.erection || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/70">{edge.foundation || '—'}</td>
                                 <td className="font-mono text-xs text-muted-foreground/70">{edge.stringing || '—'}</td>
-                                <td className="font-mono text-xs">{edge.expectedDate || '—'}</td>
+                                <td className="font-mono text-xs">{edge.scd || '—'}</td>
+                                <ECODCell edge={edge} />
                               </tr>
                             ))}
                           </tbody>

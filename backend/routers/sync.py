@@ -72,12 +72,9 @@ def sync_individual_p6_data(project_object_id: int, db: Session = Depends(get_db
 @router.post("/tc/sync")
 def sync_tc_data():
     from services.tc_sync import run_sync
-    try:
-        run_sync()
-        return {"status": "success", "message": "Synced Transmission Data"}
-    except Exception as e:
-        logger.error(f"TC sync failed: {e}")
-        raise HTTPException(status_code=500, detail=f"TC sync failed: {str(e)}")
+    import threading
+    threading.Thread(target=run_sync).start()
+    return {"status": "success", "message": "Transmission Data Sync started in background."}
 
 @router.post("/mapping/sync")
 def sync_mapping_data():

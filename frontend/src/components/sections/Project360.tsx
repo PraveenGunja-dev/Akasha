@@ -134,6 +134,14 @@ const MetricBreakdownModal = ({
                   </>
                 )}
 
+                {type === 'activity' && (
+                  <>
+                    <th className="px-6 py-3 font-semibold text-right">Lines Charged</th>
+                    <th className="px-6 py-3 font-semibold text-right">Foundation</th>
+                    <th className="px-6 py-3 font-semibold text-right">Delayed</th>
+                  </>
+                )}
+
                 {type === 'supply' && (
                   <>
                     <th className="px-6 py-3 font-semibold text-right">Availability</th>
@@ -169,6 +177,21 @@ const MetricBreakdownModal = ({
                       </td>
                       <td className={`px-6 py-3 font-mono text-xs text-right ${p.spi < 0.95 ? 'text-amber-500 font-bold' : 'text-emerald-500'}`}>{(p.spi || 0).toFixed(2)}</td>
                       <td className={`px-6 py-3 font-mono text-xs text-right ${p.delayDays > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>{p.delayDays || 0}d</td>
+                    </>
+                  )}
+
+                  {type === 'activity' && (
+                    <>
+                      <td className="px-6 py-3 font-mono text-xs text-right">
+                        <span className="text-primary font-bold">{p.tcData?.progress?.linesCharged?.count || 0}</span>
+                        <span className="text-muted-foreground"> / {p.tcData?.progress?.linesCharged?.total || 0}</span>
+                      </td>
+                      <td className="px-6 py-3 font-mono text-xs text-right">
+                        <span className="text-amber-500 font-bold">{p.tcData?.progress?.foundation?.percent || 0}%</span>
+                      </td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.tcData?.progress?.delayed?.count > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>
+                        {p.tcData?.progress?.delayed?.count || 0}
+                      </td>
                     </>
                   )}
 

@@ -293,74 +293,20 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
     # 3. In-Transit Mapping (ME2K Still to Deliver)
     in_transit = [po for po in po_items if (po.still_to_deliver_qty or 0) > 0]
     
-    # TC
-    project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == m.id).all()
-    phases = set(pe.phase for pe in project_entries if pe.phase)
+    # TC Data from Local DB (Exactly mapped by mapping_id)
+    tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
     
-    tc_khavda = []
-    tc_rajasthan = []
-    
-    if phases:
-        for p in phases:
-            edges_k = db.query(models.TcNetworkEdge).filter(
-                models.TcNetworkEdge.region == "Khavda",
-                models.TcNetworkEdge.projects.like(f'%"{p}"%')
-            ).all()
-            tc_khavda.extend(edges_k)
-            
-            edges_r = db.query(models.TcNetworkEdge).filter(
-                models.TcNetworkEdge.region == "Rajasthan",
-                models.TcNetworkEdge.projects.like(f'%"{p}"%')
-            ).all()
-            tc_rajasthan.extend(edges_r)
-            
-    # Fallback
-    direct_tc_khavda = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id, models.TcNetworkEdge.region == "Khavda").all()
-    direct_tc_rajasthan = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id, models.TcNetworkEdge.region == "Rajasthan").all()
-    tc_khavda.extend(direct_tc_khavda)
-    tc_rajasthan.extend(direct_tc_rajasthan)
-    
-    # Second Fallback: JSON explicit match
-    if m.project:
-        tc_names = [t.strip() for t in m.project.split(',') if t.strip()]
-        for t_name in tc_names:
-            json_k = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Khavda", models.TcNetworkEdge.projects.like(f'%"{t_name}"%')).all()
-            json_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like(f'%"{t_name}"%')).all()
-            tc_khavda.extend(json_k)
-            tc_rajasthan.extend(json_r)
-        
-    if m.project_name_from_p6:
-        json_p6_k = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Khavda", models.TcNetworkEdge.projects.like(f'%"{m.project_name_from_p6}"%')).all()
-        json_p6_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like(f'%"{m.project_name_from_p6}"%')).all()
-        tc_khavda.extend(json_p6_k)
-        tc_rajasthan.extend(json_p6_r)
-        
-        if "BANDHA" in m.project_name_from_p6.upper():
-            siyam_k = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Khavda", models.TcNetworkEdge.projects.like('%"Siyambar%')).all()
-            siyam_r = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.region == "Rajasthan", models.TcNetworkEdge.projects.like('%"Siyambar%')).all()
-            tc_khavda.extend(siyam_k)
-            tc_rajasthan.extend(siyam_r)
-    
-    tc_khavda = list({e.id: e for e in tc_khavda}.values())
-    tc_rajasthan = list({e.id: e for e in tc_rajasthan}.values())
-    
-    tc_khavda = filter_tc_edges_by_kps(tc_khavda, project_entries)
-    tc_rajasthan = filter_tc_edges_by_kps(tc_rajasthan, project_entries)
-    
-    # Extract project name from the JSON array in 'projects' column and convert to dict
     tc_k_dicts = []
-    for t in tc_khavda:
-        d = {c: getattr(t, c) for c in t.__table__.columns.keys()}
-        d["project"] = m.project or m.project_name_from_p6
-        d["phase"] = _safe_parse_phase(t.projects)
-        tc_k_dicts.append(d)
-        
     tc_r_dicts = []
-    for t in tc_rajasthan:
+    
+    for t in tc_edges:
         d = {c: getattr(t, c) for c in t.__table__.columns.keys()}
         d["project"] = m.project or m.project_name_from_p6
         d["phase"] = _safe_parse_phase(t.projects)
-        tc_r_dicts.append(d)
+        if t.region == "Khavda":
+            tc_k_dicts.append(d)
+        elif t.region == "Rajasthan":
+            tc_r_dicts.append(d)
     
     return {
         "mapping": {
@@ -673,70 +619,20 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
                 "top_vendors": top_vendors_list
             }
         
-        # ── Transmission Data ──
+        # ── Transmission Data (Local DB) ──
         tc_data = None
         if m.id:
-            project_entries = [pe for pe in all_tc_project_entries if pe.mapping_id == m.id]
-            phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
+            tc_progress = m.tc_progress or {}
+            lines_charged = tc_progress.get("linesCharged", {})
             
-            project_edges = []
-            if phases:
-                for edge in all_tc_edges:
-                    if phases.intersection(parsed_edge_phases.get(edge.id, set())):
-                        project_edges.append(edge)
-                        
-                # Filter by KPS if applicable
-                from services.project_service import filter_tc_edges_by_kps
-                project_edges = filter_tc_edges_by_kps(project_edges, project_entries)
-            
-            for edge in all_tc_edges:
-                if edge.mapping_id == m.id and edge not in project_edges:
-                    project_edges.append(edge)
-            
-            node_names = set()
-            for edge in project_edges:
-                if edge.from_node: node_names.add(edge.from_node)
-                if edge.to_node: node_names.add(edge.to_node)
-            
-            tc_nodes_count = len(node_names)
-            tc_edges_count = len(project_edges)
-            
-            regions = list(set(e.region for e in project_edges if e.region))
-            
-            def _p(val, status):
-                if status and status.lower() in ['charged', 'completed']:
-                    return 100.0
-                if not val: return 0
-                val_str = str(val).strip()
-                if '/' in val_str:
-                    parts = val_str.split('/')
-                    try:
-                        num = float(parts[0])
-                        den = float(parts[1])
-                        return round((num / den) * 100, 1) if den > 0 else 0
-                    except: return 0
-                try: return round(float(val_str.replace('%','')), 1)
-                except: return 0
-                
-            lines_detail = []
-            for e in project_edges:
-                lines_detail.append({
-                    "from": e.from_node or e.from_label,
-                    "to": e.to_node or e.to_label,
-                    "status": e.status,
-                    "expected_date": str(e.expected_date) if e.expected_date else None,
-                    "foundation": _p(e.foundation, e.status),
-                    "erection": _p(e.erection, e.status),
-                    "stringing": _p(e.stringing, e.status)
-                })
-            
-            tc_data = {
-                "total_substations": tc_nodes_count,
-                "total_lines": tc_edges_count,
-                "region": ", ".join(regions) if regions else "Unknown",
-                "substations": list(node_names),
-                "lines": lines_detail
-            }
+            tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
+            if tc_edges or tc_progress:
+                tc_data = {
+                    "total_lines": lines_charged.get("total", len(tc_edges)),
+                    "charged_lines": lines_charged.get("count", sum(1 for e in tc_edges if str(e.status).strip().lower() == "charged")),
+                    "delayed_lines": tc_progress.get("delayed", {}).get("count", sum(1 for e in tc_edges if str(e.status).strip().lower() == "delayed")),
+                    "lines": [{"name": f"{e.from_label} \u2192 {e.to_label}", "status": e.status} for e in tc_edges]
+                }
         
         eps_groups[eps].append({
             "id": m.id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
@@ -824,18 +720,35 @@ def get_capacity_overview(db: Session = Depends(get_db)):
 
     # Source 1: ProjectMapping for source of truth (Total 60 tracked projects)
     mappings = db.query(models.ProjectMapping).all()
+    p6_projs = db.query(models.P6Project).all()
+    
     project_map = {}
+    obj_id_to_p_name = {}
+    
     for pm in mappings:
-        name = pm.project_name_from_p6 or pm.project
-        if not name: continue
+        # Find corresponding P6 project using robust project_id match
+        matching_p6 = next((p for p in p6_projs if p.project_id and pm.project_id and p.project_id.strip() == pm.project_id.strip()), None)
         
-        # Determine type
+        # Fallback to name matching
+        if not matching_p6:
+            name_to_match = pm.project_name_from_p6 or pm.project
+            if name_to_match:
+                matching_p6 = next((p for p in p6_projs if p.name and p.name.strip().lower() == name_to_match.strip().lower()), None)
+                
+        if not matching_p6:
+            continue
+            
+        obj_id = str(matching_p6.p6_object_id)
+        display_name = matching_p6.name or pm.project_name_from_p6 or pm.project
+        obj_id_to_p_name[obj_id] = display_name
+        
         p_type = 'Wind' if 'wind' in str(pm.project).lower() else 'Solar'
         total_cap = float(pm.capacity_mwac or 0)
+        wtg_mw = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW) if p_type == 'Wind' else 0
         
-        project_map[name] = {
+        project_map[obj_id] = {
             'project_id': pm.project_id or '-',
-            'project_name': name,
+            'project_name': display_name,
             'type': p_type,
             'total_capacity': total_cap,
             'total_blocks': 0,
@@ -843,19 +756,8 @@ def get_capacity_overview(db: Session = Depends(get_db)):
             'tr_mw': 0,
             'cod_blocks': 0,
             'cod_mw': 0,
-            '_wtg_mw': 0
+            '_wtg_mw': wtg_mw
         }
-
-    # Source 2: P6Project for wind p6_object_id lookup
-    p6_projs = db.query(models.P6Project).all()
-    p6_obj_id_map = {p.name: str(p.p6_object_id) for p in p6_projs if p.name and p.p6_object_id}
-    obj_id_to_p_name = {str(p.p6_object_id): p.name for p in p6_projs if p.name and p.p6_object_id}
-
-    # Pre-assign Wind WTG multipliers
-    for p_name, data in project_map.items():
-        if data['type'] == 'Wind':
-            obj_id = p6_obj_id_map.get(p_name)
-            data['_wtg_mw'] = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW)
 
     # Source 3: All block/WTG data from P6 (P6Activity table)
     from models import P6Activity
@@ -867,18 +769,21 @@ def get_capacity_overview(db: Session = Depends(get_db)):
             (P6Activity.name.ilike('%Trial Operation%')) |
             (P6Activity.name.ilike('%cod%')) |
             (P6Activity.name.ilike('%scod%'))
-        )
+        ),
+        ~P6Activity.wbs_name.ilike('%milestone%'),
+        ~P6Activity.type.ilike('%milestone%')
     ).all()
 
     # Step 1: Group into unique blocks per project
     block_map = {}
     for act in activities:
-        p_name = obj_id_to_p_name.get(str(act.project_object_id))
+        obj_id = str(act.project_object_id)
         
         # CRUCIAL: ONLY process activities for tracked projects in ProjectMapping
-        if not p_name or p_name not in project_map: 
+        if obj_id not in project_map: 
             continue
             
+        p_name = obj_id_to_p_name.get(obj_id)
         act_name = (act.name or "").lower()
         
         # Parse Block/WTG name
@@ -889,7 +794,7 @@ def get_capacity_overview(db: Session = Depends(get_db)):
         else:
             continue # Skip project-level CODs that aren't tied to a specific block/WTG
             
-        b_key = f"{p_name}::{b_name}"
+        b_key = f"{obj_id}::{b_name}"
         actual_dt = act.actual_finish_date or act.actual_start_date or act.start_date
         is_cod = "cod" in act_name
         is_tr = "trial" in act_name or "trail" in act_name
@@ -897,9 +802,10 @@ def get_capacity_overview(db: Session = Depends(get_db)):
         
         if b_key not in block_map:
             block_map[b_key] = {
+                "_obj_id": obj_id,
                 "project": p_name,
                 "block": b_name,
-                "type": project_map[p_name]['type'],
+                "type": project_map[obj_id]['type'],
                 "capacity": 0, # Distributed later
                 "has_tr": False,
                 "has_cod": False,
@@ -926,18 +832,18 @@ def get_capacity_overview(db: Session = Depends(get_db)):
     # Group blocks by project to distribute capacity
     projects_blocks = {}
     for b_key, b in block_map.items():
-        p_name = b["project"]
-        if p_name not in projects_blocks:
-            projects_blocks[p_name] = []
-        projects_blocks[p_name].append(b)
+        obj_id = b["_obj_id"]
+        if obj_id not in projects_blocks:
+            projects_blocks[obj_id] = []
+        projects_blocks[obj_id].append(b)
 
     # Step 2: Aggregate into project-level and FY-level data
     fy_data = {}
     recent = []
     
-    for p_name, blocks in projects_blocks.items():
+    for obj_id, blocks in projects_blocks.items():
         blocks.sort(key=lambda x: x["block"])
-        pm = project_map[p_name]
+        pm = project_map[obj_id]
 
         # Distribute capacity to blocks
         if pm['type'] == 'Solar':
@@ -1039,7 +945,44 @@ def get_capacity_overview(db: Session = Depends(get_db)):
     # Sort FYs
     sorted_fys = sorted(list(fy_data.values()), key=lambda x: x["name"])
 
-    # Sort blocks descending by latest date
+    # Calculate Monthly Trends across ALL data, plotting TR and COD events independently
+    monthly_data_map = {}
+    for b in block_map.values():
+        if b["has_tr"]:
+            dt = b["tr_finish"] or b["tr_start"]
+            if dt:
+                month_str = dt.strftime("%Y-%m")
+                type_key = 'Solar Trial Run' if b['type'] == 'Solar' else 'Wind Trial Run'
+                if month_str not in monthly_data_map:
+                    monthly_data_map[month_str] = {"Solar COD": 0, "Solar Trial Run": 0, "Wind COD": 0, "Wind Trial Run": 0}
+                monthly_data_map[month_str][type_key] += b["capacity"]
+                
+        if b["has_cod"]:
+            dt = b["cod_finish"] or b["cod_start"]
+            if dt:
+                month_str = dt.strftime("%Y-%m")
+                type_key = 'Solar COD' if b['type'] == 'Solar' else 'Wind COD'
+                if month_str not in monthly_data_map:
+                    monthly_data_map[month_str] = {"Solar COD": 0, "Solar Trial Run": 0, "Wind COD": 0, "Wind Trial Run": 0}
+                monthly_data_map[month_str][type_key] += b["capacity"]
+
+    sorted_months = sorted(monthly_data_map.keys())
+    cum_solar_cod = cum_solar_tr = cum_wind_cod = cum_wind_tr = 0
+    monthly_trends = []
+    for m in sorted_months:
+        cum_solar_cod += monthly_data_map[m]["Solar COD"]
+        cum_solar_tr += monthly_data_map[m]["Solar Trial Run"]
+        cum_wind_cod += monthly_data_map[m]["Wind COD"]
+        cum_wind_tr += monthly_data_map[m]["Wind Trial Run"]
+        monthly_trends.append({
+            "name": m,
+            "Solar COD": round(cum_solar_cod, 2),
+            "Solar Trial Run": round(cum_solar_tr, 2),
+            "Wind COD": round(cum_wind_cod, 2),
+            "Wind Trial Run": round(cum_wind_tr, 2)
+        })
+
+    # Sort blocks descending by latest date for the recent feed
     recent.sort(key=lambda x: x["raw_date"].isoformat() if x["raw_date"] else "", reverse=True)
     for r in recent:
         del r["raw_date"]
@@ -1057,6 +1000,7 @@ def get_capacity_overview(db: Session = Depends(get_db)):
 
     return {
         "financial_years": sorted_fys,
+        "monthly_trends": monthly_trends,
         "recent_milestones": recent[:50],
         "totals": totals,
         "projects": projects_list

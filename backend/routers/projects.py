@@ -241,39 +241,30 @@ def update_activity(p6_object_id: int, update_data: ActivityUpdate, db: Session 
 
 @router.get("/tc-network/project/{project_id}")
 def get_project_tc_network(project_id: str, db: Session = Depends(get_db)):
-    # 1. Lookup mapping ID and project name
-    mappings = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).all()
-    mapping_ids = [m.id for m in mappings]
-    project_names = [m.project_name_from_p6 for m in mappings if m.project_name_from_p6]
+    m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
+    if not m:
+        return {"edges": [], "progress": None, "metadata": None}
 
-    if not mapping_ids and not project_names:
-        return {"edges": []}
-
-    # 2. Query tc_network_edge
-    query = db.query(models.TcNetworkEdge)
-    filters = []
+    edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
     
-    if mapping_ids:
-        filters.append(models.TcNetworkEdge.mapping_id.in_(mapping_ids))
-        
-    for name in project_names:
-        filters.append(models.TcNetworkEdge.projects.ilike(f'%"{name}"%'))
-        
-    from sqlalchemy import or_
-    edges = query.filter(or_(*filters)).all()
-
-    result = []
-    for e in edges:
-        result.append({
-            "id": e.id,
-            "edge_id": e.edge_id,
-            "region": e.region,
-            "from_label": e.from_label,
-            "to_label": e.to_label,
-            "voltage": e.voltage,
-            "status": e.status,
-            "length": e.length,
-            "projects": e.projects
-        })
-        
-    return {"edges": result}
+    return {
+        "edges": [
+            {
+                "id": e.edge_id,
+                "name": f"{getattr(e, 'from_label', '')} \u2192 {getattr(e, 'to_label', '')}",
+                "status": e.status,
+                "normalized_status": getattr(e, "normalized_status", ""),
+                "expected_date": e.expected_date,
+                "contractor": e.contractor,
+                "from_label": getattr(e, "from_label", ""),
+                "to_label": getattr(e, "to_label", ""),
+                "voltage": getattr(e, "voltage", ""),
+                "length": getattr(e, "length", ""),
+                "foundation": getattr(e, "foundation", ""),
+                "erection": getattr(e, "erection", ""),
+                "stringing": getattr(e, "stringing", "")
+            } for e in edges
+        ],
+        "progress": m.tc_progress or None,
+        "metadata": None
+    }

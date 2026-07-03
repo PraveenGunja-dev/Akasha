@@ -197,6 +197,7 @@ ACTIVITY_FIELD_MAP: Dict[str, str] = {
     'RemainingDuration': 'remaining_duration',
     'PercentComplete': 'percent_complete',
     'TotalFloat': 'total_float',
+    'IsCritical': 'is_critical',
     'WBSObjectId': 'wbs_object_id',
     'WBSName': 'wbs_name',
     'WBSCode': 'wbs_code',
@@ -267,6 +268,11 @@ def _map_p6_response(raw: Dict[str, Any], field_map: Dict[str, str], date_fields
         value = raw.get(p6_field)
         if db_column in date_fields:
             mapped[db_column] = _parse_p6_date(value)
+        elif db_column == 'is_critical':
+            if isinstance(value, str):
+                mapped[db_column] = value.lower() == 'true'
+            else:
+                mapped[db_column] = bool(value)
         else:
             mapped[db_column] = value
     return mapped
@@ -771,13 +777,14 @@ class P6Service:
                 if date_changes:
                     name_lower = (existing.name or "").lower()
                     is_cod = "cod" in name_lower or "scod" in name_lower
-                    is_critical = is_cod
+                    p6_is_critical = mapped.get("is_critical", existing.is_critical)
+                    is_critical_flag = is_cod or p6_is_critical
                     
                     # Skip notifications for non-critical activities
-                    if is_critical:
+                    if is_critical_flag:
                         c_type = "Critical Date Slip"
                         block_name = existing.name.split('-')[0].strip() if existing.name and '-' in existing.name else None
-                        cat_val = "COD" if is_cod else "Trials"
+                        cat_val = "COD" if is_cod else ("Critical Path" if p6_is_critical else "Trials")
                         
                         # Build combined message with all date changes
                         changes_str = " | ".join([f"{k}: {old} → {new}" for k, old, new in date_changes])
@@ -917,8 +924,95 @@ class P6Service:
         logger.info(f"Successfully synced {synced_count} activities to database")
         return synced_count
 
+    def fetch_activity_risks(self, project_object_id: int = None) -> List[Dict[str, Any]]:
+        endpoint = f"{self.base_url}/activityRisk"
+        params = {
+            "Fields": "ActivityId,RiskId,RiskName,ActivityObjectId,ProjectObjectId,RiskObjectId,ActivityName"
+        }
+        if project_object_id:
+            params["Filter"] = f"ProjectObjectId={project_object_id}"
+        
+        try:
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
+            response.raise_for_status()
+            return response.json()
+        except Exception as e:
+            logger.error(f"Error fetching ActivityRisk from P6: {e}")
+            return []
+
+    def sync_activity_risks_to_db(self, db: Session, project_object_id: int = None) -> int:
+        from models import P6ActivityRisk
+
+        raw_risks = self.fetch_activity_risks(project_object_id)
+        if not raw_risks:
+            return 0
+
+        synced_count = 0
+        for raw in raw_risks:
+            act_obj_id = raw.get("ActivityObjectId")
+            proj_obj_id = raw.get("ProjectObjectId")
+            risk_id = raw.get("RiskId")
+            
+            if not act_obj_id or not proj_obj_id:
+                continue
+
+            existing = db.query(P6ActivityRisk).filter(
+                P6ActivityRisk.activity_object_id == act_obj_id,
+                P6ActivityRisk.risk_id == risk_id
+            ).first()
+
+            if existing:
+                existing.risk_name = raw.get("RiskName")
+                existing.risk_object_id = raw.get("RiskObjectId")
+                existing.activity_id = raw.get("ActivityId")
+                existing.activity_name = raw.get("ActivityName")
+                existing.last_synced_at = datetime.utcnow()
+            else:
+                new_risk = P6ActivityRisk(
+                    activity_object_id=act_obj_id,
+                    project_object_id=proj_obj_id,
+                    risk_id=risk_id,
+                    risk_name=raw.get("RiskName"),
+                    risk_object_id=raw.get("RiskObjectId"),
+                    activity_id=raw.get("ActivityId"),
+                    activity_name=raw.get("ActivityName"),
+                    last_synced_at=datetime.utcnow()
+                )
+                db.add(new_risk)
+                db.flush()
+                
+                # Generate Notification for new risk assignment
+                from models import Notification, P6Project
+                proj = db.query(P6Project).filter(P6Project.p6_object_id == proj_obj_id).first()
+                proj_name = proj.name if proj else str(proj_obj_id)
+                msg = f"⚠️ NEW RISK: Activity '{raw.get('ActivityName')}' is now threatened by '{raw.get('RiskName')}'"
+                
+                notif = Notification(
+                    project_name=proj_name,
+                    module="P6",
+                    change_type="New Risk Assignment",
+                    message=msg,
+                    activity_name=raw.get("ActivityName"),
+                    old_value="",
+                    new_value=raw.get("RiskName"),
+                    reason=f"Risk '{raw.get('RiskName')}' was mapped to this activity in P6.",
+                    action_status="Pending",
+                    category="Risk",
+                    p6_object_id=act_obj_id,
+                    p6_type="Activity"
+                )
+                db.add(notif)
+
+            synced_count += 1
+            if synced_count % 100 == 0:
+                db.flush()
+
+        db.commit()
+        logger.info(f"Finished syncing {synced_count} ActivityRisks.")
+        return synced_count
+
     # ------------------------------------------
-    # 6. Full Sync: Projects + Baselines + Activities
+    # 6. Full Sync: Projects + Baselines + Activities + Risks
     # ------------------------------------------
     def full_sync(self, db: Session) -> Dict[str, int]:
         """
@@ -941,6 +1035,7 @@ class P6Service:
             wbs_synced += self.sync_wbs_to_db(db, proj.p6_object_id)
             activities_synced += self.sync_activities_to_db(db, proj.p6_object_id)
             self.sync_resource_assignments_to_db(db, proj.p6_object_id)
+            self.sync_activity_risks_to_db(db, proj.p6_object_id)
         
         # New: Post-sync check for Trial Run vs COD discrepancy
         self.check_trial_cod_discrepancy(db)
@@ -1057,6 +1152,7 @@ class P6Service:
         wbs_synced = self.sync_wbs_to_db(db, project_object_id=project_object_id)
         activities_synced = self.sync_activities_to_db(db, project_object_id=project_object_id)
         self.sync_resource_assignments_to_db(db, project_object_id=project_object_id)
+        self.sync_activity_risks_to_db(db, project_object_id=project_object_id)
 
         result = {
             "projects_synced": projects_synced,

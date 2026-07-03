@@ -39,6 +39,7 @@ export default function CEODashboard() {
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("All");
+  const [simulationContext, setSimulationContext] = useState<any>(null);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -130,6 +131,13 @@ export default function CEODashboard() {
     loadAllData();
   }, [selectedProject]);
 
+  const handleNavigateToSimulation = (projId: string, context?: any) => {
+    setSelectedProject(projId);
+    if (context) setSimulationContext(context);
+    setActiveTab('simulation_lab');
+    sessionStorage.setItem('ceoActiveTab', 'simulation_lab');
+  };
+
   const handleSyncData = async () => {
     setIsSyncing(true);
     try {
@@ -213,7 +221,7 @@ export default function CEODashboard() {
               selectedProject={selectedProject} 
               setSelectedProject={setSelectedProject} 
               masterProjects={dashboardData?.projects || []} 
-
+              onNavigateToSimulation={handleNavigateToSimulation}
               onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
               onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
               onSyncData={handleSyncData}
@@ -234,7 +242,7 @@ export default function CEODashboard() {
                 }} 
               />
             )}
-            {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} initialProject={selectedProject} />}
+            {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} initialProject={selectedProject} simulationContext={simulationContext} />}
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */

@@ -296,22 +296,19 @@ def calculate_project_360_metrics(db: Session):
             ai_recommendation = "Continue standard monitoring. No intervention required."
             ai_insight = f"Project progressing at {round(pct_complete, 1)}% with healthy performance indicators. No material risks detected."
 
-        # ── Exact TC Data Summary ──
-        project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == m.id).all()
-        phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
+        # ── Exact TC Data Summary (Local DB) ──
+        tc_edges_count = 0
+        tc_progress = m.tc_progress or {}
+        lines_charged = tc_progress.get("linesCharged", {})
         
-        tc_network_edges = []
-        if phases:
-            filtered_edges = []
-            for edge in all_tc_edges:
-                if phases.intersection(parsed_edge_phases[edge.id]):
-                    filtered_edges.append(edge)
-                    
-            tc_network_edges = filter_tc_edges_by_kps(filtered_edges, project_entries)
-            
-        direct_tc_edges = [e for e in all_tc_edges if e.mapping_id == m.id]
-        tc_network_edges.extend(direct_tc_edges)
-        tc_edges_count = len({e.id: e for e in tc_network_edges})
+        # Read exact edges from local DB
+        tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
+        tc_edges_count = lines_charged.get("total", len(tc_edges))
+        
+        m.tc_data = {
+            "progress": tc_progress,
+            "lines": [{"name": f"{e.from_label} \u2192 {e.to_label}", "status": e.status} for e in tc_edges]
+        }
 
         forecast_finish = p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.scheduled_finish_date else "N/A"
         forecast_month = p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj and p6_proj.scheduled_finish_date else "TBD"
@@ -358,6 +355,7 @@ def calculate_project_360_metrics(db: Session):
             "health": status_tier,  # alias for backward compat
             "keyIssue": primary_issue,  # alias for backward compat
             "recommendedAction": ai_recommendation,  # alias for backward compat
+            "tcData": getattr(m, "tc_data", None),
             # Date & Duration
             "startDate": p6_proj.start_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.start_date else None,
             "finishDate": p6_proj.finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.finish_date else None,
@@ -761,32 +759,7 @@ def get_project_360_detail(db: Session, project_id: str):
     tc_network_edges = []
     
     if mapping:
-        project_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == mapping.id).all()
-        phases = set(pe.phase for pe in project_entries if pe.phase)
-        
-        if phases:
-            all_edges = db.query(models.TcNetworkEdge).all()
-            filtered_edges = []
-            for edge in all_edges:
-                edge_phases = set()
-                if edge.projects:
-                    try:
-                        parsed = json.loads(edge.projects)
-                        if isinstance(parsed, dict):
-                            edge_phases = set(parsed.get("phases", []))
-                        elif isinstance(parsed, list):
-                            edge_phases = set()
-                    except:
-                        pass
-                if phases.intersection(edge_phases):
-                    filtered_edges.append(edge)
-                    
-            tc_network_edges = filter_tc_edges_by_kps(filtered_edges, project_entries)
-            
-        # Also include any direct mappings (fallback)
-        direct_tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == mapping.id).all()
-        tc_network_edges.extend(direct_tc_edges)
-        tc_network_edges = list({e.id: e for e in tc_network_edges}.values())
+        tc_network_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == mapping.id).all()
 
     tc_khavda = []
     tc_rajasthan = []
@@ -824,6 +797,9 @@ def get_project_360_detail(db: Session, project_id: str):
             "foundation": edge.foundation,
             "stringing": edge.stringing,
             "expectedDate": edge.expected_date,
+            "scd": getattr(edge, "scd", None),
+            "chargedDate": getattr(edge, "charged_date", None),
+            "isDelayed": getattr(edge, "is_delayed", False),
             "region": edge.region,
         }
         if edge.region == "Khavda":
@@ -848,6 +824,15 @@ def get_project_360_detail(db: Session, project_id: str):
                 "status": n.status,
                 "region": n.region
             })
+
+    total_tc_mw = 0
+    if mapping:
+        tc_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == mapping.id).all()
+        for e in tc_entries:
+            try:
+                total_tc_mw += float(e.mw)
+            except:
+                pass
 
     return {
         "mapping": mapping_info,
@@ -880,6 +865,11 @@ def get_project_360_detail(db: Session, project_id: str):
                 "totalKhavdaEdges": len(tc_khavda),
                 "totalRajasthanEdges": len(tc_rajasthan),
                 "totalNodes": len(tc_nodes_data),
+                "totalMW": total_tc_mw,
+                "totalLines": len(tc_khavda) + len(tc_rajasthan),
+                "chargedLines": len([e for e in tc_khavda + tc_rajasthan if str(e.get("normalizedStatus", "")).lower() == "charged" or str(e.get("status", "")).lower() == "charged"]),
+                "delayedLines": len([e for e in tc_khavda + tc_rajasthan if e.get("isDelayed")]),
+                "inProgressLines": len([e for e in tc_khavda + tc_rajasthan if str(e.get("normalizedStatus", "")).lower() in ["in_progress", "in progress"]]),
                 "hasData": len(tc_khavda) > 0 or len(tc_rajasthan) > 0 or len(tc_nodes_data) > 0,
             }
         }

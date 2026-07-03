@@ -85,36 +85,41 @@ def sync_region_data(db: Session, token: str, region: str):
     if not topology:
         return
         
-    # Get existing edges to track changes (for notifications)
-    existing_edges = {
-        e.edge_id: {
-            "status": e.status, 
-            "expected_date": e.expected_date, 
-            "contractor": e.contractor
-        } for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()
-    }
+    existing_nodes = {n.node_id: n for n in db.query(TcNetworkNode).filter(TcNetworkNode.region == region).all()}
     
-    # Clear region data for full reload
-    db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).delete()
-    db.query(TcNetworkNode).filter(TcNetworkNode.region == region).delete()
-    db.query(TcProjectEntry).filter(TcProjectEntry.region == region).delete()
-    
-    # Insert unique global nodes
+    # Upsert unique global nodes
     for n in topology["nodes"]:
-        node = TcNetworkNode(
-            region=region,
-            node_id=n.get("id"),
-            label=n.get("label"),
-            type=n.get("type"),
-            status=n.get("status"),
-            x=n.get("x"),
-            y=n.get("y")
-        )
-        db.add(node)
+        n_id = n.get("id")
+        if n_id in existing_nodes:
+            node = existing_nodes[n_id]
+            node.label = n.get("label")
+            node.type = n.get("type")
+            node.status = n.get("status")
+            node.x = n.get("x")
+            node.y = n.get("y")
+        else:
+            node = TcNetworkNode(
+                region=region,
+                node_id=n_id,
+                label=n.get("label"),
+                type=n.get("type"),
+                status=n.get("status"),
+                x=n.get("x"),
+                y=n.get("y")
+            )
+            db.add(node)
+            
+    existing_entries = {(pe.mapping_id, pe.block): pe for pe in db.query(TcProjectEntry).filter(TcProjectEntry.region == region).all()}
+    existing_edges = {(e.mapping_id, e.edge_id): e for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()}
+    
+    seen_entry_keys = set()
+    seen_edge_keys = set()
         
     # 2. Iterate over all mapped projects for precise Edge and Block mapping
     mappings = db.query(ProjectMapping).filter(ProjectMapping.project_id.isnot(None)).all()
     
+    from models import Notification
+
     for pm in mappings:
         pid = pm.project_id
         if not pid: continue
@@ -128,26 +133,42 @@ def sync_region_data(db: Session, token: str, region: str):
         metadata = p_data.get("metadata", {})
         all_entries = metadata.get("rows", [])
         
+        # Save rich progress metrics natively to the DB
+        pm.tc_progress = p_data.get("progress", {})
+        
         for entry in all_entries:
-            pe = TcProjectEntry(
-                region=region,
-                project=entry.get("project"),
-                phase=entry.get("phase"),
-                kps=entry.get("kps"),
-                pss=entry.get("pss"),
-                block=entry.get("block"),
-                breakup=str(entry.get("breakup")),
-                mw=str(entry.get("mw")),
-                mapping_id=pm.id
-            )
-            db.add(pe)
+            block = entry.get("block")
+            key = (pm.id, block)
+            seen_entry_keys.add(key)
+            if key in existing_entries:
+                pe = existing_entries[key]
+                pe.project = entry.get("project")
+                pe.phase = entry.get("phase")
+                pe.kps = entry.get("kps")
+                pe.pss = entry.get("pss")
+                pe.breakup = str(entry.get("breakup"))
+                pe.mw = str(entry.get("mw"))
+            else:
+                pe = TcProjectEntry(
+                    region=region,
+                    project=entry.get("project"),
+                    phase=entry.get("phase"),
+                    kps=entry.get("kps"),
+                    pss=entry.get("pss"),
+                    block=block,
+                    breakup=str(entry.get("breakup")),
+                    mw=str(entry.get("mw")),
+                    mapping_id=pm.id
+                )
+                db.add(pe)
             
         # Insert precisely mapped edges (lines), utilizing global topology for from/to
         lines = p_data.get("lines", [])
-        from models import Notification
         
         for e in lines:
             edge_id = e.get("id")
+            key = (pm.id, edge_id)
+            seen_edge_keys.add(key)
             
             # Lookup topology from global fetch
             global_edge = topology["edges"].get(edge_id, {})
@@ -156,52 +177,104 @@ def sync_region_data(db: Session, token: str, region: str):
             new_date = e.get("expected_date")
             new_contractor = e.get("contractor")
             
-            old_edge = existing_edges.get(edge_id)
-            if old_edge:
-                if old_edge["status"] and old_edge["status"] != new_status:
+            if key in existing_edges:
+                edge = existing_edges[key]
+                
+                is_currently_delayed = e.get("is_delayed", False)
+                is_in_progress = e.get("normalized_status") == 'in_progress'
+
+                if edge.status and edge.status != new_status:
                     db.add(Notification(
                         project_name=pm.project,
                         module="Transmission",
                         change_type="Status Update",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' status changed from '{old_edge['status']}' to '{new_status}'"
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' status changed from '{edge.status}' to '{new_status}'"
                     ))
-                
-                if old_edge["expected_date"] and old_edge["expected_date"] != new_date:
-                    db.add(Notification(
-                        project_name=pm.project,
-                        module="Transmission",
-                        change_type="Date Delay",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' expected date changed from '{old_edge['expected_date']}' to '{new_date}'"
-                    ))
-                    
-                if old_edge["contractor"] and old_edge["contractor"] != new_contractor:
+                if edge.expected_date and edge.expected_date != new_date:
+                    if is_currently_delayed and is_in_progress:
+                        db.add(Notification(
+                            project_name=pm.project,
+                            module="Transmission",
+                            change_type="COD Delay",
+                            message=f"Transmission Delay Warning: Line '{e.get('from_label')} to {e.get('to_label')}' ECOD slipped from '{edge.expected_date}' to '{new_date}'. SCOD is '{e.get('scd')}'.",
+                            block=e.get("from_label")
+                        ))
+                    else:
+                        db.add(Notification(
+                            project_name=pm.project,
+                            module="Transmission",
+                            change_type="Date Delay",
+                            message=f"Line '{e.get('from_label')} to {e.get('to_label')}' expected date changed from '{edge.expected_date}' to '{new_date}'"
+                        ))
+                if edge.contractor and edge.contractor != new_contractor:
                     db.add(Notification(
                         project_name=pm.project,
                         module="Transmission",
                         change_type="Contractor Change",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' contractor changed from '{old_edge['contractor']}' to '{new_contractor}'"
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' contractor changed from '{edge.contractor}' to '{new_contractor}'"
+                    ))
+                    
+                edge.from_node = global_edge.get("from")
+                edge.from_label = e.get("from_label")
+                edge.to_node = global_edge.get("to")
+                edge.to_label = e.get("to_label")
+                edge.projects = json.dumps({"projects": global_edge.get("project", []), "phases": global_edge.get("phases", [])})
+                edge.contractor = new_contractor
+                edge.voltage = e.get("voltage")
+                edge.length = str(e.get("length") or global_edge.get("length"))
+                edge.status = new_status
+                edge.normalized_status = e.get("normalized_status")
+                edge.erection = e.get("erection")
+                edge.foundation = e.get("foundation")
+                edge.stringing = e.get("stringing")
+                edge.expected_date = new_date
+                edge.scd = e.get("scd")
+                edge.charged_date = e.get("charged_date")
+                edge.is_delayed = e.get("is_delayed", False)
+            else:
+                edge = TcNetworkEdge(
+                    region=region,
+                    edge_id=edge_id,
+                    from_node=global_edge.get("from"),
+                    from_label=e.get("from_label"),
+                    to_node=global_edge.get("to"),
+                    to_label=e.get("to_label"),
+                    projects=json.dumps({"projects": global_edge.get("project", []), "phases": global_edge.get("phases", [])}),
+                    contractor=new_contractor,
+                    voltage=e.get("voltage"),
+                    length=str(e.get("length") or global_edge.get("length")),
+                    status=new_status,
+                    normalized_status=e.get("normalized_status"),
+                    erection=e.get("erection"),
+                    foundation=e.get("foundation"),
+                    stringing=e.get("stringing"),
+                    expected_date=new_date,
+                    scd=e.get("scd"),
+                    charged_date=e.get("charged_date"),
+                    is_delayed=e.get("is_delayed", False),
+                    mapping_id=pm.id
+                )
+                db.add(edge)
+                
+                is_currently_delayed = e.get("is_delayed", False)
+                is_in_progress = e.get("normalized_status") == 'in_progress'
+                if is_currently_delayed and is_in_progress:
+                    db.add(Notification(
+                        project_name=pm.project,
+                        module="Transmission",
+                        change_type="COD Delay",
+                        message=f"Transmission Delay Warning: Line '{e.get('from_label')} to {e.get('to_label')}' ECOD ({new_date}) is higher than SCOD ({e.get('scd')}).",
+                        block=e.get("from_label")
                     ))
                 
-            edge = TcNetworkEdge(
-                region=region,
-                edge_id=edge_id,
-                from_node=global_edge.get("from"),
-                from_label=e.get("from_label"),
-                to_node=global_edge.get("to"),
-                to_label=e.get("to_label"),
-                projects=json.dumps({"projects": global_edge.get("project", []), "phases": global_edge.get("phases", [])}),
-                contractor=e.get("contractor"),
-                voltage=e.get("voltage"),
-                length=str(e.get("length") or global_edge.get("length")),
-                status=new_status,
-                normalized_status=e.get("normalized_status"),
-                erection=e.get("erection"),
-                foundation=e.get("foundation"),
-                stringing=e.get("stringing"),
-                expected_date=e.get("expected_date"),
-                mapping_id=pm.id
-            )
-            db.add(edge)
+    # Delete stale edges and entries
+    for key, pe in existing_entries.items():
+        if key not in seen_entry_keys:
+            db.delete(pe)
+            
+    for key, e in existing_edges.items():
+        if key not in seen_edge_keys:
+            db.delete(e)
             
     db.commit()
     logger.info(f"Synced {region} Data")

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger, JSON
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -355,7 +355,8 @@ class ProjectMapping(Base):
     cluster = Column(String)                        # 'Cluster'
     not_allocated = Column(String)                  # 'Not Allocated'
     source_of_origin = Column(String, nullable=True)
-    priority = Column(String, nullable=True)# ------------------------------------------
+    priority = Column(String, nullable=True)
+    tc_progress = Column(JSON, nullable=True)  # Added for rich transmission data# ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------
 
@@ -417,6 +418,9 @@ class TcNetworkEdge(Base):
     foundation = Column(String)
     stringing = Column(String)
     expected_date = Column(String)
+    scd = Column(String)
+    charged_date = Column(String)
+    is_delayed = Column(Boolean)
     
     # Optional mapping to a primary global project if possible, though edges often span multiple projects
     mapping_id = Column(Integer, ForeignKey("project_mapping.id"), nullable=True)
@@ -450,6 +454,7 @@ class P6Activity(Base):
     percent_complete = Column(Float, nullable=True)
     
     total_float = Column(Float, nullable=True)
+    is_critical = Column(Boolean, nullable=True)
     
     wbs_object_id = Column(BigInteger, nullable=True)
     wbs_name = Column(String, nullable=True)
@@ -478,6 +483,22 @@ class P6ResourceAssignment(Base):
     last_synced_at = Column(DateTime, default=datetime.utcnow)
 
     activity = relationship("P6Activity", backref="resource_assignments")
+
+class P6ActivityRisk(Base):
+    __tablename__ = "p6_activity_risk"
+
+    id = Column(Integer, primary_key=True, index=True)
+    activity_object_id = Column(BigInteger, ForeignKey("p6_activity.p6_object_id"), index=True, nullable=False)
+    project_object_id = Column(BigInteger, ForeignKey("p6_project.p6_object_id"), index=True, nullable=False)
+    
+    risk_id = Column(String, index=True)
+    risk_name = Column(String)
+    risk_object_id = Column(BigInteger)
+    
+    activity_id = Column(String)
+    activity_name = Column(String)
+    
+    last_synced_at = Column(DateTime, default=datetime.utcnow)
 
 # ==========================================
 # Notification Model

@@ -1,8 +1,33 @@
 import React, { useState } from 'react';
-import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, X, Filter } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, Filter, Play, Sparkles } from 'lucide-react';
 
-export default function NotificationDropdown({ notifications, onClose, onMarkAllRead, onSelectNotification }: any) {
+export default function NotificationDropdown({ notifications, onClose, onMarkAllRead, onSimulate }: any) {
   const [activeTab, setActiveTab] = useState('All');
+  const [aiSuggestions, setAiSuggestions] = useState<{[key: number]: string}>({});
+  const [loadingSuggestion, setLoadingSuggestion] = useState<number | null>(null);
+
+  const fetchAISuggestion = async (e: React.MouseEvent, n: any) => {
+    e.stopPropagation();
+    if (aiSuggestions[n.id]) return;
+    setLoadingSuggestion(n.id);
+    try {
+      const res = await fetch('/akasha/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: `Provide a very short, one sentence concrete suggestion to resolve this project issue: "${n.message}". Focus on actionable operational recovery (like fast-tracking, resources, etc). Be direct and extremely brief (max 15 words).` })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setAiSuggestions(prev => ({ ...prev, [n.id]: data.response || "Fast-track parallel works or assign an extra crew to recover the delay." }));
+      } else {
+        setAiSuggestions(prev => ({ ...prev, [n.id]: "Fast-track parallel works or assign an extra crew to recover the delay." }));
+      }
+    } catch {
+      setAiSuggestions(prev => ({ ...prev, [n.id]: "Fast-track parallel works or assign an extra crew to recover the delay." }));
+    }
+    setLoadingSuggestion(null);
+  };
+
   const tabs = ['All', 'Scope', 'COD', 'Trials', 'Dates'];
 
   const filteredNotifs = activeTab === 'All' 
@@ -59,8 +84,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
           filteredNotifs.map((n: any) => (
             <div 
               key={n.id} 
-              className={`p-4 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all cursor-pointer group relative bg-white dark:bg-gray-900 ${n.is_read ? 'opacity-70' : ''}`}
-              onClick={() => onSelectNotification(n)}
+              className={`p-4 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all group relative bg-white dark:bg-gray-900 ${n.is_read ? 'opacity-70' : ''}`}
             >
               {!n.is_read && (
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-sky-500 rounded-r-full" />
@@ -71,36 +95,69 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                   {getIcon(n.change_type)}
                 </div>
                 
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1">
-                    <span className="font-bold text-[13px] text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-500 transition-colors">{n.project_name}</span>
-                    <span className="text-[10px] font-medium text-gray-500 whitespace-nowrap bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded-full">
+                <div className="flex-1 min-w-0 flex flex-col gap-2.5 mt-0.5">
+                  <div className="flex justify-between items-start">
+                    <span className="font-bold text-[14px] text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 transition-colors tracking-tight">{n.project_name}</span>
+                    <span className="text-[10px] font-semibold text-gray-500 whitespace-nowrap bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-2 py-0.5 rounded-full shrink-0 shadow-sm mt-0.5">
                       {new Date(n.created_at).toLocaleDateString()}
                     </span>
                   </div>
-                  
-                  {n.block && <div className="text-[11px] font-bold text-sky-500/80 mb-1 tracking-wider uppercase">{n.block}</div>}
-                  {n.activity_name && <div className="text-[12px] font-medium mb-2 truncate text-gray-900 dark:text-white">{n.activity_name}</div>}
-                  
-                  {/* Values Highlight */}
-                  {n.old_value && n.new_value && (
-                    <div className="flex items-center gap-2 mb-2 text-[12px] bg-gray-50 dark:bg-gray-800 p-2 rounded-lg border border-gray-100 dark:border-gray-700 shadow-sm inline-flex">
-                      <span className="text-red-500 line-through font-semibold">{n.old_value}</span>
-                      <span className="text-gray-400">➔</span>
-                      <span className="text-emerald-500 font-bold">{n.new_value}</span>
-                    </div>
-                  )}
-                  
-                  <p className="text-[12px] text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-2">{n.message}</p>
-                  {n.reason && n.reason !== n.message && n.reason !== 'Activity date updated in Primavera P6.' && (
-                    <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-1 italic">{n.reason}</p>
-                  )}
-                  
-                  {n.action_status === 'Pending' && (
-                    <div className="mt-3 flex gap-2">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-orange-50 dark:bg-orange-500/10 text-orange-600 border border-orange-200 dark:border-orange-500/20 shadow-sm">
-                        Action Required
+
+                  <div className="flex items-center flex-wrap gap-2">
+                    {n.block && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-bold bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 border border-sky-100 dark:border-sky-500/20 shadow-sm">
+                        {n.block}
                       </span>
+                    )}
+                    {n.activity_name && (
+                      <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[11px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 truncate max-w-full shadow-sm">
+                        {n.activity_name}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="p-3 rounded-xl bg-gray-50 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/50 mt-1 shadow-sm">
+                    <p className="text-[13px] text-gray-700 dark:text-gray-200 leading-relaxed font-medium">
+                      {n.message}
+                    </p>
+                  </div>
+                  
+                  {/* Actions & AI Suggestions */}
+                  {(n.change_type?.includes('Delay') || n.message?.toLowerCase().includes('delay') || n.change_type?.includes('Critical')) && (
+                    <div className="mt-3 flex flex-col gap-2">
+                      <div className="flex gap-2">
+                        {onSimulate && (
+                          <button 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onSimulate(n.project_name, n);
+                            }}
+                            className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold text-[11px] uppercase tracking-widest border border-sky-200 dark:border-sky-500/20 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors shadow-sm"
+                          >
+                            <Play className="w-3.5 h-3.5" /> Simulate
+                          </button>
+                        )}
+                        <button 
+                          onClick={(e) => fetchAISuggestion(e, n)}
+                          disabled={loadingSuggestion === n.id}
+                          className="flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[11px] uppercase tracking-widest border border-purple-200 dark:border-purple-500/20 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors shadow-sm disabled:opacity-50"
+                        >
+                          <Sparkles className="w-3.5 h-3.5" /> 
+                          {loadingSuggestion === n.id ? 'Thinking...' : 'AI Suggestion'}
+                        </button>
+                      </div>
+
+                      {aiSuggestions[n.id] && (
+                        <div className="p-3 mt-1 rounded-xl bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 relative overflow-hidden">
+                          <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
+                          <div className="flex gap-2 items-start">
+                            <Sparkles className="w-4 h-4 text-purple-500 mt-0.5 shrink-0" />
+                            <p className="text-[12px] text-purple-900 dark:text-purple-100 font-medium leading-relaxed">
+                              {aiSuggestions[n.id]}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
