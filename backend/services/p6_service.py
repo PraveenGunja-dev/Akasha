@@ -921,6 +921,32 @@ class P6Service:
         except Exception as e:
             logger.error(f"Error calculating Trial-COD gap: {e}")
 
+        # Recalculate Project Activity Counts
+        try:
+            from models import P6Project, P6Activity
+            logger.info("Recalculating project activity counts from synced activities...")
+            if project_object_id:
+                projects = db.query(P6Project).filter(P6Project.p6_object_id == project_object_id).all()
+            else:
+                projects = db.query(P6Project).all()
+                
+            for p in projects:
+                activities = db.query(P6Activity).filter_by(project_object_id=p.p6_object_id).all()
+                if not activities: continue
+                total = len(activities)
+                completed = sum(1 for a in activities if a.status == 'Completed')
+                in_progress = sum(1 for a in activities if a.status == 'In Progress')
+                not_started = sum(1 for a in activities if a.status == 'Not Started')
+                p.activity_count = total
+                p.completed_activity_count = completed
+                p.in_progress_activity_count = in_progress
+                p.not_started_activity_count = not_started
+                if total > 0:
+                    p.duration_percent_complete = (completed / total)
+            db.commit()
+        except Exception as e:
+            logger.error(f"Error recalculating activity counts: {e}")
+
         logger.info(f"Successfully synced {synced_count} activities to database")
         return synced_count
 

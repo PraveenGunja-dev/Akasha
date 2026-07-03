@@ -90,7 +90,7 @@ def call_groq(messages, temperature, max_tokens, json_response=False):
     
     kwargs = {
         "messages": messages,
-        "model": "llama3-70b-8192",
+        "model": "llama-3.3-70b-versatile",
         "temperature": temperature,
         "max_tokens": max_tokens
     }
@@ -535,12 +535,36 @@ Your strategies MUST directly address recovering from this specific issue."""
     if req.all_notifications:
         notif_str += f"\n\nAll recent project notifications:\n{json.dumps(req.all_notifications[:10], indent=2, default=str)[:2000]}"
 
+    # Deep Context extraction for LLM
+    import models
+    historical_str = "\n\nDEEP PROJECT CONTEXT & HISTORY:\n"
+    past_delays = db.query(models.Notification).filter(
+        models.Notification.project_name == project_name,
+        models.Notification.change_type.in_(["Date Delay", "Critical Slip", "Delay"])
+    ).order_by(models.Notification.created_at.desc()).limit(5).all()
+    
+    if past_delays:
+        historical_str += "Past Delays & COD shifts:\n"
+        for pd in past_delays:
+            historical_str += f"- {pd.created_at.strftime('%Y-%m-%d')}: {pd.change_type} on {pd.activity_name or 'Project'} - {pd.message}\n"
+    else:
+        historical_str += "No significant historical delays found.\n"
+        
+    proj_map = db.query(models.ProjectMapping).filter(
+        (models.ProjectMapping.project == project_name) | 
+        (models.ProjectMapping.project_name_from_p6 == project_name) |
+        (models.ProjectMapping.project_id == project_name)
+    ).first()
+    if proj_map:
+        historical_str += f"Project Specs: Category={proj_map.category}, Capacity={proj_map.capacity_mwac} MW, SPV={proj_map.spv_name}\n"
+
     # 2. Get LLM to propose 3 strategy permutations based on user constraints
     prompt = f"""You are the AKASHA AI Strategy Engine. The user wants to run a "What-If" simulation with the following parameters:
 {json.dumps(req.constraints, indent=2)}
 {notif_str}
+{historical_str}
 
-Generate 3 distinct strategy options based on these constraints. 
+Analyze the historical trends and the specific alert to generate 3 highly targeted strategy options based on these constraints. 
 For example:
 - Strategy 1: Strictly follow the user's requested parameters.
 - Strategy 2: More aggressive (e.g., add more crews if weather is bad).
@@ -571,7 +595,7 @@ IMPORTANT: You do NOT provide cost or time impact. The deterministic Monte Carlo
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=2000, json_response=True)
         else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=2000, json_response=True)
+            content = call_groq(messages, temperature=0.2, max_tokens=2000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()

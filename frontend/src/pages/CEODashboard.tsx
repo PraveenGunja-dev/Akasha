@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
+import { X } from 'lucide-react';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
 
@@ -40,11 +41,20 @@ export default function CEODashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [selectedProject, setSelectedProject] = useState<string>("All");
   const [simulationContext, setSimulationContext] = useState<any>(null);
+  const [modalSimulationContext, setModalSimulationContext] = useState<any>(null);
 
   const [dashboardData, setDashboardData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   const location = useLocation();
+
+  // Load saved tab from session storage or default to 'overview'
+  useEffect(() => {
+    const savedTab = sessionStorage.getItem('ceoActiveTab');
+    if (savedTab && implementedModules.includes(savedTab)) {
+      setActiveTab(savedTab);
+    }
+  }, []);
 
   // Reset project when returning to root dashboard via explicit back button
   useEffect(() => {
@@ -133,9 +143,12 @@ export default function CEODashboard() {
 
   const handleNavigateToSimulation = (projId: string, context?: any) => {
     setSelectedProject(projId);
-    if (context) setSimulationContext(context);
-    setActiveTab('simulation_lab');
-    sessionStorage.setItem('ceoActiveTab', 'simulation_lab');
+    if (context) {
+      setModalSimulationContext(context);
+    } else {
+      setActiveTab('simulation_lab');
+      sessionStorage.setItem('ceoActiveTab', 'simulation_lab');
+    }
   };
 
   const handleSyncData = async () => {
@@ -192,6 +205,9 @@ export default function CEODashboard() {
       setPreviousTab(activeTab);
       setActiveTab(tab);
       sessionStorage.setItem('ceoActiveTab', tab);
+      if (tab !== 'simulation_lab') {
+        setSimulationContext(null);
+      }
       if (projectId) {
         navigate('/dashboard');
       }
@@ -312,6 +328,28 @@ export default function CEODashboard() {
             setIsCopilotOpen(false);
           }} 
         />
+      )}
+      
+      {/* 5. Notification Simulation Modal */}
+      {modalSimulationContext && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-8">
+          <div className="bg-[var(--background)] w-full h-full max-w-[1400px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200 dark:border-gray-800">
+            <button 
+              onClick={() => setModalSimulationContext(null)}
+              className="absolute top-4 right-4 z-[110] p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500"
+            >
+              <X className="w-5 h-5" />
+            </button>
+            <div className="flex-1 overflow-hidden w-full h-full relative p-6 md:p-8">
+              <SimulationLab 
+                p6Data={p6Data} 
+                dashboardData={dashboardData} 
+                initialProject={selectedProject} 
+                simulationContext={modalSimulationContext} 
+              />
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

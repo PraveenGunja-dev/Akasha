@@ -1,10 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 from database import get_db
 import models
 from services.p6_service import P6Service
 from typing import Dict, Any, Optional
+import sys
+import os
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from tasks.ai_suggestion_task import populate_missing_ai_suggestions_bg
 
 router = APIRouter(prefix="/api/notifications", tags=["Notifications"])
 
@@ -18,8 +22,17 @@ class PushPayload(BaseModel):
     delete_thread: bool = False
 
 @router.get("/")
-def get_notifications(db: Session = Depends(get_db)):
-    notifs = db.query(models.Notification).order_by(models.Notification.created_at.desc()).limit(500).all()
+def get_notifications(background_tasks: BackgroundTasks, skip: int = 0, limit: int = 50, tab: str = "All", db: Session = Depends(get_db)):
+    query = db.query(models.Notification)
+    if tab != "All":
+        if tab == "Transmission":
+            query = query.filter(models.Notification.module == "Transmission")
+        else:
+            query = query.filter(models.Notification.category == tab)
+            
+    notifs = query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    # Trigger background task to populate any missing AI suggestions
+    background_tasks.add_task(populate_missing_ai_suggestions_bg)
     return notifs
 
 @router.post("/{notification_id}/read")
@@ -44,6 +57,24 @@ def update_action_status(notification_id: int, status: str, db: Session = Depend
         db.commit()
         return {"status": "success"}
     raise HTTPException(status_code=404, detail="Notification not found")
+
+@router.get("/{notification_id}/ai-suggestion")
+def get_ai_suggestion(notification_id: int, db: Session = Depends(get_db)):
+    notif = db.query(models.Notification).filter(models.Notification.id == notification_id).first()
+    if not notif:
+        raise HTTPException(status_code=404, detail="Notification not found")
+        
+    if notif.ai_suggestion:
+        return {"suggestion": notif.ai_suggestion}
+        
+    # Generate synchronously if missing
+    from tasks.ai_suggestion_task import generate_ai_suggestion_for_notification
+    generate_ai_suggestion_for_notification(notification_id)
+    
+    # Reload from DB
+    db.refresh(notif)
+    fallback = "Fast-track parallel works or assign an extra crew to recover the delay."
+    return {"suggestion": notif.ai_suggestion or fallback}
 
 @router.get("/{notification_id}/thread")
 def get_thread(notification_id: int, db: Session = Depends(get_db)):

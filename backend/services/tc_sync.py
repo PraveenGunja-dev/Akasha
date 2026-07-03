@@ -188,7 +188,8 @@ def sync_region_data(db: Session, token: str, region: str):
                         project_name=pm.project,
                         module="Transmission",
                         change_type="Status Update",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' status changed from '{edge.status}' to '{new_status}'"
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' status changed from '{edge.status}' to '{new_status}'",
+                        category="Dates"
                     ))
                 if edge.expected_date and edge.expected_date != new_date:
                     if is_currently_delayed and is_in_progress:
@@ -197,21 +198,24 @@ def sync_region_data(db: Session, token: str, region: str):
                             module="Transmission",
                             change_type="COD Delay",
                             message=f"Transmission Delay Warning: Line '{e.get('from_label')} to {e.get('to_label')}' ECOD slipped from '{edge.expected_date}' to '{new_date}'. SCOD is '{e.get('scd')}'.",
-                            block=e.get("from_label")
+                            block=e.get("from_label"),
+                            category="COD"
                         ))
                     else:
                         db.add(Notification(
                             project_name=pm.project,
                             module="Transmission",
                             change_type="Date Delay",
-                            message=f"Line '{e.get('from_label')} to {e.get('to_label')}' expected date changed from '{edge.expected_date}' to '{new_date}'"
+                            message=f"Line '{e.get('from_label')} to {e.get('to_label')}' expected date changed from '{edge.expected_date}' to '{new_date}'",
+                            category="Dates"
                         ))
                 if edge.contractor and edge.contractor != new_contractor:
                     db.add(Notification(
                         project_name=pm.project,
                         module="Transmission",
                         change_type="Contractor Change",
-                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' contractor changed from '{edge.contractor}' to '{new_contractor}'"
+                        message=f"Line '{e.get('from_label')} to {e.get('to_label')}' contractor changed from '{edge.contractor}' to '{new_contractor}'",
+                        category="Scope"
                     ))
                     
                 edge.from_node = global_edge.get("from")

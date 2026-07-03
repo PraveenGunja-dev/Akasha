@@ -71,6 +71,16 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
     }
   }, [initialProject, projects.length]);
 
+  // Jump to Step 2 if launched from a notification (simulationContext provided)
+  useEffect(() => {
+    if (simulationContext) {
+      setActiveStep(2);
+      if (simulationContext.message) {
+        setCustomScenario(`Address delay: ${simulationContext.message}`);
+      }
+    }
+  }, [simulationContext]);
+
   // Step 2 What-If Parameters
   const [recoveryPriority, setRecoveryPriority] = useState('Balanced');
   const [weatherMonsoon, setWeatherMonsoon] = useState('Normal');
@@ -162,7 +172,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
       setCustomScenario(prompt);
 
       if (activeStep === 1 && !isScanning && !showResults) {
-        setAutoRunPending(true);
+        // Skip detection step and immediately jump to Strategies generation based on the notification
+        setActiveStep(2);
+        
+        // Use a short timeout to ensure state is settled before calling the API
+        setTimeout(() => {
+          generateStrategies();
+        }, 300);
       }
     }
   }, [simulationContext]);
@@ -179,14 +195,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
 
   // Weather Auto-Fetch Effect
   useEffect(() => {
-    // Reset simulation state when project changes
-    setActiveStep(1);
-    setIsScanning(false);
-    setShowResults(false);
-    setSimulationData(null);
-    setStrategies([]);
-    setSelectedStrategyId(null);
-    
+    // Reset simulation state when project changes (unless handling a notification)
+    if (!simulationContext) {
+      setActiveStep(1);
+      setIsScanning(false);
+      setShowResults(false);
+      setSimulationData(null);
+      setStrategies([]);
+      setSelectedStrategyId(null);
+    }
     if (!selectedProject || selectedProject === 'All') {
       setWeatherData(null);
       return;
@@ -323,6 +340,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
       setIsGeneratingStrategies(false);
     }
   };
+
+  // Auto-generate strategies if triggered by notification
+  useEffect(() => {
+    if (activeStep === 2 && simulationContext && strategies.length === 0 && !isGeneratingStrategies) {
+      generateStrategies();
+    }
+  }, [activeStep, simulationContext]);
 
   // ==========================================
   // STEP 3: SIMULATE
@@ -575,7 +599,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto pb-20 scrollbar-hide">
+      <div className="flex-1 overflow-y-auto pb-20 pr-2">
         <div className="w-full space-y-6">
 
           {/* ========================================== */}
@@ -933,10 +957,11 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                 <div>
                   <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 block">Custom Scenario</label>
                   <textarea
+                    rows={3}
                     placeholder="e.g. What if module delivery is delayed by 3 weeks?"
                     value={customScenario}
                     onChange={e => setCustomScenario(e.target.value)}
-                    className="w-full bg-muted/50 border border-border rounded-lg p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none h-16 placeholder:text-muted-foreground/50"
+                    className="w-full bg-muted/50 border border-border rounded-lg p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground/50"
                   />
                 </div>
               </div>

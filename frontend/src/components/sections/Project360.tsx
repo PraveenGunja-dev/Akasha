@@ -558,11 +558,12 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   // ── Filtering ──
   const filtered = data
     .filter(d => {
+      const searchLower = searchTerm.toLowerCase();
       const matchesSearch =
-        d.projectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.projectId.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.sapPlantCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        d.primaryIssue.toLowerCase().includes(searchTerm.toLowerCase());
+        (d.projectName?.toLowerCase().includes(searchLower) ?? false) ||
+        (d.projectId?.toLowerCase().includes(searchLower) ?? false) ||
+        (d.sapPlantCode?.toLowerCase().includes(searchLower) ?? false) ||
+        (d.primaryIssue?.toLowerCase().includes(searchLower) ?? false);
       const matchesStatus = statusFilter === 'All' || d.statusTier === statusFilter;
       const matchesRisk = riskFilters.length === 0 || riskFilters.some(rf => d.riskCategories.includes(rf));
       return matchesSearch && matchesStatus && matchesRisk;
@@ -736,7 +737,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
           </div>
           <div className="flex flex-col">
             {filtered.map((project, index) => (
-              <div key={project.projectId} className="animate-in fade-in" style={{ animationDelay: `${index * 30}ms` }}>
+              <div key={`${project.projectId}-${index}`} className="animate-in fade-in" style={{ animationDelay: `${index * 30}ms` }}>
                 <ProjectRow project={project} onOpen={handleOpenProject} />
               </div>
             ))}

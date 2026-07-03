@@ -527,8 +527,10 @@ class Notification(Base):
     p6_object_id = Column(BigInteger, nullable=True)
     p6_type = Column(String, nullable=True) # Activity, Project, ResourceAssignment
     
+    ai_suggestion = Column(String, nullable=True) # Pre-generated AI suggestion for the notification
+    
     is_read = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, index=True, default=datetime.utcnow)
     
     threads = relationship("NotificationThread", back_populates="notification", cascade="all, delete-orphan")
 

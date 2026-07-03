@@ -13,9 +13,11 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const { user, logout } = useAuth();
 
   const [notifications, setNotifications] = useState<any[]>([]);
+  const [hasMoreNotifs, setHasMoreNotifs] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const LIMIT = 50;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -28,21 +30,28 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   }, []);
   const unreadCount = notifications.filter(n => n.action_status === 'Pending').length;
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = async (reset = false) => {
     try {
-      const res = await fetch('/akasha/api/notifications/');
+      const currentSkip = reset ? 0 : notifications.length;
+      const res = await fetch(`/akasha/api/notifications/?skip=${currentSkip}&limit=${LIMIT}`);
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        if (data.length < LIMIT) setHasMoreNotifs(false);
+        else setHasMoreNotifs(true);
+        setNotifications(prev => reset ? data : [...prev, ...data]);
       }
     } catch (e) {
       console.error('Failed to fetch notifications:', e);
     }
   };
 
+  const loadMoreNotifications = () => {
+    fetchNotifications(false);
+  };
+
   useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 60000);
+    fetchNotifications(true);
+    const interval = setInterval(() => fetchNotifications(true), 60000);
     return () => clearInterval(interval);
   }, []);
 
@@ -118,6 +127,8 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
                 <NotificationDropdown 
                     notifications={notifications}
                     onClose={() => setShowNotifications(false)}
+                    onLoadMore={loadMoreNotifications}
+                    hasMore={hasMoreNotifs}
                     onSimulate={(projId: string, context?: any) => {
                         setShowNotifications(false);
                         if (onNavigateToSimulation) onNavigateToSimulation(projId, context);
