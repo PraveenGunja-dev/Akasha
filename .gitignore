@@ -30,3 +30,8 @@ dist-ssr/
 .agents/
 
 backend/test/
+Data/
+*.xlsx
+*.csv
+*.pptx
+*.docx
