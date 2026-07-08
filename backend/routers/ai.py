@@ -149,7 +149,7 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
             project_data = calculate_project_360_metrics(db)
             context_str = "Live Portfolio Context (Top 5 Riskiest Projects):\n"
             for p in project_data[:5]:
-                context_str += f"- Project {p['projectName']}: Health={p['health']}, SPI={p['spi']}, CPI={p['cpi']}, RiskScore={p['riskScore']}, Issue={p['keyIssue']}\n"
+                context_str += f"- Project {p['projectName']}: Health={p['health']}, SPI={p['spi']}, CPI={p['cpi']}, Issue={p['keyIssue']}\n"
     except Exception as e:
         context_str = f"Context unavailable. Error: {str(e)}"
 

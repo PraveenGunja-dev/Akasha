@@ -38,6 +38,63 @@ def filter_tc_edges_by_kps(edges, project_entries):
             touching_edges.append(edge)
     return touching_edges if touching_edges else edges
 
+def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
+    if not p6_proj:
+        return 1.0, 1.0
+        
+    if not mapping:
+        mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == p6_proj.project_id).first()
+        
+    budget_inr = 0.0
+    expenditure_inr = 0.0
+    
+    if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
+        wbs_exact = str(mapping.module_wbs).strip()
+        pos = db.query(models.MTPOAmount).filter(models.MTPOAmount.wbs_element == wbs_exact).all()
+        po_materials = set()
+        for po in pos:
+            budget_inr += (po.net_order_value_inr or 0.0)
+            if po.material_code:
+                mat_str = str(po.material_code).strip().lstrip('0')
+                if mat_str:
+                    po_materials.add(mat_str)
+                    
+        mb51 = db.query(models.MTMaterialDocument).filter(models.MTMaterialDocument.wbs_element == wbs_exact).all()
+        for rec in mb51:
+            mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
+            if not mapping.module_wbs and mat_str not in po_materials:
+                continue
+            expenditure_inr -= (rec.amount_in_lc or 0.0)
+            
+    total_budget_evm = budget_inr if budget_inr > 0 else (getattr(p6_proj, 'planned_cost', 0) or 0)
+    actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (getattr(p6_proj, 'actual_total_cost', 0) or 0)
+    
+    progress_val = getattr(p6_proj, 'duration_percent_complete', 0) or 0
+    pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
+    
+    planned_pct = pct_complete
+    import datetime
+    today = datetime.datetime.now().date()
+    start_dt = p6_proj.baseline_start_date or p6_proj.start_date
+    finish_dt = p6_proj.baseline_finish_date or p6_proj.scheduled_finish_date or p6_proj.finish_date
+    
+    if start_dt and finish_dt:
+        start_d = start_dt.date() if isinstance(start_dt, datetime.datetime) else start_dt
+        finish_d = finish_dt.date() if isinstance(finish_dt, datetime.datetime) else finish_dt
+        if finish_d > start_d:
+            total_days = (finish_d - start_d).days
+            elapsed_days = (today - start_d).days
+            planned_pct = min(1.0, max(0.0, elapsed_days / total_days))
+            
+    ev = pct_complete * total_budget_evm
+    pv = planned_pct * total_budget_evm
+    ac = actual_cost_evm
+    
+    dynamic_spi = (ev / pv) if pv > 0 else ((pct_complete / planned_pct) if planned_pct > 0 else 1.0)
+    dynamic_cpi = (ev / ac) if ac > 0 else 1.0
+    
+    return dynamic_spi, dynamic_cpi
+
 def calculate_project_360_metrics(db: Session):
     mappings = db.query(models.ProjectMapping).all()
     all_tc_edges = db.query(models.TcNetworkEdge).all()
@@ -64,8 +121,8 @@ def calculate_project_360_metrics(db: Session):
         # 1. P6 Data
         p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
             
-        spi = p6_proj.schedule_performance_index if p6_proj and p6_proj.schedule_performance_index is not None else 1.0
-        cpi = p6_proj.cost_performance_index if p6_proj and p6_proj.cost_performance_index is not None else 1.0
+        spi = 1.0
+        cpi = 1.0
         sched_var = p6_proj.finish_date_variance if p6_proj and p6_proj.finish_date_variance is not None else 0
         cost_var = p6_proj.total_cost_variance if p6_proj and p6_proj.total_cost_variance is not None else 0
         progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
@@ -172,10 +229,40 @@ def calculate_project_360_metrics(db: Session):
             if compare_date:
                 sched_var = (p6_proj.baseline_finish_date - compare_date).days
 
-        # Fallback for SPI if None
-        if p6_proj and spi == 1.0 and p6_proj.schedule_performance_index is None:
-            if p6_proj.actual_duration and p6_proj.planned_duration and p6_proj.actual_duration > 0:
-                spi = p6_proj.planned_duration / p6_proj.actual_duration
+        # ── True EVM Calculation (SPI / CPI) ──
+        total_budget_evm = budget_inr if budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
+        actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
+        pct_complete = (progress / 100.0) if progress > 1.0 else progress
+        
+        planned_pct = pct_complete
+        if p6_proj:
+            import datetime
+            today = datetime.datetime.now().date()
+            start_dt = p6_proj.baseline_start_date or p6_proj.start_date
+            finish_dt = p6_proj.baseline_finish_date or p6_proj.scheduled_finish_date or p6_proj.finish_date
+            if start_dt and finish_dt:
+                start_d = start_dt.date() if isinstance(start_dt, datetime.datetime) else start_dt
+                finish_d = finish_dt.date() if isinstance(finish_dt, datetime.datetime) else finish_dt
+                if finish_d > start_d:
+                    total_days = (finish_d - start_d).days
+                    elapsed_days = (today - start_d).days
+                    planned_pct = min(1.0, max(0.0, elapsed_days / total_days))
+                    
+        ev = pct_complete * total_budget_evm
+        pv = planned_pct * total_budget_evm
+        ac = actual_cost_evm
+        
+        if pv > 0:
+            spi = ev / pv
+        elif planned_pct > 0:
+            spi = pct_complete / planned_pct
+        else:
+            spi = 1.0
+            
+        if ac > 0:
+            cpi = ev / ac
+        else:
+            cpi = 1.0
 
         # ── Multi-dimensional Risk Flags ──
         has_material_risk   = mat_avail < 80 and po_vol > 0
@@ -190,26 +277,17 @@ def calculate_project_360_metrics(db: Session):
         if delay_days > 14 or (has_material_risk and mat_avail < 50) or has_vendor_risk:
             cod_at_risk = True
 
-        # ── Risk Score (0-100) ──
-        base_risk = 0
-        abs_var = abs(sched_var) if sched_var < 0 else 0
-        if abs_var > 0: base_risk += min(40, abs_var)
-        if spi < 1.0: base_risk += (1.0 - spi) * 100
-        if mat_avail < 100 and ordered_qty > 0: base_risk += (100 - mat_avail) * 0.5
-        if has_vendor_risk: base_risk += 15
-        if has_financial_risk: base_risk += 10
-        risk_score = min(100, round(base_risk))
-        health_score = max(0, 100 - risk_score)
+
         
         # ── 5-Tier Status Classification ──
         pct_complete = progress * 100 if progress < 1 else progress
         if pct_complete >= 99:
             status_tier = "Completed"
-        elif risk_score >= 60 or (sched_var < -30 and spi < 0.8) or (mat_avail < 30 and ordered_qty > 0):
+        elif (sched_var < -30 and spi < 0.8) or (mat_avail < 30 and ordered_qty > 0):
             status_tier = "Critical"
-        elif risk_score >= 40 or sched_var < -20 or (mat_avail < 50 and ordered_qty > 0) or has_vendor_risk:
+        elif sched_var < -20 or (mat_avail < 50 and ordered_qty > 0) or has_vendor_risk:
             status_tier = "High Risk"
-        elif risk_score >= 20 or sched_var < -10 or (mat_avail < 80 and ordered_qty > 0):
+        elif sched_var < -10 or (mat_avail < 80 and ordered_qty > 0):
             status_tier = "Watchlist"
         else:
             status_tier = "Healthy"
@@ -346,8 +424,6 @@ def calculate_project_360_metrics(db: Session):
             "inventoryValueINR": inventory_value_inr,
             "costRemainingINR": cost_remaining_inr,
             "materialAvailability": mat_avail,
-            "riskScore": risk_score,
-            "healthScore": health_score,
             "tcEdgesCount": tc_edges_count,
             "integrationCount": sum([1 if p6_proj else 0, 1 if ordered_qty > 0 or inventory_qty > 0 or consumed_qty > 0 else 0, 1 if tc_edges_count > 0 else 0]),
             "forecastFinish": forecast_finish,
@@ -374,7 +450,7 @@ def calculate_project_360_metrics(db: Session):
         })
     # Add unmapped P6 projects logic removed
 
-    return sorted(results, key=lambda x: (x.get('integrationCount', 0), x['riskScore']), reverse=True)
+    return sorted(results, key=lambda x: x.get('integrationCount', 0), reverse=True)
 
 
 def get_project_360_detail(db: Session, project_id: str):
@@ -574,6 +650,32 @@ def get_project_360_detail(db: Session, project_id: str):
 
     material_breakdown = []
 
+    # ── True EVM Calculation (SPI / CPI) ──
+    total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
+    actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
+    progress_val = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
+    pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
+    
+    planned_pct = pct_complete
+    import datetime
+    today = datetime.datetime.now().date()
+    start_dt = p6_proj.baseline_start_date or p6_proj.start_date
+    finish_dt = p6_proj.baseline_finish_date or p6_proj.scheduled_finish_date or p6_proj.finish_date
+    if start_dt and finish_dt:
+        start_d = start_dt.date() if isinstance(start_dt, datetime.datetime) else start_dt
+        finish_d = finish_dt.date() if isinstance(finish_dt, datetime.datetime) else finish_dt
+        if finish_d > start_d:
+            total_days = (finish_d - start_d).days
+            elapsed_days = (today - start_d).days
+            planned_pct = min(1.0, max(0.0, elapsed_days / total_days))
+            
+    ev = pct_complete * total_budget_evm
+    pv = planned_pct * total_budget_evm
+    ac = actual_cost_evm
+    
+    dynamic_spi = (ev / pv) if pv > 0 else ((pct_complete / planned_pct) if planned_pct > 0 else 1.0)
+    dynamic_cpi = (ev / ac) if ac > 0 else 1.0
+
     # ── P6: Full Project Data ──
     p6_full = {
         "projectId": p6_proj.project_id,
@@ -605,8 +707,8 @@ def get_project_360_detail(db: Session, project_id: str):
         # Cost
         "actualTotalCost": p6_proj.actual_total_cost,
         "plannedCost": p6_proj.planned_cost,
-        "cpi": p6_proj.cost_performance_index,
-        "spi": p6_proj.schedule_performance_index,
+        "cpi": round(dynamic_cpi, 2),
+        "spi": round(dynamic_spi, 2),
         "currentBudget": p6_proj.current_budget,
         "totalCostVariance": p6_proj.total_cost_variance,
         # Location

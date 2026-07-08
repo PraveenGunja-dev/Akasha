@@ -110,9 +110,8 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   const steps = [
     { id: 1, label: 'Detect', status: activeStep === 1 ? 'in-progress' : activeStep > 1 ? 'completed' : 'pending' },
     { id: 2, label: 'Strategies', status: activeStep === 2 ? 'in-progress' : activeStep > 2 ? 'completed' : 'pending' },
-    { id: 3, label: 'Simulate', status: activeStep === 3 ? 'in-progress' : activeStep > 3 ? 'completed' : 'pending' },
-    { id: 4, label: 'Execute', status: activeStep === 4 ? 'in-progress' : activeStep > 4 ? 'completed' : 'pending' },
-    { id: 5, label: 'Report', status: activeStep === 5 ? 'in-progress' : activeStep > 5 ? 'completed' : 'pending' },
+    { id: 3, label: 'Execute', status: activeStep === 3 ? 'in-progress' : activeStep > 3 ? 'completed' : 'pending' },
+    { id: 4, label: 'Report', status: activeStep === 4 ? 'in-progress' : activeStep > 4 ? 'completed' : 'pending' },
   ];
 
   // Helpers
@@ -353,7 +352,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   // ==========================================
   const proceedToSimulation = () => {
     setActiveStep(3);
-    setSimulationPhase('config');
+    startActualSimulation();
   };
 
   const startActualSimulation = async () => {
@@ -391,7 +390,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   // STEP 4: EXECUTE
   // ==========================================
   const executeStrategy = async () => {
-    setActiveStep(4);
+    setActiveStep(3);
     setExecutionProgress(0);
     try {
       const projectDetails = getProjectPayload();
@@ -421,7 +420,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   // STEP 5: REPORT
   // ==========================================
   const generateFinalReport = async () => {
-    setActiveStep(5);
+    setActiveStep(4);
     try {
       const projectDetails = getProjectPayload();
       const selStrat = strategies.find(s => s.id === selectedStrategyId) || {};
@@ -569,37 +568,56 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
     <div className="h-full flex flex-col overflow-hidden">
 
       {/* HEADER & STEPS */}
-      <div className="shrink-0 flex flex-col gap-4 pb-4 border-b border-border mb-4">
-        <div className="flex justify-between items-center">
-          <div className="flex items-center gap-2 text-primary font-bold tracking-wide">
-            <Activity className="w-5 h-5" />
-            <h2>SIMULATION LAB</h2>
-          </div>
-          <div className="text-xs text-muted-foreground font-medium uppercase tracking-widest bg-muted px-2 py-1 rounded">Interactive Scenario Planning</div>
+      <div className="shrink-0 flex justify-between items-center pb-4 border-b border-border mb-4">
+        <div className="flex items-center gap-2 text-primary font-bold tracking-wide">
+          <Activity className="w-5 h-5" />
+          <h2>SIMULATION LAB</h2>
         </div>
 
-        <div className="flex items-center gap-1 w-full py-2">
-          {steps.map((step, idx) => (
-            <React.Fragment key={step.id}>
-              <div
-                className={`flex items-center gap-2 px-4 py-2 rounded-full border text-sm font-semibold transition-all ${step.status === 'in-progress' ? 'bg-primary text-primary-foreground border-primary shadow-md' :
-                    step.status === 'completed' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/30' :
-                      'bg-muted/50 text-muted-foreground border-border'
-                  }`}>
-                {step.status === 'completed' ? <CheckCircle2 className="w-4 h-4" /> : <div className="w-4 h-4 rounded-full border-2 border-current flex items-center justify-center text-[10px]">{step.id}</div>}
-                {step.label}
-              </div>
-              {idx < steps.length - 1 && (
-                <div className="flex-1 h-px bg-border flex items-center justify-center">
-                  <ChevronRight className={`w-4 h-4 ${step.status === 'completed' ? 'text-primary' : 'text-muted-foreground/50'}`} />
+        <div className="flex items-center gap-2 p-1.5 rounded-full bg-background/40 backdrop-blur-xl border border-border/50 shadow-sm">
+            {steps.map((step, idx) => {
+              const isActive = step.status === 'in-progress';
+              const isCompleted = step.status === 'completed';
+              
+              return (
+                <div 
+                  key={step.id} 
+                  className={`relative flex items-center justify-center h-10 rounded-full transition-all duration-500 ease-out cursor-pointer ${
+                    isActive 
+                      ? 'px-5 bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]' 
+                      : isCompleted 
+                        ? 'w-10 bg-emerald-500/10 hover:bg-emerald-500/20' 
+                        : 'w-10 bg-transparent hover:bg-muted'
+                  }`}
+                  onClick={() => { if (isCompleted) setActiveStep(step.id); }}
+                >
+                  {/* Icon / Number */}
+                  <div className={`flex items-center justify-center ${isActive ? 'text-white mr-2' : isCompleted ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                    {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-bold">{step.id}</span>}
+                  </div>
+                  
+                  {/* Label (Only visible when active) */}
+                  <div 
+                    className={`overflow-hidden transition-all duration-500 ${
+                      isActive ? 'max-w-[120px] opacity-100' : 'max-w-0 opacity-0'
+                    }`}
+                  >
+                    <span className="text-sm font-bold text-white whitespace-nowrap">
+                      {step.label}
+                    </span>
+                  </div>
+
+                  {/* Connecting Dot (between steps) */}
+                  {idx < steps.length - 1 && !isActive && (
+                    <div className="absolute -right-2 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-border"></div>
+                  )}
                 </div>
-              )}
-            </React.Fragment>
-          ))}
+              );
+            })}
+          </div>
         </div>
-      </div>
 
-      <div className="flex-1 overflow-y-auto pb-20 pr-2" data-lenis-prevent="true">
+      <div className="flex-1 overflow-y-auto pb-20 pr-2" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
         <div className="w-full space-y-6">
 
           {/* ========================================== */}
@@ -674,38 +692,50 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     <input type="text" placeholder={`Search ${projects.length} tracked projects...`} className="w-full bg-muted/50 border border-border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground" />
                   </div>
 
-                  <div className="flex items-center gap-3 overflow-x-auto pb-4 custom-scrollbar">
+                  <div className="flex items-center gap-4 overflow-x-auto pb-4 custom-scrollbar" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                     <div
                       onClick={() => setSelectedProject('All')}
-                      className={`shrink-0 flex items-center gap-2 px-5 py-4 rounded-xl border cursor-pointer transition-all ${selectedProject === 'All' ? 'border-primary bg-primary/5 shadow-sm font-bold text-primary' : 'border-border bg-card hover:bg-muted/50 text-foreground font-semibold'}`}
+                      className={`shrink-0 flex flex-col justify-center items-center gap-2 px-6 h-[96px] min-w-[140px] rounded-2xl border cursor-pointer transition-all relative overflow-hidden ${selectedProject === 'All' ? 'border-primary bg-primary/10 shadow-[0_8px_30px_rgba(79,70,229,0.15)] ring-1 ring-primary/30 text-primary' : 'border-border bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
                     >
-                      <Activity className="w-5 h-5" /> All Projects
+                      {selectedProject === 'All' && <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>}
+                      <Activity className={`w-6 h-6 ${selectedProject === 'All' ? 'text-primary' : ''}`} />
+                      <span className="font-bold text-sm tracking-wide">All Projects</span>
                     </div>
                     {projects.map((p: any) => (
                       <div
                         key={p.id}
                         onClick={() => setSelectedProject(p.id)}
-                        className={`group shrink-0 flex flex-col justify-between gap-3 px-4 py-3.5 rounded-xl border cursor-pointer transition-all min-w-[240px] max-w-[260px] ${selectedProject === p.id ? 'border-primary bg-primary/5 shadow-sm ring-1 ring-primary/30' : 'border-border bg-gradient-to-br from-card to-muted/20 hover:border-primary/40 hover:shadow-sm'}`}
+                        className={`group shrink-0 flex flex-col justify-between p-3.5 h-[96px] rounded-2xl border cursor-pointer transition-all min-w-[260px] max-w-[280px] relative overflow-hidden ${selectedProject === p.id ? 'border-primary bg-primary/5 shadow-[0_8px_30px_rgba(79,70,229,0.12)] ring-1 ring-primary/30' : 'border-border bg-card hover:border-primary/40 hover:shadow-md'}`}
                       >
+                        {/* Active Indicator Line */}
+                        {selectedProject === p.id && <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>}
+
                         <div className="flex items-start justify-between gap-3">
-                          <div className="flex flex-col gap-1 overflow-hidden">
-                            <div className="flex items-center gap-1.5 text-xs font-bold text-muted-foreground/70 uppercase tracking-wider">
-                              {p.critical ? <AlertTriangle className="w-3 h-3 text-red-500 shrink-0" /> : <ShieldAlert className="w-3 h-3 text-amber-500 shrink-0" />}
-                              <span className="truncate">Risk Score: {p.risk}</span>
+                          <div className="flex flex-col overflow-hidden w-full">
+                            <span className="text-[13px] font-extrabold text-foreground truncate group-hover:text-primary transition-colors mb-0.5" title={p.name}>{p.name}</span>
+                            <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
+                              <span className="flex items-center gap-1">
+                                <ShieldAlert className={`w-3 h-3 ${p.critical ? 'text-red-500' : 'text-amber-500'}`} />
+                                Risk: <span className={p.critical ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{p.risk}</span>
+                              </span>
+                              <span className="w-1 h-1 rounded-full bg-border"></span>
+                              <span className={p.critical ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>
+                                SPI: {p.spi}
+                              </span>
                             </div>
-                            <span className="text-sm font-bold text-foreground truncate group-hover:text-primary transition-colors" title={p.name}>{p.name}</span>
                           </div>
-                          <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-1 rounded-md shrink-0 ${p.critical ? 'bg-red-500/15 text-red-600 border border-red-500/20' : 'bg-amber-500/15 text-amber-600 border border-amber-500/20'}`}>
-                            SPI {p.spi}
-                          </span>
                         </div>
-                        <div className="flex items-center justify-between pt-2 border-t border-border/50 mt-1">
+                        
+                        <div className="flex items-center justify-between pt-2 border-t border-border/50">
                           <div className="flex items-center gap-1.5">
-                            <div className={`w-1.5 h-1.5 rounded-full ${p.critical ? 'bg-red-500 animate-pulse' : 'bg-amber-500'}`}></div>
-                            <span className="text-[11px] font-semibold text-muted-foreground">{p.critical ? 'Critical' : 'Warning'}</span>
+                            <div className={`relative flex h-2 w-2`}>
+                              {p.critical && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
+                              <span className={`relative inline-flex rounded-full h-2 w-2 ${p.critical ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{p.critical ? 'Critical Delay' : 'At Risk'}</span>
                           </div>
-                          <span className="flex items-baseline gap-1 text-xs font-bold text-foreground truncate">
-                            <Zap className="w-3 h-3 text-emerald-500 shrink-0" /> <span className="truncate">{p.capacity}</span> <span className="text-[10px] text-muted-foreground/60 font-medium shrink-0">MW</span>
+                          <span className="flex items-baseline gap-1 text-[11px] font-extrabold text-foreground bg-muted/50 px-2 py-0.5 rounded-md">
+                            <Zap className="w-3 h-3 text-emerald-500 shrink-0" /> {p.capacity} <span className="text-[9px] text-muted-foreground">MW</span>
                           </span>
                         </div>
                       </div>
@@ -798,7 +828,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                         <AlertTriangle className="w-5 h-5 text-amber-500" />
                         <h3 className="font-bold text-foreground">Detected Issues</h3>
                       </div>
-                      <div className="p-4 flex-1 overflow-y-auto space-y-4 pr-2">
+                      <div className="p-4 flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                         {simulationData?.issues?.map((issue: any, i: number) => (
                           <div key={i} className={`flex gap-3 p-4 bg-muted/20 hover:bg-muted/50 rounded-xl transition-colors border-l-4 ${issue.severity === 'Critical' ? 'border-red-500' : 'border-amber-500'}`}>
                             <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${issue.severity === 'Critical' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-amber-500'}`}></div>
@@ -819,19 +849,43 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                         <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-muted-foreground border-b border-border pb-2 shrink-0 flex items-center gap-2">
                           <Bell className="w-4 h-4" /> Notification History
                         </h3>
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-3">
-                          {projectNotifications.map((notif: any, i: number) => (
-                            <div key={notif.id || i} className="p-3 bg-muted/30 border border-border rounded-lg flex flex-col gap-1.5">
-                              <div className="flex items-center justify-between">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{new Date(notif.created_at).toLocaleDateString()}</span>
-                                <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-red-500/10 text-red-600' : 'bg-blue-500/10 text-blue-600'}`}>
-                                  {notif.change_type || notif.category}
-                                </span>
-                              </div>
-                              <p className="text-xs font-semibold text-foreground">{notif.activity_name || notif.block}</p>
-                              <p className="text-xs text-muted-foreground line-clamp-2">{notif.message}</p>
-                            </div>
-                          ))}
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                          {(() => {
+                            const grouped = projectNotifications.reduce((acc: any, notif: any) => {
+                              const block = notif.block || 'General Updates';
+                              if (!acc[block]) acc[block] = [];
+                              acc[block].push(notif);
+                              return acc;
+                            }, {});
+
+                            return Object.entries(grouped).map(([block, notifs]: [string, any]) => (
+                              <details key={block} className="group border border-border rounded-lg overflow-hidden" open={block !== 'General Updates'}>
+                                <summary className="flex items-center justify-between p-3 cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors font-bold text-xs uppercase tracking-wider text-foreground select-none list-none [&::-webkit-details-marker]:hidden">
+                                  <div className="flex items-center gap-2">
+                                    <div className="w-5 h-5 rounded flex items-center justify-center bg-background border border-border shadow-sm text-[10px] group-open:bg-primary group-open:text-primary-foreground transition-colors">
+                                      {notifs.length}
+                                    </div>
+                                    {block}
+                                  </div>
+                                  <ChevronRight className="w-4 h-4 text-muted-foreground group-open:rotate-90 transition-transform" />
+                                </summary>
+                                <div className="p-2 space-y-2 bg-card border-t border-border">
+                                  {notifs.map((notif: any, i: number) => (
+                                    <div key={notif.id || i} className="p-2.5 bg-muted/20 border border-border rounded flex flex-col gap-1.5 shadow-sm">
+                                      <div className="flex items-center justify-between">
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{new Date(notif.created_at).toLocaleDateString()}</span>
+                                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-red-500/10 text-red-600' : 'bg-blue-500/10 text-blue-600'}`}>
+                                          {notif.change_type || notif.category}
+                                        </span>
+                                      </div>
+                                      <p className="text-xs font-semibold text-foreground">{notif.activity_name}</p>
+                                      <p className="text-[11px] text-muted-foreground line-clamp-2">{notif.message}</p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            ));
+                          })()}
                         </div>
                       </div>
                     ) : (
@@ -1007,7 +1061,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               ) : (
                 <div className="flex gap-6 h-full">
                   {/* Strategies List */}
-                  <div className="flex-1 space-y-4 overflow-y-auto pb-4">
+                  <div className="flex-1 space-y-4 overflow-y-auto pb-4 custom-scrollbar pr-2" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-bold flex items-center gap-2"><Activity className="w-4 h-4 text-purple-600" /> Generated Strategies</h3>
                       <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded uppercase tracking-wider">{strategies.length} Options</span>
@@ -1058,10 +1112,10 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
 
               {strategies.length > 0 && !isGeneratingStrategies && (
                 <button
-                  onClick={proceedToSimulation}
-                  className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-auto"
+                  onClick={executeStrategy}
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-auto"
                 >
-                  <FastForward className="w-5 h-5 fill-current" /> Proceed to Simulation
+                  <CheckCircle2 className="w-5 h-5 fill-current" /> Execute Strategy
                 </button>
               )}
             </div>
@@ -1069,214 +1123,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
         )}
 
         {/* ========================================== */}
-        {/* STEP 3: SIMULATE */}
+        {/* STEP 3: EXECUTE */}
         {/* ========================================== */}
         {activeStep === 3 && (
-          <div className="space-y-6 animate-in fade-in">
-            {simulationPhase === 'config' && (
-              <div className="space-y-6">
-                <div className="bg-card border border-border rounded-xl shadow-sm p-5 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center border border-purple-200">
-                      <Activity className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Strategy Under Test</div>
-                      <div className="font-bold text-foreground text-lg">{strategies.find(s => s.id === selectedStrategyId)?.title}</div>
-                    </div>
-                  </div>
-                  <button onClick={() => setActiveStep(2)} className="text-sm font-bold text-muted-foreground hover:text-foreground border border-border px-3 py-1.5 rounded-lg bg-muted/50">Change Strategy</button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-card border border-border rounded-xl shadow-sm p-6">
-                    <h4 className="font-bold text-sm uppercase tracking-widest mb-2">Analysis Depth</h4>
-                    <p className="text-xs text-muted-foreground mb-4">How thoroughly should the model analyze outcomes? Deeper analysis takes longer but provides higher reliability.</p>
-                    <div className="flex gap-2">
-                      {['Quick', 'Standard', 'Deep'].map(d => (
-                        <div key={d} onClick={() => setAnalysisDepth(d)} className={`flex-1 p-3 rounded-lg border-2 cursor-pointer text-center transition-all ${analysisDepth === d ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
-                          {analysisDepth === d && <div className="text-[9px] font-bold text-primary uppercase tracking-widest mb-1 -mt-1">Recommended</div>}
-                          <div className={`font-bold ${analysisDepth === d ? 'text-primary' : 'text-foreground'}`}>{d}</div>
-                          <div className="text-xs text-muted-foreground mt-1">~{d === 'Quick' ? '2' : d === 'Standard' ? '10' : '60'} sec</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="bg-card border border-border rounded-xl shadow-sm p-6">
-                    <h4 className="font-bold text-sm uppercase tracking-widest mb-2">Accuracy Level</h4>
-                    <p className="text-xs text-muted-foreground mb-4">Higher accuracy tightens confidence bounds by increasing the Monte Carlo sample size.</p>
-                    <div className="flex gap-2">
-                      {['Good', 'High', 'Very High'].map(a => (
-                        <div key={a} onClick={() => setAccuracyLevel(a)} className={`flex-1 p-3 rounded-lg border-2 cursor-pointer text-center transition-all ${accuracyLevel === a ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
-                          {accuracyLevel === a && <div className="text-[9px] font-bold text-primary uppercase tracking-widest mb-1 -mt-1">Recommended</div>}
-                          <div className={`font-bold ${accuracyLevel === a ? 'text-primary' : 'text-foreground'}`}>{a}</div>
-                          <div className="text-xs text-muted-foreground mt-1">{a === 'Good' ? '90%' : a === 'High' ? '95%' : '99%'}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="bg-card border border-border rounded-xl shadow-sm p-5">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">What happens next</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="flex items-start gap-2">
-                      <BrainCircuit className="w-4 h-4 text-primary shrink-0 mt-0.5" />
-                      <span className="text-sm">AI runs 10,000 parallel scenarios against real SAP/P6 data.</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <BarChart2 className="w-4 h-4 text-emerald-500 shrink-0 mt-0.5" />
-                      <span className="text-sm">Results show probability distributions for cost and schedule.</span>
-                    </div>
-                    <div className="flex items-start gap-2">
-                      <CheckCircle2 className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
-                      <span className="text-sm">Generates an automated go/no-go execution checklist.</span>
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={startActualSimulation}
-                  className="w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-4"
-                >
-                  <PlaySquare className="w-5 h-5 fill-current" /> Run AI Simulation
-                </button>
-              </div>
-            )}
-
-            {simulationPhase === 'running' && (
-              <div className="py-12 flex flex-col items-center justify-center animate-in fade-in zoom-in-95">
-                <div className="relative w-40 h-40 mb-8 flex items-center justify-center">
-                  <svg className="w-full h-full transform -rotate-90" viewBox="0 0 100 100">
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="var(--border)" strokeWidth="6" />
-                    <circle cx="50" cy="50" r="45" fill="none" stroke="#8B5CF6" strokeWidth="6" strokeDasharray={`${(simIterations / 10000) * 283} 283`} strokeLinecap="round" className="transition-all duration-150" />
-                  </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-3xl font-bold text-foreground">{Math.round((simIterations / 10000) * 100)}%</div>
-                    <div className="text-xs text-muted-foreground font-mono mt-1">{simIterations.toLocaleString()} / 10,000</div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-4 mb-8">
-                  <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-emerald-500 mb-2 shadow-[0_0_8px_rgba(16,185,129,0.5)]"></div>
-                    <span className="text-xs font-bold text-emerald-600 uppercase tracking-widest">Initializing</span>
-                  </div>
-                  <div className="w-12 h-px bg-border"></div>
-                  <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-purple-500 mb-2 shadow-[0_0_8px_rgba(139,92,246,0.5)] animate-pulse"></div>
-                    <span className="text-xs font-bold text-purple-600 uppercase tracking-widest">Sampling</span>
-                  </div>
-                  <div className="w-12 h-px bg-border"></div>
-                  <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-muted-foreground/30 mb-2"></div>
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Converging</span>
-                  </div>
-                  <div className="w-12 h-px bg-border"></div>
-                  <div className="flex flex-col items-center">
-                    <div className="w-3 h-3 rounded-full bg-muted-foreground/30 mb-2"></div>
-                    <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Scoring</span>
-                  </div>
-                </div>
-
-                <div className="w-full max-w-2xl bg-card border border-border rounded-xl shadow-sm p-5 mb-6">
-                  <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-2 mb-2">Convergence Curve</h4>
-                  <div className="h-32 w-full">
-                    <ReactECharts option={convergenceChartOptions} style={{ height: '100%', width: '100%' }} />
-                  </div>
-                </div>
-
-                <div className="w-full max-w-2xl grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="bg-muted/30 border border-border rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-blue-500 font-bold text-[10px] uppercase tracking-widest mb-2"><Eye className="w-3 h-3" /> Seeing</div>
-                    <p className="text-xs text-foreground/80">Reading probability distributions for cost, schedule, and risk exposure.</p>
-                  </div>
-                  <div className="bg-muted/30 border border-border rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-purple-500 font-bold text-[10px] uppercase tracking-widest mb-2"><BrainCircuit className="w-3 h-3" /> Thinking</div>
-                    <p className="text-xs text-foreground/80">Schedule recovery path has bimodal distribution — adjusting sample density.</p>
-                  </div>
-                  <div className="bg-muted/30 border border-border rounded-lg p-4">
-                    <div className="flex items-center gap-2 text-emerald-500 font-bold text-[10px] uppercase tracking-widest mb-2"><PlaySquare className="w-3 h-3" /> Doing</div>
-                    <p className="text-xs text-foreground/80">Running parallel Monte Carlo batches on AI simulation engine...</p>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {simulationPhase === 'complete' && (
-              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4">
-                <div className="flex items-center justify-between bg-emerald-50/50 border border-emerald-200 p-4 rounded-xl">
-                  <div className="flex items-center gap-2 text-emerald-600 font-bold">
-                    <CheckCircle2 className="w-5 h-5" /> Simulation Complete
-                    <span className="text-emerald-600/70 text-sm ml-2 font-normal">10,000 iter • 95% CI</span>
-                  </div>
-                  <button onClick={() => setSimulationPhase('config')} className="text-sm font-bold text-muted-foreground border border-border px-3 py-1 rounded bg-background hover:bg-muted">↻ Re-configure</button>
-                </div>
-
-                <div className="grid grid-cols-5 gap-4">
-                  <div className="bg-card border-t-4 border-t-emerald-500 border-x border-b border-border rounded-b-xl shadow-sm p-4">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">SPI Impact</div>
-                    <div className="text-2xl font-bold text-foreground">+0.09</div>
-                  </div>
-                  <div className="bg-card border-t-4 border-t-amber-500 border-x border-b border-border rounded-b-xl shadow-sm p-4">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Cost Delta</div>
-                    <div className="text-2xl font-bold text-foreground">+₹{strategies.find(s => s.id === selectedStrategyId)?.cost_impact_cr} Cr</div>
-                  </div>
-                  <div className="bg-card border-t-4 border-t-blue-500 border-x border-b border-border rounded-b-xl shadow-sm p-4">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Risk Reduction</div>
-                    <div className="text-2xl font-bold text-foreground">-{strategies.find(s => s.id === selectedStrategyId)?.risk_reduction_pct}%</div>
-                  </div>
-                  <div className="bg-card border-t-4 border-t-indigo-500 border-x border-b border-border rounded-b-xl shadow-sm p-4">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Schedule</div>
-                    <div className="text-2xl font-bold text-foreground">-{strategies.find(s => s.id === selectedStrategyId)?.time_saved_days} days</div>
-                  </div>
-                  <div className="bg-card border-t-4 border-t-purple-500 border-x border-b border-border rounded-b-xl shadow-sm p-4">
-                    <div className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-1">Confidence</div>
-                    <div className="text-2xl font-bold text-foreground">{strategies.find(s => s.id === selectedStrategyId)?.ai_confidence_pct}%</div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-card border border-border shadow-sm rounded-xl p-5 space-y-6">
-                    <div>
-                      <h4 className="text-[10px] font-bold text-red-500 uppercase tracking-widest mb-2">Problem Detected</h4>
-                      <p className="font-bold text-foreground text-sm">Critical Path Delay</p>
-                      <p className="text-xs text-muted-foreground mt-1">Foundation works delay affecting overall project timeline targets.</p>
-                    </div>
-                    <div>
-                      <h4 className="text-[10px] font-bold text-blue-500 uppercase tracking-widest mb-2">Simulated Solution</h4>
-                      <p className="text-xs text-foreground/80 leading-relaxed">
-                        Applying '{strategies.find(s => s.id === selectedStrategyId)?.title}' reduces exposure by {strategies.find(s => s.id === selectedStrategyId)?.risk_reduction_pct}% with a manageable ₹{strategies.find(s => s.id === selectedStrategyId)?.cost_impact_cr} Cr variance. AI confidence: {strategies.find(s => s.id === selectedStrategyId)?.ai_confidence_pct}%.
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="bg-card border border-border shadow-sm rounded-xl overflow-hidden flex flex-col">
-                    <div className="bg-muted/30 px-5 py-3 border-b border-border">
-                      <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Schedule Impact Distribution</h4>
-                    </div>
-                    <div className="p-4 flex-1 min-h-[200px]">
-                      <ReactECharts option={histogramOptions} style={{ height: '100%', width: '100%' }} />
-                    </div>
-                  </div>
-                </div>
-
-                <button
-                  onClick={executeStrategy}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-6"
-                >
-                  <CheckCircle2 className="w-5 h-5" /> Proceed to Execution
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* ========================================== */}
-        {/* STEP 4: EXECUTE */}
-        {/* ========================================== */}
-        {activeStep === 4 && (
           <div className="max-w-3xl mx-auto mt-10 space-y-8 animate-in fade-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
               <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
@@ -1326,9 +1175,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
         )}
 
         {/* ========================================== */}
-        {/* STEP 5: REPORT */}
+        {/* STEP 4: REPORT */}
         {/* ========================================== */}
-        {activeStep === 5 && (
+        {activeStep === 4 && (
           <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
             <div className="bg-card border border-border rounded-xl shadow-lg p-8 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>

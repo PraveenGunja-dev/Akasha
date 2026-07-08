@@ -156,8 +156,8 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
 
   const topSapProjects = useMemo(() => {
     return [...projects]
-      .filter((p: any) => (p.sap?.req_mw || p.sap?.po_mw || p.sap?.inventory_mw) > 0)
-      .sort((a, b) => (b.sap?.req_mw || b.sap?.po_mw || 0) - (a.sap?.req_mw || a.sap?.po_mw || 0))
+      .filter((p: any) => (p.sap?.req_qty || p.sap?.po_qty || p.sap?.inventory_qty) > 0)
+      .sort((a, b) => (b.sap?.req_qty || b.sap?.po_qty || 0) - (a.sap?.req_qty || a.sap?.po_qty || 0))
       .slice(0, 5);
   }, [projects]);
 
@@ -178,10 +178,10 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
       axisLabel: { color: '#94a3b8', fontWeight: '600', fontSize: 11 }
     },
     series: [
-      { name: 'Requirement', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.req_mw || 0), itemStyle: { color: '#bfdbfe' } },
-      { name: 'PO Raised', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.po_mw || 0), itemStyle: { color: '#60a5fa' } },
-      { name: 'In-Transit', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.it_mw || 0), itemStyle: { color: '#fbbf24' } },
-      { name: 'Inventory/GRN', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.inventory_mw || 0), itemStyle: { color: '#34d399' } }
+      { name: 'Requirement', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.req_qty || 0), itemStyle: { color: '#bfdbfe' } },
+      { name: 'PO Raised', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.po_qty || 0), itemStyle: { color: '#60a5fa' } },
+      { name: 'In-Transit', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.in_transit_qty || 0), itemStyle: { color: '#fbbf24' } },
+      { name: 'Inventory/GRN', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.inventory_qty || 0), itemStyle: { color: '#34d399' } }
     ]
   };
 
@@ -463,7 +463,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
       <motion.div variants={itemVariants} initial="hidden" animate="show" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bento-card p-4 flex flex-col h-[350px]">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> SAP Material Pipeline (MW)</h3>
+            <h3 className="text-sm font-bold text-gray-900 dark:text-white flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> SAP Material Pipeline (Qty)</h3>
           </div>
           <div className="flex-1 w-full">
             <ReactECharts option={costChartOptions} style={{ height: '100%', width: '100%' }} />

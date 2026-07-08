@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import P6Project, P6BaselineProject, ProjectMapping, TcProjectEntry, TcNetworkEdge, MTTrialRun
 from datetime import datetime, timedelta
+from services.project_service import calculate_dynamic_evm
 
 router = APIRouter(prefix="/api/pmag", tags=["PMAG Dashboard"])
 
@@ -121,6 +122,8 @@ def get_pmag_dashboard(db: Session = Depends(get_db)):
                 p6_pct *= 100
             planned_pct = min(100, p6_pct + 5)
             
+        dynamic_spi, _ = calculate_dynamic_evm(db, p, m)
+            
         project_rows.append({
             "name": display_name,
             "project_id": m.project_id or "-",
@@ -136,7 +139,7 @@ def get_pmag_dashboard(db: Session = Depends(get_db)):
             "completed": p.completed_activity_count or 0,
             "in_progress": p.in_progress_activity_count or 0,
             "not_started": p.not_started_activity_count or 0,
-            "spi": round(_safe_float(p.schedule_performance_index, 0), 2),
+            "spi": round(dynamic_spi, 2),
         })
 
     total_projects = len(project_rows)

@@ -54,8 +54,8 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
         "total_projects": 0,
         "delayed_projects": 0,
         "on_track_projects": 0,
-        "total_inventory_mw": 0,
-        "total_po_mw": 0
+        "total_inventory_qty": 0,
+        "total_po_qty": 0
     }
     
     project_list = []
@@ -65,18 +65,18 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
     cap_data = db.query(models.ProjectMapping.spv_plant_code, func.sum(models.ProjectMapping.capacity_mwac)).group_by(models.ProjectMapping.spv_plant_code).all()
     capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
     
-    inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_mw)).group_by(models.MTInventory.plant_code).all() if r[0]}
+    inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.plant_code).all() if r[0]}
     req_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTRequirement.spv_plant_code, func.sum(models.MTRequirement.budgeted_units_mw)).group_by(models.MTRequirement.spv_plant_code).all() if r[0]}
     
-    # We will compute in-transit MW inline since MTPOAmount does not have a dedicated still_to_deliver_mw column
-    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    # We will compute in-transit QTY inline
+    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     
-    po_mw_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.po_quantities_mw)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    po_qty_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
 
-    all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_mw)).group_by(models.MTInventory.wbs_element).all()
-    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).group_by(models.MTPOAmount.wbs_element).all()
+    all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
+    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
 
     all_tc_entries = db.query(models.TcProjectEntry).all()
     all_tc_edges = db.query(models.TcNetworkEdge).all()
@@ -150,24 +150,24 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
         
         if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
             clean_wbs = str(m.module_wbs).strip().lower()
-            inv_mw = sum(qty for wbs, qty in all_inv_wbs if wbs and qty and clean_wbs in str(wbs).lower())
-            it_mw = sum(qty for wbs, qty in all_it_wbs if wbs and qty and clean_wbs in str(wbs).lower())
+            inv_qty = sum(qty for wbs, qty in all_inv_wbs if wbs and qty and clean_wbs in str(wbs).lower())
+            it_qty = sum(qty for wbs, qty in all_it_wbs if wbs and qty and clean_wbs in str(wbs).lower())
             allocation_ratio_inv = 1.0
         else:
-            inv_mw = (inv_by_plant.get(plant_code_str, 0) or inv_by_plant.get(agel_code_str, 0)) or 0
-            it_mw = (it_by_plant.get(plant_code_str, 0) or it_by_plant.get(agel_code_str, 0)) or 0
+            inv_qty = (inv_by_plant.get(plant_code_str, 0) or inv_by_plant.get(agel_code_str, 0)) or 0
+            it_qty = (it_by_plant.get(plant_code_str, 0) or it_by_plant.get(agel_code_str, 0)) or 0
             allocation_ratio_inv = allocation_ratio
             
-        inv_mw *= allocation_ratio_inv
-        it_mw *= allocation_ratio_inv
-        req_mw = (req_mw or 0) * allocation_ratio
+        inv_qty *= allocation_ratio_inv
+        it_qty *= allocation_ratio_inv
+        req_qty = (req_mw or 0) * allocation_ratio
 
-        po_mw = ((po_mw_by_plant.get(plant_code_str, 0) or po_mw_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
+        po_qty = ((po_qty_by_plant.get(plant_code_str, 0) or po_qty_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
         po_value = ((po_val_by_plant.get(plant_code_str, 0) or po_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
         po_delivered_cr = ((po_delivered_val_by_plant.get(plant_code_str, 0) or po_delivered_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
 
-        portfolio_summary["total_inventory_mw"] += inv_mw
-        portfolio_summary["total_po_mw"] += po_mw
+        portfolio_summary["total_inventory_qty"] += inv_qty
+        portfolio_summary["total_po_qty"] += po_qty
 
         # TC Data
         project_entries = [pe for pe in all_tc_entries if pe.mapping_id == m.id]
@@ -233,10 +233,10 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
                 "finish_date_variance": p6_data.finish_date_variance if p6_data else 0,
             },
             "sap": {
-                "req_mw": round(req_mw, 2),
-                "po_mw": round(po_mw, 2),
-                "it_mw": round(it_mw, 2),
-                "inventory_mw": round(inv_mw, 2),
+                "req_qty": round(req_qty, 2),
+                "po_qty": round(po_qty, 2),
+                "in_transit_qty": round(it_qty, 2),
+                "inventory_qty": round(inv_qty, 2),
                 "po_value": round(po_value, 2),
                 "po_delivered_cr": round(po_delivered_cr, 2)
             },

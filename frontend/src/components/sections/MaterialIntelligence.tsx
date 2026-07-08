@@ -5,13 +5,13 @@ import { Truck, Map, List, PackageSearch } from 'lucide-react';
 export default function MaterialIntelligence({ logDetails, logisticsData }: any) {
 
   // Material Transit Status (Mocked geo data for supply chain map feel, backed by real volumes)
-  const inTransitVolume = logDetails?.reduce((acc: number, val: any) => acc + val.quantity_mw, 0) || 0;
+  const inTransitVolume = logDetails?.reduce((acc: number, val: any) => acc + (val.still_to_deliver_qty || 0), 0) || 0;
 
   // Aggregate by plant code to see which plants have the most incoming material
   const plantMap: any = {};
   (logDetails || []).forEach((item: any) => {
     const p = item.plant_code || 'Unknown';
-    plantMap[p] = (plantMap[p] || 0) + item.quantity_mw;
+    plantMap[p] = (plantMap[p] || 0) + (item.still_to_deliver_qty || 0);
   });
 
   const plantList = Object.keys(plantMap).map(k => ({ name: `Plant ${k}`, value: plantMap[k] }));
@@ -21,12 +21,12 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
     legend: { textStyle: { color: 'var(--foreground)' } },
     series: [
       {
-        name: 'Incoming Material Volume (MW)',
+        name: 'Incoming Material Volume (Qty)',
         type: 'pie',
         radius: ['50%', '70%'],
         avoidLabelOverlap: false,
         itemStyle: { borderRadius: 10, borderColor: 'var(--background)', borderWidth: 2 },
-        label: { show: true, color: 'var(--foreground)', formatter: '{b}: {c}MW' },
+        label: { show: true, color: 'var(--foreground)', formatter: '{b}: {c}' },
         data: plantList.length > 0 ? plantList : [{ name: 'No Transit Data', value: 0 }]
       }
     ]
@@ -37,7 +37,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
-          <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Material In-Transit (MW)</h3>
+          <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Material In-Transit (Qty)</h3>
           <p className="text-4xl font-light text-foreground">{inTransitVolume.toFixed(2)}</p>
         </div>
         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
@@ -74,7 +74,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
                 <th className="px-4 py-3">PO Number</th>
                 <th className="px-4 py-3">Plant Destination</th>
                 <th className="px-4 py-3">Material Code</th>
-                <th className="px-4 py-3 text-right">In-Transit Volume (MW)</th>
+                <th className="px-4 py-3 text-right">In-Transit Volume (Qty)</th>
               </tr>
             </thead>
             <tbody>
@@ -83,7 +83,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
                   <td className="px-4 py-3 font-mono text-xs text-primary">{item.po_number || 'N/A'}</td>
                   <td className="px-4 py-3 text-muted-foreground font-medium">Plant {item.plant_code}</td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.material_code}</td>
-                  <td className="px-4 py-3 text-right font-medium text-amber-500">{item.quantity_mw?.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-amber-500">{item.still_to_deliver_qty?.toFixed(2)}</td>
                 </tr>
               ))}
               {(!logDetails || logDetails.length === 0) && (

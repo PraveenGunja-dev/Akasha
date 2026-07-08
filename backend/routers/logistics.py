@@ -9,7 +9,7 @@ router = APIRouter(prefix="/api")
 
 @router.get("/logistics")
 def get_logistics(project_name: Optional[str] = None, db: Session = Depends(get_db)):
-    inv_query = db.query(func.sum(models.MTInventory.quantity_mw))
+    inv_query = db.query(func.sum(models.MTInventory.quantity_inv))
     transit_query = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty))
     
     if project_name and project_name != "All":

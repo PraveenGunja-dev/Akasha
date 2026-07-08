@@ -8,7 +8,7 @@ export default function ProcurementIntelligence({ finDetails }: any) {
   const vendorMap: any = {};
   (finDetails || []).forEach((po: any) => {
       const v = po.vendor_name || 'Unknown Vendor';
-      vendorMap[v] = (vendorMap[v] || 0) + po.po_quantities_mw;
+      vendorMap[v] = (vendorMap[v] || 0) + (po.order_quantity || 0);
   });
   
   const vendorList = Object.keys(vendorMap)
@@ -23,7 +23,7 @@ export default function ProcurementIntelligence({ finDetails }: any) {
     xAxis: { type: 'value', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
     yAxis: { type: 'category', data: topVendors.map(v => v.name).reverse(), axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)', width: 120, overflow: 'truncate' } },
     series: [
-      { name: 'Total Order Volume (MW)', type: 'bar', data: topVendors.map(v => v.value).reverse(), itemStyle: { color: '#3B82F6', borderRadius: [0, 4, 4, 0] } }
+      { name: 'Total Order Volume (Qty)', type: 'bar', data: topVendors.map(v => v.value).reverse(), itemStyle: { color: '#3B82F6', borderRadius: [0, 4, 4, 0] } }
     ]
   };
 
@@ -71,7 +71,7 @@ export default function ProcurementIntelligence({ finDetails }: any) {
                 <th className="px-4 py-3">PO Number</th>
                 <th className="px-4 py-3">Vendor Name</th>
                 <th className="px-4 py-3">Material Code</th>
-                <th className="px-4 py-3 text-right">Volume Ordered (MW)</th>
+                <th className="px-4 py-3 text-right">Volume Ordered (Qty)</th>
               </tr>
             </thead>
             <tbody>
@@ -80,7 +80,7 @@ export default function ProcurementIntelligence({ finDetails }: any) {
                   <td className="px-4 py-3 font-mono text-xs text-primary">{po.purchasing_document}</td>
                   <td className="px-4 py-3 text-muted-foreground">{po.vendor_name || 'Unknown'}</td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{po.material_code}</td>
-                  <td className="px-4 py-3 text-right font-medium">{po.po_quantities_mw?.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-medium">{po.order_quantity?.toFixed(2)}</td>
                 </tr>
               ))}
               {(!finDetails || finDetails.length === 0) && (

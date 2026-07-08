@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 import models
-from services.project_service import calculate_project_360_metrics, get_project_360_detail
+from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm
 import time
 
 router = APIRouter(prefix="/api")
@@ -43,13 +43,16 @@ def get_project_summary(project_name: Optional[str] = None, db: Session = Depend
         item["plannedDuration"] = p.planned_duration
         item["actualDuration"] = p.actual_duration
         item["actualTotalCost"] = p.actual_total_cost
-        # Fallback for SPI if None
-        spi = p.schedule_performance_index
-        if spi is None and p.actual_duration and p.planned_duration:
-            spi = p.planned_duration / p.actual_duration if p.actual_duration > 0 else 1.0
-
-        item["schedulePerformanceIndex"] = spi
-        item["schedule_performance_index"] = spi
+        # Calculate EVM SPI and CPI dynamically
+        dynamic_spi, dynamic_cpi = calculate_dynamic_evm(db, p)
+        
+        item["schedulePerformanceIndex"] = dynamic_spi
+        item["schedule_performance_index"] = dynamic_spi
+        
+        # Also replace CPI if it exists in the item dict
+        item["cpi"] = dynamic_cpi
+        if "cost_performance_index" in item:
+            item["cost_performance_index"] = dynamic_cpi
         item["durationVariance"] = p.duration_variance
         item["plannedCost"] = p.planned_cost
         item["currentBudget"] = p.current_budget
