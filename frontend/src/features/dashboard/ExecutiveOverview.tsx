@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { motion } from 'framer-motion';
-import KPIDetailsModal from '../ui/KPIDetailsModal';
+import KPIDetailsModal from '../../components/ui/KPIDetailsModal';
 
 const containerVariants: any = {
   hidden: { opacity: 0 },

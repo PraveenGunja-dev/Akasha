@@ -5,30 +5,30 @@ import { X } from 'lucide-react';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
 
-import ExecutiveOverview from '../components/sections/ExecutiveOverview';
-import Project360 from '../components/sections/Project360';
-import PortfolioHealth from '../components/sections/PortfolioHealth';
+import ExecutiveOverview from '../features/dashboard/ExecutiveOverview';
+import Project360 from '../features/projects/Project360';
+import PortfolioHealth from '../features/dashboard/PortfolioHealth';
 import P6View from '../components/dashboards/P6View';
 import SAPView from '../components/dashboards/SAPView';
-import ProcurementIntelligence from '../components/sections/ProcurementIntelligence';
-import MaterialIntelligence from '../components/sections/MaterialIntelligence';
-import RiskCommandCenter from '../components/sections/RiskCommandCenter';
-import PredictiveAnalytics from '../components/sections/PredictiveAnalytics';
-import DecisionCenter from '../components/sections/DecisionCenter';
-import ReportsInsights from '../components/sections/ReportsInsights';
-import CapacityOverview from '../components/sections/CapacityOverview';
+import ProcurementIntelligence from '../features/analytics/ProcurementIntelligence';
+import MaterialIntelligence from '../features/analytics/MaterialIntelligence';
+import RiskCommandCenter from '../features/dashboard/RiskCommandCenter';
+import PredictiveAnalytics from '../features/dashboard/PredictiveAnalytics';
+import DecisionCenter from '../features/dashboard/DecisionCenter';
+import ReportsInsights from '../features/analytics/ReportsInsights';
+import CapacityOverview from '../features/dashboard/CapacityOverview';
 
 // Phase 6 AI Modules
-import AICopilot from '../components/sections/AICopilot';
-import ExecutiveBriefing from '../components/sections/ExecutiveBriefing';
-import SmartSearch from '../components/sections/SmartSearch';
-import KnowledgeGraph from '../components/sections/KnowledgeGraph';
-import ProjectMap from '../components/sections/ProjectMap';
+import AICopilot from '../features/chatbot/AICopilot';
+import ExecutiveBriefing from '../features/dashboard/ExecutiveBriefing';
+import SmartSearch from '../features/analytics/SmartSearch';
+import KnowledgeGraph from '../features/analytics/KnowledgeGraph';
+import ProjectMap from '../features/projects/ProjectMap';
 
-import TransmissionDataViewer from '../components/sections/TransmissionDataViewer';
+import TransmissionDataViewer from '../features/analytics/TransmissionDataViewer';
 import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPanel';
-import SimulationLab from '../components/sections/SimulationLab';
-import ProjectWorkspace from '../components/sections/ProjectWorkspace';
+import SimulationLab from '../features/analytics/SimulationLab';
+import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 
 export default function CEODashboard() {
   const { projectId } = useParams();

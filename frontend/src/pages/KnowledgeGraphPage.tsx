@@ -1,5 +1,5 @@
 import React from 'react';
-import KnowledgeGraph from '../components/sections/KnowledgeGraph';
+import KnowledgeGraph from '../features/analytics/KnowledgeGraph';
 
 export default function KnowledgeGraphPage() {
   return (
