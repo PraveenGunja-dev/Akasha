@@ -6,6 +6,9 @@ import models
 from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm
 import time
 
+_SUMMARY_CACHE = {}
+_SUMMARY_TTL = 300  # 5 minutes
+
 router = APIRouter(prefix="/api")
 
 @router.get("/master-projects")
@@ -15,8 +18,26 @@ def get_master_projects(db: Session = Depends(get_db)):
     return {"projects": [p[0] for p in projects if p[0]]}
 
 @router.get("/summary")
-def get_project_summary(project_name: Optional[str] = None, db: Session = Depends(get_db)):
+def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"{project_name or 'All'}_{portfolio or 'All'}"
+    if not nocache and cache_key in _SUMMARY_CACHE:
+        entry = _SUMMARY_CACHE[cache_key]
+        if time.time() - entry["timestamp"] < _SUMMARY_TTL:
+            return entry["data"]
+            
     query = db.query(models.P6Project)
+    
+    # 1. Filter by Portfolio (Global)
+    if portfolio and portfolio.lower() != "all portfolios":
+        map_query = db.query(models.ProjectMapping.project_id).filter(
+            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
+        
+        valid_ids = [m[0] for m in map_query.all() if m[0]]
+        query = query.filter(models.P6Project.project_id.in_(valid_ids))
+        
+    # 2. Filter by specific project_name (Local)
     if project_name and project_name != "All":
         mappings = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_name_from_p6 == project_name).all()
         p6_ids = [m.project_id for m in mappings]
@@ -59,20 +80,24 @@ def get_project_summary(project_name: Optional[str] = None, db: Session = Depend
         item["costVariance"] = p.total_cost_variance
         result.append(item)
         
+    _SUMMARY_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
     return result
 
-_P360_CACHE = {"data": None, "timestamp": 0}
+_P360_CACHE = {}
 _CACHE_TTL = 300  # 5 minutes
 
 @router.get("/project-360")
-def get_project_360(nocache: bool = False, db: Session = Depends(get_db)):
+def get_project_360(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     global _P360_CACHE
-    if not nocache and _P360_CACHE["data"] and time.time() - _P360_CACHE["timestamp"] < _CACHE_TTL:
-        return _P360_CACHE["data"]
-        
-    data = calculate_project_360_metrics(db)
-    _P360_CACHE["data"] = data
-    _P360_CACHE["timestamp"] = time.time()
+    cache_key = str(portfolio).lower() if portfolio else "all"
+    
+    if not nocache and cache_key in _P360_CACHE:
+        entry = _P360_CACHE[cache_key]
+        if time.time() - entry["timestamp"] < _CACHE_TTL:
+            return entry["data"]
+            
+    data = calculate_project_360_metrics(db, portfolio)
+    _P360_CACHE[cache_key] = {"data": data, "timestamp": time.time()}
     return data
 
 @router.get("/project-360/{project_id}/detail")

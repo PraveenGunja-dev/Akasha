@@ -28,7 +28,7 @@ def _safe_float(v, default=0.0):
 
 
 @router.get("/dashboard")
-def get_pmag_dashboard(db: Session = Depends(get_db)):
+def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
     """
     Returns the full PMAG dashboard data:
     - Portfolio summary KPIs
@@ -43,7 +43,13 @@ def get_pmag_dashboard(db: Session = Depends(get_db)):
     raw_projects = db.query(P6Project).all()
     p6_map = {p.project_id: p for p in raw_projects if p.project_id}
 
-    mappings = db.query(ProjectMapping).all()
+    query = db.query(ProjectMapping)
+    if portfolio and portfolio != "All Portfolios":
+        query = query.filter(
+            (ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
+    mappings = query.all()
 
     now = datetime.utcnow()
     week_start = now - timedelta(days=now.weekday())

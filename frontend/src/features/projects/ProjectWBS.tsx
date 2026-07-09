@@ -312,7 +312,24 @@ export const ProjectWBS = ({ p6Data }: { p6Data: any }) => {
       return node.activities.length > 0 || node.children.length > 0;
     };
 
-    return roots.filter(pruneEmpty);
+    const prunedRoots = roots.filter(pruneEmpty);
+    
+    // Sort all levels numerically by extracting the leading number from the code
+    const sortWBS = (nodes: any[]) => {
+      nodes.sort((a, b) => {
+        const getNum = (code: string) => {
+          if (!code) return 999999;
+          const strCode = String(code).trim();
+          const match = strCode.match(/^(\d+)/);
+          return match ? parseInt(match[1], 10) : 999999;
+        };
+        return getNum(a.code) - getNum(b.code);
+      });
+      nodes.forEach(n => sortWBS(n.children));
+    };
+    
+    sortWBS(prunedRoots);
+    return prunedRoots;
   }, [p6Data, filter]);
 
   if (!p6Data?.wbsNodes || p6Data.wbsNodes.length === 0) {

@@ -1,0 +1,545 @@
+
+============================================================
+TABLE: akasha_user  |  ROWS: 0
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('akasha_user_id_seq'::regclass)
+  username                                 VARCHAR              NOT NULL
+  password_hash                            VARCHAR              NOT NULL
+  display_name                             VARCHAR              NOT NULL
+  role                                     VARCHAR              NOT NULL
+  email                                    VARCHAR              NULL
+  is_active                                BOOLEAN              NULL
+  created_at                               TIMESTAMP            NULL
+INDEXES:
+  ix_akasha_user_id: ['id']
+  ix_akasha_user_role: ['role']
+  UNIQUE ix_akasha_user_username: ['username']
+
+============================================================
+TABLE: mt_intransit  |  ROWS: 0
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_intransit_id_seq'::regclass)
+  material_code                            VARCHAR              NULL
+  inbound_delivery_quantity                DOUBLE PRECISION     NULL
+  company_code                             VARCHAR              NULL
+  plant_code                               VARCHAR              NULL
+  gr_posting_date                          TIMESTAMP            NULL
+  ariba_invoice_date                       TIMESTAMP            NULL
+  vendor_code                              VARCHAR              NULL
+  vendor_name                              VARCHAR              NULL
+  po_number                                VARCHAR              NULL
+  wbs_element                              VARCHAR              NULL
+  mw_multiplication_factor                 DOUBLE PRECISION     NULL
+  quantity_mw                              DOUBLE PRECISION     NULL
+  grn_quantity                             DOUBLE PRECISION     NULL
+  ibd_creation_date                        TIMESTAMP            NULL
+  po_quantity                              DOUBLE PRECISION     NULL
+  rejected_quantity                        DOUBLE PRECISION     NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  ix_mt_intransit_id: ['id']
+  ix_mt_intransit_material_code: ['material_code']
+  ix_mt_intransit_plant_code: ['plant_code']
+  ix_mt_intransit_wbs_element: ['wbs_element']
+
+============================================================
+TABLE: mt_inventory  |  ROWS: 4,102
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_inventory_id_seq'::regclass)
+  company_code                             VARCHAR              NULL
+  plant_code                               VARCHAR              NULL
+  material_code                            VARCHAR              NULL
+  quantity_inv                             DOUBLE PRECISION     NULL
+  vendor_code                              VARCHAR              NULL
+  posting_date                             TIMESTAMP            NULL
+  purchase_order                           VARCHAR              NULL
+  wbs_element                              VARCHAR              NULL
+  storage_location_mapping                 VARCHAR              NULL
+  movement_type_validation                 VARCHAR              NULL
+  mw_multiplication_factor                 DOUBLE PRECISION     NULL
+  quantity_mw                              DOUBLE PRECISION     NULL
+  special_stock                            VARCHAR              NULL
+  material_type                            VARCHAR              NULL
+  material_group                           VARCHAR              NULL
+  material_description                     VARCHAR              NULL
+  value_unrestricted                       DOUBLE PRECISION     NULL
+  plant_name                               VARCHAR              NULL
+  material_name                            VARCHAR              NULL
+  unrestricted_qty                         DOUBLE PRECISION     NULL
+  upload_time                              TIMESTAMP            NULL
+  base_unit                                VARCHAR              NULL
+INDEXES:
+  ix_mt_inventory_id: ['id']
+  ix_mt_inventory_plant_code: ['plant_code']
+  ix_mt_inventory_wbs_element: ['wbs_element']
+
+============================================================
+TABLE: mt_materialdocument  |  ROWS: 515
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_materialdocument_id_seq'::regclass)
+  material_code                            VARCHAR              NULL
+  plant_code                               VARCHAR              NULL
+  movement_type                            VARCHAR              NULL
+  posting_date                             TIMESTAMP            NULL
+  quantity                                 DOUBLE PRECISION     NULL
+  material_document                        VARCHAR              NULL
+  wbs_element                              VARCHAR              NULL
+  material_name                            VARCHAR              NULL
+  material_description                     VARCHAR              NULL
+  amount_in_lc                             DOUBLE PRECISION     NULL
+  amount_in_lc_cr                          DOUBLE PRECISION     NULL
+  storage_location                         VARCHAR              NULL
+  block_plot_name                          VARCHAR              NULL
+  purchase_order                           VARCHAR              NULL
+  base_unit                                VARCHAR              NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  ix_mt_materialdocument_id: ['id']
+  ix_mt_materialdocument_material_code: ['material_code']
+  ix_mt_materialdocument_plant_code: ['plant_code']
+  ix_mt_materialdocument_wbs_element: ['wbs_element']
+
+============================================================
+TABLE: mt_poamount  |  ROWS: 230
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_poamount_id_seq'::regclass)
+  company_code                             VARCHAR              NULL
+  plant_code                               VARCHAR              NULL
+  purchasing_document                      VARCHAR              NULL
+  wbs_element                              VARCHAR              NULL
+  material_code                            VARCHAR              NULL
+  vendor_code                              VARCHAR              NULL
+  vendor_name                              VARCHAR              NULL
+  po_quantities                            DOUBLE PRECISION     NULL
+  material_type                            VARCHAR              NULL
+  mw_multiplication_factor                 DOUBLE PRECISION     NULL
+  po_quantities_mw                         DOUBLE PRECISION     NULL
+  net_order_value                          DOUBLE PRECISION     NULL
+  quantity_received                        DOUBLE PRECISION     NULL
+  still_to_be_delivered_qty                DOUBLE PRECISION     NULL
+  delivery_date                            TIMESTAMP            NULL
+  delivery_completed_flag                  VARCHAR              NULL
+  deletion_indicator                       VARCHAR              NULL
+  document_date                            TIMESTAMP            NULL
+  short_text                               VARCHAR              NULL
+  material_name                            VARCHAR              NULL
+  order_quantity                           DOUBLE PRECISION     NULL
+  net_order_value_inr                      DOUBLE PRECISION     NULL
+  still_to_deliver_qty                     DOUBLE PRECISION     NULL
+  still_to_deliver_inr                     DOUBLE PRECISION     NULL
+  delivered_qty                            DOUBLE PRECISION     NULL
+  delivered_value_inr_cr                   DOUBLE PRECISION     NULL
+  storage_location                         VARCHAR              NULL
+  block_plot_name                          VARCHAR              NULL
+  currency                                 VARCHAR              NULL
+  upload_time                              TIMESTAMP            NULL
+  buyer_name                               VARCHAR              NULL
+INDEXES:
+  ix_mt_poamount_id: ['id']
+  ix_mt_poamount_plant_code: ['plant_code']
+  ix_mt_poamount_purchasing_document: ['purchasing_document']
+  ix_mt_poamount_wbs_element: ['wbs_element']
+
+============================================================
+TABLE: mt_requirement  |  ROWS: 0
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_requirement_id_seq'::regclass)
+  activity_name                            VARCHAR              NULL
+  project_name                             VARCHAR              NULL
+  block                                    VARCHAR              NULL
+  start_date                               TIMESTAMP            NULL
+  activity_id                              VARCHAR              NULL
+  budgeted_units_mw                        DOUBLE PRECISION     NULL
+  unit_of_measure                          VARCHAR              NULL
+  project_name_p6                          VARCHAR              NULL
+  spv_plant_code                           VARCHAR              NULL
+  source_of_origin                         VARCHAR              NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  UNIQUE ix_mt_requirement_activity_id: ['activity_id']
+  ix_mt_requirement_activity_name: ['activity_name']
+  ix_mt_requirement_id: ['id']
+  ix_mt_requirement_project_name: ['project_name']
+  ix_mt_requirement_spv_plant_code: ['spv_plant_code']
+
+============================================================
+TABLE: mt_trialrun  |  ROWS: 2,118
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_trialrun_id_seq'::regclass)
+  activity_name                            VARCHAR              NULL
+  project_name                             VARCHAR              NULL
+  project_name_block                       VARCHAR              NULL
+  trial_run_start                          TIMESTAMP            NULL
+  trial_run_finish                         TIMESTAMP            NULL
+  activity_id                              VARCHAR              NULL
+  tr_quantity_mw                           DOUBLE PRECISION     NULL
+  unit_of_measure                          VARCHAR              NULL
+  project_name_p6                          VARCHAR              NULL
+  spv_plant_code                           VARCHAR              NULL
+  is_start_before_upload                   VARCHAR              NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  UNIQUE ix_mt_trialrun_activity_id: ['activity_id']
+  ix_mt_trialrun_id: ['id']
+  ix_mt_trialrun_spv_plant_code: ['spv_plant_code']
+
+============================================================
+TABLE: mt_underconstruction  |  ROWS: 0
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('mt_underconstruction_id_seq'::regclass)
+  company_code                             VARCHAR              NULL
+  plant_code                               VARCHAR              NULL
+  material_code                            VARCHAR              NULL
+  quantity_uc                              DOUBLE PRECISION     NULL
+  vendor_code                              VARCHAR              NULL
+  posting_date                             TIMESTAMP            NULL
+  purchase_order                           VARCHAR              NULL
+  storage_location_mapping                 VARCHAR              NULL
+  movement_type_validation                 VARCHAR              NULL
+  mw_multiplication_factor                 DOUBLE PRECISION     NULL
+  quantity_mw                              DOUBLE PRECISION     NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  ix_mt_underconstruction_id: ['id']
+  ix_mt_underconstruction_plant_code: ['plant_code']
+
+============================================================
+TABLE: notification  |  ROWS: 2,722
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('notification_id_seq'::regclass)
+  project_name                             VARCHAR              NULL
+  module                                   VARCHAR              NULL
+  change_type                              VARCHAR              NULL
+  message                                  VARCHAR              NULL
+  is_read                                  BOOLEAN              NULL
+  created_at                               TIMESTAMP            NULL
+  block                                    VARCHAR              NULL
+  activity_name                            VARCHAR              NULL
+  old_value                                VARCHAR              NULL
+  new_value                                VARCHAR              NULL
+  reason                                   VARCHAR              NULL
+  action_status                            VARCHAR              NULL
+  category                                 VARCHAR              NULL
+  p6_object_id                             BIGINT               NULL
+  p6_type                                  VARCHAR              NULL
+  ai_suggestion                            VARCHAR              NULL
+INDEXES:
+  ix_notification_created_at: ['created_at']
+  ix_notification_id: ['id']
+  ix_notification_module: ['module']
+  ix_notification_project_name: ['project_name']
+
+============================================================
+TABLE: notification_thread  |  ROWS: 2
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('notification_thread_id_seq'::regclass)
+  notification_id                          INTEGER              NULL
+  sender                                   VARCHAR              NULL
+  message                                  VARCHAR              NULL
+  created_at                               TIMESTAMP            NULL
+FOREIGN KEYS:
+  ['notification_id'] -> notification.['id']
+INDEXES:
+  ix_notification_thread_id: ['id']
+  ix_notification_thread_notification_id: ['notification_id']
+
+============================================================
+TABLE: p6_activity  |  ROWS: 119,383
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('p6_activity_id_seq'::regclass)
+  p6_object_id                             BIGINT               NOT NULL
+  master_project_id                        INTEGER              NULL
+  activity_id                              VARCHAR              NULL
+  name                                     VARCHAR              NULL
+  status                                   VARCHAR              NULL
+  type                                     VARCHAR              NULL
+  start_date                               TIMESTAMP            NULL
+  finish_date                              TIMESTAMP            NULL
+  planned_start_date                       TIMESTAMP            NULL
+  planned_finish_date                      TIMESTAMP            NULL
+  actual_start_date                        TIMESTAMP            NULL
+  actual_finish_date                       TIMESTAMP            NULL
+  planned_duration                         DOUBLE PRECISION     NULL
+  actual_duration                          DOUBLE PRECISION     NULL
+  remaining_duration                       DOUBLE PRECISION     NULL
+  percent_complete                         DOUBLE PRECISION     NULL
+  total_float                              DOUBLE PRECISION     NULL
+  free_float                               DOUBLE PRECISION     NULL
+  is_critical                              BOOLEAN              NULL
+  is_longest_path                          BOOLEAN              NULL
+  wbs_object_id                            BIGINT               NULL
+  wbs_name                                 VARCHAR              NULL
+  wbs_code                                 VARCHAR              NULL
+  last_synced_at                           TIMESTAMP            NULL
+  baseline_start_date                      TIMESTAMP            NULL
+  baseline_finish_date                     TIMESTAMP            NULL
+  project_object_id                        BIGINT               NULL
+INDEXES:
+  ix_p6_activity_activity_id: ['activity_id']
+  ix_p6_activity_id: ['id']
+  ix_p6_activity_master_project_id: ['master_project_id']
+  UNIQUE ix_p6_activity_p6_object_id: ['p6_object_id']
+
+============================================================
+TABLE: p6_activity_risk  |  ROWS: 0
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('p6_activity_risk_id_seq'::regclass)
+  activity_object_id                       BIGINT               NOT NULL
+  project_object_id                        BIGINT               NOT NULL
+  risk_id                                  VARCHAR              NULL
+  risk_name                                VARCHAR              NULL
+  risk_object_id                           BIGINT               NULL
+  activity_id                              VARCHAR              NULL
+  activity_name                            VARCHAR              NULL
+  last_synced_at                           TIMESTAMP            NULL
+FOREIGN KEYS:
+  ['activity_object_id'] -> p6_activity.['p6_object_id']
+  ['project_object_id'] -> p6_project.['p6_object_id']
+INDEXES:
+  ix_p6_activity_risk_activity_object_id: ['activity_object_id']
+  ix_p6_activity_risk_id: ['id']
+  ix_p6_activity_risk_project_object_id: ['project_object_id']
+  ix_p6_activity_risk_risk_id: ['risk_id']
+
+============================================================
+TABLE: p6_baseline_project  |  ROWS: 197
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('p6_baseline_project_id_seq'::regclass)
+  p6_object_id                             BIGINT               NOT NULL
+  master_project_id                        INTEGER              NULL
+  baseline_type_name                       VARCHAR              NULL
+  name                                     VARCHAR              NULL
+  planned_start_date                       TIMESTAMP            NULL
+  finish_date                              TIMESTAMP            NULL
+  original_project_object_id               BIGINT               NULL
+  scheduled_finish_date                    TIMESTAMP            NULL
+  start_date                               TIMESTAMP            NULL
+  planned_duration                         DOUBLE PRECISION     NULL
+  actual_duration                          DOUBLE PRECISION     NULL
+  remaining_duration                       DOUBLE PRECISION     NULL
+  planned_cost                             DOUBLE PRECISION     NULL
+  actual_total_cost                        DOUBLE PRECISION     NULL
+  remaining_total_cost                     DOUBLE PRECISION     NULL
+  baseline_total_cost                      DOUBLE PRECISION     NULL
+  activity_count                           INTEGER              NULL
+  completed_activity_count                 INTEGER              NULL
+  in_progress_activity_count               INTEGER              NULL
+  not_started_activity_count               INTEGER              NULL
+  current_budget                           DOUBLE PRECISION     NULL
+  original_budget                          DOUBLE PRECISION     NULL
+  status                                   VARCHAR              NULL
+  last_synced_at                           TIMESTAMP            NULL
+INDEXES:
+  ix_p6_baseline_project_id: ['id']
+  ix_p6_baseline_project_master_project_id: ['master_project_id']
+  UNIQUE ix_p6_baseline_project_p6_object_id: ['p6_object_id']
+
+============================================================
+TABLE: p6_project  |  ROWS: 64
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('p6_project_id_seq'::regclass)
+  p6_object_id                             BIGINT               NOT NULL
+  project_id                               VARCHAR              NULL
+  name                                     VARCHAR              NULL
+  status                                   VARCHAR              NULL
+  start_date                               TIMESTAMP            NULL
+  finish_date                              TIMESTAMP            NULL
+  planned_start_date                       TIMESTAMP            NULL
+  scheduled_finish_date                    TIMESTAMP            NULL
+  data_date                                TIMESTAMP            NULL
+  must_finish_by_date                      TIMESTAMP            NULL
+  duration_percent_complete                DOUBLE PRECISION     NULL
+  planned_duration                         DOUBLE PRECISION     NULL
+  actual_duration                          DOUBLE PRECISION     NULL
+  remaining_duration                       DOUBLE PRECISION     NULL
+  activity_count                           INTEGER              NULL
+  completed_activity_count                 INTEGER              NULL
+  in_progress_activity_count               INTEGER              NULL
+  not_started_activity_count               INTEGER              NULL
+  total_float                              DOUBLE PRECISION     NULL
+  finish_date_variance                     DOUBLE PRECISION     NULL
+  start_date_variance                      DOUBLE PRECISION     NULL
+  duration_variance                        DOUBLE PRECISION     NULL
+  actual_total_cost                        DOUBLE PRECISION     NULL
+  planned_cost                             DOUBLE PRECISION     NULL
+  cost_performance_index                   DOUBLE PRECISION     NULL
+  schedule_performance_index               DOUBLE PRECISION     NULL
+  current_budget                           DOUBLE PRECISION     NULL
+  total_cost_variance                      DOUBLE PRECISION     NULL
+  location_name                            VARCHAR              NULL
+  parent_eps_name                          VARCHAR              NULL
+  current_baseline_project_object_id       BIGINT               NULL
+  baseline_start_date                      TIMESTAMP            NULL
+  baseline_finish_date                     TIMESTAMP            NULL
+  baseline_duration                        DOUBLE PRECISION     NULL
+  baseline_total_cost                      DOUBLE PRECISION     NULL
+  baseline_completed_activity_count        INTEGER              NULL
+  baseline_in_progress_activity_count      INTEGER              NULL
+  baseline_not_started_activity_count      INTEGER              NULL
+  last_synced_at                           TIMESTAMP            NULL
+INDEXES:
+  ix_p6_project_id: ['id']
+  ix_p6_project_name: ['name']
+  UNIQUE ix_p6_project_p6_object_id: ['p6_object_id']
+  ix_p6_project_project_id: ['project_id']
+  ix_p6_project_status: ['status']
+
+============================================================
+TABLE: p6_resource_assignment  |  ROWS: 270,957
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('p6_resource_assignment_id_seq'::regclass)
+  p6_object_id                             BIGINT               NOT NULL
+  activity_object_id                       BIGINT               NULL
+  project_object_id                        BIGINT               NULL
+  resource_type                            VARCHAR              NULL
+  resource_name                            VARCHAR              NULL
+  planned_units                            DOUBLE PRECISION     NULL
+  actual_units                             DOUBLE PRECISION     NULL
+  last_synced_at                           TIMESTAMP            NULL
+FOREIGN KEYS:
+  ['activity_object_id'] -> p6_activity.['p6_object_id']
+  ['project_object_id'] -> p6_project.['p6_object_id']
+INDEXES:
+  ix_p6_resource_assignment_activity_object_id: ['activity_object_id']
+  ix_p6_resource_assignment_id: ['id']
+  UNIQUE ix_p6_resource_assignment_p6_object_id: ['p6_object_id']
+  ix_p6_resource_assignment_project_object_id: ['project_object_id']
+
+============================================================
+TABLE: p6_wbs_node  |  ROWS: 110,485
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('p6_wbs_node_id_seq'::regclass)
+  p6_object_id                             BIGINT               NOT NULL
+  project_object_id                        BIGINT               NOT NULL
+  wbs_code                                 VARCHAR              NULL
+  wbs_name                                 VARCHAR              NULL
+  parent_object_id                         BIGINT               NULL
+  is_block                                 BOOLEAN              NULL
+  block_number                             INTEGER              NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  ix_p6_wbs_node_id: ['id']
+  UNIQUE ix_p6_wbs_node_p6_object_id: ['p6_object_id']
+  ix_p6_wbs_node_parent_object_id: ['parent_object_id']
+  ix_p6_wbs_node_project_object_id: ['project_object_id']
+
+============================================================
+TABLE: project_mapping  |  ROWS: 64
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('project_mapping_id_seq'::regclass)
+  project                                  VARCHAR              NULL
+  spv_name                                 VARCHAR              NULL
+  project_id                               VARCHAR              NULL
+  project_name_from_p6                     VARCHAR              NULL
+  plot_no                                  VARCHAR              NULL
+  category                                 VARCHAR              NULL
+  mms_type                                 VARCHAR              NULL
+  capacity_mwac                            DOUBLE PRECISION     NULL
+  ol                                       VARCHAR              NULL
+  capacity_mwdc                            DOUBLE PRECISION     NULL
+  spv_plant_code                           VARCHAR              NULL
+  agel                                     VARCHAR              NULL
+  module_wbs                               VARCHAR              NULL
+  age6l                                    VARCHAR              NULL
+  cluster                                  VARCHAR              NULL
+  not_allocated                            VARCHAR              NULL
+  source_of_origin                         VARCHAR              NULL
+  priority                                 VARCHAR              NULL
+  tc_progress                              JSONB                NULL
+  subcluster                               VARCHAR              NULL
+INDEXES:
+  ix_project_mapping_id: ['id']
+  ix_project_mapping_module_wbs: ['module_wbs']
+  ix_project_mapping_project: ['project']
+  ix_project_mapping_project_id: ['project_id']
+  ix_project_mapping_spv_plant_code: ['spv_plant_code']
+
+============================================================
+TABLE: tc_network_edge  |  ROWS: 325
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('tc_network_edge_id_seq'::regclass)
+  region                                   VARCHAR              NULL
+  edge_id                                  VARCHAR              NULL
+  from_node                                VARCHAR              NULL
+  from_label                               VARCHAR              NULL
+  to_node                                  VARCHAR              NULL
+  to_label                                 VARCHAR              NULL
+  projects                                 VARCHAR              NULL
+  contractor                               VARCHAR              NULL
+  voltage                                  VARCHAR              NULL
+  length                                   VARCHAR              NULL
+  status                                   VARCHAR              NULL
+  normalized_status                        VARCHAR              NULL
+  erection                                 VARCHAR              NULL
+  foundation                               VARCHAR              NULL
+  stringing                                VARCHAR              NULL
+  expected_date                            VARCHAR              NULL
+  mapping_id                               INTEGER              NULL
+  upload_time                              TIMESTAMP            NULL
+  scd                                      VARCHAR              NULL
+  charged_date                             VARCHAR              NULL
+  is_delayed                               BOOLEAN              NULL
+FOREIGN KEYS:
+  ['mapping_id'] -> project_mapping.['id']
+INDEXES:
+  ix_tc_network_edge_edge_id: ['edge_id']
+  ix_tc_network_edge_id: ['id']
+  ix_tc_network_edge_region: ['region']
+
+============================================================
+TABLE: tc_network_node  |  ROWS: 52
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('tc_network_node_id_seq'::regclass)
+  region                                   VARCHAR              NULL
+  node_id                                  VARCHAR              NULL
+  label                                    VARCHAR              NULL
+  type                                     VARCHAR              NULL
+  status                                   VARCHAR              NULL
+  x                                        DOUBLE PRECISION     NULL
+  y                                        DOUBLE PRECISION     NULL
+  upload_time                              TIMESTAMP            NULL
+INDEXES:
+  ix_tc_network_node_id: ['id']
+  ix_tc_network_node_node_id: ['node_id']
+  ix_tc_network_node_region: ['region']
+
+============================================================
+TABLE: tc_project_entry  |  ROWS: 236
+============================================================
+COLUMNS:
+  id                                       INTEGER              NOT NULL DEFAULT=nextval('tc_project_entry_id_seq'::regclass)
+  region                                   VARCHAR              NULL
+  project                                  VARCHAR              NULL
+  phase                                    VARCHAR              NULL
+  kps                                      VARCHAR              NULL
+  pss                                      VARCHAR              NULL
+  block                                    VARCHAR              NULL
+  breakup                                  VARCHAR              NULL
+  mw                                       DOUBLE PRECISION     NULL
+  mapping_id                               INTEGER              NULL
+  upload_time                              TIMESTAMP            NULL
+FOREIGN KEYS:
+  ['mapping_id'] -> project_mapping.['id']
+INDEXES:
+  ix_tc_project_entry_id: ['id']
+  ix_tc_project_entry_project: ['project']
+  ix_tc_project_entry_region: ['region']

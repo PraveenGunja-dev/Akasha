@@ -122,38 +122,6 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         act_stats[pid]['Total'] += count
         if sum_pct:
             act_stats[pid]['SumPct'] += sum_pct
-    # Bulk calculate activity completion timeline and delayed activities
-    timeline_stats = {}
-    import calendar
-    from datetime import date, datetime
-    from sqlalchemy import case
-    
-    now = datetime.utcnow()
-    this_month = now.month
-    this_year = now.year
-    start_this = date(this_year, this_month, 1)
-    end_this = date(this_year, this_month, calendar.monthrange(this_year, this_month)[1])
-    
-    next_month = this_month + 1 if this_month < 12 else 1
-    next_year = this_year if this_month < 12 else this_year + 1
-    start_next = date(next_year, next_month, 1)
-    end_next = date(next_year, next_month, calendar.monthrange(next_year, next_month)[1])
-    
-    activity_timeline_query = db.query(
-        models.P6Activity.project_object_id,
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date >= start_this) & (models.P6Activity.planned_finish_date <= end_this), 1), else_=0)).label('this_month'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date >= start_next) & (models.P6Activity.planned_finish_date <= end_next), 1), else_=0)).label('next_month'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date > end_next), 1), else_=0)).label('later'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.total_float < 0), 1), else_=0)).label('delayed')
-    ).group_by(models.P6Activity.project_object_id).all()
-    
-    for row in activity_timeline_query:
-        timeline_stats[row.project_object_id] = {
-            'this_month': row.this_month or 0,
-            'next_month': row.next_month or 0,
-            'later': row.later or 0,
-            'delayed': row.delayed or 0
-        }
     
     # Pre-parse edge phases ONCE for extreme performance
     parsed_edge_phases = {}
@@ -460,11 +428,45 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         activities_completing_later = 0
         delayed_activities = 0
         if p6_proj:
-            stats = timeline_stats.get(p6_proj.p6_object_id, {})
-            activities_completing_this_month = stats.get('this_month', 0)
-            activities_completing_next_month = stats.get('next_month', 0)
-            activities_completing_later = stats.get('later', 0)
-            delayed_activities = stats.get('delayed', 0)
+            import calendar
+            from datetime import date, datetime
+            now = datetime.utcnow()
+            
+            this_month = now.month
+            this_year = now.year
+            start_this = date(this_year, this_month, 1)
+            end_this = date(this_year, this_month, calendar.monthrange(this_year, this_month)[1])
+            
+            next_month = this_month + 1 if this_month < 12 else 1
+            next_year = this_year if this_month < 12 else this_year + 1
+            start_next = date(next_year, next_month, 1)
+            end_next = date(next_year, next_month, calendar.monthrange(next_year, next_month)[1])
+            
+            activities_completing_this_month = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.planned_finish_date >= start_this,
+                models.P6Activity.planned_finish_date <= end_this
+            ).count()
+            
+            activities_completing_next_month = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.planned_finish_date >= start_next,
+                models.P6Activity.planned_finish_date <= end_next
+            ).count()
+            
+            activities_completing_later = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.planned_finish_date > end_next
+            ).count()
+            
+            delayed_activities = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.total_float < 0
+            ).count()
 
         forecast_finish = p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.scheduled_finish_date else "N/A"
         forecast_month = p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj and p6_proj.scheduled_finish_date else "TBD"
@@ -535,7 +537,11 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     return sorted(results, key=lambda x: x.get('integrationCount', 0), reverse=True)
 
 
+
 def get_project_360_detail(db: Session, project_id: str):
+    import time
+    t0 = time.time()
+
     """
     Returns enriched per-project intelligence detail:
     - All P6 fields (dates, floats, costs, baselines)
@@ -780,10 +786,10 @@ def get_project_360_detail(db: Session, project_id: str):
         "actualDuration": p6_proj.actual_duration,
         "remainingDuration": p6_proj.remaining_duration,
         # Activity Counts
-        "activityCount": len(p6_proj.activities) if p6_proj.activities else p6_proj.activity_count,
-        "completedActivities": sum(1 for a in p6_proj.activities if a.status == 'Completed') if p6_proj.activities else 0,
-        "inProgressActivities": sum(1 for a in p6_proj.activities if a.status == 'In Progress') if p6_proj.activities else 0,
-        "notStartedActivities": sum(1 for a in p6_proj.activities if a.status == 'Not Started') if p6_proj.activities else 0,
+        "activityCount": p6_proj.activity_count,
+        "completedActivities": p6_proj.completed_activity_count,
+        "inProgressActivities": p6_proj.in_progress_activity_count,
+        "notStartedActivities": p6_proj.not_started_activity_count,
         # Float & Variance
         "totalFloat": p6_proj.total_float,
         "finishDateVariance": p6_proj.finish_date_variance,
@@ -838,18 +844,15 @@ def get_project_360_detail(db: Session, project_id: str):
             }
             for act in p6_proj.activities
         ] if p6_proj.activities else [],
-        "wbsNodes": sorted(
-            [
-                {
-                    "wbsObjectId": node.p6_object_id,
-                    "parentObjectId": node.parent_object_id,
-                    "name": node.wbs_name,
-                    "code": node.wbs_code
-                }
-                for node in db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == p6_proj.p6_object_id).all()
-            ],
-            key=lambda x: int(str(x["name"]).split()[0]) if str(x["name"]).split() and str(x["name"]).split()[0].isdigit() else 999999
-        )
+        "wbsNodes": [
+            {
+                "wbsObjectId": node.p6_object_id,
+                "parentObjectId": node.parent_object_id,
+                "name": node.wbs_name,
+                "code": node.wbs_code
+            }
+            for node in db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == p6_proj.p6_object_id).all()
+        ]
     }
 
     # ── Delayed Activities & MW Capacity ──
@@ -1041,10 +1044,10 @@ def get_project_360_detail(db: Session, project_id: str):
                 "totalInTransitQty": total_transit_qty,
                 "totalInventoryQty": total_inv_qty,
                 "totalConsumedQty": consumed_qty,
-                "totalBudgetINR": total_budget_inr,
+                "totalBudgetINR": next((x.get("budgetINR", total_budget_inr) for x in calculate_project_360_metrics(db) if x["projectId"] == project_id), total_budget_inr),
                 "totalDeliveredINR": total_delivered_inr,
                 "totalInventoryValueINR": total_inv_inr,
-                "totalExpenditureINR": expenditure_inr,
+                "totalExpenditureINR": next((x.get("expenditureINR", expenditure_inr) for x in calculate_project_360_metrics(db) if x["projectId"] == project_id), expenditure_inr),
             }
         },
         "tc": {

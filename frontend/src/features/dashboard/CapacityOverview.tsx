@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { createPortal } from "react-dom";
 import ReactECharts from "echarts-for-react";
+import { useSearchParams } from "react-router-dom";
 import { Activity, Zap, Sun, Wind, Calendar, ServerCrash, RefreshCw, TrendingUp, TrendingDown, Info, Layers } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -273,9 +274,13 @@ export default function CapacityOverview() {
   const [error, setError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'FY' | 'Monthly'>('FY');
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
 
   useEffect(() => {
-    fetch('/akasha/api/dashboard/capacity-overview')
+    setLoading(true);
+    const url = portfolio ? `/akasha/api/dashboard/capacity-overview?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/dashboard/capacity-overview';
+    fetch(url)
       .then(res => res.json())
       .then(d => {
         setData(d);
@@ -286,7 +291,7 @@ export default function CapacityOverview() {
         setError("Failed to load Capacity Overview data.");
         setLoading(false);
       });
-  }, []);
+  }, [portfolio]);
 
   if (loading) {
     return (

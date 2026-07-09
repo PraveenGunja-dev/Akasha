@@ -410,17 +410,19 @@ class P6Service:
         Fetch all projects from P6, map fields, and upsert into the database.
         Returns the number of projects synced.
         """
-        from models import P6Project
+        from models import P6Project, ProjectMapping
 
         raw_projects_list = self.fetch_projects(project_object_id=project_object_id)
         if not raw_projects_list:
             logger.warning("No projects returned from P6 API")
             return 0
             
-        # Deduplicate by ObjectId in case P6 returns duplicates
+        mapped_ids = {m.project_id for m in db.query(ProjectMapping).all()}
+            
+        # Deduplicate by ObjectId in case P6 returns duplicates, and filter by mapped projects
         raw_projects = {}
         for proj in raw_projects_list:
-            if "ObjectId" in proj:
+            if "ObjectId" in proj and proj.get("Id") in mapped_ids:
                 raw_projects[proj["ObjectId"]] = proj
 
         synced_count = 0
@@ -521,17 +523,20 @@ class P6Service:
         Fetch baseline projects from P6, map fields, and upsert into the database.
         Returns the number of baselines synced.
         """
-        from models import P6BaselineProject
+        from models import P6BaselineProject, P6Project, ProjectMapping
 
         raw_baselines_list = self.fetch_baseline_projects(project_object_id)
         if not raw_baselines_list:
             logger.warning("No baseline projects returned from P6 API")
             return 0
 
-        # Deduplicate
+        mapped_ids = {m.project_id for m in db.query(ProjectMapping).all()}
+        mapped_p6_objs = {p.p6_object_id for p in db.query(P6Project).filter(P6Project.project_id.in_(mapped_ids)).all()}
+
+        # Deduplicate and filter by mapped projects
         raw_baselines = {}
         for base in raw_baselines_list:
-            if "ObjectId" in base:
+            if "ObjectId" in base and base.get("OriginalProjectObjectId") in mapped_p6_objs:
                 raw_baselines[base["ObjectId"]] = base
 
         synced_count = 0

@@ -34,17 +34,31 @@ _SUMMARY_CACHE = {"data": None, "timestamp": 0}
 _CACHE_TTL = 300  # 5 minutes
 
 @router.get("/summary")
-def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
+def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a global portfolio summary and a unified list of all mapped projects
     with data from P6, SAP, and Transmission. Includes all P6 projects even if unmapped.
     """
     global _SUMMARY_CACHE
-    if not nocache and _SUMMARY_CACHE["data"] and time.time() - _SUMMARY_CACHE["timestamp"] < _CACHE_TTL:
-        return _SUMMARY_CACHE["data"]
-        
-    raw_mappings = db.query(models.ProjectMapping).all()
+    cache_key = str(portfolio).lower() if portfolio else "all"
+    
+    if not nocache and cache_key in _SUMMARY_CACHE:
+        entry = _SUMMARY_CACHE[cache_key]
+        if time.time() - entry["timestamp"] < _CACHE_TTL:
+            return entry["data"]
+            
+    query = db.query(models.ProjectMapping)
+    if portfolio and portfolio.lower() != "all portfolios":
+        query = query.filter(
+            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
+            
+    raw_mappings = query.all()
     raw_p6_projects = db.query(models.P6Project).all()
+    if portfolio and portfolio.lower() != "all portfolios":
+        mapped_ids = [m.project_id for m in raw_mappings if m.project_id]
+        raw_p6_projects = [p for p in raw_p6_projects if p.project_id in mapped_ids]
     
     mappings = raw_mappings
     p6_projects = raw_p6_projects
@@ -258,8 +272,7 @@ def get_dashboard_summary(nocache: bool = False, db: Session = Depends(get_db)):
         "projects": project_list
     }
     
-    _SUMMARY_CACHE["data"] = result
-    _SUMMARY_CACHE["timestamp"] = time.time()
+    _SUMMARY_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
     return result
 
 @router.get("/projects/{mapping_id}")
@@ -339,7 +352,7 @@ def global_search(q: str, db: Session = Depends(get_db)):
     q_lower = q.lower().strip()
     results = []
     
-    # Search Projects (P6Project)
+    # 1. Search Projects
     projects = db.query(models.P6Project).filter(
         func.lower(models.P6Project.name).contains(q_lower) | 
         func.lower(models.P6Project.project_id).contains(q_lower)
@@ -354,7 +367,16 @@ def global_search(q: str, db: Session = Depends(get_db)):
             "raw": p.project_id
         })
         
-    # Search Purchase Orders (MTPOAmount)
+    # Helper to resolve plant_code to project_id
+    def get_project_id_from_plant(plant_code):
+        if not plant_code: return None
+        mapping = db.query(models.ProjectMapping).filter(
+            (models.ProjectMapping.spv_plant_code == plant_code) | 
+            (models.ProjectMapping.agel == plant_code)
+        ).first()
+        return mapping.project_id if mapping else None
+
+    # 2. Search Purchase Orders
     pos = db.query(models.MTPOAmount).filter(
         func.lower(models.MTPOAmount.purchasing_document).contains(q_lower) |
         func.lower(models.MTPOAmount.vendor_name).contains(q_lower) |
@@ -362,15 +384,16 @@ def global_search(q: str, db: Session = Depends(get_db)):
     ).limit(10).all()
     
     for po in pos:
+        proj_id = get_project_id_from_plant(po.plant_code)
         results.append({
             "id": f"po_{po.id}",
             "type": "Purchase Order",
             "title": f"PO-{po.purchasing_document}",
-            "snippet": f"Vendor: {po.vendor_name}. Value: ${po.net_order_value or 0:,.2f}. Material: {po.material_code}",
-            "raw": po.purchasing_document
+            "snippet": f"Vendor: {po.vendor_name}. Value: INR {po.net_order_value or 0:,.2f}. Material: {po.material_code}",
+            "raw": proj_id or po.purchasing_document # Fallback if unmapped
         })
         
-    # Search Inventory/Materials (MTInventory)
+    # 3. Search Inventory/Materials
     materials = db.query(models.MTInventory).filter(
         func.lower(models.MTInventory.material_code).contains(q_lower) |
         func.lower(models.MTInventory.vendor_code).contains(q_lower) |
@@ -378,40 +401,52 @@ def global_search(q: str, db: Session = Depends(get_db)):
     ).limit(10).all()
     
     for m in materials:
+        proj_id = get_project_id_from_plant(m.plant_code)
         results.append({
             "id": f"mat_{m.id}",
             "type": "Material Component",
             "title": m.material_code,
             "snippet": f"Inventory: {m.quantity_inv} at Plant {m.plant_code}. WBS: {m.wbs_element}",
-            "raw": m.material_code
+            "raw": proj_id or m.material_code
         })
         
-    # Vendors (unique from POs)
-    vendors = db.query(models.MTPOAmount.vendor_name, models.MTPOAmount.vendor_code).filter(
+    # 4. Vendors (unique from POs)
+    vendors = db.query(models.MTPOAmount).filter(
         func.lower(models.MTPOAmount.vendor_name).contains(q_lower) |
         func.lower(models.MTPOAmount.vendor_code).contains(q_lower)
-    ).distinct().limit(5).all()
+    ).limit(5).all()
     
-    for idx, v in enumerate(vendors):
+    seen_vendors = set()
+    for v in vendors:
+        v_key = v.vendor_code or v.vendor_name
+        if v_key in seen_vendors:
+            continue
+        seen_vendors.add(v_key)
+        
+        proj_id = get_project_id_from_plant(v.plant_code)
         results.append({
-            "id": f"vend_{idx}_{v.vendor_code}",
+            "id": f"vend_{v.id}",
             "type": "Vendor",
             "title": v.vendor_name or v.vendor_code,
-            "snippet": f"Vendor Code: {v.vendor_code}",
-            "raw": v.vendor_code
+            "snippet": f"Vendor Code: {v.vendor_code} (Plant: {v.plant_code})",
+            "raw": proj_id or v.vendor_code
         })
         
     return results
 
 @router.get("/knowledge-graph")
-def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
+def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a single unified knowledge graph with rich detail data per project:
     Root → EPS Regions → Projects (with P6/SAP/TC details) → Key Vendors
     """
     global _KG_CACHE
-    if not nocache and _KG_CACHE["data"] and time.time() - _KG_CACHE["timestamp"] < _CACHE_TTL:
-        return _KG_CACHE["data"]
+    cache_key = str(portfolio).lower() if portfolio else "all"
+    
+    if not nocache and cache_key in _KG_CACHE:
+        entry = _KG_CACHE[cache_key]
+        if time.time() - entry["timestamp"] < _CACHE_TTL:
+            return entry["data"]
         
     nodes = []
     links = []
@@ -423,8 +458,19 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
         "symbolSize": 70, "value": "Enterprise Root"
     })
     
-    all_mappings = db.query(models.ProjectMapping).all()
-    eps_groups = {}
+    query = db.query(models.ProjectMapping)
+    if portfolio and portfolio.lower() != "all portfolios":
+        query = query.filter(
+            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
+    
+    all_mappings = query.all()
+    portfolio_groups = {}
+    
+    # Pre-load Capacity Overview to get accurate COD and Trial Run MW
+    cap_data = get_capacity_overview(portfolio, db)
+    proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
     
     # Pre-load TC data for exact project association
     import json
@@ -447,8 +493,19 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
         p6 = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
         eps = (p6.parent_eps_name if p6 else None) or "Unassigned"
         
-        if eps not in eps_groups:
-            eps_groups[eps] = []
+        raw_port = m.cluster or m.category or "Other"
+        p_lower = raw_port.lower()
+        if "khavda" in p_lower: port_name = "Solar Khavda"
+        elif "rajasthan" in p_lower: port_name = "Solar Rajasthan"
+        elif "wind" in p_lower: port_name = "Wind"
+        elif "bess" in p_lower: port_name = "BESS"
+        else: port_name = raw_port
+        
+        if port_name not in portfolio_groups:
+            portfolio_groups[port_name] = {}
+            
+        if eps not in portfolio_groups[port_name]:
+            portfolio_groups[port_name][eps] = []
         
         # ── P6 Schedule Data ──
         health = "unknown"
@@ -499,9 +556,13 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
             total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
                 models.ProjectMapping.spv_plant_code == plant_code
             ).scalar() or 1.0
-            
             project_capacity = m.capacity_mwac or 0
-            allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
+            
+            if project_capacity == 0:
+                mapping_count = db.query(models.ProjectMapping).filter(models.ProjectMapping.spv_plant_code == plant_code).count()
+                allocation_ratio = (1.0 / mapping_count) if mapping_count > 0 else 1.0
+            else:
+                allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
             
             if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
                 wbs_prefix = wbs_str[:6]
@@ -631,75 +692,107 @@ def get_knowledge_graph(nocache: bool = False, db: Session = Depends(get_db)):
                     "total_lines": lines_charged.get("total", len(tc_edges)),
                     "charged_lines": lines_charged.get("count", sum(1 for e in tc_edges if str(e.status).strip().lower() == "charged")),
                     "delayed_lines": tc_progress.get("delayed", {}).get("count", sum(1 for e in tc_edges if str(e.status).strip().lower() == "delayed")),
-                    "lines": [{"name": f"{e.from_label} \u2192 {e.to_label}", "status": e.status} for e in tc_edges]
+                    "lines": [
+                        {
+                            "name": f"{e.from_label} \u2192 {e.to_label}", 
+                            "status": e.status,
+                            "normalized_status": e.normalized_status,
+                            "foundation": e.foundation,
+                            "erection": e.erection,
+                            "stringing": e.stringing,
+                            "expected_date": e.expected_date
+                        } for e in tc_edges
+                    ]
                 }
         
-        eps_groups[eps].append({
+        # ── Capacity COD & TR ──
+        pm_cap = proj_cap_dict.get(m.project_id, {})
+        cod_mw = pm_cap.get("cod_mw", 0)
+        tr_mw = pm_cap.get("tr_mw", 0)
+
+        portfolio_groups[port_name][eps].append({
             "id": m.id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
             "capacity": m.capacity_mwac or 0, "health": health,
             "progress": progress, "spv": m.spv_name or "?",
             "plant_code": plant_code,
+            "cod_mw": cod_mw, "tr_mw": tr_mw,
             "p6": p6_data, "sap": sap_data, "tc": tc_data
         })
     
-    # Add EPS region nodes
-    for eps_name, projects in eps_groups.items():
-        eps_id = f"eps_{eps_name}"
-        total_mw = sum(p["capacity"] for p in projects)
-        delayed = sum(1 for p in projects if p["health"] == "delayed")
+    # Add Portfolio and EPS nodes
+    for port_name, eps_dict in portfolio_groups.items():
+        port_id = f"port_{port_name.replace(' ', '_')}"
+        total_mw_port = sum(sum(p["capacity"] for p in projs) for projs in eps_dict.values())
+        cod_mw_port = sum(sum(p.get("cod_mw", 0) for p in projs) for projs in eps_dict.values())
+        tr_mw_port = sum(sum(p.get("tr_mw", 0) for p in projs) for projs in eps_dict.values())
         
         nodes.append({
-            "id": eps_id, "name": eps_name, "category": 1,
-            "symbolSize": max(35, min(55, total_mw / 150)),
-            "value": f"{len(projects)} projects · {round(total_mw)} MW",
-            "delayed": delayed, "on_track": len(projects) - delayed,
-            "projects_list": [{"id": p["id"], "name": p["name"], "capacity": p["capacity"], "health": p["health"], "progress": p["progress"]} for p in projects]
+            "id": port_id, "name": port_name, "category": 1,
+            "symbolSize": 50,
+            "value": f"{len(eps_dict)} Regions",
+            "mw_stats": {"total": round(total_mw_port), "cod": round(cod_mw_port), "trial": round(tr_mw_port)}
         })
-        links.append({"source": "root", "target": eps_id})
+        links.append({"source": "root", "target": port_id})
         
-        for p in projects:
-            proj_id = f"proj_{p['id']}"
-            nodes.append({
-                "id": proj_id, "name": p["name"], "category": 2 if p["health"] == "on_track" else 3,
-                "symbolSize": max(15, min(35, p["capacity"] / 30)),
-                "value": f"{p['capacity']} MW · {p['progress']}%",
-                "health": p["health"], "progress": p["progress"],
-                "spv": p["spv"], "capacity": p["capacity"],
-                "p6": p["p6"], "sap": p["sap"], "tc": p["tc"]
-            })
-            links.append({"source": eps_id, "target": proj_id})
+        for eps_name, projects in eps_dict.items():
+            eps_id = f"eps_{port_id}_{eps_name.replace(' ', '_')}"
+            total_mw = sum(p["capacity"] for p in projects)
+            cod_mw = sum(p.get("cod_mw", 0) for p in projects)
+            tr_mw = sum(p.get("tr_mw", 0) for p in projects)
+            delayed = sum(1 for p in projects if p["health"] == "delayed")
             
-            # Top vendor per project
-            if p["plant_code"]:
-                top_po = db.query(models.MTPOAmount).filter(
-                    models.MTPOAmount.plant_code == p["plant_code"]
-                ).order_by(models.MTPOAmount.net_order_value.desc()).first()
+            nodes.append({
+                "id": eps_id, "name": eps_name, "category": 2,
+                "symbolSize": max(35, min(55, total_mw / 150)),
+                "value": f"{len(projects)} projects",
+                "mw_stats": {"total": round(total_mw), "cod": round(cod_mw), "trial": round(tr_mw)},
+                "delayed": delayed, "on_track": len(projects) - delayed,
+                "projects_list": [{"id": p["id"], "name": p["name"], "capacity": p["capacity"], "health": p["health"], "progress": p["progress"]} for p in projects]
+            })
+            links.append({"source": port_id, "target": eps_id})
+            
+            for p in projects:
+                proj_id = f"proj_{p['id']}"
+                nodes.append({
+                    "id": proj_id, "name": p["name"], "category": 3 if p["health"] == "on_track" else 4,
+                    "symbolSize": max(15, min(35, p["capacity"] / 30)),
+                    "value": f"{p['capacity']} MW · {p['progress']}%",
+                    "health": p["health"], "progress": p["progress"],
+                    "spv": p["spv"], "capacity": p["capacity"],
+                    "p6": p["p6"], "sap": p["sap"], "tc": p["tc"]
+                })
+                links.append({"source": eps_id, "target": proj_id})
                 
-                if top_po and top_po.vendor_name:
-                    vcode = top_po.vendor_code or top_po.vendor_name
-                    vname = (top_po.vendor_name or "Unknown").strip()[:22]
+                # Top vendor per project
+                if p["plant_code"]:
+                    top_po = db.query(models.MTPOAmount).filter(
+                        models.MTPOAmount.plant_code == p["plant_code"]
+                    ).order_by(models.MTPOAmount.net_order_value.desc()).first()
                     
-                    if vcode not in seen_vendors:
-                        vendor_id = f"vendor_{len(seen_vendors)}"
-                        seen_vendors[vcode] = vendor_id
-                        nodes.append({
-                            "id": vendor_id, "name": vname, "category": 4,
-                            "symbolSize": 22,
-                            "value": f"Vendor · {vcode}"
+                    if top_po and top_po.vendor_name:
+                        vcode = top_po.vendor_code or top_po.vendor_name
+                        vname = (top_po.vendor_name or "Unknown").strip()[:22]
+                        
+                        if vcode not in seen_vendors:
+                            vendor_id = f"vendor_{len(seen_vendors)}"
+                            seen_vendors[vcode] = vendor_id
+                            nodes.append({
+                                "id": vendor_id, "name": vname, "category": 5,
+                                "symbolSize": 22,
+                                "value": f"Vendor · {vcode}"
+                            })
+                        
+                        links.append({
+                            "source": proj_id, "target": seen_vendors[vcode],
+                            "lineStyle": {"type": "dashed", "width": 1, "color": "rgba(245,158,11,0.3)"}
                         })
-                    
-                    links.append({
-                        "source": proj_id, "target": seen_vendors[vcode],
-                        "lineStyle": {"type": "dashed", "width": 1, "color": "rgba(245,158,11,0.3)"}
-                    })
     
     result = {"nodes": nodes, "links": links}
-    _KG_CACHE["data"] = result
-    _KG_CACHE["timestamp"] = time.time()
+    _KG_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
     return result
 
 @router.get("/capacity-overview")
-def get_capacity_overview(db: Session = Depends(get_db)):
+def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """
     Returns Capacity overview based on actual COD and Trial Run milestones.
     Logic:
@@ -718,8 +811,15 @@ def get_capacity_overview(db: Session = Depends(get_db)):
 
     import re
 
-    # Source 1: ProjectMapping for source of truth (Total 60 tracked projects)
-    mappings = db.query(models.ProjectMapping).all()
+    # Source 1: ProjectMapping for source of truth
+    query = db.query(models.ProjectMapping)
+    if portfolio and portfolio.lower() != "all portfolios":
+        query = query.filter(
+            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
+            
+    mappings = query.all()
     p6_projs = db.query(models.P6Project).all()
     
     project_map = {}
@@ -765,10 +865,7 @@ def get_capacity_overview(db: Session = Depends(get_db)):
         (
             (P6Activity.name.ilike('%trial run certificate%')) |
             (P6Activity.name.ilike('%trail run certificate%')) |
-            (P6Activity.name.ilike('%WTG Trial Run%')) |
-            (P6Activity.name.ilike('%Trial Operation%')) |
-            (P6Activity.name.ilike('%cod%')) |
-            (P6Activity.name.ilike('%scod%'))
+            (P6Activity.name.ilike('%cod%'))
         ),
         ~P6Activity.wbs_name.ilike('%milestone%'),
         ~P6Activity.type.ilike('%milestone%')
@@ -797,7 +894,7 @@ def get_capacity_overview(db: Session = Depends(get_db)):
         b_key = f"{obj_id}::{b_name}"
         actual_dt = act.actual_finish_date or act.actual_start_date or act.start_date
         is_cod = "cod" in act_name
-        is_tr = "trial" in act_name or "trail" in act_name
+        is_tr = "trial run certificate" in act_name or "trail run certificate" in act_name
         is_completed = (act.status == 'Completed')
         
         if b_key not in block_map:
@@ -847,18 +944,14 @@ def get_capacity_overview(db: Session = Depends(get_db)):
 
         # Distribute capacity to blocks
         if pm['type'] == 'Solar':
-            remaining_cap = pm['total_capacity']
-            for i, b in enumerate(blocks):
-                if remaining_cap <= 0:
-                    b["capacity"] = 0
-                elif i == len(blocks) - 1:
-                    b["capacity"] = round(remaining_cap, 2)
-                    remaining_cap = 0
-                else:
-                    assigned = min(12.5, remaining_cap)
-                    b["capacity"] = assigned
-                    remaining_cap -= assigned
-                    remaining_cap = round(remaining_cap, 2)
+            import math
+            total_cap = pm['total_capacity']
+            expected_blocks = math.ceil(total_cap / 12.5) if total_cap > 0 else 0
+            cap_per_block = (total_cap / expected_blocks) if expected_blocks > 0 else 0
+            
+            pm['total_blocks'] = expected_blocks
+            for b in blocks:
+                b["capacity"] = cap_per_block
         else:
             for b in blocks:
                 b["capacity"] = pm['_wtg_mw']
@@ -866,7 +959,8 @@ def get_capacity_overview(db: Session = Depends(get_db)):
         # Now process the blocks for aggregation
         for b in blocks:
             cap = b["capacity"]
-            pm['total_blocks'] += 1
+            if pm['type'] == 'Wind':
+                pm['total_blocks'] += 1
 
             # Determine the FY for this block based on its milestone date
             actual_dt = b["cod_finish"] or b["cod_start"] or b["tr_finish"] or b["tr_start"]

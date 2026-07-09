@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import LeftSidebar from '../components/layout/LeftSidebar';
@@ -65,6 +65,9 @@ export default function CEODashboard() {
     }
   }, [projectId, location, navigate]);
 
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
+
   // Briefing Data State
   const [briefing, setBriefing] = useState<any>(null);
   const [briefingLoading, setBriefingLoading] = useState(true);
@@ -85,15 +88,18 @@ export default function CEODashboard() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const query = selectedProject !== 'All' ? `?project_name=${encodeURIComponent(selectedProject)}` : '';
+      const queryParams = new URLSearchParams();
+      if (selectedProject !== 'All') queryParams.append('project_name', selectedProject);
+      if (portfolio) queryParams.append('portfolio', portfolio);
+      const queryStr = queryParams.toString() ? `?${queryParams.toString()}` : '';
       
       const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
-        fetch(`/akasha/api/dashboard/summary`),
-        fetch(`/akasha/api/summary${query}`),
-        fetch(`/akasha/api/financials${query}`),
-        fetch(`/akasha/api/logistics${query}`),
-        fetch(`/akasha/api/financials/details${query}`),
-        fetch(`/akasha/api/logistics/details${query}`)
+        fetch(`/akasha/api/dashboard/summary${queryStr}`),
+        fetch(`/akasha/api/summary${queryStr}`),
+        fetch(`/akasha/api/financials${queryStr}`),
+        fetch(`/akasha/api/logistics${queryStr}`),
+        fetch(`/akasha/api/financials/details${queryStr}`),
+        fetch(`/akasha/api/logistics/details${queryStr}`)
       ]);
 
       const [dash, p6, sap, log, fDet, lDet] = await Promise.all([
@@ -139,7 +145,7 @@ export default function CEODashboard() {
 
   useEffect(() => {
     loadAllData();
-  }, [selectedProject]);
+  }, [selectedProject, portfolio]);
 
   const handleNavigateToSimulation = (projId: string, context?: any) => {
     setSelectedProject(projId);
@@ -199,23 +205,19 @@ export default function CEODashboard() {
   ];
 
   const handleTabChange = (tab: string) => {
-    if (tab === 'ai_copilot') {
-      setIsCopilotOpen(true);
-    } else {
-      setPreviousTab(activeTab);
-      setActiveTab(tab);
-      sessionStorage.setItem('ceoActiveTab', tab);
-      if (tab !== 'simulation_lab') {
-        setSimulationContext(null);
-      }
-      if (projectId) {
-        navigate('/dashboard');
-      }
+    setPreviousTab(activeTab);
+    setActiveTab(tab);
+    sessionStorage.setItem('ceoActiveTab', tab);
+    if (tab !== 'simulation_lab') {
+      setSimulationContext(null);
+    }
+    if (projectId) {
+      navigate('/dashboard');
     }
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-[var(--background)]">
+    <div className={`flex w-full bg-[var(--background)] ${activeTab === 'ai_copilot' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       
       {/* 1. Left Navigation Rail */}
       <div className="sticky top-0 h-screen shrink-0 z-50">

@@ -4,7 +4,7 @@ import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
   Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network,
-  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight
+  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
 
@@ -248,6 +248,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [actFilter, setActFilter] = useState<string>('All');
   const [expandedBlock, setExpandedBlock] = useState<string | null>(null);
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
+  const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [syncingP6, setSyncingP6] = useState(false);
 
   useEffect(() => {
@@ -1543,70 +1544,179 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                     {/* Full Project Timeline */}
                     <div className="intelligence-card p-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Calendar className="w-4 h-4 text-primary/70" /> Complete Project Timeline
-                      </h3>
-                      <div className="space-y-1">
-                        {[
-                          ['Project ID', p6.projectId],
-                          ['Status', p6.status],
-                          ['Location', p6.locationName || '—'],
-                          ['Parent EPS', p6.parentEPSName || '—'],
-                          ['Start Date', p6.startDate || '—'],
-                          ['Planned Start', p6.plannedStartDate || '—'],
-                          ['Finish Date', p6.finishDate || '—'],
-                          ['Scheduled Finish', p6.scheduledFinishDate || '—'],
-                          ['Data Date', p6.dataDate || '—'],
-                          ['Must Finish By', p6.mustFinishByDate || '—'],
-                          ['Baseline Start', p6.baselineStartDate || '—'],
-                          ['Baseline Finish', p6.baselineFinishDate || '—'],
-                          ['Last Synced', p6.lastSyncedAt || '—'],
-                        ].map(([label, val]) => (
-                          <div key={label as string} className="detail-row">
-                            <span className="detail-row-label">{label}</span>
-                            <span className="detail-row-value">{val}</span>
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          <Calendar className="w-4 h-4 text-primary/70" /> Complete Project Timeline
+                        </h3>
+                        <a href="https://digitalized-dpr.adani.com" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary px-2.5 py-1.5 rounded-md transition-colors whitespace-nowrap">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          DPR Application
+                        </a>
+                      </div>
+                      <div className="flex flex-col h-full">
+                        {/* Header Info */}
+                        <div className="flex items-center gap-3 mb-6 bg-muted/40 p-3 rounded-lg border border-border/50">
+                          <div className="flex-1">
+                            <div className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Project ID</div>
+                            <div className="text-sm font-semibold text-foreground">{p6.projectId}</div>
                           </div>
-                        ))}
+                          <div className="w-px h-8 bg-border"></div>
+                          <div className="flex-1">
+                            <div className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Parent EPS</div>
+                            <div className="text-sm font-semibold text-foreground truncate">{p6.parentEPSName || '—'}</div>
+                          </div>
+                        </div>
+
+                        {/* Phases Grid */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                          {/* Start Phase */}
+                          <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                            <div className="flex items-center gap-2 mb-4 relative z-10">
+                              <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                                <Activity className="w-3.5 h-3.5 text-blue-500" />
+                              </div>
+                              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Start Phase</span>
+                            </div>
+                            <div className="space-y-4 relative z-10">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" /> Baseline</span>
+                                <span className="text-sm font-medium">{p6.baselineStartDate || '—'}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Planned</span>
+                                <span className="text-sm font-medium">{p6.plannedStartDate || '—'}</span>
+                              </div>
+                              <div className="flex justify-between items-center bg-blue-500/5 -mx-2 px-2 py-1.5 rounded border border-blue-500/10">
+                                <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Actual</span>
+                                <span className="text-sm font-bold text-blue-700 dark:text-blue-300">{p6.startDate || 'Pending'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Finish Phase */}
+                          <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                            <div className="flex items-center gap-2 mb-4 relative z-10">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                              </div>
+                              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Finish Phase</span>
+                            </div>
+                            <div className="space-y-4 relative z-10">
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" /> Baseline</span>
+                                <span className="text-sm font-medium">{p6.baselineFinishDate || '—'}</span>
+                              </div>
+                              <div className="flex justify-between items-center">
+                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Scheduled</span>
+                                <span className="text-sm font-medium">{p6.scheduledFinishDate || p6.finishDate || '—'}</span>
+                              </div>
+                              <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-amber-500/5 border-amber-500/10'}`}>
+                                <span className={`text-xs font-semibold flex items-center gap-1.5 ${p6.finishDate ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                                  {p6.finishDate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />} 
+                                  {p6.finishDate ? 'Actual Finish' : 'Must Finish By'}
+                                </span>
+                                <span className={`text-sm font-bold ${p6.finishDate ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                                  {p6.finishDate || p6.mustFinishByDate || '—'}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Footer */}
+                        <div className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[11px] text-muted-foreground">
+                          <div className="flex items-center gap-1.5"><Database className="w-3.5 h-3.5 opacity-70" /> Data Date: <span className="font-medium text-foreground/80">{p6.dataDate || '—'}</span></div>
+                          <div className="flex items-center gap-1.5"><RefreshCcw className="w-3.5 h-3.5 opacity-70" /> Last Synced: <span className="font-medium text-foreground/80">{p6.lastSyncedAt || '—'}</span></div>
+                        </div>
                       </div>
                     </div>
 
                     {/* Project Milestones */}
                     <div className="intelligence-card p-6 flex flex-col max-h-[400px]">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Flag className="w-4 h-4 text-primary/70" /> Project Milestones
-                      </h3>
-                      <div className="flex-1 overflow-auto custom-scrollbar pr-2 py-2">
-                        {(p6.milestones || []).length > 0 ? (
-                          <div className="relative border-l border-border/60 ml-2 space-y-5">
-                            {(p6.milestones || []).map((m: any, i: number) => {
+                      <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                          <Flag className="w-4 h-4 text-primary/70" /> Project Milestones
+                        </h3>
+                        <button onClick={() => setShowWorkflowModal(true)} className="p-1 hover:bg-primary/10 hover:text-primary rounded text-muted-foreground transition-colors">
+                          <Maximize2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                      
+                      <div className="flex-1 overflow-x-auto custom-scrollbar pr-2 py-6">
+                        {p6.milestones && p6.milestones.length > 0 ? (
+                          <div className="flex items-center px-4 min-w-max h-[200px]">
+                            {p6.milestones.map((m: any, i: number) => {
+                              const isLast = i === p6.milestones.length - 1;
+                              const isEven = i % 2 === 0;
                               const isCompleted = m.status === 'Completed';
                               const isInProgress = m.status === 'In Progress';
                               const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
-                              return (
-                                <div key={i} className="relative pl-6">
-                                  {/* Stepper Dot */}
-                                  <div className={`absolute -left-[5px] top-1 w-2 h-2 rounded-full ring-4 ring-card bg-card border-2 ${isCompleted ? 'border-emerald-500 bg-emerald-500' :
-                                    isInProgress ? 'border-amber-500' :
-                                      'border-muted-foreground'
-                                    }`}></div>
 
-                                  <div className="flex flex-col gap-1 -mt-1">
-                                    <div className="flex items-start justify-between gap-2">
-                                      <span className={`text-xs font-bold line-clamp-2 leading-tight ${isCompleted ? 'text-muted-foreground' : 'text-foreground'}`} title={m.name}>{m.name}</span>
-                                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded whitespace-nowrap border ${isCompleted ? 'bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-500/10 dark:text-emerald-400 dark:border-emerald-500/20' :
-                                        isInProgress ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-500/10 dark:text-amber-400 dark:border-amber-500/20' :
-                                          'bg-muted text-muted-foreground border-border'
+                              return (
+                                <div key={i} className={`relative flex items-center shrink-0 w-[240px] mr-16 ${isEven ? 'translate-y-[40px]' : '-translate-y-[40px]'}`}>
+                                  
+                                  {/* Input Port */}
+                                  {i !== 0 && (
+                                    <div className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-background border-[2px] rounded-full z-20 ${
+                                      isCompleted || isInProgress ? 'border-primary' : 'border-muted-foreground'
+                                    }`}></div>
+                                  )}
+                                  
+                                  {/* Node Card */}
+                                  <div className={`w-full bg-card rounded-xl shadow-sm flex flex-col z-10 border ${
+                                      isCompleted ? 'border-primary shadow-primary/20' : 
+                                      isInProgress ? 'border-amber-500 shadow-amber-500/20' : 
+                                      'border-border shadow-black/5'
+                                  }`}>
+                                    {/* Header */}
+                                    <div className={`px-3 py-2 flex items-center gap-2 border-b ${
+                                        isCompleted ? 'bg-primary/5 border-primary/20 text-primary' : 
+                                        isInProgress ? 'bg-amber-500/5 border-amber-500/20 text-amber-600' : 
+                                        'bg-muted/30 border-border text-muted-foreground'
+                                    } rounded-t-xl`}>
+                                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shadow-sm text-[10px] font-bold ${
+                                          isCompleted ? 'bg-primary text-primary-foreground' : 
+                                          isInProgress ? 'bg-amber-500 text-white' : 
+                                          'bg-background border border-border text-foreground'
                                         }`}>
-                                        {m.status}
-                                      </span>
+                                          {i + 1}
+                                        </div>
+                                        <h4 className="text-[11px] font-bold uppercase tracking-tight truncate flex-1" title={m.name}>
+                                          {m.name}
+                                        </h4>
                                     </div>
-                                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                                      <span className="truncate max-w-[150px]" title={m.type || 'Milestone'}>{m.type || 'Milestone'}</span>
-                                      <span className="font-mono bg-muted/50 px-1.5 py-0.5 rounded text-[9px] font-medium">{dateStr}</span>
+
+                                    {/* Body (Text removed) */}
+                                    <div className="px-3 py-2.5 flex items-center justify-between bg-card rounded-b-xl">
+                                        <div className={`w-2 h-2 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-amber-500' : 'bg-muted-foreground/30'}`}></div>
+                                        <span className="font-mono text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">{dateStr}</span>
                                     </div>
                                   </div>
+
+                                  {/* Output Port */}
+                                  {!isLast && (
+                                    <div className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-background border-[2px] rounded-full z-20 ${
+                                      isCompleted ? 'border-primary' : 'border-muted-foreground'
+                                    }`}></div>
+                                  )}
+
+                                  {/* Connection Wire (SVG Bezier Fix) */}
+                                  {!isLast && (
+                                    <svg width="64" height="80" className="absolute left-[calc(100%-1px)] pointer-events-none" style={{ top: isEven ? 'calc(50% - 80px)' : '50%', zIndex: -10 }}>
+                                      <path 
+                                        d={isEven ? "M 0 80 C 32 80, 32 0, 64 0" : "M 0 0 C 32 0, 32 80, 64 80"} 
+                                        fill="none" 
+                                        stroke="currentColor" 
+                                        strokeWidth="2" 
+                                        className={isCompleted ? 'text-primary' : 'text-primary/30'}
+                                      />
+                                    </svg>
+                                  )}
+
                                 </div>
-                              );
+                              )
                             })}
                           </div>
                         ) : (
@@ -2145,7 +2255,97 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   </tbody>
                 </table>
               </div>
+              {/* Workflow Modal */}
+      {showWorkflowModal && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between p-4 border-b bg-card z-20">
+              <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
+                <Network className="w-5 h-5 text-primary" /> Full Project Workflow
+              </h2>
+              <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-5 h-5" />
+              </button>
             </div>
+            
+            <div className="flex-1 overflow-auto bg-muted/30 p-12 custom-scrollbar">
+              <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
+                {p6?.milestones?.map((m: any, i: number) => {
+                  const isLast = i === p6.milestones.length - 1;
+                  const isEven = i % 2 === 0;
+                  const isCompleted = m.status === 'Completed';
+                  const isInProgress = m.status === 'In Progress';
+                  const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
+
+                  return (
+                    <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
+                      
+                      {/* Input Port */}
+                      {i !== 0 && (
+                        <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${
+                          isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                        }`}></div>
+                      )}
+                      
+                      {/* Node Card */}
+                      <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${
+                          isCompleted ? 'border-primary shadow-primary/20' : 
+                          isInProgress ? 'border-amber-500 shadow-amber-500/20' : 
+                          'border-border shadow-black/5'
+                      }`}>
+                        <div className={`px-4 py-3 flex items-center gap-3 border-b ${
+                            isCompleted ? 'bg-primary/5 border-primary/20 text-primary' : 
+                            isInProgress ? 'bg-amber-500/5 border-amber-500/20 text-amber-600' : 
+                            'bg-muted/30 border-border text-muted-foreground'
+                        } rounded-t-2xl`}>
+                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${
+                              isCompleted ? 'bg-primary text-primary-foreground' : 
+                              isInProgress ? 'bg-amber-500 text-white' : 
+                              'bg-background border border-border text-foreground'
+                            }`}>
+                              {i + 1}
+                            </div>
+                            <h4 className="text-[13px] font-bold uppercase tracking-tight line-clamp-2 leading-tight flex-1" title={m.name}>
+                              {m.name}
+                            </h4>
+                        </div>
+
+                        <div className="px-4 py-3.5 flex items-center justify-between bg-card rounded-b-2xl">
+                            <div className="flex items-center gap-2">
+                              <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
+                            </div>
+                            <span className="font-mono text-[10px] text-foreground bg-muted px-2 py-1 rounded-md border border-border">{dateStr}</span>
+                        </div>
+                      </div>
+
+                      {/* Output Port */}
+                      {!isLast && (
+                        <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${
+                          isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                        }`}></div>
+                      )}
+
+                      {/* Connection Wire */}
+                      {!isLast && (
+                        <svg className="absolute left-[calc(100%-1.5px)] pointer-events-none" style={{ width: '6rem', height: '160px', top: isEven ? 'calc(50% - 160px)' : '50%', zIndex: -10 }}>
+                          <path 
+                            d={isEven ? "M 0 160 C 48 160, 48 0, 96 0" : "M 0 0 C 48 0, 48 160, 96 160"} 
+                            fill="none" 
+                            stroke="currentColor" 
+                            strokeWidth="3" 
+                            className={isCompleted ? 'text-primary' : 'text-primary/20'}
+                          />
+                        </svg>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
           </div>
         </div>
       )}

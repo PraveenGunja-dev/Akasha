@@ -58,6 +58,8 @@ export default function PMAGDashboard() {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
 
   // Additional data for integrated AI/Report components
   const [dashboardData, setDashboardData] = useState<any>(null);
@@ -76,17 +78,19 @@ export default function PMAGDashboard() {
 
   const loadAllData = () => {
     setLoading(true);
-    fetch('/akasha/api/pmag/dashboard')
+    const portfolioQuery = portfolio ? `?portfolio=${encodeURIComponent(portfolio)}` : '';
+    
+    fetch(`/akasha/api/pmag/dashboard${portfolioQuery}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
 
     // Fetch data for the integrated deep-dive modules
     Promise.all([
-      fetch('/akasha/api/dashboard/summary'),
-      fetch('/akasha/api/summary'),
-      fetch('/akasha/api/financials'),
-      fetch('/akasha/api/financials/details')
+      fetch(`/akasha/api/dashboard/summary${portfolioQuery}`),
+      fetch(`/akasha/api/summary${portfolioQuery}`),
+      fetch(`/akasha/api/financials${portfolioQuery}`),
+      fetch(`/akasha/api/financials/details${portfolioQuery}`)
     ]).then(async ([dashRes, p6Res, sapRes, finDetRes]) => {
       setDashboardData(await dashRes.json());
       setP6Data(await p6Res.json());
@@ -95,9 +99,9 @@ export default function PMAGDashboard() {
     }).catch(console.error);
 
     Promise.all([
-      fetch('/akasha/api/pmag/reports'),
-      fetch('/akasha/api/pmag/team'),
-      fetch('/akasha/api/pmag/site-monitoring')
+      fetch(`/akasha/api/pmag/reports${portfolioQuery}`),
+      fetch(`/akasha/api/pmag/team${portfolioQuery}`),
+      fetch(`/akasha/api/pmag/site-monitoring${portfolioQuery}`)
     ]).then(async ([repRes, teamRes, siteRes]) => {
       setReportsData(await repRes.json());
       setTeamData(await teamRes.json());
@@ -107,7 +111,7 @@ export default function PMAGDashboard() {
 
   useEffect(() => {
     loadAllData();
-  }, []);
+  }, [portfolio]);
 
   const handleSyncData = async () => {
     setIsSyncing(true);

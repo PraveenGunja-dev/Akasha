@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, Sparkles, ChevronRight, AlertTriangle, Shield,
   Clock, Package, CheckCircle2, XCircle, Eye,
@@ -242,11 +242,14 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const thisMonth = now.getMonth();
   const thisYear = now.getFullYear();
   const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const completingThisMonth = data.filter(d => { if (!d.forecastFinish || d.forecastFinish === 'N/A') return false; const dt = new Date(d.forecastFinish); return dt.getMonth() === thisMonth && dt.getFullYear() === thisYear; }).length;
+  const completingThisMonth = data.reduce((s, d) => s + (d.activitiesCompletingThisMonth || 0), 0);
   const nextMonthIdx = (thisMonth + 1) % 12;
-  const nextMonthYear = thisMonth === 11 ? thisYear + 1 : thisYear;
-  const completingNextMonth = data.filter(d => { if (!d.forecastFinish || d.forecastFinish === 'N/A') return false; const dt = new Date(d.forecastFinish); return dt.getMonth() === nextMonthIdx && dt.getFullYear() === nextMonthYear; }).length;
-  const completingLater = data.filter(d => { if (!d.forecastFinish || d.forecastFinish === 'N/A') return false; const dt = new Date(d.forecastFinish); return dt > new Date(nextMonthYear, nextMonthIdx + 1, 0); }).length;
+  const completingNextMonth = data.reduce((s, d) => s + (d.activitiesCompletingNextMonth || 0), 0);
+  const completingLater = data.reduce((s, d) => s + (d.activitiesCompletingLater || 0), 0);
+  
+  const completedActivities = data.reduce((s, d) => s + (d.completedActivities || 0), 0);
+  const delayedActivities = data.reduce((s, d) => s + (d.delayedActivities || 0), 0);
+  const totalActivities = data.reduce((s, d) => s + (d.activityCount || 0), 0) || 1; // fallback to 1 to prevent division by zero
 
   // ── SAP Material Metrics ──
   const avgMaterial = Math.round(data.reduce((s, d) => s + d.materialAvailability, 0) / data.length);
@@ -258,9 +261,22 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
 
 
   // ── Transmission Metrics ──
-  const totalTCLines = data.reduce((s, d) => s + (d.tcEdgesCount || 0), 0);
-  const totalCharged = data.reduce((s, d) => s + (d.tcData?.progress?.linesCharged?.count || 0), 0);
-  const totalTCDelayed = data.reduce((s, d) => s + (d.tcData?.progress?.delayed?.count || 0), 0);
+  const uniqueLinesMap = new Map();
+  data.forEach(d => {
+    if (d.tcData && d.tcData.lines) {
+      d.tcData.lines.forEach((line: any) => {
+        if (line.id && !uniqueLinesMap.has(line.id)) {
+          uniqueLinesMap.set(line.id, line);
+        }
+      });
+    }
+  });
+  
+  const uniqueLines = Array.from(uniqueLinesMap.values());
+  // Fallback to simple sum if unique lines aren't fully populated yet
+  const totalTCLines = uniqueLines.length > 0 ? uniqueLines.length : data.reduce((s, d) => s + (d.tcEdgesCount || 0), 0);
+  const totalCharged = uniqueLines.length > 0 ? uniqueLines.filter(l => l.status === 'Charged').length : data.reduce((s, d) => s + (d.tcData?.progress?.linesCharged?.count || 0), 0);
+  const totalTCDelayed = uniqueLines.length > 0 ? uniqueLines.filter(l => l.is_delayed).length : data.reduce((s, d) => s + (d.tcData?.progress?.delayed?.count || 0), 0);
   const totalInProgressTC = Math.max(0, totalTCLines - totalCharged - totalTCDelayed);
   const chargedPct = totalTCLines > 0 ? Math.round((totalCharged / totalTCLines) * 100) : 0;
 
@@ -423,21 +439,21 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
               <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Charged</span>
-                  <span className="text-lg font-mono font-bold text-emerald-500">{totalCharged}</span>
+                  <span className="text-lg font-mono font-bold text-emerald-500">{fmtNum(totalCharged)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">In Prog.</span>
-                  <span className="text-lg font-mono font-bold text-amber-500">{totalInProgressTC}</span>
+                  <span className="text-lg font-mono font-bold text-amber-500">{fmtNum(totalInProgressTC)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Delayed</span>
-                  <span className={`text-lg font-mono font-bold ${totalTCDelayed > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{totalTCDelayed}</span>
+                  <span className={`text-lg font-mono font-bold ${totalTCDelayed > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{fmtNum(totalTCDelayed)}</span>
                 </div>
               </div>
               <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
                 <div className="flex justify-between items-center">
                   <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Total Lines</span>
-                  <span className="text-sm font-mono font-bold text-foreground">{totalTCLines}</span>
+                  <span className="text-sm font-mono font-bold text-foreground">{fmtNum(totalTCLines)}</span>
                 </div>
               </div>
             </div>
@@ -458,19 +474,19 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
                 <div key={i} className="flex items-center justify-between gap-3">
                   <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 w-20 shrink-0">{item.label}</span>
                   <div className="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
-                    <div className={`h-full ${item.bg} rounded-full transition-all duration-500`} style={{ width: `${data.length > 0 ? (item.count / data.length) * 100 : 0}%` }}></div>
+                    <div className={`h-full ${item.bg} rounded-full transition-all duration-500`} style={{ width: `${(item.count / totalActivities) * 100}%` }}></div>
                   </div>
-                  <span className={`text-sm font-mono font-bold ${item.color} w-6 text-right`}>{item.count}</span>
+                  <span className={`text-sm font-mono font-bold ${item.color} w-8 text-right`}>{fmtNum(item.count)}</span>
                 </div>
               ))}
               
               <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Completed</span>
-                <span className="text-lg font-mono font-bold text-emerald-500">{completedProjects}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Completed (Act.)</span>
+                <span className="text-lg font-mono font-bold text-emerald-500">{fmtNum(completedActivities)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Delayed</span>
-                <span className={`text-lg font-mono font-bold ${delayedProjects.length > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{delayedProjects.length}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Delayed (Act.)</span>
+                <span className={`text-lg font-mono font-bold ${delayedActivities > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{fmtNum(delayedActivities)}</span>
               </div>
             </div>
           </div>
@@ -620,14 +636,18 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   const [sortBy, setSortBy] = useState<string>('integration');
   const [showFilters, setShowFilters] = useState(false);
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
 
   useEffect(() => {
-    fetch('/akasha/api/project-360')
+    setLoading(true);
+    const url = portfolio ? `/akasha/api/project-360?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/project-360';
+    fetch(url)
       .then(res => res.json())
       .then(json => setData(json))
       .catch(console.error)
       .finally(() => setLoading(false));
-  }, []);
+  }, [portfolio]);
 
   // ── Filtering ──
   const filtered = data

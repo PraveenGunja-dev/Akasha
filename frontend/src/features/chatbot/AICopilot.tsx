@@ -4,7 +4,7 @@ import {
   FileText, Database, Sparkles, Calendar, Settings, PanelLeftClose,
   PanelLeft, MessageSquare, BarChart3, ShieldAlert, TrendingUp,
   Clock, ArrowRight, Trash2, Search, Globe, Cpu, BrainCircuit,
-  Activity, ChevronDown
+  Activity, ChevronDown, ThumbsUp, ThumbsDown, CheckCircle2, History, X
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -16,6 +16,14 @@ interface Message {
   content: string;
   timestamp: Date;
   sources?: string[];
+  imageData?: string; // Optional base64 image data attached to the message
+  metadata?: {
+    message_id?: number;
+    data_as_of?: string | null;
+    latency_ms?: number;
+    intent?: string;
+  };
+  feedbackStatus?: 'none' | 'liked' | 'disliked';
 }
 
 interface Thread {
@@ -44,10 +52,52 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [typingStage, setTypingStage] = useState(0);
-  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
+  const [suggestedFollowups, setSuggestedFollowups] = useState<string[]>([]);
+  const [isDeepAnalysis, setIsDeepAnalysis] = useState(false);
+  
+  // Voice and Image states
+  const [isListening, setIsListening] = useState(false);
+  const [imageFile, setImageFile] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const startListening = () => {
+    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognitionAPI) {
+      alert('Your browser does not support Speech Recognition.');
+      return;
+    }
+    const recognition = new SpeechRecognitionAPI();
+    recognition.continuous = false;
+    recognition.interimResults = true;
+
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results)
+        .map((result: any) => result[0].transcript)
+        .join('');
+      setInput(transcript);
+    };
+
+    recognition.start();
+  };
+
+  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setImageFile(reader.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // Load threads from localStorage on mount
   useEffect(() => {
@@ -55,13 +105,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     if (savedThreads) {
       setThreads(JSON.parse(savedThreads));
     }
-    const savedActive = localStorage.getItem('akasha_active_thread');
-    if (savedActive) {
-      const tid = parseInt(savedActive);
-      setActiveThreadId(tid);
-      const savedMsgs = localStorage.getItem(`akasha_msgs_${tid}`);
-      if (savedMsgs) setMessages(JSON.parse(savedMsgs));
-    }
+    // We intentionally do not auto-load the last active thread
+    // so the user starts with the landing view every time.
   }, []);
 
   // Persist messages when they change
@@ -128,6 +173,24 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     }
   };
 
+  const submitFeedback = async (msgId: number, backendMessageId: number, type: 'thumbs_up' | 'thumbs_down') => {
+    try {
+      await fetch('/akasha/api/chat/feedback', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messageId: backendMessageId,
+          feedbackType: type,
+        })
+      });
+      setMessages(prev => prev.map(m => 
+        m.id === msgId ? { ...m, feedbackStatus: type === 'thumbs_up' ? 'liked' : 'disliked' } : m
+      ));
+    } catch (e) {
+      console.error("Failed to submit feedback", e);
+    }
+  };
+
   const handleSend = async (overrideInput?: string) => {
     const text = overrideInput || input.trim();
     if (!text) return;
@@ -144,11 +207,14 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       id: Date.now(),
       type: 'user',
       content: text,
-      timestamp: new Date()
+      timestamp: new Date(),
+      imageData: imageFile || undefined
     };
 
     setMessages(prev => [...prev, userMsg]);
     setInput('');
+    const currentImageData = imageFile;
+    setImageFile(null);
     setIsTyping(true);
 
     // Update thread list
@@ -171,20 +237,67 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       const response = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text, history: messages })
+        body: JSON.stringify({ 
+          message: text, 
+          history: messages,
+          sessionId: currentThreadId.toString(),
+          isDeepAnalysis: isDeepAnalysis,
+          imageData: currentImageData
+        })
       });
 
-      const data = await response.json();
+      if (!response.ok) {
+        throw new Error('Connection failed');
+      }
+
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      
+      let botContent = '';
+      const botMsgId = Date.now() + 1;
+      
+      // Add empty bot message that we will append to
+      setMessages(prev => [...prev, {
+        id: botMsgId,
+        type: 'bot',
+        content: '',
+        timestamp: new Date(),
+        feedbackStatus: 'none'
+      }]);
+      
       setIsTyping(false);
 
-      const botMsg: Message = {
-        id: Date.now() + 1,
-        type: 'bot',
-        content: response.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`,
-        timestamp: new Date(),
-        sources: ['Primavera P6', 'SAP R/3', 'Project 360']
-      };
-      setMessages(prev => [...prev, botMsg]);
+      if (reader) {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+          
+          for (const line of lines) {
+            if (line.startsWith('data: ')) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                if (data.type === 'token') {
+                  botContent += data.content;
+                  setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
+                } else if (data.type === 'metadata') {
+                  setSuggestedFollowups(data.suggestions || []);
+                  setMessages(prev => prev.map(m => m.id === botMsgId ? { 
+                    ...m, 
+                    metadata: data.metadata,
+                    sources: data.metadata?.sources?.tables || []
+                  } : m));
+                }
+              } catch (e) {
+                // Ignore parse errors for incomplete chunks
+              }
+            }
+          }
+        }
+      }
+      
     } catch {
       setIsTyping(false);
       setMessages(prev => [...prev, {
@@ -192,6 +305,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
         type: 'bot',
         content: '⚠️ System Error: Could not reach the AKASHA AI backend. Please verify the server is running.',
         timestamp: new Date(),
+        feedbackStatus: 'none'
       }]);
     }
   };
@@ -227,108 +341,11 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     },
   ];
 
-  const suggestedFollowups = [
-    'Break this down by project',
-    'What are the recommended actions?',
-    'Show me the financial impact',
-    'Compare with last quarter',
-  ];
-
   const currentStage = TYPING_STAGES[typingStage];
   const StageIcon = currentStage.icon;
 
   return (
-    <div className="flex h-full w-full overflow-hidden bg-background border-t border-border">
-
-      {/* ── Collapsible History Panel ── */}
-      <div
-        className={`${sidebarOpen ? 'w-72' : 'w-0'} transition-all duration-300 ease-in-out overflow-hidden flex-shrink-0`}
-      >
-        <div className="w-72 h-full flex flex-col bg-card border-r border-border">
-          {/* Panel Header */}
-          <div className="p-4 flex items-center justify-between">
-            <span className="text-[11px] font-semibold text-muted-foreground/70 uppercase tracking-[0.15em]">History</span>
-            <button
-              onClick={startNewThread}
-              className="w-7 h-7 rounded-lg bg-primary/10 hover:bg-primary/20 flex items-center justify-center text-blue-400 transition-colors"
-              title="New Conversation"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Search */}
-          <div className="px-4 pb-3">
-            <div className="flex items-center gap-2 bg-muted rounded-lg px-3 py-2 border border-border">
-              <Search className="w-3.5 h-3.5 text-muted-foreground/70" />
-              <input
-                type="text"
-                placeholder="Search conversations..."
-                className="bg-transparent text-xs text-foreground/90 placeholder-muted-foreground/50 outline-none flex-1"
-              />
-            </div>
-          </div>
-
-          {/* Threads */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide px-2">
-            {threads.length > 0 ? (
-              <div className="space-y-0.5">
-                {threads.map(thread => (
-                  <button
-                    key={thread.id}
-                    onClick={() => loadThread(thread)}
-                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-150 group relative ${
-                      activeThreadId === thread.id
-                        ? 'bg-accent text-foreground'
-                        : 'text-muted-foreground hover:bg-muted hover:text-foreground/90'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2.5">
-                      <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
-                      <span className="text-[13px] truncate flex-1">{thread.title}</span>
-                    </div>
-                    <button
-                      onClick={(e) => deleteThread(thread.id, e)}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-accent text-muted-foreground/70 hover:text-red-500 transition-all"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="px-4 py-8 text-center">
-                <MessageSquare className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-                <p className="text-xs text-muted-foreground/50">No conversations yet</p>
-                <p className="text-[10px] text-muted-foreground/30 mt-1">Start a new analysis above</p>
-              </div>
-            )}
-          </div>
-
-          {/* Data Sources */}
-          <div className="p-4 border-t border-border">
-            <div className="text-[10px] font-bold text-muted-foreground/50 uppercase tracking-[0.15em] mb-3">Connected Sources</div>
-            <div className="space-y-2">
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></div>
-                <span className="text-[11px] text-muted-foreground">Primavera P6</span>
-                <span className="text-[9px] text-emerald-500 ml-auto font-mono">LIVE</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 shadow-[0_0_6px_rgba(16,185,129,0.5)]"></div>
-                <span className="text-[11px] text-muted-foreground">SAP R/3</span>
-                <span className="text-[9px] text-emerald-500 ml-auto font-mono">LIVE</span>
-              </div>
-              <div className="flex items-center gap-2.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_6px_rgba(59,130,246,0.5)]"></div>
-                <span className="text-[11px] text-muted-foreground">Document Index</span>
-                <span className="text-[9px] text-primary ml-auto font-mono">14 FILES</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
+    <div className="flex h-full w-full overflow-hidden bg-background border-t border-border relative">
       {/* ── Main Content Area ── */}
       <div className="flex-1 flex flex-col relative min-w-0">
 
@@ -340,15 +357,73 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
         {/* Top Bar */}
         <div className="h-14 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl z-20 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 relative">
             <button
               onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sidebarOpen ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}
+              title="View History"
             >
-              {sidebarOpen ? <PanelLeftClose className="w-4 h-4" /> : <PanelLeft className="w-4 h-4" />}
+              <History className="w-4 h-4" />
             </button>
+            
+            {/* History Modal */}
+            {sidebarOpen && (
+              <div className="absolute top-12 left-0 w-80 bg-card border border-border shadow-2xl rounded-xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="p-3 flex items-center justify-between border-b border-border/50 bg-muted/30">
+                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Chat History</span>
+                  <button
+                    onClick={startNewThread}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-blue-500 hover:bg-blue-500/10 transition-colors"
+                  >
+                    <Plus className="w-3 h-3" /> New
+                  </button>
+                </div>
+                <div className="p-2 border-b border-border/50">
+                  <div className="flex items-center gap-2 bg-background rounded-md px-2 py-1.5 border border-border">
+                    <Search className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
+                    <input
+                      type="text"
+                      placeholder="Search conversations..."
+                      className="bg-transparent text-[11px] text-foreground placeholder-muted-foreground outline-none flex-1 min-w-0"
+                    />
+                  </div>
+                </div>
+                <div className="max-h-64 overflow-y-auto scrollbar-hide p-1.5">
+                  {threads.length > 0 ? (
+                    <div className="space-y-0.5">
+                      {threads.map(thread => (
+                        <button
+                          key={thread.id}
+                          onClick={() => { loadThread(thread); setSidebarOpen(false); }}
+                          className={`w-full text-left px-2.5 py-2 rounded-md transition-all duration-150 group/item relative flex items-center gap-2.5 ${
+                            activeThreadId === thread.id
+                              ? 'bg-primary/5 text-primary'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground/90'
+                          }`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
+                          <span className="text-[12px] font-medium truncate flex-1">
+                            {thread.title}
+                          </span>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); deleteThread(thread.id, e); }}
+                            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-all duration-200"
+                          >
+                            <Trash2 className="w-3 h-3 shrink-0" />
+                          </button>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="py-6 text-center">
+                      <p className="text-[11px] text-muted-foreground/60">No conversations yet</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
-            <div className="h-5 w-px bg-border/50"></div>
+            <div className="h-5 w-px bg-border/50 mx-1"></div>
 
             <div className="flex items-center gap-2.5">
               <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-md">
@@ -437,7 +512,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           </div>
         ) : (
           /* ── Conversation View ── */
-          <div className="flex-1 overflow-y-auto scrollbar-hide z-10">
+          <div className="flex-1 overflow-y-auto scrollbar-hide z-10" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
             <div className="w-full px-8 py-6 space-y-1">
               {messages.map((msg) => (
                 <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -464,31 +539,74 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                         </ReactMarkdown>
                       </div>
 
-                      {/* Source Badges */}
-                      {msg.sources && (
+                      {/* Source Badges & Metadata */}
+                      <div className="flex flex-col gap-2 mt-4">
+                        {msg.sources && msg.sources.length > 0 && (
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">Sources:</span>
+                            {msg.sources.map((src, i) => (
+                              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] text-muted-foreground/70">
+                                <Globe className="w-2.5 h-2.5" />
+                                {src}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                        
+                        {msg.metadata && (
+                          <div className="flex items-center gap-4 text-[10px] text-muted-foreground/50">
+                            {msg.metadata.data_as_of && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Data as of: {new Date(msg.metadata.data_as_of).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                              </span>
+                            )}
+                            {msg.metadata.latency_ms && (
+                              <span className="flex items-center gap-1">
+                                <Zap className="w-3 h-3" />
+                                Generated in {(msg.metadata.latency_ms / 1000).toFixed(1)}s
+                              </span>
+                            )}
+                            
+                            {/* Feedback System */}
+                            {msg.metadata.message_id && (
+                              <div className="flex items-center gap-1 ml-auto">
+                                <button 
+                                  onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_up')}
+                                  disabled={msg.feedbackStatus !== 'none'}
+                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'liked' ? 'text-emerald-500 bg-emerald-500/10' : ''}`}
+                                  title="Good response"
+                                >
+                                  <ThumbsUp className="w-3.5 h-3.5" />
+                                </button>
+                                <button 
+                                  onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_down')}
+                                  disabled={msg.feedbackStatus !== 'none'}
+                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'disliked' ? 'text-red-500 bg-red-500/10' : ''}`}
+                                  title="Poor response"
+                                >
+                                  <ThumbsDown className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Suggested Follow-ups */}
+                      {msg.id === messages[messages.length - 1].id && suggestedFollowups.length > 0 && (
                         <div className="flex items-center gap-2 mt-4 flex-wrap">
-                          <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">Sources:</span>
-                          {msg.sources.map((src, i) => (
-                            <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] text-muted-foreground/70">
-                              <Globe className="w-2.5 h-2.5" />
-                              {src}
-                            </span>
+                          {suggestedFollowups.map((followup, i) => (
+                            <button
+                              key={i}
+                              onClick={() => handleSend(followup)}
+                              className="px-3 py-1.5 rounded-lg bg-card border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border/80 transition-all"
+                            >
+                              {followup}
+                            </button>
                           ))}
                         </div>
                       )}
-
-                      {/* Suggested Follow-ups */}
-                      <div className="flex items-center gap-2 mt-4 flex-wrap">
-                        {suggestedFollowups.map((followup, i) => (
-                          <button
-                            key={i}
-                            onClick={() => handleSend(followup)}
-                            className="px-3 py-1.5 rounded-lg bg-card border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border/80 transition-all"
-                          >
-                            {followup}
-                          </button>
-                        ))}
-                      </div>
                     </div>
                   )}
                 </div>
@@ -529,6 +647,20 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
         <div className={`px-5 ${isLanding ? '' : 'pb-5'} z-20 relative`}>
           <div className="w-full">
             <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(59,130,246,0.15)] transition-all duration-200">
+              {/* Image Preview */}
+              {imageFile && (
+                <div className="px-4 pt-3 pb-1">
+                  <div className="relative inline-block">
+                    <img src={imageFile} alt="Attached" className="h-16 w-16 object-cover rounded-md border border-border" />
+                    <button 
+                      onClick={() => setImageFile(null)}
+                      className="absolute -top-2 -right-2 w-5 h-5 bg-background border border-border rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </div>
+                </div>
+              )}
               {/* Input */}
               <div className="flex items-end px-4 pt-3 pb-2 gap-2">
                 <textarea
@@ -564,16 +696,33 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                   <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors" title="Attach file">
                     <Paperclip className="w-4 h-4" />
                   </button>
-                  <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors" title="Image">
+                  <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleImageChange} />
+                  <button 
+                    onClick={() => fileInputRef.current?.click()}
+                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors" 
+                    title="Image"
+                  >
                     <ImageIcon className="w-4 h-4" />
                   </button>
-                  <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors" title="Voice input">
+                  <button 
+                    onClick={startListening}
+                    className={`p-1.5 rounded-lg transition-colors ${isListening ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'hover:bg-muted text-muted-foreground hover:text-foreground/90'}`}
+                    title="Voice input"
+                  >
                     <Mic className="w-4 h-4" />
                   </button>
                   <div className="h-4 w-px bg-border/50 mx-1"></div>
-                  <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors flex items-center gap-1" title="Deep analysis mode">
-                    <Activity className="w-4 h-4" />
-                    <span className="text-[10px] hidden sm:inline">Deep Analysis</span>
+                  <button 
+                    onClick={() => setIsDeepAnalysis(!isDeepAnalysis)}
+                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
+                      isDeepAnalysis 
+                        ? 'bg-primary/20 text-primary border border-primary/30 shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
+                        : 'hover:bg-muted text-muted-foreground hover:text-foreground/90'
+                    }`} 
+                    title="Deep Analysis Agent Mode"
+                  >
+                    <Activity className={`w-4 h-4 ${isDeepAnalysis ? 'animate-pulse' : ''}`} />
+                    <span className="text-[10px] hidden sm:inline">{isDeepAnalysis ? 'Deep Analysis: ON' : 'Deep Analysis'}</span>
                   </button>
                 </div>
                 <span className="text-[10px] text-muted-foreground/30 hidden sm:inline">Akasha Platform · Enterprise Data</span>

@@ -1,47 +1,57 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Network, X, ZoomIn, ZoomOut, RotateCcw, ChevronDown, Calendar, Package, Zap, Building2, Truck } from 'lucide-react';
+import { Network, X, RotateCcw, ChevronDown, ChevronRight, Calendar, Package, Zap, Building2, Truck, Search, Filter } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
 
 interface GNode {
   id: string; name: string; category: number; value?: string;
   health?: string; progress?: number; delayed?: number; on_track?: number;
   x: number; y: number; radius: number;
+  targetX: number; targetY: number;
   color: string; glowColor: string; labelColor: string;
-  level: number; parentIdx: number;
+  level: number;
   childCount?: number;
-  spv?: string;
-  capacity?: number;
-  p6?: any;
-  sap?: any;
-  tc?: any;
-  projects_list?: any[];
+  spv?: string; capacity?: number;
+  p6?: any; sap?: any; tc?: any; projects_list?: any[];
+  children?: GNode[];
+  parent?: GNode;
+  expanded: boolean;
+  visible: boolean;
+  alpha: number;
+  mw_stats?: { total: number; cod: number; trial: number; };
 }
 
-interface GEdge { src: number; tgt: number; level: number; }
+interface GEdge { src: string; tgt: string; level: number; }
 interface Particle { edgeIdx: number; t: number; speed: number; size: number; }
 
-// Light-theme friendly colors
 const STYLE = {
-  root:    { fill: '#D4A853', glow: '#D4A85325', label: '#8B6914' },
-  eps:     { fill: '#7C5CBF', glow: '#7C5CBF20', label: '#5B3FA0' },
-  ok:      { fill: '#10B981', glow: '#10B98118', label: '#059669' },
-  delayed: { fill: '#EF4444', glow: '#EF444418', label: '#DC2626' },
-  vendor:  { fill: '#3B82F6', glow: '#3B82F618', label: '#2563EB' },
+  root:      { fill: '#D4A853', glow: '#D4A85318', label: '#B45309' },
+  portfolio: { fill: '#3B82F6', glow: '#3B82F618', label: '#2563EB' },
+  eps:       { fill: '#7C3AED', glow: '#7C3AED18', label: '#6D28D9' },
+  ok:        { fill: '#10B981', glow: '#10B98118', label: '#059669' },
+  delayed:   { fill: '#EF4444', glow: '#EF444418', label: '#DC2626' },
+  vendor:    { fill: '#F59E0B', glow: '#F59E0B18', label: '#D97706' },
 };
 
 function getStyle(cat: number, health?: string) {
   if (cat === 0) return STYLE.root;
-  if (cat === 1) return STYLE.eps;
-  if (cat === 3 || health === 'delayed') return STYLE.delayed;
-  if (cat === 4) return STYLE.vendor;
+  if (cat === 1) return STYLE.portfolio;
+  if (cat === 2) return STYLE.eps;
+  if (cat === 4 || health === 'delayed') return STYLE.delayed;
+  if (cat === 5) return STYLE.vendor;
   return STYLE.ok;
+}
+
+function hexToRgba(hex: string, alpha: number) {
+  const n = parseInt(hex.replace('#', ''), 16);
+  return `rgba(${n >> 16}, ${(n >> 8) & 0xff}, ${n & 0xff}, ${alpha})`;
 }
 
 export default function KnowledgeGraph() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const animRef = useRef(0);
-  const nodesRef = useRef<GNode[]>([]);
+  const nodesMapRef = useRef<Map<string, GNode>>(new Map());
   const edgesRef = useRef<GEdge[]>([]);
   const particlesRef = useRef<Particle[]>([]);
   const startTimeRef = useRef(0);
@@ -49,158 +59,185 @@ export default function KnowledgeGraph() {
   const panRef = useRef({ x: 0, y: 0 });
   const dragRef = useRef({ on: false, lx: 0, ly: 0 });
   const sizeRef = useRef({ w: 0, h: 0 });
+  const rootDataRef = useRef<any>(null);
 
   const [selectedNode, setSelectedNode] = useState<GNode | null>(null);
+  const [hoveredNodeId, setHoveredNodeId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({ n: 0, e: 0 });
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
 
-  const buildLayout = useCallback((data: any, w: number, h: number) => {
+  // New State
+  const [expandedNodes, setExpandedNodes] = useState<Set<string>>(new Set());
+  const [searchQuery, setSearchQuery] = useState('');
+
+  const processData = useCallback(() => {
+    const data = rootDataRef.current;
+    if (!data) return;
     const raw = data.nodes || [];
     const rawLinks = data.links || [];
-    const cx = w / 2, cy = h / 2;
-    const nodes: GNode[] = [];
-    const edges: GEdge[] = [];
-    const idxMap: Record<string, number> = {};
-
-    const root = raw.filter((n: any) => n.category === 0);
-    const epsArr = raw.filter((n: any) => n.category === 1);
-    const vendors = raw.filter((n: any) => n.category === 4);
-
-    // Map EPS → children from links
-    const epsKids: Record<string, any[]> = {};
-    rawLinks.forEach((l: any) => {
-      const sn = raw.find((n: any) => n.id === l.source);
-      const tn = raw.find((n: any) => n.id === l.target);
-      if (sn?.category === 1 && (tn?.category === 2 || tn?.category === 3)) {
-        if (!epsKids[l.source]) epsKids[l.source] = [];
-        epsKids[l.source].push(tn);
-      }
+    
+    // 1. Maintain or Create Nodes
+    const nodeMap = nodesMapRef.current;
+    
+    // Add new nodes, update existing
+    raw.forEach((n: any) => {
+       const existing = nodeMap.get(n.id);
+       const s = getStyle(n.category, n.health);
+       if (existing) {
+           existing.expanded = expandedNodes.has(n.id);
+           existing.children = [];
+           existing.parent = undefined;
+       } else {
+           nodeMap.set(n.id, {
+             ...n,
+             radius: n.category === 0 ? 36 : n.category === 1 ? 24 : n.category === 4 ? 6 : 8,
+             color: s.fill, glowColor: s.glow, labelColor: s.label,
+             level: n.category,
+             x: 0, y: 0, targetX: 0, targetY: 0,
+             children: [], expanded: expandedNodes.has(n.id), visible: false, alpha: 0
+           });
+       }
     });
 
-    // Root at center
-    if (root[0]) {
-      const s = getStyle(0);
-      nodes.push({ ...root[0], x: cx, y: cy, radius: 36, color: s.fill, glowColor: s.glow, labelColor: s.label, level: 0, parentIdx: -1 });
-      idxMap[root[0].id] = 0;
+    // 2. Build Tree
+    rawLinks.forEach((l: any) => {
+       const src = nodeMap.get(l.source);
+       const tgt = nodeMap.get(l.target);
+       if (src && tgt && src.category < tgt.category) { // Avoid cycles, enforce hierarchy
+           src.children!.push(tgt);
+           tgt.parent = src;
+       }
+    });
+    
+    // Artificially link Root to all EPS clusters (category 1) if not linked, and always expand Root
+    const rootNodes = Array.from(nodeMap.values()).filter(n => n.category === 0);
+    const epsNodes = Array.from(nodeMap.values()).filter(n => n.category === 1);
+    
+    if (rootNodes[0]) {
+        rootNodes[0].expanded = true; // Always open Root
+        epsNodes.forEach(eps => {
+            if (!eps.parent) {
+                rootNodes[0].children!.push(eps);
+                eps.parent = rootNodes[0];
+            }
+        });
+    }
+    
+    // Auto-expand for search
+    if (searchQuery.trim().length > 1) {
+        const query = searchQuery.toLowerCase();
+        nodeMap.forEach(n => {
+            if (n.name.toLowerCase().includes(query)) {
+                let p = n.parent;
+                while (p) { p.expanded = true; p = p.parent; }
+            }
+        });
     }
 
-    // ── EPS: proportional angles + VARIED distances ──
-    // More children → further from center → more room for their fan
-    const totalKids = epsArr.reduce((sum: number, e: any) => sum + Math.max((epsKids[e.id]?.length || 0), 1), 0);
-    const baseR = Math.min(w, h) * 0.28;  // minimum EPS distance — increased
-    const maxR = Math.min(w, h) * 0.44;   // maximum EPS distance — fills viewport
+    // 3. Layout (Horizontal Tree)
+    const edges: GEdge[] = [];
+    let currentY = 0;
+    const horizontalSpacing = 340;
+    const verticalSpacing = 70;
+    const { w, h } = sizeRef.current;
 
-    // Seed a deterministic pseudo-random per EPS for organic feel
-    const seed = (i: number) => Math.abs(Math.sin(i * 127.1 + 311.7)) * 0.5;
+    nodeMap.forEach(n => n.visible = false);
 
-    let currentAngle = -Math.PI / 2;
-    epsArr.forEach((n: any, i: number) => {
-      const kidCount = epsKids[n.id]?.length || 0;
-      const weight = Math.max(kidCount, 1);
-      const angleSlice = (weight / totalKids) * Math.PI * 2;
-      const midAngle = currentAngle + angleSlice / 2;
+    function traverse(node: GNode, depth: number) {
+        node.targetX = depth * horizontalSpacing;
+        node.level = depth;
+        node.visible = true;
+        
+        // Dynamic EPS size (now category 2)
+        if (node.category === 2 && node.children) {
+            node.radius = Math.max(16, Math.min(26, 14 + node.children.length * 1.2));
+        }
+        
+        if (node.expanded && node.children && node.children.length > 0) {
+            let childYSum = 0;
+            node.children.forEach(child => {
+                traverse(child, depth + 1);
+                childYSum += child.targetY;
+                edges.push({ src: node.id, tgt: child.id, level: depth + 1 });
+            });
+            node.targetY = childYSum / node.children.length;
+        } else {
+            node.targetY = currentY;
+            currentY += verticalSpacing;
+        }
+    }
+    
+    if (rootNodes[0]) traverse(rootNodes[0], 0);
+    
+    // Center vertically and anchor horizontally to the left
+    const yOffset = (currentY - verticalSpacing) / 2;
+    const centerY = h / 2;
 
-      // More children = push further out + slight random variation
-      const childFactor = kidCount / Math.max(1, Math.max(...epsArr.map((e: any) => epsKids[e.id]?.length || 1)));
-      const epsR = baseR + (maxR - baseR) * childFactor + seed(i) * 30;
-
-      const s = getStyle(1);
-      const nodeRadius = Math.max(16, Math.min(26, 14 + kidCount * 1.2));
-      const idx = nodes.length;
-      nodes.push({
-        ...n, x: cx + Math.cos(midAngle) * epsR, y: cy + Math.sin(midAngle) * epsR,
-        radius: nodeRadius, color: s.fill, glowColor: s.glow, labelColor: s.label,
-        level: 1, parentIdx: 0, childCount: kidCount
-      });
-      idxMap[n.id] = idx;
-      edges.push({ src: 0, tgt: idx, level: 1 });
-
-      // ── Projects: varied distances, organic scatter ──
-      const children = (epsKids[n.id] || []).slice(0, 8);
-      const projBaseR = 100 + kidCount * 12;      // more kids → spread much further
-      const projMaxR = projBaseR + 70;
-      const fanAngle = Math.min(angleSlice * 0.85, Math.PI * 1.0);
-      const fanStart = midAngle - fanAngle / 2;
-
-      children.forEach((child: any, ci: number) => {
-        const step = children.length > 1 ? fanAngle / (children.length - 1) : 0;
-        const childAngle = fanStart + step * ci;
-        // Alternate near/far for organic look
-        const dist = projBaseR + (projMaxR - projBaseR) * seed(ci * 7 + i * 13);
-        const s2 = getStyle(child.category, child.health);
-        const cIdx = nodes.length;
-        nodes.push({
-          ...child,
-          x: nodes[idx].x + Math.cos(childAngle) * dist,
-          y: nodes[idx].y + Math.sin(childAngle) * dist,
-          radius: 8, color: s2.fill, glowColor: s2.glow, labelColor: s2.label,
-          level: 2, parentIdx: idx
-        });
-        idxMap[child.id] = cIdx;
-        edges.push({ src: idx, tgt: cIdx, level: 2 });
-      });
-
-      currentAngle += angleSlice;
+    // Set targets for all nodes
+    nodeMap.forEach(n => { 
+        if (n.visible) {
+            n.targetY = n.targetY - yOffset + centerY;
+            n.targetX = n.targetX + 140; // 140px from left edge
+            if (n.x === 0 && n.y === 0) {
+                // If it's a new node popping in, start it at parent's position
+                n.x = n.parent ? n.parent.targetX : n.targetX;
+                n.y = n.parent ? n.parent.targetY : n.targetY;
+            }
+        } else {
+            // collapsed nodes shrink into their closest visible ancestor
+            let p = n.parent;
+            while (p && !p.visible) p = p.parent;
+            if (p) {
+                n.targetX = p.targetX;
+                n.targetY = p.targetY;
+            }
+        }
     });
 
-    // Vendors — further out, organic offset
-    const vendorLinks: { vid: string; pid: string }[] = [];
-    rawLinks.forEach((l: any) => {
-      const sn = raw.find((n: any) => n.id === l.source);
-      const tn = raw.find((n: any) => n.id === l.target);
-      if ((sn?.category === 2 || sn?.category === 3) && tn?.category === 4)
-        vendorLinks.push({ vid: tn.id, pid: sn.id });
-    });
-    const placedV = new Set<string>();
-    vendorLinks.forEach(({ vid, pid }, vi) => {
-      if (placedV.has(vid)) return;
-      placedV.add(vid);
-      const vRaw = vendors.find((v: any) => v.id === vid);
-      const pIdx = idxMap[pid];
-      if (!vRaw || pIdx === undefined) return;
-      const p = nodes[pIdx];
-      const a = Math.atan2(p.y - cy, p.x - cx);
-      const s = getStyle(4);
-      const idx = nodes.length;
-      nodes.push({ ...vRaw, x: p.x + Math.cos(a) * 50, y: p.y + Math.sin(a) * 50, radius: 6, color: s.fill, glowColor: s.glow, labelColor: s.label, level: 3, parentIdx: pIdx });
-      idxMap[vRaw.id] = idx;
-      edges.push({ src: pIdx, tgt: idx, level: 3 });
-    });
-
+    edgesRef.current = edges;
+    
     // Particles
     const particles: Particle[] = [];
     edges.forEach((_, i) => {
       const count = 1 + Math.floor(Math.random() * 2);
       for (let j = 0; j < count; j++)
-        particles.push({ edgeIdx: i, t: Math.random(), speed: 0.001 + Math.random() * 0.003, size: 1 + Math.random() * 1.5 });
+        particles.push({ edgeIdx: i, t: Math.random(), speed: 0.002 + Math.random() * 0.003, size: 1 + Math.random() * 1.5 });
     });
-
-    nodesRef.current = nodes;
-    edgesRef.current = edges;
     particlesRef.current = particles;
-    setStats({ n: nodes.length, e: edges.length });
-    startTimeRef.current = performance.now() / 1000;
-  }, []);
+
+    setStats({ n: Array.from(nodeMap.values()).filter(n=>n.visible).length, e: edges.length });
+  }, [expandedNodes, searchQuery]);
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       try {
-        const res = await fetch('/akasha/api/dashboard/knowledge-graph');
+        const url = portfolio ? `/akasha/api/dashboard/knowledge-graph?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/dashboard/knowledge-graph';
+        const res = await fetch(url);
         const data = await res.json();
+        rootDataRef.current = data;
         const c = containerRef.current;
-        if (c) { sizeRef.current = { w: c.clientWidth, h: c.clientHeight }; buildLayout(data, c.clientWidth, c.clientHeight); }
+        if (c) { 
+            sizeRef.current = { w: c.clientWidth, h: c.clientHeight }; 
+            // Reset state on new data
+            setExpandedNodes(new Set());
+            nodesMapRef.current = new Map();
+            processData(); 
+            startTimeRef.current = performance.now() / 1000;
+        }
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
-  }, [buildLayout]);
+  }, [portfolio]); // Removed processData from dependencies to fix infinite loop
 
-  // ─── Animation Phases ───
-  // 0-0.7s: root appears (bounce)
-  // 0.7-2.2s: lines to EPS grow, EPS fade in
-  // 2.2-4.2s: lines to projects grow, projects fade in (staggered)
-  // 4.2-5.2s: vendor lines + nodes
-  // 5.2s+: particles flow
+  // Re-process when expanded nodes or search changes
+  useEffect(() => {
+     if (rootDataRef.current) processData();
+  }, [expandedNodes, searchQuery, processData]);
 
+  // ─── Animation Loop ───
   const drawFrame = useCallback((ts: number) => {
     const canvas = canvasRef.current;
     if (!canvas) { animRef.current = requestAnimationFrame(drawFrame); return; }
@@ -210,7 +247,7 @@ export default function KnowledgeGraph() {
     if (!w) { animRef.current = requestAnimationFrame(drawFrame); return; }
 
     const t = ts / 1000 - startTimeRef.current;
-    const nodes = nodesRef.current;
+    const nodeMap = nodesMapRef.current;
     const edges = edgesRef.current;
     const particles = particlesRef.current;
     const scale = scaleRef.current;
@@ -219,19 +256,11 @@ export default function KnowledgeGraph() {
 
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // ── Light theme background ──
-    const bg = ctx.createRadialGradient(w * dpr / 2, h * dpr / 2, 0, w * dpr / 2, h * dpr / 2, w * dpr * 0.7);
-    bg.addColorStop(0, '#f8fafb');
-    bg.addColorStop(0.6, '#f0f4f6');
-    bg.addColorStop(1, '#e8eef2');
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
     // Subtle dot grid
-    ctx.fillStyle = 'rgba(0,0,0,0.04)';
+    ctx.fillStyle = 'rgba(0,0,0,0.03)';
     const gridSize = 36 * dpr;
-    for (let gx = 0; gx < canvas.width; gx += gridSize) {
-      for (let gy = 0; gy < canvas.height; gy += gridSize) {
+    for (let gx = (pan.x * scale * dpr) % gridSize; gx < canvas.width; gx += gridSize) {
+      for (let gy = (pan.y * scale * dpr) % gridSize; gy < canvas.height; gy += gridSize) {
         ctx.beginPath();
         ctx.arc(gx, gy, 0.8 * dpr, 0, Math.PI * 2);
         ctx.fill();
@@ -240,104 +269,115 @@ export default function KnowledgeGraph() {
 
     ctx.save();
     ctx.translate((w / 2 + pan.x) * dpr, (h / 2 + pan.y) * dpr);
-    ctx.scale(scale * dpr, scale * dpr);
+    ctx.scale(dpr, dpr); // scale is fixed to dpr, no dynamic zooming
     ctx.translate(-w / 2, -h / 2);
 
-    // ── Edges with staged reveal + connector dots ──
-    edges.forEach((edge, ei) => {
-      const src = nodes[edge.src];
-      const tgt = nodes[edge.tgt];
-      if (!src || !tgt) return;
-
-      let prog = 0;
-      if (edge.level === 1) prog = clamp((t - 0.7) / 1.2, 0, 1);
-      else if (edge.level === 2) prog = clamp((t - 2.2) / 1.5, 0, 1);
-      else if (edge.level === 3) prog = clamp((t - 4.2) / 0.8, 0, 1);
-      if (prog <= 0) return;
-
-      const ep = easeOutCubic(prog);
-      const ex = src.x + (tgt.x - src.x) * ep;
-      const ey = src.y + (tgt.y - src.y) * ep;
-
-      // Thin elegant line — golden for root links, subtle gray for others
-      ctx.beginPath();
-      ctx.moveTo(src.x, src.y);
-      ctx.lineTo(ex, ey);
-      if (edge.level === 1) {
-        const grad = ctx.createLinearGradient(src.x, src.y, ex, ey);
-        grad.addColorStop(0, 'rgba(200, 160, 60, 0.5)');
-        grad.addColorStop(1, 'rgba(140, 120, 80, 0.25)');
-        ctx.strokeStyle = grad;
-        ctx.lineWidth = 1.4;
+    // Physics Lerp & Alpha Update
+    nodeMap.forEach(node => {
+      node.x += (node.targetX - node.x) * 0.12;
+      node.y += (node.targetY - node.y) * 0.12;
+      if (node.visible) {
+          node.alpha = Math.min(1, node.alpha + 0.05);
       } else {
-        ctx.strokeStyle = `rgba(120, 120, 140, ${edge.level === 2 ? 0.2 : 0.12})`;
-        ctx.lineWidth = edge.level === 2 ? 0.8 : 0.5;
-      }
-      ctx.stroke();
-
-      // Small connector dot at midpoint (like numbered dots in reference)
-      if (prog >= 1 && edge.level <= 2) {
-        const mx = (src.x + tgt.x) / 2;
-        const my = (src.y + tgt.y) / 2;
-        ctx.beginPath();
-        ctx.arc(mx, my, edge.level === 1 ? 3.5 : 2.5, 0, Math.PI * 2);
-        ctx.fillStyle = edge.level === 1 ? 'rgba(200,160,60,0.35)' : 'rgba(120,120,140,0.2)';
-        ctx.fill();
+          node.alpha = Math.max(0, node.alpha - 0.1);
       }
     });
 
-    // ── Particles (after reveal) — subtle on light bg ──
-    if (t > 5.2) {
-      const pAlpha = clamp((t - 5.2) / 1.5, 0, 1);
-      particles.forEach(p => {
+    // Draw Edges (n8n Bezier Style)
+    edges.forEach((edge, ei) => {
+      const src = nodeMap.get(edge.src);
+      const tgt = nodeMap.get(edge.tgt);
+      if (!src || !tgt) return;
+      if (src.alpha <= 0.01 && tgt.alpha <= 0.01) return;
+
+      const pAlpha = Math.min(src.alpha, tgt.alpha);
+      
+      const startX = src.x + src.radius;
+      const endX = tgt.x - tgt.radius;
+      
+      ctx.beginPath();
+      ctx.moveTo(startX, src.y);
+      const cpDist = Math.max(40, Math.abs(endX - startX) * 0.5);
+      ctx.bezierCurveTo(startX + cpDist, src.y, endX - cpDist, tgt.y, endX, tgt.y);
+      
+      const grad = ctx.createLinearGradient(startX, src.y, endX, tgt.y);
+      grad.addColorStop(0, hexToRgba(src.color, pAlpha * 0.5));
+      grad.addColorStop(1, hexToRgba(tgt.color, pAlpha * 0.3));
+      ctx.strokeStyle = grad;
+      ctx.lineWidth = edge.level === 1 ? 2.5 : 1.5;
+      ctx.stroke();
+    });
+
+    // Particles along bezier
+    particles.forEach(p => {
         const edge = edges[p.edgeIdx];
-        if (!edge || edge.level > 2) return; // only on root→EPS and EPS→project lines
-        const src = nodes[edge.src], tgt = nodes[edge.tgt];
+        if (!edge) return;
+        const src = nodeMap.get(edge.src), tgt = nodeMap.get(edge.tgt);
         if (!src || !tgt) return;
+        const pAlpha = Math.min(src.alpha, tgt.alpha);
+        if (pAlpha <= 0.01) return;
+
         p.t += p.speed;
         if (p.t > 1) p.t = 0;
-        const px = src.x + (tgt.x - src.x) * p.t;
-        const py = src.y + (tgt.y - src.y) * p.t;
+        
+        // Bezier interpolation
+        const u = 1 - p.t;
+        const tt = p.t * p.t;
+        const uu = u * u;
+        const uuu = uu * u;
+        const ttt = tt * p.t;
+        
+        const startX = src.x + src.radius;
+        const endX = tgt.x - tgt.radius;
+        
+        const cpDist = Math.max(40, Math.abs(endX - startX) * 0.5);
+        const p0x = startX, p0y = src.y;
+        const p1x = startX + cpDist, p1y = src.y;
+        const p2x = endX - cpDist, p2y = tgt.y;
+        const p3x = endX, p3y = tgt.y;
+        
+        const px = uuu * p0x + 3 * uu * p.t * p1x + 3 * u * tt * p2x + ttt * p3x;
+        const py = uuu * p0y + 3 * uu * p.t * p1y + 3 * u * tt * p2y + ttt * p3y;
 
-        // Soft warm glow
         const gl = ctx.createRadialGradient(px, py, 0, px, py, p.size * 3);
-        gl.addColorStop(0, `rgba(190,150,50,${0.3 * pAlpha})`);
-        gl.addColorStop(1, 'rgba(190,150,50,0)');
+        gl.addColorStop(0, `rgba(255,255,255,${0.8 * pAlpha})`);
+        gl.addColorStop(1, 'rgba(255,255,255,0)');
         ctx.fillStyle = gl;
         ctx.fillRect(px - p.size * 3, py - p.size * 3, p.size * 6, p.size * 6);
+    });
 
-        ctx.beginPath();
-        ctx.arc(px, py, p.size * 0.8, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(170,130,40,${0.5 * pAlpha})`;
-        ctx.fill();
-      });
-    }
-
-    // ── Nodes with staged reveal ──
-    nodes.forEach(node => {
-      let alpha = 0, sc = 1;
-      if (node.level === 0) {
-        alpha = clamp(t / 0.5, 0, 1);
-        sc = 0.2 + 0.8 * easeOutBack(clamp(t / 0.7, 0, 1));
-      } else if (node.level === 1) {
-        alpha = clamp((t - 1.5) / 0.5, 0, 1);
-        sc = 0.5 + 0.5 * easeOutCubic(clamp((t - 1.5) / 0.5, 0, 1));
-      } else if (node.level === 2) {
-        alpha = clamp((t - 3.2) / 0.5, 0, 1);
-        sc = 0.5 + 0.5 * easeOutCubic(clamp((t - 3.2) / 0.5, 0, 1));
-      } else {
-        alpha = clamp((t - 4.8) / 0.4, 0, 1);
+    // Draw Nodes
+    const query = searchQuery.toLowerCase();
+    nodeMap.forEach(node => {
+      if (node.alpha <= 0.01) return;
+      const isHovered = hoveredNodeId === node.id;
+      const isSearchMatch = query.length > 1 && node.name.toLowerCase().includes(query);
+      drawNode(ctx, node, t, isHovered, isSearchMatch);
+      
+      // Expand Icon indicator for nodes with children
+      if (node.children && node.children.length > 0 && node.visible && node.alpha > 0.8) {
+          ctx.beginPath();
+          ctx.arc(node.x + node.radius, node.y, 6, 0, Math.PI * 2);
+          ctx.fillStyle = node.expanded ? '#f1f5f9' : node.color;
+          ctx.fill();
+          ctx.strokeStyle = '#cbd5e1';
+          ctx.lineWidth = 1;
+          ctx.stroke();
+          
+          ctx.fillStyle = node.expanded ? '#64748b' : '#ffffff';
+          ctx.font = 'bold 8px monospace';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(node.expanded ? '-' : '+', node.x + node.radius, node.y + 0.5);
       }
-      if (alpha <= 0) return;
-      drawNode(ctx, node, alpha, sc, t);
     });
 
     ctx.restore();
     animRef.current = requestAnimationFrame(drawFrame);
-  }, []);
+  }, [hoveredNodeId, searchQuery]);
 
   useEffect(() => {
-    if (!loading && nodesRef.current.length > 0) animRef.current = requestAnimationFrame(drawFrame);
+    if (!loading) animRef.current = requestAnimationFrame(drawFrame);
     return () => cancelAnimationFrame(animRef.current);
   }, [loading, drawFrame]);
 
@@ -358,62 +398,71 @@ export default function KnowledgeGraph() {
     return () => obs.disconnect();
   }, []);
 
-  // Mouse
+  // Mouse Interactivity
   const getNodeAt = useCallback((cx: number, cy: number): GNode | null => {
     const cv = canvasRef.current; if (!cv) return null;
     const rect = cv.getBoundingClientRect();
     const { w, h } = sizeRef.current;
-    const s = scaleRef.current, p = panRef.current;
-    const mx = (cx - rect.left - w / 2 - p.x) / s + w / 2;
-    const my = (cy - rect.top - h / 2 - p.y) / s + h / 2;
-    for (const n of nodesRef.current) {
+    const p = panRef.current;
+    // Scale is strictly 1 now
+    const mx = (cx - rect.left - w / 2 - p.x) + w / 2;
+    const my = (cy - rect.top - h / 2 - p.y) + h / 2;
+    
+    // Reverse iterate to click top-most nodes first
+    const nodes = Array.from(nodesMapRef.current.values()).filter(n => n.visible);
+    for (let i = nodes.length - 1; i >= 0; i--) {
+      const n = nodes[i];
       if ((mx - n.x) ** 2 + (my - n.y) ** 2 < (n.radius + 12) ** 2) return n;
     }
     return null;
   }, []);
 
-  const onClick = useCallback((e: React.MouseEvent) => setSelectedNode(getNodeAt(e.clientX, e.clientY)), [getNodeAt]);
+  const onClick = useCallback((e: React.MouseEvent) => {
+      const node = getNodeAt(e.clientX, e.clientY);
+      if (node) {
+          if (node.children && node.children.length > 0) {
+              setExpandedNodes(prev => {
+                  const next = new Set(prev);
+                  if (next.has(node.id)) next.delete(node.id);
+                  else next.add(node.id);
+                  return next;
+              });
+          }
+          if (node.category > 0) {
+              setSelectedNode(node);
+          }
+      } else {
+          setSelectedNode(null);
+      }
+  }, [getNodeAt]);
+  
   const onDown = useCallback((e: React.MouseEvent) => { dragRef.current = { on: true, lx: e.clientX, ly: e.clientY }; }, []);
   const onMove = useCallback((e: React.MouseEvent) => {
     const d = dragRef.current;
     if (d.on) { panRef.current.x += e.clientX - d.lx; panRef.current.y += e.clientY - d.ly; d.lx = e.clientX; d.ly = e.clientY; }
     const cv = canvasRef.current;
-    if (cv) cv.style.cursor = getNodeAt(e.clientX, e.clientY) ? 'pointer' : (d.on ? 'grabbing' : 'grab');
+    const node = getNodeAt(e.clientX, e.clientY);
+    if (cv) cv.style.cursor = node ? 'pointer' : (d.on ? 'grabbing' : 'grab');
+    setHoveredNodeId(node ? node.id : null);
   }, [getNodeAt]);
   const onUp = useCallback(() => { dragRef.current.on = false; }, []);
+  
   useEffect(() => {
     const cv = canvasRef.current;
     if (!cv) return;
     const handleWheel = (e: WheelEvent) => {
       e.preventDefault();
-      scaleRef.current = Math.max(0.3, Math.min(3, scaleRef.current * (e.deltaY > 0 ? 0.9 : 1.1)));
+      panRef.current.x -= e.deltaX;
+      panRef.current.y -= e.deltaY;
     };
     cv.addEventListener('wheel', handleWheel, { passive: false });
     return () => cv.removeEventListener('wheel', handleWheel);
   }, []);
 
-  const zoom = (d: 'in' | 'out') => { scaleRef.current = Math.max(0.3, Math.min(3, scaleRef.current * (d === 'in' ? 1.3 : 0.7))); };
-  const reset = () => { scaleRef.current = 1; panRef.current = { x: 0, y: 0 }; setSelectedNode(null); };
+  const reset = () => { panRef.current = { x: 0, y: 0 }; setSelectedNode(null); setExpandedNodes(new Set()); setSearchQuery(''); };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-100px)] w-full rounded-2xl border border-border overflow-hidden bg-background shadow-xl relative">
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-muted/40 z-20 relative">
-        <div className="flex items-center gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-            <Network className="w-4 h-4 text-primary" />
-          </div>
-          <div>
-            <h2 className="text-sm font-bold text-foreground tracking-wide">AKASHA KNOWLEDGE GRAPH</h2>
-            <p className="text-[10px] text-muted-foreground font-mono tracking-widest">{stats.n} entities · {stats.e} connections</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => zoom('in')} className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><ZoomIn className="w-4 h-4" /></button>
-          <button onClick={() => zoom('out')} className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><ZoomOut className="w-4 h-4" /></button>
-          <button onClick={reset} className="p-1.5 rounded-md border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"><RotateCcw className="w-4 h-4" /></button>
-        </div>
-      </div>
+    <div className="flex flex-col h-[calc(100vh-100px)] w-full relative">
 
       <div className="flex-1 relative flex overflow-hidden">
         <div ref={containerRef} className="flex-1 relative">
@@ -553,42 +602,68 @@ export default function KnowledgeGraph() {
                   )}
                 </DetailSection>}
 
-                {/* Transmission Section */}
-                {selectedNode.tc && <DetailSection icon={<Zap className="w-4 h-4" />} title="Transmission Network" color="#10B981">
-                  <DetailRow label="Region" value={selectedNode.tc.region} />
-                  <DetailRow label="Substations" value={selectedNode.tc.total_substations} />
-                  <DetailRow label="Lines" value={selectedNode.tc.total_lines} />
-                  
-                  {selectedNode.tc.substations?.length > 0 && (
-                    <div className="mt-3 text-[10px]">
-                      <span className="font-semibold text-muted-foreground uppercase tracking-wider block mb-1">Substations:</span>
-                      <span className="text-foreground leading-relaxed">{selectedNode.tc.substations.join(', ')}</span>
+                {/* Transmission Linkage Section */}
+                {selectedNode.tc && selectedNode.tc.total_lines > 0 && (
+                  <DetailSection title="Transmission Linkage" icon={<Network className="w-4 h-4" />} color="#8B5CF6">
+                    
+                    {/* Live Transmission Portal Link */}
+                    <div className="flex justify-end mb-2">
+                      <a
+                        href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${selectedNode.id}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[9px] uppercase tracking-wider px-2.5 py-1.5 rounded font-bold transition-all w-fit group"
+                      >
+                        Open Portal <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
+                      </a>
                     </div>
-                  )}
-                  
-                  {selectedNode.tc.lines?.length > 0 && (
-                    <div className="mt-4 space-y-2">
-                      <div className="text-[10px] text-muted-foreground uppercase tracking-widest font-bold border-b border-border pb-1.5 mb-2">Lines Progress</div>
-                      {selectedNode.tc.lines.map((l: any, i: number) => {
-                        const isDone = ['completed', 'charged'].includes(l.status?.toLowerCase());
-                        return (
-                          <div key={i} className={`border rounded-lg p-2.5 text-[10px] space-y-1.5 ${isDone ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-amber-500/5 border-amber-500/10'}`}>
-                            <div className="font-bold text-foreground flex justify-between items-start gap-2 leading-tight">
-                              <span>{l.from || '?'} <span className="text-muted-foreground font-normal mx-0.5">→</span> {l.to || '?'}</span>
-                              <span className={`shrink-0 ${isDone ? 'text-emerald-500' : 'text-amber-500'}`}>{l.status || 'Ongoing'}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1 pt-1 border-t border-border/30 text-muted-foreground">
-                              <div>Fdn: <span className="font-mono text-foreground font-medium">{l.foundation || 0}%</span></div>
-                              <div>Erec: <span className="font-mono text-foreground font-medium">{l.erection || 0}%</span></div>
-                              <div>Str: <span className="font-mono text-foreground font-medium">{l.stringing || 0}%</span></div>
-                            </div>
-                            {l.expected_date && <div className="text-muted-foreground pt-0.5 italic">Expected: {l.expected_date.split(' ')[0]}</div>}
-                          </div>
-                        );
-                      })}
+
+                    <div className="grid grid-cols-3 gap-2 my-2 mb-3">
+                      <div className="bg-muted/40 border border-border rounded flex flex-col items-center justify-center py-2">
+                        <span className="text-sm font-bold text-foreground">{selectedNode.tc.total_lines}</span>
+                        <span className="text-[9px] uppercase font-bold text-muted-foreground">Total</span>
+                      </div>
+                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded flex flex-col items-center justify-center py-2">
+                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{selectedNode.tc.charged_lines}</span>
+                        <span className="text-[9px] uppercase font-bold text-emerald-700 dark:text-emerald-500">Charged</span>
+                      </div>
+                      <div className="bg-red-500/10 border border-red-500/20 rounded flex flex-col items-center justify-center py-2">
+                        <span className="text-sm font-bold text-red-600 dark:text-red-400">{selectedNode.tc.delayed_lines}</span>
+                        <span className="text-[9px] uppercase font-bold text-red-700 dark:text-red-500">Delayed</span>
+                      </div>
                     </div>
-                  )}
-                </DetailSection>}
+                    {selectedNode.tc.lines?.length > 0 && (
+                      <div className="flex flex-col gap-1.5 max-h-[250px] overflow-y-auto scrollbar-thin">
+                        {selectedNode.tc.lines.map((line: any, idx: number) => {
+                          const norm = line.normalized_status || 'in_progress';
+                          const badgeColor = norm === 'charged' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
+                            norm === 'delayed' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
+                            'bg-blue-500/10 text-blue-600 dark:text-blue-400';
+                          const displayStatus = norm === 'charged' ? 'CHARGED' : norm === 'delayed' ? 'DELAYED' : 'IN PROGRESS';
+
+                          return (
+                            <div key={idx} className="flex flex-col bg-background/50 px-2 py-1.5 rounded border border-border text-xs">
+                              <div className="flex justify-between items-center pb-1">
+                                <span className="text-foreground truncate pr-2" title={line.name}>{line.name}</span>
+                                <span className={`text-[9px] uppercase font-bold px-1.5 py-0.5 rounded ${badgeColor}`}>
+                                  {displayStatus}
+                                </span>
+                              </div>
+                              
+                              {(line.foundation || line.erection || line.stringing) && (
+                                <div className="grid grid-cols-3 gap-2 pt-1.5 border-t border-border/30 text-[9px] text-muted-foreground uppercase tracking-wider font-semibold">
+                                  <div>Fdn: <span className="font-mono text-foreground font-bold ml-1">{line.foundation?.split('/')[0] || 0}</span></div>
+                                  <div>Erec: <span className="font-mono text-foreground font-bold ml-1">{line.erection?.split('/')[0] || 0}</span></div>
+                                  <div>Str: <span className="font-mono text-foreground font-bold ml-1">{line.stringing?.split('/')[0] || 0}</span></div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </DetailSection>
+                )}
               </div>
             </motion.div>
           )}
@@ -596,101 +671,245 @@ export default function KnowledgeGraph() {
       </div>
 
       {/* Legend */}
-      <div className="absolute bottom-4 left-4 z-20 flex items-center gap-4 bg-card/80 backdrop-blur-md px-4 py-2 rounded-lg border border-border shadow-sm">
-        {[
-          { c: STYLE.root.fill, l: 'Akasha' }, { c: STYLE.eps.fill, l: 'EPS Region' },
-          { c: STYLE.ok.fill, l: 'Project (On Track)' }, { c: STYLE.delayed.fill, l: 'Project (Delayed)' },
-          { c: STYLE.vendor.fill, l: 'Vendor' }
-        ].map(i => (
-          <div key={i.l} className="flex items-center gap-1.5">
-            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: i.c }} />
-            <span className="text-[10px] text-muted-foreground font-medium">{i.l}</span>
+      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2.5 bg-card/90 backdrop-blur-md px-4 py-3 rounded-lg border border-border shadow-sm">
+        <div className="flex items-center gap-4">
+          {[
+            { c: STYLE.root.fill, l: 'Enterprise' }, { c: STYLE.portfolio.fill, l: 'Portfolio' }, { c: STYLE.eps.fill, l: 'EPS Region' },
+            { c: STYLE.ok.fill, l: 'Project (On Track)' }, { c: STYLE.delayed.fill, l: 'Project (Delayed)' },
+            { c: STYLE.vendor.fill, l: 'Vendor' }
+          ].map(i => (
+            <div key={i.l} className="flex items-center gap-1.5">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: i.c }} />
+              <span className="text-[10px] text-muted-foreground font-medium">{i.l}</span>
+            </div>
+          ))}
+        </div>
+        
+        <div className="flex items-center gap-6 pt-2 border-t border-border/50">
+          <div className="flex items-center gap-2">
+             <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Stats Format:</span>
+             <span className="text-[10px] font-mono"><span className="text-blue-500 font-bold">Total MW</span> <span className="text-muted-foreground">/</span> <span className="text-emerald-500 font-bold">COD</span> <span className="text-muted-foreground">/</span> <span className="text-amber-500 font-bold">Trial</span></span>
           </div>
-        ))}
+          <div className="flex items-center gap-2">
+             <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Project Maps:</span>
+             <div className="flex gap-2 items-center">
+               <span className="text-[10px] font-bold text-blue-500">● P6 Schedule</span>
+               <span className="text-[10px] font-bold text-pink-500">● SAP Material</span>
+               <span className="text-[10px] font-bold text-red-500">● TC Network</span>
+             </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
-function drawNode(ctx: CanvasRenderingContext2D, node: GNode, alpha: number, sc: number, time: number) {
-  if (alpha <= 0) return;
-  const { x, y, color, glowColor } = node;
-  const r = node.radius * sc;
-  ctx.globalAlpha = alpha;
+function drawNode(ctx: CanvasRenderingContext2D, node: GNode, time: number, hovered: boolean, isSearchMatch: boolean) {
+  ctx.globalAlpha = node.alpha;
+  const { x, y, color, radius } = node;
+  const r = radius;
 
-  // Outer glow
-  const glow = ctx.createRadialGradient(x, y, r * 0.3, x, y, r * 2.5);
-  glow.addColorStop(0, glowColor);
-  glow.addColorStop(1, 'transparent');
-  ctx.fillStyle = glow;
-  ctx.fillRect(x - r * 2.5, y - r * 2.5, r * 5, r * 5);
-
-  // Root pulse
-  if (node.level === 0) {
-    const pulse = 0.5 + 0.5 * Math.sin(time * 1.8);
-    const pg = ctx.createRadialGradient(x, y, r, x, y, r * 3.5);
-    pg.addColorStop(0, `rgba(212,168,83,${0.1 * pulse})`);
-    pg.addColorStop(1, 'transparent');
-    ctx.fillStyle = pg;
-    ctx.fillRect(x - r * 3.5, y - r * 3.5, r * 7, r * 7);
+  // Delayed Pulse
+  if (node.health === 'delayed') {
+    const pulse = 0.5 + 0.5 * Math.sin(time * 3);
+    ctx.beginPath();
+    ctx.arc(x, y, r + 4 + pulse * 6, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(239, 68, 68, ${0.15 * pulse})`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(239, 68, 68, ${0.4 * pulse})`;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
   }
 
-  // Flat modern design instead of 3D sphere
+  if (isSearchMatch) {
+    ctx.beginPath();
+    ctx.arc(x, y, r + 10, 0, Math.PI * 2);
+    ctx.fillStyle = `rgba(59, 130, 246, 0.2)`;
+    ctx.fill();
+    ctx.strokeStyle = `rgba(59, 130, 246, 0.8)`;
+    ctx.lineWidth = 2;
+    ctx.stroke();
+  }
+
+  // Premium Node Rendering
+  ctx.save();
+  
+  // Drop Shadow
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.15)';
+  ctx.shadowBlur = 12;
+  ctx.shadowOffsetY = 4;
+  
+  // Base Circle
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.fillStyle = color;
-  ctx.fill();
   
-  // Crisp inner ring
+  const isDark = document.documentElement.classList.contains('dark');
+  
+  if (node.category === 3 || node.category === 4) {
+    const healthColor = node.health === 'delayed' ? '#EF4444' : '#10B981';
+    
+    // Just draw the health color for the dot (progress)
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = healthColor;
+    ctx.fill();
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.stroke();
+
+    if (hovered || isSearchMatch) {
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.shadowColor = healthColor;
+      ctx.shadowBlur = 20;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+  } else {
+    // Normal node rendering (Radial Gradient)
+    const grad = ctx.createRadialGradient(x, y - r * 0.3, r * 0.1, x, y, r);
+    grad.addColorStop(0, lighten(color, hovered ? 40 : 25));
+    grad.addColorStop(1, hovered ? lighten(color, 10) : color);
+    
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = grad;
+    ctx.fill();
+    if (hovered || isSearchMatch) {
+      ctx.shadowColor = node.color;
+      ctx.shadowBlur = 20;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+    }
+    ctx.lineWidth = 1.5;
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.stroke();
+  }
+  
+  // Reset shadow for strokes
+  ctx.shadowColor = 'transparent';
+  
+  // Inner subtle highlight (glass rim)
   ctx.beginPath();
   ctx.arc(x, y, Math.max(1, r - 1.5), 0, Math.PI * 2);
-  ctx.lineWidth = 1;
-  ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
   ctx.stroke();
   
-  // Clean outer border
+  // Outer subtle border
   ctx.beginPath();
   ctx.arc(x, y, r, 0, Math.PI * 2);
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = darken(color, 20);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = darken(color, 15);
   ctx.stroke();
 
-  // Shadow (light theme)
-  ctx.beginPath(); ctx.arc(x, y + r * 0.3, r * 0.9, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(0,0,0,0.04)'; ctx.fill();
+  // Bottom shading
+  ctx.beginPath(); 
+  ctx.arc(x, y + r * 0.3, r * 0.8, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.08)'; 
+  ctx.fill();
+  
+  ctx.restore();
 
-  // Label
-  const fs = node.level === 0 ? 13 : node.level === 1 ? 10 : 8;
-  ctx.font = `${node.level <= 1 ? '600 ' : '400 '}${fs}px Adani, Inter, system-ui`;
-  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
-  const ly = y + r + 5;
-  const label = node.name.length > 24 ? node.name.slice(0, 22) + '..' : node.name;
+  // Since it's a spread out horizontal tree, labels never overlap!
+  const showLabel = true;
+  
+  if (showLabel) {
+    const isDark = document.documentElement.classList.contains('dark');
+    const fs = node.level === 0 ? 18 : node.level === 1 ? 14 : 11;
+    ctx.font = `${node.level <= 1 ? '600 ' : '500 '}${fs}px Adani, Inter, system-ui`;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    
+    // Position label to the right of the node (Horizontal layout)
+    const lx = x + r + 10;
+    const label = node.name.length > 28 && !hovered ? node.name.slice(0, 26) + '..' : node.name;
 
-  // Text with outline for readability on light bg
-  ctx.strokeStyle = 'rgba(255,255,255,0.8)';
-  ctx.lineWidth = 3;
-  ctx.lineJoin = 'round';
-  ctx.strokeText(label, x, ly);
-  ctx.fillStyle = node.labelColor;
-  ctx.fillText(label, x, ly);
+    ctx.strokeStyle = isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255,255,255,0.85)';
+    ctx.lineWidth = 4;
+    ctx.lineJoin = 'round';
+    ctx.strokeText(label, lx, y);
+    
+    // Apply multi-color gradient to Project names based on mappings
+    if (node.category === 3 || node.category === 4) {
+      const hasP6 = !!node.p6;
+      const hasSAP = node.sap && (node.sap.po_count > 0 || node.sap.inventory_items > 0 || node.sap.in_transit_count > 0);
+      const hasTC = node.tc && (node.tc.lines?.length > 0 || node.tc.total_lines > 0);
+      
+      const activeColors = [];
+      if (hasP6) activeColors.push('#3B82F6'); // Blue
+      if (hasSAP) activeColors.push('#EC4899'); // Pink
+      if (hasTC) activeColors.push('#EF4444'); // Red
+      
+      if (activeColors.length > 0) {
+        const textWidth = ctx.measureText(label).width;
+        const textGrad = ctx.createLinearGradient(lx, 0, lx + textWidth, 0);
+        
+        if (activeColors.length === 1) {
+          textGrad.addColorStop(0, activeColors[0]);
+          textGrad.addColorStop(1, activeColors[0]);
+        } else if (activeColors.length === 2) {
+          textGrad.addColorStop(0, activeColors[0]);
+          textGrad.addColorStop(1, activeColors[1]);
+        } else if (activeColors.length === 3) {
+          textGrad.addColorStop(0, activeColors[0]);
+          textGrad.addColorStop(0.5, activeColors[1]);
+          textGrad.addColorStop(1, activeColors[2]);
+        }
+        
+        ctx.fillStyle = textGrad;
+      } else {
+        ctx.fillStyle = isDark ? '#9CA3AF' : '#6B7280'; // Gray if no mappings
+      }
+    } else {
+      ctx.fillStyle = isDark ? node.color : node.labelColor;
+    }
+    
+    ctx.fillText(label, lx, y);
 
-  // Sub-label
-  if (node.level === 1 && node.value) {
-    ctx.font = `8px Adani, Inter, system-ui`;
-    ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-    ctx.lineWidth = 2;
-    const sub = node.value.split('·')[0]?.trim() || '';
-    ctx.strokeText(sub, x, ly + fs + 2);
-    ctx.fillStyle = 'rgba(0,0,0,0.35)';
-    ctx.fillText(sub, x, ly + fs + 2);
+    if (node.mw_stats) {
+      // 3-part colored rendering for Portfolio & EPS MW stats
+      ctx.font = `11px Adani, Inter, system-ui`;
+      ctx.strokeStyle = isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 3;
+      
+      const parts = [
+        { text: `${node.mw_stats.total}`, color: '#3B82F6' },
+        { text: `${node.mw_stats.cod}`, color: '#10B981' },
+        { text: `${node.mw_stats.trial}`, color: '#F59E0B' }
+      ];
+      
+      let currentLx = lx;
+      parts.forEach((p, i) => {
+        // Draw the number
+        ctx.strokeText(p.text, currentLx, y + fs + 4);
+        ctx.fillStyle = p.color;
+        ctx.fillText(p.text, currentLx, y + fs + 4);
+        currentLx += ctx.measureText(p.text).width;
+        
+        // Draw separator
+        if (i < parts.length - 1) {
+          const sep = ' / ';
+          ctx.strokeText(sep, currentLx, y + fs + 4);
+          ctx.fillStyle = isDark ? 'rgba(255,255,255,0.4)' : 'rgba(0,0,0,0.3)';
+          ctx.fillText(sep, currentLx, y + fs + 4);
+          currentLx += ctx.measureText(sep).width;
+        }
+      });
+      
+    } else if (node.level === 1 && node.value) {
+      ctx.font = `10px Adani, Inter, system-ui`;
+      ctx.strokeStyle = isDark ? 'rgba(15, 23, 42, 0.85)' : 'rgba(255,255,255,0.85)';
+      ctx.lineWidth = 3;
+      const sub = node.value.split('·')[0]?.trim() || '';
+      ctx.strokeText(sub, lx, y + fs + 4);
+      ctx.fillStyle = isDark ? 'rgba(255,255,255,0.6)' : 'rgba(0,0,0,0.5)';
+      ctx.fillText(sub, lx, y + fs + 4);
+    }
   }
 
   ctx.globalAlpha = 1;
 }
-
-function clamp(v: number, min: number, max: number) { return Math.max(min, Math.min(max, v)); }
-function easeOutCubic(t: number) { return 1 - (1 - t) ** 3; }
-function easeOutBack(t: number) { const c = 1.7; return 1 + (c + 1) * (t - 1) ** 3 + c * (t - 1) ** 2; }
 
 function lighten(hex: string, pct: number): string {
   const n = parseInt(hex.replace('#', ''), 16);
