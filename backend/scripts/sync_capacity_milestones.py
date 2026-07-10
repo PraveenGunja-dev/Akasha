@@ -90,7 +90,7 @@ def fetch_capacity_milestones():
                 
                 pm = ProjectMapping(
                     project="Wind - " + proj["name"],
-                    project_name_from_p6=proj["p6_proj_id_str"],
+                    project_name_from_p6=proj["name"],
                     capacity_mwac=mw_cap,
                     spv_name=proj["name"].split(" ")[0] if " " in proj["name"] else proj["name"],
                     category="Wind",

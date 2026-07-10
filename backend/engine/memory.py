@@ -134,15 +134,18 @@ def build_memory_context(db: Session, project_id: str = None, question: str = No
     """
     feedback = get_relevant_feedback(db, project_id, question)
     
+    current_time = datetime.now().strftime("%I:%M %p")
+    context_str = f"Current System Time: {current_time}\n"
+    
     if not feedback:
-        return ""
+        return context_str
     
     lines = ["## Past Corrections (learn from these):"]
     for i, fb in enumerate(feedback, 1):
         proj = f" (Project: {fb['project_id']})" if fb['project_id'] else ""
         lines.append(f"{i}. {fb['correction']}{proj}")
     
-    return "\n".join(lines)
+    return context_str + "\n".join(lines)
 
 
 def get_feedback_stats(db: Session) -> dict:

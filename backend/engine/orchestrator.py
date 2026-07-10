@@ -257,10 +257,13 @@ class ChatOrchestrator:
 
     def _build_prompt_factual(self, message: str, context: dict, history: list, intent: ChatIntent, db: Session) -> str:
         memory = build_memory_context(db, intent.projects[0] if intent.projects else None, message)
-        return f"""You are an AI assistant for project management.
-Answer the user's question directly, naturally, and concisely using ONLY the provided data.
-Use a conversational, human-readable tone. Avoid robotic AI phrases like "Based on the data," or "Here is the summary." Just give the answer directly like an expert speaking to a colleague.
-If the data does not contain the answer, say "I don't have that information in the current data."
+        return f"""You are the Akasha AI Copilot for EPC project management.
+RULES:
+1. Answer ONLY what the user asked using ONLY the provided data. No templates, no boilerplate.
+2. If they ask a number, give the number. If they ask a list, give the list. Nothing extra.
+3. Use **bold** for key metrics. Use markdown tables when comparing items.
+4. Maximum 2 short paragraphs. No introductions, no conclusions, no disclaimers.
+5. If the data doesn't have the answer, say "I don't have that in the current data."
 
 {memory}
 
@@ -274,11 +277,13 @@ Question: {message}
 
     def _build_prompt_analytical(self, message: str, context: dict, history: list, intent: ChatIntent, db: Session) -> str:
         memory = build_memory_context(db, intent.projects[0] if intent.projects else None, message)
-        return f"""You are an expert Project Management analyst.
-Analyze the provided data to answer the user's question. Focus on variances, risks, and critical path.
-Write naturally like a senior human analyst reporting to the CEO.
-AVOID all AI clichés (e.g., "It is important to note," "Furthermore," "Delve," "In conclusion").
-Use clear, impactful, and concise language. Point out specific numbers that support your analysis without overwhelming the reader.
+        return f"""You are the Akasha AI Copilot — a senior EPC project analyst.
+RULES:
+1. Answer ONLY what the user asked. Every sentence must reference actual data from below.
+2. NEVER use pre-written templates or generic paragraphs. Every word must come from the real data.
+3. Use **bold** for key numbers/variances. Use markdown tables for comparisons.
+4. Maximum 3 short paragraphs. No AI filler phrases ("It is important to note", "Furthermore", "In conclusion").
+5. Write like a senior analyst briefing the CEO — direct, factual, no fluff.
 
 {memory}
 
@@ -296,15 +301,17 @@ Question: {message}
         if history:
             hist_str = "\nPrevious conversation:\n"
             for h in history[-4:]:
-                hist_str += f"{h['role'].upper()}: {h['content']}\n"
-        return f"""You are the Akasha AI Copilot, an expert in engineering, procurement, and construction (EPC) project management.
-Provide a comprehensive, highly accurate, and human-readable response to the user's request.
-CRITICAL TONE INSTRUCTIONS:
-- Write like a senior human executive. Do not sound like a chatbot.
-- AVOID AI tropes and filler words (e.g., "Here is a detailed breakdown", "It's crucial to consider", "Furthermore", "In summary").
-- Get straight to the point.
-- Use bold text for key metrics to make it easy for humans to read.
-- Do not use excessively long bulleted lists unless explicitly asked. Use short, punchy paragraphs.
+                r = h.get("role") or h.get("type", "user")
+                if r == "bot": r = "assistant"
+                hist_str += f"{r.upper()}: {h.get('content', '')}\n"
+        return f"""You are the Akasha AI Copilot for EPC project management.
+RULES:
+1. Answer EXACTLY what the user asked. No templates, no boilerplate, no generic advice.
+2. Every claim must reference specific data from the JSON below. If you can't back it up with data, don't say it.
+3. Use **bold** for key metrics. Use markdown tables when listing multiple items.
+4. Maximum 3 short paragraphs. No introductions ("Good morning", "Let me analyze..."), no conclusions ("In summary...").
+5. No AI filler phrases. Write like a senior executive — direct and factual.
+6. If the user's question is a greeting, respond with a brief, time-appropriate greeting and ask what they need help with. Keep it to 1-2 sentences max.
 
 {memory}
 
@@ -320,23 +327,20 @@ User Request: {message}
 
     def _generate(self, prompt: str) -> str:
         """Call the appropriate LLM backend."""
-        from routers.ai import call_ollama, call_groq, call_azure_openai_curl
-        if self.default_llm == "groq":
-            return call_groq([{"role": "user", "content": prompt}], temperature=0.3)
-        elif self.default_llm == "azure":
-            return call_azure_openai_curl(prompt)
+        from routers.ai import call_ollama, call_azure_openai_curl
+        if self.default_llm == "azure":
+            return call_azure_openai_curl([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048)
         else:
-            return call_ollama(prompt, "qwen3-coder:30b")
+            return call_ollama([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048)
 
     def _generate_stream(self, prompt: str):
         """Call the appropriate LLM backend with streaming."""
-        from routers.ai import call_ollama, call_groq, call_azure_openai_curl
-        if self.default_llm == "groq":
-            response = call_groq([{"role": "user", "content": prompt}], temperature=0.3, stream=True)
-            for chunk in response:
-                if chunk.choices[0].delta.content is not None:
-                    yield chunk.choices[0].delta.content
+        from routers.ai import call_ollama, call_azure_openai_curl
+        if self.default_llm == "azure":
+            yield call_azure_openai_curl([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048)
         else:
-            # Fallback for non-streaming models: just yield the whole thing
-            yield self._generate(prompt)
+            response = call_ollama([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048, stream=True)
+            for chunk in response:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
 

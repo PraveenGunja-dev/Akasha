@@ -4,7 +4,8 @@ import {
   FileText, Database, Sparkles, Calendar, Settings, PanelLeftClose,
   PanelLeft, MessageSquare, BarChart3, ShieldAlert, TrendingUp,
   Clock, ArrowRight, Trash2, Search, Globe, Cpu, BrainCircuit,
-  Activity, ChevronDown, ThumbsUp, ThumbsDown, CheckCircle2, History, X
+  Activity, ChevronDown, ThumbsUp, ThumbsDown, CheckCircle2, History, X,
+  Square, Loader2
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -60,10 +61,12 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   // Voice and Image states
   const [isListening, setIsListening] = useState(false);
   const [imageFile, setImageFile] = useState<string | null>(null);
+  const [isStreaming, setIsStreaming] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
   const startListening = () => {
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -193,7 +196,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
   const handleSend = async (overrideInput?: string) => {
     const text = overrideInput || input.trim();
-    if (!text) return;
+    if (!text && !imageFile) return;
 
     // Create thread if needed
     let currentThreadId = activeThreadId;
@@ -234,6 +237,10 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     }
 
     try {
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      setIsStreaming(true);
+
       const response = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -243,7 +250,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           sessionId: currentThreadId.toString(),
           isDeepAnalysis: isDeepAnalysis,
           imageData: currentImageData
-        })
+        }),
+        signal: controller.signal
       });
 
       if (!response.ok) {
@@ -298,15 +306,30 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
         }
       }
       
-    } catch {
+    } catch (err: any) {
+      if (err?.name === 'AbortError') {
+        // User stopped the generation — keep partial content
+      } else {
+        setIsTyping(false);
+        setMessages(prev => [...prev, {
+          id: Date.now() + 1,
+          type: 'bot',
+          content: '⚠️ System Error: Could not reach the AKASHA AI backend. Please verify the server is running.',
+          timestamp: new Date(),
+          feedbackStatus: 'none'
+        }]);
+      }
+    } finally {
+      setIsStreaming(false);
+      abortControllerRef.current = null;
+    }
+  };
+
+  const handleStop = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
       setIsTyping(false);
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        type: 'bot',
-        content: '⚠️ System Error: Could not reach the AKASHA AI backend. Please verify the server is running.',
-        timestamp: new Date(),
-        feedbackStatus: 'none'
-      }]);
+      setIsStreaming(false);
     }
   };
 
@@ -441,10 +464,6 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-muted border border-border">
-              <Cpu className="w-3 h-3 text-muted-foreground/70" />
-              <span className="text-[10px] text-muted-foreground/70 font-mono">GPT-OSS-120B</span>
-            </div>
             {onMinimize && (
               <button 
                 onClick={onMinimize}
@@ -533,7 +552,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
                       </div>
 
-                      <div className="akasha-response prose dark:prose-invert max-w-none prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-strong:text-foreground prose-code:text-blue-400 prose-code:bg-muted prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border prose-a:text-blue-400">
+                      <div className="akasha-response prose dark:prose-invert max-w-[60%] prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-headings:text-[15px] prose-strong:text-primary prose-strong:font-semibold prose-code:text-blue-400 prose-code:bg-blue-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border prose-a:text-blue-400 prose-li:text-[13px] prose-li:text-foreground/85">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                           {msg.content}
                         </ReactMarkdown>
@@ -612,28 +631,15 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                 </div>
               ))}
 
-              {/* Typing Indicator */}
+              {/* Typing Indicator — Inline Subtle */}
               {isTyping && (
-                <div className="py-5 animate-in fade-in duration-300">
-                  <div className="flex items-center gap-2.5 mb-3">
+                <div className="py-3 animate-in fade-in duration-300">
+                  <div className="flex items-center gap-2.5">
                     <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
-                      <MessageSquare className="w-3 h-3 text-primary-foreground animate-pulse" />
+                      <Loader2 className="w-3 h-3 text-primary-foreground animate-spin" />
                     </div>
                     <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
-                  </div>
-
-                  <div className="flex items-center gap-3 p-4 rounded-xl bg-muted/50 border border-border">
-                    {/* Animated Bars */}
-                    <div className="flex items-end gap-[3px] h-5">
-                      <div className="w-[3px] bg-primary rounded-full animate-pulse" style={{ height: '60%', animationDelay: '0ms' }}></div>
-                      <div className="w-[3px] bg-primary rounded-full animate-pulse" style={{ height: '100%', animationDelay: '150ms' }}></div>
-                      <div className="w-[3px] bg-violet-500 rounded-full animate-pulse" style={{ height: '40%', animationDelay: '300ms' }}></div>
-                      <div className="w-[3px] bg-violet-500 rounded-full animate-pulse" style={{ height: '80%', animationDelay: '450ms' }}></div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <StageIcon className="w-3.5 h-3.5 text-primary" />
-                      <span className="text-[12px] text-muted-foreground font-mono">{currentStage.text}</span>
-                    </div>
+                    <span className="text-[11px] text-muted-foreground/60 font-mono animate-pulse">{currentStage.text}</span>
                   </div>
                 </div>
               )}
@@ -677,17 +683,27 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                   className="flex-1 bg-transparent text-[14px] text-foreground placeholder-muted-foreground/50 outline-none resize-none min-h-[28px] max-h-[160px] leading-relaxed"
                   rows={1}
                 />
-                <button
-                  onClick={() => handleSend()}
-                  disabled={!input.trim() || isTyping}
-                  className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 ${
-                    input.trim() && !isTyping
-                      ? 'bg-primary text-primary-foreground shadow-md hover:bg-primary/90'
-                      : 'bg-muted text-muted-foreground/50 cursor-not-allowed'
-                  }`}
-                >
-                  <Send className="w-3.5 h-3.5" />
-                </button>
+                {isStreaming ? (
+                  <button
+                    onClick={handleStop}
+                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 bg-red-500 text-white shadow-md hover:bg-red-600 animate-pulse"
+                    title="Stop generating"
+                  >
+                    <Square className="w-3.5 h-3.5 fill-current" />
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => handleSend()}
+                    disabled={(!input.trim() && !imageFile) || isTyping}
+                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 ${
+                      (input.trim() || imageFile) && !isTyping
+                        ? 'bg-primary text-primary-foreground shadow-md hover:bg-primary/90'
+                        : 'bg-muted text-muted-foreground/50 cursor-not-allowed'
+                    }`}
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
 
               {/* Bottom Tools Row */}

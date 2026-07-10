@@ -254,18 +254,17 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   return (
     <div className="flex flex-col gap-4 w-full pb-8">
 
-      {/* ROW 1: All 7 KPIs in a single row on desktop */}
+      {/* ROW 1: All 6 KPIs in a single row on desktop */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-7 gap-3"
+        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3"
       >
         <KPICard title="Total Projects" value={totalProjects} trend="up" trendValue={onTrackProjects} trendLabel="On Track" icon={Activity} color="blue" onClick={() => setActiveKpiModal('Total Projects')} />
         <KPICard title="Portfolio Capacity" value={`${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
         <KPICard title="Delayed Projects" value={delayedProjects} icon={AlertTriangle} color="red" onClick={() => setActiveKpiModal('Delayed Projects')} />
         <KPICard title="Remaining PO Value" value={`₹${Math.max(0, remainingPOValue).toFixed(1)} Cr`} subtext="Pending Delivery" icon={DollarSign} color="amber" onClick={() => setActiveKpiModal('Remaining PO Value')} />
-        <KPICard title="Average Progress" value={`${Math.round(avgProgress)}%`} icon={TrendingUp} color="amber" onClick={() => setActiveKpiModal('Average Progress')} />
         <KPICard title="Total PO Value" value={`₹${(totalPOValue / 10000000).toFixed(1)} Cr`} icon={DollarSign} color="emerald" onClick={() => setActiveKpiModal('Total PO Value')} />
         <KPICard title="Completed Projects" value={progressStages.completed} icon={CheckCircle2} color="emerald" onClick={() => setActiveKpiModal('Completed Projects')} />
       </motion.div>

@@ -107,9 +107,14 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                     parsed_edge_phases[edge.id] = set()
             except:
                 pass
-    
+    # Pre-fetch Capacity Overview to get accurate COD and Trial Run MW (and dynamically computed WTG capacity)
+    cap_data = get_capacity_overview(portfolio, db)
+    proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
+
     for m in mappings:
-        portfolio_summary["total_mw"] += (m.capacity_mwac or 0)
+        pm_cap = proj_cap_dict.get(m.project_id, {})
+        computed_capacity = pm_cap.get("total_capacity", m.capacity_mwac or 0)
+        portfolio_summary["total_mw"] += computed_capacity
         
         # P6 Data
         p6_data = next((p for p in p6_projects if p.project_id == m.project_id), None)
@@ -125,7 +130,9 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
         
         if p6_data:
             mapped_p6_ids.add(p6_data.project_id)
-            p6_pct = p6_data.duration_percent_complete or 0
+            p6_pct = getattr(p6_data, 'construction_percent_complete', None)
+            if p6_pct is None:
+                p6_pct = p6_data.duration_percent_complete or 0
             if p6_pct <= 1.0 and p6_pct > 0:
                 p6_pct *= 100
             progress = p6_pct
@@ -225,12 +232,15 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             "mapping_id": m.id,
             "project_name": m.project or "Unknown Entity",
             "p6_project_name": m.project_name_from_p6 or (p6_data.name if p6_data else "Unknown P6 Name"),
-            "capacity_mwac": m.capacity_mwac,
+            "capacity_mwac": computed_capacity,
+            "cod_mw": pm_cap.get("cod_mw", 0),
+            "tr_mw": pm_cap.get("tr_mw", 0),
             "spv_plant_code": m.spv_plant_code,
             "p6": {
                 "id": p6_data.project_id if p6_data else None,
                 "health": schedule_health,
                 "progress": progress,
+                "construction_progress": getattr(p6_data, 'construction_percent_complete', None),
                 "start_date": p6_data.start_date if p6_data else None,
                 "finish_date": p6_data.finish_date if p6_data else None,
                 "planned_start_date": p6_data.planned_start_date if p6_data else None,
@@ -512,7 +522,10 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         progress = 0
         p6_data = None
         if p6:
-            progress = round((p6.duration_percent_complete or 0) * 100)
+            raw_progress = getattr(p6, 'construction_percent_complete', None)
+            if raw_progress is None:
+                raw_progress = p6.duration_percent_complete or 0
+            progress = round(raw_progress * 100)
             # Multi-signal delay detection:
             # 1. finish_date_variance < 0 (if available)
             # 2. scheduled finish date has passed and project is not complete
@@ -541,7 +554,8 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
                 "planned_finish": str(p6.scheduled_finish_date) if p6.scheduled_finish_date else None,
                 "variance_days": round(p6.finish_date_variance) if p6.finish_date_variance else 0,
                 "duration_pct": progress,
-                "schedule_pct": round((p6.duration_percent_complete or 0) * 100),
+                "construction_pct": progress,
+                "schedule_pct": progress,
                 "status": p6.status or "N/A",
                 "eps_name": p6.parent_eps_name or ""
             }
@@ -709,10 +723,12 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         pm_cap = proj_cap_dict.get(m.project_id, {})
         cod_mw = pm_cap.get("cod_mw", 0)
         tr_mw = pm_cap.get("tr_mw", 0)
+        # Use capacity overview's computed total_capacity (accounts for dynamic Wind WTG calculation)
+        computed_capacity = pm_cap.get("total_capacity", m.capacity_mwac or 0)
 
         portfolio_groups[port_name][eps].append({
             "id": m.id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
-            "capacity": m.capacity_mwac or 0, "health": health,
+            "capacity": computed_capacity, "health": health,
             "progress": progress, "spv": m.spv_name or "?",
             "plant_code": plant_code,
             "cod_mw": cod_mw, "tr_mw": tr_mw,

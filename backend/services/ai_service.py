@@ -13,9 +13,9 @@ def get_llm():
     else:
         from langchain_community.chat_models import ChatOpenAI
         return ChatOpenAI(
-            openai_api_base=os.getenv("OLLAMA_ENDPOINT", "http://192.168.0.56:11434/v1"),
+            openai_api_base=os.getenv("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1"),
             openai_api_key="ollama",
-            model_name=os.getenv("OLLAMA_MODEL", "llama3")
+            model_name=os.getenv("OLLAMA_MODEL", "gemma4:latest")
         )
 
 def ask_llm(question: str, context: str = "") -> str:

@@ -9,6 +9,7 @@ import logging
 import json
 from datetime import date, datetime
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 import models
 
@@ -25,6 +26,20 @@ def _parse_pct(value) -> float:
         return 0.0
 
 
+def _calc_delay_days(expected_str: str, scd_str: str) -> int:
+    if not expected_str or not scd_str:
+        return 0
+    try:
+        from datetime import datetime
+        # Parse Mon-YY format (e.g. Mar-27, Oct-26)
+        exp = datetime.strptime(expected_str, "%b-%y")
+        scd = datetime.strptime(scd_str, "%b-%y")
+        diff = (exp - scd).days
+        return diff if diff > 0 else 0
+    except Exception:
+        return 0
+
+
 def tc_get_project_lines(db: Session, project_id: str) -> dict:
     """Get transmission line status for a project.
     
@@ -37,7 +52,16 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
     if not mapping:
         return {"project_id": project_id, "has_data": False}
     
-    edges = db.query(models.TcNetworkEdge).filter(
+    subq = db.query(
+        models.TcNetworkEdge.edge_id, 
+        func.max(models.TcNetworkEdge.upload_time).label('max_time')
+    ).group_by(models.TcNetworkEdge.edge_id).subquery()
+    
+    edges = db.query(models.TcNetworkEdge).join(
+        subq, 
+        (models.TcNetworkEdge.edge_id == subq.c.edge_id) & 
+        (models.TcNetworkEdge.upload_time == subq.c.max_time)
+    ).filter(
         models.TcNetworkEdge.mapping_id == mapping.id
     ).all()
     
@@ -102,7 +126,16 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60) -> list[dict]:
     Use when: user asks about transmission risks, delayed lines, grid bottlenecks.
     """
     today = date.today()
-    edges = db.query(models.TcNetworkEdge).filter(
+    subq = db.query(
+        models.TcNetworkEdge.edge_id, 
+        func.max(models.TcNetworkEdge.upload_time).label('max_time')
+    ).group_by(models.TcNetworkEdge.edge_id).subquery()
+    
+    edges = db.query(models.TcNetworkEdge).join(
+        subq, 
+        (models.TcNetworkEdge.edge_id == subq.c.edge_id) & 
+        (models.TcNetworkEdge.upload_time == subq.c.max_time)
+    ).filter(
         models.TcNetworkEdge.is_delayed == True
     ).all()
     
@@ -111,17 +144,25 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60) -> list[dict]:
         f_pct = _parse_pct(e.foundation)
         e_pct = _parse_pct(e.erection)
         s_pct = _parse_pct(e.stringing)
+        days_delayed = _calc_delay_days(e.expected_date, e.scd)
         
         result.append({
             "edge_id": e.edge_id,
+            "region": e.region,
             "from_label": e.from_label,
             "to_label": e.to_label,
             "status": e.status,
             "contractor": e.contractor,
+            "projects": e.projects,
+            "voltage": e.voltage,
+            "length": e.length,
             "foundation_pct": f_pct,
             "erection_pct": e_pct,
             "stringing_pct": s_pct,
             "expected_date": e.expected_date,
+            "scd": e.scd,
+            "charged_date": e.charged_date,
+            "days_delayed": days_delayed,
             "_source_table": "tc_network_edge",
         })
     
@@ -133,9 +174,32 @@ def tc_get_network_summary(db: Session) -> dict:
     
     Use when: user asks about transmission network overview.
     """
-    total_nodes = db.query(models.TcNetworkNode).count()
-    total_edges = db.query(models.TcNetworkEdge).count()
-    delayed_edges = db.query(models.TcNetworkEdge).filter(
+    node_subq = db.query(
+        models.TcNetworkNode.node_id, 
+        func.max(models.TcNetworkNode.upload_time).label('max_time')
+    ).group_by(models.TcNetworkNode.node_id).subquery()
+    total_nodes = db.query(models.TcNetworkNode).join(
+        node_subq, 
+        (models.TcNetworkNode.node_id == node_subq.c.node_id) & 
+        (models.TcNetworkNode.upload_time == node_subq.c.max_time)
+    ).count()
+
+    edge_subq = db.query(
+        models.TcNetworkEdge.edge_id, 
+        func.max(models.TcNetworkEdge.upload_time).label('max_time')
+    ).group_by(models.TcNetworkEdge.edge_id).subquery()
+    
+    total_edges = db.query(models.TcNetworkEdge).join(
+        edge_subq, 
+        (models.TcNetworkEdge.edge_id == edge_subq.c.edge_id) & 
+        (models.TcNetworkEdge.upload_time == edge_subq.c.max_time)
+    ).count()
+    
+    delayed_edges = db.query(models.TcNetworkEdge).join(
+        edge_subq, 
+        (models.TcNetworkEdge.edge_id == edge_subq.c.edge_id) & 
+        (models.TcNetworkEdge.upload_time == edge_subq.c.max_time)
+    ).filter(
         models.TcNetworkEdge.is_delayed == True
     ).count()
     

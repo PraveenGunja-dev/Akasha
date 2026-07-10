@@ -110,10 +110,10 @@ def classify_intent_local(message: str, history: list = None) -> ChatIntent:
 def classify_intent_llm(message: str, history: list = None, project_names: list = None) -> ChatIntent:
     """LLM-powered classification for higher accuracy.
     
-    Uses Groq (fast ~200ms) to extract structured intent.
+    Uses Ollama (fast ~200ms) to extract structured intent.
     Falls back to local classification if LLM fails.
     """
-    from routers.ai import call_groq
+    from routers.ai import call_ollama
     
     project_list_hint = ""
     if project_names:
@@ -144,8 +144,8 @@ Output valid JSON only:
 {{"projects":[],"type":"","domains":[],"is_portfolio":false}}"""
 
     try:
-        result = call_groq(
-            [{"role": "user", "content": prompt}],
+        result = call_ollama(
+            messages=[{"role": "user", "content": prompt}],
             temperature=0,
             max_tokens=200,
             json_response=True,

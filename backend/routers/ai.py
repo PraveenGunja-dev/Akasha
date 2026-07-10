@@ -8,7 +8,6 @@ import logging
 import subprocess
 import time
 import uuid
-from groq import Groq
 from database import get_db
 import models
 from services.project_service import calculate_project_360_metrics
@@ -18,15 +17,17 @@ from engine.memory import store_feedback
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
-orchestrator = ChatOrchestrator(default_llm="groq")
+orchestrator = ChatOrchestrator(default_llm="ollama")
+
+from typing import Optional, List
 
 class ChatRequest(BaseModel):
     message: str
     history: List[dict] = []
-    projectId: str = None
-    sessionId: str = None
+    projectId: Optional[str] = None
+    sessionId: Optional[str] = None
     isDeepAnalysis: bool = False
-    imageData: str = None
+    imageData: Optional[str] = None
 
 class FeedbackRequest(BaseModel):
     messageId: int
@@ -95,7 +96,7 @@ def call_azure_openai_curl(messages, temperature, max_tokens, json_response=Fals
 def get_ai_provider():
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    return os.environ.get("AI_PROVIDER", "groq").lower()
+    return os.environ.get("AI_PROVIDER", "ollama").lower()
 
 def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
     import os
@@ -121,18 +122,18 @@ def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, s
         return chat_completion
     return chat_completion.choices[0].message.content
 
-def call_ollama(messages, temperature, max_tokens, json_response=False):
+def call_ollama(messages, temperature, max_tokens, json_response=False, stream=False):
     import openai
     import httpx
     import os
     
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.56:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "llama3")
+    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
+    model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
     
     client = openai.OpenAI(
         base_url=endpoint,
         api_key="ollama",
-        timeout=httpx.Timeout(120.0, connect=30.0)
+        timeout=httpx.Timeout(300.0, connect=30.0)
     )
     
     kwargs = {
@@ -144,8 +145,13 @@ def call_ollama(messages, temperature, max_tokens, json_response=False):
     if json_response:
         kwargs["response_format"] = {"type": "json_object"}
         
-    response = client.chat.completions.create(**kwargs)
-    return response.choices[0].message.content
+    if stream:
+        kwargs["stream"] = True
+        response = client.chat.completions.create(**kwargs)
+        return response
+    else:
+        response = client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
 
 
 @router.post("/chat")
@@ -291,9 +297,7 @@ Live Portfolio Context:
     messages = [{"role": "user", "content": prompt}]
     
     try:
-        if provider == "groq":
-            content = call_groq(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        elif provider == "azure":
+        if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
             content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
@@ -623,7 +627,7 @@ IMPORTANT: You do NOT provide cost or time impact. The deterministic Monte Carlo
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=2000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.2, max_tokens=2000, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=2000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -752,7 +756,7 @@ Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -841,7 +845,7 @@ Output valid JSON only matching this exact structure:
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=4000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.1, max_tokens=4000, json_response=True)
+            content = call_ollama(messages, temperature=0.1, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()

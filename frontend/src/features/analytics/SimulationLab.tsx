@@ -106,12 +106,12 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   const [executionTasks, setExecutionTasks] = useState<any[]>([]);
   const [executionProgress, setExecutionProgress] = useState(0);
   const [reportData, setReportData] = useState<any>(null);
+  const [resolvedTasks, setResolvedTasks] = useState<number[]>([]);
 
   const steps = [
     { id: 1, label: 'Detect', status: activeStep === 1 ? 'in-progress' : activeStep > 1 ? 'completed' : 'pending' },
     { id: 2, label: 'Strategies', status: activeStep === 2 ? 'in-progress' : activeStep > 2 ? 'completed' : 'pending' },
-    { id: 3, label: 'Execute', status: activeStep === 3 ? 'in-progress' : activeStep > 3 ? 'completed' : 'pending' },
-    { id: 4, label: 'Report', status: activeStep === 4 ? 'in-progress' : activeStep > 4 ? 'completed' : 'pending' },
+    { id: 3, label: 'Execute', status: activeStep === 3 ? 'in-progress' : activeStep > 3 ? 'completed' : 'pending' }
   ];
 
   // Helpers
@@ -1142,42 +1142,42 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             <div className="bg-card border border-border rounded-xl shadow-sm p-6 mt-8 space-y-4">
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-3">Automated Actions</h3>
               {executionTasks.map((t: any, i: number) => {
-                const isDone = executionProgress > ((i + 1) * 25);
+                const isResolved = resolvedTasks.includes(i);
                 return (
-                  <div key={i} className={`flex items-center gap-4 p-3 rounded-lg border transition-all ${isDone ? 'bg-emerald-50/50 border-emerald-100' : 'bg-muted/30 border-border opacity-50'}`}>
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 ${isDone ? 'bg-emerald-500 text-white' : 'bg-muted-foreground/30 text-transparent'}`}>
-                      <Check className="w-3 h-3" />
-                    </div>
-                    <div>
+                  <div key={i} className={`flex items-center gap-4 p-3 rounded-lg border transition-all ${isResolved ? 'bg-emerald-50/50 border-emerald-100' : 'bg-muted/30 border-border opacity-60 hover:opacity-100'}`}>
+                    <button 
+                      onClick={() => !isResolved && setResolvedTasks(prev => [...prev, i])}
+                      className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 border transition-all cursor-pointer ${isResolved ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' : 'bg-background text-transparent border-muted-foreground hover:border-primary'}`}
+                    >
+                      <Check className="w-4 h-4" />
+                    </button>
+                    <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-[10px] font-bold uppercase tracking-wider bg-background border border-border px-1.5 py-0.5 rounded">{t.system}</span>
                         <span className="font-bold text-sm text-foreground">{t.action}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{t.description}</p>
                     </div>
-                    <div className={`ml-auto text-[10px] font-bold uppercase tracking-wider ${isDone ? 'text-emerald-500' : 'text-muted-foreground'}`}>
-                      {isDone ? 'Success' : 'Pending'}
+                    <div className={`ml-auto text-[10px] font-bold uppercase tracking-wider ${isResolved ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                      {isResolved ? 'Success' : 'Pending'}
                     </div>
                   </div>
                 );
               })}
             </div>
 
-            {executionProgress >= 100 && (
-              <button
-                onClick={generateFinalReport}
-                className="w-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 animate-in slide-in-from-bottom-4"
-              >
-                <FileText className="w-5 h-5" /> Generate Final Report
-              </button>
+            {executionTasks.length > 0 && resolvedTasks.length === executionTasks.length && (
+              <div className="mt-8 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">
+                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">Issue Resolved</h3>
+                <p className="text-emerald-600/80 dark:text-emerald-400/80 mt-2 font-medium">All automated actions and required tasks have been successfully processed and pushed to their respective systems.</p>
+              </div>
             )}
           </div>
         )}
 
-        {/* ========================================== */}
-        {/* STEP 4: REPORT */}
-        {/* ========================================== */}
-        {activeStep === 4 && (
+        {/* STEP 4: REPORT has been removed per user request */}
+        {false && activeStep === 4 && (
           <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in">
             <div className="bg-card border border-border rounded-xl shadow-lg p-8 relative overflow-hidden">
               <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>

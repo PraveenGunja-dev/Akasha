@@ -940,7 +940,16 @@ class P6Service:
                 p.in_progress_activity_count = in_progress
                 p.not_started_activity_count = not_started
                 if total > 0:
-                    p.duration_percent_complete = (completed / total)
+                    total_percent = sum((a.percent_complete or 0.0) for a in activities)
+                    p.duration_percent_complete = total_percent / total
+                    
+                    # Calculate construction-specific progress
+                    construction_acts = [a for a in activities if a.wbs_name and 'construction' in str(a.wbs_name).lower()]
+                    if construction_acts:
+                        const_percent = sum((a.percent_complete or 0.0) for a in construction_acts)
+                        p.construction_percent_complete = const_percent / len(construction_acts)
+                    else:
+                        p.construction_percent_complete = p.duration_percent_complete
             db.commit()
         except Exception as e:
             logger.error(f"Error recalculating activity counts: {e}")
