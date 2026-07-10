@@ -6,17 +6,35 @@ import os
 import json
 import logging
 import subprocess
-from groq import Groq
+import time
+import uuid
 from database import get_db
+import models
 from services.project_service import calculate_project_360_metrics
+from engine.orchestrator import ChatOrchestrator
+from engine.memory import store_feedback
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
+orchestrator = ChatOrchestrator(default_llm="ollama")
+
+from typing import Optional, List
+
 class ChatRequest(BaseModel):
     message: str
     history: List[dict] = []
+    projectId: Optional[str] = None
+    sessionId: Optional[str] = None
+    isDeepAnalysis: bool = False
+    imageData: Optional[str] = None
+
+class FeedbackRequest(BaseModel):
+    messageId: int
+    feedbackType: str
+    correctionText: str = None
     projectId: str = None
+    questionPattern: str = None
 
 def call_azure_openai_curl(messages, temperature, max_tokens, json_response=False):
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
@@ -78,9 +96,9 @@ def call_azure_openai_curl(messages, temperature, max_tokens, json_response=Fals
 def get_ai_provider():
     from dotenv import load_dotenv
     load_dotenv(override=True)
-    return os.environ.get("AI_PROVIDER", "groq").lower()
+    return os.environ.get("AI_PROVIDER", "ollama").lower()
 
-def call_groq(messages, temperature, max_tokens, json_response=False):
+def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
     import os
     from groq import Groq
     api_key = os.environ.get("AKASHA_AI_API_KEY")
@@ -92,26 +110,30 @@ def call_groq(messages, temperature, max_tokens, json_response=False):
         "messages": messages,
         "model": "llama-3.3-70b-versatile",
         "temperature": temperature,
-        "max_tokens": max_tokens
+        "max_tokens": max_tokens,
+        "stream": stream
     }
     if json_response:
         kwargs["response_format"] = {"type": "json_object"}
         
     chat_completion = client.chat.completions.create(**kwargs)
+    
+    if stream:
+        return chat_completion
     return chat_completion.choices[0].message.content
 
-def call_ollama(messages, temperature, max_tokens, json_response=False):
+def call_ollama(messages, temperature, max_tokens, json_response=False, stream=False):
     import openai
     import httpx
     import os
     
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.56:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "llama3")
+    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
+    model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
     
     client = openai.OpenAI(
         base_url=endpoint,
         api_key="ollama",
-        timeout=httpx.Timeout(120.0, connect=30.0)
+        timeout=httpx.Timeout(300.0, connect=30.0)
     )
     
     kwargs = {
@@ -123,106 +145,116 @@ def call_ollama(messages, temperature, max_tokens, json_response=False):
     if json_response:
         kwargs["response_format"] = {"type": "json_object"}
         
-    response = client.chat.completions.create(**kwargs)
-    return response.choices[0].message.content
+    if stream:
+        kwargs["stream"] = True
+        response = client.chat.completions.create(**kwargs)
+        return response
+    else:
+        response = client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
 
 
 @router.post("/chat")
 def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
-    provider = get_ai_provider()
+    """Main chat endpoint powered by the 6-step Intelligent Pipeline."""
+    session_id = req.sessionId or uuid.uuid4().hex
+    
+    # We pass the projectId as a hint to the intent classifier if provided by the UI
+    project_names = [req.projectId] if req.projectId else None
+    
     try:
-        if req.projectId:
-            from services.project_service import get_project_360_detail
-            detail = get_project_360_detail(db, req.projectId)
-            if detail and "error" not in detail:
-                p6 = detail.get("p6", {})
-                sap_vendors = detail.get("sap", {}).get("vendorBreakdown", [])
-                context_str = f"Live Context for Specific Project ({req.projectId}):\n"
-                context_str += f"- Name: {p6.get('name')}\n"
-                context_str += f"- Status: {p6.get('status')} | SPI: {p6.get('spi')} | CPI: {p6.get('cpi')}\n"
-                context_str += f"- Schedule: {p6.get('startDate')} to {p6.get('forecastFinish' if p6.get('forecastFinish') else 'finishDate')}\n"
-                context_str += f"- Variance: {p6.get('scheduleVariance', 0)} days\n"
-                context_str += f"- Top Vendors: {', '.join([v.get('vendorName', '') for v in sap_vendors[:3]])}\n"
-            else:
-                context_str = f"Could not fetch details for project {req.projectId}.\n"
-        else:
-            project_data = calculate_project_360_metrics(db)
-            context_str = "Live Portfolio Context (Top 5 Riskiest Projects):\n"
-            for p in project_data[:5]:
-                context_str += f"- Project {p['projectName']}: Health={p['health']}, SPI={p['spi']}, CPI={p['cpi']}, RiskScore={p['riskScore']}, Issue={p['keyIssue']}\n"
+        # We need to stream the response
+        from fastapi.responses import StreamingResponse
+        import json
+        
+        def event_stream():
+            # Run orchestrator as a generator
+            for chunk in orchestrator.process_message_stream(
+                db=db,
+                message=req.message,
+                session_id=session_id,
+                history=req.history,
+                project_names=project_names,
+                is_deep_analysis=req.isDeepAnalysis,
+                image_data=req.imageData
+            ):
+                if isinstance(chunk, dict) and chunk.get("type") == "metadata":
+                    # End of stream metadata
+                    response_obj = chunk["response"]
+                    
+                    # Ensure session exists
+                    db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
+                    if not db_session:
+                        db_session = models.ChatSession(session_id=session_id, title=req.message[:50])
+                        db.add(db_session)
+                        db.commit()
+                        db.refresh(db_session)
+                        
+                    # Create user message
+                    user_msg = models.ChatMessage(session_id=session_id, role="user", content=req.message)
+                    db.add(user_msg)
+                    
+                    # Create assistant message
+                    asst_msg = models.ChatMessage(
+                        session_id=session_id,
+                        role="assistant",
+                        content=response_obj.content,
+                        intent_type=response_obj.intent_type,
+                        project_ids=",".join(response_obj.project_ids) if response_obj.project_ids else None,
+                        data_domains=",".join(response_obj.domains) if response_obj.domains else None,
+                        data_as_of=response_obj.data_as_of,
+                        sources_used={"tables": response_obj.sources_used},
+                        latency_ms=response_obj.latency_ms,
+                    )
+                    db.add(asst_msg)
+                    db.commit()
+                    db.refresh(asst_msg)
+                    
+                    suggestions = []
+                    if response_obj.intent_type == "factual":
+                        suggestions = ["Why is that?", "Compare this to baseline", "Show me the trend"]
+                    elif response_obj.intent_type == "analytical":
+                        suggestions = ["What should we do about it?", "Who is responsible?", "Show detailed breakdown"]
+                    else:
+                        suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
+                        
+                    yield f"data: {json.dumps({'type': 'metadata', 'metadata': {'message_id': asst_msg.id, 'data_as_of': response_obj.data_as_of, 'latency_ms': response_obj.latency_ms, 'intent': response_obj.intent_type, 'sources': response_obj.sources_used}, 'suggestions': suggestions})}\n\n"
+                else:
+                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
     except Exception as e:
-        context_str = f"Context unavailable. Error: {str(e)}"
+        logger.error(f"AKASHA Orchestrator Error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
 
-    system_prompt = f"""You are an Executive Intelligence Analyst for a large-scale infrastructure and renewable energy project.
-
-Your objective is to provide short, crisp, and highly accurate insights based ONLY on the provided project data.
-
-Important Rules:
-1. Be extremely concise. Use short sentences and bullet points.
-2. Do not generate long, repetitive reports unless explicitly asked by the user.
-3. Answer the user's question directly based on the data provided.
-4. If asked for a summary, highlight only the most critical KPI deviations, top risks, and immediate actions.
-5. The supply chain quantities in the data are in absolute Units, NOT Megawatts (MW). Use "Units" instead of "MW".
-6. Never invent project data or hallucinate. Use only the supplied project information.
-
-CRITICAL INSTRUCTION: You MUST output your response in STRICT JSON format with exactly two keys: "response" and "suggestions". 
-"response" must contain your detailed but concise analytical answer in markdown format. 
-"suggestions" must be an array of exactly 3 concise, highly relevant follow-up questions the user might ask next based on your answer.
-
-Example Output format:
-{{
-  "response": "Based on the data...",
-  "suggestions": ["Why is Project A delayed?", "Show me the CAPEX impact", "What are the recommended actions?"]
-}}
-
-CRITICAL INSTRUCTION: You MUST base your answers STRICTLY and EXCLUSIVELY on the Live Portfolio Context provided below. 
-Do NOT use outside knowledge, and do NOT hallucinate or guess information.
-
-Live Portfolio Context:
-{context_str}
-"""
-    messages = [{"role": "system", "content": system_prompt}]
-    for h in req.history[-10:]:
-        role = "assistant" if h.get("type") == "bot" else "user"
-        messages.append({"role": role, "content": h.get("content")})
-    messages.append({"role": "user", "content": req.message})
-
+@router.post("/chat/feedback")
+def submit_chat_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):
+    """Store user feedback and corrections for self-improving memory (Step 6)."""
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.3, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.3, max_tokens=4000, json_response=True)
-            
-        content = content.strip()
-        if content.startswith("```json"):
-            content = content[7:-3].strip()
-        elif content.startswith("```"):
-            content = content[3:-3].strip()
-            
-        try:
-            data = json.loads(content)
-        except Exception:
-            data = {
-                "response": content,
-                "suggestions": []
-            }
-            
-        return {
-            "response": data.get("response", content),
-            "suggestions": data.get("suggestions", [])
-        }
+        feedback = store_feedback(
+            db=db,
+            message_id=req.messageId,
+            feedback_type=req.feedbackType,
+            correction_text=req.correctionText,
+            project_id=req.projectId,
+            question_pattern=req.questionPattern
+        )
+        return {"status": "success", "feedback_id": feedback.id}
     except Exception as e:
-        logger.error(f"AKASHA AI API Error: {e}")
-        error_msg = str(e).replace("groq", "ai").replace("Groq", "AKASHA AI Provider")
-        raise HTTPException(status_code=500, detail=error_msg)
+        logger.error(f"Feedback storage error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/generate-briefing")
 def generate_executive_briefing(db: Session = Depends(get_db)):
     provider = get_ai_provider()
     try:
-        project_data = calculate_project_360_metrics(db)
-        context_str = json.dumps(project_data[:10], indent=2)
+        from engine.tools.portfolio_tools import portfolio_get_riskiest_projects
+        # Get the top 5 riskiest projects for the briefing
+        riskiest_projects = portfolio_get_riskiest_projects(db, top_n=5)
+        context_str = json.dumps(riskiest_projects, indent=2)
     except Exception as e:
+        logger.error(f"Error getting briefing context: {e}")
         context_str = "[]"
 
     prompt = f"""You are an Executive Intelligence Analyst for a large-scale infrastructure and renewable energy project.
@@ -595,7 +627,7 @@ IMPORTANT: You do NOT provide cost or time impact. The deterministic Monte Carlo
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=2000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.2, max_tokens=2000, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=2000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -724,7 +756,7 @@ Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -813,7 +845,7 @@ Output valid JSON only matching this exact structure:
         if provider == "azure":
             content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=4000, json_response=True)
         else:
-            content = call_groq(messages, temperature=0.1, max_tokens=4000, json_response=True)
+            content = call_ollama(messages, temperature=0.1, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()

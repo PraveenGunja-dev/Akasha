@@ -122,38 +122,6 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         act_stats[pid]['Total'] += count
         if sum_pct:
             act_stats[pid]['SumPct'] += sum_pct
-    # Bulk calculate activity completion timeline and delayed activities
-    timeline_stats = {}
-    import calendar
-    from datetime import date, datetime
-    from sqlalchemy import case
-    
-    now = datetime.utcnow()
-    this_month = now.month
-    this_year = now.year
-    start_this = date(this_year, this_month, 1)
-    end_this = date(this_year, this_month, calendar.monthrange(this_year, this_month)[1])
-    
-    next_month = this_month + 1 if this_month < 12 else 1
-    next_year = this_year if this_month < 12 else this_year + 1
-    start_next = date(next_year, next_month, 1)
-    end_next = date(next_year, next_month, calendar.monthrange(next_year, next_month)[1])
-    
-    activity_timeline_query = db.query(
-        models.P6Activity.project_object_id,
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date >= start_this) & (models.P6Activity.planned_finish_date <= end_this), 1), else_=0)).label('this_month'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date >= start_next) & (models.P6Activity.planned_finish_date <= end_next), 1), else_=0)).label('next_month'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date > end_next), 1), else_=0)).label('later'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.total_float < 0), 1), else_=0)).label('delayed')
-    ).group_by(models.P6Activity.project_object_id).all()
-    
-    for row in activity_timeline_query:
-        timeline_stats[row.project_object_id] = {
-            'this_month': row.this_month or 0,
-            'next_month': row.next_month or 0,
-            'later': row.later or 0,
-            'delayed': row.delayed or 0
-        }
     
     # Pre-parse edge phases ONCE for extreme performance
     parsed_edge_phases = {}
@@ -175,7 +143,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
     for m in mappings:
         # 1. P6 Data
-        p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
+        t('start queries'); p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
         
         proj_name_check = p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "")
         if "demo" in proj_name_check.lower():
@@ -234,7 +202,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
                 models.MTMaterialDocument.wbs_element == wbs_exact
             ).all()
         
-        mb51_materials = set()
+        t('before mb51'); mb51_materials = set()
         for rec in mb51_records:
             # If falling back to plant, strictly require material to be in POs
             mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
@@ -460,11 +428,45 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         activities_completing_later = 0
         delayed_activities = 0
         if p6_proj:
-            stats = timeline_stats.get(p6_proj.p6_object_id, {})
-            activities_completing_this_month = stats.get('this_month', 0)
-            activities_completing_next_month = stats.get('next_month', 0)
-            activities_completing_later = stats.get('later', 0)
-            delayed_activities = stats.get('delayed', 0)
+            import calendar
+            from datetime import date, datetime
+            now = datetime.utcnow()
+            
+            this_month = now.month
+            this_year = now.year
+            start_this = date(this_year, this_month, 1)
+            end_this = date(this_year, this_month, calendar.monthrange(this_year, this_month)[1])
+            
+            next_month = this_month + 1 if this_month < 12 else 1
+            next_year = this_year if this_month < 12 else this_year + 1
+            start_next = date(next_year, next_month, 1)
+            end_next = date(next_year, next_month, calendar.monthrange(next_year, next_month)[1])
+            
+            activities_completing_this_month = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.planned_finish_date >= start_this,
+                models.P6Activity.planned_finish_date <= end_this
+            ).count()
+            
+            activities_completing_next_month = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.planned_finish_date >= start_next,
+                models.P6Activity.planned_finish_date <= end_next
+            ).count()
+            
+            activities_completing_later = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.planned_finish_date > end_next
+            ).count()
+            
+            delayed_activities = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6_proj.p6_object_id,
+                models.P6Activity.status != 'Completed',
+                models.P6Activity.total_float < 0
+            ).count()
 
         forecast_finish = p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.scheduled_finish_date else "N/A"
         forecast_month = p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj and p6_proj.scheduled_finish_date else "TBD"
@@ -535,7 +537,12 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     return sorted(results, key=lambda x: x.get('integrationCount', 0), reverse=True)
 
 
+
 def get_project_360_detail(db: Session, project_id: str):
+    import time
+    t0 = time.time()
+    def t(msg): print(f'{msg}: {time.time()-t0}')
+
     """
     Returns enriched per-project intelligence detail:
     - All P6 fields (dates, floats, costs, baselines)
@@ -549,7 +556,7 @@ def get_project_360_detail(db: Session, project_id: str):
     ).first()
     
     from sqlalchemy.orm import selectinload
-    p6_proj = db.query(models.P6Project).options(
+    t('start queries'); p6_proj = db.query(models.P6Project).options(
         selectinload(models.P6Project.activities).selectinload(models.P6Activity.resource_assignments)
     ).filter(
         models.P6Project.project_id == project_id
@@ -562,7 +569,7 @@ def get_project_360_detail(db: Session, project_id: str):
     allocation_ratio = 1.0
 
     # ── Purchase Orders (ME2J) ──
-    po_records_all = []
+    t('after p6 proj'); po_records_all = []
     wbs_exact = None
     if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
         wbs_exact = str(mapping.module_wbs).strip()
@@ -578,7 +585,7 @@ def get_project_360_detail(db: Session, project_id: str):
                 po_materials.add(mat_str)
                 
     # ── SAP: Reverse Engineering Logic (MB51) ──
-    mb51_materials = set()
+    t('before mb51'); mb51_materials = set()
     consumed_qty = 0.0
     expenditure_inr = 0.0
     sap_consumption = []
@@ -616,7 +623,7 @@ def get_project_360_detail(db: Session, project_id: str):
         if mat_str:
             mb51_materials.add(mat_str)
     
-    sap_vendors = []
+    t('before vendors'); sap_vendors = []
     vendor_summary = {}
     total_po_qty = 0.0
     total_budget_inr = 0.0
@@ -703,7 +710,7 @@ def get_project_360_detail(db: Session, project_id: str):
     # ── In-Transit (Calculated from PO still_to_deliver) ──
 
     # ── Inventory (MB52) ──
-    inv_records = []
+    t('before inv'); inv_records = []
     if wbs_exact:
         inv_records = db.query(models.MTInventory).filter(
             models.MTInventory.wbs_element == wbs_exact,
@@ -736,7 +743,7 @@ def get_project_360_detail(db: Session, project_id: str):
     material_breakdown = []
 
     # ── True EVM Calculation (SPI / CPI) ──
-    total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
+    t('before evm'); total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
     actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
     progress_val = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
     pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
@@ -762,7 +769,7 @@ def get_project_360_detail(db: Session, project_id: str):
     dynamic_cpi = (ev / ac) if ac > 0 else 1.0
 
     # ── P6: Full Project Data ──
-    p6_full = {
+    t('before return dict'); p6_full = {
         "projectId": p6_proj.project_id,
         "name": p6_proj.name,
         "status": p6_proj.status,
@@ -780,10 +787,10 @@ def get_project_360_detail(db: Session, project_id: str):
         "actualDuration": p6_proj.actual_duration,
         "remainingDuration": p6_proj.remaining_duration,
         # Activity Counts
-        "activityCount": len(p6_proj.activities) if p6_proj.activities else p6_proj.activity_count,
-        "completedActivities": sum(1 for a in p6_proj.activities if a.status == 'Completed') if p6_proj.activities else 0,
-        "inProgressActivities": sum(1 for a in p6_proj.activities if a.status == 'In Progress') if p6_proj.activities else 0,
-        "notStartedActivities": sum(1 for a in p6_proj.activities if a.status == 'Not Started') if p6_proj.activities else 0,
+        "activityCount": p6_proj.activity_count,
+        "completedActivities": p6_proj.completed_activity_count,
+        "inProgressActivities": p6_proj.in_progress_activity_count,
+        "notStartedActivities": p6_proj.not_started_activity_count,
         # Float & Variance
         "totalFloat": p6_proj.total_float,
         "finishDateVariance": p6_proj.finish_date_variance,
@@ -838,18 +845,15 @@ def get_project_360_detail(db: Session, project_id: str):
             }
             for act in p6_proj.activities
         ] if p6_proj.activities else [],
-        "wbsNodes": sorted(
-            [
-                {
-                    "wbsObjectId": node.p6_object_id,
-                    "parentObjectId": node.parent_object_id,
-                    "name": node.wbs_name,
-                    "code": node.wbs_code
-                }
-                for node in db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == p6_proj.p6_object_id).all()
-            ],
-            key=lambda x: int(str(x["name"]).split()[0]) if str(x["name"]).split() and str(x["name"]).split()[0].isdigit() else 999999
-        )
+        "wbsNodes": [
+            {
+                "wbsObjectId": node.p6_object_id,
+                "parentObjectId": node.parent_object_id,
+                "name": node.wbs_name,
+                "code": node.wbs_code
+            }
+            for node in db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == p6_proj.p6_object_id).all()
+        ]
     }
 
     # ── Delayed Activities & MW Capacity ──
@@ -1041,10 +1045,10 @@ def get_project_360_detail(db: Session, project_id: str):
                 "totalInTransitQty": total_transit_qty,
                 "totalInventoryQty": total_inv_qty,
                 "totalConsumedQty": consumed_qty,
-                "totalBudgetINR": total_budget_inr,
+                "totalBudgetINR": next((x.get("budgetINR", total_budget_inr) for x in calculate_project_360_metrics(db) if x["projectId"] == project_id), total_budget_inr),
                 "totalDeliveredINR": total_delivered_inr,
                 "totalInventoryValueINR": total_inv_inr,
-                "totalExpenditureINR": expenditure_inr,
+                "totalExpenditureINR": next((x.get("expenditureINR", expenditure_inr) for x in calculate_project_360_metrics(db) if x["projectId"] == project_id), expenditure_inr),
             }
         },
         "tc": {

@@ -353,6 +353,7 @@ class ProjectMapping(Base):
     module_wbs = Column(String, index=True)         # 'Module WBS' (SAP mapping key 2)
     age6l = Column(String)                          # 'AGE6L'
     cluster = Column(String)                        # 'Cluster'
+    subcluster = Column(String, nullable=True)      # Sub-cluster / EPC Contractor
     not_allocated = Column(String)                  # 'Not Allocated'
     source_of_origin = Column(String, nullable=True)
     priority = Column(String, nullable=True)
@@ -545,3 +546,82 @@ class NotificationThread(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
     notification = relationship("Notification", back_populates="threads")
+
+
+# ==========================================
+# Intelligent Chatbot Models
+# ==========================================
+
+class MetricsCache(Base):
+    """Per-project computed metrics cache with freshness tracking.
+    Avoids recomputing dashboard/360/variance data on every chat question.
+    Only invalidated when upstream data actually changes (Step 2-3 of pipeline).
+    """
+    __tablename__ = "metrics_cache"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(String, nullable=False, index=True)
+    cache_key = Column(String, nullable=False)  # 'dashboard' | 'project_360' | 'variance'
+    data = Column(JSON, nullable=False)          # The cached computed result
+    computed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    # Snapshots of sync timestamps when this cache entry was computed
+    p6_synced_at = Column(DateTime, nullable=True)
+    sap_synced_at = Column(DateTime, nullable=True)
+    tc_synced_at = Column(DateTime, nullable=True)
+
+
+class ChatSession(Base):
+    """Server-side conversation sessions — replaces browser localStorage."""
+    __tablename__ = "chat_session"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, nullable=False, unique=True, index=True)
+    title = Column(String, nullable=True)        # Auto-generated from first message
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    is_active = Column(Boolean, default=True)
+
+    messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+
+
+class ChatMessage(Base):
+    """Individual chat messages with full provenance metadata.
+    Every response records what data was used, how fresh it was, and how long it took.
+    """
+    __tablename__ = "chat_message"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(String, ForeignKey("chat_session.session_id", ondelete="CASCADE"), nullable=False, index=True)
+    role = Column(String, nullable=False)          # 'user' | 'assistant'
+    content = Column(String, nullable=False)
+    # Intent metadata (from Step 1)
+    intent_type = Column(String, nullable=True)    # 'factual' | 'analytical' | 'advisory' | 'document'
+    project_ids = Column(String, nullable=True)    # Comma-separated project IDs referenced
+    data_domains = Column(String, nullable=True)   # Comma-separated: 'p6,sap,tc'
+    # Provenance (from Step 5)
+    data_as_of = Column(DateTime, nullable=True)   # Freshness timestamp of data used
+    sources_used = Column(JSON, nullable=True)     # {"tables": [...], "cache_hit": true}
+    # Performance
+    latency_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    session = relationship("ChatSession", back_populates="messages")
+    feedback = relationship("ChatFeedback", back_populates="message", cascade="all, delete-orphan")
+
+
+class ChatFeedback(Base):
+    """User feedback on chatbot responses — the self-improving memory loop (Step 6).
+    Corrections get injected into future prompts for the same project/question pattern.
+    """
+    __tablename__ = "chat_feedback"
+
+    id = Column(Integer, primary_key=True, index=True)
+    message_id = Column(Integer, ForeignKey("chat_message.id", ondelete="CASCADE"), nullable=False, index=True)
+    feedback_type = Column(String, nullable=False)   # 'thumbs_up' | 'thumbs_down' | 'correction'
+    correction_text = Column(String, nullable=True)  # User's correction if provided
+    project_id = Column(String, nullable=True)       # Which project this feedback is about
+    question_pattern = Column(String, nullable=True)  # Normalized question for pattern matching
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    message = relationship("ChatMessage", back_populates="feedback")
+

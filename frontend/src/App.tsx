@@ -4,7 +4,7 @@ import 'lenis/dist/lenis.css';
 import { AuthProvider } from './context/AuthContext';
 import LandingPage from './pages/LandingPage';
 import CEODashboard from './pages/CEODashboard';
-import ProjectWorkspace from './components/sections/ProjectWorkspace';
+import ProjectWorkspace from './features/projects/ProjectWorkspace';
 import FloatingCopilot from './components/ui/FloatingCopilot';
 import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
 import AdminDashboard from './pages/AdminDashboard';

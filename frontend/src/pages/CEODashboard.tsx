@@ -1,34 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X } from 'lucide-react';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
 
-import ExecutiveOverview from '../components/sections/ExecutiveOverview';
-import Project360 from '../components/sections/Project360';
-import PortfolioHealth from '../components/sections/PortfolioHealth';
+import ExecutiveOverview from '../features/dashboard/ExecutiveOverview';
+import Project360 from '../features/projects/Project360';
+import PortfolioHealth from '../features/dashboard/PortfolioHealth';
 import P6View from '../components/dashboards/P6View';
 import SAPView from '../components/dashboards/SAPView';
-import ProcurementIntelligence from '../components/sections/ProcurementIntelligence';
-import MaterialIntelligence from '../components/sections/MaterialIntelligence';
-import RiskCommandCenter from '../components/sections/RiskCommandCenter';
-import PredictiveAnalytics from '../components/sections/PredictiveAnalytics';
-import DecisionCenter from '../components/sections/DecisionCenter';
-import ReportsInsights from '../components/sections/ReportsInsights';
-import CapacityOverview from '../components/sections/CapacityOverview';
+import ProcurementIntelligence from '../features/analytics/ProcurementIntelligence';
+import MaterialIntelligence from '../features/analytics/MaterialIntelligence';
+import RiskCommandCenter from '../features/dashboard/RiskCommandCenter';
+import PredictiveAnalytics from '../features/dashboard/PredictiveAnalytics';
+import DecisionCenter from '../features/dashboard/DecisionCenter';
+import ReportsInsights from '../features/analytics/ReportsInsights';
+import CapacityOverview from '../features/dashboard/CapacityOverview';
 
 // Phase 6 AI Modules
-import AICopilot from '../components/sections/AICopilot';
-import ExecutiveBriefing from '../components/sections/ExecutiveBriefing';
-import SmartSearch from '../components/sections/SmartSearch';
-import KnowledgeGraph from '../components/sections/KnowledgeGraph';
-import ProjectMap from '../components/sections/ProjectMap';
+import AICopilot from '../features/chatbot/AICopilot';
+import ExecutiveBriefing from '../features/dashboard/ExecutiveBriefing';
+import SmartSearch from '../features/analytics/SmartSearch';
+import KnowledgeGraph from '../features/analytics/KnowledgeGraph';
+import ProjectMap from '../features/projects/ProjectMap';
 
-import TransmissionDataViewer from '../components/sections/TransmissionDataViewer';
+import TransmissionDataViewer from '../features/analytics/TransmissionDataViewer';
 import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPanel';
-import SimulationLab from '../components/sections/SimulationLab';
-import ProjectWorkspace from '../components/sections/ProjectWorkspace';
+import SimulationLab from '../features/analytics/SimulationLab';
+import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -65,6 +65,9 @@ export default function CEODashboard() {
     }
   }, [projectId, location, navigate]);
 
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
+
   // Briefing Data State
   const [briefing, setBriefing] = useState<any>(null);
   const [briefingLoading, setBriefingLoading] = useState(true);
@@ -85,15 +88,18 @@ export default function CEODashboard() {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const query = selectedProject !== 'All' ? `?project_name=${encodeURIComponent(selectedProject)}` : '';
+      const queryParams = new URLSearchParams();
+      if (selectedProject !== 'All') queryParams.append('project_name', selectedProject);
+      if (portfolio) queryParams.append('portfolio', portfolio);
+      const queryStr = queryParams.toString() ? `?${queryParams.toString()}` : '';
       
       const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
-        fetch(`/akasha/api/dashboard/summary`),
-        fetch(`/akasha/api/summary${query}`),
-        fetch(`/akasha/api/financials${query}`),
-        fetch(`/akasha/api/logistics${query}`),
-        fetch(`/akasha/api/financials/details${query}`),
-        fetch(`/akasha/api/logistics/details${query}`)
+        fetch(`/akasha/api/dashboard/summary${queryStr}`),
+        fetch(`/akasha/api/summary${queryStr}`),
+        fetch(`/akasha/api/financials${queryStr}`),
+        fetch(`/akasha/api/logistics${queryStr}`),
+        fetch(`/akasha/api/financials/details${queryStr}`),
+        fetch(`/akasha/api/logistics/details${queryStr}`)
       ]);
 
       const [dash, p6, sap, log, fDet, lDet] = await Promise.all([
@@ -139,7 +145,7 @@ export default function CEODashboard() {
 
   useEffect(() => {
     loadAllData();
-  }, [selectedProject]);
+  }, [selectedProject, portfolio]);
 
   const handleNavigateToSimulation = (projId: string, context?: any) => {
     setSelectedProject(projId);
@@ -199,23 +205,19 @@ export default function CEODashboard() {
   ];
 
   const handleTabChange = (tab: string) => {
-    if (tab === 'ai_copilot') {
-      setIsCopilotOpen(true);
-    } else {
-      setPreviousTab(activeTab);
-      setActiveTab(tab);
-      sessionStorage.setItem('ceoActiveTab', tab);
-      if (tab !== 'simulation_lab') {
-        setSimulationContext(null);
-      }
-      if (projectId) {
-        navigate('/dashboard');
-      }
+    setPreviousTab(activeTab);
+    setActiveTab(tab);
+    sessionStorage.setItem('ceoActiveTab', tab);
+    if (tab !== 'simulation_lab') {
+      setSimulationContext(null);
+    }
+    if (projectId) {
+      navigate('/dashboard');
     }
   };
 
   return (
-    <div className="flex min-h-screen w-full bg-[var(--background)]">
+    <div className={`flex w-full bg-[var(--background)] ${activeTab === 'ai_copilot' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       
       {/* 1. Left Navigation Rail */}
       <div className="sticky top-0 h-screen shrink-0 z-50">

@@ -4,16 +4,36 @@ from sqlalchemy import func, or_
 from typing import Optional
 from database import get_db
 import models
+import time
+
+_LOG_CACHE = {}
+_LOG_TTL = 300  # 5 minutes
 
 router = APIRouter(prefix="/api")
 
 @router.get("/logistics")
-def get_logistics(project_name: Optional[str] = None, db: Session = Depends(get_db)):
-    inv_query = db.query(func.sum(models.MTInventory.quantity_mw))
+def get_logistics(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"log_{project_name or 'All'}_{portfolio or 'All'}"
+    if not nocache and cache_key in _LOG_CACHE:
+        entry = _LOG_CACHE[cache_key]
+        if time.time() - entry["timestamp"] < _LOG_TTL:
+            return entry["data"]
+
+    inv_query = db.query(func.sum(models.MTInventory.quantity_inv))
     transit_query = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty))
     
+    map_query = db.query(models.ProjectMapping)
+    if portfolio and portfolio.lower() != "all portfolios":
+        map_query = map_query.filter(
+            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
     if project_name and project_name != "All":
-        mappings = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_name_from_p6 == project_name).all()
+        map_query = map_query.filter(models.ProjectMapping.project_name_from_p6 == project_name)
+        
+    mappings = map_query.all()
+    
+    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios"):
         wbs_exacts = [
             str(m.module_wbs).strip()
             for m in mappings
@@ -33,16 +53,35 @@ def get_logistics(project_name: Optional[str] = None, db: Session = Depends(get_
     delivered = inv_query.scalar() or 0
     in_transit = transit_query.scalar() or 0
         
-    return [
+    result = [
         { "category": "Delivered", "count": round(delivered, 2), "color": "#0B74B0" },
         { "category": "In Transit", "count": round(in_transit, 2), "color": "#75479C" }
     ]
+    _LOG_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
+    return result
 
 @router.get("/logistics/details")
-def get_logistics_details(project_name: Optional[str] = None, db: Session = Depends(get_db)):
+def get_logistics_details(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"log_det_{project_name or 'All'}_{portfolio or 'All'}"
+    if not nocache and cache_key in _LOG_CACHE:
+        entry = _LOG_CACHE[cache_key]
+        if time.time() - entry["timestamp"] < _LOG_TTL:
+            return entry["data"]
+
     query = db.query(models.MTPOAmount).filter(models.MTPOAmount.still_to_deliver_qty > 0)
+    
+    map_query = db.query(models.ProjectMapping)
+    if portfolio and portfolio.lower() != "all portfolios":
+        map_query = map_query.filter(
+            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
+            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+        )
     if project_name and project_name != "All":
-        mappings = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_name_from_p6 == project_name).all()
+        map_query = map_query.filter(models.ProjectMapping.project_name_from_p6 == project_name)
+        
+    mappings = map_query.all()
+
+    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios"):
         wbs_exacts = [
             str(m.module_wbs).strip()
             for m in mappings
@@ -55,4 +94,5 @@ def get_logistics_details(project_name: Optional[str] = None, db: Session = Depe
             return []
             
     results = query.order_by(models.MTPOAmount.still_to_deliver_qty.desc()).limit(100).all()
+    _LOG_CACHE[cache_key] = {"data": results, "timestamp": time.time()}
     return results

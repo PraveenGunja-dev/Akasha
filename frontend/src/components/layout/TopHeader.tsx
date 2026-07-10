@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard, RefreshCw } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
 import NotificationDropdown from './NotificationDropdown';
@@ -11,18 +11,25 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const navigate = useNavigate();
   const { projectId } = useParams();
   const { user, logout } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const currentPortfolio = searchParams.get('portfolio') || 'All Portfolios';
+  const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [hasMoreNotifs, setHasMoreNotifs] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
+  const portfolioRef = useRef<HTMLDivElement>(null);
   const LIMIT = 50;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
+      }
+      if (portfolioRef.current && !portfolioRef.current.contains(event.target as Node)) {
+        setIsPortfolioOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -88,6 +95,41 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
       {/* Right: project selector + actions */}
       <div className="flex items-center gap-1 sm:gap-2">
         
+        {/* Portfolio Dropdown */}
+        <div 
+          className="relative mr-2"
+          ref={portfolioRef}
+        >
+          <button 
+            onClick={() => setIsPortfolioOpen(!isPortfolioOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
+          >
+            <span>{currentPortfolio === 'All Portfolios' ? 'All Portfolios' : currentPortfolio}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isPortfolioOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
+            {['All Portfolios', 'Solar Khavda', 'Solar Rajasthan', 'Wind', 'BESS'].map(p => (
+              <button
+                key={p}
+                onClick={() => {
+                  setSearchParams(prev => {
+                    if (p === 'All Portfolios') {
+                      prev.delete('portfolio');
+                    } else {
+                      prev.set('portfolio', p);
+                    }
+                    return prev;
+                  });
+                  setIsPortfolioOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPortfolio === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+              >
+                {p}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Sync Data Button */}
         {onSyncData && (
           <button 

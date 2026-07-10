@@ -196,7 +196,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 custom-scrollbar overscroll-contain" data-lenis-prevent="true">
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 custom-scrollbar overscroll-contain" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
         {messages.length === 0 && (
           <div className="flex flex-col justify-end h-full px-2 pb-6 animate-fade-up">
             <h2 className="text-[28px] font-medium bg-gradient-to-r from-[#4285f4] via-[#ea4335] to-[#fbbc04] bg-clip-text text-transparent mb-1">Hello, {user?.display_name?.split(' ')[0] || 'there'}</h2>

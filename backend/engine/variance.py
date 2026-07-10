@@ -734,7 +734,7 @@ def compute_portfolio_variance(db: Session, top_n: int = 10) -> dict:
 
     all_projects = calculate_project_360_metrics(db)
     # Take the top_n riskiest
-    top_projects = sorted(all_projects, key=lambda x: x["riskScore"], reverse=True)[:top_n]
+    top_projects = sorted(all_projects, key=lambda x: (x.get("delayDays", 0) or 0), reverse=True)[:top_n]
 
     aggregate_phase_drift = defaultdict(list)
     total_activities = 0

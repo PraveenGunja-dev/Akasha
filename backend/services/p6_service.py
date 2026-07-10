@@ -410,17 +410,19 @@ class P6Service:
         Fetch all projects from P6, map fields, and upsert into the database.
         Returns the number of projects synced.
         """
-        from models import P6Project
+        from models import P6Project, ProjectMapping
 
         raw_projects_list = self.fetch_projects(project_object_id=project_object_id)
         if not raw_projects_list:
             logger.warning("No projects returned from P6 API")
             return 0
             
-        # Deduplicate by ObjectId in case P6 returns duplicates
+        mapped_ids = {m.project_id for m in db.query(ProjectMapping).all()}
+            
+        # Deduplicate by ObjectId in case P6 returns duplicates, and filter by mapped projects
         raw_projects = {}
         for proj in raw_projects_list:
-            if "ObjectId" in proj:
+            if "ObjectId" in proj and proj.get("Id") in mapped_ids:
                 raw_projects[proj["ObjectId"]] = proj
 
         synced_count = 0
@@ -521,17 +523,20 @@ class P6Service:
         Fetch baseline projects from P6, map fields, and upsert into the database.
         Returns the number of baselines synced.
         """
-        from models import P6BaselineProject
+        from models import P6BaselineProject, P6Project, ProjectMapping
 
         raw_baselines_list = self.fetch_baseline_projects(project_object_id)
         if not raw_baselines_list:
             logger.warning("No baseline projects returned from P6 API")
             return 0
 
-        # Deduplicate
+        mapped_ids = {m.project_id for m in db.query(ProjectMapping).all()}
+        mapped_p6_objs = {p.p6_object_id for p in db.query(P6Project).filter(P6Project.project_id.in_(mapped_ids)).all()}
+
+        # Deduplicate and filter by mapped projects
         raw_baselines = {}
         for base in raw_baselines_list:
-            if "ObjectId" in base:
+            if "ObjectId" in base and base.get("OriginalProjectObjectId") in mapped_p6_objs:
                 raw_baselines[base["ObjectId"]] = base
 
         synced_count = 0
@@ -752,6 +757,9 @@ class P6Service:
             return 0
 
         synced_count = 0
+        from collections import defaultdict
+        block_notifications = defaultdict(list)
+
         for raw in raw_activities:
             mapped = _map_p6_response(raw, ACTIVITY_FIELD_MAP, DATE_FIELDS_ACTIVITY)
             p6_object_id = mapped.get("p6_object_id")
@@ -762,8 +770,6 @@ class P6Service:
             existing = db.query(P6Activity).filter(P6Activity.p6_object_id == p6_object_id).first()
 
             if existing:
-                from models import Notification
-                
                 # Collect all date changes for this activity first
                 date_changes = []
                 for key, value in mapped.items():
@@ -782,71 +788,15 @@ class P6Service:
                     
                     # Skip notifications for non-critical activities
                     if is_critical_flag:
-                        c_type = "Critical Date Slip"
-                        block_name = existing.name.split('-')[0].strip() if existing.name and '-' in existing.name else None
+                        block_name = existing.name.split('-')[0].strip() if existing.name and '-' in existing.name else "Other"
                         cat_val = "COD" if is_cod else ("Critical Path" if p6_is_critical else "Trials")
                         
-                        # Build combined message with all date changes
-                        changes_str = " | ".join([f"{k}: {old} → {new}" for k, old, new in date_changes])
-                        
-                        if cat_val == "COD" and block_name:
-                            msg = f"{block_name} COD dates changed: {changes_str}"
-                        else:
-                            msg = f"Activity '{existing.name}' dates changed: {changes_str}"
-                            
-                        mw_str = ""
-                        try:
-                            from models import P6Project, ProjectMapping, P6Activity
-                            p = db.query(P6Project).filter(P6Project.p6_object_id == existing.project_object_id).first()
-                            if p:
-                                m = db.query(ProjectMapping).filter(ProjectMapping.project_id == p.project_id).first()
-                                if m:
-                                    is_wind = m.category and 'wind' in m.category.lower()
-                                    if not is_wind:
-                                        mw_str = " (~12.5 MW)"
-                                    else:
-                                        wtg_mw = WIND_PROJECTS.get(existing.project_object_id, DEFAULT_WIND_MW)
-                                        mw_str = f" (~{wtg_mw} MW)"
-                        except Exception:
-                            pass
-                            
-                        msg = f"🚨 CRITICAL SLIP{mw_str}: {msg}"
-
-                        try:
-                            proj_name = str(existing.project_object_id)
-                            from models import P6Project
-                            p = db.query(P6Project).filter(P6Project.p6_object_id == existing.project_object_id).first()
-                            if p and p.name: proj_name = p.name
-                        except:
-                            proj_name = str(existing.project_object_id)
-                            
-                        # Dedup check per activity (one notification per activity)
-                        exists_notif = db.query(Notification).filter(
-                            Notification.project_name == proj_name,
-                            Notification.activity_name == existing.name,
-                            Notification.message == msg
-                        ).first()
-                        if not exists_notif:
-                            # Store first change as old/new value for display
-                            first_old = str(date_changes[0][1])
-                            first_new = str(date_changes[0][2])
-                            notif = Notification(
-                                project_name=proj_name,
-                                module="P6",
-                                change_type=c_type,
-                                message=msg,
-                                block=block_name,
-                                activity_name=existing.name,
-                                old_value=first_old,
-                                new_value=first_new,
-                                reason=f"{len(date_changes)} date field(s) changed in Primavera P6.",
-                                action_status="Pending",
-                                category=cat_val,
-                                p6_object_id=existing.p6_object_id,
-                                p6_type="Activity"
-                            )
-                            db.add(notif)
-                            db.flush()
+                        block_notifications[block_name].append({
+                            "activity_name": existing.name,
+                            "is_cod": is_cod,
+                            "cat_val": cat_val,
+                            "project_object_id": existing.project_object_id
+                        })
 
                 for key, value in mapped.items():
                     setattr(existing, key, value)
@@ -858,6 +808,54 @@ class P6Service:
 
             synced_count += 1
             if synced_count % 100 == 0:
+                db.flush()
+
+        # Process aggregated block notifications
+        from models import Notification, P6Project, ProjectMapping
+        for block_name, changes in block_notifications.items():
+            if not changes: continue
+            
+            has_cod = any(c['is_cod'] for c in changes)
+            primary_cat = "COD" if has_cod else changes[0]['cat_val']
+            
+            activity_names = [c['activity_name'] for c in changes]
+            highlight = ", ".join(activity_names[:2])
+            if len(activity_names) > 2:
+                highlight += f" and {len(activity_names) - 2} others"
+                
+            msg = f"🚨 CRITICAL SLIP: {len(changes)} activities changed dates in '{block_name}' (e.g., {highlight})."
+            
+            proj_obj_id = changes[0]['project_object_id']
+            proj_name = str(proj_obj_id)
+            try:
+                p = db.query(P6Project).filter(P6Project.p6_object_id == proj_obj_id).first()
+                if p and p.name: proj_name = p.name
+            except Exception:
+                pass
+                
+            exists_notif = db.query(Notification).filter(
+                Notification.project_name == proj_name,
+                Notification.block == (block_name if block_name != "Other" else None),
+                Notification.message == msg
+            ).first()
+            
+            if not exists_notif:
+                notif = Notification(
+                    project_name=proj_name,
+                    module="P6",
+                    change_type="Critical Date Slip",
+                    message=msg,
+                    block=block_name if block_name != "Other" else None,
+                    activity_name="Multiple Activities",
+                    old_value=str(len(changes)),
+                    new_value="Activities",
+                    reason=f"Batch update: {len(changes)} critical activities shifted dates.",
+                    action_status="Pending",
+                    category=primary_cat,
+                    p6_object_id=proj_obj_id,
+                    p6_type="Project"
+                )
+                db.add(notif)
                 db.flush()
 
         db.commit()
@@ -942,7 +940,16 @@ class P6Service:
                 p.in_progress_activity_count = in_progress
                 p.not_started_activity_count = not_started
                 if total > 0:
-                    p.duration_percent_complete = (completed / total)
+                    total_percent = sum((a.percent_complete or 0.0) for a in activities)
+                    p.duration_percent_complete = total_percent / total
+                    
+                    # Calculate construction-specific progress
+                    construction_acts = [a for a in activities if a.wbs_name and 'construction' in str(a.wbs_name).lower()]
+                    if construction_acts:
+                        const_percent = sum((a.percent_complete or 0.0) for a in construction_acts)
+                        p.construction_percent_complete = const_percent / len(construction_acts)
+                    else:
+                        p.construction_percent_complete = p.duration_percent_complete
             db.commit()
         except Exception as e:
             logger.error(f"Error recalculating activity counts: {e}")
