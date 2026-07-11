@@ -507,7 +507,7 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
                 azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
                 api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
                 api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
-                http_client=httpx.Client(verify=False)
+                http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
             )
             model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
         else:
@@ -560,7 +560,7 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
             azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
             api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
             api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
-            http_client=httpx.Client(verify=False)
+            http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
         )
         model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
     else:
@@ -664,7 +664,7 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
             azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
             api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
             api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
-            http_client=httpx.Client(verify=False)
+            http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
         )
         model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
     else:
