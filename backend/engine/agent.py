@@ -585,7 +585,8 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
                 "3. Use **bold** for key numbers/metrics. Use markdown tables when comparing multiple items.\n"
                 "4. Do NOT add disclaimers, introductions, conclusions, or summaries. No 'Let me analyze...' or 'In conclusion...'.\n"
                 "5. Be extremely concise. Maximum 3 short paragraphs unless the user asks for a detailed report.\n"
-                "6. Write like a senior analyst speaking to the CEO — direct, factual, no filler."
+                "6. Write like a senior analyst speaking to the CEO — direct, factual, no filler.\n"
+                "7. When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules."
             )
         }
     ]
@@ -687,7 +688,8 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
                 "- Write naturally like a senior human analyst reporting to leadership. Do not sound like a chatbot.\n"
                 "- AVOID all AI clichés (e.g., \"It is important to note,\" \"Furthermore,\" \"Delve,\" \"In conclusion\", \"Based on the provided data\").\n"
                 "- Get straight to the point. Give the exact numbers requested.\n"
-                "- Use bold text to highlight key metrics or variances to make it easy for humans to read."
+                "- Use bold text to highlight key metrics or variances to make it easy for humans to read.\n"
+                "- When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules."
             )
         }
     ]

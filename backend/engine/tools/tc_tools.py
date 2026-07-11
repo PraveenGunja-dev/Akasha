@@ -89,12 +89,15 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
         if e.is_delayed:
             delayed += 1
         
+        days_delayed = _calc_delay_days(e.expected_date, e.scd)
+        
         lines.append({
             "edge_id": e.edge_id,
             "from_label": e.from_label,
             "to_label": e.to_label,
             "status": e.status,
             "contractor": e.contractor,
+            "projects": e.projects,
             "voltage": e.voltage,
             "foundation_pct": f_pct,
             "erection_pct": e_pct,
@@ -102,6 +105,8 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
             "avg_progress": round(avg_progress, 1),
             "is_delayed": e.is_delayed,
             "expected_date": e.expected_date,
+            "scd": e.scd,
+            "days_delayed": days_delayed,
         })
     
     latest_upload = max((e.upload_time for e in edges if e.upload_time), default=None)
