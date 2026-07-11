@@ -499,12 +499,15 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
         import openai
         import os
         
+        import httpx
+        
         provider = os.environ.get("AI_PROVIDER", "ollama").lower()
         if provider == "azure":
             client = openai.AzureOpenAI(
                 azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
                 api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+                api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
+                http_client=httpx.Client(verify=False)
             )
             model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
         else:
@@ -550,12 +553,14 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
     """
     import openai
     import os
+    import httpx
     provider = os.environ.get("AI_PROVIDER", "ollama").lower()
     if provider == "azure":
         client = openai.AzureOpenAI(
             azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
             api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-            api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
+            http_client=httpx.Client(verify=False)
         )
         model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
     else:
@@ -651,12 +656,14 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
     """
     import openai
     import os
+    import httpx
     provider = os.environ.get("AI_PROVIDER", "ollama").lower()
     if provider == "azure":
         client = openai.AzureOpenAI(
             azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
             api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-            api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
+            http_client=httpx.Client(verify=False)
         )
         model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
     else:
