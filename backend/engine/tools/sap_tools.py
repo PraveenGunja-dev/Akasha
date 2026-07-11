@@ -38,7 +38,7 @@ def sap_get_po_summary(db: Session, project_id: str) -> dict:
         return {"project_id": project_id, "has_data": False, "summary": {}}
     
     pos = db.query(models.MTPOAmount).filter(
-        models.MTPOAmount.wbs_element == wbs
+        models.MTPOAmount.wbs_element.ilike(f"%{wbs}%")
     ).all()
     
     if not pos:
@@ -78,7 +78,7 @@ def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list
         return []
     
     pos = db.query(models.MTPOAmount).filter(
-        models.MTPOAmount.wbs_element == wbs
+        models.MTPOAmount.wbs_element.ilike(f"%{wbs}%")
     ).all()
     
     material_agg = defaultdict(lambda: {"ordered": 0, "delivered": 0, "pending": 0, "name": ""})
@@ -116,7 +116,7 @@ def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
         return []
     
     pos = db.query(models.MTPOAmount).filter(
-        models.MTPOAmount.wbs_element == wbs
+        models.MTPOAmount.wbs_element.ilike(f"%{wbs}%")
     ).all()
     
     vendor_agg = defaultdict(lambda: {"ordered": 0, "delivered": 0, "pending": 0, "po_count": 0})
@@ -155,7 +155,7 @@ def sap_get_inventory(db: Session, project_id: str) -> dict:
         return {"project_id": project_id, "has_data": False}
     
     inv_records = db.query(models.MTInventory).filter(
-        models.MTInventory.wbs_element == wbs,
+        models.MTInventory.wbs_element.ilike(f"%{wbs}%"),
         models.MTInventory.quantity_inv > 0
     ).all()
     
@@ -187,7 +187,7 @@ def sap_get_consumption(db: Session, project_id: str) -> dict:
         return {"project_id": project_id, "has_data": False}
     
     records = db.query(models.MTMaterialDocument).filter(
-        models.MTMaterialDocument.wbs_element == wbs
+        models.MTMaterialDocument.wbs_element.ilike(f"%{wbs}%")
     ).all()
     
     if not records:
@@ -224,7 +224,7 @@ def sap_get_freshness(db: Session, project_id: str) -> dict:
         return {"project_id": project_id, "synced_at": None, "exists": False}
     
     latest = db.query(func.max(models.MTPOAmount.upload_time)).filter(
-        models.MTPOAmount.wbs_element == wbs
+        models.MTPOAmount.wbs_element.ilike(f"%{wbs}%")
     ).scalar()
     
     return {
