@@ -499,8 +499,18 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
         import openai
         import os
         
-        endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-        client = openai.OpenAI(base_url=endpoint, api_key="ollama")
+        provider = os.environ.get("AI_PROVIDER", "ollama").lower()
+        if provider == "azure":
+            client = openai.AzureOpenAI(
+                azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+                api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+                api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+            )
+            model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+        else:
+            endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
+            client = openai.OpenAI(base_url=endpoint, api_key="ollama")
+            model_name = "qwen3-vl:32b"
         
         # Determine if base64 has a data URI prefix, if not add a default jpeg one
         image_url = base64_image if base64_image.startswith("data:image") else f"data:image/jpeg;base64,{base64_image}"
@@ -514,7 +524,7 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
         )
         
         response = client.chat.completions.create(
-            model="qwen3-vl:32b",
+            model=model_name,
             messages=[
                 {
                     "role": "user",
@@ -539,9 +549,19 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
     Returns: (final_response_string, list_of_tools_used)
     """
     import openai
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-    client = openai.OpenAI(base_url=endpoint, api_key="ollama")
+    import os
+    provider = os.environ.get("AI_PROVIDER", "ollama").lower()
+    if provider == "azure":
+        client = openai.AzureOpenAI(
+            azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+        )
+        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+    else:
+        endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
+        model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
+        client = openai.OpenAI(base_url=endpoint, api_key="ollama")
     # Initialize messages
     messages = [
         {
@@ -630,9 +650,19 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
     Run the ReAct loop until the agent decides to return a final answer, then streams it.
     """
     import openai
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-    client = openai.OpenAI(base_url=endpoint, api_key="ollama")
+    import os
+    provider = os.environ.get("AI_PROVIDER", "ollama").lower()
+    if provider == "azure":
+        client = openai.AzureOpenAI(
+            azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION")
+        )
+        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+    else:
+        endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
+        model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
+        client = openai.OpenAI(base_url=endpoint, api_key="ollama")
     
     # Initialize messages
     messages = [

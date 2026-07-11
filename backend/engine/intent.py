@@ -113,7 +113,7 @@ def classify_intent_llm(message: str, history: list = None, project_names: list 
     Uses Ollama (fast ~200ms) to extract structured intent.
     Falls back to local classification if LLM fails.
     """
-    from routers.ai import call_ollama
+    from routers.ai import call_ollama, call_azure_openai_curl, get_ai_provider
     
     project_list_hint = ""
     if project_names:
@@ -144,12 +144,22 @@ Output valid JSON only:
 {{"projects":[],"type":"","domains":[],"is_portfolio":false}}"""
 
     try:
-        result = call_ollama(
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0,
-            max_tokens=200,
-            json_response=True,
-        )
+        messages = [{"role": "user", "content": prompt}]
+        provider = get_ai_provider()
+        if provider == "azure":
+            result = call_azure_openai_curl(
+                messages=messages,
+                temperature=0,
+                max_tokens=200,
+                json_response=True,
+            )
+        else:
+            result = call_ollama(
+                messages=messages,
+                temperature=0,
+                max_tokens=200,
+                json_response=True,
+            )
         result = result.strip()
         if result.startswith("```json"):
             result = result[7:-3].strip()
