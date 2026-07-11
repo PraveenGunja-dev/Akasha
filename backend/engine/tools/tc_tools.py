@@ -9,7 +9,7 @@ import logging
 import json
 from datetime import date, datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 import models
 
@@ -57,12 +57,18 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
         func.max(models.TcNetworkEdge.upload_time).label('max_time')
     ).group_by(models.TcNetworkEdge.edge_id).subquery()
     
+    conditions = [models.TcNetworkEdge.mapping_id == mapping.id]
+    if mapping.p6_id:
+        conditions.append(models.TcNetworkEdge.projects.ilike(f"%{mapping.p6_id}%"))
+    if mapping.project_id:
+        conditions.append(models.TcNetworkEdge.projects.ilike(f"%{mapping.project_id}%"))
+        
     edges = db.query(models.TcNetworkEdge).join(
         subq, 
         (models.TcNetworkEdge.edge_id == subq.c.edge_id) & 
         (models.TcNetworkEdge.upload_time == subq.c.max_time)
     ).filter(
-        models.TcNetworkEdge.mapping_id == mapping.id
+        or_(*conditions)
     ).all()
     
     if not edges:
