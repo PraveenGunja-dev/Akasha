@@ -255,7 +255,6 @@ class ChatOrchestrator:
                 sources.update(["p6_project", "p6_activity", "mt_poamount", "tc_network_edge"])
                 
         return context_data, freshness_info, list(sources)
-return self._generate(prompt)
 
     def _build_prompt_factual(self, message: str, context: dict, history: list, intent: ChatIntent, db: Session) -> str:
         memory = build_memory_context(db, intent.projects[0] if intent.projects else None, message)
