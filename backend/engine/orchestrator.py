@@ -219,16 +219,19 @@ class ChatOrchestrator:
             if pid:
                 resolved_pids.append(pid)
         
-        if not resolved_pids and intent.is_portfolio:
-            # Handle portfolio-wide queries
-            from engine.tools.portfolio_tools import portfolio_get_riskiest_projects
-            context_data["portfolio"] = portfolio_get_riskiest_projects(db, top_n=5)
-            sources.add("portfolio_aggregate")
-            return context_data, {}, list(sources)
+        if not resolved_pids:
+            if "tc" in intent.domains:
+                from engine.tools.tc_tools import tc_get_at_risk_lines, tc_get_network_summary
+                context_data["transmission_lines"] = tc_get_at_risk_lines(db, limit=15)
+                context_data["transmission_summary"] = tc_get_network_summary(db)
+                sources.add("tc_network")
             
-        elif not resolved_pids:
-            # Couldn't resolve project, return empty context
-            return {}, {}, []
+            if intent.is_portfolio or "p6" in intent.domains:
+                from engine.tools.portfolio_tools import portfolio_get_riskiest_projects
+                context_data["portfolio_risks"] = portfolio_get_riskiest_projects(db, top_n=5)
+                sources.add("portfolio_aggregate")
+            
+            return context_data, {}, list(sources)
 
         # Update intent with resolved IDs
         intent.projects = resolved_pids
@@ -252,19 +255,25 @@ class ChatOrchestrator:
                 sources.update(["p6_project", "p6_activity", "mt_poamount", "tc_network_edge"])
                 
         return context_data, freshness_info, list(sources)
-
-        return self._generate(prompt)
+return self._generate(prompt)
 
     def _build_prompt_factual(self, message: str, context: dict, history: list, intent: ChatIntent, db: Session) -> str:
         memory = build_memory_context(db, intent.projects[0] if intent.projects else None, message)
+        hist_str = ""
+        if history:
+            hist_str = "\nPrevious conversation:\n"
+            for h in history[-4:]:
+                r = h.get("role") or h.get("type", "user")
+                if r == "bot": r = "assistant"
+                hist_str += f"{r.upper()}: {h.get('content', '')}\n"
         return f"""You are the Akasha AI Copilot for EPC project management.
 RULES:
 1. Answer ONLY what the user asked using ONLY the provided data. No templates, no boilerplate.
-2. If they ask a number, give the number. If they ask a list, give the list. Nothing extra.
-3. Use **bold** for key metrics. Use markdown tables when comparing items.
-4. Maximum 2 short paragraphs. No introductions, no conclusions, no disclaimers.
-5. If the data doesn't have the answer, say "I don't have that in the current data."
+2. If they ask a number, give the number. If they ask a list, give the list.
+3. If the user asks a general question about your capabilities or greets you, respond conversationally and helpfully.
+4. If the user asks a specific data question and the provided data does not contain the answer, say "I don't have that in the current data."
 
+{hist_str}
 {memory}
 
 DATA FOR {', '.join(intent.projects)}:
@@ -279,11 +288,9 @@ Question: {message}
         memory = build_memory_context(db, intent.projects[0] if intent.projects else None, message)
         return f"""You are the Akasha AI Copilot — a senior EPC project analyst.
 RULES:
-1. Answer ONLY what the user asked. Every sentence must reference actual data from below.
-2. NEVER use pre-written templates or generic paragraphs. Every word must come from the real data.
-3. Use **bold** for key numbers/variances. Use markdown tables for comparisons.
-4. Maximum 3 short paragraphs. No AI filler phrases ("It is important to note", "Furthermore", "In conclusion").
-5. Write like a senior analyst briefing the CEO — direct, factual, no fluff.
+1. Write like a senior analyst briefing the CEO — direct, factual, no fluff. Use **bold** for key numbers/variances.
+2. If the user asks a general question about your capabilities or greets you, respond conversationally and helpfully.
+3. If the user asks a specific data question and the provided data does not contain the answer, say "I don't have that in the current data."
 
 {memory}
 
@@ -304,14 +311,13 @@ Question: {message}
                 r = h.get("role") or h.get("type", "user")
                 if r == "bot": r = "assistant"
                 hist_str += f"{r.upper()}: {h.get('content', '')}\n"
-        return f"""You are the Akasha AI Copilot for EPC project management.
+        return f"""You are the Akasha AI Copilot — an expert PMO Director.
 RULES:
-1. Answer EXACTLY what the user asked. No templates, no boilerplate, no generic advice.
-2. Every claim must reference specific data from the JSON below. If you can't back it up with data, don't say it.
-3. Use **bold** for key metrics. Use markdown tables when listing multiple items.
-4. Maximum 3 short paragraphs. No introductions ("Good morning", "Let me analyze..."), no conclusions ("In summary...").
-5. No AI filler phrases. Write like a senior executive — direct and factual.
-6. If the user's question is a greeting, respond with a brief, time-appropriate greeting and ask what they need help with. Keep it to 1-2 sentences max.
+1. Don't just report data — advise on what to do next. Provide actionable mitigations.
+2. Flag critical path risks immediately. Highlight high-severity bottlenecks.
+3. Be direct. No filler words. Maximum 3 paragraphs.
+4. If the user asks a general question about your capabilities or greets you, respond conversationally and helpfully.
+5. If the user asks a specific data question and the provided data does not contain the answer, say "I don't have that in the current data."
 
 {memory}
 
