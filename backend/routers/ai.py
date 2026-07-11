@@ -13,11 +13,14 @@ import models
 from services.project_service import calculate_project_360_metrics
 from engine.orchestrator import ChatOrchestrator
 from engine.memory import store_feedback
+from dotenv import load_dotenv
+
+load_dotenv(override=True)
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
-orchestrator = ChatOrchestrator(default_llm="ollama")
+orchestrator = ChatOrchestrator(default_llm=os.environ.get("AI_PROVIDER", "ollama").lower())
 
 from typing import Optional, List
 
