@@ -50,7 +50,7 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
     
     if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
         wbs_exact = str(mapping.module_wbs).strip()
-        pos = db.query(models.MTPOAmount).filter(models.MTPOAmount.wbs_element == wbs_exact).all()
+        pos = db.query(models.MTPOAmount).filter(models.MTPOAmount.wbs_element.ilike(f"%{wbs_exact}%")).all()
         po_materials = set()
         for po in pos:
             budget_inr += (po.net_order_value_inr or 0.0)
@@ -59,7 +59,7 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
                 if mat_str:
                     po_materials.add(mat_str)
                     
-        mb51 = db.query(models.MTMaterialDocument).filter(models.MTMaterialDocument.wbs_element == wbs_exact).all()
+        mb51 = db.query(models.MTMaterialDocument).filter(models.MTMaterialDocument.wbs_element.ilike(f"%{wbs_exact}%")).all()
         for rec in mb51:
             mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
             if not mapping.module_wbs and mat_str not in po_materials:
@@ -215,7 +215,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
             wbs_exact = str(m.module_wbs).strip()
             me2j_records = db.query(models.MTPOAmount).filter(
-                models.MTPOAmount.wbs_element == wbs_exact
+                models.MTPOAmount.wbs_element.ilike(f"%{wbs_exact}%")
             ).all()
             
             for rec in me2j_records:
@@ -231,7 +231,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         mb51_records = []
         if wbs_exact:
             mb51_records = db.query(models.MTMaterialDocument).filter(
-                models.MTMaterialDocument.wbs_element == wbs_exact
+                models.MTMaterialDocument.wbs_element.ilike(f"%{wbs_exact}%")
             ).all()
         
         mb51_materials = set()
@@ -255,7 +255,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         mb52_records = []
         if wbs_exact:
             mb52_records = db.query(models.MTInventory).filter(
-                models.MTInventory.wbs_element == wbs_exact,
+                models.MTInventory.wbs_element.ilike(f"%{wbs_exact}%"),
                 models.MTInventory.quantity_inv > 0
             ).all()
             for rec in mb52_records:
@@ -567,7 +567,7 @@ def get_project_360_detail(db: Session, project_id: str):
     if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
         wbs_exact = str(mapping.module_wbs).strip()
         po_records_all = db.query(models.MTPOAmount).filter(
-            models.MTPOAmount.wbs_element == wbs_exact
+            models.MTPOAmount.wbs_element.ilike(f"%{wbs_exact}%")
         ).all()
             
     po_materials = set()
@@ -586,7 +586,7 @@ def get_project_360_detail(db: Session, project_id: str):
     mb51_records = []
     if wbs_exact:
         mb51_records = db.query(models.MTMaterialDocument).filter(
-           models.MTMaterialDocument.wbs_element == wbs_exact
+           models.MTMaterialDocument.wbs_element.ilike(f"%{wbs_exact}%")
         ).all()
 
     for rec in mb51_records:
@@ -706,7 +706,7 @@ def get_project_360_detail(db: Session, project_id: str):
     inv_records = []
     if wbs_exact:
         inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.wbs_element == wbs_exact,
+            models.MTInventory.wbs_element.ilike(f"%{wbs_exact}%"),
             models.MTInventory.quantity_inv > 0
         ).all()
 
