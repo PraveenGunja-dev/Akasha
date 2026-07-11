@@ -142,7 +142,9 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60, limit: int = 15)
         func.max(models.TcNetworkEdge.upload_time).label('max_time')
     ).group_by(models.TcNetworkEdge.edge_id).subquery()
     
-    edges = db.query(models.TcNetworkEdge).join(
+    edges = db.query(models.TcNetworkEdge, models.ProjectMapping.project_id).outerjoin(
+        models.ProjectMapping, models.TcNetworkEdge.mapping_id == models.ProjectMapping.id
+    ).join(
         subq, 
         (models.TcNetworkEdge.edge_id == subq.c.edge_id) & 
         (models.TcNetworkEdge.upload_time == subq.c.max_time)
@@ -151,7 +153,7 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60, limit: int = 15)
     ).all()
     
     result = []
-    for e in edges:
+    for e, mapped_project_id in edges:
         f_pct = _parse_pct(e.foundation)
         e_pct = _parse_pct(e.erection)
         s_pct = _parse_pct(e.stringing)
@@ -165,6 +167,7 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60, limit: int = 15)
             "status": e.status,
             "contractor": e.contractor,
             "projects": e.projects,
+            "mapped_project_id": mapped_project_id,
             "voltage": e.voltage,
             "length": e.length,
             "foundation_pct": f_pct,
