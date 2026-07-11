@@ -131,7 +131,7 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
     }
 
 
-def tc_get_at_risk_lines(db: Session, days_threshold: int = 60) -> list[dict]:
+def tc_get_at_risk_lines(db: Session, days_threshold: int = 60, limit: int = 15) -> list[dict]:
     """Get all transmission lines at risk across the portfolio.
     
     Use when: user asks about transmission risks, delayed lines, grid bottlenecks.
@@ -176,8 +176,8 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60) -> list[dict]:
             "days_delayed": days_delayed,
             "_source_table": "tc_network_edge",
         })
-    
-    return result
+    result.sort(key=lambda x: x["days_delayed"], reverse=True)
+    return result[:limit]
 
 
 def tc_get_network_summary(db: Session) -> dict:

@@ -232,21 +232,19 @@ export default function CEODashboard() {
       {/* Middle Area: Header + Scrollable Content */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        {/* 2. Top Global Header (hidden for full-screen Copilot) */}
-        {activeTab !== 'ai_copilot' && (
-          <div className="sticky top-0 z-[60]">
-            <TopHeader 
-              selectedProject={selectedProject} 
-              setSelectedProject={setSelectedProject} 
-              masterProjects={dashboardData?.projects || []} 
-              onNavigateToSimulation={handleNavigateToSimulation}
-              onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
-              onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
-              onSyncData={handleSyncData}
-              isSyncing={isSyncing}
-            />
-          </div>
-        )}
+        {/* 2. Top Global Header */}
+        <div className="sticky top-0 z-[60]">
+          <TopHeader 
+            selectedProject={selectedProject} 
+            setSelectedProject={setSelectedProject} 
+            masterProjects={dashboardData?.projects || []} 
+            onNavigateToSimulation={handleNavigateToSimulation}
+            onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
+            onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
+            onSyncData={handleSyncData}
+            isSyncing={isSyncing}
+          />
+        </div>
         
         {/* 3a. Full-bleed AI Copilot or Simulation Lab (no padding, no scroll wrapper) */}
         {activeTab === 'ai_copilot' || activeTab === 'simulation_lab' ? (
