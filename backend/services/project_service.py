@@ -110,15 +110,18 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     activity_stats_raw = db.query(
         models.P6Activity.project_object_id,
         models.P6Activity.status,
+        models.P6Activity.is_critical,
         func.count(models.P6Activity.id),
         func.sum(models.P6Activity.percent_complete)
-    ).group_by(models.P6Activity.project_object_id, models.P6Activity.status).all()
+    ).group_by(models.P6Activity.project_object_id, models.P6Activity.status, models.P6Activity.is_critical).all()
     
     act_stats = {}
-    for pid, status, count, sum_pct in activity_stats_raw:
+    for pid, status, is_critical, count, sum_pct in activity_stats_raw:
         if pid not in act_stats:
-            act_stats[pid] = {'Completed': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
-        act_stats[pid][status] = count
+            act_stats[pid] = {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
+        act_stats[pid][status] += count
+        if status == 'Completed' and is_critical is True:
+            act_stats[pid]['CompletedCritical'] += count
         act_stats[pid]['Total'] += count
         if sum_pct:
             act_stats[pid]['SumPct'] += sum_pct
@@ -141,10 +144,10 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     
     activity_timeline_query = db.query(
         models.P6Activity.project_object_id,
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date >= start_this) & (models.P6Activity.planned_finish_date <= end_this), 1), else_=0)).label('this_month'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date >= start_next) & (models.P6Activity.planned_finish_date <= end_next), 1), else_=0)).label('next_month'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.planned_finish_date > end_next), 1), else_=0)).label('later'),
-        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.total_float < 0), 1), else_=0)).label('delayed')
+        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.is_critical == True) & (models.P6Activity.planned_finish_date >= start_this) & (models.P6Activity.planned_finish_date <= end_this), 1), else_=0)).label('this_month'),
+        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.is_critical == True) & (models.P6Activity.planned_finish_date >= start_next) & (models.P6Activity.planned_finish_date <= end_next), 1), else_=0)).label('next_month'),
+        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.is_critical == True) & (models.P6Activity.planned_finish_date > end_next), 1), else_=0)).label('later'),
+        func.sum(case(((models.P6Activity.status != 'Completed') & (models.P6Activity.is_critical == True) & (models.P6Activity.total_float < 0), 1), else_=0)).label('delayed')
     ).group_by(models.P6Activity.project_object_id).all()
     
     for row in activity_timeline_query:
@@ -187,12 +190,16 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         cost_var = p6_proj.total_cost_variance if p6_proj and p6_proj.total_cost_variance is not None else 0
         
         # Exact activity tracking
-        activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
+        activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
+
         
-        if activity_info['Total'] > 0:
+        if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
+            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
+        elif activity_info['Total'] > 0:
             progress = activity_info['SumPct'] / activity_info['Total']
         else:
             progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
+
         # 2. SAP Data - WBS Only Mapping
         allocation_ratio = 1.0
 
@@ -517,10 +524,11 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "status": p6_proj.status if p6_proj else "Not Started",
             "durationPercentComplete": round(pct_complete, 1),
             # Activity
-            "activityCount": activity_info['Total'],
-            "completedActivities": activity_info['Completed'],
-            "inProgressActivities": activity_info['In Progress'],
-            "notStartedActivities": activity_info['Not Started'],
+            "activityCount": activity_info.get('Total', 0),
+            "completedActivities": activity_info.get('Completed', 0),
+            "completedCriticalActivities": activity_info.get('CompletedCritical', 0),
+            "inProgressActivities": activity_info.get('In Progress', 0),
+            "notStartedActivities": activity_info.get('Not Started', 0),
             "activitiesCompletingThisMonth": activities_completing_this_month,
             "activitiesCompletingNextMonth": activities_completing_next_month,
             "activitiesCompletingLater": activities_completing_later,
@@ -534,6 +542,14 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
     return sorted(results, key=lambda x: x.get('integrationCount', 0), reverse=True)
 
+import re
+
+def normalize_block(name):
+    name = name.replace(" ", "").upper()
+    m = re.match(r'(BLOCK-|WTG-?)0+(\d+)', name)
+    if m:
+        return f"{m.group(1)}{m.group(2)}"
+    return name
 
 def get_project_360_detail(db: Session, project_id: str):
     """
@@ -557,6 +573,88 @@ def get_project_360_detail(db: Session, project_id: str):
 
     if not p6_proj:
         return {"error": "Project not found"}
+        
+    # Block/WTG Logic
+    cod_done = 0
+    pending_cod = 0
+    tr_done_cod_not = 0
+    mw_generated = 0.0
+    total_blocks_count = 0
+    
+    all_blocks = set()
+    obj_id = p6_proj.p6_object_id
+    
+    wbs_nodes = db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == obj_id).all()
+    for w in wbs_nodes:
+        m = re.search(r'(Block-\d+|WTG\s*\d+)', w.wbs_name or "", re.IGNORECASE)
+        if m:
+            all_blocks.add(normalize_block(m.group(1)))
+            
+    cod_acts = db.query(models.P6Activity).filter(models.P6Activity.project_object_id == obj_id, models.P6Activity.name.ilike('%COD%')).all()
+    tr_acts = db.query(models.P6Activity).filter(models.P6Activity.project_object_id == obj_id, models.P6Activity.name.ilike('%Trial%')).all()
+    
+    for a in cod_acts + tr_acts:
+        m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
+        if m:
+            all_blocks.add(normalize_block(m.group(1)))
+            
+    blocks_status = {b: {'cod': 'Not Started', 'tr': 'Not Started'} for b in all_blocks}
+    
+    for a in cod_acts:
+        m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
+        if m:
+            b_name = normalize_block(m.group(1))
+            if a.status == 'Completed':
+                blocks_status[b_name]['cod'] = 'Completed'
+    
+    for a in tr_acts:
+        m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
+        if m:
+            b_name = normalize_block(m.group(1))
+            if a.status == 'Completed':
+                blocks_status[b_name]['tr'] = 'Completed'
+    
+    for b, status in blocks_status.items():
+        is_cod = (status['cod'] == 'Completed')
+        is_tr = (status['tr'] == 'Completed')
+        
+        if is_cod:
+            cod_done += 1
+        else:
+            pending_cod += 1
+            if is_tr:
+                tr_done_cod_not += 1
+                
+    total_blocks_count = len(all_blocks)
+    
+    all_trs = db.query(models.MTTrialRun).all()
+    proj_name = mapping.project_name_from_p6 if mapping and mapping.project_name_from_p6 else p6_proj.name
+    
+    is_solar = any('BLOCK' in b for b in all_blocks)
+    is_wind = any('WTG' in b for b in all_blocks)
+    
+    if is_solar:
+        total_blocks = len(all_blocks)
+        cap = mapping.capacity_mwac if mapping and mapping.capacity_mwac else (mapping.capacity_mwdc if mapping and mapping.capacity_mwdc else 0.0)
+        mw_per_unit = cap / total_blocks if total_blocks > 0 else 0.0
+        mw_generated = mw_per_unit * cod_done
+    elif is_wind:
+        proj_name_nospace = proj_name.replace(" ", "").lower() if proj_name else ""
+        mw_per_wtg = 0.0
+        for tr in all_trs:
+            tr_proj_name = (tr.project_name_p6 or tr.project_name or "").replace(" ", "").lower()
+            if tr_proj_name == proj_name_nospace:
+                if tr.tr_quantity_mw:
+                    mw_per_wtg = tr.tr_quantity_mw
+                    break
+        mw_generated = mw_per_wtg * cod_done
+    else:
+        proj_name_nospace = proj_name.replace(" ", "").lower() if proj_name else ""
+        for tr in all_trs:
+            tr_proj_name = (tr.project_name_p6 or tr.project_name or "").replace(" ", "").lower()
+            if tr_proj_name == proj_name_nospace:
+                if tr.activity_name and 'COD' in tr.activity_name.upper():
+                    mw_generated += (tr.tr_quantity_mw or 0.0)
 
     # SAP Data - WBS Only Mapping
     allocation_ratio = 1.0
@@ -943,6 +1041,12 @@ def get_project_360_detail(db: Session, project_id: str):
         "capacityMW": mapping.capacity_mwac if mapping else 0,
         "p6ProjectName": p6_proj.name,
         "tcProjectName": mapping.project_name_from_p6 or mapping.project if mapping else "Unmapped",
+        "mwGenerated": round(mw_generated, 2),
+        "codBlocksDone": cod_done,
+        "pendingCodBlocks": pending_cod,
+        "trDoneCodPending": tr_done_cod_not,
+        "totalBlocksCount": total_blocks_count,
+        "unitType": "WTG" if is_wind else "Blocks",
     }
 
     # ── TC Data ──

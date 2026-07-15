@@ -247,7 +247,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const completingNextMonth = data.reduce((s, d) => s + (d.activitiesCompletingNextMonth || 0), 0);
   const completingLater = data.reduce((s, d) => s + (d.activitiesCompletingLater || 0), 0);
   
-  const completedActivities = data.reduce((s, d) => s + (d.completedActivities || 0), 0);
+  const completedCriticalActivities = data.reduce((s, d) => s + (d.completedCriticalActivities || 0), 0);
   const delayedActivities = data.reduce((s, d) => s + (d.delayedActivities || 0), 0);
   const totalActivities = data.reduce((s, d) => s + (d.activityCount || 0), 0) || 1; // fallback to 1 to prevent division by zero
 
@@ -462,7 +462,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           {/* Column 4: Completion Forecast */}
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Completion Forecast</div>
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Critical Activities Forecast</div>
             </div>
             
             <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-3">
@@ -481,11 +481,11 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
               ))}
               
               <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Completed (Act.)</span>
-                <span className="text-lg font-mono font-bold text-emerald-500">{fmtNum(completedActivities)}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Completed (Crit.)</span>
+                <span className="text-lg font-mono font-bold text-emerald-500">{fmtNum(completedCriticalActivities)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Delayed (Act.)</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Delayed (Crit.)</span>
                 <span className={`text-lg font-mono font-bold ${delayedActivities > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{fmtNum(delayedActivities)}</span>
               </div>
             </div>
@@ -531,10 +531,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-
-
       {/* 2. Schedule Performance (25%) */}
-      <div className="w-[25%] min-w-[150px] flex flex-col gap-1.5 border-l border-border pl-4 pr-4">
+      <div className="w-[25%] min-w-[150px] flex flex-col justify-center gap-1.5 border-l border-border pl-4 pr-4">
         <div className="flex flex-col gap-1 w-full max-w-[120px]">
           <div className="flex justify-between text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
             <span>Progress</span>
@@ -567,7 +565,7 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-      {/* 5. Timeline Forecast (15%) */}
+      {/* 4. Timeline Forecast (15%) */}
       <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
@@ -595,18 +593,13 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
    ═══════════════════════════════════════════════════════════ */
 const SkeletonRow = () => (
   <div className="flex items-stretch border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 animate-pulse">
-    <div className="w-[30%] min-w-[250px] p-4 flex items-start gap-3">
+    <div className="w-[35%] min-w-[250px] p-4 flex items-start gap-3">
       <div className="flex-1 mt-1">
         <div className="w-3/4 h-5 bg-gray-200 dark:bg-gray-800 rounded mb-2"></div>
         <div className="w-1/2 h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
       </div>
     </div>
-    <div className="w-[20%] min-w-[180px] border-l border-border p-4 flex flex-col justify-center gap-2">
-      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-    </div>
-    <div className="w-[15%] min-w-[150px] border-l border-border p-4 flex flex-col justify-center">
+    <div className="w-[25%] min-w-[150px] border-l border-border p-4 flex flex-col justify-center">
       <div className="w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full mb-3"></div>
       <div className="w-20 h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
     </div>
@@ -801,10 +794,9 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       {loading ? (
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
-            <div className="w-[30%] min-w-[250px] pr-4">Project Details</div>
-            <div className="w-[20%] min-w-[180px] pl-4">Activity & Trans.</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Schedule</div>
-            <div className="w-[20%] min-w-[180px] pl-4">Supply Chain</div>
+            <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
+            <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
+            <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>
             <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
           </div>
           <div className="flex flex-col">
@@ -823,10 +815,9 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       ) : (
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
-            <div className="w-[30%] min-w-[250px] pr-4">Project Details</div>
-            <div className="w-[20%] min-w-[180px] pl-4">Activity & Trans.</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Schedule</div>
-            <div className="w-[20%] min-w-[180px] pl-4">Supply Chain</div>
+            <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
+            <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
+            <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>
             <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
           </div>
           <div className="flex flex-col">

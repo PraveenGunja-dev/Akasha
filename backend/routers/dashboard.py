@@ -56,15 +56,24 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             
     raw_mappings = query.all()
     raw_p6_projects = db.query(models.P6Project).all()
+    
+    # Filter out Demo projects
+    filtered_mappings = []
+    for m in raw_mappings:
+        name_check = m.project_name_from_p6 or m.project or ""
+        if "demo" not in name_check.lower():
+            filtered_mappings.append(m)
+            
     if portfolio and portfolio.lower() != "all portfolios":
-        mapped_ids = [m.project_id for m in raw_mappings if m.project_id]
+        mapped_ids = [m.project_id for m in filtered_mappings if m.project_id]
         raw_p6_projects = [p for p in raw_p6_projects if p.project_id in mapped_ids]
     
-    mappings = raw_mappings
+    mappings = filtered_mappings
     p6_projects = raw_p6_projects
     
     portfolio_summary = {
         "total_mw": 0,
+        "achieved_mw": 0,
         "total_projects": 0,
         "delayed_projects": 0,
         "on_track_projects": 0,
@@ -110,6 +119,8 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
     # Pre-fetch Capacity Overview to get accurate COD and Trial Run MW (and dynamically computed WTG capacity)
     cap_data = get_capacity_overview(portfolio, db)
     proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
+    
+    portfolio_summary["achieved_mw"] = sum(cap_data.get("totals", {}).values())
 
     for m in mappings:
         pm_cap = proj_cap_dict.get(m.project_id, {})
@@ -836,6 +847,16 @@ def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends
         )
             
     mappings = query.all()
+    
+    # Filter out demo projects
+    filtered_mappings = []
+    for m in mappings:
+        name_check = m.project_name_from_p6 or m.project or ""
+        if "demo" not in name_check.lower():
+            filtered_mappings.append(m)
+            
+    mappings = filtered_mappings
+    
     p6_projs = db.query(models.P6Project).all()
     
     project_map = {}

@@ -2,7 +2,7 @@ import React, { useState, useRef, useMemo, useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
-import { MapPin, Layers, ChevronDown, Zap, Search, Thermometer, Wind, Loader2, CloudLightning, CloudRain, X, Activity, Sun, Maximize2, Minimize2, Cloud, Globe, Factory } from 'lucide-react';
+import { MapPin, Layers, ChevronDown, Zap, Search, Thermometer, Wind, Loader2, CloudLightning, CloudRain, X, Activity, Sun, Maximize2, Minimize2, Cloud, Globe, Factory, Target } from 'lucide-react';
 
 // ─── OIM-style voltage color scale ───
 const getVoltageColor = (voltageTag?: string): string => {
@@ -15,9 +15,9 @@ const getVoltageColor = (voltageTag?: string): string => {
   if (v >= 310000) return '#9c27b0'; // purple ≥310 kV
   if (v >= 220000) return '#e53935'; // red    ≥220 kV
   if (v >= 132000) return '#ff9800'; // orange ≥132 kV
-  if (v >= 52000)  return '#fdd835'; // yellow ≥52 kV
-  if (v >= 25000)  return '#4caf50'; // green  ≥25 kV
-  if (v >= 10000)  return '#2196f3'; // blue   ≥10 kV
+  if (v >= 52000) return '#fdd835'; // yellow ≥52 kV
+  if (v >= 25000) return '#4caf50'; // green  ≥25 kV
+  if (v >= 10000) return '#2196f3'; // blue   ≥10 kV
   return '#555555'; // dark  <10 kV
 };
 
@@ -133,7 +133,7 @@ function WeatherWidget({ lat, lng }: { lat: number, lng: number }) {
 }
 
 // Weather Simulation Side Panel
-function WeatherSimulationPanel({ location, onClose }: { location: {lat: number, lng: number, name: string}, onClose: () => void }) {
+function WeatherSimulationPanel({ location, onClose }: { location: { lat: number, lng: number, name: string }, onClose: () => void }) {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [isExpanded, setIsExpanded] = useState(false);
@@ -151,7 +151,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: {lat: number,
 
   const getChartOptions = () => {
     if (!data || !data.hourly) return {};
-    
+
     // Find index of 'now' approximately (past 7 days = 7*24 = 168 hours)
     const nowIndex = 168;
 
@@ -172,7 +172,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: {lat: number,
         type: 'category',
         data: data.hourly.time.map((t: string) => {
           const d = new Date(t);
-          return `${d.getMonth()+1}/${d.getDate()} ${d.getHours()}:00`;
+          return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
         }),
         axisLabel: { fontSize: 9, formatter: (val: string) => val.split(' ')[0] },
       },
@@ -294,7 +294,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: {lat: number,
                       <span className="text-sm font-semibold uppercase tracking-wider">7-Day Avg Cloud Cover</span>
                     </div>
                     <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-                      {(data.hourly.cloud_cover.slice(168).reduce((a:number,b:number)=>a+b,0) / data.hourly.cloud_cover.slice(168).length).toFixed(1)} <span className="text-base font-medium text-slate-500">%</span>
+                      {(data.hourly.cloud_cover.slice(168).reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.slice(168).length).toFixed(1)} <span className="text-base font-medium text-slate-500">%</span>
                     </div>
                   </div>
                   <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-600/50 pt-3">
@@ -509,13 +509,14 @@ const getProjectCoordinates = (project: any, index: number) => {
 export default function ProjectMap({ projects = [], onOpenProject, theme }: ProjectMapProps) {
   const [activeStyle, setActiveStyle] = useState(MAP_STYLES[0]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [showTransmission, setShowTransmission] = useState(false);
+  const [showTransmission, setShowTransmission] = useState(true);
+  const [showProjects, setShowProjects] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(6);
   const [searchQuery, setSearchQuery] = useState('');
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [showWeatherSim, setShowWeatherSim] = useState(false);
-  const [simLocation, setSimLocation] = useState<{lat: number, lng: number, name: string}>({lat: 24.0, lng: 74.0, name: 'Western Grid Average'});
-  
+  const [simLocation, setSimLocation] = useState<{ lat: number, lng: number, name: string }>({ lat: 24.0, lng: 74.0, name: 'Western Grid Average' });
+
   // Overpass API State
   const [showOIM, setShowOIM] = useState(false);
   const [viewportGrid, setViewportGrid] = useState<any[]>([]);
@@ -523,7 +524,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
   const [clickedLocation, setClickedLocation] = useState<L.LatLng | null>(null);
   const [overpassLoading, setOverpassLoading] = useState(false);
   const [overpassData, setOverpassData] = useState<any>(null);
-  
+
   // New State for P6 Project ID Filtering
   const [p6ProjectIdFilter, setP6ProjectIdFilter] = useState('');
   const [mappedTcEdges, setMappedTcEdges] = useState<any[]>([]);
@@ -542,7 +543,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
         if (res.ok) {
           const data = await res.json();
           setMappedTcEdges(data.edges || []);
-          
+
           // Optionally, fly to the first edge's substation if coordinates exist
           if (data.edges && data.edges.length > 0) {
             const firstEdge = data.edges[0];
@@ -564,7 +565,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
     return () => clearTimeout(timer);
   }, [p6ProjectIdFilter]);
-  
+
   const mapRef = useRef<L.Map>(null);
 
   const extractGridInViewport = async () => {
@@ -579,7 +580,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
     const bounds = mapRef.current.getBounds();
     // Overpass bbox format: south,west,north,east
     const bbox = `${bounds.getSouth()},${bounds.getWest()},${bounds.getNorth()},${bounds.getEast()}`;
-    
+
     // out geom includes the latitude and longitude for every point in the line!
     const query = `
       [out:json][timeout:30];
@@ -613,7 +614,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
     setClickedLocation(e.latlng);
     setOverpassLoading(true);
     setOverpassData(null);
-    
+
     // Construct Overpass QL query (2000 meter radius)
     const query = `
       [out:json];
@@ -623,18 +624,18 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
       );
       out tags;
     `;
-    
+
     try {
       const response = await fetch('https://overpass-api.de/api/interpreter', {
         method: 'POST',
         body: query
       });
       const data = await response.json();
-      
+
       // Filter out elements without interesting tags
       const filtered = data.elements.filter((el: any) => {
         if (!el.tags) return false;
-        
+
         // Filter out low voltage "village" lines (11kV, 33kV)
         if (el.tags.power === 'line') {
           if (el.tags.voltage) {
@@ -644,17 +645,17 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               let volts = parseInt(match[0], 10);
               // Some mappers write "400" instead of "400000". If it's less than 1000, assume it's in kV.
               if (volts < 1000) volts *= 1000;
-              
+
               // Only keep High Voltage transmission lines (66kV and above)
               if (volts < 66000) return false;
             }
           }
           return true; // Keep lines that are either high voltage or have no voltage tag specified
         }
-        
+
         return el.tags.power === 'substation' || el.tags.power === 'plant';
       });
-      
+
       // Deduplicate by name/voltage to avoid rendering 50 segments of the same line
       const uniqueData = [];
       const seen = new Set();
@@ -665,7 +666,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           uniqueData.push(item);
         }
       }
-      
+
       setOverpassData(uniqueData);
     } catch (err) {
       console.error("Overpass API Error:", err);
@@ -686,7 +687,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
   // Combine and filter searchable locations
   const searchSuggestions = useMemo(() => {
     if (!searchQuery.trim()) return [];
-    
+
     const query = searchQuery.toLowerCase();
     const suggestions: { name: string; type: string; lat: number; lng: number }[] = [];
 
@@ -742,14 +743,14 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
       {/* Floating Overlay Controls */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-4 items-start">
-        
+
         {/* Search Bar */}
         <div className="w-72 relative">
           <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
             <div className="pl-3 py-2 text-slate-400">
               <Search className="w-5 h-5" />
             </div>
-            <input 
+            <input
               type="text"
               placeholder="Search projects..."
               className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400"
@@ -784,7 +785,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               <div className="pl-3 py-2 text-indigo-500">
                 {isLoadingEdges ? <Loader2 className="w-5 h-5 animate-spin" /> : <Layers className="w-5 h-5" />}
               </div>
-              <input 
+              <input
                 type="text"
                 placeholder="Filter by P6 Project ID..."
                 className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400"
@@ -815,10 +816,10 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       </button>
                     );
                   })}
-                  {projects.filter(p => {
-                    const id = p.projectId || p.project_id;
-                    return id && id.toLowerCase().includes(p6ProjectIdFilter.toLowerCase());
-                  }).length === 0 && (
+                {projects.filter(p => {
+                  const id = p.projectId || p.project_id;
+                  return id && id.toLowerCase().includes(p6ProjectIdFilter.toLowerCase());
+                }).length === 0 && (
                     <div className="px-4 py-2 text-sm text-slate-500 italic">No matching Project IDs found in summary data</div>
                   )}
               </div>
@@ -829,114 +830,128 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
         {/* Map Buttons (Grid, Radar, Layers) */}
         <div className="flex flex-col gap-2 items-end">
 
-        {/* Weather Simulation Panel Toggle */}
-        <button
-          onClick={() => setShowWeatherSim(!showWeatherSim)}
-          className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showWeatherSim
+          {/* Weather Simulation Panel Toggle */}
+          <button
+            onClick={() => setShowWeatherSim(!showWeatherSim)}
+            className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showWeatherSim
               ? 'bg-indigo-100 dark:bg-indigo-500/20 border-indigo-300 dark:border-indigo-500/50 text-indigo-700 dark:text-indigo-400'
               : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-            }`}
-        >
-          <CloudLightning className={`w-4 h-4`} />
-          <span className="text-sm font-semibold">
-            Simulation Panel
-          </span>
-        </button>
+              }`}
+          >
+            <CloudLightning className={`w-4 h-4`} />
+            <span className="text-sm font-semibold">
+              Simulation Panel
+            </span>
+          </button>
 
-        {/* Global Infra (OIM) Toggle */}
-        <button
-          onClick={() => {
-            setShowOIM(!showOIM);
-            if (showOIM) setViewportGrid([]); // clear on turn off
-          }}
-          className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showOIM
+          {/* Global Infra (OIM) Toggle */}
+          <button
+            onClick={() => {
+              setShowOIM(!showOIM);
+              if (showOIM) setViewportGrid([]); // clear on turn off
+            }}
+            className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showOIM
               ? 'bg-emerald-100 dark:bg-emerald-500/20 border-emerald-300 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400'
               : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-            }`}
-        >
-          <Globe className={`w-4 h-4`} />
-          <span className="text-sm font-semibold">
-            Real Grid Vectors
-          </span>
-        </button>
-
-        {/* Fetch Vectors Button (Only shows if OIM is enabled) */}
-        {showOIM && (
-          <button
-            onClick={extractGridInViewport}
-            disabled={isExtractingGrid}
-            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white border-transparent shadow-lg rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+              }`}
           >
-            {isExtractingGrid ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+            <Globe className={`w-4 h-4`} />
             <span className="text-sm font-semibold">
-              {isExtractingGrid ? "Extracting..." : "Load in Viewport"}
+              Real Grid Vectors
             </span>
           </button>
-        )}
 
-        {/* Transmission Lines Toggle */}
-        <button
-          onClick={() => setShowTransmission(!showTransmission)}
-          className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showTransmission
+          {/* Fetch Vectors Button (Only shows if OIM is enabled) */}
+          {showOIM && (
+            <button
+              onClick={extractGridInViewport}
+              disabled={isExtractingGrid}
+              className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white border-transparent shadow-lg rounded-lg px-3 py-2 transition-colors disabled:opacity-50"
+            >
+              {isExtractingGrid ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
+              <span className="text-sm font-semibold">
+                {isExtractingGrid ? "Extracting..." : "Load in Viewport"}
+              </span>
+            </button>
+          )}
+
+          {/* Transmission Lines Toggle */}
+          <button
+            onClick={() => setShowTransmission(!showTransmission)}
+            className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showTransmission
               ? 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/50 text-amber-700 dark:text-amber-400'
               : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
-            }`}
-        >
-          <Zap className={`w-4 h-4 ${showTransmission ? 'fill-current' : ''}`} />
-          <span className="text-sm font-semibold">
-            Power Grid
-          </span>
-        </button>
-
-        {/* Base Map Dropdown */}
-        <div className="relative">
-          <button
-            onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-            className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              }`}
           >
-            <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-            <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
-              {activeStyle.name}
+            <Zap className={`w-4 h-4 ${showTransmission ? 'fill-current' : ''}`} />
+            <span className="text-sm font-semibold">
+              Power Grid
             </span>
-            <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
           </button>
 
-          {isDropdownOpen && (
-            <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
-              <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700/50 mb-1">
-                Map Layers
-              </div>
-              {MAP_STYLES.map((style) => (
-                <button
-                  key={style.id}
-                  onClick={() => {
-                    setActiveStyle(style);
-                    setIsDropdownOpen(false);
-                  }}
-                  className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between
-                    ${activeStyle.id === style.id
-                      ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold'
-                      : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
-                    }
-                  `}
-                >
-                  {style.name}
-                  {activeStyle.id === style.id && (
-                    <div className="w-2 h-2 rounded-full bg-indigo-500" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+          {/* Projects Toggle */}
+          <button
+            onClick={() => setShowProjects(!showProjects)}
+            className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showProjects
+              ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-300 dark:border-blue-500/50 text-blue-700 dark:text-blue-400'
+              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              }`}
+          >
+            <Target className={`w-4 h-4 ${showProjects ? 'fill-current' : ''}`} />
+            <span className="text-sm font-semibold">
+              Projects
+            </span>
+          </button>
 
-      {showWeatherSim && (
-        <WeatherSimulationPanel 
-          location={simLocation} 
-          onClose={() => setShowWeatherSim(false)} 
-        />
-      )}
+          {/* Base Map Dropdown */}
+          <div className="relative">
+            <button
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+            >
+              <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+                {activeStyle.name}
+              </span>
+              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+            </button>
+
+            {isDropdownOpen && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
+                <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700/50 mb-1">
+                  Map Layers
+                </div>
+                {MAP_STYLES.map((style) => (
+                  <button
+                    key={style.id}
+                    onClick={() => {
+                      setActiveStyle(style);
+                      setIsDropdownOpen(false);
+                    }}
+                    className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between
+                    ${activeStyle.id === style.id
+                        ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold'
+                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                      }
+                  `}
+                  >
+                    {style.name}
+                    {activeStyle.id === style.id && (
+                      <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {showWeatherSim && (
+          <WeatherSimulationPanel
+            location={simLocation}
+            onClose={() => setShowWeatherSim(false)}
+          />
+        )}
       </div>
 
       <div className="absolute inset-0 z-0 [&_.leaflet-container]:!font-sans">
@@ -981,16 +996,16 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                   )}
                   <Popup>
                     <div className="min-w-[220px] p-1">
-                      <h3 className="font-bold text-sm border-b pb-1 mb-2" style={{color}}>
+                      <h3 className="font-bold text-sm border-b pb-1 mb-2" style={{ color }}>
                         ⚡ {tags.name || 'Transmission Line'}
                       </h3>
                       <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br/><span className="font-bold">{vLabel}</span></div>}
-                        {tags.cables && <div><span className="font-semibold text-slate-400">Cables</span><br/><span className="font-bold">{tags.cables}</span></div>}
-                        {tags.circuits && <div><span className="font-semibold text-slate-400">Circuits</span><br/><span className="font-bold">{tags.circuits}</span></div>}
-                        {tags.wires && <div><span className="font-semibold text-slate-400">Wires</span><br/><span className="font-bold">{tags.wires}</span></div>}
-                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-slate-400">Operator</span><br/><span className="font-bold">{tags.operator}</span></div>}
-                        {tags.ref && <div className="col-span-2"><span className="font-semibold text-slate-400">Ref</span><br/><span className="font-bold">{tags.ref}</span></div>}
+                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br /><span className="font-bold">{vLabel}</span></div>}
+                        {tags.cables && <div><span className="font-semibold text-slate-400">Cables</span><br /><span className="font-bold">{tags.cables}</span></div>}
+                        {tags.circuits && <div><span className="font-semibold text-slate-400">Circuits</span><br /><span className="font-bold">{tags.circuits}</span></div>}
+                        {tags.wires && <div><span className="font-semibold text-slate-400">Wires</span><br /><span className="font-bold">{tags.wires}</span></div>}
+                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                        {tags.ref && <div className="col-span-2"><span className="font-semibold text-slate-400">Ref</span><br /><span className="font-bold">{tags.ref}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1012,10 +1027,10 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                         🏗️ {tags.name || 'Substation'}
                       </h3>
                       <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br/><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
-                        {tags.operator && <div><span className="font-semibold text-slate-400">Operator</span><br/><span className="font-bold">{tags.operator}</span></div>}
-                        {tags.substation && <div><span className="font-semibold text-slate-400">Type</span><br/><span className="font-bold">{tags.substation}</span></div>}
-                        {tags.ref && <div><span className="font-semibold text-slate-400">Ref</span><br/><span className="font-bold">{tags.ref}</span></div>}
+                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br /><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
+                        {tags.operator && <div><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                        {tags.substation && <div><span className="font-semibold text-slate-400">Type</span><br /><span className="font-bold">{tags.substation}</span></div>}
+                        {tags.ref && <div><span className="font-semibold text-slate-400">Ref</span><br /><span className="font-bold">{tags.ref}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1041,9 +1056,9 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                         🏗️ {tags.name || 'Substation'}
                       </h3>
                       <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br/><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
-                        {tags.operator && <div><span className="font-semibold text-slate-400">Operator</span><br/><span className="font-bold">{tags.operator}</span></div>}
-                        {tags.substation && <div><span className="font-semibold text-slate-400">Type</span><br/><span className="font-bold">{tags.substation}</span></div>}
+                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br /><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
+                        {tags.operator && <div><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                        {tags.substation && <div><span className="font-semibold text-slate-400">Type</span><br /><span className="font-bold">{tags.substation}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1063,13 +1078,13 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                 >
                   <Popup>
                     <div className="min-w-[200px] p-1">
-                      <h3 className="font-bold text-sm border-b pb-1 mb-2" style={{color: genType === 'solar' ? '#f59e0b' : genType === 'wind' ? '#0ea5e9' : '#8b5cf6'}}>
-                        {genType === 'solar' ? '☀️' : genType === 'wind' ? '🌀' : '⚡'} {tags.name || `${genType.charAt(0).toUpperCase()+genType.slice(1)} Generator`}
+                      <h3 className="font-bold text-sm border-b pb-1 mb-2" style={{ color: genType === 'solar' ? '#f59e0b' : genType === 'wind' ? '#0ea5e9' : '#8b5cf6' }}>
+                        {genType === 'solar' ? '☀️' : genType === 'wind' ? '🌀' : '⚡'} {tags.name || `${genType.charAt(0).toUpperCase() + genType.slice(1)} Generator`}
                       </h3>
                       <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags['generator:output:electricity'] && <div><span className="font-semibold text-slate-400">Output</span><br/><span className="font-bold">{tags['generator:output:electricity']}</span></div>}
-                        {tags['plant:output:electricity'] && <div><span className="font-semibold text-slate-400">Capacity</span><br/><span className="font-bold">{tags['plant:output:electricity']}</span></div>}
-                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-slate-400">Operator</span><br/><span className="font-bold">{tags.operator}</span></div>}
+                        {tags['generator:output:electricity'] && <div><span className="font-semibold text-slate-400">Output</span><br /><span className="font-bold">{tags['generator:output:electricity']}</span></div>}
+                        {tags['plant:output:electricity'] && <div><span className="font-semibold text-slate-400">Capacity</span><br /><span className="font-bold">{tags['plant:output:electricity']}</span></div>}
+                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1082,29 +1097,29 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
           {/* ─── OIM Legend Panel ─── */}
           {showOIM && viewportGrid.length > 0 && (
-            <div className="leaflet-bottom leaflet-left" style={{pointerEvents: 'auto'}}>
+            <div className="leaflet-bottom leaflet-left" style={{ pointerEvents: 'auto' }}>
               <div className="leaflet-control" style={{
                 background: 'rgba(255,255,255,0.95)', borderRadius: 8, padding: '10px 12px',
                 fontSize: 10, lineHeight: '18px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
                 border: '1px solid #e2e8f0', minWidth: 130, marginBottom: 20, marginLeft: 10,
               }}>
-                <div style={{fontWeight: 800, fontSize: 11, marginBottom: 6, color: '#1e293b'}}>Power Lines</div>
+                <div style={{ fontWeight: 800, fontSize: 11, marginBottom: 6, color: '#1e293b' }}>Power Lines</div>
                 {[
                   { label: '≥ 550 kV', color: '#00bcd4' },
                   { label: '≥ 310 kV', color: '#9c27b0' },
                   { label: '≥ 220 kV', color: '#e53935' },
                   { label: '≥ 132 kV', color: '#ff9800' },
-                  { label: '≥ 52 kV',  color: '#fdd835' },
+                  { label: '≥ 52 kV', color: '#fdd835' },
                 ].map(item => (
-                  <div key={item.label} style={{display: 'flex', alignItems: 'center', gap: 6}}>
-                    <div style={{width: 22, height: 4, borderRadius: 2, background: item.color}} />
-                    <span style={{color: '#475569'}}>{item.label}</span>
+                  <div key={item.label} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <div style={{ width: 22, height: 4, borderRadius: 2, background: item.color }} />
+                    <span style={{ color: '#475569' }}>{item.label}</span>
                   </div>
                 ))}
-                <div style={{fontWeight: 800, fontSize: 11, margin: '8px 0 4px', color: '#1e293b'}}>Infrastructure</div>
-                <div style={{display: 'flex', alignItems: 'center', gap: 6}}><span>🏗️</span><span style={{color: '#475569'}}>Substation</span></div>
-                <div style={{display: 'flex', alignItems: 'center', gap: 6}}><span>☀️</span><span style={{color: '#475569'}}>Solar Plant</span></div>
-                <div style={{display: 'flex', alignItems: 'center', gap: 6}}><span>🌀</span><span style={{color: '#475569'}}>Wind Turbine</span></div>
+                <div style={{ fontWeight: 800, fontSize: 11, margin: '8px 0 4px', color: '#1e293b' }}>Infrastructure</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span>🏗️</span><span style={{ color: '#475569' }}>Substation</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span>☀️</span><span style={{ color: '#475569' }}>Solar Plant</span></div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}><span>🌀</span><span style={{ color: '#475569' }}>Wind Turbine</span></div>
               </div>
             </div>
           )}
@@ -1114,7 +1129,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
             <Popup position={clickedLocation} eventHandlers={{ remove: () => setClickedLocation(null) }}>
               <div className="min-w-[250px] max-w-[350px] max-h-[300px] overflow-y-auto custom-scrollbar">
                 <h3 className="font-bold text-sm text-slate-800 mb-2 border-b pb-1">Real-World Infrastructure</h3>
-                
+
                 {overpassLoading ? (
                   <div className="flex flex-col items-center justify-center p-4 gap-2 text-slate-500">
                     <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
@@ -1135,7 +1150,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                           {item.tags.operator && <div><span className="font-medium text-slate-400">Operator:</span> {item.tags.operator}</div>}
                           {item.tags.line && <div className="col-span-2"><span className="font-medium text-slate-400">Line Route:</span> {item.tags.line}</div>}
                         </div>
-                        <button 
+                        <button
                           className="mt-2 w-full text-[10px] font-semibold bg-white border border-slate-300 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-slate-700 py-1.5 rounded transition-colors"
                           onClick={() => alert(`Bound ${item.tags.power} to project!`)}
                         >
@@ -1193,13 +1208,13 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
           {/* Guaranteed Permanent Markers for Curated Substations */}
           {SUBSTATION_COORDS.map((sub, index) => (
-            <Marker 
-              key={`static-${index}`} 
-              position={[sub.lat, sub.lng]} 
+            <Marker
+              key={`static-${index}`}
+              position={[sub.lat, sub.lng]}
               icon={currentZoom > 6 ? substationMarkerIcon : substationDotIcon}
               eventHandlers={{
                 click: () => {
-                  setSimLocation({lat: sub.lat, lng: sub.lng, name: sub.name});
+                  setSimLocation({ lat: sub.lat, lng: sub.lng, name: sub.name });
                   if (!showWeatherSim) setShowWeatherSim(true);
                 }
               }}
@@ -1218,17 +1233,17 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           ))}
 
           {/* Dynamic Markers from Backend Projects */}
-          {projects.map((project, index) => {
+          {showProjects && projects.map((project, index) => {
             const coords = getProjectCoordinates(project, index);
             const projName = project.name || project.projectId;
             return (
-              <Marker 
-                key={project.projectId || index} 
-                position={[coords[0], coords[1]]} 
+              <Marker
+                key={project.projectId || index}
+                position={[coords[0], coords[1]]}
                 icon={currentZoom > 6 ? projectMarkerIcon : projectDotIcon}
                 eventHandlers={{
                   click: () => {
-                    setSimLocation({lat: coords[0], lng: coords[1], name: projName});
+                    setSimLocation({ lat: coords[0], lng: coords[1], name: projName });
                     if (!showWeatherSim) setShowWeatherSim(true);
                   }
                 }}

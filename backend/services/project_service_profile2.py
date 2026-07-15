@@ -157,10 +157,13 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         # Exact activity tracking
         activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
         
-        if activity_info['Total'] > 0:
+        if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
+            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
+        elif activity_info['Total'] > 0:
             progress = activity_info['SumPct'] / activity_info['Total']
         else:
             progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
+
         # 2. SAP Data - WBS Only Mapping
         allocation_ratio = 1.0
 

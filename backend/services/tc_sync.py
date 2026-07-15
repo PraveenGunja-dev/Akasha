@@ -130,6 +130,27 @@ def sync_region_data(db: Session, token: str, region: str):
         
         # Targeted project API Call
         p_data = fetch_data(f"/api/{region.lower()}/project-details?project_id={pid}", token)
+
+        RAJ_EXTERNAL_MAP = {
+            "FY25-BANDHA_500MW": "Siyambar"
+        }
+
+        # Fallback for Rajasthan if project-details is missing
+        if not p_data and region.lower() == 'rajasthan' and pid in RAJ_EXTERNAL_MAP:
+            siyambar_key = RAJ_EXTERNAL_MAP[pid]
+            matched_lines = []
+            for global_e in topology["edges"].values():
+                proj_list = global_e.get("project", [])
+                if any(siyambar_key in p for p in proj_list):
+                    matched_lines.append(global_e)
+            
+            if matched_lines:
+                p_data = {
+                    "progress": {},
+                    "metadata": {"rows": []},
+                    "lines": matched_lines
+                }
+
         if not p_data:
             continue
             

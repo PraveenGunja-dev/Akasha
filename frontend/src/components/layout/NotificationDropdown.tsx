@@ -4,6 +4,7 @@ import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, Filter, Pla
 export default function NotificationDropdown({ notifications, onClose, onMarkAllRead, onSimulate }: any) {
   const [activeTab, setActiveTab] = useState('All');
   const [aiSuggestions, setAiSuggestions] = useState<{[key: number]: string}>({});
+  const [expandedProjects, setExpandedProjects] = useState<{[key: string]: boolean}>({});
   const [loadingSuggestion, setLoadingSuggestion] = useState<number | null>(null);
 
   const [tabNotifications, setTabNotifications] = useState<any[]>([]);
@@ -130,79 +131,148 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
           </div>
         ) : (
           <>
-            {tabNotifications.map((n: any) => (
+            {Object.entries(tabNotifications.reduce((acc: any, n: any) => {
+              if (!acc[n.project_name]) acc[n.project_name] = [];
+              acc[n.project_name].push(n);
+              return acc;
+            }, {})).map(([projectName, group]: [string, any]) => (
               <div 
-                key={n.id} 
-                className={`p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all group relative bg-white dark:bg-gray-900 ${n.is_read ? 'opacity-70' : ''}`}
+                key={projectName} 
+                className={`p-3 border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-all group relative bg-white dark:bg-gray-900 ${group.every((n: any) => n.is_read) ? 'opacity-70' : ''}`}
               >
-                {!n.is_read && (
+                {!group.every((n: any) => n.is_read) && (
                   <div className="absolute left-0 top-0 bottom-0 w-1 bg-sky-500 rounded-r-full" />
                 )}
                 
                 <div className="flex gap-3 relative z-10">
-                  <div className="mt-0.5 p-1.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm group-hover:scale-110 transition-transform h-fit">
-                    {getIcon(n.change_type)}
+                  <div className="mt-0.5 p-1.5 bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-lg shadow-sm h-fit">
+                    {getIcon(group[0].change_type)}
                   </div>
                   
                   <div className="flex-1 min-w-0 flex flex-col gap-1.5 mt-0.5">
                     <div className="flex justify-between items-start">
-                      <span className="font-bold text-[13px] text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 transition-colors tracking-tight">{n.project_name}</span>
+                      <span className="font-bold text-[13px] text-gray-900 dark:text-white truncate pr-2 group-hover:text-sky-600 transition-colors tracking-tight">{projectName}</span>
                       <span className="text-[9px] font-semibold text-gray-500 whitespace-nowrap bg-gray-100 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 px-1.5 py-0.5 rounded shrink-0 shadow-sm mt-0.5">
-                        {new Date(n.created_at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+                        {group.length} {group.length === 1 ? 'Message' : 'Messages'}
                       </span>
                     </div>
 
-                    <div className="flex items-center flex-wrap gap-1.5">
-                      {n.block && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-gray-400 border border-sky-100 dark:border-sky-500/20 shadow-sm">
-                          {n.block}
-                        </span>
-                      )}
-                      {n.activity_name && (
-                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 truncate max-w-full shadow-sm">
-                          {n.block ? n.activity_name.replace(new RegExp(`^${n.block}\\s*-?\\s*`, 'i'), '').trim() || n.activity_name : n.activity_name}
-                        </span>
-                      )}
-                    </div>
+                    <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/50 mt-0.5 shadow-sm space-y-2">
+                      {(expandedProjects[projectName] ? group : group.slice(0, 2)).map((n: any) => (
+                        <div key={n.id} className="border-b border-gray-200/50 dark:border-gray-700/50 pb-2 last:border-0 last:pb-0">
+                          <div className="flex items-center flex-wrap gap-1.5 mb-1">
+                            {n.block && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-gray-400 border border-sky-100 dark:border-sky-500/20 shadow-sm">
+                                {n.block}
+                              </span>
+                            )}
+                            {n.activity_name && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 border border-gray-200 dark:border-gray-700 truncate max-w-full shadow-sm">
+                                {n.block ? n.activity_name.replace(new RegExp(`^${n.block}\\s*-?\\s*`, 'i'), '').trim() || n.activity_name : n.activity_name}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] text-gray-700 dark:text-gray-300 leading-snug font-medium line-clamp-2">
+                            {n.message?.replace(/^🚨\s*DELAY WARNING\s*(\(.*?\))?:\s*/i, '').replace(new RegExp(`'${n.block}'\\s*`, 'i'), '').replace(new RegExp(`${n.block}\\s*`, 'i'), '').trim()}
+                          </p>
+                          
+                          {/* Expanded Actions for Individual Notifications */}
+                          {expandedProjects[projectName] && (n.change_type?.includes('Delay') || n.message?.toLowerCase().includes('delay') || n.change_type?.includes('Critical')) && (
+                            <div className="mt-2 flex flex-col gap-1.5">
+                              <div className="flex gap-1.5">
+                                {onSimulate && (
+                                  <button 
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      onSimulate(projectName, n);
+                                    }}
+                                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold text-[10px] uppercase tracking-wider border border-sky-200 dark:border-sky-500/20 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors shadow-sm"
+                                  >
+                                    <Play className="w-3 h-3" /> Simulate
+                                  </button>
+                                )}
+                                <button 
+                                  onClick={(e) => fetchAISuggestion(e, n)}
+                                  disabled={loadingSuggestion === n.id}
+                                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[10px] uppercase tracking-wider border border-purple-200 dark:border-purple-500/20 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors shadow-sm disabled:opacity-50"
+                                >
+                                  <Sparkles className="w-3 h-3" /> 
+                                  {loadingSuggestion === n.id ? 'Thinking...' : 'AI Suggestion'}
+                                </button>
+                              </div>
 
-                    <div className="p-2 rounded-lg bg-gray-50 dark:bg-gray-800/80 border border-gray-100 dark:border-gray-700/50 mt-0.5 shadow-sm">
-                      <p className="text-[11.5px] text-gray-700 dark:text-gray-300 leading-snug font-medium line-clamp-3">
-                        {n.message?.replace(/^🚨\s*DELAY WARNING\s*(\(.*?\))?:\s*/i, '').replace(new RegExp(`'${n.block}'\\s*`, 'i'), '').replace(new RegExp(`${n.block}\\s*`, 'i'), '').trim()}
-                      </p>
+                              {aiSuggestions[n.id] && (
+                                <div className="p-2 mt-0.5 rounded-lg bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 relative overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
+                                  <div className="flex gap-1.5 items-start">
+                                    <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
+                                    <p className="text-[11px] text-purple-900 dark:text-purple-100 font-medium leading-snug">
+                                      {aiSuggestions[n.id]}
+                                    </p>
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {!expandedProjects[projectName] && group.length > 2 && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedProjects(prev => ({ ...prev, [projectName]: true }));
+                          }}
+                          className="text-[10px] text-sky-500 hover:text-sky-600 font-semibold pt-1 text-left w-full transition-colors"
+                        >
+                          + {group.length - 2} more notifications
+                        </button>
+                      )}
+                      {expandedProjects[projectName] && group.length > 2 && (
+                        <button 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setExpandedProjects(prev => ({ ...prev, [projectName]: false }));
+                          }}
+                          className="text-[10px] text-gray-500 hover:text-red-500 font-semibold pt-1 flex justify-between w-full transition-colors"
+                        >
+                          <span>Show less</span>
+                          <span>Close</span>
+                        </button>
+                      )}
                     </div>
                     
-                    {/* Actions & AI Suggestions */}
-                    {(n.change_type?.includes('Delay') || n.message?.toLowerCase().includes('delay') || n.change_type?.includes('Critical')) && (
+                    {/* Actions & AI Suggestions (Grouped, only when collapsed) */}
+                    {!expandedProjects[projectName] && group.some((n: any) => n.change_type?.includes('Delay') || n.message?.toLowerCase().includes('delay') || n.change_type?.includes('Critical')) && (
                       <div className="mt-1 flex flex-col gap-1.5">
                         <div className="flex gap-1.5">
                           {onSimulate && (
                             <button 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                onSimulate(n.project_name, n);
+                                onSimulate(projectName, group[0]);
                               }}
                               className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold text-[10px] uppercase tracking-wider border border-sky-200 dark:border-sky-500/20 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors shadow-sm"
                             >
-                              <Play className="w-3 h-3" /> Simulate
+                              <Play className="w-3 h-3" /> Simulate Project
                             </button>
                           )}
                           <button 
-                            onClick={(e) => fetchAISuggestion(e, n)}
-                            disabled={loadingSuggestion === n.id}
+                            onClick={(e) => fetchAISuggestion(e, group[0])}
+                            disabled={loadingSuggestion === group[0].id}
                             className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[10px] uppercase tracking-wider border border-purple-200 dark:border-purple-500/20 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors shadow-sm disabled:opacity-50"
                           >
                             <Sparkles className="w-3 h-3" /> 
-                            {loadingSuggestion === n.id ? 'Thinking...' : 'AI Suggestion'}
+                            {loadingSuggestion === group[0].id ? 'Thinking...' : 'AI Suggestion'}
                           </button>
                         </div>
 
-                        {aiSuggestions[n.id] && (
+                        {aiSuggestions[group[0].id] && (
                           <div className="p-2 mt-0.5 rounded-lg bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 relative overflow-hidden">
                             <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
                             <div className="flex gap-1.5 items-start">
                               <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
                               <p className="text-[11px] text-purple-900 dark:text-purple-100 font-medium leading-snug">
-                                {aiSuggestions[n.id]}
+                                {aiSuggestions[group[0].id]}
                               </p>
                             </div>
                           </div>

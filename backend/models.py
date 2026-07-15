@@ -65,6 +65,10 @@ class P6Project(Base):
     planned_duration = Column(Float, nullable=True)  # SummaryPlannedDuration
     actual_duration = Column(Float, nullable=True)  # SummaryActualDuration
     remaining_duration = Column(Float, nullable=True)  # SummaryRemainingDuration
+    
+    # Progress by Units
+    actual_non_labor_units = Column(Float, nullable=True)  # SummaryActualNonLaborUnits
+    budget_labor_units = Column(Float, nullable=True)  # SummaryBudgetAtCompletionByLaborUnits
 
     # Activity Counts
     activity_count = Column(Integer, nullable=True)  # SummaryActivityCount

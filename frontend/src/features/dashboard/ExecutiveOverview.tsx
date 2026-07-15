@@ -73,6 +73,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   const delayedProjects = summary.delayed_projects || 0;
   const onTrackProjects = summary.on_track_projects || 0;
   const totalMW = summary.total_mw || 0;
+  const achievedMW = summary.achieved_mw || 0;
 
   const { totalPOValue, avgProgress, poDeliveredCr } = useMemo(() => {
     let poVal = 0;
@@ -262,7 +263,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3"
       >
         <KPICard title="Total Projects" value={totalProjects} trend="up" trendValue={onTrackProjects} trendLabel="On Track" icon={Activity} color="blue" onClick={() => setActiveKpiModal('Total Projects')} />
-        <KPICard title="Portfolio Capacity" value={`${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
+        <KPICard title="Portfolio Capacity" value={`${Math.round(achievedMW)} / ${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
         <KPICard title="Delayed Projects" value={delayedProjects} icon={AlertTriangle} color="red" onClick={() => setActiveKpiModal('Delayed Projects')} />
         <KPICard title="Remaining PO Value" value={`₹${Math.max(0, remainingPOValue).toFixed(1)} Cr`} subtext="Pending Delivery" icon={DollarSign} color="amber" onClick={() => setActiveKpiModal('Remaining PO Value')} />
         <KPICard title="Total PO Value" value={`₹${(totalPOValue / 10000000).toFixed(1)} Cr`} icon={DollarSign} color="emerald" onClick={() => setActiveKpiModal('Total PO Value')} />
