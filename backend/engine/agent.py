@@ -55,7 +55,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "portfolio_get_riskiest_projects",
-            "description": "Get a list of the riskiest projects in the entire portfolio based on schedule and float.",
+            "description": "Get a list of the riskiest projects in the entire portfolio. Returns a dictionary containing the total number of projects in the portfolio and the requested top N riskiest projects.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -170,7 +170,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "p6_list_all_projects",
-            "description": "Get a list of all active projects in the portfolio.",
+            "description": "Get the total count of all active projects in the portfolio and their core metrics. Returns a dictionary with 'total_projects' and 'projects' list.",
             "parameters": {
                 "type": "object",
                 "properties": {}
@@ -588,7 +588,9 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
                 "6. Write like a senior analyst speaking to the CEO — direct, factual, and insightful.\n"
                 "7. When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules.\n"
                 "8. ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
-                "9. All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours."
+                "9. All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours.\n"
+                "10. NEVER hardcode answers, guess, or hallucinate data. You MUST always use your tools to query the real database first before answering any project or data-related question.\n"
+                "11. You are a powerful analytical engine. Do not just regurgitate data—provide analytics, summarize trends, identify risks, and calculate aggregations when the user asks for insights or analytics."
             )
         }
     ]

@@ -181,7 +181,7 @@ def p6_get_activity_status_breakdown(db: Session, project_id: str) -> dict:
     }
 
 
-def p6_list_all_projects(db: Session) -> list[dict]:
+def p6_list_all_projects(db: Session) -> dict:
     """List all P6 projects with core metrics.
     
     Use when: user asks about portfolio overview, all projects, or doesn't specify a project.
@@ -196,6 +196,8 @@ def p6_list_all_projects(db: Session) -> list[dict]:
     for p in projects:
         m = mapping_by_pid.get(p.project_id)
         display_name = (m.project_name_from_p6 or m.project or p.name) if m else p.name
+        if "demo" in display_name.lower():
+            continue
         result.append({
             "project_id": p.project_id,
             "project_name": display_name,
@@ -210,7 +212,10 @@ def p6_list_all_projects(db: Session) -> list[dict]:
             "last_synced_at": p.last_synced_at.isoformat() if p.last_synced_at else None,
             "_source_table": "p6_project",
         })
-    return result
+    return {
+        "total_projects": len(result),
+        "projects": result
+    }
 
 
 def p6_get_wbs_tree(db: Session, project_id: str) -> list[dict]:

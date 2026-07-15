@@ -22,6 +22,12 @@ def portfolio_get_project_list(db: Session) -> list[dict]:
     Use when: need to resolve a project name to an ID, or list available projects.
     """
     mappings = db.query(models.ProjectMapping).all()
+    filtered_mappings = []
+    for m in mappings:
+        name_check = m.project_name_from_p6 or m.project or ""
+        if "demo" not in name_check.lower():
+            filtered_mappings.append(m)
+            
     return [{
         "project_id": m.project_id,
         "project_name": m.project,
@@ -31,7 +37,7 @@ def portfolio_get_project_list(db: Session) -> list[dict]:
         "capacity_mwac": m.capacity_mwac,
         "cluster": m.cluster,
         "subcluster": m.subcluster,
-    } for m in mappings]
+    } for m in filtered_mappings]
 
 
 def portfolio_get_project_360(db: Session, project_id: str) -> dict:
@@ -101,12 +107,13 @@ def portfolio_get_project_360(db: Session, project_id: str) -> dict:
     }
 
 
-def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> list[dict]:
+def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> dict:
     """Get the top-N riskiest projects across the portfolio.
     
     Use when: user asks about which projects are most at risk, portfolio risk overview.
     """
-    projects = p6_list_all_projects(db)
+    all_projects_data = p6_list_all_projects(db)
+    projects = all_projects_data.get("projects", [])
     
     # Score by SPI deviation + negative float
     scored = []
@@ -118,7 +125,11 @@ def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> list[dict]:
         scored.append({**p, "risk_score": round(risk_score, 2)})
     
     scored.sort(key=lambda x: x["risk_score"], reverse=True)
-    return scored[:top_n]
+    return {
+        "total_portfolio_projects": len(projects),
+        "showing_top_n": top_n,
+        "riskiest_projects": scored[:top_n]
+    }
 
 
 def get_project_display_name(db: Session, project_id: str) -> str:
