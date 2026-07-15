@@ -121,10 +121,33 @@ def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> list[dict]:
     return scored[:top_n]
 
 
-def portfolio_resolve_project_id(db: Session, name_or_id: str) -> str | None:
-    """Resolve a project name, P6 name, or SPV name to a project_id.
+def get_project_display_name(db: Session, project_id: str) -> str:
+    """Get the human-readable display name for a project_id.
+    
+    Returns the best available name: project_name_from_p6 > project > project_id.
+    All tools should use this to include project_name in their responses.
+    """
+    if not project_id:
+        return "Unknown"
+    mapping = db.query(models.ProjectMapping).filter(
+        models.ProjectMapping.project_id == project_id
+    ).first()
+    if mapping:
+        return mapping.project_name_from_p6 or mapping.project or project_id
+    # Fallback: check P6 project table
+    p6 = db.query(models.P6Project).filter(
+        models.P6Project.project_id == project_id
+    ).first()
+    if p6 and p6.name:
+        return p6.name
+    return project_id
+
+
+def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
+    """Resolve a fuzzy project name, SPV name, or P6 name to the canonical project_id AND project_name.
     
     Use when: user mentions a project by name and we need the canonical ID.
+    Returns: dict with project_id, project_name, p6_name — or None if not found.
     Tries: project_id → project → project_name_from_p6 → P6 name → fuzzy match.
     """
     if not name_or_id:
@@ -132,19 +155,29 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> str | None:
     
     name_or_id = name_or_id.strip()
     
+    def _build_result(mapping):
+        return {
+            "project_id": mapping.project_id,
+            "project_name": mapping.project_name_from_p6 or mapping.project or mapping.project_id,
+            "p6_name": mapping.project_name_from_p6 or "",
+            "spv_name": mapping.spv_name or "",
+            "category": mapping.category or "",
+            "capacity_mwac": mapping.capacity_mwac,
+        }
+    
     # Direct project_id match
     m = db.query(models.ProjectMapping).filter(
         models.ProjectMapping.project_id == name_or_id
     ).first()
     if m:
-        return m.project_id
+        return _build_result(m)
     
     # Match against project_mapping.project
     m = db.query(models.ProjectMapping).filter(
         models.ProjectMapping.project == name_or_id
     ).first()
     if m and m.project_id:
-        return m.project_id
+        return _build_result(m)
     
     # Match against P6 project name
     p6 = db.query(models.P6Project).filter(
@@ -155,14 +188,14 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> str | None:
             models.ProjectMapping.project_id == p6.project_id
         ).first()
         if m:
-            return m.project_id
+            return _build_result(m)
     
     # Match project_name_from_p6
     m = db.query(models.ProjectMapping).filter(
         models.ProjectMapping.project_name_from_p6 == name_or_id
     ).first()
     if m and m.project_id:
-        return m.project_id
+        return _build_result(m)
     
     # Case-insensitive fuzzy search (contains)
     name_lower = name_or_id.lower()
@@ -175,7 +208,7 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> str | None:
         ]
         for candidate in candidates:
             if name_lower in candidate.lower() or candidate.lower() in name_lower:
-                return mapping.project_id
+                return _build_result(mapping)
     return None
 
 def portfolio_get_notifications(db: Session, limit: int = 10, category: str = "All") -> list[dict]:

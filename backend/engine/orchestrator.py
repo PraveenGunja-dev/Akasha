@@ -215,8 +215,9 @@ class ChatOrchestrator:
         # Resolve project names to IDs
         resolved_pids = []
         for p in intent.projects:
-            pid = portfolio_resolve_project_id(db, p)
-            if pid:
+            result = portfolio_resolve_project_id(db, p)
+            if result:
+                pid = result["project_id"] if isinstance(result, dict) else result
                 resolved_pids.append(pid)
         
         if not resolved_pids:

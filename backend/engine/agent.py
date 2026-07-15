@@ -38,7 +38,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "portfolio_resolve_project_id",
-            "description": "Resolve a fuzzy project name, SPV name, or P6 name to the canonical project_id. ALWAYS use this first if you only have a name.",
+            "description": "Resolve a fuzzy project name, SPV name, or P6 name to the canonical project_id AND project_name. ALWAYS use this first if you only have a name. Returns project_id, project_name, p6_name, spv_name, category, and capacity.",
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -408,7 +408,7 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
     try:
         if name == "portfolio_resolve_project_id":
             res = portfolio_resolve_project_id(db, kwargs.get("name", ""))
-            return json.dumps({"resolved_project_id": res})
+            return json.dumps(res, default=str)
         
         elif name == "portfolio_get_riskiest_projects":
             res = portfolio_get_riskiest_projects(db, kwargs.get("top_n", 5))
@@ -574,7 +574,7 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
             "content": (
                 "You are Akasha AI Copilot, a Deep Analysis Agent for EPC projects. "
                 "You have access to tools querying P6 (Schedule), SAP (Procurement), TC (Transmission), and Notifications. "
-                "If a user asks about a project by name, ALWAYS call `portfolio_resolve_project_id` first to get the canonical ID. "
+                "If a user asks about a project by name, ALWAYS call `portfolio_resolve_project_id` first to get the canonical ID and project name. "
                 "If a user asks about alerts or notifications, call `portfolio_get_notifications`. "
                 "Use the tools step-by-step to gather the data you need to answer the user's question. "
                 "Once you have enough data, provide the EXACT answer the user asked for.\n"
@@ -586,7 +586,9 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
                 "4. Use **bold** for key numbers/metrics. Use markdown tables when comparing multiple items.\n"
                 "5. Do NOT add disclaimers or filler like 'Based on the provided data...' or 'Let me analyze...'.\n"
                 "6. Write like a senior analyst speaking to the CEO — direct, factual, and insightful.\n"
-                "7. When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules."
+                "7. When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules.\n"
+                "8. ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
+                "9. All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours."
             )
         }
     ]
@@ -679,7 +681,7 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
             "content": (
                 "You are Akasha AI Copilot, a Deep Analysis Agent for EPC projects. "
                 "You have access to tools querying P6 (Schedule), SAP (Procurement), TC (Transmission), and Notifications. "
-                "If a user asks about a project by name, ALWAYS call `portfolio_resolve_project_id` first to get the canonical ID. "
+                "If a user asks about a project by name, ALWAYS call `portfolio_resolve_project_id` first to get the canonical ID and project name. "
                 "If a user asks about alerts or notifications, call `portfolio_get_notifications`. "
                 "Use the tools step-by-step to gather the data you need to answer the user's question. "
                 "Once you have enough data, provide a comprehensive, analytical final answer to the user in markdown. "
@@ -690,7 +692,9 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
                 "- AVOID all AI clichés (e.g., \"It is important to note,\" \"Furthermore,\" \"Delve,\" \"In conclusion\", \"Based on the provided data\").\n"
                 "- Get straight to the point. Give the exact numbers requested.\n"
                 "- Use bold text to highlight key metrics or variances to make it easy for humans to read.\n"
-                "- When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules."
+                "- When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules.\n"
+                "- ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
+                "- All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours."
             )
         }
     ]

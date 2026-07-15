@@ -14,6 +14,10 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
+def _lazy_display_name(db: Session, project_id: str) -> str:
+    from engine.tools.portfolio_tools import get_project_display_name
+    return get_project_display_name(db, project_id)
+
 
 def sim_get_activity_productivity(db: Session, project_id: str, activity_keyword: str) -> dict:
     """
@@ -57,6 +61,7 @@ def sim_get_activity_productivity(db: Session, project_id: str, activity_keyword
     
     return {
         "project_id": project_id,
+        "project_name": _lazy_display_name(db, project_id),
         "activity": activity_keyword,
         "blocks_analyzed": len(completed_acts),
         "avg_days_per_block": round(avg_days_per_block, 2),
@@ -101,6 +106,7 @@ def sim_project_duration_what_if(db: Session, project_id: str, activity_keyword:
     
     return {
         "project_id": project_id,
+        "project_name": _lazy_display_name(db, project_id),
         "activity": activity_keyword,
         "remaining_blocks": remaining_count,
         "current_productivity": {
@@ -158,6 +164,7 @@ def sim_monsoon_impact(db: Session, project_id: str, activity_keyword: str) -> d
     
     return {
         "project_id": project_id,
+        "project_name": _lazy_display_name(db, project_id),
         "activity": activity_keyword,
         "historical_data_points": len(monsoon_acts),
         "monsoon_slowdown_multiplier": round(slowdown_ratio, 2),
@@ -175,6 +182,7 @@ def sim_material_bottlenecks(db: Session, project_id: str, activity_keyword: str
     # Here we provide a structural stub that an agent can reason over.
     return {
         "project_id": project_id,
+        "project_name": _lazy_display_name(db, project_id),
         "activity": activity_keyword,
         "status": "Simulation running",
         "bottleneck_risk": "High",

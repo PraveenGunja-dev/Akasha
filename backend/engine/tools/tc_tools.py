@@ -58,8 +58,6 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
     ).group_by(models.TcNetworkEdge.edge_id).subquery()
     
     conditions = [models.TcNetworkEdge.mapping_id == mapping.id]
-    if mapping.p6_id:
-        conditions.append(models.TcNetworkEdge.projects.ilike(f"%{mapping.p6_id}%"))
     if mapping.project_id:
         conditions.append(models.TcNetworkEdge.projects.ilike(f"%{mapping.project_id}%"))
         
@@ -117,8 +115,12 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
     
     latest_upload = max((e.upload_time for e in edges if e.upload_time), default=None)
     
+    from engine.tools.portfolio_tools import get_project_display_name
+    project_name = get_project_display_name(db, project_id)
+    
     return {
         "project_id": project_id,
+        "project_name": project_name,
         "has_data": True,
         "total_lines": len(edges),
         "completed": completed,
@@ -153,11 +155,19 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60, limit: int = 15)
     ).all()
     
     result = []
+    # Build mapping lookup for project names
+    all_mappings = db.query(models.ProjectMapping).all()
+    mapping_by_pid = {m.project_id: m for m in all_mappings}
+    
     for e, mapped_project_id in edges:
         f_pct = _parse_pct(e.foundation)
         e_pct = _parse_pct(e.erection)
         s_pct = _parse_pct(e.stringing)
         days_delayed = _calc_delay_days(e.expected_date, e.scd)
+        
+        # Resolve project name
+        m = mapping_by_pid.get(mapped_project_id) if mapped_project_id else None
+        proj_name = (m.project_name_from_p6 or m.project or mapped_project_id) if m else (mapped_project_id or "Unknown")
         
         result.append({
             "edge_id": e.edge_id,
@@ -168,6 +178,7 @@ def tc_get_at_risk_lines(db: Session, days_threshold: int = 60, limit: int = 15)
             "contractor": e.contractor,
             "projects": e.projects,
             "mapped_project_id": mapped_project_id,
+            "project_name": proj_name,
             "voltage": e.voltage,
             "length": e.length,
             "foundation_pct": f_pct,
