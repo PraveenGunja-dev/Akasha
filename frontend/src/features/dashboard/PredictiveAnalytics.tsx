@@ -60,19 +60,19 @@ export default function PredictiveAnalytics({ p6Data }: any) {
          </div>
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">90-Day Forecast</h3>
-           <p className="text-4xl font-light text-red-500">{Math.round(avgVariance * 1.9)} Days</p>
+           <p className="text-4xl font-light text-destructive">{Math.round(avgVariance * 1.9)} Days</p>
          </div>
-         <div className="bg-card border border-emerald-500/30 rounded-2xl p-6 relative shadow-sm">
+         <div className="bg-card border border-success/20 rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-2">
-             <Cpu className="w-4 h-4 text-emerald-500" /> AI Confidence
+             <Cpu className="w-4 h-4 text-success" /> AI Confidence
            </h3>
-           <p className="text-4xl font-light text-emerald-500">87%</p>
+           <p className="text-4xl font-light text-success">87%</p>
          </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-amber-500/10 rounded-lg"><TrendingUp className="w-5 h-5 text-amber-500" /></div>
+          <div className="p-2 bg-warning/100/10 rounded-lg"><TrendingUp className="w-5 h-5 text-warning" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Schedule Slippage Forecast (90 Days)</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4 border-l-2 border-amber-500 pl-3">

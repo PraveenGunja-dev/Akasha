@@ -302,10 +302,10 @@ export default function CEODashboard() {
                     
                     {/* Placeholders for unbuilt sections */}
                     {!implementedModules.includes(activeTab) && (
-                      <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-slate-900/50">
+                      <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-border dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-gray-900/50">
                         <div className="text-center">
-                          <h2 className="text-2xl font-semibold text-slate-400 mb-2">{activeTab.replace('_', ' ')} Module</h2>
-                          <p className="text-sm text-slate-500">This module is currently in development.</p>
+                          <h2 className="text-2xl font-semibold text-muted-foreground mb-2">{activeTab.replace('_', ' ')} Module</h2>
+                          <p className="text-sm text-muted-foreground">This module is currently in development.</p>
                         </div>
                       </div>
                     )}
@@ -333,10 +333,10 @@ export default function CEODashboard() {
       {/* 5. Notification Simulation Modal */}
       {modalSimulationContext && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 md:p-8">
-          <div className="bg-[var(--background)] w-full h-full max-w-[1400px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-gray-200 dark:border-gray-800">
+          <div className="bg-[var(--background)] w-full h-full max-w-[1400px] max-h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col relative border border-border dark:border-border">
             <button 
               onClick={() => setModalSimulationContext(null)}
-              className="absolute top-4 right-4 z-[110] p-2 bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-gray-500"
+              className="absolute top-4 right-4 z-[110] p-2 bg-muted dark:bg-card hover:bg-gray-200 dark:hover:bg-gray-700 rounded-full transition-colors text-muted-foreground"
             >
               <X className="w-5 h-5" />
             </button>

@@ -2,9 +2,9 @@ import React, { useState, useMemo } from 'react';
 import { Layers, ChevronDown, ChevronRight, CheckCircle2, Clock, PlayCircle, Save, X, Edit2, Loader2, AlertTriangle } from 'lucide-react';
 
 const statusColors: any = {
-  'Completed': 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20',
-  'In Progress': 'bg-blue-500/10 text-blue-500 border-blue-500/20',
-  'Not Started': 'bg-slate-500/10 text-slate-500 border-slate-500/20',
+  'Completed': 'bg-success/100/10 text-success border-success/20',
+  'In Progress': 'bg-primary/100/10 text-primary border-primary/20',
+  'Not Started': 'bg-muted0/10 text-muted-foreground border-slate-500/20',
 };
 
 const getStatusIcon = (status: string) => {
@@ -97,14 +97,14 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
   const isDelayed = false; 
 
   return (
-    <div className={`flex flex-col border-b border-border/30 hover:bg-muted/30 transition-colors ${isDelayed ? 'bg-red-500/5' : ''}`}>
+    <div className={`flex flex-col border-b border-border/30 hover:bg-muted transition-colors ${isDelayed ? 'bg-destructive/100/5' : ''}`}>
       {/* View Mode Row / Edit Mode Header Row */}
       <div className="grid grid-cols-12 gap-4 py-2.5 px-4 items-center">
         <div className="col-span-5 flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-foreground">{act.name}</span>
             {isDelayed && (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-red-500 bg-red-500/10 px-1.5 py-0.5 rounded">
+              <span className="flex items-center gap-1 text-[10px] font-bold text-destructive bg-destructive/100/10 px-1.5 py-0.5 rounded">
                 <AlertTriangle className="w-3 h-3" /> DELAYED
               </span>
             )}
@@ -120,10 +120,10 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
         {isEditing ? (
            <div className="col-span-7 flex justify-end gap-2 items-center">
               <span className="text-xs font-semibold text-primary mr-2">EDITING ACTIVITY</span>
-              <button className="flex items-center gap-1 bg-emerald-500/10 text-emerald-500 border border-emerald-500/20 px-3 py-1 rounded hover:bg-emerald-500/20 transition-colors text-xs font-semibold" onClick={handleSave} disabled={isSaving}>
+              <button className="flex items-center gap-1 bg-success/100/10 text-success border border-success/20 px-3 py-1 rounded hover:bg-success/100/20 transition-colors text-xs font-semibold" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} SAVE TO P6
               </button>
-              <button className="flex items-center gap-1 bg-muted border border-border px-3 py-1 rounded hover:bg-muted/80 transition-colors text-xs font-semibold text-muted-foreground" onClick={() => { setIsEditing(false); setError(null); }} disabled={isSaving}>
+              <button className="flex items-center gap-1 bg-muted border border-border px-3 py-1 rounded hover:bg-muted transition-colors text-xs font-semibold text-muted-foreground" onClick={() => { setIsEditing(false); setError(null); }} disabled={isSaving}>
                 <X className="w-3 h-3" /> CANCEL
               </button>
            </div>
@@ -153,7 +153,7 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
       {/* Expanded Edit Form */}
       {isEditing && (
         <div className="px-4 pb-4 pt-2 border-t border-border/20 bg-background/50 grid grid-cols-12 gap-6 relative">
-          {error && <div className="absolute top-0 left-0 right-0 bg-red-500/10 text-red-500 text-xs text-center py-1 font-semibold">{error}</div>}
+          {error && <div className="absolute top-0 left-0 right-0 bg-destructive/100/10 text-destructive text-xs text-center py-1 font-semibold">{error}</div>}
           
           <div className="col-span-12 md:col-span-5 grid grid-cols-2 gap-4">
             <div className="col-span-2">
@@ -210,8 +210,8 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
              <div className="flex flex-col gap-2">
                {/* Labor */}
                {labor.p6ObjectId ? (
-                 <div className="grid grid-cols-12 gap-2 items-center px-2 py-1 hover:bg-muted/30 rounded">
-                   <div className="col-span-4 text-xs text-foreground font-medium flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div> Labor</div>
+                 <div className="grid grid-cols-12 gap-2 items-center px-2 py-1 hover:bg-muted rounded">
+                   <div className="col-span-4 text-xs text-foreground font-medium flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-primary/100"></div> Labor</div>
                    <div className="col-span-4"><input type="number" step="0.1" value={editData.laborBudgetedUnits} onChange={(e) => setEditData({...editData, laborBudgetedUnits: e.target.value})} className="w-full text-xs bg-background border border-border rounded px-2 py-1 outline-none" /></div>
                    <div className="col-span-4"><input type="number" step="0.1" value={editData.laborActualUnits} onChange={(e) => setEditData({...editData, laborActualUnits: e.target.value})} className="w-full text-xs bg-background border border-border rounded px-2 py-1 outline-none" /></div>
                  </div>
@@ -219,8 +219,8 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
 
                {/* Material */}
                {material.p6ObjectId ? (
-                 <div className="grid grid-cols-12 gap-2 items-center px-2 py-1 hover:bg-muted/30 rounded">
-                   <div className="col-span-4 text-xs text-foreground font-medium flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-orange-500"></div> Material</div>
+                 <div className="grid grid-cols-12 gap-2 items-center px-2 py-1 hover:bg-muted rounded">
+                   <div className="col-span-4 text-xs text-foreground font-medium flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-warning/100"></div> Material</div>
                    <div className="col-span-4"><input type="number" step="0.1" value={editData.materialBudgetedUnits} onChange={(e) => setEditData({...editData, materialBudgetedUnits: e.target.value})} className="w-full text-xs bg-background border border-border rounded px-2 py-1 outline-none" /></div>
                    <div className="col-span-4"><input type="number" step="0.1" value={editData.materialActualUnits} onChange={(e) => setEditData({...editData, materialActualUnits: e.target.value})} className="w-full text-xs bg-background border border-border rounded px-2 py-1 outline-none" /></div>
                  </div>
@@ -241,11 +241,11 @@ const WBSNode = ({ node, level, onUpdateActivity }: any) => {
   return (
     <div className="border-l border-border/30 ml-4 pl-2 my-1">
       <div 
-        className="flex items-center gap-2 py-2 px-2 hover:bg-muted/30 cursor-pointer rounded transition-colors group"
+        className="flex items-center gap-2 py-2 px-2 hover:bg-muted cursor-pointer rounded transition-colors group"
         onClick={() => setIsExpanded(!isExpanded)}
       >
         {isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-primary" /> : <ChevronRight className="w-3.5 h-3.5 text-muted-foreground group-hover:text-primary" />}
-        <span className="text-[11px] font-mono font-bold text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded">{node.code}</span>
+        <span className="text-[11px] font-mono font-bold text-muted-foreground bg-muted px-1.5 py-0.5 rounded">{node.code}</span>
         <span className="text-sm font-semibold text-foreground/90">{node.name}</span>
         <span className="text-[10px] text-muted-foreground ml-auto bg-background border border-border px-1.5 rounded-full">
           {node.activities.length} acts
@@ -348,7 +348,7 @@ export const ProjectWBS = ({ p6Data }: { p6Data: any }) => {
           <Layers className="w-4 h-4 text-primary/70" /> P6 WBS Hierarchy
           <span className="text-[10px] font-mono text-muted-foreground ml-2 bg-muted px-2 py-0.5 rounded">{p6Data.allActivities.length}</span>
         </h3>
-        <div className="flex gap-1 bg-muted/40 border border-border rounded-lg p-0.5">
+        <div className="flex gap-1 bg-muted border border-border rounded-lg p-0.5">
           {statuses.map(s => (
             <button key={s} onClick={() => setFilter(s)}
               className={`px-3 py-1 text-[10px] font-bold uppercase tracking-wider rounded-md transition-all ${filter === s ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'

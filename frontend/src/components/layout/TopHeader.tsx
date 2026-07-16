@@ -73,13 +73,13 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
 
   return (
     <>
-    <header className="h-[73px] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 shadow-sm flex items-center justify-between px-4 shrink-0 z-40">
+    <header className="h-[73px] bg-card border-b border-border dark:border-border shadow-sm flex items-center justify-between px-4 shrink-0 z-40">
       
       {/* Left: hamburger (mobile) & Title */}
       <div className="flex items-center gap-3 flex-1">
         <button 
           onClick={onToggleSidebar}
-          className="md:hidden p-2 -ml-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors"
+          className="md:hidden p-2 -ml-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           aria-label="Menu"
         >
           <Menu className="w-5 h-5" />
@@ -102,12 +102,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         >
           <button 
             onClick={() => setIsPortfolioOpen(!isPortfolioOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
           >
             <span>{currentPortfolio === 'All Portfolios' ? 'All Portfolios' : currentPortfolio}</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${isPortfolioOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPortfolioOpen ? 'rotate-180' : ''}`} />
           </button>
-          <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-white dark:bg-gray-800 rounded-lg shadow-lg border border-gray-100 dark:border-gray-700 transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
+          <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-card rounded-lg shadow-lg border border-muted dark:border-gray-700 transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
             {['All Portfolios', 'Solar Khavda', 'Solar Rajasthan', 'Wind', 'BESS'].map(p => (
               <button
                 key={p}
@@ -122,7 +122,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
                   });
                   setIsPortfolioOpen(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPortfolio === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700/50'}`}
+                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPortfolio === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-gray-700/50'}`}
               >
                 {p}
               </button>
@@ -162,7 +162,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         <div className="relative" ref={notificationRef}>
             <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
             <Bell className="w-4 h-4" />
-            {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-red-500 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />}
+            {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-destructive/100 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />}
             </button>
             
             {showNotifications && (
@@ -186,12 +186,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
                <User className="w-3.5 h-3.5 text-muted-foreground" />
             </div>
           </div>
-          <div className="absolute right-0 top-full mt-1.5 w-44 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
-             <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
-               <p className="text-[12px] font-semibold text-gray-900 dark:text-white">{user?.display_name || 'User'}</p>
-               <p className="text-[11px] text-gray-400 truncate">{user?.role || 'executive'}</p>
+          <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border dark:border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
+             <div className="px-3 py-2 border-b border-muted dark:border-border">
+               <p className="text-[12px] font-semibold text-foreground dark:text-white">{user?.display_name || 'User'}</p>
+               <p className="text-[11px] text-muted-foreground truncate">{user?.role || 'executive'}</p>
              </div>
-             <button onClick={handleSignOut} className="w-full text-left px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center gap-1.5">
+             <button onClick={handleSignOut} className="w-full text-left px-3 py-1.5 text-[12px] text-destructive hover:bg-destructive/10 dark:hover:bg-red-900/10 transition-colors flex items-center gap-1.5">
                <LogOut className="w-3.5 h-3.5" />
                Sign Out
              </button>

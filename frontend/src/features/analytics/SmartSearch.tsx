@@ -29,10 +29,10 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
 
   const getIconAndColor = (type: string) => {
     switch(type) {
-      case 'Project': return { icon: Command, color: 'text-red-500', bg: 'bg-red-500/10' };
+      case 'Project': return { icon: Command, color: 'text-destructive', bg: 'bg-destructive/100/10' };
       case 'Purchase Order': return { icon: FileText, color: 'text-primary', bg: 'bg-primary/10' };
-      case 'Material Component': return { icon: Package, color: 'text-emerald-500', bg: 'bg-emerald-500/10' };
-      case 'Vendor': return { icon: Building2, color: 'text-amber-500', bg: 'bg-amber-500/10' };
+      case 'Material Component': return { icon: Package, color: 'text-success', bg: 'bg-success/100/10' };
+      case 'Vendor': return { icon: Building2, color: 'text-warning', bg: 'bg-warning/100/10' };
       default: return { icon: Database, color: 'text-muted-foreground', bg: 'bg-muted' };
     }
   };
@@ -122,7 +122,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
                  <div 
                     key={result.id} 
                     onClick={() => handleResultClick(result)}
-                    className="group bg-card/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 rounded-2xl p-5 flex gap-5 cursor-pointer transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] hover:-translate-y-1 relative overflow-hidden"
+                    className="group bg-white/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 rounded-2xl p-5 flex gap-5 cursor-pointer transition-all duration-300 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] hover:-translate-y-1 relative overflow-hidden"
                  >
                    <div className={`absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-500 pointer-events-none ${style.bg.replace('/10', '')}`} />
                    
@@ -132,7 +132,7 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
                    <div className="flex-1 relative z-10">
                      <div className="flex items-center gap-3 mb-1.5">
                        <h3 className="text-lg font-semibold text-foreground/90 group-hover:text-primary transition-colors">{result.title}</h3>
-                       <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-muted/80 text-muted-foreground border border-border">{result.type}</span>
+                       <span className="px-2.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-widest bg-muted text-muted-foreground border border-border">{result.type}</span>
                      </div>
                      <p className="text-[13px] text-muted-foreground leading-relaxed">{result.snippet}</p>
                    </div>

@@ -158,7 +158,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
     <div className="fixed top-[88px] right-6 w-[420px] h-[calc(100vh-110px)] flex flex-col bg-card border border-border z-[60] shadow-2xl rounded-2xl animate-in slide-in-from-right-8 duration-300 fade-in overflow-hidden">
       
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 bg-muted/20">
+      <div className="flex items-center justify-between px-3 py-2 border-b border-border/20 bg-muted">
         <button onClick={startNewChat} className="flex items-center gap-2 px-3 py-1.5 rounded-lg hover:bg-muted text-sm font-medium transition-colors text-foreground">
           <Plus className="w-4 h-4" /> New Chat
         </button>
@@ -196,7 +196,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
       </div>
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 custom-scrollbar overscroll-contain" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6 custom-scrollbar overscroll-contain" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
         {messages.length === 0 && (
           <div className="flex flex-col justify-end h-full px-2 pb-6 animate-fade-up">
             <h2 className="text-[28px] font-medium bg-gradient-to-r from-[#4285f4] via-[#ea4335] to-[#fbbc04] bg-clip-text text-transparent mb-1">Hello, {user?.display_name?.split(' ')[0] || 'there'}</h2>
@@ -209,7 +209,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
                 { icon: <Lightbulb className="w-4 h-4 text-[#fbbc04]" />, text: 'Help me think through a problem' }
               ].map((q, i) => (
                 <button key={i} onClick={() => sendMessage(q.text)}
-                  className="text-[13px] text-left px-4 py-3.5 rounded-2xl border border-border/30 bg-muted/40 hover:bg-muted/80 transition-colors text-foreground/90 flex items-center gap-3 w-max max-w-full group">
+                  className="text-[13px] text-left px-4 py-3.5 rounded-2xl border border-border/30 bg-muted hover:bg-muted transition-colors text-foreground/90 flex items-center gap-3 w-max max-w-full group">
                   {q.icon}
                   <span className="truncate">{q.text}</span>
                 </button>
@@ -222,7 +222,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
           <div key={idx} className={`flex ${msg.type === 'user' ? 'justify-end' : 'justify-start'} animate-fade-up`} style={{animationDelay: '50ms'}}>
             <div className={`max-w-[85%] px-5 py-3 rounded-3xl text-[14px] leading-relaxed ${
               msg.type === 'user'
-                ? 'bg-muted/60 text-foreground rounded-br-sm'
+                ? 'bg-muted text-foreground rounded-br-sm'
                 : 'bg-transparent text-foreground'
             }`}>
               {msg.type === 'bot' && (
@@ -259,7 +259,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
 
       {/* Input */}
       <div className="p-4 pt-0">
-        <div className="flex flex-col bg-muted/30 rounded-[24px] p-1.5 border border-border focus-within:bg-muted/60 focus-within:border-border transition-all">
+        <div className="flex flex-col bg-muted rounded-[24px] p-1.5 border border-border focus-within:bg-muted focus-within:border-border transition-all">
           <div className="flex items-center px-3 pt-2 pb-1">
             <input ref={inputRef} type="text" value={input}
               onChange={e => setInput(e.target.value)}

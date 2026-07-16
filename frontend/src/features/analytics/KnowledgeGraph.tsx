@@ -486,7 +486,7 @@ export default function KnowledgeGraph() {
               className="absolute right-4 top-4 bottom-4 w-80 bg-background/95 backdrop-blur-md border border-border rounded-xl shadow-2xl flex flex-col z-30 overflow-hidden"
               onWheel={(e) => e.stopPropagation()}
             >
-              <div className="p-4 border-b border-border bg-muted/20">
+              <div className="p-4 border-b border-border bg-muted">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-bold uppercase tracking-widest" style={{ color: selectedNode.color }}>
                     {['Enterprise','EPS Region','Project','Project','Vendor'][selectedNode.category]}
@@ -504,9 +504,9 @@ export default function KnowledgeGraph() {
                 {/* Health + Progress (Projects) */}
                 {selectedNode.health && (
                   <div className="p-4 border-b border-border space-y-3">
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${selectedNode.health === 'delayed' ? 'bg-red-500/10' : 'bg-emerald-500/10'}`}>
-                      <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${selectedNode.health === 'delayed' ? 'bg-red-500' : 'bg-emerald-500'}`} />
-                      <span className={`text-xs font-bold uppercase tracking-wider ${selectedNode.health === 'delayed' ? 'text-red-600 dark:text-red-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${selectedNode.health === 'delayed' ? 'bg-destructive/100/10' : 'bg-success/100/10'}`}>
+                      <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${selectedNode.health === 'delayed' ? 'bg-destructive/100' : 'bg-success/100'}`} />
+                      <span className={`text-xs font-bold uppercase tracking-wider ${selectedNode.health === 'delayed' ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'}`}>
                         {selectedNode.health === 'delayed' ? 'Delayed' : 'On Track'}
                       </span>
                     </div>
@@ -521,7 +521,7 @@ export default function KnowledgeGraph() {
                             initial={{ width: 0 }} 
                             animate={{ width: `${selectedNode.progress}%` }} 
                             transition={{ duration: 0.8 }} 
-                            className={`h-full rounded-full ${selectedNode.progress > 80 ? 'bg-emerald-500' : selectedNode.progress > 40 ? 'bg-blue-500' : 'bg-amber-500'}`} 
+                            className={`h-full rounded-full ${selectedNode.progress > 80 ? 'bg-success/100' : selectedNode.progress > 40 ? 'bg-primary/100' : 'bg-warning/100'}`} 
                           />
                         </div>
                       </div>
@@ -533,13 +533,13 @@ export default function KnowledgeGraph() {
                 {selectedNode.delayed !== undefined && (
                   <div className="p-4 border-b border-border">
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-red-500/10 rounded-xl p-3 text-center border border-red-500/20">
-                        <div className="text-xl font-bold text-red-600 dark:text-red-400">{selectedNode.delayed}</div>
-                        <div className="text-[9px] text-red-600/80 dark:text-red-400/80 uppercase font-bold mt-0.5">Delayed</div>
+                      <div className="bg-destructive/100/10 rounded-xl p-3 text-center border border-destructive/20">
+                        <div className="text-xl font-bold text-destructive dark:text-destructive">{selectedNode.delayed}</div>
+                        <div className="text-[9px] text-destructive/80 dark:text-destructive/80 uppercase font-bold mt-0.5">Delayed</div>
                       </div>
-                      <div className="bg-emerald-500/10 rounded-xl p-3 text-center border border-emerald-500/20">
-                        <div className="text-xl font-bold text-emerald-600 dark:text-emerald-400">{selectedNode.on_track}</div>
-                        <div className="text-[9px] text-emerald-600/80 dark:text-emerald-400/80 uppercase font-bold mt-0.5">On Track</div>
+                      <div className="bg-success/100/10 rounded-xl p-3 text-center border border-success/20">
+                        <div className="text-xl font-bold text-success dark:text-success">{selectedNode.on_track}</div>
+                        <div className="text-[9px] text-success/80 dark:text-success/80 uppercase font-bold mt-0.5">On Track</div>
                       </div>
                     </div>
                     
@@ -549,12 +549,12 @@ export default function KnowledgeGraph() {
                         <h4 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest mb-2">Projects in Region ({selectedNode.projects_list.length})</h4>
                         <div className="space-y-2">
                           {selectedNode.projects_list.map((proj: any) => (
-                            <div key={proj.id} className="p-2.5 bg-muted/30 rounded-lg border border-border flex justify-between items-center group hover:bg-muted/50 transition-colors">
+                            <div key={proj.id} className="p-2.5 bg-muted rounded-lg border border-border flex justify-between items-center group hover:bg-muted transition-colors">
                               <div className="flex-1 min-w-0 pr-3">
                                 <div className="text-xs font-semibold text-foreground truncate" title={proj.name}>{proj.name}</div>
                                 <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">{proj.capacity} MW</div>
                               </div>
-                              <div className={`px-2 py-1 rounded-md text-[10px] font-bold shrink-0 ${proj.health === 'delayed' ? 'bg-red-500/15 text-red-600 dark:text-red-400' : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400'}`}>
+                              <div className={`px-2 py-1 rounded-md text-[10px] font-bold shrink-0 ${proj.health === 'delayed' ? 'bg-destructive/100/15 text-destructive dark:text-destructive' : 'bg-success/100/15 text-success dark:text-success'}`}>
                                 {proj.progress}%
                               </div>
                             </div>
@@ -585,9 +585,9 @@ export default function KnowledgeGraph() {
                     <MiniCard label="Requirements" value={selectedNode.sap.requirement_count} sub={`${selectedNode.sap.requirement_mw} MW`} />
                     <MiniCard label="Inventory" value={selectedNode.sap.inventory_items} sub="items" />
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-amber-500/10 border border-amber-500/20 mb-3">
-                    <Truck className="w-4 h-4 text-amber-600 dark:text-amber-500" />
-                    <span className="text-xs text-amber-700 dark:text-amber-400 font-semibold">{selectedNode.sap.in_transit_count} in transit · {selectedNode.sap.in_transit_mw} MW</span>
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/100/10 border border-warning/20 mb-3">
+                    <Truck className="w-4 h-4 text-warning dark:text-warning" />
+                    <span className="text-xs text-warning dark:text-warning font-semibold">{selectedNode.sap.in_transit_count} in transit · {selectedNode.sap.in_transit_mw} MW</span>
                   </div>
                   {selectedNode.sap.top_vendors?.length > 0 && (
                     <div className="mt-2">
@@ -619,26 +619,26 @@ export default function KnowledgeGraph() {
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 my-2 mb-3">
-                      <div className="bg-muted/40 border border-border rounded flex flex-col items-center justify-center py-2">
+                      <div className="bg-muted border border-border rounded flex flex-col items-center justify-center py-2">
                         <span className="text-sm font-bold text-foreground">{selectedNode.tc.total_lines}</span>
                         <span className="text-[9px] uppercase font-bold text-muted-foreground">Total</span>
                       </div>
-                      <div className="bg-emerald-500/10 border border-emerald-500/20 rounded flex flex-col items-center justify-center py-2">
-                        <span className="text-sm font-bold text-emerald-600 dark:text-emerald-400">{selectedNode.tc.charged_lines}</span>
-                        <span className="text-[9px] uppercase font-bold text-emerald-700 dark:text-emerald-500">Charged</span>
+                      <div className="bg-success/100/10 border border-success/20 rounded flex flex-col items-center justify-center py-2">
+                        <span className="text-sm font-bold text-success dark:text-success">{selectedNode.tc.charged_lines}</span>
+                        <span className="text-[9px] uppercase font-bold text-success dark:text-success">Charged</span>
                       </div>
-                      <div className="bg-red-500/10 border border-red-500/20 rounded flex flex-col items-center justify-center py-2">
-                        <span className="text-sm font-bold text-red-600 dark:text-red-400">{selectedNode.tc.delayed_lines}</span>
-                        <span className="text-[9px] uppercase font-bold text-red-700 dark:text-red-500">Delayed</span>
+                      <div className="bg-destructive/100/10 border border-destructive/20 rounded flex flex-col items-center justify-center py-2">
+                        <span className="text-sm font-bold text-destructive dark:text-destructive">{selectedNode.tc.delayed_lines}</span>
+                        <span className="text-[9px] uppercase font-bold text-destructive dark:text-destructive">Delayed</span>
                       </div>
                     </div>
                     {selectedNode.tc.lines?.length > 0 && (
                       <div className="flex flex-col gap-1.5 max-h-[250px] overflow-y-auto scrollbar-thin">
                         {selectedNode.tc.lines.map((line: any, idx: number) => {
                           const norm = line.normalized_status || 'in_progress';
-                          const badgeColor = norm === 'charged' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' :
-                            norm === 'delayed' ? 'bg-red-500/10 text-red-600 dark:text-red-400' :
-                            'bg-blue-500/10 text-blue-600 dark:text-blue-400';
+                          const badgeColor = norm === 'charged' ? 'bg-success/100/10 text-success dark:text-success' :
+                            norm === 'delayed' ? 'bg-destructive/100/10 text-destructive dark:text-destructive' :
+                            'bg-primary/100/10 text-primary dark:text-primary';
                           const displayStatus = norm === 'charged' ? 'CHARGED' : norm === 'delayed' ? 'DELAYED' : 'IN PROGRESS';
 
                           return (
@@ -671,7 +671,7 @@ export default function KnowledgeGraph() {
       </div>
 
       {/* Legend */}
-      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2.5 bg-card/90 backdrop-blur-md px-4 py-3 rounded-lg border border-border shadow-sm">
+      <div className="absolute top-4 right-4 z-20 flex flex-col gap-2.5 bg-white/90 backdrop-blur-md px-4 py-3 rounded-lg border border-border shadow-sm">
         <div className="flex items-center gap-4">
           {[
             { c: STYLE.root.fill, l: 'Enterprise' }, { c: STYLE.portfolio.fill, l: 'Portfolio' }, { c: STYLE.eps.fill, l: 'EPS Region' },
@@ -688,14 +688,14 @@ export default function KnowledgeGraph() {
         <div className="flex items-center gap-6 pt-2 border-t border-border/50">
           <div className="flex items-center gap-2">
              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Stats Format:</span>
-             <span className="text-[10px] font-mono"><span className="text-blue-500 font-bold">Total MW</span> <span className="text-muted-foreground">/</span> <span className="text-emerald-500 font-bold">COD</span> <span className="text-muted-foreground">/</span> <span className="text-amber-500 font-bold">Trial</span></span>
+             <span className="text-[10px] font-mono"><span className="text-primary font-bold">Total MW</span> <span className="text-muted-foreground">/</span> <span className="text-success font-bold">COD</span> <span className="text-muted-foreground">/</span> <span className="text-warning font-bold">Trial</span></span>
           </div>
           <div className="flex items-center gap-2">
              <span className="text-[9px] font-bold text-muted-foreground uppercase tracking-widest">Project Maps:</span>
              <div className="flex gap-2 items-center">
-               <span className="text-[10px] font-bold text-blue-500">● P6 Schedule</span>
+               <span className="text-[10px] font-bold text-primary">● P6 Schedule</span>
                <span className="text-[10px] font-bold text-pink-500">● SAP Material</span>
-               <span className="text-[10px] font-bold text-red-500">● TC Network</span>
+               <span className="text-[10px] font-bold text-destructive">● TC Network</span>
              </div>
           </div>
         </div>
@@ -926,7 +926,7 @@ function DetailSection({ icon, title, color, children }: { icon: React.ReactNode
   const [open, setOpen] = React.useState(true);
   return (
     <div className="border-b border-border">
-      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted/50 transition-colors">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 px-4 py-3 hover:bg-muted transition-colors">
         <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${color}15`, color }}>{icon}</div>
         <span className="text-[11px] font-bold text-foreground flex-1 text-left">{title}</span>
         <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
@@ -941,7 +941,7 @@ function DetailRow({ label, value, highlight }: { label: string; value: any; hig
     <div className="flex justify-between items-center py-0.5">
       <span className="text-[10px] text-muted-foreground">{label}</span>
       <span className={`text-[10px] font-semibold font-mono ${
-        highlight === 'red' ? 'text-red-600' : highlight === 'green' ? 'text-emerald-600' : 'text-foreground'
+        highlight === 'red' ? 'text-destructive' : highlight === 'green' ? 'text-success' : 'text-foreground'
       }`}>{value}</span>
     </div>
   );
@@ -949,7 +949,7 @@ function DetailRow({ label, value, highlight }: { label: string; value: any; hig
 
 function MiniCard({ label, value, sub }: { label: string; value: any; sub: string }) {
   return (
-    <div className="bg-muted/50 rounded-lg p-2 text-center border border-border">
+    <div className="bg-muted rounded-lg p-2 text-center border border-border">
       <div className="text-sm font-bold text-foreground">{value}</div>
       <div className="text-[8px] text-muted-foreground uppercase font-bold tracking-wider">{label}</div>
       <div className="text-[8px] text-muted-foreground">{sub}</div>

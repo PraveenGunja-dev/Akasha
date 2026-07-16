@@ -31,7 +31,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
               className="pl-9 pr-4 py-1.5 bg-card border border-border rounded text-[12px] text-foreground focus:ring-2 focus:ring-primary focus:border-primary outline-none w-64"
             />
           </div>
-          <button className="p-1.5 border border-border rounded bg-card hover:bg-slate-50 dark:hover:bg-slate-800 text-muted-foreground transition-colors">
+          <button className="p-1.5 border border-border rounded bg-card hover:bg-muted dark:hover:bg-card text-muted-foreground transition-colors">
             <Filter className="w-4 h-4" />
           </button>
         </div>
@@ -45,7 +45,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Generated This Month</p>
             <div className="flex items-end gap-2">
               <span className="text-[28px] font-black text-foreground leading-none">{kpis.generated_this_month}</span>
-              <span className="text-[12px] text-emerald-600 font-bold mb-1 flex items-center">+12%</span>
+              <span className="text-[12px] text-success font-bold mb-1 flex items-center">+12%</span>
             </div>
           </div>
           <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
@@ -61,8 +61,8 @@ export default function ReportsAnalytics({ data, theme }: any) {
               <span className="text-[12px] text-muted-foreground font-medium mb-1">Active</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-amber-500/10 flex items-center justify-center">
-            <Calendar className="w-5 h-5 text-amber-600" />
+          <div className="w-10 h-10 rounded-full bg-warning/100/10 flex items-center justify-center">
+            <Calendar className="w-5 h-5 text-warning" />
           </div>
         </div>
         {/* KPI 3 */}
@@ -74,8 +74,8 @@ export default function ReportsAnalytics({ data, theme }: any) {
               <span className="text-[12px] text-muted-foreground font-medium mb-1">GB</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
-            <HardDrive className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+          <div className="w-10 h-10 rounded-full bg-slate-200 dark:bg-card flex items-center justify-center">
+            <HardDrive className="w-5 h-5 text-muted-foreground dark:text-muted-foreground" />
           </div>
         </div>
       </div>
@@ -120,14 +120,14 @@ export default function ReportsAnalytics({ data, theme }: any) {
                 {reports
                   .filter((r: any) => activeCategory === 'All' || r.category === activeCategory)
                   .map((r: any, i: number) => (
-                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={i} className="hover:bg-muted dark:hover:bg-white/50 transition-colors">
                     <td className="font-bold text-foreground flex items-center gap-2">
                       <FileDown className="w-4 h-4 text-muted-foreground" />
                       {r.name}
                     </td>
                     <td className="text-muted-foreground">{r.date}</td>
                     <td>
-                      <span className="text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold border border-border">
+                      <span className="text-[10px] px-2 py-0.5 rounded bg-muted dark:bg-card text-foreground dark:text-muted-foreground font-bold border border-border">
                         {r.category}
                       </span>
                     </td>
@@ -136,7 +136,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
                       {r.status === 'Ready' ? (
                         <span className="risk-badge-low">Ready</span>
                       ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-500 font-bold border border-amber-200 dark:border-amber-500/30 flex items-center gap-1 w-fit">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning font-bold border border-warning/20 dark:border-warning/20 flex items-center gap-1 w-fit">
                           <Clock className="w-3 h-3" /> Processing
                         </span>
                       )}
@@ -203,20 +203,20 @@ export default function ReportsAnalytics({ data, theme }: any) {
           <div className="bento-card p-4 flex-1 flex flex-col">
             <div className="flex justify-between items-center mb-4">
               <h3 className="section-label !text-[12px] !text-foreground flex items-center gap-2">
-                <Clock className="w-4 h-4 text-[#bc3860]" /> Automation Schedules
+                <Clock className="w-4 h-4 text-accent" /> Automation Schedules
               </h3>
               <button className="text-[11px] text-primary font-bold hover:underline">Manage</button>
             </div>
             <div className="space-y-3 flex-1 overflow-y-auto custom-scrollbar pr-1">
               {schedules.map((s: any, i: number) => (
-                <div key={i} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors">
+                <div key={i} className="flex items-center justify-between p-3 border border-border rounded-lg bg-card hover:bg-muted dark:hover:bg-card transition-colors">
                   <div>
                     <h4 className="text-[12px] font-bold text-foreground mb-0.5">{s.name}</h4>
                     <p className="text-[10px] text-muted-foreground">{s.schedule}</p>
                   </div>
                   {/* Toggle Switch */}
                   <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
-                    <input type="checkbox" name={`toggle-${i}`} id={`toggle-${i}`} defaultChecked={s.active} className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-2 border-slate-300 dark:border-slate-600 appearance-none cursor-pointer z-10 transition-transform duration-200 ease-in-out" />
+                    <input type="checkbox" name={`toggle-${i}`} id={`toggle-${i}`} defaultChecked={s.active} className="toggle-checkbox absolute block w-4 h-4 rounded-full bg-white border-2 border-border dark:border-slate-600 appearance-none cursor-pointer z-10 transition-transform duration-200 ease-in-out" />
                     <label htmlFor={`toggle-${i}`} className="toggle-label block overflow-hidden h-4 rounded-full bg-slate-300 dark:bg-slate-700 cursor-pointer transition-colors duration-200 ease-in"></label>
                   </div>
                 </div>

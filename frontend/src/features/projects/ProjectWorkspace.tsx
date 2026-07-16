@@ -3,7 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
-  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network,
+  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
   Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
@@ -18,10 +18,10 @@ const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
       <svg width={size} height={size} className="transform -rotate-90">
         <circle className="progress-ring-track" cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke} />
         <circle className="progress-ring-fill" cx={size / 2} cy={size / 2} r={radius} strokeWidth={stroke}
-          stroke={color} strokeDasharray={circumference} strokeDashoffset={offset} />
+          stroke={color} strokeDasharray={circumference} strokeDashoffset={offset} strokeLinecap="round" />
         <text x="50%" y="50%" dominantBaseline="central" textAnchor="middle"
-          className="transform rotate-90 origin-center"
-          style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace', fill: 'rgba(255,255,255,0.9)' }}>
+          className="transform rotate-90 origin-center fill-foreground"
+          style={{ fontSize: '14px', fontWeight: 700, fontFamily: 'monospace' }}>
           {Math.round(value)}
         </text>
       </svg>
@@ -34,20 +34,22 @@ const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
 const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, hasBreakdown }: any) => (
   <div
     onClick={onClick}
-    className={`bg-muted/20 hover:bg-muted/40 transition-all duration-300 border rounded-xl p-4 flex flex-col gap-2 group relative overflow-hidden shadow-sm hover:shadow-md ${active ? 'border-primary/60 ring-1 ring-primary/30 bg-primary/5' : 'border-border hover:border-primary/20'
+    className={`bg-card hover:bg-muted transition-all duration-300 border rounded-2xl p-5 flex flex-col gap-3 group relative overflow-hidden shadow-card hover:shadow-card-hover ${active ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/5' : 'border-border hover:border-primary/30'
       } ${hasBreakdown ? 'cursor-pointer' : ''}`}
   >
     <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
     <div className="flex items-center justify-between">
-      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/70 group-hover:text-muted-foreground transition-colors truncate pr-2">{label}</span>
-      <Icon className={`w-4 h-4 shrink-0 ${color} transition-transform duration-300 group-hover:scale-110`} />
+      <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 group-hover:text-foreground transition-colors truncate pr-2">{label}</span>
+      <div className={`p-2 rounded-xl bg-muted group-hover:bg-primary/10 transition-colors`}>
+        <Icon className={`w-4 h-4 shrink-0 ${color} transition-transform duration-300 group-hover:scale-110`} />
+      </div>
     </div>
-    <div className="flex items-baseline gap-1.5 relative z-10 w-full overflow-hidden">
-      <span title={typeof value === 'string' ? value : undefined} className={`text-xl md:text-2xl font-light tracking-tight truncate ${color}`}>{value}</span>
-      {unit && <span className="text-xs text-muted-foreground/50 shrink-0">{unit}</span>}
+    <div className="flex items-baseline gap-1.5 relative z-10 w-full overflow-hidden mt-1">
+      <span title={typeof value === 'string' ? value : undefined} className={`text-2xl md:text-3xl font-light tracking-tight truncate ${color}`}>{value}</span>
+      {unit && <span className="text-xs font-semibold text-muted-foreground/60 shrink-0">{unit}</span>}
     </div>
     {hasBreakdown && (
-      <div className={`absolute bottom-1.5 right-2 text-[9px] font-medium transition-colors ${active ? 'text-primary' : 'text-muted-foreground/30 group-hover:text-muted-foreground/50'}`}>▾ details</div>
+      <div className={`absolute bottom-2 right-3 text-[10px] font-bold transition-colors ${active ? 'text-primary' : 'text-muted-foreground/40 group-hover:text-primary/70'}`}>View Details &rarr;</div>
     )}
   </div>
 );
@@ -55,14 +57,14 @@ const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, ha
 /* ── Tab Button ── */
 const TabBtn = ({ active, label, icon: Icon, onClick }: any) => (
   <button onClick={onClick}
-    className={`relative flex items-center gap-2 px-5 py-3.5 text-[12px] font-bold uppercase tracking-wider transition-all ${active
-      ? 'text-primary'
-      : 'text-muted-foreground hover:text-foreground hover:bg-muted/30'
+    className={`relative flex items-center gap-2 px-6 py-4 text-[13px] font-bold uppercase tracking-wider transition-all ${active
+      ? 'text-primary bg-primary/5'
+      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
       }`}>
     <Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-muted-foreground/70'}`} />
     {label}
     {active && (
-      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary rounded-t-full shadow-[0_-2px_10px_rgba(59,130,246,0.3)]" />
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary rounded-t-full shadow-[0_-2px_12px_rgba(59,130,246,0.5)]" />
     )}
   </button>
 );
@@ -95,10 +97,10 @@ const ECODCell = ({ edge }: { edge: any }) => {
   
   return (
     <td className="text-xs font-mono whitespace-nowrap">
-      {isDelayed && <AlertTriangle className="w-3 h-3 text-red-500 inline mr-1" />}
-      <span className={isDelayed ? "text-red-400 font-semibold" : ""}>
+      {isDelayed && <AlertTriangle className="w-3 h-3 text-destructive inline mr-1" />}
+      <span className={isDelayed ? "text-destructive font-semibold" : ""}>
         {ecod || '—'} 
-        {isDelayed && <span className="text-[10px] ml-1 bg-red-500/10 px-1.5 py-0.5 rounded-sm border border-red-500/20 text-red-500 font-bold">+{delayMonths}m</span>}
+        {isDelayed && <span className="text-[10px] ml-1 bg-destructive/100/10 px-1.5 py-0.5 rounded-sm border border-destructive/20 text-destructive font-bold">+{delayMonths}m</span>}
       </span>
     </td>
   );
@@ -189,7 +191,7 @@ const P6SyncEditor = ({ p6 }: { p6: any }) => {
         </h3>
         <div className="flex items-center gap-2">
           {saveMsg && (
-            <span className={`text-xs font-medium ${saveMsg.startsWith('✓') ? 'text-emerald-500' : 'text-amber-500'}`}>{saveMsg}</span>
+            <span className={`text-xs font-medium ${saveMsg.startsWith('✓') ? 'text-success' : 'text-warning'}`}>{saveMsg}</span>
           )}
           {editMode ? (
             <>
@@ -211,7 +213,7 @@ const P6SyncEditor = ({ p6 }: { p6: any }) => {
       </div>
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {editableFields.map(f => (
-          <div key={f.key} className="bg-muted/30 border border-border rounded-lg p-3">
+          <div key={f.key} className="bg-muted border border-border rounded-lg p-3">
             <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-1.5">{f.label}</div>
             {editMode ? (
               <input type="date" defaultValue={f.current || ''}
@@ -484,7 +486,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     return (
       <div className="flex items-center justify-center w-full h-full min-h-[500px] bg-background">
         <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-amber-500/50 mx-auto mb-4" />
+          <AlertTriangle className="w-12 h-12 text-warning/50 mx-auto mb-4" />
           <p className="text-muted-foreground">Project not found.</p>
           <button onClick={() => navigate('/dashboard')} className="mt-4 text-primary text-sm hover:underline">
             ← Back to Dashboard
@@ -497,7 +499,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const p = project;
   const progressPct = p.progress < 1 ? p.progress * 100 : p.progress;
   const tier = p.statusTier || p.health;
-  const healthColor = tier === 'Critical' ? 'text-red-400' : (tier === 'High Risk' || tier === 'Watchlist') ? 'text-amber-400' : 'text-emerald-400';
+  const healthColor = tier === 'Critical' ? 'text-destructive' : (tier === 'High Risk' || tier === 'Watchlist') ? 'text-warning' : 'text-success';
   const dotClass = tier === 'Critical' ? 'status-dot-critical' : (tier === 'High Risk' || tier === 'Watchlist') ? 'status-dot-warning' : 'status-dot-healthy';
 
   // Activity completion chart
@@ -679,7 +681,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             Back to Portfolio
           </button>
-          <div className="h-5 w-px bg-muted/50"></div>
+          <div className="h-5 w-px bg-muted"></div>
           <div className="flex items-center gap-2">
             <div className={dotClass}></div>
             <span className="text-sm font-semibold text-foreground truncate max-w-[400px]">{p.projectName}</span>
@@ -721,19 +723,19 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         {/* ── Hero Section ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
-          <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-blue-400" />
+          <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-primary" />
           
-          <HeroMetric label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} value={detail?.mapping?.codBlocksDone || 0} icon={CheckCircle2} color="text-emerald-500" />
+          <HeroMetric label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} value={detail?.mapping?.codBlocksDone || 0} icon={CheckCircle2} color="text-success" />
           <HeroMetric label="MW Generated" value={detail?.mapping?.mwGenerated || 0} unit="MW" icon={Zap} color="text-primary" />
-          <HeroMetric label="Pending COD" value={detail?.mapping?.pendingCodBlocks || 0} icon={AlertTriangle} color="text-amber-500" />
+          <HeroMetric label="Pending COD" value={detail?.mapping?.pendingCodBlocks || 0} icon={AlertTriangle} color="text-warning" />
           
-          <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-red-400' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
+          <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-destructive' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
           <HeroMetric label="Forecast COD" value={p.forecastFinish || p.forecastMonth} icon={Calendar} color="text-primary" />
           {((detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)) > 0 && (
-            <HeroMetric label="Transmission Lines" value={(detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)} icon={MapPin} color="text-indigo-400" />
+            <HeroMetric label="Transmission Lines" value={(detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)} icon={MapPin} color="text-primary" />
           )}
           {(detail?.tc?.summary?.totalNodes || 0) > 0 && (
-            <HeroMetric label="Substations" value={detail?.tc?.summary?.totalNodes || 0} icon={Zap} color="text-amber-400" />
+            <HeroMetric label="Substations" value={detail?.tc?.summary?.totalNodes || 0} icon={Zap} color="text-warning" />
           )}
           <HeroMetric label="Baseline COD" value={p6?.baselineFinishDate || 'Not Set'} icon={CalendarClock} color="text-teal-500 dark:text-teal-400" />
         </div>
@@ -817,7 +819,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               <div>
                 <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">Key Issue</h4>
                 <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${p.keyIssue === 'On Track' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' : 'bg-red-500/10 text-red-400 border border-red-500/20'
+                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${p.keyIssue === 'On Track' ? 'bg-success/100/10 text-success border border-success/20' : 'bg-destructive/100/10 text-destructive border border-destructive/20'
                     }`}>
                     {p.keyIssue === 'On Track' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
                     {p.keyIssue}
@@ -845,7 +847,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         </div>
 
         {/* ── Tab Navigation ── */}
-        <div className="flex items-center gap-2 border-b border-border bg-card/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
+        <div className="flex items-center gap-2 border-b border-border bg-slate-100/50 dark:bg-gray-900/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
           <TabBtn active={activeTab === 'overview'} label="Overview" icon={BarChart3} onClick={() => setActiveTab('overview')} />
           <TabBtn active={activeTab === 'schedule'} label="Schedule" icon={Calendar} onClick={() => setActiveTab('schedule')} />
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
@@ -876,14 +878,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   <div className="flex-1 w-full max-w-[240px] space-y-4">
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                        <div className="w-3 h-3 rounded-sm bg-success/100 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">Completed</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.completedActivities}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
+                        <div className="w-3 h-3 rounded-sm bg-primary/100 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">In Progress</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.inProgressActivities}</span>
@@ -923,7 +925,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     ['Actual Duration', p.actualDuration ? `${Math.round(p.actualDuration)} hrs` : '—'],
                     ['Parent EPS', p.parentEPS || '—'],
                   ].map(([label, val]) => (
-                    <div key={label} className="bg-muted/30 border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors">
+                    <div key={label} className="bg-muted border border-border rounded-lg p-3 hover:bg-muted transition-colors">
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">{label}</span>
                       <span className="block text-sm font-semibold text-foreground truncate" title={val as string}>{val}</span>
                     </div>
@@ -945,10 +947,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                   <div className="relative pl-4 border-l-2 border-border space-y-6">
                     {[
-                      { icon: Flag, color: 'text-emerald-500', bg: 'bg-emerald-500/10', border: 'border-emerald-500/20', label: 'Project Start', value: p.startDate || '—', desc: 'Official commencement' },
-                      { icon: Activity, color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20', label: 'Data Date', value: p6?.dataDate || '—', desc: 'Latest schedule update' },
-                      { icon: Target, color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20', label: 'Baseline Finish', value: p.baselineFinishDate || '—', desc: 'Original target' },
-                      { icon: CalendarClock, color: 'text-red-500', bg: 'bg-red-500/10', border: 'border-red-500/20', label: 'Forecast Finish', value: p.forecastFinish, desc: 'Current projection' },
+                      { icon: Flag, color: 'text-success', bg: 'bg-success/100/10', border: 'border-success/20', label: 'Project Start', value: p.startDate || '—', desc: 'Official commencement' },
+                      { icon: Activity, color: 'text-primary', bg: 'bg-primary/100/10', border: 'border-primary/20', label: 'Data Date', value: p6?.dataDate || '—', desc: 'Latest schedule update' },
+                      { icon: Target, color: 'text-warning', bg: 'bg-warning/100/10', border: 'border-warning/20', label: 'Baseline Finish', value: p.baselineFinishDate || '—', desc: 'Original target' },
+                      { icon: CalendarClock, color: 'text-destructive', bg: 'bg-destructive/100/10', border: 'border-destructive/20', label: 'Forecast Finish', value: p.forecastFinish, desc: 'Current projection' },
                     ].map((item, idx) => (
                       <div key={idx} className="relative">
                         <div className={`absolute -left-[23px] top-1 w-3 h-3 rounded-full border-2 border-background ${item.bg.replace('/10', '')}`} />
@@ -968,16 +970,16 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="intelligence-card p-4 flex items-center justify-between bg-muted/20">
+                  <div className="intelligence-card p-4 flex items-center justify-between bg-muted">
                     <div>
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Schedule Variance</span>
-                      <span className={`block text-xl font-bold mt-1 ${p.scheduleVariance < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                      <span className={`block text-xl font-bold mt-1 ${p.scheduleVariance < 0 ? 'text-destructive' : 'text-success'}`}>
                         {p.scheduleVariance} days
                       </span>
                     </div>
-                    <AlertTriangle className={`w-8 h-8 opacity-20 ${p.scheduleVariance < 0 ? 'text-red-500' : 'text-emerald-500'}`} />
+                    <AlertTriangle className={`w-8 h-8 opacity-20 ${p.scheduleVariance < 0 ? 'text-destructive' : 'text-success'}`} />
                   </div>
-                  <div className="intelligence-card p-4 flex items-center justify-between bg-muted/20">
+                  <div className="intelligence-card p-4 flex items-center justify-between bg-muted">
                     <div>
                       <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Must Finish By</span>
                       <span className="block text-lg font-mono font-bold text-foreground mt-1">{p6?.mustFinishByDate || 'Not Set'}</span>
@@ -988,14 +990,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {p6?.delayedActivities && p6.delayedActivities.length > 0 && (
                     <div
                       onClick={() => setShowDelayedModal(true)}
-                      className="intelligence-card p-4 flex items-center justify-between bg-red-500/10 border-red-500/30 cursor-pointer hover:bg-red-500/20 transition-colors"
+                      className="intelligence-card p-4 flex items-center justify-between bg-destructive/100/10 border-destructive/20 cursor-pointer hover:bg-destructive/100/20 transition-colors"
                     >
                       <div>
-                        <span className="block text-[10px] font-bold uppercase tracking-wider text-red-500">Delayed Activities</span>
-                        <span className="block text-2xl font-mono font-bold text-red-500 mt-1">{p6.delayedActivities.length}</span>
-                        <span className="block text-xs text-red-500/80 mt-1 underline decoration-red-500/30 underline-offset-2">View details</span>
+                        <span className="block text-[10px] font-bold uppercase tracking-wider text-destructive">Delayed Activities</span>
+                        <span className="block text-2xl font-mono font-bold text-destructive mt-1">{p6.delayedActivities.length}</span>
+                        <span className="block text-xs text-destructive/80 mt-1 underline decoration-red-500/30 underline-offset-2">View details</span>
                       </div>
-                      <AlertTriangle className="w-10 h-10 text-red-500 opacity-80" />
+                      <AlertTriangle className="w-10 h-10 text-destructive opacity-80" />
                     </div>
                   )}
                 </div>
@@ -1021,7 +1023,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <Database className="w-5 h-5 text-primary/70" /> SAP Intelligence
                     </h2>
                     <div className="flex items-center gap-3">
-                      <div className="flex items-center bg-muted/40 border border-border rounded-lg p-0.5">
+                      <div className="flex items-center bg-muted border border-border rounded-lg p-0.5">
                         {[
                           { key: 'all' as const, label: 'All', disabled: false },
                           {
@@ -1044,7 +1046,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               ? 'opacity-40 cursor-not-allowed border border-dashed border-muted-foreground/30 text-muted-foreground'
                               : sapFilter === opt.key
                                 ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                               }`}
                           >
                             {opt.label}
@@ -1070,17 +1072,17 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   ) : (
                     <>
                       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
+                        <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
                         <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
-                        <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-indigo-500 dark:text-indigo-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} />
-                        <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="No" icon={Package} color="text-blue-500 dark:text-blue-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />
-                        <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="No" icon={Box} color="text-emerald-500 dark:text-emerald-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
+                        <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} />
+                        <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="No" icon={Package} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />
+                        <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="No" icon={Box} color="text-success dark:text-success" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
 
                         <HeroMetric label="Supply PO Amount" value={fmtCost(sap.summary.totalBudgetINR)} icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
-                        <HeroMetric label="Utilized Supply PO Amount" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-orange-500 dark:text-orange-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
+                        <HeroMetric label="Utilized Supply PO Amount" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
                         <HeroMetric label="Remaining Supply PO Amount" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
-                        <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-red-500 dark:text-red-400' : 'text-emerald-500 dark:text-emerald-400'} />
-                        <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="No" icon={Truck} color="text-amber-500 dark:text-amber-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
+                        <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'} />
+                        <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="No" icon={Truck} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
                       </div>
 
                       {/* ── Interactive Breakdown Panel ── */}
@@ -1099,11 +1101,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               {expandedMetric === 'remaining' && 'Remaining Balance by Material'}
                               {expandedMetric === 'transit' && 'In-Transit Breakdown'}
                             </h4>
-                            <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted/50 transition-colors">✕ Close</button>
+                            <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors">✕ Close</button>
                           </div>
                           <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin">
                             <table className="intel-table w-full text-xs">
-                              <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+                              <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
                                 {/* ── PO Breakdown ── */}
                                 {expandedMetric === 'pos' && (
                                   <tr>
@@ -1181,21 +1183,21 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <tbody className="divide-y divide-border/30">
                                 {/* ── PO Rows ── */}
                                 {expandedMetric === 'pos' && (sap.purchaseOrders || []).slice(0, 50).map((po: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <tr key={i} className="hover:bg-muted transition-colors">
                                     <td className="text-left font-mono font-medium text-primary/80">{po.poNumber}</td>
                                     <td className="text-left text-foreground/70 max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
                                     <td className="text-left text-foreground/70 max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
-                                    <td className="text-right font-mono font-semibold text-blue-400">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
+                                    <td className="text-right font-mono font-semibold text-primary">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
                                     <td className="text-right font-mono text-foreground/70">{fmtCost(po.budgetINR)}</td>
-                                    <td className="text-right font-mono text-emerald-500">{fmtCost(po.deliveredINR)}</td>
-                                    <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
+                                    <td className="text-right font-mono text-success">{fmtCost(po.deliveredINR)}</td>
+                                    <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
                                   </tr>
                                 ))}
                                 {/* ── Vendor Rows ── */}
                                 {expandedMetric === 'vendors' && (sap.vendorBreakdown || []).map((v: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <tr key={i} className="hover:bg-muted transition-colors">
                                     <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={v.vendorName}>{v.vendorName}</td>
-                                    <td className="text-center font-mono font-semibold text-blue-400">{v.poCount}</td>
+                                    <td className="text-center font-mono font-semibold text-primary">{v.poCount}</td>
                                     <td className="text-center font-mono text-purple-400">{v.materialCount}</td>
                                     <td className="text-right font-mono font-semibold text-foreground">{Number(v.totalOrderedQty || 0).toLocaleString('en-IN')}</td>
                                     <td className="text-right font-mono text-pink-400">{fmtCost(v.totalBudgetINR)}</td>
@@ -1203,23 +1205,23 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 ))}
                                 {/* ── Materials Rows ── */}
                                 {expandedMetric === 'materials' && unifiedMaterials.slice(0, 50).map((mat: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <tr key={i} className="hover:bg-muted transition-colors">
                                     <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
                                     <td className="text-left text-foreground/70 max-w-[180px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                    <td className="text-right font-mono text-blue-400">{mat.orderedQty ? <>{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                    <td className="text-right font-mono text-emerald-500">{mat.consumedQty ? <>{Number(mat.consumedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                    <td className="text-right font-mono text-primary">{mat.orderedQty ? <>{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                    <td className="text-right font-mono text-success">{mat.consumedQty ? <>{Number(mat.consumedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
                                     <td className="text-right font-mono text-purple-400">{mat.inventoryQty ? <>{Number(mat.inventoryQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                    <td className="text-right font-mono text-amber-400">{mat.inTransitQty ? <>{Number(mat.inTransitQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                    <td className="text-right font-mono text-warning">{mat.inTransitQty ? <>{Number(mat.inTransitQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
                                   </tr>
                                 ))}
                                 {/* ── Volume Rows ── */}
                                 {expandedMetric === 'volume' && unifiedMaterials.filter((m: any) => m.orderedQty > 0).slice(0, 30).map((mat: any, i: number) => {
                                   const pct = sap.summary.totalOrderedQty ? (mat.orderedQty / sap.summary.totalOrderedQty) * 100 : 0;
                                   return (
-                                    <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                    <tr key={i} className="hover:bg-muted transition-colors">
                                       <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
                                       <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                      <td className="text-right font-mono font-semibold text-blue-400">{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</td>
+                                      <td className="text-right font-mono font-semibold text-primary">{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</td>
                                       <td className="text-right font-mono text-foreground/60">{pct.toFixed(1)}%</td>
                                       <td className="text-left"><div className="w-full h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${Math.min(pct, 100)}%` }}></div></div></td>
                                     </tr>
@@ -1227,12 +1229,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 })}
                                 {/* ── Inventory Rows ── */}
                                 {expandedMetric === 'inventory' && (sap.inventory || []).filter((inv: any) => (inv.inventoryQty || 0) > 0).slice(0, 50).map((inv: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <tr key={i} className="hover:bg-muted transition-colors">
                                     <td className="text-left font-mono text-primary/80">{inv.materialCode}</td>
                                     <td className="text-left text-foreground/70 max-w-[150px] truncate">{inv.materialName || '—'}</td>
-                                    <td className="text-right font-mono font-semibold text-emerald-400">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')} {inv.baseUnit && inv.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{inv.baseUnit}</span> : unifiedMaterialsMap[inv.materialCode]?.baseUnit && unifiedMaterialsMap[inv.materialCode]?.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[inv.materialCode].baseUnit}</span> : null}</td>
+                                    <td className="text-right font-mono font-semibold text-success">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')} {inv.baseUnit && inv.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{inv.baseUnit}</span> : unifiedMaterialsMap[inv.materialCode]?.baseUnit && unifiedMaterialsMap[inv.materialCode]?.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[inv.materialCode].baseUnit}</span> : null}</td>
                                     <td className="text-right font-mono text-purple-400">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                    <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-500' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
+                                    <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
                                   </tr>
                                 ))}
                                 {/* ── Budget / Utilized / Remaining Rows ── */}
@@ -1243,16 +1245,16 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 }).slice(0, 50).map((mat: any, i: number) => {
                                   const utilPct = mat.budgetINR ? (mat.consumedAmountINR / mat.budgetINR) * 100 : 0;
                                   return (
-                                    <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                    <tr key={i} className="hover:bg-muted transition-colors">
                                       <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
                                       <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
                                       <td className="text-right font-mono text-pink-400">{fmtCost(mat.budgetINR)}</td>
-                                      <td className="text-right font-mono text-orange-400">{fmtCost(mat.consumedAmountINR)}</td>
+                                      <td className="text-right font-mono text-warning">{fmtCost(mat.consumedAmountINR)}</td>
                                       <td className="text-right font-mono text-teal-400">{fmtCost(mat.remainingBalanceINR)}</td>
                                       <td className="text-left">
                                         <div className="flex items-center gap-2">
-                                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${utilPct > 90 ? 'bg-red-500' : utilPct > 60 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${Math.min(utilPct, 100)}%` }}></div></div>
-                                          <span className={`text-[10px] font-mono font-bold ${utilPct > 90 ? 'text-red-400' : utilPct > 60 ? 'text-amber-400' : 'text-emerald-400'}`}>{utilPct.toFixed(0)}%</span>
+                                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${utilPct > 90 ? 'bg-destructive/100' : utilPct > 60 ? 'bg-warning/100' : 'bg-success/100'}`} style={{ width: `${Math.min(utilPct, 100)}%` }}></div></div>
+                                          <span className={`text-[10px] font-mono font-bold ${utilPct > 90 ? 'text-destructive' : utilPct > 60 ? 'text-warning' : 'text-success'}`}>{utilPct.toFixed(0)}%</span>
                                         </div>
                                       </td>
                                     </tr>
@@ -1260,10 +1262,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 })}
                                 {/* ── Transit Rows ── */}
                                 {expandedMetric === 'transit' && (sap.inTransit || []).filter((t: any) => (t.inTransitQty || 0) > 0).slice(0, 50).map((t: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                  <tr key={i} className="hover:bg-muted transition-colors">
                                     <td className="text-left font-mono text-primary/80">{t.materialCode}</td>
                                     <td className="text-left text-foreground/70 max-w-[150px] truncate" title={t.vendorName}>{t.vendorName || '—'}</td>
-                                    <td className="text-right font-mono font-semibold text-amber-400">{Number(t.inTransitQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[t.materialCode]?.baseUnit && unifiedMaterialsMap[t.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[t.materialCode].baseUnit}</span>}</td>
+                                    <td className="text-right font-mono font-semibold text-warning">{Number(t.inTransitQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[t.materialCode]?.baseUnit && unifiedMaterialsMap[t.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[t.materialCode].baseUnit}</span>}</td>
                                     <td className="text-left font-mono text-foreground/50 text-[10px]">{t.wbsElement || '—'}</td>
                                   </tr>
                                 ))}
@@ -1276,15 +1278,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <span className="text-muted-foreground">Total Inventory Value:</span>
                               <span className="font-mono font-bold text-purple-400">{fmtCost(sap.summary.totalInventoryValueINR)}</span>
                               <span className="text-muted-foreground ml-4">Total Inventory Qty:</span>
-                              <span className="font-mono font-bold text-emerald-400">{fmtMW(sap.summary.totalInventoryQty)}</span>
+                              <span className="font-mono font-bold text-success">{fmtMW(sap.summary.totalInventoryQty)}</span>
                             </div>
                           )}
                           {expandedMetric === 'transit' && (
                             <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
                               <span className="text-muted-foreground">Total In-Transit Qty:</span>
-                              <span className="font-mono font-bold text-amber-400">{fmtMW(sap.summary.totalInTransitQty)}</span>
+                              <span className="font-mono font-bold text-warning">{fmtMW(sap.summary.totalInTransitQty)}</span>
                               <span className="text-muted-foreground ml-4">Unique Materials in Transit:</span>
-                              <span className="font-mono font-bold text-amber-400">{new Set((sap.inTransit || []).map((t: any) => t.materialCode)).size}</span>
+                              <span className="font-mono font-bold text-warning">{new Set((sap.inTransit || []).map((t: any) => t.materialCode)).size}</span>
                             </div>
                           )}
                         </div>
@@ -1319,7 +1321,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           </h3>
                           <div className="flex-1">
                             {!sap.consumption || sap.consumption.length === 0 ? (
-                              <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted/5">
+                              <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted">
                                 <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-3" />
                                 <p className="text-sm font-medium text-muted-foreground/70">No Consumption Data</p>
                                 <p className="text-xs text-muted-foreground/40 mt-1 max-w-[250px] text-center">There are no MB51 material consumption records for this selection.</p>
@@ -1353,16 +1355,16 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
                               <Box className="w-4 h-4 text-primary/70" /> Material Lifecycle & Tracking
                             </h3>
-                            <div className="flex bg-muted/40 p-1 rounded-md border border-border">
-                              <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>All Stock</button>
-                              <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>Company (CS01)</button>
-                              <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'}`}>Project (PS01)</button>
+                            <div className="flex bg-muted p-1 rounded-md border border-border">
+                              <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>
+                              <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>
+                              <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>
                             </div>
                           </div>
 
                           <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin">
                             <table className="intel-table relative w-full text-xs">
-                              <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm text-[10px] uppercase tracking-wider whitespace-nowrap">
+                              <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 shadow-sm text-[10px] uppercase tracking-wider whitespace-nowrap">
                                 <tr>
                                   <th className="w-8"></th>
                                   <th className="text-center">Material Code</th>
@@ -1403,20 +1405,20 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                             </div>
                                           ) : <span className="text-muted-foreground/40">—</span>}
                                         </td>
-                                        <td className="text-center font-mono font-semibold text-blue-400">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono font-semibold text-emerald-500">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono font-semibold text-amber-500">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono font-semibold text-primary">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono font-semibold text-success">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono font-semibold text-warning">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
                                         <td className="text-center font-mono text-purple-400">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
                                         <td className="text-center font-mono text-purple-400/80">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                        <td className="text-center font-mono text-orange-400">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono text-warning">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
                                         <td className="text-center font-mono text-foreground/70">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                        <td className="text-center font-mono text-emerald-500/80">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
-                                        <td className="text-center font-mono text-amber-500/80">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
+                                        <td className="text-center font-mono text-success/80">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
+                                        <td className="text-center font-mono text-warning/80">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
                                       </tr>
 
                                       {/* Drill-down Detail Row */}
                                       {isExpanded && (
-                                        <tr className="bg-muted/30 border-b border-border">
+                                        <tr className="bg-muted border-b border-border">
                                           <td colSpan={12} className="p-0">
                                             <div className="p-6 space-y-6">
 
@@ -1426,7 +1428,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                   <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> Purchase Orders</h4>
                                                   <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
                                                     <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
                                                         <tr>
                                                           <th className="text-left font-semibold py-2 px-4">PO Number</th>
                                                           <th className="text-right font-semibold py-2 px-4">Ordered Qty</th>
@@ -1435,11 +1437,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                       </thead>
                                                       <tbody className="divide-y divide-border/30">
                                                         {mat.pos.map((po: any, j: number) => (
-                                                          <tr key={j} className="hover:bg-muted/50 transition-colors">
+                                                          <tr key={j} className="hover:bg-muted transition-colors">
                                                             <td className="text-left font-mono font-medium text-foreground py-2 px-4">{po.poNumber}</td>
-                                                            <td className="text-right font-mono font-semibold text-blue-500 dark:text-blue-400 py-2 px-4">{po.orderedQty} Unit</td>
+                                                            <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{po.orderedQty} Unit</td>
                                                             <td className="text-center py-2 px-4">
-                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
                                                             </td>
                                                           </tr>
                                                         ))}
@@ -1455,7 +1457,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                   <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Consumptions</h4>
                                                   <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
                                                     <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
                                                         <tr>
                                                           <th className="text-center font-semibold py-2 px-4 w-24">Movement</th>
                                                           <th className="text-left font-semibold py-2 px-4">WBS Element / Date</th>
@@ -1464,9 +1466,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                       </thead>
                                                       <tbody className="divide-y divide-border/30">
                                                         {mat.consumptions.slice(0, 50).map((c: any, j: number) => (
-                                                          <tr key={j} className="hover:bg-muted/50 transition-colors">
+                                                          <tr key={j} className="hover:bg-muted transition-colors">
                                                             <td className="text-center py-2 px-4">
-                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-red-500/10 text-red-600 dark:text-red-400'}`}>{c.movementType}</span>
+                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/100/10 text-success dark:text-success' : 'bg-destructive/100/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
                                                             </td>
                                                             <td className="text-left text-foreground/80 font-medium py-2 px-4">{c.wbsElement || c.postingDate}</td>
                                                             <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
@@ -1484,7 +1486,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                   <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Inventory Storage</h4>
                                                   <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
                                                     <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted/50 text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
                                                         <tr>
                                                           <th className="text-left font-semibold py-2 px-4">WBS Element</th>
                                                           <th className="text-right font-semibold py-2 px-4">Inventory Qty</th>
@@ -1494,12 +1496,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                       </thead>
                                                       <tbody className="divide-y divide-border/30">
                                                         {mat.inventories.map((inv: any, j: number) => (
-                                                          <tr key={j} className="hover:bg-muted/50 transition-colors">
+                                                          <tr key={j} className="hover:bg-muted transition-colors">
                                                             <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
-                                                            <td className="text-right font-mono font-semibold text-emerald-600 dark:text-emerald-400 py-2 px-4">{inv.inventoryQty}</td>
+                                                            <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
                                                             <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
                                                             <td className="text-center py-2 px-4">
-                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
+                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
                                                             </td>
                                                           </tr>
                                                         ))}
@@ -1560,7 +1562,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       </div>
                       <div className="flex flex-col h-full">
                         {/* Header Info */}
-                        <div className="flex items-center gap-3 mb-6 bg-muted/40 p-3 rounded-lg border border-border/50">
+                        <div className="flex items-center gap-3 mb-6 bg-muted p-3 rounded-lg border border-border/50">
                           <div className="flex-1">
                             <div className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Project ID</div>
                             <div className="text-sm font-semibold text-foreground">{p6.projectId}</div>
@@ -1576,10 +1578,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           {/* Start Phase */}
                           <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/100/5 rounded-full blur-2xl pointer-events-none"></div>
                             <div className="flex items-center gap-2 mb-4 relative z-10">
-                              <div className="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                                <Activity className="w-3.5 h-3.5 text-blue-500" />
+                              <div className="w-7 h-7 rounded-lg bg-primary/100/10 flex items-center justify-center border border-primary/20">
+                                <Activity className="w-3.5 h-3.5 text-primary" />
                               </div>
                               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Start Phase</span>
                             </div>
@@ -1592,8 +1594,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Planned</span>
                                 <span className="text-sm font-medium">{p6.plannedStartDate || '—'}</span>
                               </div>
-                              <div className="flex justify-between items-center bg-blue-500/5 -mx-2 px-2 py-1.5 rounded border border-blue-500/10">
-                                <span className="text-xs text-blue-600 dark:text-blue-400 font-semibold flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Actual</span>
+                              <div className="flex justify-between items-center bg-primary/100/5 -mx-2 px-2 py-1.5 rounded border border-blue-500/10">
+                                <span className="text-xs text-primary dark:text-primary font-semibold flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Actual</span>
                                 <span className="text-sm font-bold text-blue-700 dark:text-blue-300">{p6.startDate || 'Pending'}</span>
                               </div>
                             </div>
@@ -1601,10 +1603,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                           {/* Finish Phase */}
                           <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-success/100/5 rounded-full blur-2xl pointer-events-none"></div>
                             <div className="flex items-center gap-2 mb-4 relative z-10">
-                              <div className="w-7 h-7 rounded-lg bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                              <div className="w-7 h-7 rounded-lg bg-success/100/10 flex items-center justify-center border border-success/20">
+                                <CheckCircle2 className="w-3.5 h-3.5 text-success" />
                               </div>
                               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Finish Phase</span>
                             </div>
@@ -1617,12 +1619,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Scheduled</span>
                                 <span className="text-sm font-medium">{p6.scheduledFinishDate || p6.finishDate || '—'}</span>
                               </div>
-                              <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-emerald-500/5 border-emerald-500/10' : 'bg-amber-500/5 border-amber-500/10'}`}>
-                                <span className={`text-xs font-semibold flex items-center gap-1.5 ${p6.finishDate ? 'text-emerald-600 dark:text-emerald-400' : 'text-amber-600 dark:text-amber-400'}`}>
+                              <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-success/100/5 border-emerald-500/10' : 'bg-warning/100/5 border-amber-500/10'}`}>
+                                <span className={`text-xs font-semibold flex items-center gap-1.5 ${p6.finishDate ? 'text-success dark:text-success' : 'text-warning dark:text-warning'}`}>
                                   {p6.finishDate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />} 
                                   {p6.finishDate ? 'Actual Finish' : 'Must Finish By'}
                                 </span>
-                                <span className={`text-sm font-bold ${p6.finishDate ? 'text-emerald-700 dark:text-emerald-300' : 'text-amber-700 dark:text-amber-300'}`}>
+                                <span className={`text-sm font-bold ${p6.finishDate ? 'text-success dark:text-emerald-300' : 'text-warning dark:text-amber-300'}`}>
                                   {p6.finishDate || p6.mustFinishByDate || '—'}
                                 </span>
                               </div>
@@ -1651,7 +1653,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       
                       <div className="flex-1 overflow-x-auto custom-scrollbar pr-2 py-6">
                         {p6.milestones && p6.milestones.length > 0 ? (
-                          <div className="flex items-center px-4 min-w-max h-[200px]">
+                          <div className="flex items-center px-6 min-w-max h-[240px]">
                             {p6.milestones.map((m: any, i: number) => {
                               const isLast = i === p6.milestones.length - 1;
                               const isEven = i % 2 === 0;
@@ -1660,62 +1662,93 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
 
                               return (
-                                <div key={i} className={`relative flex items-center shrink-0 w-[240px] mr-16 ${isEven ? 'translate-y-[40px]' : '-translate-y-[40px]'}`}>
+                                <div key={i} className={`relative flex items-center shrink-0 w-[260px] mr-16 transition-transform duration-500 hover:z-50 ${isEven ? 'translate-y-[45px]' : '-translate-y-[45px]'}`}>
                                   
                                   {/* Input Port */}
                                   {i !== 0 && (
-                                    <div className={`absolute -left-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-background border-[2px] rounded-full z-20 ${
-                                      isCompleted || isInProgress ? 'border-primary' : 'border-muted-foreground'
+                                    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${
+                                      isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 
+                                      isInProgress ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse' : 
+                                      'border-border shadow-inner'
                                     }`}></div>
                                   )}
                                   
                                   {/* Node Card */}
-                                  <div className={`w-full bg-card rounded-xl shadow-sm flex flex-col z-10 border ${
-                                      isCompleted ? 'border-primary shadow-primary/20' : 
-                                      isInProgress ? 'border-amber-500 shadow-amber-500/20' : 
-                                      'border-border shadow-black/5'
+                                  <div className={`group w-full rounded-2xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${
+                                      isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-[0_8px_30px_-4px_rgba(59,130,246,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(59,130,246,0.4)] backdrop-blur-md' : 
+                                      isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-[0_8px_30px_-4px_rgba(245,158,11,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(245,158,11,0.4)] backdrop-blur-md ring-1 ring-amber-500/20 ring-inset' : 
+                                      'bg-card/40 dark:bg-card/40 border-border shadow-lg hover:shadow-xl backdrop-blur-sm hover:border-border/80'
                                   }`}>
+                                    {/* Glass reflection overlay */}
+                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/0 via-white/5 to-white/0 dark:from-white/0 dark:via-white/5 dark:to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
+
                                     {/* Header */}
-                                    <div className={`px-3 py-2 flex items-center gap-2 border-b ${
-                                        isCompleted ? 'bg-primary/5 border-primary/20 text-primary' : 
-                                        isInProgress ? 'bg-amber-500/5 border-amber-500/20 text-amber-600' : 
-                                        'bg-muted/30 border-border text-muted-foreground'
-                                    } rounded-t-xl`}>
-                                        <div className={`w-5 h-5 rounded-md flex items-center justify-center shadow-sm text-[10px] font-bold ${
-                                          isCompleted ? 'bg-primary text-primary-foreground' : 
-                                          isInProgress ? 'bg-amber-500 text-white' : 
-                                          'bg-background border border-border text-foreground'
+                                    <div className={`px-4 py-3 flex items-center gap-3 border-b ${
+                                        isCompleted ? 'border-primary/20 text-primary' : 
+                                        isInProgress ? 'border-amber-500/20 text-amber-500' : 
+                                        'border-border text-muted-foreground group-hover:text-foreground transition-colors'
+                                    }`}>
+                                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center shadow-inner text-[11px] font-black tracking-tighter ${
+                                          isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white shadow-primary/40' : 
+                                          isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/40 animate-pulse' : 
+                                          'bg-muted border border-border text-muted-foreground group-hover:bg-muted/80 transition-colors'
                                         }`}>
-                                          {i + 1}
+                                          {isCompleted ? <Check className="w-4 h-4 text-white" /> : i + 1}
                                         </div>
-                                        <h4 className="text-[11px] font-bold uppercase tracking-tight truncate flex-1" title={m.name}>
+                                        <h4 className="text-[12px] font-bold uppercase tracking-wide truncate flex-1 drop-shadow-sm" title={m.name}>
                                           {m.name}
                                         </h4>
                                     </div>
 
-                                    {/* Body (Text removed) */}
-                                    <div className="px-3 py-2.5 flex items-center justify-between bg-card rounded-b-xl">
-                                        <div className={`w-2 h-2 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-amber-500' : 'bg-muted-foreground/30'}`}></div>
-                                        <span className="font-mono text-[9px] text-muted-foreground bg-muted/50 px-1.5 py-0.5 rounded border border-border/50">{dateStr}</span>
+                                    {/* Body */}
+                                    <div className="px-4 py-3 flex items-center justify-between relative overflow-hidden">
+                                        <div className="flex items-center gap-2">
+                                          {isCompleted ? (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-md text-[10px] font-semibold border border-primary/20">
+                                              <CheckCircle2 className="w-3 h-3" /> Done
+                                            </div>
+                                          ) : isInProgress ? (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md text-[10px] font-semibold border border-amber-500/20">
+                                              <Activity className="w-3 h-3 animate-pulse" /> Active
+                                            </div>
+                                          ) : (
+                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-muted text-muted-foreground rounded-md text-[10px] font-semibold border border-border">
+                                              <Clock className="w-3 h-3" /> Pending
+                                            </div>
+                                          )}
+                                        </div>
+                                        <div className={`font-mono text-[10px] px-2 py-1 rounded-md border backdrop-blur-sm font-medium ${
+                                          isCompleted ? 'bg-primary/5 text-primary border-primary/20' : 
+                                          isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' : 
+                                          'bg-card/50 text-muted-foreground border-border shadow-inner'
+                                        }`}>
+                                          {dateStr}
+                                        </div>
                                     </div>
                                   </div>
 
                                   {/* Output Port */}
                                   {!isLast && (
-                                    <div className={`absolute -right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 bg-background border-[2px] rounded-full z-20 ${
-                                      isCompleted ? 'border-primary' : 'border-muted-foreground'
+                                    <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${
+                                      isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 
+                                      'border-border shadow-inner'
                                     }`}></div>
                                   )}
 
                                   {/* Connection Wire (SVG Bezier Fix) */}
                                   {!isLast && (
-                                    <svg width="64" height="80" className="absolute left-[calc(100%-1px)] pointer-events-none" style={{ top: isEven ? 'calc(50% - 80px)' : '50%', zIndex: -10 }}>
+                                    <svg width="64" height="90" className="absolute left-[calc(100%-2px)] pointer-events-none drop-shadow-md" style={{ top: isEven ? 'calc(50% - 90px)' : '50%', zIndex: 0 }}>
                                       <path 
-                                        d={isEven ? "M 0 80 C 32 80, 32 0, 64 0" : "M 0 0 C 32 0, 32 80, 64 80"} 
+                                        d={isEven ? "M 0 90 C 32 90, 32 0, 64 0" : "M 0 0 C 32 0, 32 90, 64 90"} 
                                         fill="none" 
                                         stroke="currentColor" 
-                                        strokeWidth="2" 
-                                        className={isCompleted ? 'text-primary' : 'text-primary/30'}
+                                        strokeWidth={isCompleted ? "3" : "2"} 
+                                        strokeDasharray={isInProgress ? "4 4" : "0"}
+                                        className={`transition-all duration-700 ${
+                                          isCompleted ? 'text-primary' : 
+                                          isInProgress ? 'text-amber-500 animate-[dash_2s_linear_infinite]' : 
+                                          'text-border dark:text-gray-700'
+                                        }`}
                                       />
                                     </svg>
                                   )}
@@ -1725,7 +1758,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             })}
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground italic py-8 text-center bg-muted/30 rounded-xl border border-border">
+                          <div className="text-xs text-muted-foreground italic py-8 text-center bg-muted rounded-xl border border-border">
                             No milestones tracked in P6 for this EPS
                           </div>
                         )}
@@ -1748,13 +1781,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         ].map(([label, val]) => (
                           <div key={label as string} className="detail-row">
                             <span className="detail-row-label">{label}</span>
-                            <span className={`detail-row-value ${(label === 'Total Float' && p6.totalFloat != null && p6.totalFloat <= 0) ? 'text-red-400 font-semibold' :
-                              (label === 'Finish Date Variance' && p6.finishDateVariance != null && p6.finishDateVariance < -10) ? 'text-red-400' : ''
+                            <span className={`detail-row-value ${(label === 'Total Float' && p6.totalFloat != null && p6.totalFloat <= 0) ? 'text-destructive font-semibold' :
+                              (label === 'Finish Date Variance' && p6.finishDateVariance != null && p6.finishDateVariance < -10) ? 'text-destructive' : ''
                               }`}>{val}</span>
                           </div>
                         ))}
                         {p6.totalFloat != null && (
-                          <div className="mt-3 p-3 rounded-lg bg-muted/50 border border-border">
+                          <div className="mt-3 p-3 rounded-lg bg-muted border border-border">
                             <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
                               {p6.totalFloat <= 0
                                 ? '⚠️ Critical path — zero or negative float. Any delay directly impacts the project finish date.'
@@ -1868,8 +1901,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h3 className="text-lg font-bold text-foreground">Live Transmission Commissioning Portal</h3>
                     <p className="text-sm text-muted-foreground mt-1">Access the live Adani Transmission dashboard for deep-dive real-time metrics.</p>
 
-                    <div className="flex items-center gap-2 mt-3 text-xs bg-emerald-500/10 border border-emerald-500/20 text-emerald-700 dark:text-emerald-400 px-3 py-1.5 rounded-md w-fit">
-                      <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <div className="flex items-center gap-2 mt-3 text-xs bg-success/100/10 border border-success/20 text-success dark:text-success px-3 py-1.5 rounded-md w-fit">
+                      <div className="w-2 h-2 rounded-full bg-success/100 animate-pulse" />
                       <span><strong>Auto-Login Enabled:</strong> You will be securely authenticated automatically.</span>
                     </div>
                   </div>
@@ -1903,11 +1936,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {/* TC Summary Cards */}
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                     <HeroMetric label="Total Lines" value={tc.summary.totalLines} icon={Network} color="text-purple-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'total' ? null : 'total')} active={expandedTcMetric === 'total'} />
-                    <HeroMetric label="Charged" value={tc.summary.chargedLines} icon={Zap} color="text-emerald-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'charged' ? null : 'charged')} active={expandedTcMetric === 'charged'} />
-                    <HeroMetric label="In Progress" value={tc.summary.inProgressLines} icon={Activity} color="text-blue-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'in_progress' ? null : 'in_progress')} active={expandedTcMetric === 'in_progress'} />
-                    <HeroMetric label="Delayed" value={tc.summary.delayedLines} icon={AlertTriangle} color="text-red-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'delayed' ? null : 'delayed')} active={expandedTcMetric === 'delayed'} />
-                    <HeroMetric label="Mapped MW" value={tc.summary.totalMW ? `${tc.summary.totalMW}` : '—'} unit="MW" icon={Target} color="text-emerald-400" />
-                    <HeroMetric label="TC Project" value={mapping?.tcProjectName || '—'} icon={MapPin} color="text-amber-400" />
+                    <HeroMetric label="Charged" value={tc.summary.chargedLines} icon={Zap} color="text-success" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'charged' ? null : 'charged')} active={expandedTcMetric === 'charged'} />
+                    <HeroMetric label="In Progress" value={tc.summary.inProgressLines} icon={Activity} color="text-primary" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'in_progress' ? null : 'in_progress')} active={expandedTcMetric === 'in_progress'} />
+                    <HeroMetric label="Delayed" value={tc.summary.delayedLines} icon={AlertTriangle} color="text-destructive" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'delayed' ? null : 'delayed')} active={expandedTcMetric === 'delayed'} />
+                    <HeroMetric label="Mapped MW" value={tc.summary.totalMW ? `${tc.summary.totalMW}` : '—'} unit="MW" icon={Target} color="text-success" />
+                    <HeroMetric label="TC Project" value={mapping?.tcProjectName || '—'} icon={MapPin} color="text-warning" />
                   </div>
 
                   {/* ── Interactive Breakdown Panel ── */}
@@ -1921,11 +1954,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           {expandedTcMetric === 'in_progress' && 'Lines In Progress'}
                           {expandedTcMetric === 'delayed' && 'Delayed Lines'}
                         </h4>
-                        <button onClick={() => setExpandedTcMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted/50 transition-colors">✕ Close</button>
+                        <button onClick={() => setExpandedTcMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors">✕ Close</button>
                       </div>
                       <div className="overflow-x-auto max-h-[500px] overflow-y-auto scrollbar-thin">
                         <table className="intel-table relative w-full">
-                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+                          <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
                             <tr>
                               <th className="whitespace-nowrap">Project / Phase</th>
                               <th>From</th>
@@ -1951,7 +1984,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 return true;
                               })
                               .map((edge: any, i: number) => (
-                                <tr key={i} className="hover:bg-muted/50 transition-colors">
+                                <tr key={i} className="hover:bg-muted transition-colors">
                                   <td className="font-bold text-purple-400 font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
                                     {edge.project} <span className="text-muted-foreground ml-1 font-normal lowercase tracking-normal">({edge.phase})</span>
                                   </td>
@@ -1961,8 +1994,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   <td className="font-mono text-xs">{edge.length || '—'}</td>
                                   <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
                                   <td>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                      edge.normalizedStatus === 'in_progress' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-success/100/10 text-success border border-success/20' :
+                                      edge.normalizedStatus === 'in_progress' ? 'bg-warning/100/10 text-warning border border-warning/20' :
                                         'bg-muted text-muted-foreground border border-border'
                                       }`}>
                                       {edge.status || '—'}
@@ -2017,8 +2050,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-emerald-500/10 text-emerald-400' :
-                                    edge.normalizedStatus === 'in_progress' ? 'bg-amber-500/10 text-amber-400' :
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-success/100/10 text-success' :
+                                    edge.normalizedStatus === 'in_progress' ? 'bg-warning/100/10 text-warning' :
                                       'bg-muted text-muted-foreground'
                                     }`}>
                                     {edge.status || '—'}
@@ -2041,7 +2074,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {tc.rajasthanEdges.length > 0 && (
                     <div className="intelligence-card p-6">
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Network className="w-4 h-4 text-blue-400" /> Rajasthan Transmission Lines
+                        <Network className="w-4 h-4 text-primary" /> Rajasthan Transmission Lines
                       </h3>
                       <div className="overflow-x-auto">
                         <table className="intel-table">
@@ -2073,9 +2106,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs max-w-[120px] truncate">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'Completed' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                    edge.normalizedStatus === 'In Progress' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' :
-                                      'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'Completed' ? 'bg-success/100/10 text-success border border-success/20' :
+                                    edge.normalizedStatus === 'In Progress' ? 'bg-primary/100/10 text-primary border border-primary/20' :
+                                      'bg-warning/100/10 text-warning border border-warning/20'
                                     }`}>
                                     {edge.normalizedStatus || edge.status || '—'}
                                   </span>
@@ -2097,11 +2130,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {tc.nodes && tc.nodes.length > 0 && (
                     <div className="intelligence-card p-6">
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <MapPin className="w-4 h-4 text-emerald-400" /> Transmission Substations & Nodes
+                        <MapPin className="w-4 h-4 text-success" /> Transmission Substations & Nodes
                       </h3>
                       <div className="overflow-x-auto max-h-[300px] overflow-y-auto scrollbar-thin">
                         <table className="intel-table relative w-full">
-                          <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 shadow-sm">
+                          <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 shadow-sm">
                             <tr>
                               <th>Node ID</th>
                               <th>Label</th>
@@ -2122,9 +2155,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 </td>
                                 <td className="text-muted-foreground/70 text-xs">{n.region || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${n.status === 'Completed' || n.status === 'charged' ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' :
-                                    n.status === 'In Progress' || n.status === 'in_progress' ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20' :
-                                      'bg-muted/50 text-muted-foreground border border-border'
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${n.status === 'Completed' || n.status === 'charged' ? 'bg-success/100/10 text-success border border-success/20' :
+                                    n.status === 'In Progress' || n.status === 'in_progress' ? 'bg-warning/100/10 text-warning border border-warning/20' :
+                                      'bg-muted text-muted-foreground border border-border'
                                     }`}>
                                     {n.status || '—'}
                                   </span>
@@ -2149,8 +2182,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <div className="bg-card border border-border rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b border-border bg-muted">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-100 dark:bg-red-500/10 flex items-center justify-center">
-                  <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-500" />
+                <div className="w-10 h-10 rounded-xl bg-destructive/10 dark:bg-destructive/100/10 flex items-center justify-center">
+                  <AlertTriangle className="w-5 h-5 text-destructive dark:text-destructive" />
                 </div>
                 <div>
                   <h3 className="text-lg font-bold text-card-foreground tracking-tight">Delayed Construction Activities</h3>
@@ -2160,14 +2193,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               <button onClick={() => setShowDelayedModal(false)} className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
             </div>
 
-            <div className="flex-1 overflow-auto p-6 space-y-6" data-lenis-prevent="true">
+            <div className="flex-1 overflow-auto p-6 space-y-6">
               <div className="grid grid-cols-3 gap-4">
                 <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Total Delayed</div>
                     <div className="text-3xl font-light text-card-foreground">{detail.p6.delayedActivities.length}</div>
                   </div>
-                  <AlertTriangle className="w-8 h-8 text-red-500/20" />
+                  <AlertTriangle className="w-8 h-8 text-destructive/20" />
                 </div>
                 <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
                   <div>
@@ -2191,14 +2224,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       })()} <span className="text-sm">MW</span>
                     </div>
                   </div>
-                  <Zap className="w-8 h-8 text-amber-500/20" />
+                  <Zap className="w-8 h-8 text-warning/20" />
                 </div>
                 <div className="bg-muted border border-border rounded-xl p-4 flex items-center justify-between">
                   <div>
                     <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Critical Delays (&gt;30d)</div>
-                    <div className="text-3xl font-light text-red-500">{detail.p6.delayedActivities.filter((a: any) => a.delayDays > 30).length}</div>
+                    <div className="text-3xl font-light text-destructive">{detail.p6.delayedActivities.filter((a: any) => a.delayDays > 30).length}</div>
                   </div>
-                  <Clock className="w-8 h-8 text-red-500/20" />
+                  <Clock className="w-8 h-8 text-destructive/20" />
                 </div>
               </div>
 
@@ -2230,14 +2263,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           }
                         }
                         return (
-                          <tr key={i} className="hover:bg-muted/50 transition-colors">
+                          <tr key={i} className="hover:bg-muted transition-colors">
                             <td className="px-4 py-3">
                               <div className="text-xs font-mono text-muted-foreground mb-0.5">{act.activityId}</div>
                               <div className="font-medium text-card-foreground max-w-[300px] truncate" title={act.name}>{act.name}</div>
                             </td>
                             <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${act.status === 'In Progress' ? 'bg-amber-100 text-amber-700 dark:bg-amber-500/10 dark:text-amber-500' : 'bg-red-100 text-red-700 dark:bg-red-500/10 dark:text-red-500'}`}>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${act.status === 'In Progress' ? 'bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning' : 'bg-destructive/10 text-destructive dark:bg-destructive/100/10 dark:text-destructive'}`}>
                                 {act.status}
                               </span>
                             </td>
@@ -2245,13 +2278,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               {act.status === 'In Progress' ? act.plannedFinishDate : act.plannedStartDate}
                             </td>
                             <td className="px-4 py-3">
-                              <div className="flex items-center gap-1.5 text-red-500 font-medium">
-                                <ArrowLeft className="w-3 h-3 text-red-500/50" />
+                              <div className="flex items-center gap-1.5 text-destructive font-medium">
+                                <ArrowLeft className="w-3 h-3 text-destructive/50" />
                                 {act.delayDays} days
                               </div>
                             </td>
                             <td className="px-4 py-3">
-                              {showMW ? <span className="text-amber-500 font-medium">{act.mwCapacity.toFixed(1)} MW</span> : <span className="text-muted-foreground/40 italic text-[10px]">grouped</span>}
+                              {showMW ? <span className="text-warning font-medium">{act.mwCapacity.toFixed(1)} MW</span> : <span className="text-muted-foreground/40 italic text-[10px]">grouped</span>}
                             </td>
                           </tr>
                         );
@@ -2273,7 +2306,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               </button>
             </div>
             
-            <div className="flex-1 overflow-auto bg-muted/30 p-12 custom-scrollbar">
+            <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
               <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
                 {p6?.milestones?.map((m: any, i: number) => {
                   const isLast = i === p6.milestones.length - 1;
@@ -2300,12 +2333,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       }`}>
                         <div className={`px-4 py-3 flex items-center gap-3 border-b ${
                             isCompleted ? 'bg-primary/5 border-primary/20 text-primary' : 
-                            isInProgress ? 'bg-amber-500/5 border-amber-500/20 text-amber-600' : 
-                            'bg-muted/30 border-border text-muted-foreground'
+                            isInProgress ? 'bg-warning/100/5 border-warning/20 text-warning' : 
+                            'bg-muted border-border text-muted-foreground'
                         } rounded-t-2xl`}>
                             <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${
                               isCompleted ? 'bg-primary text-primary-foreground' : 
-                              isInProgress ? 'bg-amber-500 text-white' : 
+                              isInProgress ? 'bg-warning/100 text-white' : 
                               'bg-background border border-border text-foreground'
                             }`}>
                               {i + 1}
@@ -2317,7 +2350,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                         <div className="px-4 py-3.5 flex items-center justify-between bg-card rounded-b-2xl">
                             <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-amber-500 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
+                              <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-warning/100 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
                             </div>
                             <span className="font-mono text-[10px] text-foreground bg-muted px-2 py-1 rounded-md border border-border">{dateStr}</span>
                         </div>

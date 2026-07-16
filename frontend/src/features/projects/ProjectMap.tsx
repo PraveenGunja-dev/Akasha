@@ -115,16 +115,16 @@ function WeatherWidget({ lat, lng }: { lat: number, lng: number }) {
       .catch(() => setLoading(false));
   }, [lat, lng]);
 
-  if (loading) return <div className="flex items-center gap-2 text-xs text-slate-500 mt-2"><Loader2 className="w-3 h-3 animate-spin" /> Fetching live weather...</div>;
+  if (loading) return <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2"><Loader2 className="w-3 h-3 animate-spin" /> Fetching live weather...</div>;
   if (!weather) return null;
 
   return (
-    <div className="mt-2 bg-slate-50 dark:bg-slate-700/50 px-2 py-1.5 rounded flex flex-wrap items-center justify-between gap-2 border border-slate-100 dark:border-slate-600">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+    <div className="mt-2 bg-muted dark:bg-slate-700/50 px-2 py-1.5 rounded flex flex-wrap items-center justify-between gap-2 border border-muted dark:border-slate-600">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground dark:text-muted-foreground">
         <Thermometer className="w-3.5 h-3.5 text-rose-500" />
         {weather.temperature}°C
       </div>
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-200">
+      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground dark:text-muted-foreground">
         <Wind className="w-3.5 h-3.5 text-cyan-500" />
         {weather.windspeed} km/h
       </div>
@@ -219,55 +219,55 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
 
   if (isExpanded) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 sm:p-8 animate-fade-in" onWheel={(e) => e.stopPropagation()}>
-        <div className="w-full max-w-5xl bg-white dark:bg-slate-800 shadow-2xl rounded-2xl flex flex-col overflow-hidden max-h-[90vh]">
-          <div className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/60 backdrop-blur-sm p-4 sm:p-8 animate-fade-in" onWheel={(e) => e.stopPropagation()}>
+        <div className="w-full max-w-5xl bg-card shadow-2xl rounded-2xl flex flex-col overflow-hidden max-h-[90vh]">
+          <div className="p-5 border-b border-border dark:border-slate-700 flex justify-between items-center bg-muted dark:bg-gray-900/80">
             <div>
-              <h3 className="font-bold text-xl text-slate-800 dark:text-slate-200 flex items-center gap-2">
-                <Activity className="w-6 h-6 text-indigo-600 dark:text-indigo-400" />
+              <h3 className="font-bold text-xl text-foreground dark:text-muted-foreground flex items-center gap-2">
+                <Activity className="w-6 h-6 text-primary dark:text-primary" />
                 Weather Simulation
               </h3>
-              <p className="text-sm text-slate-500 mt-1">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
+              <p className="text-sm text-muted-foreground mt-1">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
             </div>
             <div className="flex items-center gap-2">
-              <button onClick={() => setIsExpanded(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500" title="Minimize">
+              <button onClick={() => setIsExpanded(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-muted-foreground" title="Minimize">
                 <Minimize2 className="w-5 h-5" />
               </button>
-              <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-slate-500" title="Close">
+              <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-muted-foreground" title="Close">
                 <X className="w-6 h-6" />
               </button>
             </div>
           </div>
 
-          <div className="flex-1 p-6 overflow-y-auto bg-slate-50/50 dark:bg-slate-800/30">
-            <div className="mb-6 text-base text-slate-600 dark:text-slate-400">
+          <div className="flex-1 p-6 overflow-y-auto bg-muted dark:bg-gray-900/30">
+            <div className="mb-6 text-base text-foreground dark:text-muted-foreground">
               Analyze historical patterns (past 7 days) and forecast data (next 7 days) for generation optimization.
             </div>
 
             {loading ? (
-              <div className="h-[250px] flex flex-col items-center justify-center text-slate-500 gap-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
-                <Loader2 className="w-10 h-10 animate-spin text-indigo-500" />
+              <div className="h-[250px] flex flex-col items-center justify-center text-muted-foreground gap-4 bg-card rounded-xl border border-border dark:border-slate-700 shadow-sm">
+                <Loader2 className="w-10 h-10 animate-spin text-primary" />
                 <span className="text-base font-medium">Running Environmental Simulation...</span>
               </div>
             ) : (
-              <div className="h-[250px] w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm pt-4 px-2">
+              <div className="h-[250px] w-full bg-card rounded-xl border border-border dark:border-slate-700 shadow-sm pt-4 px-2">
                 <ReactECharts option={getChartOptions()} style={{ height: '100%', width: '100%' }} />
               </div>
             )}
 
             {!loading && data && (
               <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-amber-50 dark:bg-amber-900/20 p-5 rounded-xl border border-amber-100 dark:border-amber-800/30 shadow-sm flex flex-col justify-between">
+                <div className="bg-warning/10 dark:bg-amber-900/20 p-5 rounded-xl border border-warning/20 dark:border-amber-800/30 shadow-sm flex flex-col justify-between">
                   <div>
-                    <div className="flex items-center gap-2 text-amber-700 dark:text-amber-400 mb-2">
+                    <div className="flex items-center gap-2 text-warning dark:text-warning mb-2">
                       <Sun className="w-5 h-5" />
                       <span className="text-sm font-semibold uppercase tracking-wider">7-Day Peak Irradiance</span>
                     </div>
                     <div className="text-3xl font-bold text-amber-900 dark:text-amber-100">
-                      {Math.max(...data.hourly.direct_normal_irradiance.slice(168)).toFixed(1)} <span className="text-base font-medium text-amber-700/70">W/m²</span>
+                      {Math.max(...data.hourly.direct_normal_irradiance.slice(168)).toFixed(1)} <span className="text-base font-medium text-warning/70">W/m²</span>
                     </div>
                   </div>
-                  <div className="mt-4 text-xs text-amber-800/70 dark:text-amber-400/70 leading-relaxed border-t border-amber-200/50 dark:border-amber-800/50 pt-3">
+                  <div className="mt-4 text-xs text-amber-800/70 dark:text-warning/70 leading-relaxed border-t border-warning/20/50 dark:border-amber-800/50 pt-3">
                     <strong>Direct Impact:</strong> Represents direct sunlight hitting panels. Values over 800 W/m² yield optimal solar power generation.
                   </div>
                 </div>
@@ -287,17 +287,17 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
                   </div>
                 </div>
 
-                <div className="bg-slate-100 dark:bg-slate-700/30 p-5 rounded-xl border border-slate-200 dark:border-slate-600/50 shadow-sm flex flex-col justify-between">
+                <div className="bg-muted dark:bg-slate-700/30 p-5 rounded-xl border border-border dark:border-slate-600/50 shadow-sm flex flex-col justify-between">
                   <div>
-                    <div className="flex items-center gap-2 text-slate-700 dark:text-slate-300 mb-2">
+                    <div className="flex items-center gap-2 text-foreground dark:text-muted-foreground mb-2">
                       <Cloud className="w-5 h-5" />
                       <span className="text-sm font-semibold uppercase tracking-wider">7-Day Avg Cloud Cover</span>
                     </div>
-                    <div className="text-3xl font-bold text-slate-800 dark:text-slate-100">
-                      {(data.hourly.cloud_cover.slice(168).reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.slice(168).length).toFixed(1)} <span className="text-base font-medium text-slate-500">%</span>
+                    <div className="text-3xl font-bold text-foreground dark:text-slate-100">
+                      {(data.hourly.cloud_cover.slice(168).reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.slice(168).length).toFixed(1)} <span className="text-base font-medium text-muted-foreground">%</span>
                     </div>
                   </div>
-                  <div className="mt-4 text-xs text-slate-500 dark:text-slate-400 leading-relaxed border-t border-slate-200 dark:border-slate-600/50 pt-3">
+                  <div className="mt-4 text-xs text-muted-foreground dark:text-muted-foreground leading-relaxed border-t border-border dark:border-slate-600/50 pt-3">
                     <strong>Direct Impact:</strong> Dense cloud cover drastically diminishes solar yield. Consistent high coverage may require dispatching grid reserves.
                   </div>
                 </div>
@@ -325,46 +325,46 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
   }
 
   return (
-    <div className="absolute top-20 left-4 w-80 bg-white dark:bg-slate-800 shadow-xl rounded-xl flex flex-col border border-slate-200 dark:border-slate-700 z-[2000] overflow-hidden">
-      <div className="px-3 py-2 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center bg-slate-50 dark:bg-slate-800/80">
+    <div className="absolute top-20 left-4 w-80 bg-card shadow-xl rounded-xl flex flex-col border border-border dark:border-slate-700 z-[2000] overflow-hidden">
+      <div className="px-3 py-2 border-b border-border dark:border-slate-700 flex justify-between items-center bg-muted dark:bg-gray-900/80">
         <div>
-          <h3 className="font-bold text-sm text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-            <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+          <h3 className="font-bold text-sm text-foreground dark:text-muted-foreground flex items-center gap-1.5">
+            <Activity className="w-4 h-4 text-primary dark:text-primary" />
             Weather Sim
           </h3>
-          <p className="text-[10px] text-slate-500">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
+          <p className="text-[10px] text-muted-foreground">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setIsExpanded(true)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-slate-500" title="Expand">
+          <button onClick={() => setIsExpanded(true)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-muted-foreground" title="Expand">
             <Maximize2 className="w-3.5 h-3.5" />
           </button>
-          <button onClick={onClose} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-slate-500" title="Close">
+          <button onClick={onClose} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-muted-foreground" title="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="p-2 bg-slate-50/50 dark:bg-slate-800/30 flex-1 overflow-hidden">
+      <div className="p-2 bg-muted dark:bg-gray-900/30 flex-1 overflow-hidden">
         {loading ? (
-          <div className="h-40 flex flex-col items-center justify-center text-slate-500 gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+          <div className="h-40 flex flex-col items-center justify-center text-muted-foreground gap-2">
+            <Loader2 className="w-5 h-5 animate-spin text-primary" />
             <span className="text-[10px] font-medium">Running Simulation...</span>
           </div>
         ) : (
-          <div className="h-40 w-full bg-white dark:bg-slate-800 rounded border border-slate-200 dark:border-slate-700 pt-1 px-1">
+          <div className="h-40 w-full bg-card rounded border border-border dark:border-slate-700 pt-1 px-1">
             <ReactECharts option={getChartOptions()} style={{ height: '100%', width: '100%' }} />
           </div>
         )}
 
         {!loading && data && (
           <div className="mt-2 grid grid-cols-2 gap-1.5">
-            <div className="bg-amber-50 dark:bg-amber-900/20 p-1.5 rounded border border-amber-100 dark:border-amber-800/30">
-              <div className="flex items-center gap-1 text-amber-700 dark:text-amber-400 mb-0.5">
+            <div className="bg-warning/10 dark:bg-amber-900/20 p-1.5 rounded border border-warning/20 dark:border-amber-800/30">
+              <div className="flex items-center gap-1 text-warning dark:text-warning mb-0.5">
                 <Sun className="w-3 h-3" />
                 <span className="text-[9px] font-semibold uppercase">7-Day Peak Irradiance</span>
               </div>
               <div className="text-sm font-bold text-amber-900 dark:text-amber-100">
-                {Math.max(...data.hourly.direct_normal_irradiance.slice(168)).toFixed(0)} <span className="text-[10px] font-medium text-amber-700/70">W/m²</span>
+                {Math.max(...data.hourly.direct_normal_irradiance.slice(168)).toFixed(0)} <span className="text-[10px] font-medium text-warning/70">W/m²</span>
               </div>
             </div>
             <div className="bg-cyan-50 dark:bg-cyan-900/20 p-1.5 rounded border border-cyan-100 dark:border-cyan-800/30">
@@ -746,14 +746,14 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
         {/* Search Bar */}
         <div className="w-72 relative">
-          <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
-            <div className="pl-3 py-2 text-slate-400">
+          <div className="flex items-center bg-card border border-border dark:border-slate-700 shadow-lg rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+            <div className="pl-3 py-2 text-muted-foreground">
               <Search className="w-5 h-5" />
             </div>
             <input
               type="text"
               placeholder="Search projects..."
-              className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400"
+              className="w-full bg-transparent border-none px-3 py-2 text-sm text-foreground dark:text-muted-foreground focus:outline-none placeholder:text-muted-foreground"
               value={searchQuery}
               onChange={(e) => {
                 setSearchQuery(e.target.value);
@@ -765,15 +765,15 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
           {/* Autocomplete Suggestions */}
           {showSuggestions && searchSuggestions.length > 0 && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 max-h-64 overflow-y-auto">
+            <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 max-h-64 overflow-y-auto">
               {searchSuggestions.map((item, idx) => (
                 <button
                   key={`${item.name}-${idx}`}
                   onClick={() => handleSearchSelect(item.lat, item.lng)}
-                  className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors flex flex-col"
+                  className="w-full text-left px-4 py-2 text-sm hover:bg-muted dark:hover:bg-slate-700/50 transition-colors flex flex-col"
                 >
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">{item.name}</span>
-                  <span className="text-xs text-slate-500 dark:text-slate-400">{item.type}</span>
+                  <span className="font-semibold text-foreground dark:text-muted-foreground">{item.name}</span>
+                  <span className="text-xs text-muted-foreground dark:text-muted-foreground">{item.type}</span>
                 </button>
               ))}
             </div>
@@ -781,14 +781,14 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
           {/* New P6 Project ID Filter */}
           <div className="mt-2 relative">
-            <div className="flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
-              <div className="pl-3 py-2 text-indigo-500">
+            <div className="flex items-center bg-card border border-border dark:border-slate-700 shadow-lg rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-indigo-500 transition-all">
+              <div className="pl-3 py-2 text-primary">
                 {isLoadingEdges ? <Loader2 className="w-5 h-5 animate-spin" /> : <Layers className="w-5 h-5" />}
               </div>
               <input
                 type="text"
                 placeholder="Filter by P6 Project ID..."
-                className="w-full bg-transparent border-none px-3 py-2 text-sm text-slate-700 dark:text-slate-200 focus:outline-none placeholder:text-slate-400"
+                className="w-full bg-transparent border-none px-3 py-2 text-sm text-foreground dark:text-muted-foreground focus:outline-none placeholder:text-muted-foreground"
                 value={p6ProjectIdFilter}
                 onChange={(e) => setP6ProjectIdFilter(e.target.value)}
                 title="Enter P6 Project ID to see its mapped transmission lines"
@@ -797,7 +797,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
             {/* P6 Project ID Autocomplete Suggestions */}
             {p6ProjectIdFilter.trim() && !isLoadingEdges && mappedTcEdges.length === 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 max-h-48 overflow-y-auto">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-card border border-border dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1 max-h-48 overflow-y-auto">
                 {projects
                   .filter(p => {
                     const id = p.projectId || p.project_id;
@@ -810,7 +810,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       <button
                         key={`p6-sug-${idx}`}
                         onClick={() => setP6ProjectIdFilter(id)}
-                        className="w-full text-left px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors font-semibold text-slate-800 dark:text-slate-200"
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-muted dark:hover:bg-slate-700/50 transition-colors font-semibold text-foreground dark:text-muted-foreground"
                       >
                         {id}
                       </button>
@@ -820,7 +820,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                   const id = p.projectId || p.project_id;
                   return id && id.toLowerCase().includes(p6ProjectIdFilter.toLowerCase());
                 }).length === 0 && (
-                    <div className="px-4 py-2 text-sm text-slate-500 italic">No matching Project IDs found in summary data</div>
+                    <div className="px-4 py-2 text-sm text-muted-foreground italic">No matching Project IDs found in summary data</div>
                   )}
               </div>
             )}
@@ -834,8 +834,8 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <button
             onClick={() => setShowWeatherSim(!showWeatherSim)}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showWeatherSim
-              ? 'bg-indigo-100 dark:bg-indigo-500/20 border-indigo-300 dark:border-indigo-500/50 text-indigo-700 dark:text-indigo-400'
-              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              ? 'bg-primary/10 dark:bg-primary/100/20 border-indigo-300 dark:border-indigo-500/50 text-indigo-700 dark:text-primary'
+              : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
             <CloudLightning className={`w-4 h-4`} />
@@ -851,8 +851,8 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               if (showOIM) setViewportGrid([]); // clear on turn off
             }}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showOIM
-              ? 'bg-emerald-100 dark:bg-emerald-500/20 border-emerald-300 dark:border-emerald-500/50 text-emerald-700 dark:text-emerald-400'
-              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              ? 'bg-success/10 dark:bg-success/100/20 border-emerald-300 dark:border-emerald-500/50 text-success dark:text-success'
+              : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
             <Globe className={`w-4 h-4`} />
@@ -879,8 +879,8 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <button
             onClick={() => setShowTransmission(!showTransmission)}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showTransmission
-              ? 'bg-amber-100 dark:bg-amber-500/20 border-amber-300 dark:border-amber-500/50 text-amber-700 dark:text-amber-400'
-              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              ? 'bg-warning/10 dark:bg-warning/100/20 border-amber-300 dark:border-amber-500/50 text-warning dark:text-warning'
+              : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
             <Zap className={`w-4 h-4 ${showTransmission ? 'fill-current' : ''}`} />
@@ -893,8 +893,8 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <button
             onClick={() => setShowProjects(!showProjects)}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showProjects
-              ? 'bg-blue-100 dark:bg-blue-500/20 border-blue-300 dark:border-blue-500/50 text-blue-700 dark:text-blue-400'
-              : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200'
+              ? 'bg-primary/10 dark:bg-primary/100/20 border-blue-300 dark:border-blue-500/50 text-blue-700 dark:text-primary'
+              : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
             <Target className={`w-4 h-4 ${showProjects ? 'fill-current' : ''}`} />
@@ -907,18 +907,18 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <div className="relative">
             <button
               onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-              className="flex items-center gap-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 shadow-lg rounded-lg px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              className="flex items-center gap-2 bg-card border border-border dark:border-slate-700 shadow-lg rounded-lg px-3 py-2 hover:bg-muted dark:hover:bg-slate-700 transition-colors"
             >
-              <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-              <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">
+              <Layers className="w-4 h-4 text-primary dark:text-primary" />
+              <span className="text-sm font-semibold text-foreground dark:text-muted-foreground">
                 {activeStyle.name}
               </span>
-              <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+              <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
             </button>
 
             {isDropdownOpen && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
-                <div className="px-3 py-2 text-xs font-bold text-slate-400 uppercase tracking-wider border-b border-slate-100 dark:border-slate-700/50 mb-1">
+              <div className="absolute right-0 top-full mt-2 w-56 bg-card border border-border dark:border-slate-700 rounded-lg shadow-xl overflow-hidden py-1">
+                <div className="px-3 py-2 text-xs font-bold text-muted-foreground uppercase tracking-wider border-b border-muted dark:border-slate-700/50 mb-1">
                   Map Layers
                 </div>
                 {MAP_STYLES.map((style) => (
@@ -930,14 +930,14 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                     }}
                     className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between
                     ${activeStyle.id === style.id
-                        ? 'bg-indigo-50 dark:bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 font-semibold'
-                        : 'text-slate-600 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50'
+                        ? 'bg-primary/10 dark:bg-primary/100/10 text-indigo-700 dark:text-primary font-semibold'
+                        : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-slate-700/50'
                       }
                   `}
                   >
                     {style.name}
                     {activeStyle.id === style.id && (
-                      <div className="w-2 h-2 rounded-full bg-indigo-500" />
+                      <div className="w-2 h-2 rounded-full bg-primary/100" />
                     )}
                   </button>
                 ))}
@@ -999,13 +999,13 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       <h3 className="font-bold text-sm border-b pb-1 mb-2" style={{ color }}>
                         ⚡ {tags.name || 'Transmission Line'}
                       </h3>
-                      <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br /><span className="font-bold">{vLabel}</span></div>}
-                        {tags.cables && <div><span className="font-semibold text-slate-400">Cables</span><br /><span className="font-bold">{tags.cables}</span></div>}
-                        {tags.circuits && <div><span className="font-semibold text-slate-400">Circuits</span><br /><span className="font-bold">{tags.circuits}</span></div>}
-                        {tags.wires && <div><span className="font-semibold text-slate-400">Wires</span><br /><span className="font-bold">{tags.wires}</span></div>}
-                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
-                        {tags.ref && <div className="col-span-2"><span className="font-semibold text-slate-400">Ref</span><br /><span className="font-bold">{tags.ref}</span></div>}
+                      <div className="text-xs text-foreground grid grid-cols-2 gap-y-1.5 gap-x-3">
+                        {tags.voltage && <div><span className="font-semibold text-muted-foreground">Voltage</span><br /><span className="font-bold">{vLabel}</span></div>}
+                        {tags.cables && <div><span className="font-semibold text-muted-foreground">Cables</span><br /><span className="font-bold">{tags.cables}</span></div>}
+                        {tags.circuits && <div><span className="font-semibold text-muted-foreground">Circuits</span><br /><span className="font-bold">{tags.circuits}</span></div>}
+                        {tags.wires && <div><span className="font-semibold text-muted-foreground">Wires</span><br /><span className="font-bold">{tags.wires}</span></div>}
+                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-muted-foreground">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                        {tags.ref && <div className="col-span-2"><span className="font-semibold text-muted-foreground">Ref</span><br /><span className="font-bold">{tags.ref}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1026,11 +1026,11 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       <h3 className="font-bold text-sm text-indigo-700 border-b pb-1 mb-2">
                         🏗️ {tags.name || 'Substation'}
                       </h3>
-                      <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br /><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
-                        {tags.operator && <div><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
-                        {tags.substation && <div><span className="font-semibold text-slate-400">Type</span><br /><span className="font-bold">{tags.substation}</span></div>}
-                        {tags.ref && <div><span className="font-semibold text-slate-400">Ref</span><br /><span className="font-bold">{tags.ref}</span></div>}
+                      <div className="text-xs text-foreground grid grid-cols-2 gap-y-1.5 gap-x-3">
+                        {tags.voltage && <div><span className="font-semibold text-muted-foreground">Voltage</span><br /><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
+                        {tags.operator && <div><span className="font-semibold text-muted-foreground">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                        {tags.substation && <div><span className="font-semibold text-muted-foreground">Type</span><br /><span className="font-bold">{tags.substation}</span></div>}
+                        {tags.ref && <div><span className="font-semibold text-muted-foreground">Ref</span><br /><span className="font-bold">{tags.ref}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1055,10 +1055,10 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       <h3 className="font-bold text-sm text-indigo-700 border-b pb-1 mb-2">
                         🏗️ {tags.name || 'Substation'}
                       </h3>
-                      <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags.voltage && <div><span className="font-semibold text-slate-400">Voltage</span><br /><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
-                        {tags.operator && <div><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
-                        {tags.substation && <div><span className="font-semibold text-slate-400">Type</span><br /><span className="font-bold">{tags.substation}</span></div>}
+                      <div className="text-xs text-foreground grid grid-cols-2 gap-y-1.5 gap-x-3">
+                        {tags.voltage && <div><span className="font-semibold text-muted-foreground">Voltage</span><br /><span className="font-bold">{formatVoltageLabel(tags.voltage)}</span></div>}
+                        {tags.operator && <div><span className="font-semibold text-muted-foreground">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                        {tags.substation && <div><span className="font-semibold text-muted-foreground">Type</span><br /><span className="font-bold">{tags.substation}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1081,10 +1081,10 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       <h3 className="font-bold text-sm border-b pb-1 mb-2" style={{ color: genType === 'solar' ? '#f59e0b' : genType === 'wind' ? '#0ea5e9' : '#8b5cf6' }}>
                         {genType === 'solar' ? '☀️' : genType === 'wind' ? '🌀' : '⚡'} {tags.name || `${genType.charAt(0).toUpperCase() + genType.slice(1)} Generator`}
                       </h3>
-                      <div className="text-xs text-slate-700 grid grid-cols-2 gap-y-1.5 gap-x-3">
-                        {tags['generator:output:electricity'] && <div><span className="font-semibold text-slate-400">Output</span><br /><span className="font-bold">{tags['generator:output:electricity']}</span></div>}
-                        {tags['plant:output:electricity'] && <div><span className="font-semibold text-slate-400">Capacity</span><br /><span className="font-bold">{tags['plant:output:electricity']}</span></div>}
-                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-slate-400">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
+                      <div className="text-xs text-foreground grid grid-cols-2 gap-y-1.5 gap-x-3">
+                        {tags['generator:output:electricity'] && <div><span className="font-semibold text-muted-foreground">Output</span><br /><span className="font-bold">{tags['generator:output:electricity']}</span></div>}
+                        {tags['plant:output:electricity'] && <div><span className="font-semibold text-muted-foreground">Capacity</span><br /><span className="font-bold">{tags['plant:output:electricity']}</span></div>}
+                        {tags.operator && <div className="col-span-2"><span className="font-semibold text-muted-foreground">Operator</span><br /><span className="font-bold">{tags.operator}</span></div>}
                       </div>
                     </div>
                   </Popup>
@@ -1128,30 +1128,30 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           {clickedLocation && (
             <Popup position={clickedLocation} eventHandlers={{ remove: () => setClickedLocation(null) }}>
               <div className="min-w-[250px] max-w-[350px] max-h-[300px] overflow-y-auto custom-scrollbar">
-                <h3 className="font-bold text-sm text-slate-800 mb-2 border-b pb-1">Real-World Infrastructure</h3>
+                <h3 className="font-bold text-sm text-foreground mb-2 border-b pb-1">Real-World Infrastructure</h3>
 
                 {overpassLoading ? (
-                  <div className="flex flex-col items-center justify-center p-4 gap-2 text-slate-500">
-                    <Loader2 className="w-5 h-5 animate-spin text-indigo-500" />
+                  <div className="flex flex-col items-center justify-center p-4 gap-2 text-muted-foreground">
+                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
                     <span className="text-xs">Extracting OSM data...</span>
                   </div>
                 ) : overpassData && overpassData.length > 0 ? (
                   <div className="flex flex-col gap-3 mt-2">
                     {overpassData.map((item: any, idx: number) => (
-                      <div key={idx} className="bg-slate-50 border rounded p-2 shadow-sm">
+                      <div key={idx} className="bg-muted border rounded p-2 shadow-sm">
                         <div className="font-bold text-xs text-indigo-700 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-                          {item.tags.power === 'line' ? <Zap className="w-3.5 h-3.5 text-amber-500" /> : <Layers className="w-3.5 h-3.5 text-indigo-500" />}
+                          {item.tags.power === 'line' ? <Zap className="w-3.5 h-3.5 text-warning" /> : <Layers className="w-3.5 h-3.5 text-primary" />}
                           {item.tags.power} {item.tags.name ? `- ${item.tags.name}` : ''}
                         </div>
-                        <div className="text-[11px] text-slate-600 grid grid-cols-2 gap-x-2 gap-y-1">
-                          {item.tags.voltage && <div><span className="font-medium text-slate-400">Voltage:</span> {item.tags.voltage}</div>}
-                          {item.tags.cables && <div><span className="font-medium text-slate-400">Cables:</span> {item.tags.cables}</div>}
-                          {item.tags.circuits && <div><span className="font-medium text-slate-400">Circuits:</span> {item.tags.circuits}</div>}
-                          {item.tags.operator && <div><span className="font-medium text-slate-400">Operator:</span> {item.tags.operator}</div>}
-                          {item.tags.line && <div className="col-span-2"><span className="font-medium text-slate-400">Line Route:</span> {item.tags.line}</div>}
+                        <div className="text-[11px] text-foreground grid grid-cols-2 gap-x-2 gap-y-1">
+                          {item.tags.voltage && <div><span className="font-medium text-muted-foreground">Voltage:</span> {item.tags.voltage}</div>}
+                          {item.tags.cables && <div><span className="font-medium text-muted-foreground">Cables:</span> {item.tags.cables}</div>}
+                          {item.tags.circuits && <div><span className="font-medium text-muted-foreground">Circuits:</span> {item.tags.circuits}</div>}
+                          {item.tags.operator && <div><span className="font-medium text-muted-foreground">Operator:</span> {item.tags.operator}</div>}
+                          {item.tags.line && <div className="col-span-2"><span className="font-medium text-muted-foreground">Line Route:</span> {item.tags.line}</div>}
                         </div>
                         <button
-                          className="mt-2 w-full text-[10px] font-semibold bg-white border border-slate-300 hover:bg-indigo-50 hover:border-indigo-300 hover:text-indigo-700 text-slate-700 py-1.5 rounded transition-colors"
+                          className="mt-2 w-full text-[10px] font-semibold bg-white border border-border hover:bg-primary/10 hover:border-indigo-300 hover:text-indigo-700 text-foreground py-1.5 rounded transition-colors"
                           onClick={() => alert(`Bound ${item.tags.power} to project!`)}
                         >
                           Bind to Project Data
@@ -1160,7 +1160,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                     ))}
                   </div>
                 ) : (
-                  <div className="text-xs text-slate-500 p-2 text-center">
+                  <div className="text-xs text-muted-foreground p-2 text-center">
                     No power infrastructure found within 2km.
                   </div>
                 )}
@@ -1195,7 +1195,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                 <Popup>
                   <div className="flex flex-col gap-1 min-w-[120px]">
                     <h3 className="font-bold text-sm text-indigo-700">{sourceName} ↔ {targetName}</h3>
-                    <div className="text-xs text-slate-600">
+                    <div className="text-xs text-foreground">
                       <div>Type/Voltage: {type}</div>
                       <div>Status: <span className="font-semibold" style={{ color: getEdgeColor(status) }}>{status.replace('_', ' ').toUpperCase()}</span></div>
                       {edge.length && <div>Length: {edge.length}</div>}
@@ -1222,7 +1222,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               <Popup>
                 <div className="flex flex-col gap-2 min-w-[150px]">
                   <h3 className="font-bold text-sm text-indigo-700">{sub.name}</h3>
-                  <div className="text-xs text-slate-600">
+                  <div className="text-xs text-foreground">
                     <div>Type: Major Substation / Project Node</div>
                     <div>Lat: {sub.lat} | Lng: {sub.lng}</div>
                   </div>
@@ -1251,7 +1251,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                 <Popup>
                   <div className="flex flex-col gap-2 min-w-[200px]">
                     <h3 className="font-bold text-sm">{project.name || project.projectId}</h3>
-                    <div className="text-xs text-slate-600">
+                    <div className="text-xs text-foreground">
                       <div>Status: {project.health || 'N/A'}</div>
                       <div>Progress: {project.progress || 0}%</div>
                     </div>

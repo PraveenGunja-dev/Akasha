@@ -46,9 +46,9 @@ export default function LoginPage() {
 
       {/* Animated Background Gradient Orbs */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-1/4 -left-1/4 w-[800px] h-[800px] rounded-full bg-gradient-to-br from-[#0b74b1]/20 to-transparent blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
+        <div className="absolute -top-1/4 -left-1/4 w-[800px] h-[800px] rounded-full bg-gradient-to-br from-primary/20 to-transparent blur-[120px] animate-pulse" style={{ animationDuration: '8s' }} />
         <div className="absolute -bottom-1/4 -right-1/4 w-[700px] h-[700px] rounded-full bg-gradient-to-tl from-[#75479c]/20 to-transparent blur-[120px] animate-pulse" style={{ animationDuration: '10s', animationDelay: '2s' }} />
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-gradient-to-r from-[#bc3860]/10 to-[#0b74b1]/10 blur-[100px] animate-pulse" style={{ animationDuration: '12s', animationDelay: '4s' }} />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[500px] h-[500px] rounded-full bg-gradient-to-r from-accent/10 to-primary/10 blur-[100px] animate-pulse" style={{ animationDuration: '12s', animationDelay: '4s' }} />
       </div>
 
       {/* Grid pattern overlay */}
@@ -62,7 +62,7 @@ export default function LoginPage() {
         
         {/* Brand */}
         <div className="text-center mb-10">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-[#0b74b1] via-[#75479c] to-[#bc3860] mb-5 shadow-2xl shadow-[#0b74b1]/30">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-primary via-[#75479c] to-accent mb-5 shadow-2xl shadow-primary/30">
             <Zap className="w-8 h-8 text-white" />
           </div>
           <h1 className="text-4xl font-black tracking-tight text-white mb-1" style={{ fontFamily: 'Adani, sans-serif' }}>
@@ -91,7 +91,7 @@ export default function LoginPage() {
                   type="text"
                   value={username}
                   onChange={e => setUsername(e.target.value)}
-                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-[#0b74b1]/50 focus:bg-white/[0.08] transition-all text-[15px]"
+                  className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all text-[15px]"
                   placeholder="Enter your username"
                   autoComplete="username"
                   required
@@ -108,7 +108,7 @@ export default function LoginPage() {
                   type={showPassword ? 'text' : 'password'}
                   value={password}
                   onChange={e => setPassword(e.target.value)}
-                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-[#0b74b1]/50 focus:bg-white/[0.08] transition-all text-[15px]"
+                  className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-primary/50 focus:bg-white/[0.08] transition-all text-[15px]"
                   placeholder="Enter your password"
                   autoComplete="current-password"
                   required
@@ -125,8 +125,8 @@ export default function LoginPage() {
 
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium animate-in slide-in-from-top-2 duration-200">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-destructive/100/10 border border-destructive/20 text-destructive text-sm font-medium animate-in slide-in-from-top-2 duration-200">
+                <div className="w-1.5 h-1.5 rounded-full bg-destructive/100 shrink-0" />
                 {error}
               </div>
             )}
@@ -135,7 +135,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading || !username.trim() || !password.trim()}
-              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0b74b1] via-[#4a60c5] to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-2"
+              className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary via-[#4a60c5] to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-2"
             >
               {loading ? (
                 <>

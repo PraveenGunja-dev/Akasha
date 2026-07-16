@@ -80,10 +80,10 @@ export default function RightCopilot() {
              <h2 className="text-sm font-semibold text-white flex items-center gap-1">
                Ask Akasha
              </h2>
-             <p className="text-[10px] text-gray-400">Data Query Assistant</p>
+             <p className="text-[10px] text-muted-foreground">Data Query Assistant</p>
            </div>
         </div>
-        <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-[#1F2937] rounded text-gray-400 hover:text-white transition-colors">
+        <button onClick={() => setIsOpen(false)} className="p-1 hover:bg-[#1F2937] rounded text-muted-foreground hover:text-white transition-colors">
           <ChevronRight className="w-5 h-5" />
         </button>
       </div>
@@ -91,7 +91,7 @@ export default function RightCopilot() {
       {/* Chat Area */}
       <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar flex flex-col">
          <div className="text-center my-2">
-            <span className="text-[10px] text-gray-500 uppercase tracking-widest font-semibold border border-gray-800 rounded-full px-3 py-1">Today</span>
+            <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold border border-border rounded-full px-3 py-1">Today</span>
          </div>
 
          {messages.map((msg) => (
@@ -103,7 +103,7 @@ export default function RightCopilot() {
                 <div className={`text-xs p-3 rounded-2xl border shadow-sm leading-relaxed prose prose-invert max-w-full ${
                   msg.type === 'user' 
                     ? 'bg-[#3B82F6] text-white rounded-tr-none border-[#3B82F6]' 
-                    : 'bg-[#1F2937] text-gray-200 rounded-tl-none border-gray-800'
+                    : 'bg-[#1F2937] text-muted-foreground rounded-tl-none border-border'
                 }`}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
                     {msg.content}
@@ -119,7 +119,7 @@ export default function RightCopilot() {
                 <MessageSquare className="w-3 h-3 text-[#3B82F6]" />
              </div>
              <div className="flex-1">
-                <p className="text-xs p-3 rounded-2xl rounded-tl-none bg-[#1F2937] text-gray-400 border border-gray-800 flex items-center gap-2 w-fit">
+                <p className="text-xs p-3 rounded-2xl rounded-tl-none bg-[#1F2937] text-muted-foreground border border-border flex items-center gap-2 w-fit">
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] animate-bounce"></span>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] animate-bounce delay-100"></span>
                   <span className="w-1.5 h-1.5 rounded-full bg-[#3B82F6] animate-bounce delay-200"></span>
@@ -147,7 +147,7 @@ export default function RightCopilot() {
              style={{ minHeight: '44px' }}
            />
            <div className="absolute right-2 flex items-center gap-1">
-              <button className="p-1.5 text-gray-400 hover:text-[#3B82F6] transition-colors rounded-lg">
+              <button className="p-1.5 text-muted-foreground hover:text-[#3B82F6] transition-colors rounded-lg">
                 <Mic className="w-4 h-4" />
               </button>
               <button onClick={() => handleSend()} disabled={!input.trim()} className="p-1.5 bg-[#3B82F6] text-white rounded-lg shadow-[0_0_10px_rgba(59,130,246,0.3)] hover:bg-blue-600 transition-colors disabled:opacity-50">
@@ -158,7 +158,7 @@ export default function RightCopilot() {
         {suggestions.length > 0 && (
           <div className="flex gap-2 mt-2 px-1 overflow-x-auto custom-scrollbar whitespace-nowrap hide-scrollbar">
              {suggestions.map((s, idx) => (
-               <span key={idx} onClick={() => handleSend(s)} className="text-[10px] text-gray-400 bg-gray-800 border border-gray-700 rounded-full px-3 py-1 cursor-pointer hover:text-white hover:bg-gray-700 transition-colors">
+               <span key={idx} onClick={() => handleSend(s)} className="text-[10px] text-muted-foreground bg-card border border-gray-700 rounded-full px-3 py-1 cursor-pointer hover:text-white hover:bg-gray-700 transition-colors">
                  {s}
                </span>
              ))}

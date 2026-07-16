@@ -46,20 +46,20 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
          <div className="bg-card border border-red-500/50 rounded-2xl p-6 relative shadow-[0_0_15px_theme(colors.red.500/0.1)]">
-           <h3 className="text-red-500 text-xs font-semibold mb-2 uppercase tracking-wider flex items-center gap-2">
+           <h3 className="text-destructive text-xs font-semibold mb-2 uppercase tracking-wider flex items-center gap-2">
              <AlertTriangle className="w-4 h-4" /> Schedule Risks
            </h3>
            <p className="text-4xl font-light text-foreground">{scheduleRisks.length}</p>
          </div>
          <div className="bg-card border border-amber-500/50 rounded-2xl p-6 relative shadow-[0_0_15px_theme(colors.amber.500/0.1)]">
-           <h3 className="text-amber-500 text-xs font-semibold mb-2 uppercase tracking-wider flex items-center gap-2">
+           <h3 className="text-warning text-xs font-semibold mb-2 uppercase tracking-wider flex items-center gap-2">
              <Activity className="w-4 h-4" /> Financial Risks (High Val POs)
            </h3>
            <p className="text-4xl font-light text-foreground">{financialRisks.length}</p>
          </div>
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Overall Risk Score</h3>
-           <p className="text-4xl font-light text-red-500">
+           <p className="text-4xl font-light text-destructive">
              {Math.min(100, (scheduleRisks.length * 5) + (financialRisks.length * 2))}
            </p>
          </div>
@@ -67,7 +67,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
 
       <div className="bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-red-500/10 rounded-lg"><ShieldAlert className="w-5 h-5 text-red-500" /></div>
+          <div className="p-2 bg-destructive/100/10 rounded-lg"><ShieldAlert className="w-5 h-5 text-destructive" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Risk Heatmap (Probability vs Impact)</h2>
         </div>
         <div className="w-full h-[350px]">
@@ -79,7 +79,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
         {/* Schedule Risk Register */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-red-500/10 rounded-lg"><List className="w-5 h-5 text-red-500" /></div>
+            <div className="p-2 bg-destructive/100/10 rounded-lg"><List className="w-5 h-5 text-destructive" /></div>
             <h2 className="text-lg font-medium tracking-wide text-foreground">Top Schedule Risks</h2>
           </div>
           
@@ -95,7 +95,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
                 {scheduleRisks.map((p: any, idx: number) => (
                   <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
                     <td className="px-4 py-3 font-medium text-foreground">{p.name}</td>
-                    <td className="px-4 py-3 text-right font-bold text-red-500">+{p.finishDateVariance}</td>
+                    <td className="px-4 py-3 text-right font-bold text-destructive">+{p.finishDateVariance}</td>
                   </tr>
                 ))}
                 {scheduleRisks.length === 0 && (
@@ -109,7 +109,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
         {/* Financial Risk Register */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-amber-500/10 rounded-lg"><List className="w-5 h-5 text-amber-500" /></div>
+            <div className="p-2 bg-warning/100/10 rounded-lg"><List className="w-5 h-5 text-warning" /></div>
             <h2 className="text-lg font-medium tracking-wide text-foreground">Top Financial Risks (Vendor Concentration)</h2>
           </div>
           
@@ -127,7 +127,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
                   <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
                     <td className="px-4 py-3 text-foreground truncate max-w-[150px]">{po.vendor_name}</td>
                     <td className="px-4 py-3 font-mono text-xs text-primary">{po.purchasing_document}</td>
-                    <td className="px-4 py-3 text-right font-medium text-amber-500">{po.po_quantities_mw?.toFixed(2)}</td>
+                    <td className="px-4 py-3 text-right font-medium text-warning">{po.po_quantities_mw?.toFixed(2)}</td>
                   </tr>
                 ))}
                 {financialRisks.length === 0 && (

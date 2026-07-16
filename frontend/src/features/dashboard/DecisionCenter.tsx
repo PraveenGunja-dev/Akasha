@@ -52,11 +52,11 @@ export default function DecisionCenter({ p6Data, finDetails }: any) {
              <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Pending Actions</h3>
              <p className="text-4xl font-light text-foreground">{allActions.length}</p>
            </div>
-           <div className="bg-card border border-red-500/30 rounded-2xl p-6 shadow-sm">
+           <div className="bg-card border border-destructive/20 rounded-2xl p-6 shadow-sm">
              <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-2">
-               <AlertTriangle className="w-4 h-4 text-red-500" /> High Priority
+               <AlertTriangle className="w-4 h-4 text-destructive" /> High Priority
              </h3>
-             <p className="text-4xl font-light text-red-500">{allActions.filter(a => a.priority === 'high').length}</p>
+             <p className="text-4xl font-light text-destructive">{allActions.filter(a => a.priority === 'high').length}</p>
            </div>
         </div>
 
@@ -72,7 +72,7 @@ export default function DecisionCenter({ p6Data, finDetails }: any) {
           <div className="space-y-4">
             {allActions.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-48 text-muted-foreground/70">
-                 <CheckCircle className="w-12 h-12 mb-3 text-emerald-500/50" />
+                 <CheckCircle className="w-12 h-12 mb-3 text-success/50" />
                  <p>No critical actions required at this time.</p>
               </div>
             ) : (
@@ -80,20 +80,20 @@ export default function DecisionCenter({ p6Data, finDetails }: any) {
                 <div key={`${action.id}-${idx}`} className="group flex flex-col sm:flex-row gap-4 p-4 rounded-xl border border-border bg-muted hover:border-primary/50 transition-colors relative overflow-hidden">
                    
                    {/* Priority Indicator Line */}
-                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${action.priority === 'high' ? 'bg-red-500' : 'bg-amber-500'}`}></div>
+                   <div className={`absolute left-0 top-0 bottom-0 w-1 ${action.priority === 'high' ? 'bg-destructive/100' : 'bg-warning/100'}`}></div>
 
                    <div className="flex-shrink-0 pl-2">
                       {action.type === 'schedule' ? (
-                        <div className="p-3 bg-red-500/10 rounded-lg"><Clock className="w-6 h-6 text-red-500" /></div>
+                        <div className="p-3 bg-destructive/100/10 rounded-lg"><Clock className="w-6 h-6 text-destructive" /></div>
                       ) : (
-                        <div className="p-3 bg-amber-500/10 rounded-lg"><DollarSign className="w-6 h-6 text-amber-500" /></div>
+                        <div className="p-3 bg-warning/100/10 rounded-lg"><DollarSign className="w-6 h-6 text-warning" /></div>
                       )}
                    </div>
                    
                    <div className="flex-1">
                      <div className="flex items-start justify-between mb-1">
                        <h4 className="text-base font-medium text-foreground">{action.title}</h4>
-                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${action.priority === 'high' ? 'bg-red-500/20 text-red-500' : 'bg-amber-500/20 text-amber-500'}`}>
+                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${action.priority === 'high' ? 'bg-destructive/100/20 text-destructive' : 'bg-warning/100/20 text-warning'}`}>
                          {action.priority}
                        </span>
                      </div>

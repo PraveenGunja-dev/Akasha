@@ -1070,6 +1070,19 @@ def get_project_360_detail(db: Session, project_id: str):
                 elif isinstance(parsed, list):
                     if parsed:
                         edge_phase = parsed[0]
+            except Exception:
+                try:
+                    import ast
+                    parsed = ast.literal_eval(edge.projects)
+                    if isinstance(parsed, dict):
+                        phases_list = parsed.get("phases", [])
+                        if phases_list:
+                            edge_phase = phases_list[0]
+                except Exception:
+                    import re
+                    m = re.search(r'[\'"]phases[\'"]\s*:\s*\[\s*[\'"]([^\'"]+)[\'"]', edge.projects)
+                    if m:
+                        edge_phase = m.group(1)
             except:
                 pass
 

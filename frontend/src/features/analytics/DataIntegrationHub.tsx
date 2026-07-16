@@ -268,18 +268,18 @@ export default function DataIntegrationHub() {
       </div>
 
       {syncError && (
-        <div className="mb-6 p-4 bg-red-500/10 border border-red-500/20 rounded-md flex items-start gap-3 text-red-500 text-sm">
+        <div className="mb-6 p-4 bg-destructive/100/10 border border-destructive/20 rounded-md flex items-start gap-3 text-destructive text-sm">
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <h4 className="font-semibold mb-1">Live Sync Failed</h4>
-            <p className="text-red-500/80">{syncError}</p>
+            <p className="text-destructive/80">{syncError}</p>
           </div>
         </div>
       )}
 
       {/* P6 Password Expiry Warning Banner */}
       {p6ConfigStatus && p6ConfigStatus.is_expiring_soon && (
-        <div className="mb-6 p-4 bg-amber-500/10 border border-amber-500/20 rounded-md flex items-center justify-between text-amber-600 dark:text-amber-500">
+        <div className="mb-6 p-4 bg-warning/100/10 border border-warning/20 rounded-md flex items-center justify-between text-warning dark:text-warning">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
             <div>
@@ -292,7 +292,7 @@ export default function DataIntegrationHub() {
           </div>
           <button 
             onClick={() => setShowPasswordModal(true)}
-            className="ml-4 px-4 py-2 bg-amber-500 text-white hover:bg-amber-600 text-sm font-medium rounded-md transition-colors shadow-sm"
+            className="ml-4 px-4 py-2 bg-warning/100 text-white hover:bg-amber-600 text-sm font-medium rounded-md transition-colors shadow-sm"
           >
             Update
           </button>
@@ -327,7 +327,7 @@ export default function DataIntegrationHub() {
       {/* ── Master Projects Table ── */}
       <div className="bg-card rounded-xl border border-border shadow-sm flex flex-col flex-1 min-h-[500px] overflow-hidden">
         {/* Toolbar */}
-        <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-muted/10">
+        <div className="px-4 py-3 border-b border-border flex justify-between items-center bg-muted">
           <div className="relative w-72">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input 
@@ -352,7 +352,7 @@ export default function DataIntegrationHub() {
             </div>
           )}
           <table className="w-full text-sm text-left">
-            <thead className="bg-muted/30 text-muted-foreground text-[11px] font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-border">
+            <thead className="bg-muted text-muted-foreground text-[11px] font-semibold uppercase tracking-wider sticky top-0 z-10 border-b border-border">
               <tr>
                 <th className="px-5 py-3 font-medium">Project Entity</th>
                 <th className="px-5 py-3 font-medium">Primavera P6</th>
@@ -370,7 +370,7 @@ export default function DataIntegrationHub() {
                 </tr>
               ) : (
                 filteredData.map((proj, idx) => (
-                  <tr key={idx} className="hover:bg-muted/30 transition-colors">
+                  <tr key={idx} className="hover:bg-muted transition-colors">
                     {/* Master Info */}
                     <td className="px-5 py-3">
                       <div className="font-medium">{proj.project_name}</div>
@@ -386,7 +386,7 @@ export default function DataIntegrationHub() {
                         <div className="flex flex-col gap-1.5">
                           <div className="text-xs font-medium">{proj.p6.id}</div>
                           <div className="flex items-center gap-1.5 text-[11px]">
-                            <span className={`w-2 h-2 rounded-full ${proj.p6.health === 'On Track' ? 'bg-emerald-500' : proj.p6.health === 'Delayed' ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                            <span className={`w-2 h-2 rounded-full ${proj.p6.health === 'On Track' ? 'bg-success/100' : proj.p6.health === 'Delayed' ? 'bg-destructive/100' : 'bg-warning/100'}`}></span>
                             <span className="text-muted-foreground">{proj.p6.health}</span>
                           </div>
                         </div>
@@ -444,7 +444,7 @@ export default function DataIntegrationHub() {
           <div className="w-full max-w-5xl bg-card border border-border shadow-xl rounded-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
             
             {/* Header */}
-            <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-muted/10">
+            <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-muted">
               <div>
                 <h3 className="font-semibold text-foreground text-lg" style={{ textWrap: 'balance' }}>
                   {editingProject.p6_project_name || editingProject.project_name}
@@ -538,8 +538,8 @@ export default function DataIntegrationHub() {
                           {isPushing ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
                           {isPushing ? 'Saving...' : 'Save Updates'}
                         </button>
-                        {pushError && <p className="text-red-500 text-[11px] mt-1">{pushError}</p>}
-                        {pushSuccess && <p className="text-emerald-500 text-[11px] mt-1">Saved successfully</p>}
+                        {pushError && <p className="text-destructive text-[11px] mt-1">{pushError}</p>}
+                        {pushSuccess && <p className="text-success text-[11px] mt-1">Saved successfully</p>}
                       </div>
                     ) : (
                       <div className="space-y-2 text-[13px]">
@@ -575,11 +575,11 @@ export default function DataIntegrationHub() {
                     {projectDetails?.sap && (projectDetails.sap.inventory?.length > 0 || projectDetails.sap.po?.length > 0 || projectDetails.sap.inventory_summary > 0) ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="p-3 border border-border rounded-md bg-muted/10">
+                          <div className="p-3 border border-border rounded-md bg-muted">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Inventory Val</div>
                             <div className="text-base font-mono tabular-nums text-foreground">₹{projectDetails.sap.inventory?.reduce((sum: number, i: any) => sum + (i.value_unrestricted || 0), 0) / 10000000 > 0 ? (projectDetails.sap.inventory?.reduce((sum: number, i: any) => sum + (i.value_unrestricted || 0), 0) / 10000000).toFixed(2) : '0.00'} Cr</div>
                           </div>
-                          <div className="p-3 border border-border rounded-md bg-muted/10">
+                          <div className="p-3 border border-border rounded-md bg-muted">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">PO Value</div>
                             <div className="text-base font-mono tabular-nums text-foreground">₹{projectDetails.sap.po?.reduce((sum: number, po: any) => sum + (po.net_order_value_inr || 0), 0) / 10000000 > 0 ? (projectDetails.sap.po?.reduce((sum: number, po: any) => sum + (po.net_order_value_inr || 0), 0) / 10000000).toFixed(2) : '0.00'} Cr</div>
                           </div>
@@ -590,7 +590,7 @@ export default function DataIntegrationHub() {
                             <h5 className="text-[11px] font-medium text-muted-foreground mb-2">Recent Purchase Orders</h5>
                             <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
                               {projectDetails.sap.po.map((po: any, i: number) => (
-                                <div key={i} className="flex justify-between items-center py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors text-xs gap-2">
+                                <div key={i} className="flex justify-between items-center py-1.5 px-2 rounded-md hover:bg-muted transition-colors text-xs gap-2">
                                   <span className="font-mono text-muted-foreground">{po.purchasing_document}</span>
                                   <span className="truncate flex-1 text-foreground" title={po.vendor_name}>{po.vendor_name}</span>
                                   <span className="font-mono tabular-nums text-foreground whitespace-nowrap">₹{((po.net_order_value_inr || 0) / 10000000).toFixed(2)}</span>
@@ -613,11 +613,11 @@ export default function DataIntegrationHub() {
                     {projectDetails?.tc && (projectDetails.tc.khavda_edges?.length > 0 || projectDetails.tc.rajasthan_edges?.length > 0) ? (
                       <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">
-                          <div className="p-3 border border-border rounded-md bg-muted/10">
+                          <div className="p-3 border border-border rounded-md bg-muted">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Khavda Nodes</div>
                             <div className="text-base font-semibold text-foreground">{projectDetails.tc.khavda_edges?.length || 0}</div>
                           </div>
-                          <div className="p-3 border border-border rounded-md bg-muted/10">
+                          <div className="p-3 border border-border rounded-md bg-muted">
                             <div className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Rajasthan Nodes</div>
                             <div className="text-base font-semibold text-foreground">{projectDetails.tc.rajasthan_edges?.length || 0}</div>
                           </div>
@@ -627,7 +627,7 @@ export default function DataIntegrationHub() {
                            <h5 className="text-[11px] font-medium text-muted-foreground mb-2">Network Edges</h5>
                            <div className="space-y-1.5 max-h-[180px] overflow-y-auto pr-1">
                              {[...(projectDetails.tc.khavda_edges || []), ...(projectDetails.tc.rajasthan_edges || [])].map((edge: any, i: number) => (
-                               <div key={i} className="flex flex-col py-1.5 px-2 rounded-md hover:bg-muted/50 transition-colors text-xs gap-1">
+                               <div key={i} className="flex flex-col py-1.5 px-2 rounded-md hover:bg-muted transition-colors text-xs gap-1">
                                  <div className="flex justify-between items-center font-medium">
                                    <span className="truncate flex-1" title={edge.project}>{edge.project}</span>
                                    <div className="flex gap-1 shrink-0 text-[10px]">
@@ -666,7 +666,7 @@ export default function DataIntegrationHub() {
       {showPasswordModal && createPortal(
         <div className="fixed inset-0 flex items-center justify-center bg-black/40 p-4" style={{ zIndex: 9999 }}>
           <div className="w-full max-w-sm bg-card border border-border shadow-xl rounded-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
-            <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-muted/10">
+            <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-muted">
               <h3 className="font-semibold text-foreground">Update P6 Credentials</h3>
               <button 
                 onClick={() => setShowPasswordModal(false)}
@@ -693,7 +693,7 @@ export default function DataIntegrationHub() {
               </div>
               
               {passwordUpdateResult && (
-                <div className={`p-3 rounded-md text-sm ${passwordUpdateResult.error ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                <div className={`p-3 rounded-md text-sm ${passwordUpdateResult.error ? 'bg-destructive/100/10 text-destructive' : 'bg-success/100/10 text-success'}`}>
                   {passwordUpdateResult.error || passwordUpdateResult.success}
                 </div>
               )}
@@ -719,8 +719,8 @@ export default function DataIntegrationHub() {
 
 function SystemCard({ icon: Icon, name, status, color, metrics }: any) {
   const dotMap: any = {
-    blue: "bg-blue-500",
-    emerald: "bg-emerald-500",
+    blue: "bg-primary/100",
+    emerald: "bg-success/100",
     purple: "bg-purple-500"
   };
 
@@ -734,7 +734,7 @@ function SystemCard({ icon: Icon, name, status, color, metrics }: any) {
           <div>
             <h3 className="font-medium text-sm text-foreground">{name}</h3>
             <div className="flex items-center gap-1.5 mt-0.5 text-[11px] text-muted-foreground">
-              <div className={`w-1.5 h-1.5 rounded-full ${dotMap[color] || 'bg-gray-500'}`}></div>
+              <div className={`w-1.5 h-1.5 rounded-full ${dotMap[color] || 'bg-muted0'}`}></div>
               {status}
             </div>
           </div>

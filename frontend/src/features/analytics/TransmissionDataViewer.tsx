@@ -38,7 +38,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex justify-between items-center bg-card/40 border border-border p-6 rounded-2xl backdrop-blur-xl">
+      <div className="flex justify-between items-center bg-white/40 border border-border p-6 rounded-2xl backdrop-blur-xl">
         <div>
           <h2 className="text-2xl font-light tracking-wide text-foreground">Transmission Data Explorer</h2>
           <p className="text-sm text-muted-foreground mt-1">Raw API Data from Rajasthan & Khavda Endpoints</p>
@@ -61,7 +61,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
       {/* SECTION: UNIFIED PROJECT EXPLORER (Moved from Executive Overview) */}
       <div className="mt-8">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0b74b1] to-[#76489d] flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-sm">
             <h3 className="text-white font-bold text-lg">M</h3>
           </div>
           <h2 className="text-xl font-medium text-foreground tracking-wide">Transmission Mapping Details</h2>
@@ -70,7 +70,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
         <div className="glass-card rounded-2xl overflow-hidden shadow-lg border border-white/20">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
-              <thead className="bg-muted/50 text-muted-foreground uppercase tracking-widest text-[10px] font-bold border-b border-border">
+              <thead className="bg-muted text-muted-foreground uppercase tracking-widest text-[10px] font-bold border-b border-border">
                 <tr>
                   <th className="px-6 py-4">Project Name</th>
                   <th className="px-6 py-4">Capacity</th>
@@ -82,13 +82,13 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
               <tbody className="divide-y divide-border/30">
                 {/* Fallback to raw data if unified dashboardData is not passed */}
                 {dashboardData?.projects?.map((proj: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-muted/30 transition-colors group">
+                  <tr key={idx} className="hover:bg-muted transition-colors group">
                     <td className="px-6 py-4 font-medium text-foreground">{proj.project_name}</td>
                     <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mw} MW</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        proj.p6.health === 'On Track' ? 'bg-emerald-500/10 text-emerald-600' :
-                        proj.p6.health === 'Delayed' ? 'bg-red-500/10 text-red-600' : 'bg-gray-500/10 text-gray-500'
+                        proj.p6.health === 'On Track' ? 'bg-success/100/10 text-success' :
+                        proj.p6.health === 'Delayed' ? 'bg-destructive/100/10 text-destructive' : 'bg-muted0/10 text-muted-foreground'
                       }`}>
                         {proj.p6.health}
                       </span>
@@ -134,7 +134,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
 
 function DataCard({ title, data }: { title: string, data: any }) {
   return (
-    <div className="bg-card/30 border border-border/40 rounded-2xl p-6 backdrop-blur-lg flex flex-col max-h-[500px]">
+    <div className="bg-white/30 border border-border/40 rounded-2xl p-6 backdrop-blur-lg flex flex-col max-h-[500px]">
       <h3 className="text-lg font-medium text-foreground mb-4">{title}</h3>
       <div className="flex-1 overflow-auto bg-black/40 rounded-xl p-4 custom-scrollbar">
         {data ? (

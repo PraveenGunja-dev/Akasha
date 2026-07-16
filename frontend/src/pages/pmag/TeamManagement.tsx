@@ -21,7 +21,7 @@ export default function TeamManagement({ data, theme }: any) {
           <p className="text-[13px] text-muted-foreground mt-1">Manage PMO staff, project assignments, and governance permissions.</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 bg-card border border-border text-foreground text-[12px] px-4 py-1.5 rounded hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors shadow-sm">
+          <button className="flex items-center gap-2 bg-card border border-border text-foreground text-[12px] px-4 py-1.5 rounded hover:bg-muted dark:hover:bg-card transition-colors shadow-sm">
             <Settings2 className="w-4 h-4" /> Permissions
           </button>
           <button className="flex items-center gap-2 bg-primary text-white text-[12px] font-bold px-4 py-1.5 rounded hover:bg-primary/90 transition-colors shadow-sm">
@@ -70,7 +70,7 @@ export default function TeamManagement({ data, theme }: any) {
           </div>
           <div className="flex items-end gap-2">
             <span className="text-[24px] font-black text-foreground leading-none">{kpis.dpr_submission_rate_pct}%</span>
-            <span className="text-[12px] text-red-600 font-bold mb-0.5 flex items-center">
+            <span className="text-[12px] text-destructive font-bold mb-0.5 flex items-center">
               - 2%
             </span>
           </div>
@@ -109,7 +109,7 @@ export default function TeamManagement({ data, theme }: any) {
               </thead>
               <tbody>
                 {members.map((m: any, i: number) => (
-                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={i} className="hover:bg-muted dark:hover:bg-white/50 transition-colors">
                     <td>
                       <div className="flex items-center gap-3">
                         <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-primary font-bold text-[12px]">
@@ -127,10 +127,10 @@ export default function TeamManagement({ data, theme }: any) {
                     </td>
                     <td className="text-[11px] text-muted-foreground font-medium">{m.assignment}</td>
                     <td className="text-center">
-                      <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 mt-1">
-                        <div className={`h-1.5 rounded-full ${m.allocation > 100 ? 'bg-red-500' : 'bg-[#0b74b1]'}`} style={{ width: `${Math.min(m.allocation, 100)}%` }}></div>
+                      <div className="w-full bg-muted dark:bg-card rounded-full h-1.5 mt-1">
+                        <div className={`h-1.5 rounded-full ${m.allocation > 100 ? 'bg-destructive/100' : 'bg-primary'}`} style={{ width: `${Math.min(m.allocation, 100)}%` }}></div>
                       </div>
-                      <span className={`text-[10px] ${m.allocation > 100 ? 'text-red-500 font-bold' : 'text-muted-foreground'}`}>{m.allocation}%</span>
+                      <span className={`text-[10px] ${m.allocation > 100 ? 'text-destructive font-bold' : 'text-muted-foreground'}`}>{m.allocation}%</span>
                     </td>
                     <td>
                       <span className={m.allocation > 100 ? 'risk-badge-high' : m.status === 'Active' ? 'risk-badge-low' : 'risk-badge-medium'}>
@@ -173,41 +173,41 @@ export default function TeamManagement({ data, theme }: any) {
                 {/* Dept 1 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Engineering</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">85%</div>
-                  <div className="h-6 bg-red-500/20 text-red-700 dark:text-red-400 rounded-sm flex items-center justify-center text-[10px] font-bold border border-red-500/30">105%</div>
-                  <div className="h-6 bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-amber-500/30">95%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">80%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">85%</div>
+                  <div className="h-6 bg-destructive/100/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">105%</div>
+                  <div className="h-6 bg-warning/100/20 text-warning dark:text-warning rounded-sm flex items-center justify-center text-[10px] font-medium border border-warning/20">95%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">80%</div>
                 </div>
                 {/* Dept 2 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Project Mgmt</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">70%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">75%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">80%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">85%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">70%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">75%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">80%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">85%</div>
                 </div>
                 {/* Dept 3 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Field Ops</div>
-                  <div className="h-6 bg-red-500/20 text-red-700 dark:text-red-400 rounded-sm flex items-center justify-center text-[10px] font-bold border border-red-500/30">110%</div>
-                  <div className="h-6 bg-red-500/20 text-red-700 dark:text-red-400 rounded-sm flex items-center justify-center text-[10px] font-bold border border-red-500/30">110%</div>
-                  <div className="h-6 bg-amber-500/20 text-amber-700 dark:text-amber-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-amber-500/30">98%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">90%</div>
+                  <div className="h-6 bg-destructive/100/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">110%</div>
+                  <div className="h-6 bg-destructive/100/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">110%</div>
+                  <div className="h-6 bg-warning/100/20 text-warning dark:text-warning rounded-sm flex items-center justify-center text-[10px] font-medium border border-warning/20">98%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">90%</div>
                 </div>
                 {/* Dept 4 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Risk & Comp</div>
-                  <div className="h-6 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-slate-300 dark:border-slate-700">40%</div>
-                  <div className="h-6 bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-slate-300 dark:border-slate-700">40%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">50%</div>
-                  <div className="h-6 bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 rounded-sm flex items-center justify-center text-[10px] font-medium border border-emerald-500/30">60%</div>
+                  <div className="h-6 bg-slate-200 dark:bg-card text-foreground dark:text-muted-foreground rounded-sm flex items-center justify-center text-[10px] font-medium border border-border dark:border-slate-700">40%</div>
+                  <div className="h-6 bg-slate-200 dark:bg-card text-foreground dark:text-muted-foreground rounded-sm flex items-center justify-center text-[10px] font-medium border border-border dark:border-slate-700">40%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">50%</div>
+                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">60%</div>
                 </div>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-border flex justify-between text-[10px] font-bold text-muted-foreground shrink-0">
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-emerald-500/50 border border-emerald-500/50"></span> Optimal</div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-amber-500/50 border border-amber-500/50"></span> High</div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-red-500/50 border border-red-500/50"></span> Over (100%+)</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-success/100/50 border border-emerald-500/50"></span> Optimal</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-warning/100/50 border border-amber-500/50"></span> High</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-destructive/100/50 border border-red-500/50"></span> Over (100%+)</div>
             </div>
           </div>
 
@@ -251,16 +251,16 @@ export default function TeamManagement({ data, theme }: any) {
       <div className="bento-card p-5">
         <div className="flex justify-between items-center mb-4 border-b border-border pb-3">
           <h3 className="section-label !text-[12px] !text-foreground flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-[#bc3860]" /> Governance & Activity Log
+            <ShieldAlert className="w-4 h-4 text-accent" /> Governance & Activity Log
           </h3>
           <button className="text-[11px] text-primary font-bold hover:underline">View All Logs</button>
         </div>
         <div className="flex flex-col">
           {activity_log.map((log: any, i: number) => (
-            <div key={i} className="flex gap-4 py-3 border-b border-border/50 last:border-0 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors px-2 rounded">
+            <div key={i} className="flex gap-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted dark:hover:bg-white/50 transition-colors px-2 rounded">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
-                log.type === 'admin' ? 'bg-[#0b74b1]/10 text-[#0b74b1]' : 
-                log.type === 'alert' ? 'bg-red-500/10 text-red-500' : 'bg-slate-200 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
+                log.type === 'admin' ? 'bg-primary/10 text-primary' : 
+                log.type === 'alert' ? 'bg-destructive/100/10 text-destructive' : 'bg-slate-200 dark:bg-card text-muted-foreground dark:text-muted-foreground'
               }`}>
                 {log.type === 'admin' ? <Settings2 className="w-4 h-4" /> : log.type === 'alert' ? <ShieldAlert className="w-4 h-4" /> : <Users className="w-4 h-4" />}
               </div>

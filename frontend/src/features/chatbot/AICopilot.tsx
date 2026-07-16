@@ -392,11 +392,11 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
             {/* History Modal */}
             {sidebarOpen && (
               <div className="absolute top-12 left-0 w-80 bg-card border border-border shadow-2xl rounded-xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="p-3 flex items-center justify-between border-b border-border/50 bg-muted/30">
+                <div className="p-3 flex items-center justify-between border-b border-border/50 bg-muted">
                   <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Chat History</span>
                   <button
                     onClick={startNewThread}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-blue-500 hover:bg-blue-500/10 transition-colors"
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-primary hover:bg-primary/100/10 transition-colors"
                   >
                     <Plus className="w-3 h-3" /> New
                   </button>
@@ -430,7 +430,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                           </span>
                           <button
                             onClick={(e) => { e.stopPropagation(); deleteThread(thread.id, e); }}
-                            className="p-1 rounded hover:bg-red-500/10 text-muted-foreground/50 hover:text-red-500 opacity-0 group-hover/item:opacity-100 transition-all duration-200"
+                            className="p-1 rounded hover:bg-destructive/100/10 text-muted-foreground/50 hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-all duration-200"
                           >
                             <Trash2 className="w-3 h-3 shrink-0" />
                           </button>
@@ -457,9 +457,9 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 ml-3 px-2 py-1 rounded-md bg-emerald-500/10 border border-emerald-500/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></div>
-              <span className="text-[10px] text-emerald-500 font-semibold tracking-wider uppercase">Online</span>
+            <div className="flex items-center gap-1.5 ml-3 px-2 py-1 rounded-md bg-success/100/10 border border-success/20">
+              <div className="w-1.5 h-1.5 rounded-full bg-success/100 animate-pulse"></div>
+              <span className="text-[10px] text-success font-semibold tracking-wider uppercase">Online</span>
             </div>
           </div>
 
@@ -501,7 +501,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                 <button
                   key={i}
                   onClick={() => handleSend(card.prompt)}
-                  className="group text-left p-5 rounded-2xl bg-card/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden"
+                  className="group text-left p-5 rounded-2xl bg-white/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden"
                 >
                   {/* Subtle Colored Glow Overlay on Hover */}
                   <div 
@@ -531,7 +531,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           </div>
         ) : (
           /* ── Conversation View ── */
-          <div className="flex-1 overflow-y-auto scrollbar-hide z-10" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+          <div className="flex-1 overflow-y-auto scrollbar-hide z-10" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
             <div className="w-full px-8 py-6 space-y-1">
               {messages.map((msg) => (
                 <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
@@ -552,7 +552,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
                       </div>
 
-                      <div className="akasha-response prose dark:prose-invert max-w-[60%] prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-headings:text-[15px] prose-strong:text-primary prose-strong:font-semibold prose-code:text-blue-400 prose-code:bg-blue-500/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border prose-a:text-blue-400 prose-li:text-[13px] prose-li:text-foreground/85">
+                      <div className="akasha-response prose dark:prose-invert max-w-[60%] prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-headings:text-[15px] prose-strong:text-primary prose-strong:font-semibold prose-code:text-primary prose-code:bg-primary/100/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-[13px] prose-li:text-foreground/85">
                         <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
                           {msg.content}
                         </ReactMarkdown>
@@ -593,7 +593,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                                 <button 
                                   onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_up')}
                                   disabled={msg.feedbackStatus !== 'none'}
-                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'liked' ? 'text-emerald-500 bg-emerald-500/10' : ''}`}
+                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'liked' ? 'text-success bg-success/100/10' : ''}`}
                                   title="Good response"
                                 >
                                   <ThumbsUp className="w-3.5 h-3.5" />
@@ -601,7 +601,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                                 <button 
                                   onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_down')}
                                   disabled={msg.feedbackStatus !== 'none'}
-                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'disliked' ? 'text-red-500 bg-red-500/10' : ''}`}
+                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'disliked' ? 'text-destructive bg-destructive/100/10' : ''}`}
                                   title="Poor response"
                                 >
                                   <ThumbsDown className="w-3.5 h-3.5" />
@@ -686,7 +686,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                 {isStreaming ? (
                   <button
                     onClick={handleStop}
-                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 bg-red-500 text-white shadow-md hover:bg-red-600 animate-pulse"
+                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 bg-destructive/100 text-white shadow-md hover:bg-red-600 animate-pulse"
                     title="Stop generating"
                   >
                     <Square className="w-3.5 h-3.5 fill-current" />
@@ -722,7 +722,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                   </button>
                   <button 
                     onClick={startListening}
-                    className={`p-1.5 rounded-lg transition-colors ${isListening ? 'bg-red-500/10 text-red-500 hover:bg-red-500/20' : 'hover:bg-muted text-muted-foreground hover:text-foreground/90'}`}
+                    className={`p-1.5 rounded-lg transition-colors ${isListening ? 'bg-destructive/100/10 text-destructive hover:bg-destructive/100/20' : 'hover:bg-muted text-muted-foreground hover:text-foreground/90'}`}
                     title="Voice input"
                   >
                     <Mic className="w-4 h-4" />

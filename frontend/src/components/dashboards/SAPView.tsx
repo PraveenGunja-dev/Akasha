@@ -100,7 +100,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
 
           <div className="col-span-1 bg-card border border-border rounded-2xl p-6 min-h-[350px] shadow-sm">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-500/10 rounded-lg"><Truck className="w-5 h-5 text-blue-500" /></div>
+              <div className="p-2 bg-primary/100/10 rounded-lg"><Truck className="w-5 h-5 text-primary" /></div>
               <h2 className="text-lg font-medium tracking-wide text-foreground">Material Logistics Funnel</h2>
             </div>
             <div className="w-full h-[250px]">
@@ -153,7 +153,7 @@ export default function SAPView({ sapData, logisticsData, finDetails, logDetails
                     {po.delivery_completed_flag === 'X' ? (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Delivered</span>
                     ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">Pending</span>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-blue-800">Pending</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right font-medium">{((po.net_order_value_inr || po.net_order_value || 0) / 10000000).toFixed(2)}</td>

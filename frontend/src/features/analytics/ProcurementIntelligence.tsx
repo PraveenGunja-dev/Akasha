@@ -41,7 +41,7 @@ export default function ProcurementIntelligence({ finDetails }: any) {
          </div>
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Vendor Concentration Risk</h3>
-           <p className="text-4xl font-light text-amber-500">
+           <p className="text-4xl font-light text-warning">
              {vendorList.length > 0 ? Math.round((vendorList[0]?.value / vendorList.reduce((acc, v) => acc + v.value, 0)) * 100) : 0}%
            </p>
          </div>
@@ -60,7 +60,7 @@ export default function ProcurementIntelligence({ finDetails }: any) {
       {/* Detailed PO Pipeline */}
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-emerald-500/10 rounded-lg"><ShoppingCart className="w-5 h-5 text-emerald-500" /></div>
+          <div className="p-2 bg-success/100/10 rounded-lg"><ShoppingCart className="w-5 h-5 text-success" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Active Procurement Pipeline</h2>
         </div>
         

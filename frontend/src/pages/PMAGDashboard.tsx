@@ -167,7 +167,7 @@ export default function PMAGDashboard() {
     return (
       <div className="relative group/nav">
         {collapsed && !isMobileOpen && (
-          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-md bg-slate-800 text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover/nav:opacity-100 transition-opacity z-[60] shadow-lg">
+          <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-md bg-card text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover/nav:opacity-100 transition-opacity z-[60] shadow-lg">
             {item.label}
           </div>
         )}
@@ -186,11 +186,11 @@ export default function PMAGDashboard() {
           className={`w-full flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
             ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}
             ${isActive && item.id !== 'ai_copilot'
-              ? 'bg-[#0b74b1] text-white shadow-sm shadow-[#0b74b1]/25'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-primary text-white shadow-sm shadow-primary/25'
+              : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-card hover:text-foreground dark:hover:text-white'
             }`}
         >
-          <item.icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-white' : 'text-slate-400 group-hover/nav:text-slate-600 dark:group-hover/nav:text-slate-300'}`} />
+          <item.icon className={`w-[18px] h-[18px] shrink-0 transition-colors ${isActive ? 'text-white' : 'text-muted-foreground group-hover/nav:text-foreground dark:group-hover/nav:text-muted-foreground'}`} />
           {showLabel && <span className="truncate leading-none">{item.label}</span>}
         </button>
       </div>
@@ -200,20 +200,20 @@ export default function PMAGDashboard() {
   const sidebarInner = (
     <div className="flex flex-col h-full">
       {/* Brand Bar */}
-      <div className={`flex items-center shrink-0 border-b border-slate-100 dark:border-slate-800 h-[73px] ${collapsed && !isMobileOpen ? 'justify-center px-2' : 'px-4 justify-between'}`}>
+      <div className={`flex items-center shrink-0 border-b border-muted dark:border-border h-[73px] ${collapsed && !isMobileOpen ? 'justify-center px-2' : 'px-4 justify-between'}`}>
         <div className="flex items-center overflow-hidden">
           {!showLabel && (
-            <span className="text-[22px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-[#0b74b1] via-[#76489d] to-[#bc3860] text-transparent bg-clip-text mx-auto">A</span>
+            <span className="text-[22px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-brand-blue via-brand-purple to-brand-pink text-transparent bg-clip-text mx-auto">A</span>
           )}
           {showLabel && (
             <div className="flex flex-col min-w-0 py-1">
-              <span className="text-[24px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-[#0b74b1] via-[#76489d] to-[#bc3860] text-transparent bg-clip-text">AKASHA</span>
-              <span className="text-[9px] font-bold text-[#0b74b1] uppercase tracking-[0.25em] mt-0.5">PMAG Dashboard</span>
+              <span className="text-[24px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-brand-blue via-brand-purple to-brand-pink text-transparent bg-clip-text">AKASHA</span>
+              <span className="text-[9px] font-bold text-primary uppercase tracking-[0.25em] mt-0.5">PMAG Dashboard</span>
             </div>
           )}
         </div>
         {isMobileOpen && (
-          <button onClick={() => setIsMobileOpen(false)} className="md:hidden p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded">
+          <button onClick={() => setIsMobileOpen(false)} className="md:hidden p-1 text-muted-foreground hover:text-foreground dark:hover:text-muted-foreground rounded">
             <X className="w-4 h-4" />
           </button>
         )}
@@ -224,7 +224,7 @@ export default function PMAGDashboard() {
         {sidebarGroups.map((group, groupIdx) => (
           <div key={groupIdx} className="flex flex-col gap-0.5">
             {showLabel && (
-              <h3 className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-slate-400 dark:text-slate-500">
+              <h3 className="px-3 mb-1.5 text-[10px] font-bold uppercase tracking-[0.15em] text-muted-foreground dark:text-muted-foreground">
                 {group.title}
               </h3>
             )}
@@ -233,14 +233,14 @@ export default function PMAGDashboard() {
         ))}
 
         {/* Bottom section */}
-        <div className="flex flex-col gap-0.5 mt-auto pt-3 border-t border-slate-100 dark:border-slate-800">
+        <div className="flex flex-col gap-0.5 mt-auto pt-3 border-t border-muted dark:border-border">
           {showLabel && (
             <div className="px-3 py-1.5 mb-1">
-              <p className="text-[12px] font-bold text-slate-900 dark:text-white truncate">{user?.display_name}</p>
-              <p className="text-[10px] text-slate-400 font-medium uppercase tracking-wider">{user?.role}</p>
+              <p className="text-[12px] font-bold text-foreground dark:text-white truncate">{user?.display_name}</p>
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{user?.role}</p>
             </div>
           )}
-          <button onClick={handleLogout} className={`w-full flex items-center gap-2 rounded-lg text-[12px] font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}`}>
+          <button onClick={handleLogout} className={`w-full flex items-center gap-2 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/100/10 transition-colors ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}`}>
             <LogOut className="w-4 h-4" />
             {showLabel && <span>Sign Out</span>}
           </button>
@@ -248,8 +248,8 @@ export default function PMAGDashboard() {
       </nav>
 
       {/* Collapse toggle */}
-      <div className="hidden md:flex shrink-0 border-t border-slate-100 dark:border-slate-800 px-2.5 py-2">
-        <button onClick={() => setCollapsed(!collapsed)} className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-slate-400 dark:text-slate-500 hover:text-slate-600 dark:hover:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-xs font-medium">
+      <div className="hidden md:flex shrink-0 border-t border-muted dark:border-border px-2.5 py-2">
+        <button onClick={() => setCollapsed(!collapsed)} className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-muted-foreground hover:bg-muted dark:hover:bg-card transition-colors text-xs font-medium">
           {collapsed ? <ChevronRight className="w-4 h-4" /> : (<><ChevronLeft className="w-4 h-4" /><span>Collapse</span></>)}
         </button>
       </div>
@@ -260,7 +260,7 @@ export default function PMAGDashboard() {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-3 border-[#0b74b1] border-t-transparent rounded-full animate-spin" />
+          <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
           <p className="text-sm font-medium text-muted-foreground">Loading PMAG Dashboard...</p>
         </div>
       </div>
@@ -273,28 +273,28 @@ export default function PMAGDashboard() {
   return (
     <div className="flex min-h-screen w-full bg-[var(--background)]">
       {/* ─── Sidebar (identical structure to LeftSidebar.tsx) ─── */}
-      <aside className={`hidden md:block h-screen bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-50 shrink-0 transition-[width] duration-200 ease-in-out sticky top-0 ${collapsed ? 'w-[60px]' : 'w-[210px]'}`}>
+      <aside className={`hidden md:block h-screen bg-card border-r border-border dark:border-border z-50 shrink-0 transition-[width] duration-200 ease-in-out sticky top-0 ${collapsed ? 'w-[60px]' : 'w-[210px]'}`}>
         {sidebarInner}
       </aside>
 
       {isMobileOpen && <div className="fixed inset-0 bg-black/30 z-[100] md:hidden" onClick={() => setIsMobileOpen(false)} />}
-      <aside className={`fixed inset-y-0 left-0 w-[250px] bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 z-[101] transform transition-transform duration-200 ease-in-out md:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed inset-y-0 left-0 w-[250px] bg-card border-r border-border dark:border-border z-[101] transform transition-transform duration-200 ease-in-out md:hidden ${isMobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         {sidebarInner}
       </aside>
 
       {/* ─── Main Content (same structure as CEODashboard) ─── */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Header (matches TopHeader.tsx) */}
-        <header className="h-[73px] bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-2 sm:px-4 shrink-0 z-40 sticky top-0">
+        <header className="h-[73px] bg-card border-b border-border dark:border-border flex items-center justify-between px-2 sm:px-4 shrink-0 z-40 sticky top-0">
           <div className="flex items-center gap-3 flex-1">
-            <button onClick={() => setIsMobileOpen(true)} className="md:hidden p-2 -ml-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-colors">
+            <button onClick={() => setIsMobileOpen(true)} className="md:hidden p-2 -ml-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
               <Menu className="w-5 h-5" />
             </button>
             <div className="hidden md:flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-[#0b74b1]/10 flex items-center justify-center">
-                <LayoutDashboard className="w-4 h-4 text-[#0b74b1]" />
+              <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
+                <LayoutDashboard className="w-4 h-4 text-primary" />
               </div>
-              <span className="font-bold text-gray-900 dark:text-white text-sm tracking-tight">PMAG — Portfolio Management & Governance</span>
+              <span className="font-bold text-foreground dark:text-white text-sm tracking-tight">PMAG — Portfolio Management & Governance</span>
             </div>
           </div>
           <div className="flex items-center gap-1 sm:gap-2">
@@ -302,45 +302,45 @@ export default function PMAGDashboard() {
             <button 
               onClick={handleSyncData}
               disabled={isSyncing}
-              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700 text-foreground dark:text-muted-foreground text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-[#0b74b1]' : ''}`} />
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-primary' : ''}`} />
               <span className="hidden lg:inline">{isSyncing ? 'Syncing...' : 'Sync All Data'}</span>
             </button>
 
             {/* Ask Akasha Button */}
             <button 
               onClick={() => setIsCopilotOpen(!isCopilotOpen)} 
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0b74b1] hover:bg-[#0966a0] text-white text-[12px] font-semibold transition-colors shadow-sm shadow-[#0b74b1]/20 mr-2"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary hover:bg-[#0966a0] text-white text-[12px] font-semibold transition-colors shadow-sm shadow-primary/20 mr-2"
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden lg:inline">Ask Akasha</span>
             </button>
 
             <div className="relative hidden lg:block">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
               <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search projects..."
-                className="pl-9 pr-4 py-1.5 w-52 rounded-lg bg-gray-100 dark:bg-gray-800 text-[12px] text-gray-700 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#0b74b1]/20 border border-transparent transition-all" />
+                className="pl-9 pr-4 py-1.5 w-52 rounded-lg bg-muted dark:bg-card text-[12px] text-foreground dark:text-muted-foreground placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 border border-transparent transition-all" />
             </div>
-            <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-card transition-colors">
               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
-            <button className="relative p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-card transition-colors">
               <Bell className="w-4 h-4" />
-              {alerts.length > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-red-500" />}
+              {alerts.length > 0 && <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full bg-destructive/100" />}
             </button>
             <div className="relative group ml-0.5">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#0b74b1] to-[#76489d] p-[1.5px] cursor-pointer">
-                <div className="w-full h-full rounded-full bg-white dark:bg-gray-900 flex items-center justify-center">
-                  <User className="w-3.5 h-3.5 text-gray-500" />
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary to-secondary p-[1.5px] cursor-pointer">
+                <div className="w-full h-full rounded-full bg-card flex items-center justify-center">
+                  <User className="w-3.5 h-3.5 text-muted-foreground" />
                 </div>
               </div>
-              <div className="absolute right-0 top-full mt-1.5 w-44 bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-800 rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
-                <div className="px-3 py-2 border-b border-gray-100 dark:border-gray-800">
-                  <p className="text-[12px] font-semibold text-gray-900 dark:text-white">{user?.display_name}</p>
-                  <p className="text-[11px] text-gray-400 truncate">{user?.role}</p>
+              <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border dark:border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
+                <div className="px-3 py-2 border-b border-muted dark:border-border">
+                  <p className="text-[12px] font-semibold text-foreground dark:text-white">{user?.display_name}</p>
+                  <p className="text-[11px] text-muted-foreground truncate">{user?.role}</p>
                 </div>
-                <button onClick={handleLogout} className="w-full text-left px-3 py-1.5 text-[12px] text-red-600 hover:bg-red-50 dark:hover:bg-red-900/10 transition-colors flex items-center gap-1.5">
+                <button onClick={handleLogout} className="w-full text-left px-3 py-1.5 text-[12px] text-destructive hover:bg-destructive/10 dark:hover:bg-red-900/10 transition-colors flex items-center gap-1.5">
                   <LogOut className="w-3.5 h-3.5" /> Sign Out
                 </button>
               </div>
@@ -358,7 +358,7 @@ export default function PMAGDashboard() {
                 animate={{ opacity: 1, x: 0 }}
                 exit={{ opacity: 0, x: -20 }}
                 transition={{ duration: 0.2 }}
-                className="h-[calc(100vh-100px)] bg-white dark:bg-gray-900 rounded-2xl shadow-sm border border-gray-100 dark:border-gray-800 overflow-hidden relative"
+                className="h-[calc(100vh-100px)] bg-card rounded-2xl shadow-sm border border-muted dark:border-border overflow-hidden relative"
               >
                 <div className="absolute inset-0 overflow-y-auto">
                   <ProjectWorkspace projectId={selectedProjectId} onBack={() => setSelectedProjectId(null)} />
@@ -384,6 +384,7 @@ export default function PMAGDashboard() {
                   connectivity={connectivity}
                   alerts={alerts}
                   theme={theme}
+                  onOpenProject={(id: string) => setSelectedProjectId(id)}
                 />
               )}
 

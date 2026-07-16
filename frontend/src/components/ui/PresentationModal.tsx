@@ -59,13 +59,13 @@ export default function PresentationModal({ isOpen, onClose, totalSlides = 10 }:
             <div className="flex items-center gap-2">
               <button 
                 onClick={() => setIsFullscreen(!isFullscreen)}
-                className="p-2 text-gray-400 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+                className="p-2 text-muted-foreground hover:text-white hover:bg-white/10 rounded-lg transition-colors"
               >
                 {isFullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
               </button>
               <button 
                 onClick={onClose}
-                className="p-2 text-red-400 hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
+                className="p-2 text-destructive hover:text-red-300 hover:bg-red-400/10 rounded-lg transition-colors"
               >
                 <X size={20} />
               </button>
@@ -103,7 +103,7 @@ export default function PresentationModal({ isOpen, onClose, totalSlides = 10 }:
           </div>
 
           {/* Progress Bar */}
-          <div className="h-1 bg-gray-800 shrink-0">
+          <div className="h-1 bg-card shrink-0">
             <div 
               className="h-full bg-gradient-to-r from-primary to-purple-500 transition-all duration-300 ease-out"
               style={{ width: `${(currentSlide / totalSlides) * 100}%` }}

@@ -8,6 +8,11 @@ export default {
   theme: {
     extend: {
       colors: {
+        brand: {
+          blue: "var(--brand-blue)",
+          pink: "var(--brand-pink)",
+          purple: "var(--brand-purple)",
+        },
         border: "var(--border)",
         input: "var(--input)",
         ring: "var(--ring)",

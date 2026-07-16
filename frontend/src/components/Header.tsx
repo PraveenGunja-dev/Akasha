@@ -28,7 +28,7 @@ export default function Header() {
       <div className="flex items-center gap-6">
         <button
           onClick={toggleTheme}
-          className="p-2.5 rounded-full hover:bg-muted/80 backdrop-blur-sm transition-colors text-foreground shadow-sm"
+          className="p-2.5 rounded-full hover:bg-muted backdrop-blur-sm transition-colors text-foreground shadow-sm"
         >
           {theme === "light" ? <Moon size={20} /> : <Sun size={20} />}
         </button>

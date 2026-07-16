@@ -67,7 +67,7 @@ export default function LandingPage() {
         </div>
         <button
           onClick={toggleTheme}
-          className="p-2.5 rounded-full hover:bg-muted/80 transition-colors text-foreground"
+          className="p-2.5 rounded-full hover:bg-muted transition-colors text-foreground"
         >
           {theme === "light" ? <Moon size={22} /> : <Sun size={22} />}
         </button>
@@ -170,7 +170,7 @@ export default function LandingPage() {
               {/* Header */}
               <div className="mb-7">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#0b74b1] via-[#75479c] to-[#bc3860] flex items-center justify-center shadow-lg shadow-[#0b74b1]/30">
+                  <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary via-[#75479c] to-accent flex items-center justify-center shadow-lg shadow-primary/30">
                     <Lock className="w-5 h-5 text-white" />
                   </div>
                   <div>
@@ -190,7 +190,7 @@ export default function LandingPage() {
                       type="text"
                       value={username}
                       onChange={e => setUsername(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-[#0b74b1]/60 focus:bg-white/[0.1] transition-all text-[15px]"
+                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-primary/60 focus:bg-white/[0.1] transition-all text-[15px]"
                       placeholder="Enter your username"
                       autoComplete="username"
                       autoFocus
@@ -208,7 +208,7 @@ export default function LandingPage() {
                       type={showPassword ? 'text' : 'password'}
                       value={password}
                       onChange={e => setPassword(e.target.value)}
-                      className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-[#0b74b1]/60 focus:bg-white/[0.1] transition-all text-[15px]"
+                      className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-primary/60 focus:bg-white/[0.1] transition-all text-[15px]"
                       placeholder="Enter your password"
                       autoComplete="current-password"
                       required
@@ -225,8 +225,8 @@ export default function LandingPage() {
 
                 {/* Error */}
                 {error && (
-                  <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium animate-in slide-in-from-top-2 duration-200">
-                    <div className="w-1.5 h-1.5 rounded-full bg-red-500 shrink-0" />
+                  <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-destructive/100/10 border border-destructive/20 text-destructive text-sm font-medium animate-in slide-in-from-top-2 duration-200">
+                    <div className="w-1.5 h-1.5 rounded-full bg-destructive/100 shrink-0" />
                     {error}
                   </div>
                 )}
@@ -235,7 +235,7 @@ export default function LandingPage() {
                 <button
                   type="submit"
                   disabled={loading || !username.trim() || !password.trim()}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#0b74b1] via-[#4a60c5] to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-2"
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary via-[#4a60c5] to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-2"
                 >
                   {loading ? (
                     <>

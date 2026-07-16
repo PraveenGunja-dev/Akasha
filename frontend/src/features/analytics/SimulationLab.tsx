@@ -586,13 +586,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     isActive 
                       ? 'px-5 bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]' 
                       : isCompleted 
-                        ? 'w-10 bg-emerald-500/10 hover:bg-emerald-500/20' 
+                        ? 'w-10 bg-success/100/10 hover:bg-success/100/20' 
                         : 'w-10 bg-transparent hover:bg-muted'
                   }`}
                   onClick={() => { if (isCompleted) setActiveStep(step.id); }}
                 >
                   {/* Icon / Number */}
-                  <div className={`flex items-center justify-center ${isActive ? 'text-white mr-2' : isCompleted ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                  <div className={`flex items-center justify-center ${isActive ? 'text-white mr-2' : isCompleted ? 'text-success' : 'text-muted-foreground'}`}>
                     {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <span className="text-sm font-bold">{step.id}</span>}
                   </div>
                   
@@ -617,7 +617,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
           </div>
         </div>
 
-      <div className="flex-1 overflow-y-auto pb-20 pr-2" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+      <div className="flex-1 overflow-y-auto pb-20 pr-2" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
         <div className="w-full space-y-6">
 
           {/* ========================================== */}
@@ -627,13 +627,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             <>
               {/* Context Banner */}
               {simulationContext && (
-                <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 mb-6 animate-in fade-in slide-in-from-top-4">
+                <div className="bg-warning/100/10 border border-warning/20 rounded-xl p-4 mb-6 animate-in fade-in slide-in-from-top-4">
                   <div className="flex items-start gap-3">
-                    <div className="bg-amber-500/20 p-2 rounded-lg">
-                      <Bell className="w-5 h-5 text-amber-600" />
+                    <div className="bg-warning/100/20 p-2 rounded-lg">
+                      <Bell className="w-5 h-5 text-warning" />
                     </div>
                     <div>
-                      <h4 className="text-sm font-bold text-amber-700 dark:text-amber-500 uppercase tracking-widest mb-1">Triggered by Notification</h4>
+                      <h4 className="text-sm font-bold text-warning dark:text-warning uppercase tracking-widest mb-1">Triggered by Notification</h4>
                       <p className="text-sm font-medium text-foreground">
                         {simulationContext.change_type} on <span className="font-bold">{simulationContext.block || ''} {simulationContext.activity_name}</span>
                       </p>
@@ -666,11 +666,11 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                       const proj = projects.find((p: any) => p.id === selectedProject);
                       return proj ? (
                         <div className="flex items-center gap-2 ml-3">
-                          <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md ${proj.critical ? 'bg-red-500/15 text-red-600 border border-red-500/20' : 'bg-amber-500/15 text-amber-600 border border-amber-500/20'}`}>
+                          <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md ${proj.critical ? 'bg-destructive/100/15 text-destructive border border-destructive/20' : 'bg-warning/100/15 text-warning border border-warning/20'}`}>
                             SPI {proj.spi}
                           </span>
                           <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
-                            <Zap className="w-3 h-3 text-emerald-500" />{proj.capacity} MW
+                            <Zap className="w-3 h-3 text-success" />{proj.capacity} MW
                           </span>
                         </div>
                       ) : null;
@@ -678,7 +678,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   </div>
                   <button
                     onClick={() => { setShowResults(false); setIsScanning(false); setScanProgress(0); setSimulationData(null); }}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted/50 hover:bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-muted hover:bg-muted text-xs font-semibold text-muted-foreground hover:text-foreground transition-colors"
                   >
                     <Search className="w-3.5 h-3.5" /> Change Project
                   </button>
@@ -689,13 +689,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-3">Select Scope</h3>
                   <div className="relative mb-4">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <input type="text" placeholder={`Search ${projects.length} tracked projects...`} className="w-full bg-muted/50 border border-border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground" />
+                    <input type="text" placeholder={`Search ${projects.length} tracked projects...`} className="w-full bg-muted border border-border rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-primary transition-colors text-foreground placeholder:text-muted-foreground" />
                   </div>
 
-                  <div className="flex items-center gap-4 overflow-x-auto pb-4 custom-scrollbar" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                  <div className="flex items-center gap-4 overflow-x-auto pb-4 custom-scrollbar" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                     <div
                       onClick={() => setSelectedProject('All')}
-                      className={`shrink-0 flex flex-col justify-center items-center gap-2 px-6 h-[96px] min-w-[140px] rounded-2xl border cursor-pointer transition-all relative overflow-hidden ${selectedProject === 'All' ? 'border-primary bg-primary/10 shadow-[0_8px_30px_rgba(79,70,229,0.15)] ring-1 ring-primary/30 text-primary' : 'border-border bg-card hover:bg-muted/50 text-muted-foreground hover:text-foreground'}`}
+                      className={`shrink-0 flex flex-col justify-center items-center gap-2 px-6 h-[96px] min-w-[140px] rounded-2xl border cursor-pointer transition-all relative overflow-hidden ${selectedProject === 'All' ? 'border-primary bg-primary/10 shadow-[0_8px_30px_rgba(79,70,229,0.15)] ring-1 ring-primary/30 text-primary' : 'border-border bg-card hover:bg-muted text-muted-foreground hover:text-foreground'}`}
                     >
                       {selectedProject === 'All' && <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-600 to-indigo-600"></div>}
                       <Activity className={`w-6 h-6 ${selectedProject === 'All' ? 'text-primary' : ''}`} />
@@ -715,11 +715,11 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                             <span className="text-[13px] font-extrabold text-foreground truncate group-hover:text-primary transition-colors mb-0.5" title={p.name}>{p.name}</span>
                             <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                               <span className="flex items-center gap-1">
-                                <ShieldAlert className={`w-3 h-3 ${p.critical ? 'text-red-500' : 'text-amber-500'}`} />
-                                Risk: <span className={p.critical ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>{p.risk}</span>
+                                <ShieldAlert className={`w-3 h-3 ${p.critical ? 'text-destructive' : 'text-warning'}`} />
+                                Risk: <span className={p.critical ? 'text-destructive dark:text-destructive' : 'text-warning dark:text-warning'}>{p.risk}</span>
                               </span>
                               <span className="w-1 h-1 rounded-full bg-border"></span>
-                              <span className={p.critical ? 'text-red-600 dark:text-red-400' : 'text-amber-600 dark:text-amber-400'}>
+                              <span className={p.critical ? 'text-destructive dark:text-destructive' : 'text-warning dark:text-warning'}>
                                 SPI: {p.spi}
                               </span>
                             </div>
@@ -730,12 +730,12 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                           <div className="flex items-center gap-1.5">
                             <div className={`relative flex h-2 w-2`}>
                               {p.critical && <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>}
-                              <span className={`relative inline-flex rounded-full h-2 w-2 ${p.critical ? 'bg-red-500' : 'bg-amber-500'}`}></span>
+                              <span className={`relative inline-flex rounded-full h-2 w-2 ${p.critical ? 'bg-destructive/100' : 'bg-warning/100'}`}></span>
                             </div>
                             <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{p.critical ? 'Critical Delay' : 'At Risk'}</span>
                           </div>
-                          <span className="flex items-baseline gap-1 text-[11px] font-extrabold text-foreground bg-muted/50 px-2 py-0.5 rounded-md">
-                            <Zap className="w-3 h-3 text-emerald-500 shrink-0" /> {p.capacity} <span className="text-[9px] text-muted-foreground">MW</span>
+                          <span className="flex items-baseline gap-1 text-[11px] font-extrabold text-foreground bg-muted px-2 py-0.5 rounded-md">
+                            <Zap className="w-3 h-3 text-success shrink-0" /> {p.capacity} <span className="text-[9px] text-muted-foreground">MW</span>
                           </span>
                         </div>
                       </div>
@@ -766,34 +766,34 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-widest mb-3">
+                    <div className="bg-primary/10/50 border border-primary/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest mb-3">
                         <Eye className="w-4 h-4" /> Seeing
                       </div>
                       <ul className="space-y-2 text-xs font-medium text-foreground/80 list-disc pl-4">
                         <li className={scanProgress > 10 ? 'opacity-100' : 'opacity-30 transition-opacity'}>Reading live schedules for {selectedProject}...</li>
                         <li className={scanProgress > 30 ? 'opacity-100' : 'opacity-30 transition-opacity'}>Scanning SPI/CPI metrics...</li>
-                        <li className={scanProgress > 50 ? 'opacity-100 text-blue-600 font-semibold' : 'opacity-30 transition-opacity'}>Pulling supply chain data from SAP MM...</li>
+                        <li className={scanProgress > 50 ? 'opacity-100 text-primary font-semibold' : 'opacity-30 transition-opacity'}>Pulling supply chain data from SAP MM...</li>
                       </ul>
                     </div>
-                    <div className="bg-indigo-50/50 border border-indigo-100 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-widest mb-3">
+                    <div className="bg-primary/10/50 border border-primary/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-primary font-bold text-xs uppercase tracking-widest mb-3">
                         <Activity className="w-4 h-4" /> Analyzing
                       </div>
                       <ul className="space-y-2 text-xs font-medium text-foreground/80 list-disc pl-4">
                         <li className={scanProgress > 40 ? 'opacity-100' : 'opacity-0 transition-opacity'}>{selectedProject} SPI vs threshold...</li>
                         <li className={scanProgress > 60 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Analyzing weather overlap...</li>
-                        <li className={scanProgress > 80 ? 'opacity-100 text-indigo-600 font-semibold' : 'opacity-0 transition-opacity'}>Cross-referencing budget variance...</li>
+                        <li className={scanProgress > 80 ? 'opacity-100 text-primary font-semibold' : 'opacity-0 transition-opacity'}>Cross-referencing budget variance...</li>
                       </ul>
                     </div>
-                    <div className="bg-emerald-50/50 border border-emerald-100 rounded-lg p-4">
-                      <div className="flex items-center gap-2 text-emerald-600 font-bold text-xs uppercase tracking-widest mb-3">
+                    <div className="bg-success/10/50 border border-success/20 rounded-lg p-4">
+                      <div className="flex items-center gap-2 text-success font-bold text-xs uppercase tracking-widest mb-3">
                         <PlaySquare className="w-4 h-4" /> Doing
                       </div>
                       <ul className="space-y-2 text-xs font-medium text-foreground/80 list-disc pl-4">
                         <li className={scanProgress > 60 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Querying baselines...</li>
                         <li className={scanProgress > 80 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Running anomaly detection...</li>
-                        <li className={scanProgress > 95 ? 'opacity-100 text-emerald-600 font-semibold' : 'opacity-0 transition-opacity'}>Classifying issues...</li>
+                        <li className={scanProgress > 95 ? 'opacity-100 text-success font-semibold' : 'opacity-0 transition-opacity'}>Classifying issues...</li>
                       </ul>
                     </div>
                   </div>
@@ -805,15 +805,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   <div className="grid grid-cols-4 gap-4">
                     <div className="bg-card rounded-xl border border-border shadow-sm p-5">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><Activity className="w-4 h-4" /> SPI</div>
-                      <div className={`text-3xl font-bold ${currentSpi < 0.85 ? 'text-red-500' : 'text-emerald-500'}`}>{currentSpi}</div>
+                      <div className={`text-3xl font-bold ${currentSpi < 0.85 ? 'text-destructive' : 'text-success'}`}>{currentSpi}</div>
                     </div>
                     <div className="bg-card rounded-xl border border-border shadow-sm p-5">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Risk Score</div>
-                      <div className={`text-3xl font-bold ${currentRisk > 70 ? 'text-red-500' : 'text-emerald-500'}`}>{currentRisk}</div>
+                      <div className={`text-3xl font-bold ${currentRisk > 70 ? 'text-destructive' : 'text-success'}`}>{currentRisk}</div>
                     </div>
                     <div className="bg-card rounded-xl border border-border shadow-sm p-5">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><BarChart2 className="w-4 h-4" /> Completion</div>
-                      <div className="text-3xl font-bold text-amber-500">{currentCompletion}%</div>
+                      <div className="text-3xl font-bold text-warning">{currentCompletion}%</div>
                     </div>
                     <div className="bg-card rounded-xl border border-border shadow-sm p-5">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><Zap className="w-4 h-4" /> Target MW</div>
@@ -824,17 +824,17 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     {/* AI Detected Issues Panel */}
                     <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col h-[400px]">
-                      <div className="bg-muted/30 px-5 py-4 border-b border-border flex items-center gap-3 shrink-0">
-                        <AlertTriangle className="w-5 h-5 text-amber-500" />
+                      <div className="bg-muted px-5 py-4 border-b border-border flex items-center gap-3 shrink-0">
+                        <AlertTriangle className="w-5 h-5 text-warning" />
                         <h3 className="font-bold text-foreground">Detected Issues</h3>
                       </div>
-                      <div className="p-4 flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                      <div className="p-4 flex-1 overflow-y-auto space-y-4 pr-2 custom-scrollbar" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                         {simulationData?.issues?.map((issue: any, i: number) => (
-                          <div key={i} className={`flex gap-3 p-4 bg-muted/20 hover:bg-muted/50 rounded-xl transition-colors border-l-4 ${issue.severity === 'Critical' ? 'border-red-500' : 'border-amber-500'}`}>
-                            <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${issue.severity === 'Critical' ? 'bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-amber-500'}`}></div>
+                          <div key={i} className={`flex gap-3 p-4 bg-muted hover:bg-muted rounded-xl transition-colors border-l-4 ${issue.severity === 'Critical' ? 'border-red-500' : 'border-amber-500'}`}>
+                            <div className={`mt-1 w-2.5 h-2.5 rounded-full shrink-0 ${issue.severity === 'Critical' ? 'bg-destructive/100 shadow-[0_0_8px_rgba(239,68,68,0.5)]' : 'bg-warning/100'}`}></div>
                             <div className="flex-1">
                               <div className="flex items-center justify-between mb-2">
-                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${issue.severity === 'Critical' ? 'text-red-600 bg-red-100' : 'text-amber-700 bg-amber-100'}`}>{issue.severity}</span>
+                                <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${issue.severity === 'Critical' ? 'text-destructive bg-destructive/10' : 'text-warning bg-warning/10'}`}>{issue.severity}</span>
                               </div>
                               <p className="text-sm text-foreground/90 leading-relaxed">{issue.title}</p>
                             </div>
@@ -849,7 +849,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                         <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-muted-foreground border-b border-border pb-2 shrink-0 flex items-center gap-2">
                           <Bell className="w-4 h-4" /> Notification History
                         </h3>
-                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                        <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar space-y-2" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                           {(() => {
                             const grouped = projectNotifications.reduce((acc: any, notif: any) => {
                               const block = notif.block || 'General Updates';
@@ -860,7 +860,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
 
                             return Object.entries(grouped).map(([block, notifs]: [string, any]) => (
                               <details key={block} className="group border border-border rounded-lg overflow-hidden" open={block !== 'General Updates'}>
-                                <summary className="flex items-center justify-between p-3 cursor-pointer bg-muted/30 hover:bg-muted/50 transition-colors font-bold text-xs uppercase tracking-wider text-foreground select-none list-none [&::-webkit-details-marker]:hidden">
+                                <summary className="flex items-center justify-between p-3 cursor-pointer bg-muted hover:bg-muted transition-colors font-bold text-xs uppercase tracking-wider text-foreground select-none list-none [&::-webkit-details-marker]:hidden">
                                   <div className="flex items-center gap-2">
                                     <div className="w-5 h-5 rounded flex items-center justify-center bg-background border border-border shadow-sm text-[10px] group-open:bg-primary group-open:text-primary-foreground transition-colors">
                                       {notifs.length}
@@ -871,10 +871,10 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                                 </summary>
                                 <div className="p-2 space-y-2 bg-card border-t border-border">
                                   {notifs.map((notif: any, i: number) => (
-                                    <div key={notif.id || i} className="p-2.5 bg-muted/20 border border-border rounded flex flex-col gap-1.5 shadow-sm">
+                                    <div key={notif.id || i} className="p-2.5 bg-muted border border-border rounded flex flex-col gap-1.5 shadow-sm">
                                       <div className="flex items-center justify-between">
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{new Date(notif.created_at).toLocaleDateString()}</span>
-                                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-red-500/10 text-red-600' : 'bg-blue-500/10 text-blue-600'}`}>
+                                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-destructive/100/10 text-destructive' : 'bg-primary/100/10 text-primary'}`}>
                                           {notif.change_type || notif.category}
                                         </span>
                                       </div>
@@ -924,7 +924,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
 
               <div>
                 <label className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-2 block">Recovery Priority</label>
-                <div className="flex bg-muted/50 p-1 rounded-lg border border-border">
+                <div className="flex bg-muted p-1 rounded-lg border border-border">
                   {['Fastest', 'Balanced', 'Cheapest'].map(p => (
                     <button
                       key={p}
@@ -939,12 +939,12 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
 
               <div className="space-y-4">
                 {/* Weather Live Panel */}
-                <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 border border-slate-200 dark:border-slate-700 p-3 rounded-lg relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-blue-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
+                <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 border border-border dark:border-slate-700 p-3 rounded-lg relative overflow-hidden">
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary/100/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
                   <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-3">
-                      <CloudRain className="w-4 h-4 text-blue-500" />
-                      <h4 className="text-xs font-bold uppercase tracking-widest text-slate-700 dark:text-slate-300">Live Weather Context</h4>
+                      <CloudRain className="w-4 h-4 text-primary" />
+                      <h4 className="text-xs font-bold uppercase tracking-widest text-foreground dark:text-muted-foreground">Live Weather Context</h4>
                     </div>
 
                     {weatherLoading ? (
@@ -955,7 +955,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                         <div>
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-[11px] font-semibold text-muted-foreground">Rainfall (14d avg)</span>
-                            <span className="text-[10px] font-bold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded">
+                            <span className="text-[10px] font-bold bg-primary/10 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-1.5 py-0.5 rounded">
                               {weatherMonsoon}
                             </span>
                           </div>
@@ -964,7 +964,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                               <button
                                 key={w}
                                 onClick={() => setWeatherMonsoon(w)}
-                                className={`flex-1 text-[10px] font-bold py-1 transition-all ${weatherMonsoon === w ? 'bg-blue-500 text-white' : 'text-muted-foreground hover:bg-muted'}`}
+                                className={`flex-1 text-[10px] font-bold py-1 transition-all ${weatherMonsoon === w ? 'bg-primary/100 text-white' : 'text-muted-foreground hover:bg-muted'}`}
                               >
                                 {w}
                               </button>
@@ -1002,7 +1002,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                 <div>
                   <div className="flex justify-between text-xs font-bold mb-2">
                     <span className="text-muted-foreground uppercase tracking-widest">Add Foundation Crews</span>
-                    <span className="text-emerald-500">+{addedCrews} Crews</span>
+                    <span className="text-success">+{addedCrews} Crews</span>
                   </div>
                   <input type="range" min="0" max="5" value={addedCrews} onChange={e => setAddedCrews(Number(e.target.value))} className="w-full accent-emerald-500 h-1.5 bg-muted rounded-lg appearance-none cursor-pointer" />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-1"><span>0</span><span>+5</span></div>
@@ -1015,7 +1015,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     placeholder="e.g. What if module delivery is delayed by 3 weeks?"
                     value={customScenario}
                     onChange={e => setCustomScenario(e.target.value)}
-                    className="w-full bg-muted/50 border border-border rounded-lg p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground/50"
+                    className="w-full bg-muted border border-border rounded-lg p-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary resize-none placeholder:text-muted-foreground/50"
                   />
                 </div>
               </div>
@@ -1023,7 +1023,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               <div className="border-t border-border pt-4 space-y-3">
                 <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Execution Constraints</h4>
                 <label className="flex items-center gap-3 cursor-pointer">
-                  <div className={`w-10 h-5 rounded-full p-1 transition-colors ${allowOvertime ? 'bg-emerald-500' : 'bg-muted-foreground/30'}`} onClick={() => setAllowOvertime(!allowOvertime)}>
+                  <div className={`w-10 h-5 rounded-full p-1 transition-colors ${allowOvertime ? 'bg-success/100' : 'bg-muted-foreground/30'}`} onClick={() => setAllowOvertime(!allowOvertime)}>
                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${allowOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
                   </div>
                   <span className="text-sm font-medium">Allow overtime shifts</span>
@@ -1043,7 +1043,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             {/* Main Area */}
             <div className="flex-1 flex flex-col gap-4">
               {!strategies.length && !isGeneratingStrategies ? (
-                <div className="flex-1 border-2 border-dashed border-border rounded-xl flex items-center justify-center bg-card/50">
+                <div className="flex-1 border-2 border-dashed border-border rounded-xl flex items-center justify-center bg-white/50">
                   <div className="text-center max-w-sm">
                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4"><Activity className="w-8 h-8 text-muted-foreground" /></div>
                     <h3 className="font-bold text-lg mb-2">Ready to Generate</h3>
@@ -1061,7 +1061,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               ) : (
                 <div className="flex gap-6 h-full">
                   {/* Strategies List */}
-                  <div className="flex-1 space-y-4 overflow-y-auto pb-4 custom-scrollbar pr-2" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                  <div className="flex-1 space-y-4 overflow-y-auto pb-4 custom-scrollbar pr-2" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-bold flex items-center gap-2"><Activity className="w-4 h-4 text-purple-600" /> Generated Strategies</h3>
                       <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded uppercase tracking-wider">{strategies.length} Options</span>
@@ -1079,13 +1079,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                           </div>
                           <h4 className="font-bold text-foreground">{strat.title}</h4>
                           {strat.recommended && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded">Recommended</span>}
-                          <span className="text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">Viable</span>
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-success/10 text-success px-2 py-0.5 rounded">Viable</span>
                         </div>
                         <p className="text-sm text-muted-foreground pl-7 mb-4">{strat.description}</p>
                         <div className="pl-7 flex items-center gap-4">
-                          <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-amber-500 font-bold">Cost ∆:</span> +₹{strat.cost_impact_cr} Cr</div>
-                          <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-emerald-500 font-bold">Time ∆:</span> {strat.time_saved_days < 0 ? '' : '+'}{strat.time_saved_days} days</div>
-                          <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-emerald-500 font-bold">Risk -:</span> {strat.risk_reduction_pct}%</div>
+                          <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-warning font-bold">Cost ∆:</span> +₹{strat.cost_impact_cr} Cr</div>
+                          <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-success font-bold">Time ∆:</span> {strat.time_saved_days < 0 ? '' : '+'}{strat.time_saved_days} days</div>
+                          <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-success font-bold">Risk -:</span> {strat.risk_reduction_pct}%</div>
                           <div className="text-xs font-medium text-muted-foreground ml-auto">Confidence: {strat.ai_confidence_pct}%</div>
                         </div>
                       </div>
@@ -1101,9 +1101,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     <div className="border-t border-border pt-4 mt-2">
                       <h5 className="text-xs font-bold text-foreground mb-3">{strategies.find(s => s.id === selectedStrategyId)?.title}</h5>
                       <div className="space-y-2">
-                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Cost Impact</span><span className="font-bold text-amber-500">+₹{strategies.find(s => s.id === selectedStrategyId)?.cost_impact_cr} Cr</span></div>
-                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Time Impact</span><span className="font-bold text-emerald-500">{strategies.find(s => s.id === selectedStrategyId)?.time_saved_days} days</span></div>
-                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Risk Reduction</span><span className="font-bold text-emerald-500">{strategies.find(s => s.id === selectedStrategyId)?.risk_reduction_pct}%</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Cost Impact</span><span className="font-bold text-warning">+₹{strategies.find(s => s.id === selectedStrategyId)?.cost_impact_cr} Cr</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Time Impact</span><span className="font-bold text-success">{strategies.find(s => s.id === selectedStrategyId)?.time_saved_days} days</span></div>
+                        <div className="flex justify-between text-xs"><span className="text-muted-foreground">Risk Reduction</span><span className="font-bold text-success">{strategies.find(s => s.id === selectedStrategyId)?.risk_reduction_pct}%</span></div>
                       </div>
                     </div>
                   </div>
@@ -1128,14 +1128,14 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
         {activeStep === 3 && (
           <div className="max-w-3xl mx-auto mt-10 space-y-8 animate-in fade-in zoom-in-95 duration-500">
             <div className="text-center space-y-4">
-              <div className="w-20 h-20 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
-                <Activity className="w-10 h-10 text-emerald-600 animate-pulse" />
+              <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
+                <Activity className="w-10 h-10 text-success animate-pulse" />
               </div>
               <h2 className="text-2xl font-bold">Executing AI Strategy</h2>
               <p className="text-muted-foreground">Pushing tasks and automated decisions to SAP and PMAG...</p>
 
               <div className="w-full max-w-md mx-auto h-2 bg-muted rounded-full overflow-hidden mt-8">
-                <div className="h-full bg-emerald-500 transition-all duration-300" style={{ width: `${executionProgress}%` }}></div>
+                <div className="h-full bg-success/100 transition-all duration-300" style={{ width: `${executionProgress}%` }}></div>
               </div>
             </div>
 
@@ -1144,10 +1144,10 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               {executionTasks.map((t: any, i: number) => {
                 const isResolved = resolvedTasks.includes(i);
                 return (
-                  <div key={i} className={`flex items-center gap-4 p-3 rounded-lg border transition-all ${isResolved ? 'bg-emerald-50/50 border-emerald-100' : 'bg-muted/30 border-border opacity-60 hover:opacity-100'}`}>
+                  <div key={i} className={`flex items-center gap-4 p-3 rounded-lg border transition-all ${isResolved ? 'bg-success/10/50 border-success/20' : 'bg-muted border-border opacity-60 hover:opacity-100'}`}>
                     <button 
                       onClick={() => !isResolved && setResolvedTasks(prev => [...prev, i])}
-                      className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 border transition-all cursor-pointer ${isResolved ? 'bg-emerald-500 text-white border-emerald-500 shadow-sm' : 'bg-background text-transparent border-muted-foreground hover:border-primary'}`}
+                      className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 border transition-all cursor-pointer ${isResolved ? 'bg-success/100 text-white border-emerald-500 shadow-sm' : 'bg-background text-transparent border-muted-foreground hover:border-primary'}`}
                     >
                       <Check className="w-4 h-4" />
                     </button>
@@ -1158,7 +1158,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                       </div>
                       <p className="text-xs text-muted-foreground">{t.description}</p>
                     </div>
-                    <div className={`ml-auto text-[10px] font-bold uppercase tracking-wider ${isResolved ? 'text-emerald-500' : 'text-muted-foreground'}`}>
+                    <div className={`ml-auto text-[10px] font-bold uppercase tracking-wider ${isResolved ? 'text-success' : 'text-muted-foreground'}`}>
                       {isResolved ? 'Success' : 'Pending'}
                     </div>
                   </div>
@@ -1167,10 +1167,10 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             </div>
 
             {executionTasks.length > 0 && resolvedTasks.length === executionTasks.length && (
-              <div className="mt-8 bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">
-                <CheckCircle2 className="w-12 h-12 text-emerald-500 mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-emerald-700 dark:text-emerald-400">Issue Resolved</h3>
-                <p className="text-emerald-600/80 dark:text-emerald-400/80 mt-2 font-medium">All automated actions and required tasks have been successfully processed and pushed to their respective systems.</p>
+              <div className="mt-8 bg-success/10 dark:bg-success/100/10 border border-success/20 dark:border-success/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">
+                <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-4" />
+                <h3 className="text-xl font-bold text-success dark:text-success">Issue Resolved</h3>
+                <p className="text-success/80 dark:text-success/80 mt-2 font-medium">All automated actions and required tasks have been successfully processed and pushed to their respective systems.</p>
               </div>
             )}
           </div>
@@ -1203,11 +1203,11 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     </div>
                     <div>
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Projected Time Saved</div>
-                      <div className="font-bold text-emerald-500">{strategies.find(s => s.id === selectedStrategyId)?.time_saved_days} Days</div>
+                      <div className="font-bold text-success">{strategies.find(s => s.id === selectedStrategyId)?.time_saved_days} Days</div>
                     </div>
                     <div>
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Cost Variation</div>
-                      <div className="font-bold text-amber-500">+₹{strategies.find(s => s.id === selectedStrategyId)?.cost_impact_cr} Cr</div>
+                      <div className="font-bold text-warning">+₹{strategies.find(s => s.id === selectedStrategyId)?.cost_impact_cr} Cr</div>
                     </div>
                   </div>
 

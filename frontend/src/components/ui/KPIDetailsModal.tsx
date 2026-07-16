@@ -13,13 +13,13 @@ interface KPIDetailsModalProps {
 }
 
 const kpiConfig: Record<string, { icon: React.ElementType, gradient: string, glow: string, bg: string }> = {
-  'Total Projects': { icon: Briefcase, gradient: 'from-blue-500 to-indigo-500', glow: 'shadow-blue-500/20', bg: 'bg-blue-500/10 text-blue-500' },
+  'Total Projects': { icon: Briefcase, gradient: 'from-blue-500 to-indigo-500', glow: 'shadow-blue-500/20', bg: 'bg-primary/100/10 text-primary' },
   'Portfolio Capacity': { icon: Activity, gradient: 'from-cyan-400 to-blue-500', glow: 'shadow-cyan-500/20', bg: 'bg-cyan-500/10 text-cyan-500' },
-  'Delayed Projects': { icon: AlertTriangle, gradient: 'from-rose-500 to-red-600', glow: 'shadow-red-500/20', bg: 'bg-red-500/10 text-red-500' },
-  'Average Progress': { icon: Target, gradient: 'from-emerald-400 to-teal-500', glow: 'shadow-emerald-500/20', bg: 'bg-emerald-500/10 text-emerald-500' },
+  'Delayed Projects': { icon: AlertTriangle, gradient: 'from-rose-500 to-red-600', glow: 'shadow-red-500/20', bg: 'bg-destructive/100/10 text-destructive' },
+  'Average Progress': { icon: Target, gradient: 'from-emerald-400 to-teal-500', glow: 'shadow-emerald-500/20', bg: 'bg-success/100/10 text-success' },
   'Total PO Value': { icon: Hash, gradient: 'from-violet-500 to-purple-600', glow: 'shadow-purple-500/20', bg: 'bg-purple-500/10 text-purple-500' },
   'Completed Projects': { icon: CheckCircle2, gradient: 'from-green-400 to-emerald-500', glow: 'shadow-green-500/20', bg: 'bg-green-500/10 text-green-500' },
-  'Remaining PO Value': { icon: Layers, gradient: 'from-orange-400 to-rose-500', glow: 'shadow-orange-500/20', bg: 'bg-orange-500/10 text-orange-500' },
+  'Remaining PO Value': { icon: Layers, gradient: 'from-orange-400 to-rose-500', glow: 'shadow-orange-500/20', bg: 'bg-warning/100/10 text-warning' },
 };
 
 export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }: KPIDetailsModalProps) {
@@ -410,18 +410,18 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, transition: { duration: 0.2 } }}
             onClick={onClose}
-            className="fixed inset-0 z-[100] bg-slate-900/40 backdrop-blur-md pointer-events-auto"
-            data-lenis-prevent="true"
+            className="fixed inset-0 z-[100] bg-white/40 backdrop-blur-md pointer-events-auto"
+           
           />
           
-          <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 sm:p-6 lg:p-8" data-lenis-prevent="true">
+          <div className="fixed inset-0 z-[100] flex items-center justify-center pointer-events-none p-4 sm:p-6 lg:p-8">
             <motion.div
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0, transition: { type: "spring", damping: 25, stiffness: 300 } }}
               exit={{ opacity: 0, scale: 0.95, y: 20, transition: { duration: 0.2 } }}
-              className={`w-full max-w-[90vw] 2xl:max-w-[85vw] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border border-white dark:border-slate-800 shadow-2xl dark:shadow-black/50 ${currentConfig.glow} rounded-[2rem] overflow-hidden flex flex-col max-h-[90vh] pointer-events-auto ring-1 ring-black/5`}
+              className={`w-full max-w-[90vw] 2xl:max-w-[85vw] bg-white/95 dark:bg-slate-950/95 backdrop-blur-xl border border-white dark:border-border shadow-2xl dark:shadow-black/50 ${currentConfig.glow} rounded-[2rem] overflow-hidden flex flex-col max-h-[90vh] pointer-events-auto ring-1 ring-black/5`}
             >
-              <div className="relative px-8 py-6 border-b border-slate-200/60 dark:border-slate-800/60 bg-gradient-to-r from-slate-50/50 to-white/50 dark:from-slate-900/50 dark:to-slate-950/50 shrink-0">
+              <div className="relative px-8 py-6 border-b border-border/60 dark:border-border/60 bg-gradient-to-r from-slate-50/50 to-white/50 dark:from-slate-900/50 dark:to-slate-950/50 shrink-0">
                 <div className="flex items-center justify-between relative z-10">
                   <div className="flex items-center gap-5">
                     <div className={`w-14 h-14 rounded-2xl ${currentConfig.bg} flex items-center justify-center shadow-inner`}>
@@ -431,27 +431,27 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
                       <h2 className={`text-2xl font-bold bg-clip-text text-transparent bg-gradient-to-r ${currentConfig.gradient} leading-tight tracking-tight`}>
                         {activeKpi} Analysis
                       </h2>
-                      <p className="text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">Performance Breakdown & Contributing Assets</p>
+                      <p className="text-sm text-muted-foreground dark:text-muted-foreground font-medium mt-1">Performance Breakdown & Contributing Assets</p>
                     </div>
                   </div>
-                  <button onClick={onClose} className="p-3 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 rounded-full transition-all text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 hover:rotate-90">
+                  <button onClick={onClose} className="p-3 bg-muted hover:bg-slate-200 dark:bg-card dark:hover:bg-slate-700 rounded-full transition-all text-muted-foreground hover:text-foreground dark:text-muted-foreground dark:hover:text-muted-foreground hover:rotate-90">
                     <X className="w-5 h-5" />
                   </button>
                 </div>
               </div>
             
               <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-white dark:bg-slate-950">
-                <div className="w-full lg:w-[50%] p-8 border-b lg:border-b-0 lg:border-r border-slate-200/60 dark:border-slate-800/60 flex flex-col relative bg-slate-50/30 dark:bg-slate-900/30">
+                <div className="w-full lg:w-[50%] p-8 border-b lg:border-b-0 lg:border-r border-border/60 dark:border-border/60 flex flex-col relative bg-muted dark:bg-gray-900/30">
                    {activeKpi === 'Remaining PO Value' ? (
                      <div className="flex flex-col gap-1 w-full h-full pb-8">
-                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-slate-500 dark:text-slate-400 mb-2">Largest Open PO Values (SAP PO)</h3>
-                       <p className="text-xs text-slate-400 dark:text-slate-500 mb-6 font-medium">Select any segment below to dynamically filter the asset list.</p>
+                       <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground dark:text-muted-foreground mb-2">Largest Open PO Values (SAP PO)</h3>
+                       <p className="text-xs text-muted-foreground dark:text-muted-foreground mb-6 font-medium">Select any segment below to dynamically filter the asset list.</p>
                      </div>
                    ) : (
                      <div className="mb-8 shrink-0 flex justify-between items-end">
                        <div>
-                         <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100 mb-1">{chartData?.title}</h3>
-                         <p className="text-sm text-slate-500 dark:text-slate-400 font-medium">Select any segment below to dynamically filter the asset list.</p>
+                         <h3 className="text-lg font-bold text-foreground dark:text-slate-100 mb-1">{chartData?.title}</h3>
+                         <p className="text-sm text-muted-foreground dark:text-muted-foreground font-medium">Select any segment below to dynamically filter the asset list.</p>
                        </div>
                      </div>
                    )}
@@ -461,23 +461,23 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
                 </div>
                 
                 <div className="w-full lg:w-[50%] flex flex-col overflow-hidden bg-white dark:bg-slate-950 relative">
-                  <div className="px-8 py-6 flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800/60 shrink-0 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-10">
-                    <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
-                      <Layers className="w-4 h-4 text-indigo-500 dark:text-indigo-400" />
+                  <div className="px-8 py-6 flex items-center justify-between border-b border-border/60 dark:border-border/60 shrink-0 sticky top-0 bg-white/80 dark:bg-slate-950/80 backdrop-blur-md z-10">
+                    <h3 className="text-sm font-bold text-foreground dark:text-slate-100 uppercase tracking-wider flex items-center gap-2">
+                      <Layers className="w-4 h-4 text-primary dark:text-primary" />
                       {filterCategory ? `Filtered: ${filterCategory.replace('|', ' - ')}` : 'Contributing Assets'}
                     </h3>
                     {filterCategory && (
                       <motion.button 
                         initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }}
                         onClick={() => setFilterCategory(null)} 
-                        className="text-xs bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-3 py-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold transition-colors"
+                        className="text-xs bg-muted dark:bg-card text-foreground dark:text-muted-foreground px-3 py-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 font-bold transition-colors"
                       >
                         Clear Filter
                       </motion.button>
                     )}
                   </div>
                   
-                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 overscroll-contain" data-lenis-prevent="true" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                  <div className="flex-1 overflow-y-auto custom-scrollbar p-6 overscroll-contain" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
                     <div className="space-y-3">
                       {filteredProjectsList.slice(0, 50).map((item: any, idx: number) => {
                         const isAlert = item.value.includes('Delay') || item.value.includes('-') || (item.value.includes('+') && activeKpi === 'Remaining PO Value');
@@ -495,37 +495,37 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects }
                                 navigate(`/dashboard/project/${encodeURIComponent(item.id)}${activeKpi === 'Remaining PO Value' || activeKpi === 'Total PO Value' ? '?tab=sap' : ''}`);
                               }
                             }}
-                            className={`group flex justify-between items-center px-5 py-4 rounded-2xl transition-all duration-300 ${item.id ? 'cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50 hover:shadow-md hover:scale-[1.02] border border-slate-100 dark:border-slate-800' : 'cursor-default border border-transparent'}`}
+                            className={`group flex justify-between items-center px-5 py-4 rounded-2xl transition-all duration-300 ${item.id ? 'cursor-pointer hover:bg-muted dark:hover:bg-white/50 hover:shadow-md hover:scale-[1.02] border border-muted dark:border-border' : 'cursor-default border border-transparent'}`}
                           >
                             <div className="flex items-center gap-4 overflow-hidden pr-4 flex-1">
-                               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isAlert ? 'bg-red-50 dark:bg-red-500/10 text-red-600 dark:text-red-400' : isDone ? 'bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400'}`}>
+                               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isAlert ? 'bg-destructive/10 dark:bg-destructive/100/10 text-destructive dark:text-destructive' : isDone ? 'bg-success/10 dark:bg-success/100/10 text-success dark:text-success' : 'bg-primary/10 dark:bg-primary/100/10 text-primary dark:text-primary'}`}>
                                  {item.name.substring(0, 1).toUpperCase()}
                                </div>
-                               <span className="text-sm font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors" title={item.name}>{item.name}</span>
+                               <span className="text-sm font-semibold text-foreground dark:text-muted-foreground truncate group-hover:text-primary dark:group-hover:text-primary transition-colors" title={item.name}>{item.name}</span>
                             </div>
                             <div className="shrink-0 flex items-center gap-3">
                               <div className={`flex items-baseline gap-1.5`}>
-                                <span className={`text-base font-bold ${isAlert ? 'text-red-500' : isDone ? 'text-emerald-500' : 'text-slate-800 dark:text-slate-100'}`}>
+                                <span className={`text-base font-bold ${isAlert ? 'text-destructive' : isDone ? 'text-success' : 'text-foreground dark:text-slate-100'}`}>
                                   {item.value}
                                 </span>
                                 {item.sub && (
-                                  <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">{item.sub}</span>
+                                  <span className="text-[10px] font-bold text-muted-foreground dark:text-muted-foreground uppercase tracking-wider">{item.sub}</span>
                                 )}
                               </div>
-                              <ChevronRight className={`w-4 h-4 ${isAlert ? 'text-red-300 dark:text-red-400/50' : isDone ? 'text-emerald-300 dark:text-emerald-400/50' : 'text-slate-300 dark:text-slate-600'} group-hover:translate-x-1 transition-transform`} />
+                              <ChevronRight className={`w-4 h-4 ${isAlert ? 'text-red-300 dark:text-destructive/50' : isDone ? 'text-emerald-300 dark:text-success/50' : 'text-muted-foreground dark:text-foreground'} group-hover:translate-x-1 transition-transform`} />
                             </div>
                           </motion.div>
                         );
                       })}
                       {filteredProjectsList.length === 0 && (
-                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-48 text-slate-400">
+                        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col items-center justify-center h-48 text-muted-foreground">
                           <Layers className="w-12 h-12 mb-4 opacity-20" />
                           <span className="text-sm font-medium">No assets found for this segment.</span>
                         </motion.div>
                       )}
                     </div>
                     {filteredProjectsList.length > 50 && (
-                      <div className="text-xs text-center py-6 text-slate-400 font-bold uppercase tracking-widest mt-4">
+                      <div className="text-xs text-center py-6 text-muted-foreground font-bold uppercase tracking-widest mt-4">
                         Showing Top 50 of {filteredProjectsList.length}
                       </div>
                     )}

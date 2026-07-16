@@ -36,7 +36,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
           </div>
           <div className="flex items-end gap-2">
             <span className="text-[24px] font-black text-foreground leading-none">Nov 15</span>
-            <span className="text-[12px] text-emerald-600 font-bold mb-0.5">On Schedule</span>
+            <span className="text-[12px] text-success font-bold mb-0.5">On Schedule</span>
           </div>
         </div>
         {/* KPI 2 */}
@@ -47,7 +47,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
           </div>
           <div className="flex items-end gap-2">
             <span className="text-[24px] font-black text-foreground leading-none">82%</span>
-            <span className="text-[12px] text-amber-600 font-bold mb-0.5">2 Pending</span>
+            <span className="text-[12px] text-warning font-bold mb-0.5">2 Pending</span>
           </div>
         </div>
         {/* KPI 3 */}
@@ -74,36 +74,36 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
             </h3>
             <div className="flex gap-3">
               <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
-                <span className="w-2 h-2 rounded-full bg-emerald-500"></span> Active
+                <span className="w-2 h-2 rounded-full bg-success/100"></span> Active
               </span>
               <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
-                <span className="w-2 h-2 rounded-full bg-amber-500"></span> In Progress
+                <span className="w-2 h-2 rounded-full bg-warning/100"></span> In Progress
               </span>
             </div>
           </div>
-          <div className="flex-1 relative bg-slate-100 dark:bg-slate-800/50 overflow-hidden flex items-center justify-center">
+          <div className="flex-1 relative bg-muted dark:bg-gray-900/50 overflow-hidden flex items-center justify-center">
             {/* Map Simulation */}
             <div className="absolute inset-0 opacity-20 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(0,0,0,0.15) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
             
             <div className="relative w-full h-full p-8 flex items-center justify-between">
                {/* Node 1 */}
                <div className="flex flex-col items-center group relative">
-                 <div className="w-8 h-8 rounded-full bg-emerald-500 border-4 border-card shadow-lg z-10 flex items-center justify-center">
+                 <div className="w-8 h-8 rounded-full bg-success/100 border-4 border-card shadow-lg z-10 flex items-center justify-center">
                     <CheckCircle2 className="w-4 h-4 text-white" />
                  </div>
                  <div className="mt-2 text-center">
                    <div className="text-[11px] font-bold text-foreground">Node Alpha</div>
-                   <div className="text-[10px] text-emerald-600">Energized</div>
+                   <div className="text-[10px] text-success">Energized</div>
                  </div>
-                 <div className="absolute top-4 left-8 w-[150px] h-[3px] bg-emerald-500 z-0"></div>
+                 <div className="absolute top-4 left-8 w-[150px] h-[3px] bg-success/100 z-0"></div>
                </div>
 
                {/* Node 2 */}
                <div className="flex flex-col items-center group relative">
-                 <div className="w-8 h-8 rounded-full bg-amber-500 border-4 border-card shadow-lg z-10 animate-pulse"></div>
+                 <div className="w-8 h-8 rounded-full bg-warning/100 border-4 border-card shadow-lg z-10 animate-pulse"></div>
                  <div className="mt-2 text-center">
                    <div className="text-[11px] font-bold text-foreground">Substation Beta</div>
-                   <div className="text-[10px] text-amber-600">Testing Phase</div>
+                   <div className="text-[10px] text-warning">Testing Phase</div>
                  </div>
                  <div className="absolute top-4 left-8 w-[150px] h-[3px] bg-slate-300 dark:bg-slate-700 border-t-2 border-dashed border-amber-500 z-0"></div>
                </div>
@@ -124,7 +124,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
         <div className="lg:col-span-4 bento-card flex flex-col h-[450px]">
           <div className="px-4 py-3.5 border-b border-border bg-card flex justify-between items-center shrink-0">
             <h3 className="section-label !text-[12px] !text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-amber-500" /> Critical Path
+              <AlertTriangle className="w-4 h-4 text-warning" /> Critical Path
             </h3>
           </div>
           <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
@@ -132,13 +132,13 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
               
               {/* Item 1 */}
               <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-emerald-500 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-success/100 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
                   <CheckCircle2 className="w-4 h-4" />
                 </div>
                 <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-lg border border-border bg-card shadow-sm">
                   <div className="flex items-center justify-between mb-1">
                     <h4 className="font-bold text-[12px] text-foreground">Tower Foundation</h4>
-                    <span className="text-[10px] text-emerald-600 font-medium">Done</span>
+                    <span className="text-[10px] text-success font-medium">Done</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground">Sector 4 completely laid out.</p>
                 </div>
@@ -146,13 +146,13 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
 
               {/* Item 2 */}
               <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-amber-500 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-warning/100 text-white shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
                   <Clock className="w-4 h-4" />
                 </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-900/10 shadow-sm">
+                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-lg border border-warning/20 dark:border-amber-900/50 bg-warning/10 dark:bg-amber-900/10 shadow-sm">
                   <div className="flex items-center justify-between mb-1">
                     <h4 className="font-bold text-[12px] text-foreground">Line Stringing</h4>
-                    <span className="text-[10px] text-amber-600 font-bold">In Progress</span>
+                    <span className="text-[10px] text-warning font-bold">In Progress</span>
                   </div>
                   <p className="text-[11px] text-muted-foreground">Delayed due to clearance permit. Blocks downstream.</p>
                 </div>
@@ -160,10 +160,10 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
 
               {/* Item 3 */}
               <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group">
-                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-slate-200 dark:bg-slate-700 text-slate-500 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
+                <div className="flex items-center justify-center w-10 h-10 rounded-full border-4 border-card bg-slate-200 dark:bg-slate-700 text-muted-foreground shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2 shadow-sm z-10">
                   <Layers className="w-4 h-4" />
                 </div>
-                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-lg border border-border bg-card/50 shadow-sm opacity-60">
+                <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-3 rounded-lg border border-border bg-white/50 shadow-sm opacity-60">
                   <div className="flex items-center justify-between mb-1">
                     <h4 className="font-bold text-[12px] text-foreground">Testing & Commissioning</h4>
                     <span className="text-[10px] text-muted-foreground">Pending</span>
@@ -181,7 +181,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
       <div className="bento-card overflow-hidden">
         <div className="px-5 py-3.5 border-b border-border bg-card flex justify-between items-center">
           <h3 className="section-label !text-[12px] !text-foreground flex items-center gap-2">
-            <Network className="w-4 h-4 text-[#0b74b1]" /> Site to Transmission Readiness Log
+            <Network className="w-4 h-4 text-primary" /> Site to Transmission Readiness Log
           </h3>
           <div className="relative">
             <input 
@@ -212,8 +212,8 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
                   
                   <td>
                     <div className="flex items-center gap-2">
-                      <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-[#0b74b1] rounded-full" style={{ width: '100%' }}></div>
+                      <div className="w-12 h-1.5 bg-muted dark:bg-card rounded-full overflow-hidden">
+                        <div className="h-full bg-primary rounded-full" style={{ width: '100%' }}></div>
                       </div>
                       <span className="text-[10px] font-bold">100%</span>
                     </div>
@@ -221,8 +221,8 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
                   
                   <td>
                     <div className="flex items-center gap-2">
-                      <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className="h-full bg-emerald-500 rounded-full" style={{ width: i % 2 === 0 ? '100%' : '60%' }}></div>
+                      <div className="w-12 h-1.5 bg-muted dark:bg-card rounded-full overflow-hidden">
+                        <div className="h-full bg-success/100 rounded-full" style={{ width: i % 2 === 0 ? '100%' : '60%' }}></div>
                       </div>
                       <span className="text-[10px] font-bold">{i % 2 === 0 ? '100%' : '60%'}</span>
                     </div>
@@ -230,10 +230,10 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
 
                   <td>
                     <div className="flex items-center gap-2">
-                      <div className="w-12 h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${i === 0 ? 'bg-amber-500' : 'bg-[#0b74b1]'}`} style={{ width: i === 0 ? '30%' : '90%' }}></div>
+                      <div className="w-12 h-1.5 bg-muted dark:bg-card rounded-full overflow-hidden">
+                        <div className={`h-full rounded-full ${i === 0 ? 'bg-warning/100' : 'bg-primary'}`} style={{ width: i === 0 ? '30%' : '90%' }}></div>
                       </div>
-                      <span className="text-[10px] font-bold text-amber-600">{i === 0 ? '30%' : '90%'}</span>
+                      <span className="text-[10px] font-bold text-warning">{i === 0 ? '30%' : '90%'}</span>
                     </div>
                   </td>
 

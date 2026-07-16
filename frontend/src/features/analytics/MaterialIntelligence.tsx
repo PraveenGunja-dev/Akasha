@@ -42,17 +42,17 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
         </div>
         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
           <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Active Shipments</h3>
-          <p className="text-4xl font-light text-amber-500">{logDetails?.length || 0}</p>
+          <p className="text-4xl font-light text-warning">{logDetails?.length || 0}</p>
         </div>
         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
           <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Delivered (Historical)</h3>
-          <p className="text-4xl font-light text-emerald-500">{logisticsData.find((l: any) => l.category === 'Delivered')?.count || 0}</p>
+          <p className="text-4xl font-light text-success">{logisticsData.find((l: any) => l.category === 'Delivered')?.count || 0}</p>
         </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-amber-500/10 rounded-lg"><Map className="w-5 h-5 text-amber-500" /></div>
+          <div className="p-2 bg-warning/100/10 rounded-lg"><Map className="w-5 h-5 text-warning" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Supply Chain Distribution (In-Transit to Plants)</h2>
         </div>
         <div className="w-full h-[350px]">
@@ -63,7 +63,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
       {/* Detailed Material Transit Ledger */}
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-emerald-500/10 rounded-lg"><PackageSearch className="w-5 h-5 text-emerald-500" /></div>
+          <div className="p-2 bg-success/100/10 rounded-lg"><PackageSearch className="w-5 h-5 text-success" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Live In-Transit Ledger</h2>
         </div>
 
@@ -83,7 +83,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
                   <td className="px-4 py-3 font-mono text-xs text-primary">{item.po_number || 'N/A'}</td>
                   <td className="px-4 py-3 text-muted-foreground font-medium">Plant {item.plant_code}</td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.material_code}</td>
-                  <td className="px-4 py-3 text-right font-medium text-amber-500">{item.still_to_deliver_qty?.toFixed(2)}</td>
+                  <td className="px-4 py-3 text-right font-medium text-warning">{item.still_to_deliver_qty?.toFixed(2)}</td>
                 </tr>
               ))}
               {(!logDetails || logDetails.length === 0) && (

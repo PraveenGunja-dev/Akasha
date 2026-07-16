@@ -71,7 +71,7 @@ const KPICard = ({ title, value, unit, icon: Icon, color, trend, trendValue, spa
   const isAmber = color === 'amber';
   const isBlue = color === 'blue';
   
-  const iconColor = isRed ? 'text-red-500' : isEmerald ? 'text-emerald-500' : isAmber ? 'text-amber-500' : isBlue ? 'text-blue-500' : 'text-primary';
+  const iconColor = isRed ? 'text-destructive' : isEmerald ? 'text-success' : isAmber ? 'text-warning' : isBlue ? 'text-primary' : 'text-primary';
   const glowColor = isRed ? 'from-red-500/20 to-rose-500/5' : isEmerald ? 'from-emerald-500/20 to-teal-500/5' : isAmber ? 'from-amber-500/20 to-orange-500/5' : isBlue ? 'from-blue-500/20 to-cyan-500/5' : 'from-primary/20 to-indigo-500/5';
   const chartColor = isRed ? '#ef4444' : isEmerald ? '#10b981' : isAmber ? '#f59e0b' : isBlue ? '#3b82f6' : '#0ea5e9';
 
@@ -105,11 +105,11 @@ const KPICard = ({ title, value, unit, icon: Icon, color, trend, trendValue, spa
         <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full bg-gradient-to-br ${glowColor} opacity-50 blur-2xl group-hover:scale-150 transition-transform duration-700`} />
         
         <div className="flex justify-between items-start mb-2 relative z-10">
-          <h4 className="text-[11px] font-bold text-gray-500 uppercase tracking-[0.1em] leading-tight flex items-center gap-1.5">
+          <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.1em] leading-tight flex items-center gap-1.5">
             <Icon className={`w-3.5 h-3.5 ${iconColor}`} /> {title}
           </h4>
           {trend && (
-            <div className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md ${trend === 'up' ? 'text-emerald-700 bg-emerald-500/10 border border-emerald-500/20' : 'text-red-700 bg-red-500/10 border border-red-500/20'}`}>
+            <div className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md ${trend === 'up' ? 'text-success bg-success/100/10 border border-success/20' : 'text-destructive bg-destructive/100/10 border border-destructive/20'}`}>
               {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />} {trendValue}
             </div>
           )}
@@ -117,8 +117,8 @@ const KPICard = ({ title, value, unit, icon: Icon, color, trend, trendValue, spa
         
         <div className="flex items-end justify-between relative z-10 mt-1">
           <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-black tracking-tight text-gray-900 dark:text-white leading-none group-hover:scale-105 transform origin-left transition-transform duration-300">{value}</span>
-            {unit && <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">{unit}</span>}
+            <span className="text-3xl font-black tracking-tight text-foreground dark:text-white leading-none group-hover:scale-105 transform origin-left transition-transform duration-300">{value}</span>
+            {unit && <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{unit}</span>}
           </div>
           
           <div className="h-8 w-20 opacity-80 group-hover:opacity-100 transition-opacity">
@@ -158,13 +158,13 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
   if (activeKpi === "COD Done") {
     filteredProjects = projects.filter(p => p.cod_mw > 0);
   } else if (activeKpi === "Trial Run Only") {
-    titleColor = "text-emerald-500";
+    titleColor = "text-success";
     filteredProjects = projects.filter(p => p.tr_mw > 0);
   } else if (activeKpi === "Solar Portfolio") {
-    titleColor = "text-amber-500";
+    titleColor = "text-warning";
     filteredProjects = projects.filter(p => p.type === 'Solar');
   } else if (activeKpi === "Wind Portfolio") {
-    titleColor = "text-blue-500";
+    titleColor = "text-primary";
     filteredProjects = projects.filter(p => p.type === 'Wind');
   }
 
@@ -176,12 +176,12 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
   return createPortal(
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6" data-lenis-prevent="true">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
           <motion.div 
             initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
             className="absolute inset-0 bg-black/40 backdrop-blur-md" 
             onClick={onClose} 
-            data-lenis-prevent="true" 
+            
           />
           <motion.div 
             initial={{ opacity: 0, y: 20, scale: 0.95 }}
@@ -189,30 +189,30 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
             exit={{ opacity: 0, y: 20, scale: 0.95, transition: { duration: 0.2 } }}
             className="bg-white/80 dark:bg-gray-900/80 backdrop-blur-2xl w-full max-w-5xl rounded-3xl shadow-2xl relative z-10 overflow-hidden flex flex-col max-h-[85vh] border border-white/50 dark:border-white/10"
           >
-            <div className="px-6 py-6 border-b border-gray-200/50 dark:border-gray-800/50 flex justify-between items-start bg-gradient-to-r from-gray-50/50 to-transparent dark:from-gray-800/20">
+            <div className="px-6 py-6 border-b border-border/50 dark:border-border/50 flex justify-between items-start bg-gradient-to-r from-gray-50/50 to-transparent dark:from-gray-800/20">
               <div>
                 <h2 className={`text-xl font-black ${titleColor} flex items-center gap-2 mb-1 tracking-tight`}>
                   <Layers className="w-6 h-6" /> {activeKpi}
                 </h2>
                 <div className="flex gap-2 mt-3 flex-wrap">
-                  <span className="text-[11px] font-bold text-gray-600 dark:text-gray-300 uppercase tracking-wider bg-white/50 dark:bg-gray-800/50 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-gray-200/50 dark:border-gray-700/50">Total Cap: <span className="text-gray-900 dark:text-white ml-1">{totalCap.toFixed(1)} MW</span></span>
+                  <span className="text-[11px] font-bold text-foreground dark:text-muted-foreground uppercase tracking-wider bg-white/50 dark:bg-gray-900/50 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-border/50 dark:border-gray-700/50">Total Cap: <span className="text-foreground dark:text-white ml-1">{totalCap.toFixed(1)} MW</span></span>
                   <span className="text-[11px] font-bold text-primary uppercase tracking-wider bg-primary/5 dark:bg-primary/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-primary/20">COD: <span className="ml-1 font-black">{totalCod.toFixed(1)} MW</span></span>
-                  <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-400 uppercase tracking-wider bg-emerald-500/5 dark:bg-emerald-500/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-emerald-500/20">TR Only: <span className="ml-1 font-black">{totalTr.toFixed(1)} MW</span></span>
-                  <span className="text-[11px] font-bold text-amber-600 dark:text-amber-400 uppercase tracking-wider bg-amber-500/5 dark:bg-amber-500/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-amber-500/20">Remaining: <span className="ml-1 font-black">{totalRemaining.toFixed(1)} MW</span></span>
+                  <span className="text-[11px] font-bold text-success dark:text-success uppercase tracking-wider bg-success/100/5 dark:bg-success/100/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-success/20">TR Only: <span className="ml-1 font-black">{totalTr.toFixed(1)} MW</span></span>
+                  <span className="text-[11px] font-bold text-warning dark:text-warning uppercase tracking-wider bg-warning/100/5 dark:bg-warning/100/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-warning/20">Remaining: <span className="ml-1 font-black">{totalRemaining.toFixed(1)} MW</span></span>
                 </div>
               </div>
-              <button onClick={onClose} className="p-2.5 bg-gray-100/80 hover:bg-gray-200 dark:bg-gray-800/80 dark:hover:bg-gray-700 rounded-full transition-colors self-start backdrop-blur-sm group">
+              <button onClick={onClose} className="p-2.5 bg-muted hover:bg-gray-200 dark:bg-gray-900/80 dark:hover:bg-gray-700 rounded-full transition-colors self-start backdrop-blur-sm group">
                 <span className="sr-only">Close</span>
-                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-gray-500 group-hover:text-gray-900 dark:text-gray-400 dark:group-hover:text-white transition-colors"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
+                <svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg" className="text-muted-foreground group-hover:text-foreground dark:text-muted-foreground dark:group-hover:text-white transition-colors"><path d="M11.7816 4.03157C12.0062 3.80702 12.0062 3.44295 11.7816 3.2184C11.5571 2.99385 11.193 2.99385 10.9685 3.2184L7.50005 6.68682L4.03164 3.2184C3.80708 2.99385 3.44301 2.99385 3.21846 3.2184C2.99391 3.44295 2.99391 3.80702 3.21846 4.03157L6.68688 7.49999L3.21846 10.9684C2.99391 11.193 2.99391 11.557 3.21846 11.7816C3.44301 12.0061 3.80708 12.0061 4.03164 11.7816L7.50005 8.31316L10.9685 11.7816C11.193 12.0061 11.5571 12.0061 11.7816 11.7816C12.0062 11.557 12.0062 11.193 11.7816 10.9684L8.31322 7.49999L11.7816 4.03157Z" fill="currentColor" fillRule="evenodd" clipRule="evenodd"></path></svg>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar" data-lenis-prevent="true">
+            <div className="flex-1 overflow-y-auto min-h-0 custom-scrollbar">
               {filteredProjects.length === 0 ? (
-                <div className="text-center py-16 text-gray-500 font-medium">No projects found for this metric.</div>
+                <div className="text-center py-16 text-muted-foreground font-medium">No projects found for this metric.</div>
               ) : (
                 <div className="px-6 pb-6 pt-2">
                   <table className="w-full text-left text-sm border-separate border-spacing-y-2">
-                    <thead className="text-[10px] font-black text-gray-400 uppercase tracking-[0.1em] sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-10">
+                    <thead className="text-[10px] font-black text-muted-foreground uppercase tracking-[0.1em] sticky top-0 bg-white/95 dark:bg-gray-900/95 backdrop-blur-md z-10">
                     <tr>
                       <th className="py-3 pl-4 rounded-l-xl">Project</th>
                       <th className="py-3 text-center">Type</th>
@@ -227,28 +227,28 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
                     {filteredProjects.map((p, idx) => {
                       const pct = p.total_capacity > 0 ? ((p.cod_mw + p.tr_mw) / p.total_capacity * 100) : 0;
                       return (
-                        <tr key={idx} className="bg-white/40 dark:bg-gray-800/40 hover:bg-white dark:hover:bg-gray-800 transition-all duration-200 group shadow-sm hover:shadow-md rounded-xl">
-                          <td className="px-4 py-3.5 font-bold text-[12px] text-gray-900 dark:text-white max-w-[200px] truncate rounded-l-xl" title={p.project_name}>{p.project_name}</td>
+                        <tr key={idx} className="bg-white/40 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-card transition-all duration-200 group shadow-sm hover:shadow-md rounded-xl">
+                          <td className="px-4 py-3.5 font-bold text-[12px] text-foreground dark:text-white max-w-[200px] truncate rounded-l-xl" title={p.project_name}>{p.project_name}</td>
                           <td className="px-2 py-3.5 text-center">
-                            {p.type === 'Solar' ? <div className="mx-auto w-6 h-6 rounded-full bg-amber-500/10 flex items-center justify-center"><Sun size={12} className="text-amber-500" /></div> : <div className="mx-auto w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center"><Wind size={12} className="text-blue-500" /></div>}
+                            {p.type === 'Solar' ? <div className="mx-auto w-6 h-6 rounded-full bg-warning/100/10 flex items-center justify-center"><Sun size={12} className="text-warning" /></div> : <div className="mx-auto w-6 h-6 rounded-full bg-primary/100/10 flex items-center justify-center"><Wind size={12} className="text-primary" /></div>}
                           </td>
-                          <td className="px-2 py-3.5 text-center text-[12px] font-black text-gray-800 dark:text-gray-200">{p.total_capacity.toFixed(1)}</td>
-                          <td className="px-2 py-3.5 text-center text-[11px] font-bold text-gray-500">{p.total_blocks}</td>
+                          <td className="px-2 py-3.5 text-center text-[12px] font-black text-foreground dark:text-muted-foreground">{p.total_capacity.toFixed(1)}</td>
+                          <td className="px-2 py-3.5 text-center text-[11px] font-bold text-muted-foreground">{p.total_blocks}</td>
                           <td className="px-2 py-3.5 text-center">
-                            {p.cod_mw > 0 ? <span className="text-[11px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full">{p.cod_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.cod_blocks})</span></span> : <span className="text-gray-300">-</span>}
+                            {p.cod_mw > 0 ? <span className="text-[11px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full">{p.cod_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.cod_blocks})</span></span> : <span className="text-muted-foreground">-</span>}
                           </td>
                           <td className="px-2 py-3.5 text-center">
-                            {p.tr_mw > 0 ? <span className="text-[11px] font-black text-emerald-600 bg-emerald-500/10 px-2.5 py-1 rounded-full">{p.tr_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.tr_blocks})</span></span> : <span className="text-gray-300">-</span>}
+                            {p.tr_mw > 0 ? <span className="text-[11px] font-black text-success bg-success/100/10 px-2.5 py-1 rounded-full">{p.tr_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.tr_blocks})</span></span> : <span className="text-muted-foreground">-</span>}
                           </td>
                           <td className="px-4 py-3.5 text-center rounded-r-xl">
                             <div className="flex flex-col gap-1.5">
                               <div className="flex justify-between items-center px-1">
-                                <span className="text-[10px] font-bold text-gray-400">{pct.toFixed(0)}% Done</span>
-                                <span className="text-[10px] font-bold text-amber-600 dark:text-amber-400">{p.remaining_capacity.toFixed(1)} MW Left</span>
+                                <span className="text-[10px] font-bold text-muted-foreground">{pct.toFixed(0)}% Done</span>
+                                <span className="text-[10px] font-bold text-warning dark:text-warning">{p.remaining_capacity.toFixed(1)} MW Left</span>
                               </div>
                               <div className="w-full h-1.5 bg-gray-200/50 dark:bg-gray-700/50 rounded-full overflow-hidden shadow-inner flex">
                                 {p.cod_mw > 0 && <div className="h-full bg-primary transition-all duration-700 ease-out" style={{ width: `${Math.min((p.cod_mw / p.total_capacity) * 100, 100)}%` }}></div>}
-                                {p.tr_mw > 0 && <div className="h-full bg-emerald-500 transition-all duration-700 ease-out" style={{ width: `${Math.min((p.tr_mw / p.total_capacity) * 100, 100)}%` }}></div>}
+                                {p.tr_mw > 0 && <div className="h-full bg-success/100 transition-all duration-700 ease-out" style={{ width: `${Math.min((p.tr_mw / p.total_capacity) * 100, 100)}%` }}></div>}
                               </div>
                             </div>
                           </td>
@@ -302,7 +302,7 @@ export default function CapacityOverview() {
     );
   }
 
-  if (error || !data) return <div className="text-red-500 flex justify-center items-center h-64 font-bold">{error || "No data available"}</div>;
+  if (error || !data) return <div className="text-destructive flex justify-center items-center h-64 font-bold">{error || "No data available"}</div>;
 
   const { financial_years, monthly_trends, recent_milestones, totals, projects } = data;
 
@@ -414,10 +414,10 @@ export default function CapacityOverview() {
   }
 
   const renderGap = (gap: number | null) => {
-    if (gap === null) return <span className="text-gray-300">-</span>;
-    let colorClass = "bg-emerald-50 border-emerald-100 text-emerald-700";
-    if (gap > 20) colorClass = "bg-red-50 border-red-100 text-red-700";
-    else if (gap > 15) colorClass = "bg-amber-50 border-amber-100 text-amber-700";
+    if (gap === null) return <span className="text-muted-foreground">-</span>;
+    let colorClass = "bg-success/10 border-success/20 text-success";
+    if (gap > 20) colorClass = "bg-destructive/10 border-destructive/20 text-destructive";
+    else if (gap > 15) colorClass = "bg-warning/10 border-warning/20 text-warning";
     return <span className={`px-2.5 py-1 rounded-md text-[11px] font-bold border shadow-sm ${colorClass}`}>{gap} d</span>;
   };
 
@@ -438,10 +438,10 @@ export default function CapacityOverview() {
         {/* Main Chart */}
         <motion.div variants={itemVariants} className="p-5 lg:col-span-2 flex flex-col h-[400px] rounded-2xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <div className="flex justify-between items-center mb-4">
-            <h3 className="text-[12px] font-bold text-gray-900 dark:text-white uppercase tracking-[0.08em] flex items-center gap-2">
+            <h3 className="text-[12px] font-bold text-foreground dark:text-white uppercase tracking-[0.08em] flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" /> Capacity Trajectory
             </h3>
-            <div className="flex bg-gray-100/80 dark:bg-gray-800/80 backdrop-blur p-1 rounded-xl shadow-inner border border-gray-200/50 dark:border-gray-700/50 relative">
+            <div className="flex bg-muted dark:bg-gray-900/80 backdrop-blur p-1 rounded-xl shadow-inner border border-border/50 dark:border-gray-700/50 relative">
               {viewMode === 'FY' ? (
                  <motion.div layoutId="chartViewToggle" className="absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg shadow-sm" />
               ) : (
@@ -449,13 +449,13 @@ export default function CapacityOverview() {
               )}
               <button 
                 onClick={() => setViewMode('FY')} 
-                className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'FY' ? 'text-primary' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'FY' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 Financial Year
               </button>
               <button 
                 onClick={() => setViewMode('Monthly')} 
-                className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'Monthly' ? 'text-primary' : 'text-gray-500 hover:text-gray-900'}`}
+                className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'Monthly' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
               >
                 Monthly Trend
               </button>
@@ -485,25 +485,25 @@ export default function CapacityOverview() {
         <motion.div variants={itemVariants} className="p-5 flex flex-col h-[400px] rounded-2xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden relative">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-gradient-to-br from-amber-500/10 to-blue-500/10 rounded-full blur-2xl" />
 
-          <h3 className="text-[12px] font-bold text-gray-900 dark:text-white uppercase tracking-[0.08em] mb-2 flex items-center gap-2">
+          <h3 className="text-[12px] font-bold text-foreground dark:text-white uppercase tracking-[0.08em] mb-2 flex items-center gap-2">
             <Activity className="w-4 h-4 text-primary" /> Portfolio Mix
           </h3>
           <div className="flex-1 relative flex items-center justify-center">
             <ReactECharts option={pieEchartOption} style={{ height: '100%', width: '100%' }} />
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total</span>
-              <span className="text-2xl font-black text-gray-900 dark:text-white leading-none mt-1">{(totalSolar + totalWind).toFixed(0)}</span>
-              <span className="text-[10px] font-bold text-gray-400">MW</span>
+              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total</span>
+              <span className="text-2xl font-black text-foreground dark:text-white leading-none mt-1">{(totalSolar + totalWind).toFixed(0)}</span>
+              <span className="text-[10px] font-bold text-muted-foreground">MW</span>
             </div>
           </div>
-          <div className="flex justify-center gap-6 mt-2 pt-4 border-t border-gray-100 dark:border-gray-800">
+          <div className="flex justify-center gap-6 mt-2 pt-4 border-t border-muted dark:border-border">
             <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-amber-500"></div><span className="text-[11px] font-bold text-gray-500 uppercase">Solar</span></div>
-              <span className="text-[13px] font-bold text-gray-900 dark:text-white">{totalSolar.toFixed(1)} MW</span>
+              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-warning/100"></div><span className="text-[11px] font-bold text-muted-foreground uppercase">Solar</span></div>
+              <span className="text-[13px] font-bold text-foreground dark:text-white">{totalSolar.toFixed(1)} MW</span>
             </div>
             <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-blue-500"></div><span className="text-[11px] font-bold text-gray-500 uppercase">Wind</span></div>
-              <span className="text-[13px] font-bold text-gray-900 dark:text-white">{totalWind.toFixed(1)} MW</span>
+              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-primary/100"></div><span className="text-[11px] font-bold text-muted-foreground uppercase">Wind</span></div>
+              <span className="text-[13px] font-bold text-foreground dark:text-white">{totalWind.toFixed(1)} MW</span>
             </div>
           </div>
         </motion.div>

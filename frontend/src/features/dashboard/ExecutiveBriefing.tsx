@@ -65,8 +65,8 @@ export default function ExecutiveBriefing() {
         </div>
       ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center space-y-4">
-           <ServerCrash className="w-12 h-12 text-red-500" />
-           <p className="text-red-500 font-medium">{error}</p>
+           <ServerCrash className="w-12 h-12 text-destructive" />
+           <p className="text-destructive font-medium">{error}</p>
            <p className="text-muted-foreground/70 text-sm">Please ensure the AI API Key is set in your backend environment.</p>
         </div>
       ) : briefing ? (

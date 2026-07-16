@@ -31,7 +31,7 @@ export default function SiteMonitoring({ data, theme }: any) {
             <option>Wind Offshore</option>
             <option>Hydroelectric</option>
           </select>
-          <button className="p-1.5 border border-border rounded hover:bg-slate-50 dark:hover:bg-slate-800 text-muted-foreground transition-colors shadow-sm">
+          <button className="p-1.5 border border-border rounded hover:bg-muted dark:hover:bg-card text-muted-foreground transition-colors shadow-sm">
             <RefreshCw className="w-4 h-4" />
           </button>
         </div>
@@ -51,11 +51,11 @@ export default function SiteMonitoring({ data, theme }: any) {
                 <span className="w-2 h-2 rounded-full bg-primary"></span> Optimal
               </span>
               <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground font-medium">
-                <span className="w-2 h-2 rounded-full bg-red-500"></span> Alert
+                <span className="w-2 h-2 rounded-full bg-destructive/100"></span> Alert
               </span>
             </div>
           </div>
-          <div className="flex-1 relative bg-slate-100 dark:bg-slate-800/30 overflow-hidden group/map">
+          <div className="flex-1 relative bg-muted dark:bg-gray-900/30 overflow-hidden group/map">
             {/* Map Placeholder Image or Vector */}
             <div className="absolute inset-0 opacity-[0.15] dark:opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(circle at 10px 10px, rgba(0,0,0,0.4) 1px, transparent 0)', backgroundSize: '40px 40px' }}></div>
             
@@ -68,13 +68,13 @@ export default function SiteMonitoring({ data, theme }: any) {
             </div>
             
             <div className="absolute top-[60%] left-[70%] flex flex-col items-center group cursor-pointer z-10">
-              <div className="w-4 h-4 rounded-full bg-red-500 border-2 border-card shadow-sm z-10 animate-pulse transition-transform group-hover:scale-125"></div>
+              <div className="w-4 h-4 rounded-full bg-destructive/100 border-2 border-card shadow-sm z-10 animate-pulse transition-transform group-hover:scale-125"></div>
               <div className="bg-foreground text-background px-2 py-1 rounded text-[10px] font-bold mt-1 absolute top-full hidden group-hover:block whitespace-nowrap z-20 shadow-lg">
                 Wind Park Beta (Turbine Fault)
               </div>
             </div>
 
-            <div className="absolute bottom-4 right-4 bg-card/80 backdrop-blur border border-border px-3 py-1.5 rounded shadow-sm text-[10px] font-bold text-muted-foreground">
+            <div className="absolute bottom-4 right-4 bg-white/80 backdrop-blur border border-border px-3 py-1.5 rounded shadow-sm text-[10px] font-bold text-muted-foreground">
               Northern Grid Region
             </div>
           </div>
@@ -96,10 +96,10 @@ export default function SiteMonitoring({ data, theme }: any) {
             </div>
           </div>
           {/* KPI 2 */}
-          <div className="bento-card p-4 flex flex-col justify-between hover:border-amber-500/30 transition-colors">
+          <div className="bento-card p-4 flex flex-col justify-between hover:border-warning/20 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Avg Irradiance</span>
-              <Sun className="w-4 h-4 text-amber-500" />
+              <Sun className="w-4 h-4 text-warning" />
             </div>
             <div>
               <div className="text-[22px] font-black text-foreground leading-none">{telemetry.avg_irradiance_wm2} <span className="text-[11px] font-medium text-muted-foreground">W/m²</span></div>
@@ -110,20 +110,20 @@ export default function SiteMonitoring({ data, theme }: any) {
           <div className="bento-card p-4 flex flex-col justify-between hover:border-blue-500/30 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Wind Speed</span>
-              <Wind className="w-4 h-4 text-blue-500" />
+              <Wind className="w-4 h-4 text-primary" />
             </div>
             <div>
               <div className="text-[22px] font-black text-foreground leading-none">{telemetry.wind_speed_ms} <span className="text-[11px] font-medium text-muted-foreground">m/s</span></div>
-              <div className="text-[10px] font-bold text-red-500 mt-1 flex items-center">
+              <div className="text-[10px] font-bold text-destructive mt-1 flex items-center">
                 <Activity className="w-3 h-3 mr-1" /> -1.2% dropping
               </div>
             </div>
           </div>
           {/* KPI 4 */}
-          <div className="bento-card p-4 flex flex-col justify-between hover:border-emerald-500/30 transition-colors">
+          <div className="bento-card p-4 flex flex-col justify-between hover:border-success/20 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Grid Sync</span>
-              <Activity className="w-4 h-4 text-emerald-500" />
+              <Activity className="w-4 h-4 text-success" />
             </div>
             <div>
               <div className="text-[22px] font-black text-foreground leading-none">{telemetry.grid_sync_pct} <span className="text-[11px] font-medium text-muted-foreground">%</span></div>
@@ -136,7 +136,7 @@ export default function SiteMonitoring({ data, theme }: any) {
         <div className="md:col-span-7 bento-card flex flex-col overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border bg-card flex justify-between items-center shrink-0">
             <h3 className="section-label !text-[12px] !text-foreground flex items-center gap-2">
-              <Activity className="w-4 h-4 text-emerald-500" /> Equipment Health Status
+              <Activity className="w-4 h-4 text-success" /> Equipment Health Status
             </h3>
             <button className="text-[11px] text-primary font-bold hover:underline">View All Assets</button>
           </div>
@@ -153,11 +153,11 @@ export default function SiteMonitoring({ data, theme }: any) {
               </thead>
               <tbody>
                 {equipment_health.map((eq: any, i: number) => (
-                  <tr key={i} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors">
+                  <tr key={i} className="hover:bg-muted dark:hover:bg-white/50 transition-colors">
                     <td className="font-bold text-foreground whitespace-nowrap">{eq.id}</td>
                     <td>
                       <span className="flex items-center gap-1.5 text-[11px] font-medium text-muted-foreground">
-                        {eq.type === 'Solar' ? <Sun className="w-3 h-3 text-amber-500" /> : eq.type === 'Wind' ? <Wind className="w-3 h-3 text-blue-500" /> : <Zap className="w-3 h-3 text-cyan-500" />}
+                        {eq.type === 'Solar' ? <Sun className="w-3 h-3 text-warning" /> : eq.type === 'Wind' ? <Wind className="w-3 h-3 text-primary" /> : <Zap className="w-3 h-3 text-cyan-500" />}
                         {eq.type}
                       </span>
                     </td>
@@ -167,8 +167,8 @@ export default function SiteMonitoring({ data, theme }: any) {
                       <span className={
                         eq.status === 'OPERATIONAL' ? 'risk-badge-low' : 
                         eq.status === 'MAINTENANCE REQ' ? 'risk-badge-high' : 
-                        eq.status === 'DEGRADED' ? 'text-[10px] px-2 py-0.5 rounded bg-amber-50 text-amber-600 dark:bg-amber-500/10 dark:text-amber-500 font-bold border border-amber-200 dark:border-amber-500/30' : 
-                        'text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 font-bold border border-slate-200 dark:border-slate-700'
+                        eq.status === 'DEGRADED' ? 'text-[10px] px-2 py-0.5 rounded bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning font-bold border border-warning/20 dark:border-warning/20' : 
+                        'text-[10px] px-2 py-0.5 rounded bg-muted text-foreground dark:bg-card dark:text-muted-foreground font-bold border border-border dark:border-slate-700'
                       }>
                         {eq.status}
                       </span>
@@ -184,21 +184,21 @@ export default function SiteMonitoring({ data, theme }: any) {
         <div className="md:col-span-5 bento-card flex flex-col overflow-hidden">
           <div className="px-5 py-3.5 border-b border-border bg-card flex justify-between items-center shrink-0">
             <h3 className="section-label !text-[12px] !text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-500" /> Recent Alerts
+              <AlertTriangle className="w-4 h-4 text-destructive" /> Recent Alerts
             </h3>
-            <span className="bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{alerts.length} Active</span>
+            <span className="bg-destructive/100 text-white text-[10px] font-bold px-2 py-0.5 rounded-full">{alerts.length} Active</span>
           </div>
-          <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-slate-50 dark:bg-slate-900/20">
+          <div className="flex-1 overflow-y-auto p-3 space-y-3 custom-scrollbar bg-muted dark:bg-gray-900/20">
             {alerts.map((a: any, i: number) => (
               <div key={i} className={`p-3 rounded-lg flex gap-3 items-start border shadow-sm ${
-                a.level === 'critical' ? 'bg-red-50 dark:bg-red-950/20 border-red-200 dark:border-red-900/50' : 
-                a.level === 'warning' ? 'bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50' : 
+                a.level === 'critical' ? 'bg-destructive/10 dark:bg-red-950/20 border-destructive/20 dark:border-red-900/50' : 
+                a.level === 'warning' ? 'bg-warning/10 dark:bg-amber-950/20 border-warning/20 dark:border-amber-900/50' : 
                 'bg-card border-border'
               }`}>
                 <div className="shrink-0 mt-0.5">
-                  {a.level === 'critical' ? <AlertTriangle className="w-4 h-4 text-red-500" /> : 
-                   a.level === 'warning' ? <Thermometer className="w-4 h-4 text-amber-500" /> : 
-                   <Info className="w-4 h-4 text-slate-500" />}
+                  {a.level === 'critical' ? <AlertTriangle className="w-4 h-4 text-destructive" /> : 
+                   a.level === 'warning' ? <Thermometer className="w-4 h-4 text-warning" /> : 
+                   <Info className="w-4 h-4 text-muted-foreground" />}
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex justify-between items-center mb-1">
@@ -209,7 +209,7 @@ export default function SiteMonitoring({ data, theme }: any) {
                   
                   {a.level === 'critical' && (
                     <div className="mt-2.5 flex gap-3">
-                      <button className="text-[10px] font-bold text-red-600 dark:text-red-400 hover:underline uppercase tracking-wider">Acknowledge</button>
+                      <button className="text-[10px] font-bold text-destructive dark:text-destructive hover:underline uppercase tracking-wider">Acknowledge</button>
                       <button className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">Create Ticket</button>
                     </div>
                   )}

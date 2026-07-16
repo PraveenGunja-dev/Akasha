@@ -107,7 +107,8 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
         if p.finish_date:
             actual_finish = p.finish_date.strftime("%Y-%m-%d")
 
-        project_name = m.project or m.project_name_from_p6 or "Unknown"
+        # Use P6 native names as requested by the user
+        project_name = p.name or m.project_name_from_p6 or "Unknown"
         display_name = f"{m.project_id} - {project_name}" if m.project_id else project_name
         
         planned_pct = 100
@@ -173,7 +174,7 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
         sv = _safe_float(p.finish_date_variance, 0)
         if tf <= 0 or sv < -3:
             critical_activities.append({
-                "project": m.project or m.project_id,
+                "project": p.name or m.project_id,
                 "activity": f"Project-level critical path ({m.project_id})",
                 "planned_date": p.finish_date.strftime("%Y-%m-%d") if p.finish_date else "-",
                 "delay_days": abs(round(sv, 0)) if sv < 0 else 0,
@@ -197,7 +198,7 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
             status = "submitted" if r > 0.2 else ("pending" if r > 0.1 else "missing")
             days.append({"date": dt.strftime("%Y-%m-%d"), "day": dt.strftime("%a"), "status": status})
         dpr_sites.append({
-            "project": (m.project or m.project_name_from_p6 or "Site")[:35],
+            "project": (p6_map.get(m.project_id).name if p6_map.get(m.project_id) else m.project_name_from_p6 or "Site")[:35],
             "days": days,
         })
 

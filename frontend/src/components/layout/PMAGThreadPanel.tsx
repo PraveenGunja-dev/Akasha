@@ -105,39 +105,39 @@ export default function PMAGThreadPanel({ notification, onClose, onResolved }: a
   return (
     <>
       <div className="fixed inset-0 bg-black/30 backdrop-blur-sm z-50 transition-opacity" onClick={onClose} />
-      <div className="fixed top-0 right-0 h-full w-[450px] bg-white dark:bg-gray-900 shadow-2xl z-50 flex flex-col border-l border-gray-200 dark:border-gray-800 transform transition-transform duration-300 overflow-hidden">
+      <div className="fixed top-0 right-0 h-full w-[450px] bg-card shadow-2xl z-50 flex flex-col border-l border-border dark:border-border transform transition-transform duration-300 overflow-hidden">
         
         {/* Header - Glassmorphism */}
-        <div className="h-[73px] shrink-0 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between px-6 bg-gradient-to-r from-sky-500/10 to-transparent">
+        <div className="h-[73px] shrink-0 border-b border-border dark:border-border flex items-center justify-between px-6 bg-gradient-to-r from-sky-500/10 to-transparent">
           <div>
-            <h2 className="font-bold text-gray-900 dark:text-white text-lg tracking-tight">PMAG Action Center</h2>
-            <p className="text-xs text-gray-500 truncate max-w-[300px]">{notification.project_name}</p>
+            <h2 className="font-bold text-foreground dark:text-white text-lg tracking-tight">PMAG Action Center</h2>
+            <p className="text-xs text-muted-foreground truncate max-w-[300px]">{notification.project_name}</p>
           </div>
-          <button onClick={onClose} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
-            <X className="w-5 h-5 text-gray-500" />
+          <button onClick={onClose} className="p-2 hover:bg-muted dark:hover:bg-card rounded-full transition-colors">
+            <X className="w-5 h-5 text-muted-foreground" />
           </button>
         </div>
 
         {/* Issue Details Card */}
-        <div className="p-6 border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shrink-0 shadow-sm relative z-10">
+        <div className="p-6 border-b border-border dark:border-border bg-card shrink-0 shadow-sm relative z-10">
           <div className="flex items-center gap-2 mb-4">
-            <div className="p-1.5 bg-orange-50 dark:bg-orange-900/20 rounded-lg">
-              <AlertTriangle className="w-4 h-4 text-orange-500" />
+            <div className="p-1.5 bg-warning/10 dark:bg-orange-900/20 rounded-lg">
+              <AlertTriangle className="w-4 h-4 text-warning" />
             </div>
-            <span className="font-semibold text-[15px] text-gray-900 dark:text-white">{notification.change_type}</span>
+            <span className="font-semibold text-[15px] text-foreground dark:text-white">{notification.change_type}</span>
           </div>
           
           <div className="space-y-3 mb-5">
             {notification.block && (
               <div className="flex justify-between items-center text-[13px]">
-                <span className="text-gray-500 font-medium">Block:</span>
-                <span className="font-semibold text-gray-900 dark:text-white">{notification.block}</span>
+                <span className="text-muted-foreground font-medium">Block:</span>
+                <span className="font-semibold text-foreground dark:text-white">{notification.block}</span>
               </div>
             )}
             {notification.activity_name && (
               <div className="flex justify-between items-center text-[13px]">
-                <span className="text-gray-500 font-medium">Activity:</span>
-                <span className="font-semibold text-gray-900 dark:text-white text-right max-w-[240px] truncate">{notification.activity_name}</span>
+                <span className="text-muted-foreground font-medium">Activity:</span>
+                <span className="font-semibold text-foreground dark:text-white text-right max-w-[240px] truncate">{notification.activity_name}</span>
               </div>
             )}
           </div>
@@ -150,8 +150,8 @@ export default function PMAGThreadPanel({ notification, onClose, onResolved }: a
                 <div className="flex items-center gap-3 relative z-10">
                   {notification.old_value && (
                     <>
-                      <span className="text-red-500 line-through font-semibold text-sm opacity-90">{notification.old_value}</span>
-                      <span className="text-gray-400">➔</span>
+                      <span className="text-destructive line-through font-semibold text-sm opacity-90">{notification.old_value}</span>
+                      <span className="text-muted-foreground">➔</span>
                     </>
                   )}
                   <input 
@@ -159,11 +159,11 @@ export default function PMAGThreadPanel({ notification, onClose, onResolved }: a
                     value={editValue}
                     onChange={(e) => setEditValue(e.target.value)}
                     placeholder="Enter new value..."
-                    className="bg-white dark:bg-gray-900 border border-emerald-500/40 text-emerald-600 dark:text-emerald-400 font-bold px-3 py-1.5 rounded-lg text-[15px] w-full focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all shadow-sm"
+                    className="bg-card border border-emerald-500/40 text-success dark:text-success font-bold px-3 py-1.5 rounded-lg text-[15px] w-full focus:outline-none focus:ring-2 focus:ring-emerald-500/30 transition-all shadow-sm"
                   />
                 </div>
                 {notification.reason && (
-                  <p className="text-[12px] text-gray-600 dark:text-gray-400 mt-3 italic leading-relaxed relative z-10">{notification.reason}</p>
+                  <p className="text-[12px] text-foreground dark:text-muted-foreground mt-3 italic leading-relaxed relative z-10">{notification.reason}</p>
                 )}
               </div>
 
@@ -182,41 +182,41 @@ export default function PMAGThreadPanel({ notification, onClose, onResolved }: a
               <div className="flex items-center gap-3 relative z-10">
                 {notification.old_value && (
                   <>
-                    <span className="text-red-500 line-through font-semibold text-sm opacity-90">{notification.old_value}</span>
-                    <span className="text-gray-400">➔</span>
+                    <span className="text-destructive line-through font-semibold text-sm opacity-90">{notification.old_value}</span>
+                    <span className="text-muted-foreground">➔</span>
                   </>
                 )}
-                <span className="text-emerald-600 dark:text-emerald-400 font-bold text-[15px]">{notification.new_value}</span>
+                <span className="text-success dark:text-success font-bold text-[15px]">{notification.new_value}</span>
               </div>
               {notification.reason && (
-                <p className="text-[12px] text-gray-600 dark:text-gray-400 mt-3 italic leading-relaxed relative z-10">{notification.reason}</p>
+                <p className="text-[12px] text-foreground dark:text-muted-foreground mt-3 italic leading-relaxed relative z-10">{notification.reason}</p>
               )}
             </div>
           )}
         </div>
 
         {/* PMAG Thread - Chat Area */}
-        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-gray-800/30 flex flex-col gap-4 relative">
+        <div className="flex-1 overflow-y-auto p-6 bg-muted dark:bg-gray-900/30 flex flex-col gap-4 relative">
           
           {messages.length === 0 ? (
-            <div className="absolute inset-0 flex flex-col items-center justify-center text-gray-400 opacity-80">
+            <div className="absolute inset-0 flex flex-col items-center justify-center text-muted-foreground opacity-80">
               <MessageSquarePlus className="w-12 h-12 mb-3 stroke-1" />
               <p className="text-[13px] font-medium">No messages yet.</p>
               <p className="text-[11px] mt-1">Start a conversation with the PMAG Team below.</p>
             </div>
           ) : (
-            <div className="text-center text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-2">
+            <div className="text-center text-[10px] uppercase font-bold tracking-wider text-muted-foreground mb-2">
               Conversation Started
             </div>
           )}
           
           {messages.map((msg, i) => (
             <div key={i} className={`flex flex-col max-w-[85%] ${msg.sender === 'User' ? 'self-end items-end' : 'self-start items-start'}`} z-10>
-              <span className="text-[10px] text-gray-500 mb-1 px-1 font-medium">{msg.sender}</span>
-              <div className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender === 'User' ? 'bg-sky-500 text-white rounded-br-sm' : 'bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white rounded-bl-sm'}`}>
+              <span className="text-[10px] text-muted-foreground mb-1 px-1 font-medium">{msg.sender}</span>
+              <div className={`px-4 py-2.5 rounded-2xl text-[13px] leading-relaxed shadow-sm ${msg.sender === 'User' ? 'bg-sky-500 text-white rounded-br-sm' : 'bg-card border border-border dark:border-gray-700 text-foreground dark:text-white rounded-bl-sm'}`}>
                 {msg.message}
               </div>
-              <span className="text-[9px] text-gray-400 mt-1 px-1">
+              <span className="text-[9px] text-muted-foreground mt-1 px-1">
                 {new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
               </span>
             </div>
@@ -225,19 +225,19 @@ export default function PMAGThreadPanel({ notification, onClose, onResolved }: a
         </div>
 
         {/* Message Input - Bottom Pinned */}
-        <div className="p-4 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-10 relative">
+        <div className="p-4 bg-card border-t border-border dark:border-border shadow-[0_-10px_30px_rgba(0,0,0,0.03)] z-10 relative">
           <form onSubmit={handleSendMessage} className="flex gap-2">
             <input 
               type="text"
               value={newMessage}
               onChange={(e) => setNewMessage(e.target.value)}
               placeholder="Type your message to PMAG..."
-              className="flex-1 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 focus:border-sky-500 focus:bg-white dark:focus:bg-gray-900 focus:ring-2 focus:ring-sky-500/20 rounded-xl text-[13px] px-4 py-3 transition-all"
+              className="flex-1 bg-muted dark:bg-card border border-border dark:border-gray-700 focus:border-sky-500 focus:bg-white dark:focus:bg-card focus:ring-2 focus:ring-sky-500/20 rounded-xl text-[13px] px-4 py-3 transition-all"
             />
             <button 
               type="submit"
               disabled={loading || !newMessage.trim()}
-              className="bg-sky-500 hover:bg-sky-600 disabled:bg-gray-200 dark:disabled:bg-gray-800 disabled:text-gray-400 text-white rounded-xl px-4 flex items-center justify-center transition-all shadow-[0_4px_10px_rgba(14,165,233,0.2)] disabled:shadow-none"
+              className="bg-sky-500 hover:bg-sky-600 disabled:bg-gray-200 dark:disabled:bg-card disabled:text-muted-foreground text-white rounded-xl px-4 flex items-center justify-center transition-all shadow-[0_4px_10px_rgba(14,165,233,0.2)] disabled:shadow-none"
             >
               <Send className="w-4 h-4" />
             </button>

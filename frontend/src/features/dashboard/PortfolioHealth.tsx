@@ -39,7 +39,7 @@ export default function PortfolioHealth({ p6Data, logisticsData }: any) {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-card/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 rounded-3xl p-7 relative group overflow-hidden">
+        <div className="bg-white/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 rounded-3xl p-7 relative group overflow-hidden">
           <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-0"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-6">
@@ -52,12 +52,12 @@ export default function PortfolioHealth({ p6Data, logisticsData }: any) {
           </div>
         </div>
 
-        <div className="bg-card/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(16,185,129,0.1)] transition-all duration-300 rounded-3xl p-7 relative group overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/5 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-0"></div>
+        <div className="bg-white/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(16,185,129,0.1)] transition-all duration-300 rounded-3xl p-7 relative group overflow-hidden">
+          <div className="absolute top-0 right-0 w-64 h-64 bg-success/100/5 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-0"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 bg-emerald-500/10 rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm border border-emerald-500/20"><PieChart className="w-5 h-5 text-emerald-500" /></div>
-              <h3 className="text-[13px] font-semibold text-foreground tracking-widest uppercase transition-colors group-hover:text-emerald-500">Overall Logistics Status</h3>
+              <div className="p-2.5 bg-success/100/10 rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm border border-success/20"><PieChart className="w-5 h-5 text-success" /></div>
+              <h3 className="text-[13px] font-semibold text-foreground tracking-widest uppercase transition-colors group-hover:text-success">Overall Logistics Status</h3>
             </div>
             <div className="w-full h-[300px]">
               <ReactECharts option={logisticsOption} style={{ height: '100%', width: '100%' }} />
@@ -67,7 +67,7 @@ export default function PortfolioHealth({ p6Data, logisticsData }: any) {
       </div>
       
       {/* Portfolio Status Matrix Placeholder */}
-      <div className="bg-card/40 backdrop-blur-md border border-border/60 rounded-3xl p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 min-h-[300px] flex flex-col items-center justify-center text-center mt-2 group relative overflow-hidden">
+      <div className="bg-white/40 backdrop-blur-md border border-border/60 rounded-3xl p-8 hover:shadow-[0_8px_30px_rgb(0,0,0,0.04)] transition-all duration-300 min-h-[300px] flex flex-col items-center justify-center text-center mt-2 group relative overflow-hidden">
          <div className="absolute inset-0 bg-gradient-to-br from-transparent to-muted/20 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
          <PieChart className="w-12 h-12 text-muted-foreground/50 mb-4 transition-transform duration-300 group-hover:scale-110" />
          <h3 className="text-lg font-medium text-foreground mb-2">Portfolio Health Matrix (Quadrant)</h3>

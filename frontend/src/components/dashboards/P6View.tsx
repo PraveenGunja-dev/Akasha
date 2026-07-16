@@ -66,14 +66,14 @@ export default function P6View({ p6Data, loading }: any) {
          </div>
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Projects Delayed {">"} 30 Days</h3>
-           <p className="text-4xl font-light text-red-500">{delayedProjects.filter(p => (p.finishDateVariance || 0) < -30).length}</p>
+           <p className="text-4xl font-light text-destructive">{delayedProjects.filter(p => (p.finishDateVariance || 0) < -30).length}</p>
          </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="col-span-1 bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-blue-500/10 rounded-lg"><Calendar className="w-5 h-5 text-blue-500" /></div>
+              <div className="p-2 bg-primary/100/10 rounded-lg"><Calendar className="w-5 h-5 text-primary" /></div>
               <h2 className="text-lg font-medium tracking-wide text-foreground">Schedule Progress</h2>
             </div>
             <div className="w-full h-[350px]">
@@ -120,7 +120,7 @@ export default function P6View({ p6Data, loading }: any) {
                   <td className="px-4 py-3 text-muted-foreground">{p.start_date ? new Date(p.start_date).toLocaleDateString() : 'N/A'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.finish_date ? new Date(p.finish_date).toLocaleDateString() : 'N/A'}</td>
                   <td className="px-4 py-3 text-right font-medium">{p.total_float ?? '0'}</td>
-                  <td className={`px-4 py-3 text-right font-medium ${(p.finishDateVariance || 0) < 0 ? 'text-red-500' : 'text-emerald-500'}`}>
+                  <td className={`px-4 py-3 text-right font-medium ${(p.finishDateVariance || 0) < 0 ? 'text-destructive' : 'text-success'}`}>
                       {p.finishDateVariance ?? '0'}
                   </td>
                   <td className="px-4 py-3 text-center">

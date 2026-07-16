@@ -29,23 +29,23 @@ const fmtMW = (n: number): string => {
    STATUS TIER CONFIGURATION
    ═══════════════════════════════════════════════════════════ */
 const STATUS_CONFIG: Record<string, { color: string; bgColor: string; borderColor: string; dotClass: string; icon: any; label: string }> = {
-  All: { color: 'text-gray-900', bgColor: 'bg-gray-100', borderColor: 'border-gray-200', dotClass: '', icon: Layers, label: 'All' },
-  Critical: { color: 'text-red-600', bgColor: 'bg-red-50', borderColor: 'border-red-100', dotClass: 'status-dot-critical', icon: XCircle, label: 'Critical' },
-  'High Risk': { color: 'text-orange-600', bgColor: 'bg-orange-50', borderColor: 'border-orange-100', dotClass: 'status-dot-warning', icon: AlertTriangle, label: 'High Risk' },
-  Watchlist: { color: 'text-amber-600', bgColor: 'bg-amber-50', borderColor: 'border-amber-100', dotClass: 'status-dot-warning', icon: Eye, label: 'Watchlist' },
-  Healthy: { color: 'text-emerald-600', bgColor: 'bg-emerald-50', borderColor: 'border-emerald-100', dotClass: 'status-dot-healthy', icon: Shield, label: 'Healthy' },
-  Completed: { color: 'text-blue-600', bgColor: 'bg-blue-50', borderColor: 'border-blue-100', dotClass: 'status-dot-healthy', icon: CheckCircle2, label: 'Completed' },
+  All: { color: 'text-foreground', bgColor: 'bg-muted', borderColor: 'border-border', dotClass: '', icon: Layers, label: 'All' },
+  Critical: { color: 'text-destructive', bgColor: 'bg-destructive/10', borderColor: 'border-destructive/20', dotClass: 'status-dot-critical', icon: XCircle, label: 'Critical' },
+  'High Risk': { color: 'text-warning', bgColor: 'bg-warning/10', borderColor: 'border-warning/20', dotClass: 'status-dot-warning', icon: AlertTriangle, label: 'High Risk' },
+  Watchlist: { color: 'text-warning', bgColor: 'bg-warning/10', borderColor: 'border-warning/20', dotClass: 'status-dot-warning', icon: Eye, label: 'Watchlist' },
+  Healthy: { color: 'text-success', bgColor: 'bg-success/10', borderColor: 'border-success/20', dotClass: 'status-dot-healthy', icon: Shield, label: 'Healthy' },
+  Completed: { color: 'text-primary', bgColor: 'bg-primary/10', borderColor: 'border-primary/20', dotClass: 'status-dot-healthy', icon: CheckCircle2, label: 'Completed' },
 };
 
 const ISSUE_CONFIG: Record<string, { icon: any; color: string; bg: string }> = {
-  'Material Bottleneck': { icon: Package, color: 'text-red-500', bg: '' },
+  'Material Bottleneck': { icon: Package, color: 'text-destructive', bg: '' },
   'Vendor Delay': { icon: Truck, color: 'text-purple-500', bg: '' },
-  'Schedule Slippage': { icon: Clock, color: 'text-amber-500', bg: '' },
+  'Schedule Slippage': { icon: Clock, color: 'text-warning', bg: '' },
   'Cost Overrun': { icon: DollarSign, color: 'text-pink-500', bg: '' },
-  'Procurement Gap': { icon: Factory, color: 'text-orange-500', bg: '' },
+  'Procurement Gap': { icon: Factory, color: 'text-warning', bg: '' },
   'Resource Shortage': { icon: Users, color: 'text-cyan-500', bg: '' },
   'Engineering Delay': { icon: CalendarClock, color: 'text-yellow-500', bg: '' },
-  'On Track': { icon: CheckCircle2, color: 'text-emerald-500', bg: '' },
+  'On Track': { icon: CheckCircle2, color: 'text-success', bg: '' },
 };
 
 const RISK_FILTER_OPTIONS = [
@@ -60,14 +60,14 @@ const StatusPill = ({ tier, count, active, onClick }: { tier: string; count: num
   const cfg = STATUS_CONFIG[tier] || STATUS_CONFIG['Healthy'];
   return (
     <button onClick={onClick}
-      className={`relative flex items-center gap-3 px-5 py-3.5 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden group ${active
-          ? `${cfg.bgColor} ${cfg.borderColor} shadow-sm ring-1 ring-primary/20 -translate-y-1`
-          : `bg-white border-gray-200 hover:border-primary/30 hover:shadow-sm hover:-translate-y-1`
+      className={`relative flex items-center gap-3 px-6 py-4 rounded-2xl border transition-all duration-300 cursor-pointer overflow-hidden group ${active
+          ? `${cfg.bgColor} ${cfg.borderColor} shadow-card ring-2 ring-primary/20 -translate-y-1 scale-[1.02]`
+          : `bg-card border-border hover:border-primary/30 hover:shadow-card-hover hover:-translate-y-1`
         }`}>
       <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none ${!active ? cfg.bgColor : ''}`} />
       {cfg.dotClass && <div className={`${cfg.dotClass} relative z-10`}></div>}
       <div className="text-left relative z-10">
-        <div className={`text-xl font-semibold tracking-tight transition-colors ${active ? cfg.color : 'text-foreground group-hover:text-primary'}`}>{count}</div>
+        <div className={`text-2xl font-bold tracking-tight transition-colors ${active ? cfg.color : 'text-foreground group-hover:text-primary'}`}>{count}</div>
         <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{tier}</div>
       </div>
     </button>
@@ -109,7 +109,7 @@ const MetricBreakdownModal = ({
       <div className="relative w-full max-w-4xl bg-card border border-border shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
         
         {/* Header */}
-        <div className="flex items-center justify-between p-5 border-b border-border bg-muted/30">
+        <div className="flex items-center justify-between p-5 border-b border-border bg-muted">
           <div>
             <h3 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Info className="w-5 h-5 text-primary" />
@@ -123,9 +123,9 @@ const MetricBreakdownModal = ({
         </div>
 
         {/* Table Content */}
-        <div className="flex-1 min-h-0 overflow-auto p-0 custom-scrollbar" data-lenis-prevent="true">
+        <div className="flex-1 min-h-0 overflow-auto p-0 custom-scrollbar">
           <table className="w-full text-left text-sm whitespace-nowrap">
-            <thead className="bg-muted/50 sticky top-0 z-10 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+            <thead className="bg-muted sticky top-0 z-10 border-b border-border text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-6 py-3 font-semibold w-full">Project</th>
                 {type === 'schedule' && (
@@ -162,7 +162,7 @@ const MetricBreakdownModal = ({
             </thead>
             <tbody className="divide-y divide-border">
               {sorted.map((p) => (
-                <tr key={p.projectId} className="hover:bg-muted/30 transition-colors">
+                <tr key={p.projectId} className="hover:bg-muted transition-colors">
                   <td className="px-6 py-3 w-full max-w-[250px] sm:max-w-xs md:max-w-md">
                     <div className="font-semibold text-foreground truncate">{p.projectName}</div>
                     <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{p.projectId}</div>
@@ -177,8 +177,8 @@ const MetricBreakdownModal = ({
                            <span className="font-mono text-xs">{Math.round((p.progress || 0) * 100)}%</span>
                         </div>
                       </td>
-                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.spi < 0.95 ? 'text-amber-500 font-bold' : 'text-emerald-500'}`}>{(p.spi || 0).toFixed(2)}</td>
-                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.delayDays > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>{p.delayDays || 0}d</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.spi < 0.95 ? 'text-warning font-bold' : 'text-success'}`}>{(p.spi || 0).toFixed(2)}</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.delayDays > 0 ? 'text-destructive font-bold' : 'text-success'}`}>{p.delayDays || 0}d</td>
                     </>
                   )}
 
@@ -189,9 +189,9 @@ const MetricBreakdownModal = ({
                         <span className="text-muted-foreground"> / {p.tcData?.progress?.linesCharged?.total || 0}</span>
                       </td>
                       <td className="px-6 py-3 font-mono text-xs text-right">
-                        <span className="text-amber-500 font-bold">{p.tcData?.progress?.foundation?.percent || 0}%</span>
+                        <span className="text-warning font-bold">{p.tcData?.progress?.foundation?.percent || 0}%</span>
                       </td>
-                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.tcData?.progress?.delayed?.count > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.tcData?.progress?.delayed?.count > 0 ? 'text-destructive font-bold' : 'text-success'}`}>
                         {p.tcData?.progress?.delayed?.count || 0}
                       </td>
                     </>
@@ -199,16 +199,16 @@ const MetricBreakdownModal = ({
 
                   {type === 'supply' && (
                     <>
-                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.materialAvailability < 80 ? 'text-amber-500 font-bold' : 'text-emerald-500'}`}>{Math.round(p.materialAvailability || 0)}%</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.materialAvailability < 80 ? 'text-warning font-bold' : 'text-success'}`}>{Math.round(p.materialAvailability || 0)}%</td>
                       <td className="px-6 py-3 font-mono text-xs text-right">{fmtNum(p.orderedQty || 0)}</td>
-                      <td className="px-6 py-3 font-mono text-xs text-right text-emerald-500">{fmtNum(p.inventoryQty || 0)}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-success">{fmtNum(p.inventoryQty || 0)}</td>
                     </>
                   )}
                   {type === 'transmission' && (
                     <>
                       <td className="px-6 py-3 font-mono text-xs text-right">{p.tcEdgesCount || 0}</td>
-                      <td className="px-6 py-3 font-mono text-xs text-right text-emerald-500 font-bold">{p.tcData?.progress?.linesCharged?.count || 0}</td>
-                      <td className={`px-6 py-3 font-mono text-xs text-right ${(p.tcData?.progress?.delayed?.count || 0) > 0 ? 'text-red-500 font-bold' : 'text-emerald-500'}`}>{p.tcData?.progress?.delayed?.count || 0}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-success font-bold">{p.tcData?.progress?.linesCharged?.count || 0}</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${(p.tcData?.progress?.delayed?.count || 0) > 0 ? 'text-destructive font-bold' : 'text-success'}`}>{p.tcData?.progress?.delayed?.count || 0}</td>
                     </>
                   )}
                 </tr>
@@ -301,7 +301,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
       <div className="bento-card relative overflow-hidden group transition-all duration-300 mb-8 p-0">
       <div className="relative z-10">
         {/* Header Bar */}
-        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-gray-100 dark:border-gray-800">
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-muted dark:border-border">
           <div className="flex items-center gap-4">
             <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center shadow-md shadow-primary/20 transition-transform duration-300 group-hover:scale-105 group-hover:-rotate-3">
               <Target className="w-5 h-5 text-white" />
@@ -309,18 +309,18 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             <div>
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2 tracking-tight">
                 Portfolio Briefing
-                <span className="text-[10px] bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-emerald-500/20 flex items-center gap-1">
-                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span> Live
+                <span className="text-[10px] bg-success/100/10 text-success dark:text-success px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-success/20 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-success/100 animate-pulse"></span> Live
                 </span>
               </h3>
               <p className="text-[10px] text-muted-foreground mt-0.5">Powered by P6 · SAP · Transmission · {fmtMW(totalCapacity)} Total Portfolio</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted/50 px-3 py-1.5 rounded-full border border-border">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground bg-muted px-3 py-1.5 rounded-full border border-border">
               <span>{data.length} Projects</span>
               <span className="text-primary font-bold">·</span>
-              <span className="font-mono font-bold text-emerald-500">{completedProjects} Done</span>
+              <span className="font-mono font-bold text-success">{completedProjects} Done</span>
             </div>
           </div>
         </div>
@@ -332,12 +332,12 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between">
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-primary"></span> P6 Schedule</div>
-              <button onClick={() => setActiveModal('schedule')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+              <button onClick={() => setActiveModal('schedule')} className="text-muted-foreground hover:text-primary transition-colors bg-muted hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
                 <Info className="w-3.5 h-3.5" />
               </button>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
               {/* Overall Progress */}
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
@@ -349,19 +349,19 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border dark:border-gray-700">
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Completing This Mo.</div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Completing This Mo.</div>
                   <div className="text-xl font-mono font-bold text-primary">{completingThisMonth}</div>
                 </div>
                 <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-gray-500 mb-1">Avg Delay</div>
-                  <div className={`text-xl font-mono font-bold ${avgDelayDays > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{avgDelayDays}d</div>
+                  <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg Delay</div>
+                  <div className={`text-xl font-mono font-bold ${avgDelayDays > 0 ? 'text-destructive' : 'text-success'}`}>{avgDelayDays}d</div>
                 </div>
               </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="pt-2 border-t border-border dark:border-gray-700">
                 <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">In-Progress Activities</span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">In-Progress Activities</span>
                   <span className="text-sm font-mono font-bold text-foreground">{fmtNum(totalInProgressAct)}</span>
                 </div>
               </div>
@@ -373,45 +373,45 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           {/* Column 3: Material & Supply Chain */}
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-amber-500"></span> SAP Pipeline</div>
-              <button onClick={() => setActiveModal('supply')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-warning/100"></span> SAP Pipeline</div>
+              <button onClick={() => setActiveModal('supply')} className="text-muted-foreground hover:text-primary transition-colors bg-muted hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
                 <Info className="w-3.5 h-3.5" />
               </button>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <span>Material Availability</span>
                   <span className="text-foreground">{avgMaterial}%</span>
                 </div>
                 <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
-                  <div className={`h-full ${avgMaterial < 80 ? 'bg-amber-500' : 'bg-emerald-500'}`} style={{ width: `${avgMaterial}%` }}></div>
+                  <div className={`h-full ${avgMaterial < 80 ? 'bg-warning/100' : 'bg-success/100'}`} style={{ width: `${avgMaterial}%` }}></div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border dark:border-gray-700">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
                   <span className="text-sm font-mono font-semibold text-foreground/80">{fmtNum(totalOrdered)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Consumed</span>
-                  <span className="text-sm font-mono font-semibold text-emerald-500">{fmtNum(totalConsumed)}</span>
+                  <span className="text-sm font-mono font-semibold text-success">{fmtNum(totalConsumed)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Inventory</span>
                   <span className="text-sm font-mono font-semibold text-primary">{fmtNum(totalInventory)}</span>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border dark:border-gray-700">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Transit</span>
-                  <span className="text-sm font-mono font-semibold text-amber-500">{fmtNum(totalInTransit)}</span>
+                  <span className="text-sm font-mono font-semibold text-warning">{fmtNum(totalInTransit)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Pending</span>
-                  <span className="text-sm font-mono font-semibold text-red-400">{fmtNum(totalPending)}</span>
+                  <span className="text-sm font-mono font-semibold text-destructive">{fmtNum(totalPending)}</span>
                 </div>
               </div>
             </div>
@@ -420,39 +420,39 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
           {/* Column 3: Transmission Lines */}
           <div className="p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Transmission</div>
-              <button onClick={() => setActiveModal('transmission')} className="text-muted-foreground hover:text-primary transition-colors bg-muted/50 hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
+              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-success/100"></span> Transmission</div>
+              <button onClick={() => setActiveModal('transmission')} className="text-muted-foreground hover:text-primary transition-colors bg-muted hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
                 <Info className="w-3.5 h-3.5" />
               </button>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-4">
+            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
               <div className="flex flex-col gap-1.5">
                 <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
                   <span>Lines Charged</span>
                   <span className="text-foreground">{chargedPct}%</span>
                 </div>
                 <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
-                  <div className="h-full bg-emerald-500 rounded-full transition-all duration-500" style={{ width: `${chargedPct}%` }}></div>
+                  <div className="h-full bg-success/100 rounded-full transition-all duration-500" style={{ width: `${chargedPct}%` }}></div>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border dark:border-gray-700">
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Charged</span>
-                  <span className="text-lg font-mono font-bold text-emerald-500">{fmtNum(totalCharged)}</span>
+                  <span className="text-lg font-mono font-bold text-success">{fmtNum(totalCharged)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">In Prog.</span>
-                  <span className="text-lg font-mono font-bold text-amber-500">{fmtNum(totalInProgressTC)}</span>
+                  <span className="text-lg font-mono font-bold text-warning">{fmtNum(totalInProgressTC)}</span>
                 </div>
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Delayed</span>
-                  <span className={`text-lg font-mono font-bold ${totalTCDelayed > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{fmtNum(totalTCDelayed)}</span>
+                  <span className={`text-lg font-mono font-bold ${totalTCDelayed > 0 ? 'text-destructive' : 'text-success'}`}>{fmtNum(totalTCDelayed)}</span>
                 </div>
               </div>
-              <div className="pt-2 border-t border-gray-200 dark:border-gray-700">
+              <div className="pt-2 border-t border-border dark:border-gray-700">
                 <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Total Lines</span>
+                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Total Lines</span>
                   <span className="text-sm font-mono font-bold text-foreground">{fmtNum(totalTCLines)}</span>
                 </div>
               </div>
@@ -465,14 +465,14 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
               <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Critical Activities Forecast</div>
             </div>
             
-            <div className="bg-gray-50 dark:bg-gray-800/50 rounded-xl p-4 border border-gray-100 dark:border-gray-800 space-y-3">
+            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-3">
               {[
                 { label: monthNames[thisMonth], count: completingThisMonth, color: 'text-primary', bg: 'bg-primary' },
-                { label: monthNames[nextMonthIdx], count: completingNextMonth, color: 'text-amber-500', bg: 'bg-amber-500' },
+                { label: monthNames[nextMonthIdx], count: completingNextMonth, color: 'text-warning', bg: 'bg-warning/100' },
                 { label: '2+ Months', count: completingLater, color: 'text-purple-500', bg: 'bg-purple-500' },
               ].map((item, i) => (
                 <div key={i} className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-gray-500 w-20 shrink-0">{item.label}</span>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-20 shrink-0">{item.label}</span>
                   <div className="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
                     <div className={`h-full ${item.bg} rounded-full transition-all duration-500`} style={{ width: `${(item.count / totalActivities) * 100}%` }}></div>
                   </div>
@@ -480,13 +480,13 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
                 </div>
               ))}
               
-              <div className="pt-3 border-t border-gray-200 dark:border-gray-700 flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Completed (Crit.)</span>
-                <span className="text-lg font-mono font-bold text-emerald-500">{fmtNum(completedCriticalActivities)}</span>
+              <div className="pt-3 border-t border-border dark:border-gray-700 flex items-center justify-between">
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Completed (Crit.)</span>
+                <span className="text-lg font-mono font-bold text-success">{fmtNum(completedCriticalActivities)}</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-gray-500">Delayed (Crit.)</span>
-                <span className={`text-lg font-mono font-bold ${delayedActivities > 0 ? 'text-red-500' : 'text-emerald-500'}`}>{fmtNum(delayedActivities)}</span>
+                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Delayed (Crit.)</span>
+                <span className={`text-lg font-mono font-bold ${delayedActivities > 0 ? 'text-destructive' : 'text-success'}`}>{fmtNum(delayedActivities)}</span>
               </div>
             </div>
           </div>
@@ -511,7 +511,7 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
   return (
     <div
       onClick={() => onOpen(project.projectId)}
-      className="group relative flex items-center justify-between px-6 py-4 bg-white dark:bg-gray-900 hover:bg-gray-50/80 dark:hover:bg-gray-800/80 border-b border-gray-100 dark:border-gray-800 cursor-pointer transition-colors duration-200"
+      className="group relative flex items-center justify-between px-6 py-5 bg-card hover:bg-muted border-b border-border cursor-pointer transition-all duration-300"
     >
       <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none" style={{ backgroundColor: accentColor }} />
       <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accentColor }}></div>
@@ -557,11 +557,11 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
         <div className="flex justify-between items-center text-[10px] mb-0.5">
           <span className="text-muted-foreground uppercase tracking-widest font-semibold">Consumed</span>
-          <span className="font-mono font-semibold text-emerald-500">{fmtNum(project.consumedQty)}</span>
+          <span className="font-mono font-semibold text-success">{fmtNum(project.consumedQty)}</span>
         </div>
         <div className="flex justify-between items-center text-[10px]">
           <span className="text-muted-foreground uppercase tracking-widest font-semibold">Pending</span>
-          <span className="font-mono font-semibold text-amber-500">{fmtNum(project.pendingDispatchQty)}</span>
+          <span className="font-mono font-semibold text-warning">{fmtNum(project.pendingDispatchQty)}</span>
         </div>
       </div>
 
@@ -573,8 +573,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
             <span className="text-[11px] font-mono font-semibold text-foreground/60">{project.baselineMonth || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[9px] uppercase tracking-widest font-semibold w-12 ${project.codAtRisk ? 'text-red-500/70' : 'text-primary/70'}`}>Fcst</span>
-            <span className={`text-[13px] font-mono font-bold ${project.codAtRisk ? 'text-red-500' : 'text-foreground/90'}`}>{project.forecastMonth}</span>
+            <span className={`text-[9px] uppercase tracking-widest font-semibold w-12 ${project.codAtRisk ? 'text-destructive/70' : 'text-primary/70'}`}>Fcst</span>
+            <span className={`text-[13px] font-mono font-bold ${project.codAtRisk ? 'text-destructive' : 'text-foreground/90'}`}>{project.forecastMonth}</span>
           </div>
         </div>
         <div className="flex flex-col items-end gap-0.5 ml-2">
@@ -592,26 +592,26 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
    SKELETON LOADER
    ═══════════════════════════════════════════════════════════ */
 const SkeletonRow = () => (
-  <div className="flex items-stretch border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/40 animate-pulse">
+  <div className="flex items-stretch border-b border-muted dark:border-border bg-white/40 animate-pulse">
     <div className="w-[35%] min-w-[250px] p-4 flex items-start gap-3">
       <div className="flex-1 mt-1">
-        <div className="w-3/4 h-5 bg-gray-200 dark:bg-gray-800 rounded mb-2"></div>
-        <div className="w-1/2 h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
+        <div className="w-3/4 h-5 bg-gray-200 dark:bg-card rounded mb-2"></div>
+        <div className="w-1/2 h-4 bg-gray-200 dark:bg-card rounded"></div>
       </div>
     </div>
     <div className="w-[25%] min-w-[150px] border-l border-border p-4 flex flex-col justify-center">
-      <div className="w-full h-2 bg-gray-200 dark:bg-gray-800 rounded-full mb-3"></div>
-      <div className="w-20 h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      <div className="w-full h-2 bg-gray-200 dark:bg-card rounded-full mb-3"></div>
+      <div className="w-20 h-3 bg-gray-200 dark:bg-card rounded"></div>
     </div>
     <div className="w-[20%] min-w-[180px] border-l border-border p-4 flex flex-col justify-center gap-2">
-      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-      <div className="w-full h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
     </div>
     <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
       <div className="flex flex-col gap-2">
-        <div className="w-16 h-3 bg-gray-200 dark:bg-gray-800 rounded"></div>
-        <div className="w-16 h-4 bg-gray-200 dark:bg-gray-800 rounded"></div>
+        <div className="w-16 h-3 bg-gray-200 dark:bg-card rounded"></div>
+        <div className="w-16 h-4 bg-gray-200 dark:bg-card rounded"></div>
       </div>
     </div>
   </div>
@@ -762,13 +762,13 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
               <button key={rf} onClick={() => toggleRiskFilter(rf)}
                 className={`text-[11px] font-semibold px-3 py-1.5 rounded-lg border transition-all ${riskFilters.includes(rf)
                     ? 'bg-primary/15 text-primary border-primary/20'
-                    : 'text-muted-foreground border-border hover:bg-muted/20 hover:text-foreground'
+                    : 'text-muted-foreground border-border hover:bg-muted hover:text-foreground'
                   }`}>
                 {rf}
               </button>
             ))}
             {riskFilters.length > 0 && (
-              <button onClick={() => setRiskFilters([])} className="text-[11px] text-red-400 hover:text-red-300 transition-colors ml-2 self-center font-medium">
+              <button onClick={() => setRiskFilters([])} className="text-[11px] text-destructive hover:text-red-300 transition-colors ml-2 self-center font-medium">
                 Clear all
               </button>
             )}
@@ -793,7 +793,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       {/* ── Intelligence Card Grid ── */}
       {loading ? (
         <div className="bento-card overflow-hidden mb-8 p-0">
-          <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
+          <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
             <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
             <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
             <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>
@@ -814,7 +814,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         </div>
       ) : (
         <div className="bento-card overflow-hidden mb-8 p-0">
-          <div className="flex items-center px-6 py-3 bg-gray-50 dark:bg-gray-800/50 border-b border-gray-200 dark:border-gray-800 text-[11px] font-bold uppercase tracking-[0.08em] text-gray-500">
+          <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
             <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
             <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
             <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>

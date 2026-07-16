@@ -13,17 +13,36 @@ from services.project_service import filter_tc_edges_by_kps
 def _safe_parse_phase(projects_json):
     if not projects_json:
         return "Unknown Phase"
-    try:
-        parsed = json.loads(projects_json)
-        if isinstance(parsed, dict):
-            phases = parsed.get("phases", [])
-            if phases:
-                return phases[0]
-        elif isinstance(parsed, list):
-            if parsed:
-                return parsed[0]
-    except Exception:
-        pass
+    
+    if isinstance(projects_json, str):
+        if not projects_json.strip().startswith('{') and not projects_json.strip().startswith('['):
+            return str(projects_json).strip()
+            
+        try:
+            parsed = json.loads(projects_json)
+            if isinstance(parsed, dict):
+                phases = parsed.get("phases", [])
+                if phases:
+                    return phases[0]
+            elif isinstance(parsed, list):
+                if parsed:
+                    return parsed[0]
+        except Exception:
+            try:
+                import ast
+                parsed = ast.literal_eval(projects_json)
+                if isinstance(parsed, dict):
+                    phases = parsed.get("phases", [])
+                    if phases:
+                        return phases[0]
+                elif isinstance(parsed, list):
+                    if parsed:
+                        return parsed[0]
+            except Exception:
+                import re
+                m = re.search(r'[\'"]phases[\'"]\s*:\s*\[\s*[\'"]([^\'"]+)[\'"]', projects_json)
+                if m:
+                    return m.group(1)
     return "Unknown Phase"
 
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
@@ -49,9 +68,10 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             
     query = db.query(models.ProjectMapping)
     if portfolio and portfolio.lower() != "all portfolios":
+        p_clean = portfolio.replace('+', ' ').strip().lower()
         query = query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
+            (func.lower(models.ProjectMapping.cluster).contains(p_clean)) |
+            (func.lower(models.ProjectMapping.category).contains(p_clean))
         )
             
     raw_mappings = query.all()
@@ -108,14 +128,9 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
     for edge in all_tc_edges:
         parsed_edge_phases[edge.id] = set()
         if edge.projects:
-            try:
-                parsed = json.loads(edge.projects)
-                if isinstance(parsed, dict):
-                    parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in parsed.get("phases", []))
-                elif isinstance(parsed, list):
-                    parsed_edge_phases[edge.id] = set()
-            except:
-                pass
+            phase_val = _safe_parse_phase(edge.projects)
+            if phase_val and phase_val != "Unknown Phase":
+                parsed_edge_phases[edge.id] = {str(phase_val).strip().upper()}
     # Pre-fetch Capacity Overview to get accurate COD and Trial Run MW (and dynamically computed WTG capacity)
     cap_data = get_capacity_overview(portfolio, db)
     proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
