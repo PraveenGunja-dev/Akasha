@@ -106,7 +106,7 @@ function WeatherWidget({ lat, lng }: { lat: number, lng: number }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true`)
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&wind_speed_unit=ms`)
       .then(res => res.json())
       .then(data => {
         setWeather(data.current_weather);
@@ -126,7 +126,7 @@ function WeatherWidget({ lat, lng }: { lat: number, lng: number }) {
       </div>
       <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground dark:text-muted-foreground">
         <Wind className="w-3.5 h-3.5 text-cyan-500" />
-        {weather.windspeed} km/h
+        {weather.windspeed} m/s
       </div>
     </div>
   );
@@ -140,7 +140,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
 
   useEffect(() => {
     setLoading(true);
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lng}&hourly=temperature_2m,wind_speed_10m,direct_normal_irradiance,precipitation,cloud_cover&past_days=7&forecast_days=7&timezone=auto`)
+    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${location.lat}&longitude=${location.lng}&hourly=wind_speed_10m,temperature_2m,precipitation_probability,cloud_cover,wind_direction_10m&forecast_days=7&wind_speed_unit=ms&timezone=auto`)
       .then(res => res.json())
       .then(resData => {
         setData(resData);
@@ -152,22 +152,30 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
   const getChartOptions = () => {
     if (!data || !data.hourly) return {};
 
-    // Find index of 'now' approximately (past 7 days = 7*24 = 168 hours)
-    const nowIndex = 168;
-
     return {
       tooltip: {
         trigger: 'axis',
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderColor: '#e2e8f0',
         textStyle: { color: '#1e293b' },
+        formatter: function (params: any) {
+          let html = `<div style="font-weight:bold;margin-bottom:5px">${params[0].name}</div>`;
+          params.forEach((p: any) => {
+            let unit = p.seriesName === 'Temperature' ? '°C' : p.seriesName === 'Wind Speed' ? 'm/s' : '%';
+            html += `<div style="display:flex;justify-content:space-between;gap:15px;margin-bottom:2px">
+              <span>${p.marker} ${p.seriesName}</span>
+              <span style="font-weight:bold">${p.value} ${unit}</span>
+            </div>`;
+          });
+          return html;
+        }
       },
       legend: {
-        data: ['Solar Irradiance', 'Wind Speed', 'Precipitation'],
+        data: ['Temperature', 'Wind Speed', 'Precip. Prob.', 'Cloud Cover'],
         bottom: 0,
         textStyle: { fontSize: 10 }
       },
-      grid: { top: 30, right: 30, bottom: 60, left: 50 },
+      grid: { top: 30, right: 30, bottom: 60, left: 40 },
       xAxis: {
         type: 'category',
         data: data.hourly.time.map((t: string) => {
@@ -177,41 +185,44 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
         axisLabel: { fontSize: 9, formatter: (val: string) => val.split(' ')[0] },
       },
       yAxis: [
-        { type: 'value', name: 'W/m²', position: 'left', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 } },
-        { type: 'value', name: 'km/h', position: 'right', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 }, splitLine: { show: false } }
+        { type: 'value', name: '°C / m/s', position: 'left', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 } },
+        { type: 'value', name: '%', position: 'right', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 }, splitLine: { show: false }, min: 0, max: 100 }
       ],
       series: [
         {
-          name: 'Solar Irradiance',
+          name: 'Temperature',
           type: 'line',
           smooth: true,
           showSymbol: false,
           yAxisIndex: 0,
-          itemStyle: { color: '#f59e0b' },
-          areaStyle: { color: 'rgba(245, 158, 11, 0.1)' },
-          data: data.hourly.direct_normal_irradiance,
-          markLine: {
-            symbol: ['none', 'none'],
-            label: { show: true, position: 'middle', formatter: 'Today' },
-            data: [{ xAxis: nowIndex }],
-            lineStyle: { type: 'dashed', color: '#94a3b8' }
-          }
+          itemStyle: { color: '#ef4444' },
+          data: data.hourly.temperature_2m,
         },
         {
           name: 'Wind Speed',
           type: 'line',
           smooth: true,
           showSymbol: false,
-          yAxisIndex: 1,
+          yAxisIndex: 0,
           itemStyle: { color: '#0ea5e9' },
           data: data.hourly.wind_speed_10m
         },
         {
-          name: 'Precipitation',
+          name: 'Precip. Prob.',
           type: 'bar',
           yAxisIndex: 1,
           itemStyle: { color: '#3b82f6' },
-          data: data.hourly.precipitation
+          data: data.hourly.precipitation_probability
+        },
+        {
+          name: 'Cloud Cover',
+          type: 'line',
+          smooth: true,
+          showSymbol: false,
+          yAxisIndex: 1,
+          itemStyle: { color: '#94a3b8' },
+          areaStyle: { color: 'rgba(148, 163, 184, 0.2)' },
+          data: data.hourly.cloud_cover
         }
       ]
     };
@@ -241,7 +252,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
 
           <div className="flex-1 p-6 overflow-y-auto bg-muted dark:bg-gray-900/30">
             <div className="mb-6 text-base text-foreground dark:text-muted-foreground">
-              Analyze historical patterns (past 7 days) and forecast data (next 7 days) for generation optimization.
+              Analyze 7-day high-precision forecasting data for optimal generation dispatching and site safety.
             </div>
 
             {loading ? (
@@ -260,15 +271,15 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
                 <div className="bg-warning/10 dark:bg-amber-900/20 p-5 rounded-xl border border-warning/20 dark:border-amber-800/30 shadow-sm flex flex-col justify-between">
                   <div>
                     <div className="flex items-center gap-2 text-warning dark:text-warning mb-2">
-                      <Sun className="w-5 h-5" />
-                      <span className="text-sm font-semibold uppercase tracking-wider">7-Day Peak Irradiance</span>
+                      <Cloud className="w-5 h-5" />
+                      <span className="text-sm font-semibold uppercase tracking-wider">Peak Precip Prob</span>
                     </div>
                     <div className="text-3xl font-bold text-amber-900 dark:text-amber-100">
-                      {Math.max(...data.hourly.direct_normal_irradiance.slice(168)).toFixed(1)} <span className="text-base font-medium text-warning/70">W/m²</span>
+                      {Math.max(...(data?.hourly?.precipitation_probability || [0]))} <span className="text-base font-medium text-warning/70">%</span>
                     </div>
                   </div>
                   <div className="mt-4 text-xs text-amber-800/70 dark:text-warning/70 leading-relaxed border-t border-warning/20/50 dark:border-amber-800/50 pt-3">
-                    <strong>Direct Impact:</strong> Represents direct sunlight hitting panels. Values over 800 W/m² yield optimal solar power generation.
+                    <strong>Direct Impact:</strong> High precipitation probability indicates likely rainfall, potentially interrupting site construction and civil works.
                   </div>
                 </div>
 
@@ -279,11 +290,11 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
                       <span className="text-sm font-semibold uppercase tracking-wider">7-Day Max Wind</span>
                     </div>
                     <div className="text-3xl font-bold text-cyan-900 dark:text-cyan-100">
-                      {Math.max(...data.hourly.wind_speed_10m.slice(168)).toFixed(1)} <span className="text-base font-medium text-cyan-700/70">km/h</span>
+                      {Math.max(...(data?.hourly?.wind_speed_10m || [0])).toFixed(1)} <span className="text-base font-medium text-cyan-700/70">m/s</span>
                     </div>
                   </div>
                   <div className="mt-4 text-xs text-cyan-800/70 dark:text-cyan-400/70 leading-relaxed border-t border-cyan-200/50 dark:border-cyan-800/50 pt-3">
-                    <strong>Direct Impact:</strong> Crucial for turbine generation. Speeds between 15-25 km/h are ideal; extreme speeds risk automatic turbine shutdown.
+                    <strong>Direct Impact:</strong> Crucial for turbine generation. Speeds around 10-15 m/s are ideal; extreme speeds risk automatic turbine shutdown.
                   </div>
                 </div>
 
@@ -291,10 +302,10 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
                   <div>
                     <div className="flex items-center gap-2 text-foreground dark:text-muted-foreground mb-2">
                       <Cloud className="w-5 h-5" />
-                      <span className="text-sm font-semibold uppercase tracking-wider">7-Day Avg Cloud Cover</span>
+                      <span className="text-sm font-semibold uppercase tracking-wider">Avg Cloud Cover</span>
                     </div>
                     <div className="text-3xl font-bold text-foreground dark:text-slate-100">
-                      {(data.hourly.cloud_cover.slice(168).reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.slice(168).length).toFixed(1)} <span className="text-base font-medium text-muted-foreground">%</span>
+                      {data?.hourly?.cloud_cover ? (data.hourly.cloud_cover.reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.length).toFixed(1) : 0} <span className="text-base font-medium text-muted-foreground">%</span>
                     </div>
                   </div>
                   <div className="mt-4 text-xs text-muted-foreground dark:text-muted-foreground leading-relaxed border-t border-border dark:border-slate-600/50 pt-3">
@@ -309,7 +320,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
                       <span className="text-sm font-semibold uppercase tracking-wider">7-Day Peak Temp</span>
                     </div>
                     <div className="text-3xl font-bold text-rose-900 dark:text-rose-100">
-                      {Math.max(...data.hourly.temperature_2m.slice(168)).toFixed(1)} <span className="text-base font-medium text-rose-700/70">°C</span>
+                      {Math.max(...(data?.hourly?.temperature_2m || [0])).toFixed(1)} <span className="text-base font-medium text-rose-700/70">°C</span>
                     </div>
                   </div>
                   <div className="mt-4 text-xs text-rose-800/70 dark:text-rose-400/70 leading-relaxed border-t border-rose-200/50 dark:border-rose-800/50 pt-3">
@@ -360,11 +371,11 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
           <div className="mt-2 grid grid-cols-2 gap-1.5">
             <div className="bg-warning/10 dark:bg-amber-900/20 p-1.5 rounded border border-warning/20 dark:border-amber-800/30">
               <div className="flex items-center gap-1 text-warning dark:text-warning mb-0.5">
-                <Sun className="w-3 h-3" />
-                <span className="text-[9px] font-semibold uppercase">7-Day Peak Irradiance</span>
+                <Thermometer className="w-3 h-3" />
+                <span className="text-[9px] font-semibold uppercase">7-Day Peak Temp</span>
               </div>
               <div className="text-sm font-bold text-amber-900 dark:text-amber-100">
-                {Math.max(...data.hourly.direct_normal_irradiance.slice(168)).toFixed(0)} <span className="text-[10px] font-medium text-warning/70">W/m²</span>
+                {Math.max(...(data?.hourly?.temperature_2m || [0])).toFixed(0)} <span className="text-[10px] font-medium text-warning/70">°C</span>
               </div>
             </div>
             <div className="bg-cyan-50 dark:bg-cyan-900/20 p-1.5 rounded border border-cyan-100 dark:border-cyan-800/30">
@@ -373,7 +384,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
                 <span className="text-[9px] font-semibold uppercase">7-Day Max Wind</span>
               </div>
               <div className="text-sm font-bold text-cyan-900 dark:text-cyan-100">
-                {Math.max(...data.hourly.wind_speed_10m.slice(168)).toFixed(0)} <span className="text-[10px] font-medium text-cyan-700/70">km/h</span>
+                {Math.max(...(data?.hourly?.wind_speed_10m || [0])).toFixed(0)} <span className="text-[10px] font-medium text-cyan-700/70">m/s</span>
               </div>
             </div>
           </div>
