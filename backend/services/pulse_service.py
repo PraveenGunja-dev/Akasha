@@ -229,11 +229,13 @@ class PulseService:
         # ── Sync NCs ──
         raw_ncs = self.fetch_all_ncs()
         nc_count = 0
+        seen_nc_ids = set()
         for raw in raw_ncs:
             mapped = self._map_nc(raw)
             pulse_id = mapped["pulse_id"]
-            if not pulse_id:
+            if not pulse_id or pulse_id in seen_nc_ids:
                 continue
+            seen_nc_ids.add(pulse_id)
 
             existing = db.query(models.PulseNC).filter(
                 models.PulseNC.pulse_id == pulse_id
@@ -255,11 +257,13 @@ class PulseService:
         raw_rfis = self.fetch_all_rfis()
         rfi_count = 0
         batch_size = 500
+        seen_rfi_ids = set()
         for i, raw in enumerate(raw_rfis):
             mapped = self._map_rfi(raw)
             pulse_id = mapped["pulse_id"]
-            if not pulse_id:
+            if not pulse_id or pulse_id in seen_rfi_ids:
                 continue
+            seen_rfi_ids.add(pulse_id)
 
             existing = db.query(models.PulseRFI).filter(
                 models.PulseRFI.pulse_id == pulse_id
