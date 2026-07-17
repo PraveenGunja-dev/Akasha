@@ -281,4 +281,50 @@ class PulseService:
         db.commit()
         logger.info(f"Synced {rfi_count} RFIs to database.")
 
-        return {"ncs": nc_count, "rfis": rfi_count}
+        # ── Map Pulse Projects to ProjectMapping ──
+        pulse_projects_dict = {}
+        for raw in raw_ncs + raw_rfis:
+            p_name = _safe_get(raw, "PROJECT", "NAME")
+            p_cluster = raw.get("CLUSTER_NAME") or _safe_get(raw, "PROJECT", "CLUSTER_NAME")
+            p_type = _safe_get(raw, "PROJECT", "TYPE")
+            if p_name and p_name not in pulse_projects_dict:
+                pulse_projects_dict[p_name] = {
+                    "cluster": p_cluster,
+                    "type": p_type
+                }
+                
+        existing_mappings = db.query(models.ProjectMapping).all()
+        mapped_names = {m.project.lower() if m.project else "": m for m in existing_mappings}
+        mapped_p6_names = {m.project_name_from_p6.lower() if m.project_name_from_p6 else "": m for m in existing_mappings}
+        
+        from difflib import get_close_matches
+        import re
+        
+        new_mappings_added = 0
+        for p_name, meta in pulse_projects_dict.items():
+            p_name_lower = p_name.lower()
+            
+            if p_name_lower in mapped_names or p_name_lower in mapped_p6_names:
+                continue
+                
+            all_existing = list(mapped_names.keys()) + list(mapped_p6_names.keys())
+            matches = get_close_matches(p_name_lower, [x for x in all_existing if x], n=1, cutoff=0.8)
+            if matches:
+                continue
+                
+            safe_id = re.sub(r'[^a-zA-Z0-9]', '-', p_name).upper()
+            new_mapping = models.ProjectMapping(
+                project_id=f"PULSE-{safe_id}",
+                project=p_name,
+                project_name_from_p6=p_name,
+                cluster=meta["cluster"],
+                category="Merchant" if "merchant" in p_name_lower else "BESS" if "bess" in p_name_lower else "Other"
+            )
+            db.add(new_mapping)
+            new_mappings_added += 1
+            
+        if new_mappings_added > 0:
+            db.commit()
+            logger.info(f"Added {new_mappings_added} new Pulse projects to ProjectMapping.")
+
+        return {"ncs": nc_count, "rfis": rfi_count, "new_projects": new_mappings_added}

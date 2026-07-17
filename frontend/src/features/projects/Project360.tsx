@@ -502,6 +502,11 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
   const issueCfg = ISSUE_CONFIG[project.primaryIssue] || ISSUE_CONFIG['On Track'];
   const IssueIcon = issueCfg.icon;
 
+  const progressRaw = project.progress || 0;
+  // If progress is between 0 and 1 (exclusive of 0), assume it's a decimal (e.g. 0.81 = 81%)
+  // Otherwise, assume it's already a percentage (e.g. 3.9 = 3.9%)
+  const progressPct = progressRaw > 0 && progressRaw <= 1 ? progressRaw * 100 : progressRaw;
+
   const accentColor =
     project.statusTier === 'Critical' ? '#EF4444' :
       project.statusTier === 'High Risk' ? '#F97316' :
@@ -536,10 +541,10 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         <div className="flex flex-col gap-1 w-full max-w-[120px]">
           <div className="flex justify-between text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
             <span>Progress</span>
-            <span className="text-foreground">{Math.round((project.progress || 0) * 100)}%</span>
+            <span className="text-foreground">{Math.round(progressPct)}%</span>
           </div>
           <div className="h-1.5 w-full bg-border rounded-full overflow-hidden">
-            <div className="h-full bg-primary" style={{ width: `${Math.round((project.progress || 0) * 100)}%` }}></div>
+            <div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.round(progressPct))}%` }}></div>
           </div>
         </div>
         <div className="flex items-center gap-2 text-[9px] mt-0.5 text-muted-foreground font-mono">
@@ -630,7 +635,8 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   const [showFilters, setShowFilters] = useState(false);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const portfolio = searchParams.get('portfolio');
+  const rawPortfolio = searchParams.get('portfolio');
+  const portfolio = rawPortfolio ? rawPortfolio.replace(/\+/g, ' ') : null;
 
   useEffect(() => {
     setLoading(true);
