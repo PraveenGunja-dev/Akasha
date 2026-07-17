@@ -3,7 +3,8 @@ from sqlalchemy import func, or_
 import models
 import logging
 import json
-
+import re
+import ast
 logger = logging.getLogger(__name__)
 
 def filter_tc_edges_by_kps(edges, project_entries):
@@ -543,8 +544,6 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
     return sorted(results, key=lambda x: x.get('integrationCount', 0), reverse=True)
 
-import re
-
 def normalize_block(name):
     name = name.replace(" ", "").upper()
     m = re.match(r'(BLOCK-|WTG-?)0+(\d+)', name)
@@ -1073,14 +1072,12 @@ def get_project_360_detail(db: Session, project_id: str):
                         edge_phase = parsed[0]
             except Exception:
                 try:
-                    import ast
                     parsed = ast.literal_eval(edge.projects)
                     if isinstance(parsed, dict):
                         phases_list = parsed.get("phases", [])
                         if phases_list:
                             edge_phase = phases_list[0]
                 except Exception:
-                    import re
                     m = re.search(r'[\'"]phases[\'"]\s*:\s*\[\s*[\'"]([^\'"]+)[\'"]', edge.projects)
                     if m:
                         edge_phase = m.group(1)
