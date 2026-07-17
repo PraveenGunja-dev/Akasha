@@ -98,6 +98,7 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
 def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     query = db.query(models.ProjectMapping)
     if portfolio_type and portfolio_type.lower() != "all portfolios":
+        portfolio_type = portfolio_type.replace("+", " ")
         query = query.filter(
             (models.ProjectMapping.cluster.ilike(f"%{portfolio_type}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio_type}%"))

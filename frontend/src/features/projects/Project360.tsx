@@ -640,7 +640,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
 
   useEffect(() => {
     setLoading(true);
-    const url = portfolio ? `/akasha/api/project-360?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/project-360';
+    const url = portfolio ? `/akasha/api/project-360?portfolio=${encodeURIComponent(portfolio)}&nocache=true` : '/akasha/api/project-360?nocache=true';
     fetch(url)
       .then(res => res.json())
       .then(json => setData(json))
