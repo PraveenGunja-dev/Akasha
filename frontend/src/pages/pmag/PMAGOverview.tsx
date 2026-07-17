@@ -60,9 +60,9 @@ export default function PMAGOverview({
 
   // ─── Scatter Plot Option (Portfolio Heatmap) ───
   const scatterOption = useMemo(() => {
-    const dataGreen = [];
-    const dataAmber = [];
-    const dataRed = [];
+    const dataGreen: any[] = [];
+    const dataAmber: any[] = [];
+    const dataRed: any[] = [];
 
     filteredProjects.forEach((p: any) => {
       // x: planned, y: actual, size: random representation of budget/scale

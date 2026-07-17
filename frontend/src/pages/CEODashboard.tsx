@@ -29,6 +29,7 @@ import TransmissionDataViewer from '../features/analytics/TransmissionDataViewer
 import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPanel';
 import SimulationLab from '../features/analytics/SimulationLab';
 import ProjectWorkspace from '../features/projects/ProjectWorkspace';
+import QualityCommandCenter from '../features/quality/QualityCommandCenter';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -165,7 +166,8 @@ export default function CEODashboard() {
         fetch('/akasha/api/tc/sync', { method: 'POST' }),
         fetch('/akasha/api/mapping/sync', { method: 'POST' }),
         fetch('/akasha/api/p6/sync', { method: 'POST' }),
-        fetch('/akasha/api/capacity/sync', { method: 'POST' })
+        fetch('/akasha/api/capacity/sync', { method: 'POST' }),
+        fetch('/akasha/api/pulse/sync', { method: 'POST' })
       ]);
     } catch (error) {
       console.error("Sync failed:", error);
@@ -201,7 +203,8 @@ export default function CEODashboard() {
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
-    'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab'
+    'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
+    'quality'
   ];
 
   const handleTabChange = (tab: string) => {
@@ -299,6 +302,7 @@ export default function CEODashboard() {
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
                     {activeTab === 'project_map' && <ProjectMap projects={dashboardData?.project_health || []} onOpenProject={handleOpenProject} />}
                     {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
+                    {activeTab === 'quality' && <QualityCommandCenter />}
                     
                     {/* Placeholders for unbuilt sections */}
                     {!implementedModules.includes(activeTab) && (

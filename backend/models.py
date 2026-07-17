@@ -629,3 +629,106 @@ class ChatFeedback(Base):
 
     message = relationship("ChatMessage", back_populates="feedback")
 
+
+# ==========================================
+# Pulse Quality Management Models
+# ==========================================
+
+class PulseNC(Base):
+    """Non-Conformance records from Pulse quality system.
+    Flattened from deeply nested OData $expand for fast dashboard queries."""
+    __tablename__ = "pulse_nc"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pulse_id = Column(String, unique=True, index=True, nullable=False)  # Pulse UUID
+
+    # Core NC fields
+    nc_label = Column(String, index=True)
+    status = Column(String, index=True)           # raised, submitted, approved, completed, rejected
+    status_label = Column(String)                  # Raised, In Review EE, In Review QI, Approved, Rejected
+    category = Column(String, index=True)          # Critical, Non Critical
+    defect_type = Column(String)
+    description = Column(String, nullable=True)
+    quantity = Column(Float, nullable=True)
+    ad_hoc = Column(Boolean, default=True)
+    archived = Column(Boolean, default=False)
+    version = Column(Integer, nullable=True)
+    current_handler = Column(String, index=True)   # contractor, execution_engineer, quality_inspector
+
+    # Financial penalty
+    debit = Column(Float, nullable=True)
+    debit_reason = Column(String, nullable=True)
+
+    # Location (flattened from WORKAREA, WORKLOCATION, CLUSTER)
+    cluster_name = Column(String, index=True)      # Gujarat, Rajasthan
+    project_name = Column(String, index=True)      # BESS PSS-12 Project
+    project_id = Column(String, index=True)        # Pulse project UUID
+    project_type = Column(String, nullable=True)   # bess, solar, pss
+    spv_name = Column(String, nullable=True)       # AGE27CL
+    worklocation_name = Column(String, nullable=True)  # BESS PSS-12
+    workarea_name = Column(String, nullable=True)  # BL07 (block)
+
+    # People (flattened from CONTRACTOR, ENGINEER, QUALITY)
+    contractor_name = Column(String, nullable=True)
+    vendor_name = Column(String, index=True, nullable=True)
+    vendor_code = Column(String, nullable=True)
+    engineer_name = Column(String, nullable=True)
+    quality_name = Column(String, nullable=True)
+
+    # Work breakdown (flattened from SUBACTIVITY → ACTIVITY → SUBPACKAGE → PACKAGE)
+    package_name = Column(String, index=True, nullable=True)      # Civil
+    subpackage_name = Column(String, nullable=True)                # CT Foundation
+    activity_name = Column(String, nullable=True)                  # 6. CT Foundation Backfilling with Compaction
+    subactivity_name = Column(String, nullable=True)               # Compaction & FDD test
+
+    # Service order
+    service_order_number = Column(String, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    approved_at = Column(DateTime, nullable=True)
+
+    # Sync metadata
+    last_synced_at = Column(DateTime, default=datetime.utcnow)
+
+
+class PulseRFI(Base):
+    """Request-For-Inspection records from Pulse quality system."""
+    __tablename__ = "pulse_rfi"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pulse_id = Column(String, unique=True, index=True, nullable=False)
+
+    # Core RFI fields
+    rfi_label = Column(String, index=True)
+    status = Column(String, index=True)
+    status_label = Column(String)
+    current_handler = Column(String, nullable=True)
+
+    # Location
+    cluster_name = Column(String, index=True)
+    project_name = Column(String, index=True)
+    project_id = Column(String, index=True)
+    project_type = Column(String, nullable=True)
+    spv_name = Column(String, nullable=True)
+    worklocation_name = Column(String, nullable=True)
+    workarea_name = Column(String, nullable=True)
+
+    # People
+    contractor_name = Column(String, nullable=True)
+    vendor_name = Column(String, nullable=True)
+    engineer_name = Column(String, nullable=True)
+    quality_name = Column(String, nullable=True)
+
+    # Work breakdown
+    package_name = Column(String, nullable=True)
+    inspection_point_name = Column(String, nullable=True)
+
+    # Timestamps
+    created_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+    # Sync metadata
+    last_synced_at = Column(DateTime, default=datetime.utcnow)
+

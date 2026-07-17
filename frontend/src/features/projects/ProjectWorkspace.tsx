@@ -7,6 +7,7 @@ import {
   Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
+import QualityProjectTab from '../quality/QualityProjectTab';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -238,7 +239,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'sap' | 'p6' | 'transmission'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'sap' | 'p6' | 'transmission' | 'quality'>('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
@@ -853,6 +854,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'p6'} label="P6 Deep Dive" icon={Layers} onClick={() => setActiveTab('p6')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
+          <TabBtn active={activeTab === 'quality'} label="Quality" icon={Shield} onClick={() => setActiveTab('quality')} />
         </div>
 
         {/* ── Tab Content ── */}
@@ -2173,6 +2175,20 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               )}
             </div>
           )}
+          
+          {/* ════════ QUALITY TAB (NEW) ════════ */}
+          {activeTab === 'quality' && (
+            <div className="intelligence-card p-6 min-h-[500px]">
+              <div className="mb-6">
+                <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                  <Shield className="w-5 h-5 text-primary" /> Pulse Quality Data
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">Non-conformances and inspections synced from SAP Pulse for {p.projectName}</p>
+              </div>
+              <QualityProjectTab projectName={p.projectName} />
+            </div>
+          )}
+
         </div>
       </main>
 
@@ -2383,6 +2399,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           </div>
         </div>
       )}
+
     </div>
           </div>
         </div>

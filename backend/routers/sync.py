@@ -95,6 +95,23 @@ def sync_capacity_data():
     except Exception as e:
         logger.error(f"Capacity sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Capacity sync failed: {str(e)}")
+
+@router.post("/pulse/sync")
+def sync_pulse_data(db: Session = Depends(get_db)):
+    """Sync Non-Conformances and RFIs from Pulse quality system."""
+    from services.pulse_service import PulseService
+    try:
+        service = PulseService()
+        result = service.full_sync(db)
+        return {
+            "status": "success",
+            "message": f"Synced {result['ncs']} NCs and {result['rfis']} RFIs from Pulse",
+            **result
+        }
+    except Exception as e:
+        logger.error(f"Pulse sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Pulse sync failed: {str(e)}")
+
 import base64
 from datetime import datetime
 import dotenv

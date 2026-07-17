@@ -70,18 +70,17 @@ const createSubstationLabelIcon = (name: string, voltage?: string) => new L.DivI
 
 // Create DivIcon for generators (solar/wind plants)
 const createGeneratorIcon = (type: string) => {
-  const emoji = type === 'solar' ? '☀️' : type === 'wind' ? '🌀' : '⚡';
+  const color = type === 'solar' ? '#f59e0b' : type === 'wind' ? '#0ea5e9' : '#8b5cf6';
   return new L.DivIcon({
     html: `<div style="
-      width:22px; height:22px; border-radius:50%; background:rgba(255,255,255,0.95);
-      border:2px solid ${type === 'solar' ? '#f59e0b' : type === 'wind' ? '#0ea5e9' : '#8b5cf6'};
-      display:flex; align-items:center; justify-content:center; font-size:12px;
-      box-shadow:0 2px 6px rgba(0,0,0,0.3);
-    ">${emoji}</div>`,
-    className: 'generator-icon',
-    iconSize: [22, 22],
-    iconAnchor: [11, 11],
-    popupAnchor: [0, -14],
+      width:14px; height:14px; border-radius:50%; background:${color};
+      border:2px solid white; box-shadow:0 2px 4px rgba(0,0,0,0.3);
+      display:flex; align-items:center; justify-content:center;
+    "></div>`,
+    className: 'generator-dot-icon',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+    popupAnchor: [0, -7],
   });
 };
 import ReactECharts from 'echarts-for-react';
@@ -100,37 +99,7 @@ const createMarkerIcon = (color: string) => new L.DivIcon({
   popupAnchor: [0, -32],
 });
 
-// Weather Widget for Popups
-function WeatherWidget({ lat, lng }: { lat: number, lng: number }) {
-  const [weather, setWeather] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lng}&current_weather=true&wind_speed_unit=ms`)
-      .then(res => res.json())
-      .then(data => {
-        setWeather(data.current_weather);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [lat, lng]);
-
-  if (loading) return <div className="flex items-center gap-2 text-xs text-muted-foreground mt-2"><Loader2 className="w-3 h-3 animate-spin" /> Fetching live weather...</div>;
-  if (!weather) return null;
-
-  return (
-    <div className="mt-2 bg-muted dark:bg-slate-700/50 px-2 py-1.5 rounded flex flex-wrap items-center justify-between gap-2 border border-muted dark:border-slate-600">
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground dark:text-muted-foreground">
-        <Thermometer className="w-3.5 h-3.5 text-rose-500" />
-        {weather.temperature}°C
-      </div>
-      <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground dark:text-muted-foreground">
-        <Wind className="w-3.5 h-3.5 text-cyan-500" />
-        {weather.windspeed} m/s
-      </div>
-    </div>
-  );
-}
 
 // Weather Simulation Side Panel
 function WeatherSimulationPanel({ location, onClose }: { location: { lat: number, lng: number, name: string }, onClose: () => void }) {
@@ -149,69 +118,112 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
       .catch(() => setLoading(false));
   }, [location.lat, location.lng]);
 
-  const getChartOptions = () => {
+  const getChartOptions = (expanded: boolean) => {
     if (!data || !data.hourly) return {};
 
     return {
       tooltip: {
         trigger: 'axis',
+        appendToBody: true, // Fixes clipping & overlap issues by floating over the DOM
         backgroundColor: 'rgba(255, 255, 255, 0.95)',
         borderColor: '#e2e8f0',
-        textStyle: { color: '#1e293b' },
+        padding: expanded ? [12, 16] : [6, 10], // smaller padding for mini view
+        textStyle: { color: '#1e293b', fontSize: expanded ? 12 : 10 },
         formatter: function (params: any) {
-          let html = `<div style="font-weight:bold;margin-bottom:5px">${params[0].name}</div>`;
+          let html = `<div style="font-weight:bold;margin-bottom:${expanded ? '5px' : '2px'};font-size:${expanded ? '12px' : '10px'}">${params[0].name}</div>`;
           params.forEach((p: any) => {
             let unit = p.seriesName === 'Temperature' ? '°C' : p.seriesName === 'Wind Speed' ? 'm/s' : '%';
-            html += `<div style="display:flex;justify-content:space-between;gap:15px;margin-bottom:2px">
-              <span>${p.marker} ${p.seriesName}</span>
-              <span style="font-weight:bold">${p.value} ${unit}</span>
-            </div>`;
+            if (expanded) {
+              html += `<div style="display:flex;justify-content:space-between;gap:15px;margin-bottom:2px">
+                <span>${p.marker} ${p.seriesName}</span>
+                <span style="font-weight:bold">${p.value} ${unit}</span>
+              </div>`;
+            } else {
+              // Ultra-compact tooltip for minimized view
+              html += `<div style="font-size:10px;margin-bottom:2px;display:flex;justify-content:space-between;gap:12px;align-items:center">
+                <span style="display:flex;align-items:center;gap:4px">${p.marker} <span style="color:#64748b">${p.seriesName}</span></span>
+                <b style="color:#0f172a">${p.value} ${unit}</b>
+              </div>`;
+            }
           });
           return html;
         }
       },
       legend: {
+        show: expanded, // Hide legend in minimized view to save space
         data: ['Temperature', 'Wind Speed', 'Precip. Prob.', 'Cloud Cover'],
         bottom: 0,
         textStyle: { fontSize: 10 }
       },
-      grid: { top: 30, right: 30, bottom: 60, left: 40 },
+      grid: expanded 
+        ? { top: 40, right: 30, bottom: 40, left: 40 }
+        : { top: 15, right: 10, bottom: 20, left: 25 },
       xAxis: {
         type: 'category',
+        boundaryGap: false,
         data: data.hourly.time.map((t: string) => {
           const d = new Date(t);
           return `${d.getMonth() + 1}/${d.getDate()} ${d.getHours()}:00`;
         }),
-        axisLabel: { fontSize: 9, formatter: (val: string) => val.split(' ')[0] },
+        axisLine: { lineStyle: { color: '#cbd5e1' } },
+        axisLabel: { fontSize: expanded ? 10 : 8, color: '#64748b', formatter: (val: string) => val.split(' ')[0] },
       },
       yAxis: [
-        { type: 'value', name: '°C / m/s', position: 'left', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 } },
-        { type: 'value', name: '%', position: 'right', nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 9 }, splitLine: { show: false }, min: 0, max: 100 }
+        { 
+          type: 'value', 
+          name: expanded ? '°C / m/s' : '', 
+          position: 'left', 
+          nameTextStyle: { fontSize: 10, color: '#64748b' }, 
+          axisLabel: { fontSize: expanded ? 10 : 8, color: '#64748b' },
+          splitLine: { show: expanded, lineStyle: { type: 'dashed', color: '#e2e8f0', opacity: 0.5 } }
+        },
+        { 
+          type: 'value', 
+          name: expanded ? '%' : '', 
+          position: 'right', 
+          nameTextStyle: { fontSize: 10, color: '#64748b' }, 
+          axisLabel: { fontSize: expanded ? 10 : 8, color: '#64748b' }, 
+          splitLine: { show: false }, 
+          min: 0, 
+          max: 100 
+        }
       ],
       series: [
         {
           name: 'Temperature',
           type: 'line',
-          smooth: true,
+          smooth: 0.4,
           showSymbol: false,
           yAxisIndex: 0,
-          itemStyle: { color: '#ef4444' },
+          lineStyle: { 
+            width: 3, 
+            color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{offset: 0, color: '#f43f5e'}, {offset: 1, color: '#fb923c'}] },
+            shadowColor: 'rgba(244, 63, 94, 0.4)', shadowBlur: 10, shadowOffsetY: 5
+          },
           data: data.hourly.temperature_2m,
         },
         {
           name: 'Wind Speed',
           type: 'line',
-          smooth: true,
+          smooth: 0.4,
           showSymbol: false,
           yAxisIndex: 0,
-          itemStyle: { color: '#0ea5e9' },
+          lineStyle: { 
+            width: 3, 
+            color: { type: 'linear', x: 0, y: 0, x2: 1, y2: 0, colorStops: [{offset: 0, color: '#0ea5e9'}, {offset: 1, color: '#38bdf8'}] },
+            shadowColor: 'rgba(14, 165, 233, 0.4)', shadowBlur: 10, shadowOffsetY: 5
+          },
           data: data.hourly.wind_speed_10m
         },
         {
           name: 'Precip. Prob.',
           type: 'bar',
+          barWidth: '60%',
+          itemStyle: { 
+            borderRadius: [4, 4, 0, 0],
+            color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: '#3b82f6'}, {offset: 1, color: 'rgba(59, 130, 246, 0.1)'}] }
+          },
           yAxisIndex: 1,
-          itemStyle: { color: '#3b82f6' },
           data: data.hourly.precipitation_probability
         },
         {
@@ -220,8 +232,11 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
           smooth: true,
           showSymbol: false,
           yAxisIndex: 1,
+          lineStyle: { width: 0 },
           itemStyle: { color: '#94a3b8' },
-          areaStyle: { color: 'rgba(148, 163, 184, 0.2)' },
+          areaStyle: { 
+            color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1, colorStops: [{offset: 0, color: 'rgba(148, 163, 184, 0.4)'}, {offset: 1, color: 'rgba(148, 163, 184, 0.05)'}] }
+          },
           data: data.hourly.cloud_cover
         }
       ]
@@ -230,15 +245,17 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
 
   if (isExpanded) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white/60 backdrop-blur-sm p-4 sm:p-8 animate-fade-in" onWheel={(e) => e.stopPropagation()}>
-        <div className="w-full max-w-5xl bg-card shadow-2xl rounded-2xl flex flex-col overflow-hidden max-h-[90vh]">
-          <div className="p-5 border-b border-border dark:border-slate-700 flex justify-between items-center bg-muted dark:bg-gray-900/80">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:p-8 animate-fade-in" onWheel={(e) => e.stopPropagation()}>
+        <div className="w-full max-w-7xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] border border-white/20 dark:border-slate-800/50">
+          <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
             <div>
-              <h3 className="font-bold text-xl text-foreground dark:text-muted-foreground flex items-center gap-2">
-                <Activity className="w-6 h-6 text-primary dark:text-primary" />
-                Weather Simulation
+              <h3 className="font-extrabold text-2xl text-slate-900 dark:text-white flex items-center gap-3">
+                <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-xl">
+                  <Activity className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+                </div>
+                Weather Simulation Engine
               </h3>
-              <p className="text-sm text-muted-foreground mt-1">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
+              <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mt-1 ml-12">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={() => setIsExpanded(false)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full transition-colors text-muted-foreground" title="Minimize">
@@ -250,85 +267,90 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
             </div>
           </div>
 
-          <div className="flex-1 p-6 overflow-y-auto bg-muted dark:bg-gray-900/30">
-            <div className="mb-6 text-base text-foreground dark:text-muted-foreground">
+          <div className="flex-1 p-8 overflow-y-auto bg-slate-50/50 dark:bg-slate-900/50">
+            <div className="mb-8 text-slate-600 dark:text-slate-400 text-lg leading-relaxed max-w-3xl">
               Analyze 7-day high-precision forecasting data for optimal generation dispatching and site safety.
             </div>
 
             {loading ? (
-              <div className="h-[250px] flex flex-col items-center justify-center text-muted-foreground gap-4 bg-card rounded-xl border border-border dark:border-slate-700 shadow-sm">
-                <Loader2 className="w-10 h-10 animate-spin text-primary" />
-                <span className="text-base font-medium">Running Environmental Simulation...</span>
+              <div className="h-[400px] flex flex-col items-center justify-center gap-4 bg-white/50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm backdrop-blur-sm">
+                <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+                <span className="text-lg font-semibold text-slate-600 dark:text-slate-300">Running Environmental Simulation...</span>
               </div>
-            ) : (
-              <div className="h-[250px] w-full bg-card rounded-xl border border-border dark:border-slate-700 shadow-sm pt-4 px-2">
-                <ReactECharts option={getChartOptions()} style={{ height: '100%', width: '100%' }} />
+            ) : data ? (
+              <div className="grid grid-cols-1 lg:grid-cols-5 gap-8">
+                
+                {/* Chart Section - Takes 3 columns (60%) */}
+                <div className="lg:col-span-3 h-[450px] w-full bg-white dark:bg-slate-800/90 rounded-3xl border border-slate-200/60 dark:border-slate-700/60 shadow-xl shadow-slate-200/40 dark:shadow-none p-6 hover:shadow-2xl transition-shadow duration-300 backdrop-blur-xl flex flex-col">
+                  <ReactECharts option={getChartOptions(true)} style={{ flex: 1, width: '100%' }} />
+                </div>
+
+                {/* Metrics Section - Takes 2 columns (40%), stacked 2x2 */}
+                <div className="lg:col-span-2 grid grid-cols-2 gap-6 h-[450px]">
+                  
+                  <div className="bg-gradient-to-br from-amber-50 to-orange-100 dark:from-amber-900/40 dark:to-orange-900/20 p-6 rounded-3xl border border-amber-200/60 dark:border-amber-800/60 shadow-lg shadow-amber-100/50 dark:shadow-none hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-amber-700 dark:text-amber-500 mb-3">
+                        <Cloud className="w-6 h-6" />
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">Precip Prob</span>
+                      </div>
+                      <div className="text-5xl font-black text-amber-900 dark:text-amber-50 tracking-tighter">
+                        {Math.max(...(data?.hourly?.precipitation_probability || [0]))} <span className="text-xl font-semibold text-amber-700/60">%</span>
+                      </div>
+                    </div>
+                    <div className="text-xs font-medium text-amber-900/70 dark:text-amber-200/70 leading-relaxed border-t border-amber-300/30 dark:border-amber-700/50 pt-4">
+                      High probability indicates rainfall; may interrupt civil works.
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-cyan-50 to-blue-100 dark:from-cyan-900/40 dark:to-blue-900/20 p-6 rounded-3xl border border-cyan-200/60 dark:border-cyan-800/60 shadow-lg shadow-cyan-100/50 dark:shadow-none hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-500 mb-3">
+                        <Wind className="w-6 h-6" />
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">Max Wind</span>
+                      </div>
+                      <div className="text-5xl font-black text-cyan-900 dark:text-cyan-50 tracking-tighter">
+                        {Math.max(...(data?.hourly?.wind_speed_10m || [0])).toFixed(0)} <span className="text-xl font-semibold text-cyan-700/60">m/s</span>
+                      </div>
+                    </div>
+                    <div className="text-xs font-medium text-cyan-900/70 dark:text-cyan-200/70 leading-relaxed border-t border-cyan-300/30 dark:border-cyan-700/50 pt-4">
+                      Speeds above 20m/s risk automatic turbine shutdown.
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-800 dark:to-slate-700/50 p-6 rounded-3xl border border-slate-300/60 dark:border-slate-600/60 shadow-lg shadow-slate-200/50 dark:shadow-none hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-slate-700 dark:text-slate-400 mb-3">
+                        <Cloud className="w-6 h-6" />
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">Cloud Cover</span>
+                      </div>
+                      <div className="text-5xl font-black text-slate-900 dark:text-white tracking-tighter">
+                        {data?.hourly?.cloud_cover ? (data.hourly.cloud_cover.reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.length).toFixed(0) : 0} <span className="text-xl font-semibold text-slate-500">%</span>
+                      </div>
+                    </div>
+                    <div className="text-xs font-medium text-slate-600 dark:text-slate-400 leading-relaxed border-t border-slate-300/50 dark:border-slate-600/50 pt-4">
+                      Dense cover diminishes solar yield. Dispatch grid reserves.
+                    </div>
+                  </div>
+
+                  <div className="bg-gradient-to-br from-rose-50 to-red-100 dark:from-rose-900/40 dark:to-red-900/20 p-6 rounded-3xl border border-rose-200/60 dark:border-rose-800/60 shadow-lg shadow-rose-100/50 dark:shadow-none hover:-translate-y-1 transition-all duration-300 flex flex-col justify-between">
+                    <div>
+                      <div className="flex items-center gap-2 text-rose-700 dark:text-rose-500 mb-3">
+                        <Thermometer className="w-6 h-6" />
+                        <span className="text-xs font-bold uppercase tracking-widest opacity-80">Peak Temp</span>
+                      </div>
+                      <div className="text-5xl font-black text-rose-900 dark:text-rose-50 tracking-tighter">
+                        {Math.max(...(data?.hourly?.temperature_2m || [0])).toFixed(0)} <span className="text-xl font-semibold text-rose-700/60">°C</span>
+                      </div>
+                    </div>
+                    <div className="text-xs font-medium text-rose-900/70 dark:text-rose-200/60 leading-relaxed border-t border-rose-300/30 dark:border-rose-700/50 pt-4">
+                      Panels lose efficiency for every degree above 25°C.
+                    </div>
+                  </div>
+
+                </div>
               </div>
-            )}
-
-            {!loading && data && (
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-warning/10 dark:bg-amber-900/20 p-5 rounded-xl border border-warning/20 dark:border-amber-800/30 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-warning dark:text-warning mb-2">
-                      <Cloud className="w-5 h-5" />
-                      <span className="text-sm font-semibold uppercase tracking-wider">Peak Precip Prob</span>
-                    </div>
-                    <div className="text-3xl font-bold text-amber-900 dark:text-amber-100">
-                      {Math.max(...(data?.hourly?.precipitation_probability || [0]))} <span className="text-base font-medium text-warning/70">%</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-xs text-amber-800/70 dark:text-warning/70 leading-relaxed border-t border-warning/20/50 dark:border-amber-800/50 pt-3">
-                    <strong>Direct Impact:</strong> High precipitation probability indicates likely rainfall, potentially interrupting site construction and civil works.
-                  </div>
-                </div>
-
-                <div className="bg-cyan-50 dark:bg-cyan-900/20 p-5 rounded-xl border border-cyan-100 dark:border-cyan-800/30 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-cyan-700 dark:text-cyan-400 mb-2">
-                      <Wind className="w-5 h-5" />
-                      <span className="text-sm font-semibold uppercase tracking-wider">7-Day Max Wind</span>
-                    </div>
-                    <div className="text-3xl font-bold text-cyan-900 dark:text-cyan-100">
-                      {Math.max(...(data?.hourly?.wind_speed_10m || [0])).toFixed(1)} <span className="text-base font-medium text-cyan-700/70">m/s</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-xs text-cyan-800/70 dark:text-cyan-400/70 leading-relaxed border-t border-cyan-200/50 dark:border-cyan-800/50 pt-3">
-                    <strong>Direct Impact:</strong> Crucial for turbine generation. Speeds around 10-15 m/s are ideal; extreme speeds risk automatic turbine shutdown.
-                  </div>
-                </div>
-
-                <div className="bg-muted dark:bg-slate-700/30 p-5 rounded-xl border border-border dark:border-slate-600/50 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-foreground dark:text-muted-foreground mb-2">
-                      <Cloud className="w-5 h-5" />
-                      <span className="text-sm font-semibold uppercase tracking-wider">Avg Cloud Cover</span>
-                    </div>
-                    <div className="text-3xl font-bold text-foreground dark:text-slate-100">
-                      {data?.hourly?.cloud_cover ? (data.hourly.cloud_cover.reduce((a: number, b: number) => a + b, 0) / data.hourly.cloud_cover.length).toFixed(1) : 0} <span className="text-base font-medium text-muted-foreground">%</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-xs text-muted-foreground dark:text-muted-foreground leading-relaxed border-t border-border dark:border-slate-600/50 pt-3">
-                    <strong>Direct Impact:</strong> Dense cloud cover drastically diminishes solar yield. Consistent high coverage may require dispatching grid reserves.
-                  </div>
-                </div>
-
-                <div className="bg-rose-50 dark:bg-rose-900/20 p-5 rounded-xl border border-rose-100 dark:border-rose-800/30 shadow-sm flex flex-col justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-rose-700 dark:text-rose-400 mb-2">
-                      <Thermometer className="w-5 h-5" />
-                      <span className="text-sm font-semibold uppercase tracking-wider">7-Day Peak Temp</span>
-                    </div>
-                    <div className="text-3xl font-bold text-rose-900 dark:text-rose-100">
-                      {Math.max(...(data?.hourly?.temperature_2m || [0])).toFixed(1)} <span className="text-base font-medium text-rose-700/70">°C</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 text-xs text-rose-800/70 dark:text-rose-400/70 leading-relaxed border-t border-rose-200/50 dark:border-rose-800/50 pt-3">
-                    <strong>Direct Impact:</strong> Solar panels lose ~0.4% efficiency for every degree above 25°C. High temps degrade performance despite high sunlight.
-                  </div>
-                </div>
-              </div>
-            )}
+            ) : null}
           </div>
         </div>
       </div>
@@ -336,55 +358,57 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
   }
 
   return (
-    <div className="absolute top-20 left-4 w-80 bg-card shadow-xl rounded-xl flex flex-col border border-border dark:border-slate-700 z-[2000] overflow-hidden">
-      <div className="px-3 py-2 border-b border-border dark:border-slate-700 flex justify-between items-center bg-muted dark:bg-gray-900/80">
+    <div className="absolute top-20 left-4 w-96 bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-2xl rounded-2xl flex flex-col border border-white/20 dark:border-slate-800/50 z-[2000] overflow-hidden transform transition-all duration-300">
+      <div className="px-4 py-3 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
         <div>
-          <h3 className="font-bold text-sm text-foreground dark:text-muted-foreground flex items-center gap-1.5">
-            <Activity className="w-4 h-4 text-primary dark:text-primary" />
+          <h3 className="font-extrabold text-[15px] text-slate-900 dark:text-white flex items-center gap-2">
+            <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
+              <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
             Weather Sim
           </h3>
-          <p className="text-[10px] text-muted-foreground">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
+          <p className="text-[10px] font-medium text-slate-500 dark:text-slate-400 mt-0.5 ml-8">{location.name} ({location.lat.toFixed(2)}, {location.lng.toFixed(2)})</p>
         </div>
         <div className="flex items-center gap-1">
-          <button onClick={() => setIsExpanded(true)} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-muted-foreground" title="Expand">
-            <Maximize2 className="w-3.5 h-3.5" />
+          <button onClick={() => setIsExpanded(true)} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors text-slate-500" title="Expand">
+            <Maximize2 className="w-4 h-4" />
           </button>
-          <button onClick={onClose} className="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded transition-colors text-muted-foreground" title="Close">
+          <button onClick={onClose} className="p-1.5 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-md transition-colors text-slate-500" title="Close">
             <X className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      <div className="p-2 bg-muted dark:bg-gray-900/30 flex-1 overflow-hidden">
+      <div className="p-3 bg-slate-50/50 dark:bg-slate-900/50 flex-1 overflow-hidden">
         {loading ? (
-          <div className="h-40 flex flex-col items-center justify-center text-muted-foreground gap-2">
-            <Loader2 className="w-5 h-5 animate-spin text-primary" />
-            <span className="text-[10px] font-medium">Running Simulation...</span>
+          <div className="h-44 flex flex-col items-center justify-center gap-3">
+            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Running Simulation...</span>
           </div>
         ) : (
-          <div className="h-40 w-full bg-card rounded border border-border dark:border-slate-700 pt-1 px-1">
-            <ReactECharts option={getChartOptions()} style={{ height: '100%', width: '100%' }} />
+          <div className="h-48 w-full bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 pt-2 px-1 shadow-sm hover:shadow-md transition-shadow">
+            <ReactECharts option={getChartOptions(false)} style={{ height: '100%', width: '100%' }} />
           </div>
         )}
 
         {!loading && data && (
-          <div className="mt-2 grid grid-cols-2 gap-1.5">
-            <div className="bg-warning/10 dark:bg-amber-900/20 p-1.5 rounded border border-warning/20 dark:border-amber-800/30">
-              <div className="flex items-center gap-1 text-warning dark:text-warning mb-0.5">
-                <Thermometer className="w-3 h-3" />
-                <span className="text-[9px] font-semibold uppercase">7-Day Peak Temp</span>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            <div className="bg-gradient-to-br from-amber-50 to-orange-50 dark:from-amber-900/30 dark:to-orange-900/20 p-2.5 rounded-xl border border-amber-200/50 dark:border-amber-800/50 shadow-sm transition-transform hover:scale-[1.02]">
+              <div className="flex items-center gap-1.5 text-amber-600 dark:text-amber-500 mb-1">
+                <Thermometer className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">7-Day Peak Temp</span>
               </div>
-              <div className="text-sm font-bold text-amber-900 dark:text-amber-100">
-                {Math.max(...(data?.hourly?.temperature_2m || [0])).toFixed(0)} <span className="text-[10px] font-medium text-warning/70">°C</span>
+              <div className="text-lg font-extrabold text-amber-900 dark:text-amber-100">
+                {Math.max(...(data?.hourly?.temperature_2m || [0])).toFixed(0)} <span className="text-xs font-semibold text-amber-600/70">°C</span>
               </div>
             </div>
-            <div className="bg-cyan-50 dark:bg-cyan-900/20 p-1.5 rounded border border-cyan-100 dark:border-cyan-800/30">
-              <div className="flex items-center gap-1 text-cyan-700 dark:text-cyan-400 mb-0.5">
-                <Wind className="w-3 h-3" />
-                <span className="text-[9px] font-semibold uppercase">7-Day Max Wind</span>
+            <div className="bg-gradient-to-br from-cyan-50 to-blue-50 dark:from-cyan-900/30 dark:to-blue-900/20 p-2.5 rounded-xl border border-cyan-200/50 dark:border-cyan-800/50 shadow-sm transition-transform hover:scale-[1.02]">
+              <div className="flex items-center gap-1.5 text-cyan-600 dark:text-cyan-500 mb-1">
+                <Wind className="w-3.5 h-3.5" />
+                <span className="text-[10px] font-bold uppercase tracking-wider">7-Day Max Wind</span>
               </div>
-              <div className="text-sm font-bold text-cyan-900 dark:text-cyan-100">
-                {Math.max(...(data?.hourly?.wind_speed_10m || [0])).toFixed(0)} <span className="text-[10px] font-medium text-cyan-700/70">m/s</span>
+              <div className="text-lg font-extrabold text-cyan-900 dark:text-cyan-100">
+                {Math.max(...(data?.hourly?.wind_speed_10m || [0])).toFixed(0)} <span className="text-xs font-semibold text-cyan-600/70">m/s</span>
               </div>
             </div>
           </div>
@@ -509,18 +533,14 @@ const getProjectCoordinates = (project: any, index: number) => {
     }
   }
 
-  // Fallback to western India (Rajasthan/Gujarat region) if absolutely no match found
-  // Using deterministic spread so they don't pile up on one exact pixel
-  const fallbackLat = 24.5 + (Math.sin(index * 45) * 4);
-  const fallbackLng = 72.0 + (Math.cos(index * 89) * 4);
-
-  return [fallbackLat, fallbackLng];
+  // Return null if absolutely no match found to avoid hallucinating locations
+  return null;
 };
 
 export default function ProjectMap({ projects = [], onOpenProject, theme }: ProjectMapProps) {
   const [activeStyle, setActiveStyle] = useState(MAP_STYLES[0]);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
-  const [showTransmission, setShowTransmission] = useState(true);
+  const [showTransmission, setShowTransmission] = useState(false); // Hidden by default to reduce clutter
   const [showProjects, setShowProjects] = useState(false);
   const [currentZoom, setCurrentZoom] = useState(6);
   const [searchQuery, setSearchQuery] = useState('');
@@ -583,7 +603,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
     if (!mapRef.current) return;
     const zoom = mapRef.current.getZoom();
     if (zoom < 8) {
-      alert("Please zoom in closer (zoom level 8 or higher) before extracting the grid to prevent overloading the browser.");
+      console.warn("Please zoom in closer (zoom level 8 or higher) before extracting the grid to prevent overloading the browser.");
       return;
     }
 
@@ -615,7 +635,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
       setViewportGrid(data.elements || []);
     } catch (err) {
       console.error("Vector Extraction Error:", err);
-      alert("Failed to extract grid vectors from OpenStreetMap.");
+      console.warn("Failed to extract grid vectors from OpenStreetMap.");
     } finally {
       setIsExtractingGrid(false);
     }
@@ -1237,7 +1257,6 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                     <div>Type: Major Substation / Project Node</div>
                     <div>Lat: {sub.lat} | Lng: {sub.lng}</div>
                   </div>
-                  <WeatherWidget lat={sub.lat} lng={sub.lng} />
                 </div>
               </Popup>
             </Marker>
@@ -1246,6 +1265,8 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           {/* Dynamic Markers from Backend Projects */}
           {showProjects && projects.map((project, index) => {
             const coords = getProjectCoordinates(project, index);
+            if (!coords) return null; // Skip rendering if no accurate location is found
+            
             const projName = project.name || project.projectId;
             return (
               <Marker
@@ -1266,7 +1287,6 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                       <div>Status: {project.health || 'N/A'}</div>
                       <div>Progress: {project.progress || 0}%</div>
                     </div>
-                    <WeatherWidget lat={coords[0]} lng={coords[1]} />
                     {onOpenProject && (
                       <button
                         onClick={() => onOpenProject(project.projectId)}
