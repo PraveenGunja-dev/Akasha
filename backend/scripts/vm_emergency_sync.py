@@ -4,6 +4,9 @@ import os
 # Add backend to path
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+import urllib3
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
 from database import engine, SessionLocal
 import models
 from services.pulse_service import PulseService
