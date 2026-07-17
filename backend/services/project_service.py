@@ -99,7 +99,9 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
 def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     query = db.query(models.ProjectMapping)
     if portfolio_type and portfolio_type.lower() != "all portfolios":
-        portfolio_type = portfolio_type.replace("+", " ")
+        import re
+        portfolio_type = re.sub(r'[\+]+', ' ', portfolio_type).strip()
+        portfolio_type = re.sub(r'\s+', ' ', portfolio_type)
         query = query.filter(
             (models.ProjectMapping.cluster.ilike(f"%{portfolio_type}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio_type}%"))
@@ -196,11 +198,18 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
         
         if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
+            # Using Non Labor Units as per user's earlier structure (usually actual_labor_units / budget_labor_units, but adhering to existing)
             progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
         elif activity_info['Total'] > 0:
-            progress = activity_info['SumPct'] / activity_info['Total']
+            # SumPct is 0-100*N, Total is N, so avg is 0-100. Divide by 100 to get 0-1.
+            progress = (activity_info['SumPct'] / activity_info['Total']) / 100.0
         else:
-            progress = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
+            # duration_percent_complete is 0-100. Divide by 100 to get 0-1.
+            duration_pct = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
+            progress = duration_pct / 100.0
+            
+        # Cap progress between 0 and 1
+        progress = max(0.0, min(1.0, progress))
 
         # 2. SAP Data - WBS Only Mapping
         allocation_ratio = 1.0

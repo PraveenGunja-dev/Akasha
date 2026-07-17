@@ -23,6 +23,18 @@ def run_emergency_setup():
         print(f"❌ Error creating tables: {e}")
         return
 
+    # 1.5 Clean up previously injected dummy PULSE projects
+    print("🧹 Cleaning up dummy PULSE projects injected from previous sync...")
+    db = SessionLocal()
+    try:
+        deleted = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id.like("PULSE-%")).delete(synchronize_session=False)
+        db.commit()
+        print(f"✅ Deleted {deleted} dummy PULSE projects from ProjectMapping!")
+    except Exception as e:
+        print(f"❌ Error cleaning up PULSE projects: {e}")
+    finally:
+        db.close()
+
     # 2. Run Pulse Sync to fetch missing projects
     print("🔄 Running Pulse Sync to fetch NCs/RFIs and add missing projects...")
     db = SessionLocal()
