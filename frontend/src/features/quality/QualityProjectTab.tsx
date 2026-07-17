@@ -79,7 +79,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
 
   const byHandler = data.by_handler || {};
   const byStatus = data.by_status || {};
-  const handlerTotal = Object.values(byHandler).reduce((a: any, b: any) => a + b, 0);
+  const handlerTotal = Object.values(byHandler).reduce((a: number, b: any) => a + (Number(b) || 0), 0) as number;
 
   return (
     <div className="flex flex-col gap-5 animate-in fade-in duration-400">

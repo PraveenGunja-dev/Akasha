@@ -734,7 +734,9 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
       const name = proj.name || proj.projectId || '';
       if (name.toLowerCase().includes(query)) {
         const coords = getProjectCoordinates(proj, idx);
-        suggestions.push({ name: name, type: proj.category || 'Project', lat: coords[0], lng: coords[1] });
+        if (coords) {
+          suggestions.push({ name: name, type: proj.category || 'Project', lat: coords[0], lng: coords[1] });
+        }
       }
     });
 
