@@ -24,8 +24,9 @@ def new_request(self, method, url, **kwargs):
 requests.Session.request = new_request
 # ----------------------------------------------------------------
 
-# Create tables if not exists
-models.Base.metadata.create_all(bind=engine)
+# Automatically create tables and add missing columns dynamically
+from auto_migrate import auto_upgrade_schema
+auto_upgrade_schema()
 
 app = FastAPI(
     title="Akasha Intelligence API",
