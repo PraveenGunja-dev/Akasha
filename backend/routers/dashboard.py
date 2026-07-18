@@ -69,10 +69,14 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
     query = db.query(models.ProjectMapping)
     if portfolio and portfolio.lower() != "all portfolios":
         p_clean = portfolio.replace('+', ' ').strip().lower()
-        query = query.filter(
-            (func.lower(models.ProjectMapping.cluster).contains(p_clean)) |
-            (func.lower(models.ProjectMapping.category).contains(p_clean))
-        )
+        # Make filtering robust by splitting into words
+        parts = p_clean.split()
+        for part in parts:
+            query = query.filter(
+                (func.lower(models.ProjectMapping.cluster).contains(part)) |
+                (func.lower(models.ProjectMapping.category).contains(part)) |
+                (func.lower(models.ProjectMapping.project).contains(part))
+            )
             
     raw_mappings = query.all()
     raw_p6_projects = db.query(models.P6Project).all()
