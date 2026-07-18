@@ -58,6 +58,15 @@ def run_emergency_setup():
     finally:
         db.close()
 
+    # 3. Sync Transmission (TC) Data
+    print("⚡ Syncing Transmission Network (TC) Data...")
+    try:
+        from services.tc_sync import run_sync
+        run_sync()
+        print("✅ Transmission Data Sync Complete!")
+    except Exception as e:
+        print(f"❌ Error during Transmission Sync: {e}")
+
     print("\n🎉 EMERGENCY SETUP COMPLETE!")
     print("⚠️ IMPORTANT: Please completely restart your backend FastAPI server to clear the memory cache and load the new code!")
 
