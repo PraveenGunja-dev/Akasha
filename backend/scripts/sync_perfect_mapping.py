@@ -21,6 +21,12 @@ def run_perfect_sync():
             
         print(f"📦 Loaded {len(perfect_projects)} perfect projects from JSON.")
         
+        # Wipe TC tables first to avoid Foreign Key violations
+        print("🧹 Wiping Transmission tables to clear foreign key constraints...")
+        db.query(models.TcNetworkEdge).delete(synchronize_session=False)
+        db.query(models.TcProjectEntry).delete(synchronize_session=False)
+        db.query(models.TcNetworkNode).delete(synchronize_session=False)
+        
         # Completely wipe the existing messed up mappings
         print("🧹 Wiping existing ProjectMapping table...")
         deleted = db.query(models.ProjectMapping).delete(synchronize_session=False)
