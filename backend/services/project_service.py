@@ -197,19 +197,15 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
 
         
-        if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
-            # Using Non Labor Units as per user's earlier structure (usually actual_labor_units / budget_labor_units, but adhering to existing)
-            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
-        elif activity_info['Total'] > 0:
-            # SumPct is 0-100*N, Total is N, so avg is 0-100. Divide by 100 to get 0-1.
-            progress = (activity_info['SumPct'] / activity_info['Total']) / 100.0
+        # STRICT user-requested formula (NO fallbacks):
+        # Progress = SummaryActualNonLaborUnits / SummaryBaselineNonLaborUnits
+        if p6_proj and getattr(p6_proj, 'baseline_non_labor_units', 0) and p6_proj.baseline_non_labor_units > 0:
+            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.baseline_non_labor_units
         else:
-            # duration_percent_complete is 0-100. Divide by 100 to get 0-1.
-            duration_pct = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
-            progress = duration_pct / 100.0
+            progress = 0.0
             
-        # Cap progress between 0 and 1
-        progress = max(0.0, min(1.0, progress))
+        # Cap progress between 0 and 1 to prevent exceeding 100% in UI
+        progress = max(0.0, min(1.0, float(progress)))
 
         # 2. SAP Data - WBS Only Mapping
         allocation_ratio = 1.0
