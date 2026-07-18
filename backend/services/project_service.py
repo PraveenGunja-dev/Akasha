@@ -197,10 +197,16 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
 
         
-        # STRICT user-requested formula (NO fallbacks):
-        # Progress = SummaryActualNonLaborUnits / SummaryBaselineNonLaborUnits
-        if p6_proj and getattr(p6_proj, 'baseline_non_labor_units', 0) and p6_proj.baseline_non_labor_units > 0:
-            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.baseline_non_labor_units
+        # STRICT user-requested formula:
+        # Progress = SummaryActualNonLaborUnits / SummaryBudgetAtCompletionByLaborUnits
+        if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
+            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
+        elif p6_proj:
+            # Fallback for projects that don't have labor units tracked yet
+            raw_pct = getattr(p6_proj, 'construction_percent_complete', None)
+            if raw_pct is None:
+                raw_pct = p6_proj.duration_percent_complete or 0.0
+            progress = float(raw_pct) if raw_pct <= 1.0 else float(raw_pct) / 100.0
         else:
             progress = 0.0
             

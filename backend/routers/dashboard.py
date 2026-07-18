@@ -160,11 +160,16 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
         
         if p6_data:
             mapped_p6_ids.add(p6_data.project_id)
-            p6_pct = getattr(p6_data, 'construction_percent_complete', None)
-            if p6_pct is None:
-                p6_pct = p6_data.duration_percent_complete or 0
-            if p6_pct <= 1.0 and p6_pct > 0:
-                p6_pct *= 100
+            if getattr(p6_data, 'budget_labor_units', 0) and p6_data.budget_labor_units > 0:
+                calc_val = (getattr(p6_data, 'actual_non_labor_units', 0) or 0) / p6_data.budget_labor_units
+                p6_pct = calc_val * 100
+            else:
+                p6_pct = getattr(p6_data, 'construction_percent_complete', None)
+                if p6_pct is None:
+                    p6_pct = p6_data.duration_percent_complete or 0
+                if p6_pct <= 1.0 and p6_pct > 0:
+                    p6_pct *= 100
+                    
             progress = p6_pct
             is_delayed_proj = False
             
@@ -552,9 +557,12 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         progress = 0
         p6_data = None
         if p6:
-            raw_progress = getattr(p6, 'construction_percent_complete', None)
-            if raw_progress is None:
-                raw_progress = p6.duration_percent_complete or 0
+            if getattr(p6, 'budget_labor_units', 0) and p6.budget_labor_units > 0:
+                raw_progress = (getattr(p6, 'actual_non_labor_units', 0) or 0) / p6.budget_labor_units
+            else:
+                raw_progress = getattr(p6, 'construction_percent_complete', None)
+                if raw_progress is None:
+                    raw_progress = p6.duration_percent_complete or 0
             progress = round(raw_progress * 100)
             # Multi-signal delay detection:
             # 1. finish_date_variance < 0 (if available)
