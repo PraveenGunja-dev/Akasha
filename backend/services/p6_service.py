@@ -118,6 +118,7 @@ PROJECT_FIELD_MAP: Dict[str, str] = {
     "SummaryActualNonLaborUnits": "actual_non_labor_units",
     "SummaryBaselineNonLaborUnits": "baseline_non_labor_units",
     "SummaryBudgetAtCompletionByLaborUnits": "budget_labor_units",
+    "SummaryAtCompletionNonLaborUnits": "at_completion_non_labor_units",
     # Activity Counts
     "SummaryActivityCount": "activity_count",
     "SummaryCompletedActivityCount": "completed_activity_count",

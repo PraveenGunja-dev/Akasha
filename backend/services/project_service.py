@@ -198,9 +198,9 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
         
         # STRICT user-requested formula:
-        # Progress = SummaryActualNonLaborUnits / SummaryBudgetAtCompletionByLaborUnits
-        if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
-            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
+        # Progress = SummaryActualNonLaborUnits / SummaryAtCompletionNonLaborUnits
+        if p6_proj and getattr(p6_proj, 'at_completion_non_labor_units', 0) and p6_proj.at_completion_non_labor_units > 0:
+            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.at_completion_non_labor_units
         elif p6_proj:
             # Fallback for projects that don't have labor units tracked yet
             raw_pct = getattr(p6_proj, 'construction_percent_complete', None)

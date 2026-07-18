@@ -160,8 +160,8 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
         
         if p6_data:
             mapped_p6_ids.add(p6_data.project_id)
-            if getattr(p6_data, 'budget_labor_units', 0) and p6_data.budget_labor_units > 0:
-                calc_val = (getattr(p6_data, 'actual_non_labor_units', 0) or 0) / p6_data.budget_labor_units
+            if getattr(p6_data, 'at_completion_non_labor_units', 0) and p6_data.at_completion_non_labor_units > 0:
+                calc_val = (getattr(p6_data, 'actual_non_labor_units', 0) or 0) / p6_data.at_completion_non_labor_units
                 p6_pct = calc_val * 100
             else:
                 p6_pct = getattr(p6_data, 'construction_percent_complete', None)
@@ -557,8 +557,8 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         progress = 0
         p6_data = None
         if p6:
-            if getattr(p6, 'budget_labor_units', 0) and p6.budget_labor_units > 0:
-                raw_progress = (getattr(p6, 'actual_non_labor_units', 0) or 0) / p6.budget_labor_units
+            if getattr(p6, 'at_completion_non_labor_units', 0) and p6.at_completion_non_labor_units > 0:
+                raw_progress = (getattr(p6, 'actual_non_labor_units', 0) or 0) / p6.at_completion_non_labor_units
             else:
                 raw_progress = getattr(p6, 'construction_percent_complete', None)
                 if raw_progress is None:

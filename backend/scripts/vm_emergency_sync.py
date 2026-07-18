@@ -23,15 +23,18 @@ def run_emergency_setup():
         print(f"❌ Error creating tables: {e}")
         return
         
-    print("🛠️ Injecting new baseline_non_labor_units column into p6_project table...")
+    print("🛠️ Injecting new labor unit columns into p6_project table...")
     try:
         with engine.connect() as conn:
             from sqlalchemy import text
-            conn.execute(text("ALTER TABLE p6_project ADD COLUMN baseline_non_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS baseline_non_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS actual_non_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS budget_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS at_completion_non_labor_units FLOAT;"))
             conn.commit()
-            print("✅ Column added successfully!")
+            print("✅ Columns added successfully!")
     except Exception as e:
-        print(f"⚠️ Column likely already exists (skipping): {e}")
+        print(f"⚠️ Columns likely already exist (skipping): {e}")
 
     # 1.5 Clean up previously injected dummy PULSE projects
     print("🧹 Cleaning up dummy PULSE projects injected from previous sync...")
