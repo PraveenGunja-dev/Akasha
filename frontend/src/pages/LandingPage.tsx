@@ -16,7 +16,7 @@ const ROLE_ROUTES: Record<string, string> = {
 };
 
 export default function LandingPage() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [showPresentation, setShowPresentation] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
@@ -50,11 +50,19 @@ export default function LandingPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate('/dashboard', { replace: true });
+    setLoading(true);
+    setError('');
+    const res = await login(username, password);
+    setLoading(false);
+    if (res.success) {
+      // useEffect will handle the redirect based on user role
+    } else {
+      setError(res.message);
+    }
   };
 
   const openLogin = () => {
-    navigate('/dashboard', { replace: true });
+    setShowLogin(true);
   };
 
   return (

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import {
   TrendingUp, Activity, DollarSign,
-  AlertTriangle, Zap, Clock, Layers, MapPin, Package, RefreshCw, AlertCircle, Bot, CheckCircle2
+  AlertTriangle, Zap, Clock, Layers, MapPin, Package, RefreshCw, AlertCircle, Bot, CheckCircle2, Shield
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { motion } from 'framer-motion';
@@ -73,7 +73,14 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   const delayedProjects = summary.delayed_projects || 0;
   const onTrackProjects = summary.on_track_projects || 0;
   const totalMW = summary.total_mw || 0;
-  const achievedMW = summary.achieved_mw || 0;
+  
+  const { codMW, trMW } = useMemo(() => {
+    return projects.reduce((acc: any, p: any) => {
+      acc.codMW += (p.cod_mw || 0);
+      acc.trMW += (p.tr_mw || 0);
+      return acc;
+    }, { codMW: 0, trMW: 0 });
+  }, [projects]);
 
   const { totalPOValue, avgProgress, poDeliveredCr } = useMemo(() => {
     let poVal = 0;
@@ -151,10 +158,6 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     return projects;
   }, [projects, activeListTab]);
 
-  const delayedProjectList = useMemo(() => {
-    return projects.filter((p: any) => p.p6?.health === 'Delayed').slice(0, 5);
-  }, [projects]);
-
   const topSapProjects = useMemo(() => {
     return [...projects]
       .filter((p: any) => (p.sap?.req_qty || p.sap?.po_qty || p.sap?.inventory_qty) > 0)
@@ -189,7 +192,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   const originalScatterOptions = {
     backgroundColor: 'transparent',
     textStyle: { fontFamily: 'inherit' },
-    tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${p.data[0]}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW` },
+    tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${p.data[0]}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>COD: ${p.data[3]}` },
     grid: { left: '3%', right: '7%', bottom: '3%', top: '15%', containLabel: true },
     xAxis: {
       type: 'value', name: 'Progress (%)',
@@ -207,14 +210,18 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
       name: 'Projects', type: 'scatter',
       symbolSize: (data: any) => Math.max(10, Math.min(data[1] / 10, 40)),
       itemStyle: { color: '#3b82f6', opacity: 0.6, borderColor: '#ffffff', borderWidth: 1 },
-      data: projects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => [Math.round(p.p6?.progress || 0), parseFloat(p.extractedCap.toFixed(1)), p.p6_project_name || p.project_name])
+      data: projects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => {
+        const codDateStr = p.p6?.planned_finish_date || p.p6?.scheduled_finish_date || p.p6?.finish_date;
+        const cod = codDateStr ? new Date(codDateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+        return [Math.round(p.p6?.progress || 0), parseFloat(p.extractedCap.toFixed(1)), p.p6_project_name || p.project_name, cod];
+      })
     }]
   };
 
   const queueScatterOptions = {
     backgroundColor: 'transparent',
     textStyle: { fontFamily: 'inherit' },
-    tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${Number(p.data[0]).toFixed(1)}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>Status: ${p.data[3]}${p.data[4] > 0 ? ` (${p.data[4]} days delayed)` : ''}` },
+    tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${Number(p.data[0]).toFixed(1)}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>COD: ${p.data[5]}<br/>Status: ${p.data[3]}${p.data[4] > 0 ? ' (' + p.data[4] + ' days delayed)' : ''}` },
     grid: { left: '3%', right: '4%', bottom: '5%', top: '10%', containLabel: true },
     xAxis: {
       type: 'value', name: 'Progress (%)',
@@ -237,6 +244,8 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
       },
       data: listProjects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => {
         let delayDays = 0;
+        const codDateStr = p.p6?.planned_finish_date || p.p6?.scheduled_finish_date || p.p6?.finish_date;
+        const cod = codDateStr ? new Date(codDateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
         if (p.p6?.baseline_finish_date) {
           const finishStr = p.p6?.scheduled_finish_date || p.p6?.finish_date;
           if (finishStr) {
@@ -247,7 +256,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
             }
           }
         }
-        return [p.p6?.progress || 0, parseFloat(p.extractedCap.toFixed(1)), p.p6_project_name || p.project_name, p.p6?.health || 'On Track', delayDays];
+        return [p.p6?.progress || 0, parseFloat(p.extractedCap.toFixed(1)), p.p6_project_name || p.project_name, p.p6?.health || 'On Track', delayDays, cod];
       })
     }]
   };
@@ -255,16 +264,27 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   return (
     <div className="flex flex-col gap-4 w-full pb-8">
 
-      {/* ROW 1: All 6 KPIs in a single row on desktop */}
+      {/* ROW 1: All KPIs in a single row on desktop */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-6 gap-3"
+        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3"
       >
         <KPICard title="Total Projects" value={totalProjects} trend="up" trendValue={onTrackProjects} trendLabel="On Track" icon={Activity} color="blue" onClick={() => setActiveKpiModal('Total Projects')} />
-        <KPICard title="Portfolio Capacity" value={`${Math.round(achievedMW)} / ${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
+        <KPICard title="Portfolio Capacity" value={`COD: ${Math.round(codMW)} MW`} subtext={`Trial Run: ${Math.round(trMW)} MW | Total: ${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
         <KPICard title="Delayed Projects" value={delayedProjects} icon={AlertTriangle} color="red" onClick={() => setActiveKpiModal('Delayed Projects')} />
+        
+        {/* Quality Pulse KPI */}
+        <KPICard 
+          title="Quality (Pulse)" 
+          value={`${summary?.quality?.open_ncs || 0} Open NCs`} 
+          subtext={`${summary?.quality?.closure_rate || 0}% Closure Rate`} 
+          icon={Shield} 
+          color="amber" 
+          onClick={() => setActiveKpiModal('Quality (Pulse)')} 
+        />
+
         <KPICard title="Remaining PO Value" value={`₹${Math.max(0, remainingPOValue).toFixed(1)} Cr`} subtext="Pending Delivery" icon={DollarSign} color="amber" onClick={() => setActiveKpiModal('Remaining PO Value')} />
         <KPICard title="Total PO Value" value={`₹${(totalPOValue / 10000000).toFixed(1)} Cr`} icon={DollarSign} color="emerald" onClick={() => setActiveKpiModal('Total PO Value')} />
         <KPICard title="Completed Projects" value={progressStages.completed} icon={CheckCircle2} color="emerald" onClick={() => setActiveKpiModal('Completed Projects')} />
@@ -398,68 +418,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         </div>
       </div>
 
-      {/* ROW 4: Alerts, Timeline */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-
-        {/* Risk Alerts */}
-        <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6 overflow-hidden">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2"><AlertTriangle className="w-5 h-5 text-destructive" /> Delayed Projects</h3>
-            <div className="px-2.5 py-1 rounded-md bg-destructive/10 text-destructive dark:bg-destructive/100/10 dark:text-destructive text-[10px] font-bold uppercase border border-destructive/20 dark:border-destructive/20">{delayedProjects} Active</div>
-          </div>
-          <div className="space-y-4">
-            {delayedProjectList.length > 0 ? delayedProjectList.map((p: any, i: number) => (
-              <div key={i} className="flex items-start gap-4 p-3 rounded-xl hover:bg-muted dark:hover:bg-white/50 transition-colors group border border-transparent hover:border-border dark:hover:border-gray-700">
-                <div className="w-2.5 h-2.5 mt-1.5 rounded-full shrink-0 bg-destructive/100 shadow-[0_0_8px_rgba(239,68,68,0.5)]"></div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1.5 gap-2">
-                    <div className="text-[13px] font-bold text-foreground dark:text-white leading-snug group-hover:text-primary transition-colors line-clamp-2 break-all" title={p.p6_project_name || p.project_name}>
-                      {p.p6_project_name || p.project_name}
-                    </div>
-                    <div className="text-[10px] font-bold text-muted-foreground bg-muted dark:bg-card px-2 py-0.5 rounded-md border border-border dark:border-gray-700 shrink-0">
-                      {Math.round((p.p6?.progress || 0) * 100)}%
-                    </div>
-                  </div>
-                  <div className="text-[11px] text-muted-foreground flex justify-between items-center bg-muted dark:bg-gray-900/30 px-3 py-2 rounded-lg border border-muted dark:border-border">
-                    <span className="truncate pr-2"><span className="font-semibold text-foreground dark:text-muted-foreground">Plan:</span> {(p.p6?.planned_finish_date || p.p6?.scheduled_finish_date) ? new Date(p.p6.planned_finish_date || p.p6.scheduled_finish_date).toLocaleDateString() : 'N/A'}</span>
-                    <span className="text-destructive dark:text-destructive font-medium flex items-center gap-1 shrink-0"><Clock className="w-3 h-3" /> <span className="font-semibold">Cur:</span> {p.p6?.finish_date ? new Date(p.p6.finish_date).toLocaleDateString() : 'N/A'}</span>
-                  </div>
-                </div>
-              </div>
-            )) : (
-              <div className="text-sm text-muted-foreground flex items-center justify-center h-32 bg-muted dark:bg-gray-900/30 rounded-xl border border-dashed border-border dark:border-gray-700">No delayed projects found in current data.</div>
-            )}
-          </div>
-        </motion.div>
-
-        {/* Upcoming Deadlines / Timeline */}
-        <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6">
-          <div className="flex justify-between items-center mb-6">
-            <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2"><Clock className="w-5 h-5 text-primary" /> Upcoming Finish Dates</h3>
-          </div>
-          <div className="space-y-4">
-            {[...projects].filter((p: any) => p.p6?.finish_date && new Date(p.p6.finish_date).getTime() > Date.now()).sort((a, b) => new Date(a.p6.finish_date).getTime() - new Date(b.p6.finish_date).getTime()).slice(0, 5).map((p: any, i: number) => (
-              <div key={i} className="flex gap-4 p-2 hover:bg-muted dark:hover:bg-white/50 rounded-lg transition-colors group">
-                <div className="w-16 text-[10px] text-muted-foreground font-bold pt-1 shrink-0 uppercase tracking-[0.08em] text-right">
-                  {new Date(p.p6.finish_date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                </div>
-                <div className="relative border-l-2 border-border dark:border-gray-700 pl-4 pb-2 flex-1 min-w-0">
-                  <div className={`absolute -left-[5px] top-2 w-2 h-2 rounded-full ${(p.p6?.progress || 0) * 100 > 90 ? 'bg-success/100' : 'bg-primary'} ring-4 ring-white dark:ring-gray-900 group-hover:scale-150 transition-transform`}></div>
-                  <div className="text-[13px] text-foreground dark:text-white font-bold leading-tight pt-0.5 mb-1.5 group-hover:text-primary transition-colors line-clamp-2 break-all" title={p.p6_project_name || p.project_name}>
-                    {p.p6_project_name || p.project_name}
-                  </div>
-                  <div className="text-[11px] text-muted-foreground flex items-center gap-3">
-                    <span className="flex items-center gap-1"><Zap className="w-3 h-3 text-muted-foreground" /> <span className="text-foreground dark:text-muted-foreground font-semibold">{p.capacity_mwac || 0} MW</span></span>
-                    <span className="flex items-center gap-1"><Activity className="w-3 h-3 text-muted-foreground" /> <span className="text-foreground dark:text-muted-foreground font-semibold">{Math.round((p.p6?.progress || 0) * 100)}%</span></span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </motion.div>
-      </div>
-
-      {/* ROW 4: ECharts */}
+      {/* ROW 3: ECharts */}
       <motion.div variants={itemVariants} initial="hidden" animate="show" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bento-card p-4 flex flex-col h-[350px]">
           <div className="flex justify-between items-center mb-4">
@@ -483,6 +442,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         onClose={() => setActiveKpiModal(null)}
         activeKpi={activeKpiModal}
         projects={projects}
+        summary={summary}
       />
     </div>
   );

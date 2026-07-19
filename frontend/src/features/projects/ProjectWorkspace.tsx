@@ -1911,7 +1911,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </div>
 
                 <a
-                  href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${projectId}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
+                  href={`https://adani.unada.in/transmission/v1/dashboard/${(detail?.mapping?.cluster || 'khavda').toLowerCase().includes('rajasthan') ? 'rajasthan' : 'khavda'}/commissioning-team?project=${encodeURIComponent(project?.projectName || projectId)}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all whitespace-nowrap shrink-0 group"
@@ -1936,12 +1936,35 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               ) : (
                 <>
                   {/* TC Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <HeroMetric label="Total Lines" value={tc.summary.totalLines} icon={Network} color="text-purple-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'total' ? null : 'total')} active={expandedTcMetric === 'total'} />
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
                     <HeroMetric label="Charged" value={tc.summary.chargedLines} icon={Zap} color="text-success" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'charged' ? null : 'charged')} active={expandedTcMetric === 'charged'} />
                     <HeroMetric label="In Progress" value={tc.summary.inProgressLines} icon={Activity} color="text-primary" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'in_progress' ? null : 'in_progress')} active={expandedTcMetric === 'in_progress'} />
                     <HeroMetric label="Delayed" value={tc.summary.delayedLines} icon={AlertTriangle} color="text-destructive" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'delayed' ? null : 'delayed')} active={expandedTcMetric === 'delayed'} />
-                    <HeroMetric label="Mapped MW" value={tc.summary.totalMW ? `${tc.summary.totalMW}` : '—'} unit="MW" icon={Target} color="text-success" />
+                    
+                    {(() => {
+                      let mappedMW = tc.summary.totalMW;
+                      if (!mappedMW) {
+                        let sum = 0;
+                        const KV_TO_MW: Record<string, number> = {
+                          '800': 4000,
+                          '765': 3000,
+                          '400': 1000,
+                          '220': 400,
+                          '132': 150
+                        };
+                        const allEdges = [...(tc.khavdaEdges || []), ...(tc.rajasthanEdges || [])];
+                        allEdges.forEach(edge => {
+                          const match = String(edge.voltage || '').match(/(\d+)/);
+                          if (match) {
+                            const kv = match[1];
+                            sum += KV_TO_MW[kv] || parseInt(kv, 10);
+                          }
+                        });
+                        if (sum > 0) mappedMW = sum;
+                      }
+                      return <HeroMetric label="Mapped MW" value={mappedMW != null && mappedMW !== '' ? `${mappedMW}` : '—'} unit="MW" icon={Target} color="text-success" />
+                    })()}
+
                     <HeroMetric label="TC Project" value={mapping?.tcProjectName || '—'} icon={MapPin} color="text-warning" />
                   </div>
 
@@ -2022,7 +2045,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Zap className="w-4 h-4 text-purple-400" /> Khavda Transmission Lines
                       </h3>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-auto max-h-[400px]">
                         <table className="intel-table">
                           <thead>
                             <tr>
@@ -2052,9 +2075,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-success/100/10 text-success' :
-                                    edge.normalizedStatus === 'in_progress' ? 'bg-warning/100/10 text-warning' :
-                                      'bg-muted text-muted-foreground'
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.status || '—'}
                                   </span>
@@ -2078,7 +2102,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Network className="w-4 h-4 text-primary" /> Rajasthan Transmission Lines
                       </h3>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-auto max-h-[400px]">
                         <table className="intel-table">
                           <thead>
                             <tr>
@@ -2108,9 +2132,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs max-w-[120px] truncate">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'Completed' ? 'bg-success/100/10 text-success border border-success/20' :
-                                    edge.normalizedStatus === 'In Progress' ? 'bg-primary/100/10 text-primary border border-primary/20' :
-                                      'bg-warning/100/10 text-warning border border-warning/20'
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.normalizedStatus || edge.status || '—'}
                                   </span>
@@ -2157,9 +2182,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 </td>
                                 <td className="text-muted-foreground/70 text-xs">{n.region || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${n.status === 'Completed' || n.status === 'charged' ? 'bg-success/100/10 text-success border border-success/20' :
-                                    n.status === 'In Progress' || n.status === 'in_progress' ? 'bg-warning/100/10 text-warning border border-warning/20' :
-                                      'bg-muted text-muted-foreground border border-border'
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(n.status || '').toLowerCase() === 'charged' || (n.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (n.status || '').toLowerCase() === 'in_progress' || (n.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                    (n.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {n.status || '—'}
                                   </span>
@@ -2286,7 +2312,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             </td>
                             <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${act.status === 'In Progress' ? 'bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning' : 'bg-destructive/10 text-destructive dark:bg-destructive/100/10 dark:text-destructive'}`}>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(act.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (act.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                      'bg-red-500/10 text-red-500 border border-red-500/20'
+                                    }`}>
                                 {act.status}
                               </span>
                             </td>

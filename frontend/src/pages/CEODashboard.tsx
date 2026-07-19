@@ -300,7 +300,7 @@ export default function CEODashboard() {
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
-                    {activeTab === 'project_map' && <ProjectMap projects={dashboardData?.project_health || []} onOpenProject={handleOpenProject} />}
+                    {activeTab === 'project_map' && <ProjectMap projects={dashboardData?.projects || []} onOpenProject={handleOpenProject} />}
                     {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
                     {activeTab === 'quality' && <QualityCommandCenter />}
                     

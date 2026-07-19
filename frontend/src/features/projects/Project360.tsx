@@ -819,14 +819,14 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
           </button>
         </div>
       ) : (
-        <div className="bento-card overflow-hidden mb-8 p-0">
-          <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+        <div className="bento-card overflow-hidden mb-8 p-0 flex flex-col max-h-[700px]">
+          <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground shrink-0 z-10">
             <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
             <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
             <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>
             <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col overflow-y-auto custom-scrollbar flex-1 relative">
             {filtered.map((project, index) => (
               <div key={`${project.projectId}-${index}`} className="animate-in fade-in" style={{ animationDelay: `${index * 30}ms` }}>
                 <ProjectRow project={project} onOpen={handleOpenProject} />

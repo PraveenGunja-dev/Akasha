@@ -1058,6 +1058,7 @@ def get_project_360_detail(db: Session, project_id: str):
         "trDoneCodPending": tr_done_cod_not,
         "totalBlocksCount": total_blocks_count,
         "unitType": "WTG" if is_wind else "Blocks",
+        "cluster": mapping.cluster if mapping else None,
     }
 
     # ── TC Data ──
@@ -1071,27 +1072,60 @@ def get_project_360_detail(db: Session, project_id: str):
     
     for edge in tc_network_edges:
         edge_phase = "Unknown Phase"
+        edge_project_name = None
         if edge.projects:
             try:
                 parsed = json.loads(edge.projects)
                 if isinstance(parsed, dict):
+                    project_val = parsed.get("project") or parsed.get("projects")
+                    if isinstance(project_val, list):
+                        edge_project_name = ", ".join(str(p) for p in project_val if p)
+                    elif project_val:
+                        edge_project_name = str(project_val)
                     phases_list = parsed.get("phases", [])
                     if phases_list:
                         edge_phase = phases_list[0]
                 elif isinstance(parsed, list):
                     if parsed:
-                        edge_phase = parsed[0]
+                        if isinstance(parsed[0], dict):
+                            project_val = parsed[0].get("project") or parsed[0].get("projects")
+                            if isinstance(project_val, list):
+                                edge_project_name = ", ".join(str(p) for p in project_val if p)
+                            elif project_val:
+                                edge_project_name = str(project_val)
+                            phases_list = parsed[0].get("phases", [])
+                            if phases_list:
+                                edge_phase = phases_list[0]
+                        else:
+                            edge_phase = str(parsed[0])
             except Exception:
                 try:
                     parsed = ast.literal_eval(edge.projects)
                     if isinstance(parsed, dict):
+                        project_val = parsed.get("project") or parsed.get("projects")
+                        if isinstance(project_val, list):
+                            edge_project_name = ", ".join(str(p) for p in project_val if p)
+                        elif project_val:
+                            edge_project_name = str(project_val)
                         phases_list = parsed.get("phases", [])
+                        if phases_list:
+                            edge_phase = phases_list[0]
+                    elif isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                        project_val = parsed[0].get("project") or parsed[0].get("projects")
+                        if isinstance(project_val, list):
+                            edge_project_name = ", ".join(str(p) for p in project_val if p)
+                        elif project_val:
+                            edge_project_name = str(project_val)
+                        phases_list = parsed[0].get("phases", [])
                         if phases_list:
                             edge_phase = phases_list[0]
                 except Exception:
                     m = re.search(r'[\'"]phases[\'"]\s*:\s*\[\s*[\'"]([^\'"]+)[\'"]', edge.projects)
                     if m:
                         edge_phase = m.group(1)
+                    m2 = re.search(r'[\'"]projects?[\'"]\s*:\s*(?:\[\s*[\'"]([^\'"]+)[\'"]|[\'"]([^\'"]+)[\'"])', edge.projects)
+                    if m2:
+                        edge_project_name = m2.group(1) or m2.group(2)
             except:
                 pass
 
@@ -1101,7 +1135,7 @@ def get_project_360_detail(db: Session, project_id: str):
             "fromLabel": edge.from_label,
             "toNode": edge.to_node,
             "toLabel": edge.to_label,
-            "project": mapping.project or mapping.project_name_from_p6 if mapping else "Unmapped",
+            "project": edge_project_name or (mapping.project or mapping.project_name_from_p6 if mapping else "Unmapped"),
             "phase": edge_phase,
             "projects": edge.projects,
             "contractor": edge.contractor,
@@ -1149,6 +1183,22 @@ def get_project_360_detail(db: Session, project_id: str):
                 total_tc_mw += float(e.mw)
             except:
                 pass
+
+        # Fallback/Additional: If Mapped MW is needed from kV
+        # Standard indicative Thermal Capacities for Indian Transmission Lines
+        KV_TO_MW = {
+            '800': 4000,  # HVDC
+            '765': 3000,
+            '400': 1000,
+            '220': 400,
+            '132': 150,
+        }
+        for edge in tc_network_edges:
+            if edge.voltage:
+                match = re.search(r'(\d+)', str(edge.voltage))
+                if match:
+                    kv_str = match.group(1)
+                    total_tc_mw += KV_TO_MW.get(kv_str, float(kv_str))
 
     return {
         "mapping": mapping_info,
