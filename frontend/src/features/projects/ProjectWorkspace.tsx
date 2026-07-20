@@ -243,6 +243,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
+  const [showCodModal, setShowCodModal] = useState<'done' | 'pending' | null>(null);
   const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel'>('all');
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
@@ -726,9 +727,25 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
           <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-primary" />
           
-          <HeroMetric label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} value={detail?.mapping?.codBlocksDone || 0} icon={CheckCircle2} color="text-success" />
+          <HeroMetric 
+            label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} 
+            value={detail?.mapping?.codBlocksDone || 0} 
+            icon={CheckCircle2} 
+            color="text-success" 
+            hasBreakdown={(detail?.mapping?.codBlocksDone || 0) > 0} 
+            onClick={() => (detail?.mapping?.codBlocksDone || 0) > 0 && setShowCodModal('done')} 
+            active={showCodModal === 'done'} 
+          />
           <HeroMetric label="MW Generated" value={detail?.mapping?.mwGenerated || 0} unit="MW" icon={Zap} color="text-primary" />
-          <HeroMetric label="Pending COD" value={detail?.mapping?.pendingCodBlocks || 0} icon={AlertTriangle} color="text-warning" />
+          <HeroMetric 
+            label="Pending COD" 
+            value={detail?.mapping?.pendingCodBlocks || 0} 
+            icon={AlertTriangle} 
+            color="text-warning" 
+            hasBreakdown={(detail?.mapping?.pendingCodBlocks || 0) > 0} 
+            onClick={() => (detail?.mapping?.pendingCodBlocks || 0) > 0 && setShowCodModal('pending')} 
+            active={showCodModal === 'pending'} 
+          />
           
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-destructive' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
           <HeroMetric label="Forecast COD" value={p.forecastFinish || p.forecastMonth} icon={Calendar} color="text-primary" />
@@ -2219,6 +2236,75 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       </main>
 
       {/* ── Modals ── */}
+      {/* COD Blocks Modal */}
+      {showCodModal && detail?.mapping?.blocksStatus && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowCodModal(null)}>
+          <div className="bg-card w-full max-w-4xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-border bg-muted/30">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  {showCodModal === 'done' ? (
+                    <><CheckCircle2 className="w-5 h-5 text-success" /> COD Completed {detail.mapping.unitType || 'Blocks'}</>
+                  ) : (
+                    <><AlertTriangle className="w-5 h-5 text-warning" /> Pending COD {detail.mapping.unitType || 'Blocks'}</>
+                  )}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {showCodModal === 'done' ? 'Units that have achieved Commercial Operation Date' : 'Units waiting for Commercial Operation Date'}
+                </p>
+              </div>
+              <button onClick={() => setShowCodModal(null)} className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(detail.mapping.blocksStatus)
+                  .filter(([_, status]: any) => showCodModal === 'done' ? status.cod === 'Completed' : status.cod !== 'Completed')
+                  .sort(([a], [b]) => a.localeCompare(b, undefined, {numeric: true}))
+                  .map(([bName, status]: any) => (
+                  <div key={bName} className="p-4 rounded-xl border border-border bg-background shadow-sm space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                      <span className="font-bold text-sm truncate pr-2">{bName}</span>
+                      <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold shrink-0 ${status.cod === 'Completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                        {status.cod === 'Completed' ? 'COD Done' : 'Pending'}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <div className="text-muted-foreground mb-1 text-[10px] uppercase">COD</div>
+                        {status.cod === 'Completed' ? (
+                          <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.cod_actual_date || 'Done'}
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                            <Clock className="w-3 h-3 shrink-0" /> {status.cod_forecast_date || 'TBD'}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <div className="text-muted-foreground mb-1 text-[10px] uppercase">Trial Run</div>
+                        {status.tr === 'Completed' ? (
+                          <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.tr_actual_date || 'Done'}
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                            <Clock className="w-3 h-3 shrink-0" /> Pending
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDelayedModal && detail?.p6?.delayedActivities && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowDelayedModal(false)}>
           <div className="bg-card border border-border rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10" onClick={e => e.stopPropagation()}>

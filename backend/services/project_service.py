@@ -609,21 +609,29 @@ def get_project_360_detail(db: Session, project_id: str):
         if m:
             all_blocks.add(normalize_block(m.group(1)))
             
-    blocks_status = {b: {'cod': 'Not Started', 'tr': 'Not Started'} for b in all_blocks}
+    blocks_status = {b: {'cod': 'Not Started', 'tr': 'Not Started', 'cod_forecast_date': None, 'cod_actual_date': None, 'tr_actual_date': None} for b in all_blocks}
     
     for a in cod_acts:
         m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
         if m:
             b_name = normalize_block(m.group(1))
+            forecast = a.planned_finish_date.strftime("%Y-%m-%d") if a.planned_finish_date else None
+            actual = a.actual_finish_date.strftime("%Y-%m-%d") if a.actual_finish_date else None
+            if not blocks_status[b_name]['cod_forecast_date']:
+                blocks_status[b_name]['cod_forecast_date'] = forecast
+                
             if a.status == 'Completed':
                 blocks_status[b_name]['cod'] = 'Completed'
+                blocks_status[b_name]['cod_actual_date'] = actual
     
     for a in tr_acts:
         m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
         if m:
             b_name = normalize_block(m.group(1))
+            actual = a.actual_finish_date.strftime("%Y-%m-%d") if a.actual_finish_date else None
             if a.status == 'Completed':
                 blocks_status[b_name]['tr'] = 'Completed'
+                blocks_status[b_name]['tr_actual_date'] = actual
     
     for b, status in blocks_status.items():
         is_cod = (status['cod'] == 'Completed')
@@ -1059,6 +1067,7 @@ def get_project_360_detail(db: Session, project_id: str):
         "totalBlocksCount": total_blocks_count,
         "unitType": "WTG" if is_wind else "Blocks",
         "cluster": mapping.cluster if mapping else None,
+        "blocksStatus": blocks_status,
     }
 
     # ── TC Data ──
