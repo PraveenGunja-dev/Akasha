@@ -538,7 +538,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
                             onClick={() => {
                               if (item.id) {
                                 onClose();
-                                navigate(`/dashboard/project/${encodeURIComponent(item.id)}${activeKpi === 'Remaining PO Value' || activeKpi === 'Total PO Value' ? '?tab=sap' : ''}`);
+                                navigate(`/ceo-dashboard/project/${encodeURIComponent(item.id)}${activeKpi === 'Remaining PO Value' || activeKpi === 'Total PO Value' ? '?tab=sap' : ''}`);
                               }
                             }}
                             className={`group flex justify-between items-center px-5 py-4 rounded-2xl transition-all duration-300 ${item.id ? 'cursor-pointer hover:bg-muted dark:hover:bg-white/5 hover:shadow-md hover:scale-[1.02] border border-muted dark:border-border' : 'cursor-default border border-transparent'}`}

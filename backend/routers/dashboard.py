@@ -316,8 +316,8 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                 "status": tc_summary,
                 "has_data": bool(tc_khavda or tc_rajasthan),
                 "data": {
-                    "khavda": [{"project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
-                    "rajasthan": [{"project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
+                    "khavda": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
+                    "rajasthan": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
                 }
             }
         })

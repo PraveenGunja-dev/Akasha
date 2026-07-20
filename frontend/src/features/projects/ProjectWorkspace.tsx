@@ -489,7 +489,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         <div className="text-center">
           <AlertTriangle className="w-12 h-12 text-warning/50 mx-auto mb-4" />
           <p className="text-muted-foreground">Project not found.</p>
-          <button onClick={() => navigate('/dashboard')} className="mt-4 text-primary text-sm hover:underline">
+          <button onClick={() => navigate('/ceo-dashboard')} className="mt-4 text-primary text-sm hover:underline">
             ← Back to Dashboard
           </button>
         </div>
@@ -677,7 +677,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       {/* ── Top Bar ── */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border px-6 py-3">
         <div className="max-w-[1600px] mx-auto flex items-center gap-4">
-          <button onClick={() => onBack ? onBack() : navigate('/dashboard')}
+          <button onClick={() => onBack ? onBack() : navigate('/ceo-dashboard')}
             className="flex items-center gap-2 text-sm text-muted-foreground/70 hover:text-foreground transition-colors group">
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             Back to Portfolio

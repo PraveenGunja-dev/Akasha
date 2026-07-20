@@ -134,20 +134,22 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   }, [projects]);
 
   const transmissionOverview = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, Set<string | number>>();
     projects.forEach((p: any) => {
       const tc = p.tc?.data || {};
       ['khavda', 'rajasthan'].forEach(loc => {
         (tc[loc] || []).forEach((item: any) => {
           if (item.phase && item.voltage) {
             const key = `${item.phase} - ${item.voltage}`;
-            map.set(key, (map.get(key) || 0) + 1);
+            if (!map.has(key)) map.set(key, new Set());
+            // Use item.id for deduplication, fallback to random to count everything if no ID
+            map.get(key)!.add(item.id || Math.random());
           }
         });
       });
     });
     return Array.from(map.entries())
-      .map(([key, count]) => ({ key, count }))
+      .map(([key, idSet]) => ({ key, count: idSet.size }))
       .sort((a, b) => b.count - a.count)
       .slice(0, 6);
   }, [projects]);
@@ -410,7 +412,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
                     <Zap className={`w-4 h-4 text-success shrink-0`} />
                     <span className="line-clamp-1" title={node.key}>{node.key}</span>
                   </div>
-                  <div className="text-[11px] font-bold text-muted-foreground bg-muted dark:bg-gray-900/50 px-2.5 py-1 rounded-md shrink-0 border border-border dark:border-gray-700">{node.count} Nodes</div>
+                  <div className="text-[11px] font-bold text-muted-foreground bg-muted dark:bg-gray-900/50 px-2.5 py-1 rounded-md shrink-0 border border-border dark:border-gray-700">{node.count} Lines</div>
                 </div>
               ))}
             </div>

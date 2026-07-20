@@ -62,7 +62,7 @@ export default function CEODashboard() {
     if (!projectId && location.state?.reset) {
       setSelectedProject("All");
       // Clear the state so it doesn't trigger again on a simple refresh
-      navigate('/dashboard', { replace: true, state: {} });
+      navigate('/ceo-dashboard', { replace: true, state: {} });
     }
   }, [projectId, location, navigate]);
 
@@ -82,7 +82,7 @@ export default function CEODashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleOpenProject = (id: string) => {
-    navigate(`/dashboard/project/${id}`);
+    navigate(`/ceo-dashboard/project/${id}`);
   };
 
   // Fetch Data
@@ -193,7 +193,7 @@ export default function CEODashboard() {
       }
       setActiveTab('simulation_lab');
       sessionStorage.setItem('ceoActiveTab', 'simulation_lab');
-      navigate('/dashboard');
+      navigate('/ceo-dashboard');
     };
     window.addEventListener('open-simulation-lab', handleOpenSimulation);
     return () => window.removeEventListener('open-simulation-lab', handleOpenSimulation);
@@ -215,7 +215,7 @@ export default function CEODashboard() {
       setSimulationContext(null);
     }
     if (projectId) {
-      navigate('/dashboard');
+      navigate('/ceo-dashboard');
     }
   };
 
@@ -271,7 +271,7 @@ export default function CEODashboard() {
                 <div className="w-full h-full min-h-[calc(100vh-120px)]">
                   <ProjectWorkspace 
                     projectId={projectId} 
-                    onBack={() => navigate('/dashboard', { state: { reset: true } })} 
+                    onBack={() => navigate('/ceo-dashboard', { state: { reset: true } })} 
                   />
                 </div>
               ) : (
