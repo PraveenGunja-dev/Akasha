@@ -19,6 +19,12 @@ if os.getenv("AKASHA_DISABLE_TLS_VERIFY_FOR_DEV", "false").lower() == "true":
     import urllib3
     import requests
 
+# Optional local-only corporate proxy workaround.
+# Production should keep TLS verification enabled.
+if os.getenv("AKASHA_DISABLE_TLS_VERIFY_FOR_DEV", "false").lower() == "true":
+    import urllib3
+    import requests
+
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     old_request = requests.Session.request
 
@@ -31,6 +37,11 @@ if os.getenv("AKASHA_DISABLE_TLS_VERIFY_FOR_DEV", "false").lower() == "true":
 # Create tables only when explicitly enabled for local setup.
 if os.getenv("AKASHA_AUTO_CREATE_TABLES", "false").lower() == "true":
     models.Base.metadata.create_all(bind=engine)
+
+# Run dynamic schema upgrade only when explicitly enabled.
+if os.getenv("AKASHA_AUTO_UPGRADE_SCHEMA", "false").lower() == "true":
+    from auto_migrate import auto_upgrade_schema
+    auto_upgrade_schema()
 
 app = FastAPI(
     title="Akasha Intelligence API",

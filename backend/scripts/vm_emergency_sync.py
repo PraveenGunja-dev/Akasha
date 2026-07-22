@@ -22,6 +22,19 @@ def run_emergency_setup():
     except Exception as e:
         print(f"❌ Error creating tables: {e}")
         return
+        
+    print("🛠️ Injecting new labor unit columns into p6_project table...")
+    try:
+        with engine.connect() as conn:
+            from sqlalchemy import text
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS baseline_non_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS actual_non_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS budget_labor_units FLOAT;"))
+            conn.execute(text("ALTER TABLE p6_project ADD COLUMN IF NOT EXISTS at_completion_non_labor_units FLOAT;"))
+            conn.commit()
+            print("✅ Columns added successfully!")
+    except Exception as e:
+        print(f"⚠️ Columns likely already exist (skipping): {e}")
 
     # 1.5 Clean up previously injected dummy PULSE projects
     print("🧹 Cleaning up dummy PULSE projects injected from previous sync...")
@@ -47,6 +60,15 @@ def run_emergency_setup():
         print(f"❌ Error during Pulse Sync: {e}")
     finally:
         db.close()
+
+    # 3. Sync Transmission (TC) Data
+    print("⚡ Syncing Transmission Network (TC) Data...")
+    try:
+        from services.tc_sync import run_sync
+        run_sync()
+        print("✅ Transmission Data Sync Complete!")
+    except Exception as e:
+        print(f"❌ Error during Transmission Sync: {e}")
 
     print("\n🎉 EMERGENCY SETUP COMPLETE!")
     print("⚠️ IMPORTANT: Please completely restart your backend FastAPI server to clear the memory cache and load the new code!")

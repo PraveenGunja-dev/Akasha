@@ -520,7 +520,7 @@ const getProjectCoordinates = (project: any, index: number) => {
     return [project.latitude, project.longitude];
   }
 
-  const name = (project.name || project.projectId || "").toLowerCase();
+  const name = (project.project_name || project.p6_project_name || project.name || project.projectId || "").toLowerCase();
   const locName = (project.locationName || "").toLowerCase();
 
   // Search the curated list for a match
@@ -731,7 +731,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
 
     // Search dynamic projects
     projects.forEach((proj, idx) => {
-      const name = proj.name || proj.projectId || '';
+      const name = proj.project_name || proj.p6_project_name || proj.name || proj.projectId || '';
       if (name.toLowerCase().includes(query)) {
         const coords = getProjectCoordinates(proj, idx);
         if (coords) {
@@ -1284,14 +1284,14 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               >
                 <Popup>
                   <div className="flex flex-col gap-2 min-w-[200px]">
-                    <h3 className="font-bold text-sm">{project.name || project.projectId}</h3>
+                    <h3 className="font-bold text-sm">{project.project_name || project.p6_project_name || project.name || project.projectId || 'Unknown Project'}</h3>
                     <div className="text-xs text-foreground">
+                      <div>Capacity: {project.capacity_mwac || project.capacity || 0} MW</div>
                       <div>Status: {project.health || 'N/A'}</div>
-                      <div>Progress: {project.progress || 0}%</div>
                     </div>
                     {onOpenProject && (
                       <button
-                        onClick={() => onOpenProject(project.projectId)}
+                        onClick={() => onOpenProject(project.p6?.id || project.mapping_id || project.projectId)}
                         className="mt-2 text-xs bg-indigo-600 text-white px-3 py-1.5 rounded hover:bg-indigo-700 transition-colors"
                       >
                         View Details

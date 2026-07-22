@@ -300,6 +300,7 @@ class PulseService:
         existing_mappings = db.query(models.ProjectMapping).all()
         mapped_names = {m.project.lower() if m.project else "": m for m in existing_mappings}
         mapped_p6_names = {m.project_name_from_p6.lower() if m.project_name_from_p6 else "": m for m in existing_mappings}
+        new_mappings_added = 0
         if new_mappings_added > 0:
             db.commit()
             logger.info(f"Added {new_mappings_added} new Pulse projects to ProjectMapping.")

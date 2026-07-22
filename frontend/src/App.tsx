@@ -18,9 +18,9 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             {/* Executive / CEO Dashboard */}
-            <Route path="/dashboard" element={<CEODashboard />} />
-            <Route path="/dashboard/project/:projectId" element={<CEODashboard />} />
-            <Route path="/dashboard/knowledge-graph" element={<KnowledgeGraphPage />} />
+            <Route path="/ceo-dashboard" element={<CEODashboard />} />
+            <Route path="/ceo-dashboard/project/:projectId" element={<CEODashboard />} />
+            <Route path="/ceo-dashboard/knowledge-graph" element={<KnowledgeGraphPage />} />
             {/* PMAG Dashboard */}
             <Route path="/pmag" element={<PMAGDashboard />} />
             {/* Placeholder routes for other roles */}

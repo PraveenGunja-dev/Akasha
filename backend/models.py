@@ -68,7 +68,9 @@ class P6Project(Base):
     
     # Progress by Units
     actual_non_labor_units = Column(Float, nullable=True)  # SummaryActualNonLaborUnits
+    baseline_non_labor_units = Column(Float, nullable=True) # SummaryBaselineNonLaborUnits
     budget_labor_units = Column(Float, nullable=True)  # SummaryBudgetAtCompletionByLaborUnits
+    at_completion_non_labor_units = Column(Float, nullable=True) # SummaryAtCompletionNonLaborUnits
 
     # Activity Counts
     activity_count = Column(Integer, nullable=True)  # SummaryActivityCount

@@ -107,6 +107,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   const [executionProgress, setExecutionProgress] = useState(0);
   const [reportData, setReportData] = useState<any>(null);
   const [resolvedTasks, setResolvedTasks] = useState<number[]>([]);
+  const [selectedTasks, setSelectedTasks] = useState<number[]>([]);
 
   const steps = [
     { id: 1, label: 'Detect', status: activeStep === 1 ? 'in-progress' : activeStep > 1 ? 'completed' : 'pending' },
@@ -1143,11 +1144,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-3">Automated Actions</h3>
               {executionTasks.map((t: any, i: number) => {
                 const isResolved = resolvedTasks.includes(i);
+                const isSelected = selectedTasks.includes(i);
                 return (
-                  <div key={i} className={`flex items-center gap-4 p-3 rounded-lg border transition-all ${isResolved ? 'bg-success/10/50 border-success/20' : 'bg-muted border-border opacity-60 hover:opacity-100'}`}>
+                  <div key={i} className={`flex items-center gap-4 p-3 rounded-lg border transition-all ${isResolved ? 'bg-success/10/50 border-success/20' : isSelected ? 'bg-primary/5 border-primary/30' : 'bg-muted border-border opacity-60 hover:opacity-100'}`}>
                     <button 
-                      onClick={() => !isResolved && setResolvedTasks(prev => [...prev, i])}
-                      className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 border transition-all cursor-pointer ${isResolved ? 'bg-success/100 text-white border-emerald-500 shadow-sm' : 'bg-background text-transparent border-muted-foreground hover:border-primary'}`}
+                      onClick={() => {
+                        if (isResolved) return;
+                        setSelectedTasks(prev => prev.includes(i) ? prev.filter(x => x !== i) : [...prev, i]);
+                      }}
+                      className={`w-6 h-6 rounded-md flex items-center justify-center shrink-0 border transition-all cursor-pointer ${isResolved ? 'bg-success/100 text-white border-emerald-500 shadow-sm' : isSelected ? 'bg-primary text-white border-primary shadow-sm' : 'bg-background text-transparent border-muted-foreground hover:border-primary'}`}
                     >
                       <Check className="w-4 h-4" />
                     </button>
@@ -1165,6 +1170,20 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                 );
               })}
             </div>
+
+            {executionTasks.length > 0 && resolvedTasks.length < executionTasks.length && (
+              <button
+                onClick={() => {
+                  if (selectedTasks.length === 0) return;
+                  setResolvedTasks(prev => Array.from(new Set([...prev, ...selectedTasks])));
+                  setSelectedTasks([]);
+                }}
+                disabled={selectedTasks.length === 0}
+                className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <CheckCircle2 className="w-5 h-5 fill-current" /> Execute Selected Actions ({selectedTasks.length})
+              </button>
+            )}
 
             {executionTasks.length > 0 && resolvedTasks.length === executionTasks.length && (
               <div className="mt-8 bg-success/10 dark:bg-success/100/10 border border-success/20 dark:border-success/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">

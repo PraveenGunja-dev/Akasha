@@ -1,0 +1,2178 @@
+[
+    {
+        "project": "ACL",
+        "spv_name": "ACL",
+        "project_id": "FY25-P08",
+        "project_name_from_p6": "ACL_A1_FT_125MW_GROUP_Commissioned",
+        "plot_no": "A-1",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 125.0,
+        "ol": "1.36",
+        "capacity_mwdc": 170.0,
+        "spv_plant_code": "2303",
+        "agel": "2303",
+        "module_wbs": "GWL64.2303.M.00001",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-08",
+        "tc_progress": null
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "AGE24L",
+        "project_id": "FY25-P06",
+        "project_name_from_p6": "AGE24L_S05_HSAT_150MW_MERCHANT_Commissioned",
+        "plot_no": "S-5",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 150.0,
+        "ol": "1.35",
+        "capacity_mwdc": 203.0,
+        "spv_plant_code": "682D",
+        "agel": "51ZG",
+        "module_wbs": "H-51GA-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-06",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "AGE24L",
+        "project_id": "FY25-P07",
+        "project_name_from_p6": "AGE24L_A14_HSAT_150MW_MERCHANT_Commissioned",
+        "plot_no": "A-14",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 150.0,
+        "ol": "1.35",
+        "capacity_mwdc": 203.0,
+        "spv_plant_code": "682D",
+        "agel": "51ZG",
+        "module_wbs": "H-51GB-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-07",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "AGE25BL",
+        "project_id": "FY25-P03",
+        "project_name_from_p6": "ARE48L_S08_HSAT_100MW_MERCHANT",
+        "plot_no": "S-8",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 100.0,
+        "ol": "1.35",
+        "capacity_mwdc": 135.0,
+        "spv_plant_code": "678C",
+        "agel": "51YU",
+        "module_wbs": "H-51Y1-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-03",
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "AGE27CL_PSS12_FINAL",
+        "project_name_from_p6": "AGE27CL_PSS12",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "BESS",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "AGE27BL_PSS11_FINAL",
+        "project_name_from_p6": "AGES11_PSS11",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "BESS",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "ARE35L_PSS10B_FINAL",
+        "project_name_from_p6": "ARE35L_PSS10B",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "BESS",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "AGE35L_PSS8B_FINAL",
+        "project_name_from_p6": "AGE35L_PSS8B",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "BESS",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "AGE44L_PSS5B_FINAL",
+        "project_name_from_p6": "AGE44L_PSS5B",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "BESS",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "AGE27AL_PSS09_FINAL",
+        "project_name_from_p6": "AGE27AL_PSS09",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "BESS",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - AGE25CL PSS-11 (36 Loc.) & PSS-14 (13 Loc.)",
+        "spv_name": "AGE25CL",
+        "project_id": "AGE25CL",
+        "project_name_from_p6": "AGE25CL PSS-11 (36 Loc.) & PSS-14 (13 Loc.)",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 254.8,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_3074",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - AGE26AL PSS-12 (27 Loc.) & PSS-14 (60 Loc.)",
+        "spv_name": "AGE26AL",
+        "project_id": "AGE26AL",
+        "project_name_from_p6": "AGE26AL PSS-12 (27 Loc.) & PSS-14 (60 Loc.)",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 452.40000000000003,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_3075",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - ARE3L PSS-08 (05 Loc.)",
+        "spv_name": "ARE3L",
+        "project_id": "ARE3L",
+        "project_name_from_p6": "ARE3L PSS-08 (05 Loc.)",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 26.0,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_3072",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - Digital DPR - Demo AGE26AL PSS-12 (27 Loc.) & PSS-14 (60 Loc.)",
+        "spv_name": "Digital",
+        "project_id": "Demo DPR Wind",
+        "project_name_from_p6": "Digital DPR - Demo AGE26AL PSS-12 (27 Loc.) & PSS-14 (60 Loc.)",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 452.40000000000003,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_6733",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "MLP T3 AP",
+        "spv_name": "AGE25CL",
+        "project_id": "FY25-P15",
+        "project_name_from_p6": "AGE25CL_A06_FT_425MW_PPA",
+        "plot_no": "A-6",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 425.0,
+        "ol": "1.36",
+        "capacity_mwdc": 578.0,
+        "spv_plant_code": "6061",
+        "agel": "51ZQ",
+        "module_wbs": "H-51ZQ-03-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P-15",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "MLP T1 J&K",
+        "spv_name": "AGE26AL",
+        "project_id": "FY25-P10",
+        "project_name_from_p6": "AGE26AL_A16_FT_50MW_PPA_Commissioned",
+        "plot_no": "A-16",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 50.0,
+        "ol": "1.33",
+        "capacity_mwdc": 66.5,
+        "spv_plant_code": "6031",
+        "agel": "51Y9",
+        "module_wbs": "H-51Y9-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "P-10",
+        "tc_progress": {
+            "delayed": {
+                "count": 0,
+                "remarks": []
+            },
+            "erection": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "stringing": {
+                "total": 109.0,
+                "percent": 100.0,
+                "completed": 109.0
+            },
+            "foundation": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "linesCharged": {
+                "count": 1,
+                "total": 1
+            }
+        }
+    },
+    {
+        "project": "MLP T1 CG",
+        "spv_name": "AGE26AL",
+        "project_id": "FY25-P11",
+        "project_name_from_p6": "AGE26AL_A16_FT_200MW_PPA_Commissioned",
+        "plot_no": "A-16",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 200.0,
+        "ol": "1.32",
+        "capacity_mwdc": 264.0,
+        "spv_plant_code": "6031",
+        "agel": "51Y9",
+        "module_wbs": "H-51YA-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "P-11",
+        "tc_progress": {
+            "delayed": {
+                "count": 0,
+                "remarks": []
+            },
+            "erection": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "stringing": {
+                "total": 109.0,
+                "percent": 100.0,
+                "completed": 109.0
+            },
+            "foundation": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "linesCharged": {
+                "count": 1,
+                "total": 1
+            }
+        }
+    },
+    {
+        "project": "Wind - AHEJ5L PSS-05 (39 Loc.)",
+        "spv_name": "AHEJ5L",
+        "project_id": "AHEJ5L",
+        "project_name_from_p6": "AHEJ5L PSS-05 (39 Loc.)",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 202.8,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_3076",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "MLP T1 TN",
+        "spv_name": "AGE26AL",
+        "project_id": "FY25-P12",
+        "project_name_from_p6": "AGE26AL_A16C_FT_167MW_PPA_Commissioned",
+        "plot_no": "A-16",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 167.0,
+        "ol": "1.33",
+        "capacity_mwdc": 222.11,
+        "spv_plant_code": "6031",
+        "agel": "51Y9",
+        "module_wbs": "H-51YB-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "P-12",
+        "tc_progress": {
+            "delayed": {
+                "count": 0,
+                "remarks": []
+            },
+            "erection": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "stringing": {
+                "total": 109.0,
+                "percent": 100.0,
+                "completed": 109.0
+            },
+            "foundation": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "linesCharged": {
+                "count": 1,
+                "total": 1
+            }
+        }
+    },
+    {
+        "project": "MLP T1 OR",
+        "spv_name": "AGE26AL",
+        "project_id": "FY25-P13",
+        "project_name_from_p6": "AGE26AL_A16_FT_333MW_PPA_Commissioned",
+        "plot_no": "A-16",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 333.0,
+        "ol": "1.32",
+        "capacity_mwdc": 439.56,
+        "spv_plant_code": "6031",
+        "agel": "51Y9",
+        "module_wbs": "H-51YC-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "P-13",
+        "tc_progress": {
+            "delayed": {
+                "count": 0,
+                "remarks": []
+            },
+            "erection": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "stringing": {
+                "total": 109.0,
+                "percent": 100.0,
+                "completed": 109.0
+            },
+            "foundation": {
+                "total": 0,
+                "percent": 0,
+                "completed": 0
+            },
+            "linesCharged": {
+                "count": 1,
+                "total": 1
+            }
+        }
+    },
+    {
+        "project": "AGEL Hybrid Merchant",
+        "spv_name": "AGE26BL",
+        "project_id": "FY25-P05",
+        "project_name_from_p6": "AGE26BL_S05_HSAT_292MW_MERCHANT_HYBRID_Commissioned",
+        "plot_no": "S-5",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 292.0,
+        "ol": "1.35",
+        "capacity_mwdc": 394.0,
+        "spv_plant_code": "6057",
+        "agel": "51YR",
+        "module_wbs": "H-51RY-03-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-05",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "AHEJ5L",
+        "project_id": "FY25-P04",
+        "project_name_from_p6": "AHEJ5L_A15a_HSAT_150MW_MERCHANT",
+        "plot_no": "A-15a",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 150.0,
+        "ol": "1.35",
+        "capacity_mwdc": 203.0,
+        "spv_plant_code": "6885",
+        "agel": "51Z6",
+        "module_wbs": "H-51Z6-03-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-04",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "AGEL Hybrid Merchant",
+        "spv_name": "AHEJ5L",
+        "project_id": "FY26-P02",
+        "project_name_from_p6": "APSEZ_A01_D_HSAT_25MW_GROUP",
+        "plot_no": "S-4",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 300.0,
+        "ol": "1.35",
+        "capacity_mwdc": 405.0,
+        "spv_plant_code": "6885",
+        "agel": "51Z6",
+        "module_wbs": "H-516A-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "Enrich Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-02",
+        "tc_progress": null
+    },
+    {
+        "project": "MLP T1 TR",
+        "spv_name": "AGE26AL",
+        "project_id": "FY25-P14",
+        "project_name_from_p6": "AGE26AL_A10a_FT_50MW_PPA_Commissioned",
+        "plot_no": "A10a",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 50.0,
+        "ol": "1.33",
+        "capacity_mwdc": 66.5,
+        "spv_plant_code": "6031",
+        "agel": "51Y9",
+        "module_wbs": "H-519Y-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "P-14",
+        "tc_progress": {
+            "delayed": {
+                "count": 1,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1861,
+                "percent": 99.2,
+                "completed": 1847
+            },
+            "stringing": {
+                "total": 1021.8,
+                "percent": 85.8,
+                "completed": 876.5
+            },
+            "foundation": {
+                "total": 1861,
+                "percent": 100.0,
+                "completed": 1861
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 7
+            }
+        }
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "ARE3L",
+        "project_id": "FY25-P01",
+        "project_name_from_p6": "ARE3L_A06_HSAT_25MW_MERCHANT_Commissioned",
+        "plot_no": "A-6",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 25.0,
+        "ol": "1.35",
+        "capacity_mwdc": 34.0,
+        "spv_plant_code": "9221",
+        "agel": "51YS",
+        "module_wbs": "H-51YS-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-01",
+        "tc_progress": {
+            "delayed": {
+                "count": 1,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1861,
+                "percent": 99.2,
+                "completed": 1847
+            },
+            "stringing": {
+                "total": 1021.8,
+                "percent": 85.8,
+                "completed": 876.5
+            },
+            "foundation": {
+                "total": 1861,
+                "percent": 100.0,
+                "completed": 1861
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 7
+            }
+        }
+    },
+    {
+        "project": "MLP T1",
+        "spv_name": "AGE25BL",
+        "project_id": "FY25-BANDHA_500MW",
+        "project_name_from_p6": "AGE25BL_BANDHA_FT_500MW_PPA",
+        "plot_no": "",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 500.0,
+        "ol": "1.39",
+        "capacity_mwdc": 695.0,
+        "spv_plant_code": "678B",
+        "agel": "51YW",
+        "module_wbs": "H-51YW-01-01",
+        "age6l": "62RF",
+        "cluster": "Solar Rajasthan",
+        "subcluster": "None",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "X",
+        "tc_progress": {}
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "ASEJ6PL",
+        "project_id": "FY25-P02",
+        "project_name_from_p6": "ASEJ6PL_A06_HSAT_35MW_MERCHANT_Commissioned",
+        "plot_no": "A-6",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 35.0,
+        "ol": "1.35",
+        "capacity_mwdc": 47.0,
+        "spv_plant_code": "9844",
+        "agel": "51YT",
+        "module_wbs": "H-51YT-01-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P-02",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "AESL PPA (C&I) - Solar",
+        "spv_name": "ARE41L",
+        "project_id": "FY26-P01",
+        "project_name_from_p6": "ARE41L_A01-C_HSAT_25MW_MERCHANT",
+        "plot_no": "A01c",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 25.0,
+        "ol": "1.35",
+        "capacity_mwdc": 33.75,
+        "spv_plant_code": "51F4",
+        "agel": "51ZF",
+        "module_wbs": "H-51FF-01-01",
+        "age6l": "H-624W",
+        "cluster": "Solar Khavda",
+        "subcluster": "Enrich Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-01",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "Group - Cement (Hybrid - Solar)",
+        "spv_name": "ACL",
+        "project_id": "FY26-P03",
+        "project_name_from_p6": "ACL_A01_E_FT_25MW_GROUP_NEW",
+        "plot_no": "A01e",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 25.0,
+        "ol": "1.36",
+        "capacity_mwdc": 34.0,
+        "spv_plant_code": "",
+        "agel": "",
+        "module_wbs": "B-0331-01-01",
+        "age6l": "",
+        "cluster": "Solar Khavda",
+        "subcluster": "Enrich Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-03",
+        "tc_progress": null
+    },
+    {
+        "project": "AGEL Merchant (Solar)",
+        "spv_name": "AHEJ5L",
+        "project_id": "FY26-P05",
+        "project_name_from_p6": "AHEJ5L_S04_HSAT_300MW_MERCHANT_HYBRID",
+        "plot_no": "S04",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 300.0,
+        "ol": "1.35",
+        "capacity_mwdc": 405.0,
+        "spv_plant_code": "688H",
+        "agel": "51Z6",
+        "module_wbs": "H-516A-01-01",
+        "age6l": "H-623T",
+        "cluster": "Solar Khavda",
+        "subcluster": "Hild Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P4-05",
+        "tc_progress": null
+    },
+    {
+        "project": "MSEDCL PPA Ph-1",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P06",
+        "project_name_from_p6": "ARE55L_A15b_HSAT_50MW_PPA",
+        "plot_no": "A15b",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 50.0,
+        "ol": "1.35",
+        "capacity_mwdc": 67.5,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-546S-01-01",
+        "age6l": "H-624N",
+        "cluster": "Solar Khavda",
+        "subcluster": "Sterling and Wilson",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-07",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "TPL-D PPA",
+        "spv_name": "ARE8L",
+        "project_id": "FY26-P08",
+        "project_name_from_p6": "ARE8L_A02_HSAT_150MW_PPA_TPL",
+        "plot_no": "A02",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 150.0,
+        "ol": "1.35",
+        "capacity_mwdc": 202.5,
+        "spv_plant_code": "9361",
+        "agel": "511T",
+        "module_wbs": "H-51W8-01-01",
+        "age6l": "H-624H",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-08",
+        "tc_progress": {
+            "delayed": {
+                "count": 1,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1861,
+                "percent": 99.2,
+                "completed": 1847
+            },
+            "stringing": {
+                "total": 1021.8,
+                "percent": 85.8,
+                "completed": 876.5
+            },
+            "foundation": {
+                "total": 1861,
+                "percent": 100.0,
+                "completed": 1861
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 7
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-1",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P09",
+        "project_name_from_p6": "ARE55L_A01_HSAT_150MW_Group_NEW",
+        "plot_no": "A01",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 150.0,
+        "ol": "1.35",
+        "capacity_mwdc": 202.5,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S2-01-01",
+        "age6l": "H-624A-275",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P4-09",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-1",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P10",
+        "project_name_from_p6": "ARE55L_A02_HSAT_125MW",
+        "plot_no": "A02",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 125.0,
+        "ol": "1.35",
+        "capacity_mwdc": 168.75,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S2-01-01",
+        "age6l": "H-624A-275",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-10",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-2 & MSEDCL PPA Ph-3",
+        "spv_name": "ARE55L",
+        "project_id": "FY27-P06&07",
+        "project_name_from_p6": "ARE55L_S02A_HSAT_250 MW_PPA",
+        "plot_no": "S02a",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 250.0,
+        "ol": "1.35",
+        "capacity_mwdc": 337.5,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S4-01-01",
+        "age6l": "H-624L",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "not allocate",
+        "source_of_origin": "India",
+        "priority": "P5-06&07",
+        "tc_progress": null
+    },
+    {
+        "project": "MLP T4 PPA - AP",
+        "spv_name": "AGE26BL",
+        "project_id": "FY26-P12-5",
+        "project_name_from_p6": "AGE26BL_A03_HSAT_250MW_LTP_T4_AP_NEW",
+        "plot_no": "A03",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 250.0,
+        "ol": "1.35",
+        "capacity_mwdc": 337.5,
+        "spv_plant_code": "6051",
+        "agel": "51Z7",
+        "module_wbs": "H-5177-01-01",
+        "age6l": "H-624R",
+        "cluster": "Solar Khavda",
+        "subcluster": "Enrich Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-11",
+        "tc_progress": {
+            "delayed": {
+                "count": 1,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1861,
+                "percent": 99.2,
+                "completed": 1847
+            },
+            "stringing": {
+                "total": 1130.8,
+                "percent": 87.2,
+                "completed": 985.5
+            },
+            "foundation": {
+                "total": 1861,
+                "percent": 100.0,
+                "completed": 1861
+            },
+            "linesCharged": {
+                "count": 8,
+                "total": 8
+            }
+        }
+    },
+    {
+        "project": "MLP T4 PPA - AP",
+        "spv_name": "AGE24L",
+        "project_id": "FY26-P12",
+        "project_name_from_p6": "AGE24L_A03_HSAT_250MW",
+        "plot_no": "A03",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 250.0,
+        "ol": "1.35",
+        "capacity_mwdc": 337.5,
+        "spv_plant_code": "682A",
+        "agel": "51XS",
+        "module_wbs": "H-51XS-01-01",
+        "age6l": "H-624X",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P4-12",
+        "tc_progress": {
+            "delayed": {
+                "count": 1,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1861,
+                "percent": 99.2,
+                "completed": 1847
+            },
+            "stringing": {
+                "total": 1130.8,
+                "percent": 87.2,
+                "completed": 985.5
+            },
+            "foundation": {
+                "total": 1861,
+                "percent": 100.0,
+                "completed": 1861
+            },
+            "linesCharged": {
+                "count": 8,
+                "total": 8
+            }
+        }
+    },
+    {
+        "project": "SECI VIII PPA",
+        "spv_name": "ASEJ6PL",
+        "project_id": "FY26-P14",
+        "project_name_from_p6": "ASEJ6PL_S07_FT_300MW_PPA",
+        "plot_no": "S07",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 300.0,
+        "ol": "1.36",
+        "capacity_mwdc": 408.00000000000006,
+        "spv_plant_code": "984C",
+        "agel": "51YB",
+        "module_wbs": "",
+        "age6l": "H-624T",
+        "cluster": "Solar Khavda",
+        "subcluster": "Bondada Engineering Limited",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P4-14",
+        "tc_progress": {
+            "delayed": {
+                "count": 5,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1847,
+                "percent": 47.0,
+                "completed": 868
+            },
+            "stringing": {
+                "total": 700.8,
+                "percent": 15.7,
+                "completed": 110.0
+            },
+            "foundation": {
+                "total": 1847,
+                "percent": 81.3,
+                "completed": 1501
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 5
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-1",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P17",
+        "project_name_from_p6": "ARE55L_S02A_HSAT_175_MW_PPA",
+        "plot_no": "S02a",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 175.0,
+        "ol": "1.35",
+        "capacity_mwdc": 236.25000000000003,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S3-01-01",
+        "age6l": "H-624J - 175",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-17",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "MLP T1  PPA - BEST",
+        "spv_name": "AGE26AL",
+        "project_id": "FY26-P18",
+        "project_name_from_p6": "AGE26AL_S06A_FT_234MW_PPA",
+        "plot_no": "S06a",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 234.0,
+        "ol": "1.36",
+        "capacity_mwdc": 318.24,
+        "spv_plant_code": "603C",
+        "agel": "51Y9",
+        "module_wbs": "H-51YY-01-01",
+        "age6l": "H-624Y",
+        "cluster": "Solar Khavda",
+        "subcluster": "KPI Green Energy Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-18",
+        "tc_progress": {
+            "delayed": {
+                "count": 5,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1847,
+                "percent": 47.0,
+                "completed": 868
+            },
+            "stringing": {
+                "total": 700.8,
+                "percent": 15.7,
+                "completed": 110.0
+            },
+            "foundation": {
+                "total": 1847,
+                "percent": 81.3,
+                "completed": 1501
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 5
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-1",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P19",
+        "project_name_from_p6": "ARE55L_S01_HSAT_100_MW_PPA",
+        "plot_no": "S01",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 100.0,
+        "ol": "1.35",
+        "capacity_mwdc": 135.0,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S9-01-01",
+        "age6l": "H-624G",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "SEA",
+        "priority": "P4-19",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": "NHPC BOO",
+        "spv_name": "ASEB1PL",
+        "project_id": "FY25-BAIYA_600MW",
+        "project_name_from_p6": "ASEB1PL_BAIYA_FT_600MW_PPA",
+        "plot_no": "",
+        "category": null,
+        "mms_type": "FT",
+        "capacity_mwac": 600.0,
+        "ol": "1.36",
+        "capacity_mwdc": 816.0000000000001,
+        "spv_plant_code": "9712",
+        "agel": "51AW",
+        "module_wbs": "H-51AW-03-01",
+        "age6l": "621R",
+        "cluster": "Solar Rajasthan",
+        "subcluster": "None",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "X",
+        "tc_progress": {}
+    },
+    {
+        "project": "MSEDCL PPA Ph-2",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P20",
+        "project_name_from_p6": "ARE55L_S02A_HSAT_50_MW_PPA",
+        "plot_no": "S02a",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 50.0,
+        "ol": "1.35",
+        "capacity_mwdc": 67.5,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-545S-01-01",
+        "age6l": "H-624K - 50",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-20",
+        "tc_progress": {
+            "delayed": {
+                "count": 5,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1847,
+                "percent": 47.0,
+                "completed": 868
+            },
+            "stringing": {
+                "total": 700.8,
+                "percent": 15.7,
+                "completed": 110.0
+            },
+            "foundation": {
+                "total": 1847,
+                "percent": 81.3,
+                "completed": 1501
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 5
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-2",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P22",
+        "project_name_from_p6": "ARE55L_S01_HSAT_200_MW_PPA",
+        "plot_no": "S01",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 200.0,
+        "ol": "1.35",
+        "capacity_mwdc": 270.0,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S9-01-01",
+        "age6l": "H-624G",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-22",
+        "tc_progress": {
+            "delayed": {
+                "count": 5,
+                "remarks": []
+            },
+            "erection": {
+                "total": 1847,
+                "percent": 47.0,
+                "completed": 868
+            },
+            "stringing": {
+                "total": 700.8,
+                "percent": 15.7,
+                "completed": 110.0
+            },
+            "foundation": {
+                "total": 1847,
+                "percent": 81.3,
+                "completed": 1501
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 5
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-2",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P23",
+        "project_name_from_p6": "ARE55L_A18_HSAT_600MW_PPA",
+        "plot_no": "A18",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 600.0,
+        "ol": "1.35",
+        "capacity_mwdc": 810.0,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-542S-01-01",
+        "age6l": "H-624E",
+        "cluster": "Solar Khavda",
+        "subcluster": "Sterling and Wilson",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-23",
+        "tc_progress": null
+    },
+    {
+        "project": "MSEDCL PPA Ph-3",
+        "spv_name": "ARE55L",
+        "project_id": "FY27-P03&04",
+        "project_name_from_p6": "AGEL_SE14_HSAT_500MW_HILD",
+        "plot_no": "SE14",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 500.0,
+        "ol": "1.35",
+        "capacity_mwdc": 675.0,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-544S-01-01",
+        "age6l": "H-624O",
+        "cluster": "Solar Khavda",
+        "subcluster": "Hild Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P5-04",
+        "tc_progress": null
+    },
+    {
+        "project": "MSEDCL PPA Ph-3",
+        "spv_name": "ARE55L",
+        "project_id": "FY27-P05",
+        "project_name_from_p6": "AGEL_S10_287.5_MW_HSAT",
+        "plot_no": "S10",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 287.5,
+        "ol": "1.35",
+        "capacity_mwdc": 388.125,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-541S-01-01",
+        "age6l": "H-624F",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P5-05",
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "FY26-P15",
+        "project_name_from_p6": "ARE55L_S09_HSAT_400MW_PPA",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "Solar Khavda",
+        "subcluster": "Sterling and Wilson",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "FY26-P13",
+        "project_name_from_p6": "ASEJ6PL_S07_FT_300MW_PPA",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "Solar Khavda",
+        "subcluster": "Bondada Engineering Limited",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - AGE25CL PSS-18 (49 Loc.) - Phase-4",
+        "spv_name": "AGE25CL",
+        "project_id": "AGE25CL (PH-4)",
+        "project_name_from_p6": "AGE25CL PSS-18 (49 Loc.) - Phase-4",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 254.8,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_4707",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - ASEJ6PL PSS-08 (12 Loc.)",
+        "spv_name": "ASEJ6PL",
+        "project_id": "ASEJ6PL",
+        "project_name_from_p6": "ASEJ6PL PSS-08 (12 Loc.)",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 62.400000000000006,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_3073",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - MANDVI",
+        "spv_name": "MANDVI",
+        "project_id": "MDW",
+        "project_name_from_p6": "MANDVI",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 384.8,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": "WIND_3105",
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "Wind - MUNDRA NORTH-NEW",
+        "spv_name": "MUNDRA NORTH-NEW",
+        "project_id": "MNW - B3",
+        "project_name_from_p6": "MUNDRA NORTH-NEW",
+        "plot_no": null,
+        "category": null,
+        "mms_type": "Wind",
+        "capacity_mwac": 509.6,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": "Wind",
+        "age6l": null,
+        "cluster": "Wind",
+        "subcluster": null,
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "MLP T3 AP",
+        "spv_name": "AGE25CL",
+        "project_id": "FY25-P09",
+        "project_name_from_p6": "AGE25CL_A06_HSAT_75MW_PPA_Commissioned",
+        "plot_no": "A-6",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 75.0,
+        "ol": "1.35",
+        "capacity_mwdc": 101.0,
+        "spv_plant_code": "6061",
+        "agel": "51ZQ",
+        "module_wbs": "H-51ZQ-03-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P-09",
+        "tc_progress": {
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            },
+            "erection": {
+                "total": 3708,
+                "percent": 73.2,
+                "completed": 2715
+            },
+            "stringing": {
+                "total": 1722.6,
+                "percent": 57.3,
+                "completed": 986.5
+            },
+            "foundation": {
+                "total": 3708,
+                "percent": 90.7,
+                "completed": 3362
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            }
+        }
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "FY27-P16-3-2",
+        "project_name_from_p6": "NHPC EPC 600 MW Khavda-I",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": null
+    },
+    {
+        "project": "AGEL Merchant",
+        "spv_name": "AHEJ5L",
+        "project_id": "FY25-P18&19&20",
+        "project_name_from_p6": "AGE25BL_A15a_HSAT_50MW_MERCHANT",
+        "plot_no": "A15a",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 50.0,
+        "ol": "1.35",
+        "capacity_mwdc": 67.5,
+        "spv_plant_code": "688H",
+        "agel": "51Z6",
+        "module_wbs": "H-51Z6-03-01",
+        "age6l": "H-623J",
+        "cluster": "Solar Khavda",
+        "subcluster": "Hild Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P3-04",
+        "tc_progress": null
+    },
+    {
+        "project": "MSEDCL PPA Ph-3",
+        "spv_name": "ARE55L",
+        "project_id": "FY27-P01&P02",
+        "project_name_from_p6": "ARE55L_S03_HSAT_500MW_MERCHANT",
+        "plot_no": "S03",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 500.0,
+        "ol": "1.35",
+        "capacity_mwdc": 675.0,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S6-01-01",
+        "age6l": "H-624B",
+        "cluster": "Solar Khavda",
+        "subcluster": "Hild Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P5-01",
+        "tc_progress": null
+    },
+    {
+        "project": "AGEL Merchant (Solar) - TTE",
+        "spv_name": "AE2L",
+        "project_id": "FY26-P21",
+        "project_name_from_p6": "AE2L_S03_HSAT_150MW_MERCHANT",
+        "plot_no": "S03",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 150.0,
+        "ol": "1.35",
+        "capacity_mwdc": 202.5,
+        "spv_plant_code": "61B2",
+        "agel": "51W5",
+        "module_wbs": "H-51W5-01-01",
+        "age6l": "H-624C",
+        "cluster": "Solar Khavda",
+        "subcluster": "Enrich Energy Private Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-21",
+        "tc_progress": {
+            "foundation": {
+                "percent": 37.7,
+                "completed": 3288,
+                "total": 8717
+            },
+            "erection": {
+                "percent": 16.6,
+                "completed": 1445,
+                "total": 8721
+            },
+            "stringing": {
+                "percent": 3.5,
+                "completed": 136.6,
+                "total": 3889.4
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 24
+            },
+            "delayed": {
+                "count": 13,
+                "remarks": []
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-3",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P24",
+        "project_name_from_p6": "ARE55L_S02B_HSAT_12.5_MW_PPA",
+        "plot_no": "S02b",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 112.5,
+        "ol": "1.35",
+        "capacity_mwdc": 151.875,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-54S5-01-01",
+        "age6l": "H-624M",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-24",
+        "tc_progress": {
+            "foundation": {
+                "percent": 37.7,
+                "completed": 3288,
+                "total": 8717
+            },
+            "erection": {
+                "percent": 16.6,
+                "completed": 1445,
+                "total": 8721
+            },
+            "stringing": {
+                "percent": 3.5,
+                "completed": 136.6,
+                "total": 3889.4
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 24
+            },
+            "delayed": {
+                "count": 13,
+                "remarks": []
+            }
+        }
+    },
+    {
+        "project": "AGEL Merchant (Solar) - TTE",
+        "spv_name": "AE3L",
+        "project_id": "FY26-P25",
+        "project_name_from_p6": "AE3L_S01_HSAT_75_MW_MERCHANT",
+        "plot_no": "S01",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 75.0,
+        "ol": "1.35",
+        "capacity_mwdc": 101.25,
+        "spv_plant_code": "61C2",
+        "agel": "51W9",
+        "module_wbs": "H-51WA-01-01",
+        "age6l": "H-624I",
+        "cluster": "Solar Khavda",
+        "subcluster": "Larsen and Toubro Limited",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-25",
+        "tc_progress": {
+            "foundation": {
+                "percent": 37.7,
+                "completed": 3288,
+                "total": 8717
+            },
+            "erection": {
+                "percent": 16.6,
+                "completed": 1445,
+                "total": 8721
+            },
+            "stringing": {
+                "percent": 3.5,
+                "completed": 136.6,
+                "total": 3889.4
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 24
+            },
+            "delayed": {
+                "count": 13,
+                "remarks": []
+            }
+        }
+    },
+    {
+        "project": "MSEDCL PPA Ph-3",
+        "spv_name": "ARE55L",
+        "project_id": "FY26-P26",
+        "project_name_from_p6": "ARE55L_S10_HSAT_50 MW_PPA",
+        "plot_no": "S10",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 50.0,
+        "ol": "1.35",
+        "capacity_mwdc": 67.5,
+        "spv_plant_code": "51P1",
+        "agel": "51Y1",
+        "module_wbs": "H-543S-01-01",
+        "age6l": "",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-26",
+        "tc_progress": {
+            "foundation": {
+                "percent": 37.7,
+                "completed": 3288,
+                "total": 8717
+            },
+            "erection": {
+                "percent": 16.6,
+                "completed": 1445,
+                "total": 8721
+            },
+            "stringing": {
+                "percent": 3.5,
+                "completed": 136.6,
+                "total": 3889.4
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 24
+            },
+            "delayed": {
+                "count": 13,
+                "remarks": []
+            }
+        }
+    },
+    {
+        "project": null,
+        "spv_name": null,
+        "project_id": "FY26-LUDBAY_150MW",
+        "project_name_from_p6": "ARE8L_LUDBAY_FT_150MW_PPA",
+        "plot_no": null,
+        "category": null,
+        "mms_type": null,
+        "capacity_mwac": null,
+        "ol": null,
+        "capacity_mwdc": null,
+        "spv_plant_code": null,
+        "agel": null,
+        "module_wbs": null,
+        "age6l": null,
+        "cluster": "Solar Rajasthan",
+        "subcluster": "None",
+        "not_allocated": null,
+        "source_of_origin": null,
+        "priority": null,
+        "tc_progress": {}
+    },
+    {
+        "project": "MLP AP New",
+        "spv_name": "ARE57L",
+        "project_id": "FY26-P04",
+        "project_name_from_p6": "ARE57L_A12_HSAT_350MW_PPA",
+        "plot_no": "A-12",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 350.0,
+        "ol": "1.35",
+        "capacity_mwdc": 472.50000000000006,
+        "spv_plant_code": "51R1",
+        "agel": "51Y4",
+        "module_wbs": "H-51Y4-03-01",
+        "age6l": "6211",
+        "cluster": "Solar Khavda",
+        "subcluster": "AGEL Projects",
+        "not_allocated": "",
+        "source_of_origin": "China",
+        "priority": "P4-04",
+        "tc_progress": {
+            "foundation": {
+                "percent": 35.7,
+                "completed": 1826,
+                "total": 5115
+            },
+            "erection": {
+                "percent": 17.0,
+                "completed": 868,
+                "total": 5115
+            },
+            "stringing": {
+                "percent": 4.3,
+                "completed": 110.0,
+                "total": 2534.8
+            },
+            "linesCharged": {
+                "count": 0,
+                "total": 12
+            },
+            "delayed": {
+                "count": 5,
+                "remarks": []
+            }
+        }
+    },
+    {
+        "project": "Group - Cement (Hybrid - Solar)",
+        "spv_name": "ACL",
+        "project_id": "FY26-P07",
+        "project_name_from_p6": "ACL_A01_HSAT_50MW_Group_NEW",
+        "plot_no": "A01",
+        "category": null,
+        "mms_type": "HSAT",
+        "capacity_mwac": 50.0,
+        "ol": "1.35",
+        "capacity_mwdc": 67.5,
+        "spv_plant_code": "",
+        "agel": "",
+        "module_wbs": "GWL64.2302.M.00001",
+        "age6l": "",
+        "cluster": "Solar Khavda",
+        "subcluster": "Amara Raja",
+        "not_allocated": "",
+        "source_of_origin": "India",
+        "priority": "P4-06",
+        "tc_progress": {
+            "foundation": {
+                "percent": 90.7,
+                "completed": 3362,
+                "total": 3708
+            },
+            "erection": {
+                "percent": 73.2,
+                "completed": 2715,
+                "total": 3708
+            },
+            "stringing": {
+                "percent": 57.3,
+                "completed": 986.5,
+                "total": 1722.6
+            },
+            "linesCharged": {
+                "count": 7,
+                "total": 12
+            },
+            "delayed": {
+                "count": 6,
+                "remarks": []
+            }
+        }
+    }
+]

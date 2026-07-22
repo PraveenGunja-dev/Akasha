@@ -116,12 +116,17 @@ export default function QualityCommandCenter() {
     return list;
   }, [ncList, activeFilter, searchQuery]);
 
+  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark');
+  const labelColor = isDark ? '#cbd5e1' : '#475569';
+  const lineColor = isDark ? '#334155' : '#e2e8f0';
+
   /* ── ECharts: Aging ── */
   const agingOption = useMemo(() => ({
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11 }, borderWidth: 0 },
+    textStyle: { fontFamily: 'Adani, sans-serif' },
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11, fontFamily: 'Adani' }, borderWidth: 0 },
     grid: { left: 0, right: 10, top: 10, bottom: 0, containLabel: true },
-    xAxis: { type: 'category', data: ['0-3 days', '3-7 days', '7-14 days', '14-30 days', '30+ days'], axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)', fontSize: 10 } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } }, axisLabel: { color: 'var(--foreground)', fontSize: 10 } },
+    xAxis: { type: 'category', data: ['0-3 days', '3-7 days', '7-14 days', '14-30 days', '30+ days'], axisLine: { lineStyle: { color: lineColor } }, axisLabel: { color: labelColor, fontSize: 10 } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: lineColor, opacity: 0.5 } }, axisLabel: { color: labelColor, fontSize: 10 } },
     series: [{
       type: 'bar', barWidth: '60%', data: [
         { value: aging['0-3'] || 0, itemStyle: { color: '#22c55e', borderRadius: [4, 4, 0, 0] } },
@@ -131,14 +136,15 @@ export default function QualityCommandCenter() {
         { value: aging['30+'] || 0, itemStyle: { color: '#ef4444', borderRadius: [4, 4, 0, 0] } },
       ]
     }]
-  }), [aging]);
+  }), [aging, labelColor, lineColor]);
 
   /* ── ECharts: Trend ── */
   const trendOption = useMemo(() => ({
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11 }, borderWidth: 0 },
+    textStyle: { fontFamily: 'Adani, sans-serif' },
+    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11, fontFamily: 'Adani' }, borderWidth: 0 },
     grid: { left: 0, right: 10, top: 20, bottom: 0, containLabel: true },
-    xAxis: { type: 'category', data: trend.map((t: any) => t.month), axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)', fontSize: 10 } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } }, axisLabel: { color: 'var(--foreground)', fontSize: 10 } },
+    xAxis: { type: 'category', data: trend.map((t: any) => t.month), axisLine: { lineStyle: { color: lineColor } }, axisLabel: { color: labelColor, fontSize: 10 } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { color: lineColor, opacity: 0.5 } }, axisLabel: { color: labelColor, fontSize: 10 } },
     series: [{
       name: 'NCs Created', type: 'line', smooth: true, symbol: 'circle', symbolSize: 8,
       data: trend.map((t: any) => t.count),
@@ -146,28 +152,39 @@ export default function QualityCommandCenter() {
       lineStyle: { color: '#ef4444', width: 2 },
       itemStyle: { color: '#ef4444' }
     }]
-  }), [trend]);
+  }), [trend, labelColor, lineColor]);
 
-  /* ── ECharts: Defect Radar ── */
-  const radarOption = useMemo(() => {
-    const items = topDefects.slice(0, 6);
-    const maxVal = items.length > 0 ? Math.max(...items.map((d: any) => d.count)) : 1;
+  /* ── ECharts: Defect Bar Chart ── */
+  const defectBarOption = useMemo(() => {
+    const items = [...topDefects].slice(0, 6).reverse(); // Reverse so largest is at the top
     return {
-      tooltip: { backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11 }, borderWidth: 0 },
-      radar: {
-        indicator: items.map((d: any) => ({ name: d.type.length > 20 ? d.type.substring(0, 18) + '..' : d.type, max: maxVal * 1.2 })),
-        shape: 'polygon',
-        splitArea: { areaStyle: { color: ['transparent'] } },
-        splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.3 } },
-        axisLine: { lineStyle: { color: 'var(--border)', opacity: 0.3 } },
-        axisName: { color: 'var(--foreground)', fontSize: 9 },
+      textStyle: { fontFamily: 'Adani, sans-serif' },
+      tooltip: { backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11, fontFamily: 'Adani' }, borderWidth: 0, trigger: 'axis', axisPointer: { type: 'shadow' } },
+      grid: { left: 0, right: 30, top: 10, bottom: 0, containLabel: true },
+      xAxis: { type: 'value', splitLine: { show: false }, axisLabel: { show: false } },
+      yAxis: { 
+        type: 'category', 
+        data: items.map((d: any) => d.type.length > 25 ? d.type.substring(0, 23) + '..' : d.type), 
+        axisLine: { show: false }, 
+        axisTick: { show: false },
+        axisLabel: { color: labelColor, fontSize: 11, fontWeight: '500', fontFamily: 'Adani' }
       },
       series: [{
-        type: 'radar',
-        data: [{ value: items.map((d: any) => d.count), areaStyle: { color: 'rgba(189,56,97,0.2)' }, lineStyle: { color: '#BD3861' }, itemStyle: { color: '#BD3861' } }]
+        name: 'Defects',
+        type: 'bar',
+        data: items.map((d: any) => d.count),
+        itemStyle: { 
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 1, y2: 0,
+            colorStops: [{ offset: 0, color: '#f43f5e' }, { offset: 1, color: '#9f1239' }]
+          },
+          borderRadius: [0, 4, 4, 0] 
+        },
+        label: { show: true, position: 'right', color: labelColor, fontSize: 11, fontWeight: 'bold' },
+        barMaxWidth: 20
       }]
     };
-  }, [topDefects]);
+  }, [topDefects, labelColor]);
 
   /* ── ECharts: Package Donut ── */
   const packageOption = useMemo(() => {
@@ -175,16 +192,17 @@ export default function QualityCommandCenter() {
     const items = Object.entries(byPkg).sort((a: any, b: any) => b[1] - a[1]).slice(0, 5);
     const colors = ['#0B74B0', '#75479C', '#BD3861', '#f59e0b', '#22c55e'];
     return {
-      tooltip: { backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11 }, borderWidth: 0 },
+      textStyle: { fontFamily: 'Adani, sans-serif' },
+      tooltip: { backgroundColor: 'rgba(0,0,0,0.85)', textStyle: { color: '#fff', fontSize: 11, fontFamily: 'Adani' }, borderWidth: 0 },
       series: [{
         type: 'pie', radius: ['55%', '80%'], center: ['50%', '50%'],
-        label: { show: true, position: 'outside', color: 'var(--foreground)', fontSize: 10, formatter: '{b}\n{c}' },
-        labelLine: { lineStyle: { color: 'var(--border)' } },
+        label: { show: true, position: 'outside', color: labelColor, fontSize: 10, formatter: '{b}\n{c}', fontFamily: 'Adani' },
+        labelLine: { lineStyle: { color: lineColor } },
         data: items.map(([name, count], i) => ({ name, value: count, itemStyle: { color: colors[i] } })),
         emphasis: { itemStyle: { shadowBlur: 10, shadowColor: 'rgba(0,0,0,0.2)' } }
       }]
     };
-  }, [ov.by_package]);
+  }, [ov.by_package, labelColor, lineColor]);
 
   if (loading) {
     return (
@@ -265,7 +283,7 @@ export default function QualityCommandCenter() {
             <Shield className="w-4 h-4 text-pink-500" /> Defect Pattern Analysis
           </h3>
           <p className="text-[10px] text-muted-foreground/60 mb-3">Top defect types — clustered patterns indicate systemic issues</p>
-          <ReactECharts option={radarOption} style={{ height: 200 }} />
+          <ReactECharts option={defectBarOption} style={{ height: 200 }} />
         </div>
       </div>
 

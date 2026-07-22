@@ -28,6 +28,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [blockFilter, setBlockFilter] = useState('all');
+  const [contractorFilter, setContractorFilter] = useState('all');
 
   useEffect(() => {
     if (!projectName) return;
@@ -43,19 +44,40 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
     let list = data.ncs;
     if (statusFilter !== 'all') list = list.filter((nc: any) => nc.status === statusFilter);
     if (blockFilter !== 'all') list = list.filter((nc: any) => nc.workarea_name === blockFilter);
+    if (contractorFilter !== 'all') {
+      list = list.filter((nc: any) => (nc.vendor_name || nc.contractor_name || 'Unknown') === contractorFilter);
+    }
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter((nc: any) =>
         (nc.nc_label || '').toLowerCase().includes(q) ||
-        (nc.defect_type || '').toLowerCase().includes(q)
+        (nc.defect_type || '').toLowerCase().includes(q) ||
+        (nc.description || '').toLowerCase().includes(q)
       );
     }
     return list;
-  }, [data?.ncs, statusFilter, blockFilter, searchQuery]);
+  }, [data?.ncs, statusFilter, blockFilter, contractorFilter, searchQuery]);
 
   const blocks = useMemo(() => data?.blocks || [], [data?.blocks]);
   const allBlocks = useMemo(() => (data?.ncs || []).map((nc: any) => nc.workarea_name).filter(Boolean), [data?.ncs]);
   const uniqueBlocks = useMemo(() => [...new Set(allBlocks)].sort(), [allBlocks]);
+
+  const allContractors = useMemo(() => (data?.ncs || []).map((nc: any) => nc.vendor_name || nc.contractor_name || 'Unknown').filter(Boolean), [data?.ncs]);
+  const uniqueContractors = useMemo(() => [...new Set(allContractors)].sort(), [allContractors]);
+
+  // Analytics for top contractors
+  const topContractors = useMemo(() => {
+    const counts: Record<string, number> = {};
+    let totalOpen = 0;
+    (data?.ncs || []).forEach((nc: any) => {
+      if (nc.status === 'completed' || nc.status === 'rejected') return;
+      const name = nc.vendor_name || nc.contractor_name || 'Unknown';
+      counts[name] = (counts[name] || 0) + 1;
+      totalOpen++;
+    });
+    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    return { list: sorted, total: totalOpen };
+  }, [data?.ncs]);
 
   if (loading) {
     return (
@@ -108,34 +130,59 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
         </div>
       </div>
 
-      {/* ── Who Needs to Act? ── */}
-      {handlerTotal > 0 && (
-        <div className="bg-card border border-border rounded-xl p-5">
-          <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-3 flex items-center gap-2">
-            <Users className="w-3.5 h-3.5 text-primary" /> Who Needs to Act? <span className="text-foreground ml-1">{handlerTotal} open</span>
-          </h3>
-          <div className="space-y-2">
-            {Object.entries(HANDLER_LABELS).map(([key, cfg]) => {
-              const count = byHandler[key] || 0;
-              if (count === 0) return null;
-              const pct = handlerTotal > 0 ? (count / handlerTotal) * 100 : 0;
-              return (
-                <div key={key} className={`flex items-center gap-3 p-2.5 rounded-lg ${cfg.bg}`}>
-                  <span className={`text-xs font-bold ${cfg.color} w-40`}>{cfg.label}</span>
-                  <div className="flex-1 h-2.5 bg-muted rounded-full overflow-hidden">
-                    <div className="h-full rounded-full transition-all duration-500"
-                      style={{
-                        width: `${pct}%`,
-                        backgroundColor: key === 'contractor' ? '#ef4444' : key === 'execution_engineer' ? '#f59e0b' : '#3b82f6'
-                      }} />
+      {/* ── Analytics Grid ── */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {handlerTotal > 0 && (
+          <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+              <Users className="w-3.5 h-3.5 text-primary" /> Who Needs to Act? <span className="text-foreground ml-1">{handlerTotal} open</span>
+            </h3>
+            <div className="grid grid-cols-3 gap-3">
+              {Object.entries(HANDLER_LABELS).map(([key, cfg]) => {
+                const count = byHandler[key] || 0;
+                return (
+                  <div key={key} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-transparent transition-all hover:scale-[1.02] cursor-default ${cfg.bg}`}>
+                    <span className={`text-4xl font-black ${cfg.color} drop-shadow-sm`}>{count}</span>
+                    <span className={`text-[9px] font-bold ${cfg.color} uppercase tracking-widest text-center leading-tight`}>
+                      {cfg.label.replace(' Pending', '')}<br />Pending
+                    </span>
                   </div>
-                  <span className={`text-sm font-bold ${cfg.color} w-8 text-right`}>{count}</span>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {topContractors.total > 0 && (
+          <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-warning" /> Top Contractors by Open NCs
+            </h3>
+            <div className="space-y-4">
+              {topContractors.list.map(([name, count], i) => {
+                const maxCount = topContractors.list[0][1];
+                const pct = (count / maxCount) * 100;
+                return (
+                  <div key={name} className="flex items-start gap-3 group">
+                    <div className="w-6 h-6 rounded-full bg-primary/10 text-primary flex items-center justify-center text-[10px] font-bold shrink-0 mt-0.5 ring-2 ring-background">
+                      {i + 1}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-end mb-1.5">
+                        <span className="text-[10px] font-bold text-foreground/90 truncate uppercase tracking-widest pr-2" title={name}>{name}</span>
+                        <span className="text-xs font-black text-foreground">{count}</span>
+                      </div>
+                      <div className="h-1.5 w-full bg-black/5 dark:bg-white/5 rounded-full overflow-hidden">
+                        <div className="h-full bg-primary opacity-80 rounded-full transition-all duration-700 ease-out group-hover:opacity-100 shadow-sm" style={{ width: `${pct}%` }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* ── Block Quality Map ── */}
       {blocks.length > 0 && (
@@ -180,48 +227,85 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
           <div className="flex items-center gap-2 flex-wrap">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search..."
-                className="pl-7 pr-2 py-1 bg-muted border border-border rounded-lg text-[11px] w-[150px] focus:outline-none focus:ring-1 focus:ring-primary" />
+              <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search defect or description..."
+                className="pl-7 pr-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] w-[200px] focus:outline-none focus:ring-1 focus:ring-primary" />
             </div>
+            <select value={contractorFilter} onChange={e => setContractorFilter(e.target.value)}
+              className="bg-muted border border-border rounded-lg text-[11px] px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+              <option value="all">All Contractors</option>
+              {uniqueContractors.map((c: any) => <option key={String(c)} value={String(c)}>{String(c)}</option>)}
+            </select>
             <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-              className="bg-muted border border-border rounded-lg text-[11px] px-2 py-1 focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+              className="bg-muted border border-border rounded-lg text-[11px] px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
               <option value="all">All Status</option>
               {Object.entries(STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
             </select>
           </div>
         </div>
 
-        <div className="space-y-1.5 max-h-[400px] overflow-y-auto custom-scrollbar">
-          {filteredNCs.length === 0 ? (
-            <div className="text-center py-8 text-sm text-muted-foreground">No NCs match the current filters.</div>
-          ) : filteredNCs.map((nc: any, i: number) => {
-            const sCfg = STATUS_CONFIG[nc.status] || { label: nc.status, color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' };
-            return (
-              <div key={nc.id || i} className="border border-border/50 rounded-lg p-3 hover:border-primary/20 transition-colors">
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="font-mono font-bold text-xs">{nc.nc_label}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${nc.category === 'Critical' ? 'bg-destructive/10 text-destructive' : 'bg-blue-500/10 text-blue-500'}`}>{nc.category}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${sCfg.bg} ${sCfg.color}`}>{sCfg.label}</span>
-                    </div>
-                    <p className="text-[11px] text-muted-foreground mt-0.5 truncate">{nc.defect_type}</p>
-                    <div className="flex items-center gap-2 mt-1 text-[9px] text-muted-foreground/60 flex-wrap">
-                      <span>{nc.workarea_name || '—'}</span>
-                      <span>•</span>
-                      <span>{nc.package_name || '—'}</span>
-                      <span>•</span>
-                      <span>{nc.vendor_name || nc.contractor_name || '—'}</span>
-                      {nc.debit && nc.debit > 0 && <span className="text-pink-500 font-bold">₹{nc.debit.toLocaleString()}</span>}
-                    </div>
-                  </div>
-                  <div className={`text-sm font-bold shrink-0 ${nc.age_days > 30 ? 'text-destructive' : nc.age_days > 14 ? 'text-warning' : 'text-muted-foreground'}`}>
-                    {nc.age_days}d
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+        <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
+          <table className="intel-table relative w-full">
+            <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+              <tr>
+                <th className="whitespace-nowrap">NC ID & Status</th>
+                <th>Defect / Description</th>
+                <th>Location</th>
+                <th>Responsibility</th>
+                <th>Pending With</th>
+                <th className="text-right">Age</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredNCs.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="text-center py-8 text-sm text-muted-foreground">No NCs match the current filters.</td>
+                </tr>
+              ) : filteredNCs.map((nc: any, i: number) => {
+                const sCfg = STATUS_CONFIG[nc.status] || { label: nc.status, color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' };
+                return (
+                  <tr key={nc.id || i} className="hover:bg-muted/50 transition-colors group">
+                    <td className="align-top max-w-[200px]">
+                      <div className="font-mono font-bold text-[11px] text-foreground mb-1">{nc.nc_label}</div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${nc.category === 'Critical' ? 'bg-destructive/10 text-destructive' : 'bg-blue-500/10 text-blue-500'}`}>{nc.category}</span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${sCfg.bg} ${sCfg.color}`}>{sCfg.label}</span>
+                      </div>
+                    </td>
+                    <td className="align-top max-w-[250px]">
+                      <div className="text-[11px] font-semibold text-foreground/90 truncate" title={nc.defect_type}>{nc.defect_type}</div>
+                      {nc.description && <div className="text-[10px] text-muted-foreground line-clamp-2 mt-0.5" title={nc.description}>{nc.description}</div>}
+                    </td>
+                    <td className="align-top max-w-[150px]">
+                      <div className="text-[10px] flex items-center gap-1 truncate text-foreground/80"><MapPin className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0"/> {nc.workarea_name || '—'}</div>
+                      {nc.package_name && <div className="text-[9px] text-muted-foreground mt-0.5 truncate pl-3.5">{nc.package_name}</div>}
+                    </td>
+                    <td className="align-top max-w-[180px]">
+                      <div className="text-[10px] font-medium text-foreground/80 truncate flex items-center gap-1" title={nc.vendor_name || nc.contractor_name}><Users className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0"/> {nc.vendor_name || nc.contractor_name || '—'}</div>
+                      {(nc.engineer_name || nc.quality_name) && (
+                        <div className="flex flex-col gap-0.5 mt-1 pl-3.5 text-[9px] text-muted-foreground">
+                          {nc.engineer_name && <div className="truncate"><span className="font-semibold">EE:</span> {nc.engineer_name}</div>}
+                          {nc.quality_name && <div className="truncate"><span className="font-semibold">QI:</span> {nc.quality_name}</div>}
+                        </div>
+                      )}
+                    </td>
+                    <td className="align-top">
+                      {nc.current_handler ? (
+                        <div className="flex items-center gap-1 text-[10px] text-amber-500 font-medium capitalize">
+                          <Clock className="w-2.5 h-2.5 shrink-0" /> {nc.current_handler.replace(/_/g, ' ')}
+                        </div>
+                      ) : <span className="text-muted-foreground/50 text-[10px]">—</span>}
+                    </td>
+                    <td className="align-top text-right">
+                      <div className={`text-sm font-black ${nc.age_days > 30 ? 'text-destructive' : nc.age_days > 14 ? 'text-warning' : 'text-foreground'}`}>
+                        {nc.age_days}<span className="text-[9px] font-semibold opacity-60 ml-0.5">d</span>
+                      </div>
+                      {nc.debit && nc.debit > 0 && <div className="text-[9px] font-bold text-pink-500 mt-1 whitespace-nowrap">₹{nc.debit.toLocaleString()}</div>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>

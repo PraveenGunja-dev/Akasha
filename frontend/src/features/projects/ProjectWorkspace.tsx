@@ -243,6 +243,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
+  const [showCodModal, setShowCodModal] = useState<'done' | 'pending' | null>(null);
   const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel'>('all');
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
@@ -489,7 +490,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         <div className="text-center">
           <AlertTriangle className="w-12 h-12 text-warning/50 mx-auto mb-4" />
           <p className="text-muted-foreground">Project not found.</p>
-          <button onClick={() => navigate('/dashboard')} className="mt-4 text-primary text-sm hover:underline">
+          <button onClick={() => navigate('/ceo-dashboard')} className="mt-4 text-primary text-sm hover:underline">
             ← Back to Dashboard
           </button>
         </div>
@@ -677,7 +678,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       {/* ── Top Bar ── */}
       <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border px-6 py-3">
         <div className="max-w-[1600px] mx-auto flex items-center gap-4">
-          <button onClick={() => onBack ? onBack() : navigate('/dashboard')}
+          <button onClick={() => onBack ? onBack() : navigate('/ceo-dashboard')}
             className="flex items-center gap-2 text-sm text-muted-foreground/70 hover:text-foreground transition-colors group">
             <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
             Back to Portfolio
@@ -726,9 +727,25 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
           <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-primary" />
           
-          <HeroMetric label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} value={detail?.mapping?.codBlocksDone || 0} icon={CheckCircle2} color="text-success" />
+          <HeroMetric 
+            label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} 
+            value={detail?.mapping?.codBlocksDone || 0} 
+            icon={CheckCircle2} 
+            color="text-success" 
+            hasBreakdown={(detail?.mapping?.codBlocksDone || 0) > 0} 
+            onClick={() => (detail?.mapping?.codBlocksDone || 0) > 0 && setShowCodModal('done')} 
+            active={showCodModal === 'done'} 
+          />
           <HeroMetric label="MW Generated" value={detail?.mapping?.mwGenerated || 0} unit="MW" icon={Zap} color="text-primary" />
-          <HeroMetric label="Pending COD" value={detail?.mapping?.pendingCodBlocks || 0} icon={AlertTriangle} color="text-warning" />
+          <HeroMetric 
+            label="Pending COD" 
+            value={detail?.mapping?.pendingCodBlocks || 0} 
+            icon={AlertTriangle} 
+            color="text-warning" 
+            hasBreakdown={(detail?.mapping?.pendingCodBlocks || 0) > 0} 
+            onClick={() => (detail?.mapping?.pendingCodBlocks || 0) > 0 && setShowCodModal('pending')} 
+            active={showCodModal === 'pending'} 
+          />
           
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-destructive' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
           <HeroMetric label="Forecast COD" value={p.forecastFinish || p.forecastMonth} icon={Calendar} color="text-primary" />
@@ -1911,7 +1928,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </div>
 
                 <a
-                  href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${projectId}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
+                  href={`https://adani.unada.in/transmission/v1/dashboard/${(detail?.mapping?.cluster || 'khavda').toLowerCase().includes('rajasthan') ? 'rajasthan' : 'khavda'}/commissioning-team?project=${encodeURIComponent(project?.projectName || projectId)}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all whitespace-nowrap shrink-0 group"
@@ -1936,12 +1953,35 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               ) : (
                 <>
                   {/* TC Summary Cards */}
-                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-                    <HeroMetric label="Total Lines" value={tc.summary.totalLines} icon={Network} color="text-purple-400" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'total' ? null : 'total')} active={expandedTcMetric === 'total'} />
+                  <div className="grid grid-cols-2 lg:grid-cols-5 gap-6">
                     <HeroMetric label="Charged" value={tc.summary.chargedLines} icon={Zap} color="text-success" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'charged' ? null : 'charged')} active={expandedTcMetric === 'charged'} />
                     <HeroMetric label="In Progress" value={tc.summary.inProgressLines} icon={Activity} color="text-primary" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'in_progress' ? null : 'in_progress')} active={expandedTcMetric === 'in_progress'} />
                     <HeroMetric label="Delayed" value={tc.summary.delayedLines} icon={AlertTriangle} color="text-destructive" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'delayed' ? null : 'delayed')} active={expandedTcMetric === 'delayed'} />
-                    <HeroMetric label="Mapped MW" value={tc.summary.totalMW ? `${tc.summary.totalMW}` : '—'} unit="MW" icon={Target} color="text-success" />
+                    
+                    {(() => {
+                      let mappedMW = tc.summary.totalMW;
+                      if (!mappedMW) {
+                        let sum = 0;
+                        const KV_TO_MW: Record<string, number> = {
+                          '800': 4000,
+                          '765': 3000,
+                          '400': 1000,
+                          '220': 400,
+                          '132': 150
+                        };
+                        const allEdges = [...(tc.khavdaEdges || []), ...(tc.rajasthanEdges || [])];
+                        allEdges.forEach(edge => {
+                          const match = String(edge.voltage || '').match(/(\d+)/);
+                          if (match) {
+                            const kv = match[1];
+                            sum += KV_TO_MW[kv] || parseInt(kv, 10);
+                          }
+                        });
+                        if (sum > 0) mappedMW = sum;
+                      }
+                      return <HeroMetric label="Mapped MW" value={mappedMW != null && mappedMW !== '' ? `${mappedMW}` : '—'} unit="MW" icon={Target} color="text-success" />
+                    })()}
+
                     <HeroMetric label="TC Project" value={mapping?.tcProjectName || '—'} icon={MapPin} color="text-warning" />
                   </div>
 
@@ -2022,7 +2062,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Zap className="w-4 h-4 text-purple-400" /> Khavda Transmission Lines
                       </h3>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-auto max-h-[400px]">
                         <table className="intel-table">
                           <thead>
                             <tr>
@@ -2052,9 +2092,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-success/100/10 text-success' :
-                                    edge.normalizedStatus === 'in_progress' ? 'bg-warning/100/10 text-warning' :
-                                      'bg-muted text-muted-foreground'
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.status || '—'}
                                   </span>
@@ -2078,7 +2119,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
                         <Network className="w-4 h-4 text-primary" /> Rajasthan Transmission Lines
                       </h3>
-                      <div className="overflow-x-auto">
+                      <div className="overflow-auto max-h-[400px]">
                         <table className="intel-table">
                           <thead>
                             <tr>
@@ -2108,9 +2149,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs max-w-[120px] truncate">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'Completed' ? 'bg-success/100/10 text-success border border-success/20' :
-                                    edge.normalizedStatus === 'In Progress' ? 'bg-primary/100/10 text-primary border border-primary/20' :
-                                      'bg-warning/100/10 text-warning border border-warning/20'
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.normalizedStatus || edge.status || '—'}
                                   </span>
@@ -2157,9 +2199,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 </td>
                                 <td className="text-muted-foreground/70 text-xs">{n.region || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${n.status === 'Completed' || n.status === 'charged' ? 'bg-success/100/10 text-success border border-success/20' :
-                                    n.status === 'In Progress' || n.status === 'in_progress' ? 'bg-warning/100/10 text-warning border border-warning/20' :
-                                      'bg-muted text-muted-foreground border border-border'
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(n.status || '').toLowerCase() === 'charged' || (n.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (n.status || '').toLowerCase() === 'in_progress' || (n.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                    (n.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {n.status || '—'}
                                   </span>
@@ -2193,6 +2236,75 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       </main>
 
       {/* ── Modals ── */}
+      {/* COD Blocks Modal */}
+      {showCodModal && detail?.mapping?.blocksStatus && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowCodModal(null)}>
+          <div className="bg-card w-full max-w-4xl max-h-[85vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-border" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-6 border-b border-border bg-muted/30">
+              <div>
+                <h2 className="text-xl font-bold flex items-center gap-2">
+                  {showCodModal === 'done' ? (
+                    <><CheckCircle2 className="w-5 h-5 text-success" /> COD Completed {detail.mapping.unitType || 'Blocks'}</>
+                  ) : (
+                    <><AlertTriangle className="w-5 h-5 text-warning" /> Pending COD {detail.mapping.unitType || 'Blocks'}</>
+                  )}
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {showCodModal === 'done' ? 'Units that have achieved Commercial Operation Date' : 'Units waiting for Commercial Operation Date'}
+                </p>
+              </div>
+              <button onClick={() => setShowCodModal(null)} className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {Object.entries(detail.mapping.blocksStatus)
+                  .filter(([_, status]: any) => showCodModal === 'done' ? status.cod === 'Completed' : status.cod !== 'Completed')
+                  .sort(([a], [b]) => a.localeCompare(b, undefined, {numeric: true}))
+                  .map(([bName, status]: any) => (
+                  <div key={bName} className="p-4 rounded-xl border border-border bg-background shadow-sm space-y-3">
+                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                      <span className="font-bold text-sm truncate pr-2">{bName}</span>
+                      <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold shrink-0 ${status.cod === 'Completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                        {status.cod === 'Completed' ? 'COD Done' : 'Pending'}
+                      </span>
+                    </div>
+                    
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <div className="text-muted-foreground mb-1 text-[10px] uppercase">COD</div>
+                        {status.cod === 'Completed' ? (
+                          <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.cod_actual_date || 'Done'}
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                            <Clock className="w-3 h-3 shrink-0" /> {status.cod_forecast_date || 'TBD'}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div>
+                        <div className="text-muted-foreground mb-1 text-[10px] uppercase">Trial Run</div>
+                        {status.tr === 'Completed' ? (
+                          <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
+                            <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.tr_actual_date || 'Done'}
+                          </div>
+                        ) : (
+                          <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                            <Clock className="w-3 h-3 shrink-0" /> Pending
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showDelayedModal && detail?.p6?.delayedActivities && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => setShowDelayedModal(false)}>
           <div className="bg-card border border-border rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10" onClick={e => e.stopPropagation()}>
@@ -2286,7 +2398,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             </td>
                             <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${act.status === 'In Progress' ? 'bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning' : 'bg-destructive/10 text-destructive dark:bg-destructive/100/10 dark:text-destructive'}`}>
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(act.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
+                                    (act.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                      'bg-red-500/10 text-red-500 border border-red-500/20'
+                                    }`}>
                                 {act.status}
                               </span>
                             </td>

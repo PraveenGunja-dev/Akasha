@@ -69,10 +69,14 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
     query = db.query(models.ProjectMapping)
     if portfolio and portfolio.lower() != "all portfolios":
         p_clean = portfolio.replace('+', ' ').strip().lower()
-        query = query.filter(
-            (func.lower(models.ProjectMapping.cluster).contains(p_clean)) |
-            (func.lower(models.ProjectMapping.category).contains(p_clean))
-        )
+        # Make filtering robust by splitting into words
+        parts = p_clean.split()
+        for part in parts:
+            query = query.filter(
+                (func.lower(models.ProjectMapping.cluster).contains(part)) |
+                (func.lower(models.ProjectMapping.category).contains(part)) |
+                (func.lower(models.ProjectMapping.project).contains(part))
+            )
             
     raw_mappings = query.all()
     raw_p6_projects = db.query(models.P6Project).all()
@@ -139,7 +143,20 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
 
     for m in mappings:
         pm_cap = proj_cap_dict.get(m.project_id, {})
-        computed_capacity = pm_cap.get("total_capacity", m.capacity_mwac or 0)
+        
+        # Try to extract capacity from name as fallback
+        fallback_cap = 0
+        p6_name_for_cap = str(m.project_name_from_p6 or m.project or "").upper()
+        import re
+        mw_match = re.search(r'(\d+(?:\.\d+)?)[\s_]*MW', p6_name_for_cap)
+        if mw_match:
+            fallback_cap = float(mw_match.group(1))
+            
+        base_cap = m.capacity_mwac if (m.capacity_mwac and m.capacity_mwac > 0) else fallback_cap
+        computed_capacity = pm_cap.get("total_capacity", base_cap)
+        if computed_capacity == 0:
+            computed_capacity = base_cap
+            
         portfolio_summary["total_mw"] += computed_capacity
         
         # P6 Data
@@ -156,11 +173,16 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
         
         if p6_data:
             mapped_p6_ids.add(p6_data.project_id)
-            p6_pct = getattr(p6_data, 'construction_percent_complete', None)
-            if p6_pct is None:
-                p6_pct = p6_data.duration_percent_complete or 0
-            if p6_pct <= 1.0 and p6_pct > 0:
-                p6_pct *= 100
+            if getattr(p6_data, 'at_completion_non_labor_units', 0) and p6_data.at_completion_non_labor_units > 0:
+                calc_val = (getattr(p6_data, 'actual_non_labor_units', 0) or 0) / p6_data.at_completion_non_labor_units
+                p6_pct = calc_val * 100
+            else:
+                p6_pct = getattr(p6_data, 'construction_percent_complete', None)
+                if p6_pct is None:
+                    p6_pct = p6_data.duration_percent_complete or 0
+                if p6_pct <= 1.0 and p6_pct > 0:
+                    p6_pct *= 100
+                    
             progress = p6_pct
             is_delayed_proj = False
             
@@ -294,14 +316,103 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                 "status": tc_summary,
                 "has_data": bool(tc_khavda or tc_rajasthan),
                 "data": {
-                    "khavda": [{"project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
-                    "rajasthan": [{"project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
+                    "khavda": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
+                    "rajasthan": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
                 }
             }
         })
         
     # ... inside get_dashboard_summary ...
     portfolio_summary["total_projects"] = len(project_list)
+    
+    # Global Quality (Pulse) Metrics
+    total_ncs = db.query(func.count(models.PulseNC.id)).scalar() or 0
+    resolved_ncs = db.query(func.count(models.PulseNC.id)).filter(models.PulseNC.status == 'completed').scalar() or 0
+    total_rfis = db.query(func.count(models.PulseRFI.id)).scalar() or 0
+    completed_rfis = db.query(func.count(models.PulseRFI.id)).filter(models.PulseRFI.status == 'completed').scalar() or 0
+    
+    closure_rate = 0
+    if total_ncs > 0:
+        closure_rate = round((resolved_ncs / total_ncs) * 100, 1)
+        
+    vendor_col = func.coalesce(models.PulseNC.vendor_name, models.PulseNC.contractor_name, 'Unknown Contractor')
+    open_ncs_query = db.query(
+        vendor_col, func.count(models.PulseNC.id)
+    ).filter(
+        models.PulseNC.status != 'completed'
+    ).group_by(vendor_col).order_by(func.count(models.PulseNC.id).desc()).limit(15).all()
+    
+    top_contractor_names = [r[0] for r in open_ncs_query]
+    
+    contractor_project_ncs = {}
+    if top_contractor_names:
+        project_ncs_query = db.query(
+            vendor_col, models.PulseNC.project_name, func.count(models.PulseNC.id)
+        ).filter(
+            models.PulseNC.status != 'completed',
+            vendor_col.in_(top_contractor_names)
+        ).group_by(vendor_col, models.PulseNC.project_name).all()
+        
+        for vendor, proj, count in project_ncs_query:
+            if vendor not in contractor_project_ncs:
+                contractor_project_ncs[vendor] = []
+                
+            matched_mapping = None
+            if proj:
+                p_lower = proj.lower().strip()
+                # Try exact match
+                for m in raw_mappings:
+                    m_name = (m.project or "").lower().strip()
+                    m_p6_name = (m.project_name_from_p6 or "").lower().strip()
+                    if (m_name and p_lower == m_name) or (m_p6_name and p_lower == m_p6_name):
+                        matched_mapping = m
+                        break
+                # Try partial match if no exact match
+                if not matched_mapping:
+                    for m in raw_mappings:
+                        m_name = (m.project or "").lower().strip()
+                        m_p6_name = (m.project_name_from_p6 or "").lower().strip()
+                        if (m_name and m_name in p_lower) or (m_p6_name and m_p6_name in p_lower):
+                            matched_mapping = m
+                            break
+
+            mapping_id = matched_mapping.id if matched_mapping else None
+            p6_id = matched_mapping.project_id if matched_mapping else None
+            
+            p6_name = proj
+            if matched_mapping:
+                if matched_mapping.project_name_from_p6:
+                    p6_name = matched_mapping.project_name_from_p6
+                else:
+                    p6_proj = next((p for p in raw_p6_projects if p.project_id == matched_mapping.project_id), None)
+                    if p6_proj and p6_proj.name:
+                        p6_name = p6_proj.name
+
+            contractor_project_ncs[vendor].append({
+                "project_name": proj or "Unknown Project",
+                "p6_name": p6_name or "Unknown Project",
+                "mapping_id": mapping_id,
+                "p6_id": p6_id,
+                "open_ncs": count
+            })
+            
+    top_contractors = [
+        {
+            "name": r[0], 
+            "value": r[1],
+            "projects": sorted(contractor_project_ncs.get(r[0], []), key=lambda x: x["open_ncs"], reverse=True)
+        } for r in open_ncs_query
+    ]
+        
+    portfolio_summary["quality"] = {
+        "total_ncs": total_ncs,
+        "open_ncs": total_ncs - resolved_ncs,
+        "resolved_ncs": resolved_ncs,
+        "closure_rate": closure_rate,
+        "total_rfis": total_rfis,
+        "completed_rfis": completed_rfis,
+        "top_contractors": top_contractors
+    }
     
     result = {
         "summary": portfolio_summary,
@@ -548,9 +659,12 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         progress = 0
         p6_data = None
         if p6:
-            raw_progress = getattr(p6, 'construction_percent_complete', None)
-            if raw_progress is None:
-                raw_progress = p6.duration_percent_complete or 0
+            if getattr(p6, 'at_completion_non_labor_units', 0) and p6.at_completion_non_labor_units > 0:
+                raw_progress = (getattr(p6, 'actual_non_labor_units', 0) or 0) / p6.at_completion_non_labor_units
+            else:
+                raw_progress = getattr(p6, 'construction_percent_complete', None)
+                if raw_progress is None:
+                    raw_progress = p6.duration_percent_complete or 0
             progress = round(raw_progress * 100)
             # Multi-signal delay detection:
             # 1. finish_date_variance < 0 (if available)
@@ -749,8 +863,18 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         pm_cap = proj_cap_dict.get(m.project_id, {})
         cod_mw = pm_cap.get("cod_mw", 0)
         tr_mw = pm_cap.get("tr_mw", 0)
-        # Use capacity overview's computed total_capacity (accounts for dynamic Wind WTG calculation)
-        computed_capacity = pm_cap.get("total_capacity", m.capacity_mwac or 0)
+        
+        fallback_cap = 0
+        p6_name_for_cap = str(m.project_name_from_p6 or m.project or "").upper()
+        import re
+        mw_match = re.search(r'(\d+(?:\.\d+)?)[\s_]*MW', p6_name_for_cap)
+        if mw_match:
+            fallback_cap = float(mw_match.group(1))
+            
+        base_cap = m.capacity_mwac if (m.capacity_mwac and m.capacity_mwac > 0) else fallback_cap
+        computed_capacity = pm_cap.get("total_capacity", base_cap)
+        if computed_capacity == 0:
+            computed_capacity = base_cap
 
         portfolio_groups[port_name][eps].append({
             "id": m.id, "name": (m.project_name_from_p6 or m.project or "?")[:28],

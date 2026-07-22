@@ -8,7 +8,7 @@ import PresentationModal from "../components/ui/PresentationModal";
 import { useAuth } from "../context/AuthContext";
 
 const ROLE_ROUTES: Record<string, string> = {
-  executive: '/dashboard',
+  executive: '/ceo-dashboard',
   pmag: '/pmag',
   projects: '/projects',
   tc_ordering: '/tc-ordering',
@@ -16,7 +16,7 @@ const ROLE_ROUTES: Record<string, string> = {
 };
 
 export default function LandingPage() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, setTheme] = useState<"light" | "dark">("dark");
   const [showPresentation, setShowPresentation] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
@@ -40,7 +40,7 @@ export default function LandingPage() {
   // If already logged in, redirect to their dashboard
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(ROLE_ROUTES[user.role] || '/dashboard', { replace: true });
+      navigate(ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
@@ -50,11 +50,19 @@ export default function LandingPage() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    navigate('/dashboard', { replace: true });
+    setLoading(true);
+    setError('');
+    const res = await login(username, password);
+    setLoading(false);
+    if (res.success) {
+      // useEffect will handle the redirect based on user role
+    } else {
+      setError(res.message);
+    }
   };
 
   const openLogin = () => {
-    navigate('/dashboard', { replace: true });
+    setShowLogin(true);
   };
 
   return (
@@ -180,73 +188,20 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <form onSubmit={handleLogin} className="space-y-5">
-                {/* Username */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-white/50 uppercase tracking-wider mb-2">Username</label>
-                  <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                    <input
-                      type="text"
-                      value={username}
-                      onChange={e => setUsername(e.target.value)}
-                      className="w-full pl-11 pr-4 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-primary/60 focus:bg-white/[0.1] transition-all text-[15px]"
-                      placeholder="Enter your username"
-                      autoComplete="username"
-                      autoFocus
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password */}
-                <div>
-                  <label className="block text-[11px] font-semibold text-white/50 uppercase tracking-wider mb-2">Password</label>
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-white/30" />
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      className="w-full pl-11 pr-12 py-3.5 rounded-xl bg-white/[0.06] border border-white/[0.08] text-white placeholder-white/20 focus:outline-none focus:border-primary/60 focus:bg-white/[0.1] transition-all text-[15px]"
-                      placeholder="Enter your password"
-                      autoComplete="current-password"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Error */}
-                {error && (
-                  <div className="flex items-center gap-2.5 px-4 py-3 rounded-xl bg-destructive/100/10 border border-destructive/20 text-destructive text-sm font-medium animate-in slide-in-from-top-2 duration-200">
-                    <div className="w-1.5 h-1.5 rounded-full bg-destructive/100 shrink-0" />
-                    {error}
-                  </div>
-                )}
-
-                {/* Submit */}
+              <div className="space-y-4">
                 <button
-                  type="submit"
-                  disabled={loading || !username.trim() || !password.trim()}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary via-[#4a60c5] to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:shadow-none disabled:hover:scale-100 flex items-center justify-center gap-2"
+                  onClick={() => navigate('/ceo-dashboard')}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
                 >
-                  {loading ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Signing in...
-                    </>
-                  ) : (
-                    'Sign In'
-                  )}
+                  Login as CEO
                 </button>
-              </form>
+                <button
+                  onClick={() => navigate('/pmag')}
+                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#4a60c5] to-accent text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(74,96,197,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
+                >
+                  Login as PMAG
+                </button>
+              </div>
 
               {/* Footer hint */}
               <p className="text-center text-[11px] text-white/20 mt-5">

@@ -197,19 +197,21 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
 
         
-        if p6_proj and getattr(p6_proj, 'budget_labor_units', 0) and p6_proj.budget_labor_units > 0:
-            # Using Non Labor Units as per user's earlier structure (usually actual_labor_units / budget_labor_units, but adhering to existing)
-            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.budget_labor_units
-        elif activity_info['Total'] > 0:
-            # SumPct is 0-100*N, Total is N, so avg is 0-100. Divide by 100 to get 0-1.
-            progress = (activity_info['SumPct'] / activity_info['Total']) / 100.0
+        # STRICT user-requested formula:
+        # Progress = SummaryActualNonLaborUnits / SummaryAtCompletionNonLaborUnits
+        if p6_proj and getattr(p6_proj, 'at_completion_non_labor_units', 0) and p6_proj.at_completion_non_labor_units > 0:
+            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.at_completion_non_labor_units
+        elif p6_proj:
+            # Fallback for projects that don't have labor units tracked yet
+            raw_pct = getattr(p6_proj, 'construction_percent_complete', None)
+            if raw_pct is None:
+                raw_pct = p6_proj.duration_percent_complete or 0.0
+            progress = float(raw_pct) if raw_pct <= 1.0 else float(raw_pct) / 100.0
         else:
-            # duration_percent_complete is 0-100. Divide by 100 to get 0-1.
-            duration_pct = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
-            progress = duration_pct / 100.0
+            progress = 0.0
             
-        # Cap progress between 0 and 1
-        progress = max(0.0, min(1.0, progress))
+        # Cap progress between 0 and 1 to prevent exceeding 100% in UI
+        progress = max(0.0, min(1.0, float(progress)))
 
         # 2. SAP Data - WBS Only Mapping
         allocation_ratio = 1.0
@@ -607,21 +609,29 @@ def get_project_360_detail(db: Session, project_id: str):
         if m:
             all_blocks.add(normalize_block(m.group(1)))
             
-    blocks_status = {b: {'cod': 'Not Started', 'tr': 'Not Started'} for b in all_blocks}
+    blocks_status = {b: {'cod': 'Not Started', 'tr': 'Not Started', 'cod_forecast_date': None, 'cod_actual_date': None, 'tr_actual_date': None} for b in all_blocks}
     
     for a in cod_acts:
         m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
         if m:
             b_name = normalize_block(m.group(1))
+            forecast = a.planned_finish_date.strftime("%Y-%m-%d") if a.planned_finish_date else None
+            actual = a.actual_finish_date.strftime("%Y-%m-%d") if a.actual_finish_date else None
+            if not blocks_status[b_name]['cod_forecast_date']:
+                blocks_status[b_name]['cod_forecast_date'] = forecast
+                
             if a.status == 'Completed':
                 blocks_status[b_name]['cod'] = 'Completed'
+                blocks_status[b_name]['cod_actual_date'] = actual
     
     for a in tr_acts:
         m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
         if m:
             b_name = normalize_block(m.group(1))
+            actual = a.actual_finish_date.strftime("%Y-%m-%d") if a.actual_finish_date else None
             if a.status == 'Completed':
                 blocks_status[b_name]['tr'] = 'Completed'
+                blocks_status[b_name]['tr_actual_date'] = actual
     
     for b, status in blocks_status.items():
         is_cod = (status['cod'] == 'Completed')
@@ -1056,6 +1066,8 @@ def get_project_360_detail(db: Session, project_id: str):
         "trDoneCodPending": tr_done_cod_not,
         "totalBlocksCount": total_blocks_count,
         "unitType": "WTG" if is_wind else "Blocks",
+        "cluster": mapping.cluster if mapping else None,
+        "blocksStatus": blocks_status,
     }
 
     # ── TC Data ──
@@ -1069,27 +1081,60 @@ def get_project_360_detail(db: Session, project_id: str):
     
     for edge in tc_network_edges:
         edge_phase = "Unknown Phase"
+        edge_project_name = None
         if edge.projects:
             try:
                 parsed = json.loads(edge.projects)
                 if isinstance(parsed, dict):
+                    project_val = parsed.get("project") or parsed.get("projects")
+                    if isinstance(project_val, list):
+                        edge_project_name = ", ".join(str(p) for p in project_val if p)
+                    elif project_val:
+                        edge_project_name = str(project_val)
                     phases_list = parsed.get("phases", [])
                     if phases_list:
                         edge_phase = phases_list[0]
                 elif isinstance(parsed, list):
                     if parsed:
-                        edge_phase = parsed[0]
+                        if isinstance(parsed[0], dict):
+                            project_val = parsed[0].get("project") or parsed[0].get("projects")
+                            if isinstance(project_val, list):
+                                edge_project_name = ", ".join(str(p) for p in project_val if p)
+                            elif project_val:
+                                edge_project_name = str(project_val)
+                            phases_list = parsed[0].get("phases", [])
+                            if phases_list:
+                                edge_phase = phases_list[0]
+                        else:
+                            edge_phase = str(parsed[0])
             except Exception:
                 try:
                     parsed = ast.literal_eval(edge.projects)
                     if isinstance(parsed, dict):
+                        project_val = parsed.get("project") or parsed.get("projects")
+                        if isinstance(project_val, list):
+                            edge_project_name = ", ".join(str(p) for p in project_val if p)
+                        elif project_val:
+                            edge_project_name = str(project_val)
                         phases_list = parsed.get("phases", [])
+                        if phases_list:
+                            edge_phase = phases_list[0]
+                    elif isinstance(parsed, list) and parsed and isinstance(parsed[0], dict):
+                        project_val = parsed[0].get("project") or parsed[0].get("projects")
+                        if isinstance(project_val, list):
+                            edge_project_name = ", ".join(str(p) for p in project_val if p)
+                        elif project_val:
+                            edge_project_name = str(project_val)
+                        phases_list = parsed[0].get("phases", [])
                         if phases_list:
                             edge_phase = phases_list[0]
                 except Exception:
                     m = re.search(r'[\'"]phases[\'"]\s*:\s*\[\s*[\'"]([^\'"]+)[\'"]', edge.projects)
                     if m:
                         edge_phase = m.group(1)
+                    m2 = re.search(r'[\'"]projects?[\'"]\s*:\s*(?:\[\s*[\'"]([^\'"]+)[\'"]|[\'"]([^\'"]+)[\'"])', edge.projects)
+                    if m2:
+                        edge_project_name = m2.group(1) or m2.group(2)
             except:
                 pass
 
@@ -1099,7 +1144,7 @@ def get_project_360_detail(db: Session, project_id: str):
             "fromLabel": edge.from_label,
             "toNode": edge.to_node,
             "toLabel": edge.to_label,
-            "project": mapping.project or mapping.project_name_from_p6 if mapping else "Unmapped",
+            "project": edge_project_name or (mapping.project or mapping.project_name_from_p6 if mapping else "Unmapped"),
             "phase": edge_phase,
             "projects": edge.projects,
             "contractor": edge.contractor,
@@ -1147,6 +1192,22 @@ def get_project_360_detail(db: Session, project_id: str):
                 total_tc_mw += float(e.mw)
             except:
                 pass
+
+        # Fallback/Additional: If Mapped MW is needed from kV
+        # Standard indicative Thermal Capacities for Indian Transmission Lines
+        KV_TO_MW = {
+            '800': 4000,  # HVDC
+            '765': 3000,
+            '400': 1000,
+            '220': 400,
+            '132': 150,
+        }
+        for edge in tc_network_edges:
+            if edge.voltage:
+                match = re.search(r'(\d+)', str(edge.voltage))
+                if match:
+                    kv_str = match.group(1)
+                    total_tc_mw += KV_TO_MW.get(kv_str, float(kv_str))
 
     return {
         "mapping": mapping_info,

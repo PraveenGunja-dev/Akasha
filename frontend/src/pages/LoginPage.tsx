@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Loader2, Lock, User, Eye, EyeOff, Zap } from 'lucide-react';
 
 const ROLE_ROUTES: Record<string, string> = {
-  executive: '/dashboard',
+  executive: '/ceo-dashboard',
   pmag: '/pmag',
   projects: '/projects',
   tc_ordering: '/tc-ordering',
@@ -23,7 +23,7 @@ export default function LoginPage() {
   // If already logged in, redirect to their dashboard
   useEffect(() => {
     if (isAuthenticated && user) {
-      navigate(ROLE_ROUTES[user.role] || '/dashboard', { replace: true });
+      navigate(ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
     }
   }, [isAuthenticated, user, navigate]);
 
