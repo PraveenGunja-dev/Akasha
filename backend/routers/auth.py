@@ -1,12 +1,14 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, Header, HTTPException
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database import get_db
 from models import AkashaUser
 import hashlib
+import os
 import secrets
 
 router = APIRouter(prefix="/api/auth", tags=["Authentication"])
+_SESSION_TOKENS: dict[str, int] = {}
 
 
 def hash_password(password: str) -> str:
@@ -41,6 +43,7 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
     # Generate a simple session token
     token = secrets.token_hex(32)
+    _SESSION_TOKENS[token] = user.id
 
     return LoginResponse(
         success=True,
@@ -56,10 +59,51 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
     )
 
 
-@router.get("/me")
-def get_current_user():
+@router.get("/me_legacy")
+def get_current_user_legacy():
     """Placeholder — in production, validate the token from headers."""
     return {"detail": "Use token-based auth in production"}
+
+
+def get_current_user_optional(
+    authorization: str | None = Header(default=None),
+    db: Session = Depends(get_db),
+) -> AkashaUser | None:
+    """Validate a Bearer token when supplied."""
+    require_auth = os.getenv("AKASHA_REQUIRE_CHAT_AUTH", "false").lower() == "true"
+    if not authorization:
+        if require_auth:
+            raise HTTPException(status_code=401, detail="Authentication required")
+        return None
+
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="Invalid authorization header")
+
+    user_id = _SESSION_TOKENS.get(token)
+    if not user_id:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+
+    user = db.query(AkashaUser).filter(AkashaUser.id == user_id, AkashaUser.is_active == True).first()
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid or inactive user")
+    return user
+
+
+@router.get("/me")
+def get_current_user(user: AkashaUser | None = Depends(get_current_user_optional)):
+    if not user:
+        return {"authenticated": False}
+    return {
+        "authenticated": True,
+        "user": {
+            "id": user.id,
+            "username": user.username,
+            "display_name": user.display_name,
+            "role": user.role,
+            "email": user.email or "",
+        },
+    }
 
 
 @router.post("/seed")

@@ -256,7 +256,7 @@ def _compare_sync_times(current: dict, cached: dict) -> bool:
     for key in ("p6_synced_at", "sap_synced_at", "tc_synced_at"):
         current_val = current.get(key)
         cached_val = cached.get(key)
-        if current_val and cached_val and current_val != cached_val:
+        if current_val != cached_val:
             return True
     return False
 

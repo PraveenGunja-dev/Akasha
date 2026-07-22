@@ -13,19 +13,24 @@ from routers import projects, logistics, financials, ai, sync, tc_router, dashbo
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- FIX FOR CORPORATE PROXIES (SSL CERTIFICATE VERIFY FAILED) ---
-import urllib3
-import requests
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-old_request = requests.Session.request
-def new_request(self, method, url, **kwargs):
-    kwargs['verify'] = False
-    return old_request(self, method, url, **kwargs)
-requests.Session.request = new_request
-# ----------------------------------------------------------------
+# Optional local-only corporate proxy workaround.
+# Production should keep TLS verification enabled.
+if os.getenv("AKASHA_DISABLE_TLS_VERIFY_FOR_DEV", "false").lower() == "true":
+    import urllib3
+    import requests
 
-# Create tables if not exists
-models.Base.metadata.create_all(bind=engine)
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    old_request = requests.Session.request
+
+    def new_request(self, method, url, **kwargs):
+        kwargs["verify"] = False
+        return old_request(self, method, url, **kwargs)
+
+    requests.Session.request = new_request
+
+# Create tables only when explicitly enabled for local setup.
+if os.getenv("AKASHA_AUTO_CREATE_TABLES", "false").lower() == "true":
+    models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Akasha Intelligence API",

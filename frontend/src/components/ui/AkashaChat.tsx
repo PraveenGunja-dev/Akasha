@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Maximize2, Minimize2, Bot, ChevronRight, Activity, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { streamChat } from '../../features/chatbot/chatSseClient';
+import { useAuth } from '../../context/AuthContext';
 
 interface AkashaChatProps {
   isOpen: boolean;
@@ -17,6 +19,7 @@ interface Message {
 }
 
 export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFullScreen }: AkashaChatProps) {
+  const { token } = useAuth();
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
@@ -44,23 +47,29 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
     setLoading(true);
 
     try {
-      const response = await fetch('/akasha/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg.content, history: messages })
-      });
-      
-      const data = await response.json();
-      
-      setMessages(prev => [...prev, {
-        id: Date.now() + 1,
-        type: 'bot',
-        content: response.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`
-      }]);
-      
-      if (response.ok && data.suggestions) {
-        setSuggestions(data.suggestions);
-      }
+      let botContent = '';
+      const botId = Date.now() + 1;
+      setMessages(prev => [...prev, { id: botId, type: 'bot', content: '' }]);
+
+      await streamChat(
+        { message: userMsg.content, history: messages, client_version: 'akasha-side-chat-1' },
+        {
+          token,
+          onEvent: (event) => {
+            if (event.type === 'answer_delta' || event.type === 'token') {
+              botContent += event.content || '';
+            } else if (event.type === 'clarification_required') {
+              botContent = event.question || 'I need one clarification before I can answer.';
+            } else if (event.type === 'run_completed' || event.type === 'metadata') {
+              setSuggestions(event.suggestions || []);
+            } else if (event.type === 'error') {
+              botContent = event.message || 'The chatbot run failed before completion.';
+            }
+
+            setMessages(prev => prev.map(msg => msg.id === botId ? { ...msg, content: botContent } : msg));
+          },
+        }
+      );
     } catch (error) {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,

@@ -10,6 +10,8 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import { useAuth } from '../../context/AuthContext';
+import { metadataFromEvent, streamChat } from './chatSseClient';
 
 interface Message {
   id: number;
@@ -45,9 +47,11 @@ const TYPING_STAGES = [
 
 interface AICopilotProps {
   onMinimize?: () => void;
+  projectId?: string | null;
 }
 
-export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
+export default function AICopilot({ onMinimize, projectId }: AICopilotProps = {}) {
+  const { token } = useAuth();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -241,26 +245,6 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       abortControllerRef.current = controller;
       setIsStreaming(true);
 
-      const response = await fetch('/akasha/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: text, 
-          history: messages,
-          sessionId: currentThreadId.toString(),
-          isDeepAnalysis: isDeepAnalysis,
-          imageData: currentImageData
-        }),
-        signal: controller.signal
-      });
-
-      if (!response.ok) {
-        throw new Error('Connection failed');
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      
       let botContent = '';
       const botMsgId = Date.now() + 1;
       
@@ -275,36 +259,39 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       
       setIsTyping(false);
 
-      if (reader) {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === 'token') {
-                  botContent += data.content;
-                  setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
-                } else if (data.type === 'metadata') {
-                  setSuggestedFollowups(data.suggestions || []);
-                  setMessages(prev => prev.map(m => m.id === botMsgId ? { 
-                    ...m, 
-                    metadata: data.metadata,
-                    sources: data.metadata?.sources?.tables || []
-                  } : m));
-                }
-              } catch (e) {
-                // Ignore parse errors for incomplete chunks
-              }
-            }
+      await streamChat({
+        message: text,
+        history: messages,
+        projectId: projectId && projectId !== 'All' ? projectId : undefined,
+        sessionId: currentThreadId.toString(),
+        isDeepAnalysis,
+        imageData: currentImageData,
+        mode: isDeepAnalysis ? 'analysis' : 'auto',
+        client_version: 'akasha-web-1',
+      }, {
+        token,
+        signal: controller.signal,
+        onEvent: (data) => {
+          if (data.type === 'answer_delta' || data.type === 'token') {
+            botContent += data.content || '';
+            setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
+          } else if (data.type === 'clarification_required') {
+            botContent = data.question || 'I need one clarification before I can answer.';
+            setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
+          } else if (data.type === 'run_completed' || data.type === 'metadata') {
+            setSuggestedFollowups(data.suggestions || []);
+            const metadata = metadataFromEvent(data);
+            setMessages(prev => prev.map(m => m.id === botMsgId ? {
+              ...m,
+              metadata,
+              sources: metadata?.sources?.tables || data.sources || []
+            } : m));
+          } else if (data.type === 'error') {
+            botContent = data.message || 'The chatbot run failed before completion.';
+            setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
           }
-        }
-      }
+        },
+      });
       
     } catch (err: any) {
       if (err?.name === 'AbortError') {
