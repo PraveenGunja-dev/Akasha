@@ -254,6 +254,7 @@ export default function CEODashboard() {
           <div className="flex-1 min-h-0 p-4 overflow-hidden flex flex-col">
             {activeTab === 'ai_copilot' && (
               <AICopilot 
+                projectId={projectId || selectedProject}
                 onMinimize={() => {
                   setActiveTab(previousTab);
                   sessionStorage.setItem('ceoActiveTab', previousTab);

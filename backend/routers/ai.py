@@ -1,6 +1,6 @@
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
 from pydantic import BaseModel
 import os
 import json
@@ -11,8 +11,12 @@ import uuid
 from database import get_db
 import models
 from services.project_service import calculate_project_360_metrics
+from engine.contracts import ChatRequestContract
 from engine.orchestrator import ChatOrchestrator
 from engine.memory import store_feedback
+from engine.model_gateway import chat_completion, complete_text, get_ai_provider as gateway_get_ai_provider
+from engine.security import build_user_scope
+from routers.auth import get_current_user_optional
 from dotenv import load_dotenv
 
 load_dotenv(override=True)
@@ -22,15 +26,7 @@ logger = logging.getLogger(__name__)
 
 orchestrator = ChatOrchestrator(default_llm=os.environ.get("AI_PROVIDER", "ollama").lower())
 
-from typing import Optional, List
-
-class ChatRequest(BaseModel):
-    message: str
-    history: List[dict] = []
-    projectId: Optional[str] = None
-    sessionId: Optional[str] = None
-    isDeepAnalysis: bool = False
-    imageData: Optional[str] = None
+from typing import Optional
 
 class FeedbackRequest(BaseModel):
     messageId: int
@@ -40,130 +36,90 @@ class FeedbackRequest(BaseModel):
     questionPattern: str = None
 
 def call_azure_openai_curl(messages, temperature, max_tokens, json_response=False):
-    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
-    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
-    api_version = os.environ.get("AZURE_OPENAI_API_VERSION")
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
-    
-    if not all([endpoint, api_key, api_version, deployment]):
-        raise Exception("Azure OpenAI credentials missing from environment.")
-        
-    # Strip trailing slash from endpoint if present
-    endpoint = endpoint.rstrip("/")
-    url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
-    
-    payload = {
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }
-    if json_response:
-        payload["response_format"] = {"type": "json_object"}
-        
-    # Write payload to a temporary file to avoid command-line length limits or escaping issues
-    import uuid
-    temp_file = f"temp_payload_{uuid.uuid4().hex}.json"
-    with open(temp_file, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
-        
-    cmd = [
-        "curl.exe",
-        "-k",
-        "--noproxy", "*",
-        "-X", "POST",
-        url,
-        "-H", "Content-Type: application/json",
-        "-H", f"api-key: {api_key}",
-        "-d", f"@{temp_file}",
-        "-s"
-    ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
-    finally:
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
-            
-    if result.returncode != 0:
-        raise Exception(f"Curl failed: {result.stderr}")
-        
-    try:
-        data = json.loads(result.stdout)
-        if "error" in data:
-            raise Exception(f"Azure Error: {data['error'].get('message', str(data['error']))}")
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        raise Exception(f"Failed to parse Azure response. Output: {result.stdout[:200]}... Error: {str(e)}")
+    return complete_text(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_response=json_response,
+        provider="azure",
+    )
 
 
 def get_ai_provider():
-    from dotenv import load_dotenv
-    load_dotenv(override=True)
-    return os.environ.get("AI_PROVIDER", "ollama").lower()
+    return gateway_get_ai_provider()
 
 def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
-    import os
-    from groq import Groq
-    api_key = os.environ.get("AKASHA_AI_API_KEY")
-    if not api_key:
-        raise Exception("Groq API key missing in environment")
-    client = Groq(api_key=api_key)
-    
-    kwargs = {
-        "messages": messages,
-        "model": "llama-3.3-70b-versatile",
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": stream
-    }
-    if json_response:
-        kwargs["response_format"] = {"type": "json_object"}
-        
-    chat_completion = client.chat.completions.create(**kwargs)
-    
     if stream:
-        return chat_completion
-    return chat_completion.choices[0].message.content
+        return chat_completion(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_response=json_response,
+            stream=True,
+            provider="groq",
+        )
+    return complete_text(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_response=json_response,
+        provider="groq",
+    )
 
 def call_ollama(messages, temperature, max_tokens, json_response=False, stream=False):
-    import openai
-    import httpx
-    import os
-    
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-    
-    client = openai.OpenAI(
-        base_url=endpoint,
-        api_key="ollama",
-        timeout=httpx.Timeout(300.0, connect=30.0)
-    )
-    
-    kwargs = {
-        "messages": messages,
-        "model": model_name,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }
-    if json_response:
-        kwargs["response_format"] = {"type": "json_object"}
-        
     if stream:
-        kwargs["stream"] = True
-        response = client.chat.completions.create(**kwargs)
-        return response
-    else:
-        response = client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content
+        return chat_completion(
+            messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            json_response=json_response,
+            stream=True,
+        )
+    return complete_text(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_response=json_response,
+    )
+
+
+def _model_dump(obj):
+    if hasattr(obj, "model_dump"):
+        return obj.model_dump()
+    if hasattr(obj, "dict"):
+        return obj.dict()
+    return obj
+
+
+def _parse_datetime(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except Exception:
+        return None
+
+
+def _sse(event_type: str, payload: dict) -> str:
+    return f"data: {json.dumps({'type': event_type, **payload}, default=str)}\n\n"
 
 
 @router.post("/chat")
-def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
+def chat_with_copilot(
+    req: ChatRequestContract,
+    db: Session = Depends(get_db),
+    current_user: models.AkashaUser | None = Depends(get_current_user_optional),
+):
     """Main chat endpoint powered by the 6-step Intelligent Pipeline."""
-    session_id = req.sessionId or uuid.uuid4().hex
+    session_id = req.session_id or uuid.uuid4().hex
+    run_id = str(uuid.uuid4())
     
     # We pass the projectId as a hint to the intent classifier if provided by the UI
-    project_names = [req.projectId] if req.projectId else None
+    project_names = [req.project_id] if req.project_id else None
+    analysis_requested = req.is_deep_analysis or req.mode == "analysis"
+    user_scope = build_user_scope(current_user)
     
     try:
         # We need to stream the response
@@ -171,64 +127,194 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
         import json
         
         def event_stream():
-            # Run orchestrator as a generator
-            for chunk in orchestrator.process_message_stream(
-                db=db,
-                message=req.message,
-                session_id=session_id,
-                history=req.history,
-                project_names=project_names,
-                is_deep_analysis=req.isDeepAnalysis,
-                image_data=req.imageData
-            ):
-                if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                    # End of stream metadata
-                    response_obj = chunk["response"]
-                    
-                    # Ensure session exists
-                    db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
-                    if not db_session:
-                        db_session = models.ChatSession(session_id=session_id, title=req.message[:50])
-                        db.add(db_session)
-                        db.commit()
-                        db.refresh(db_session)
-                        
-                    # Create user message
-                    user_msg = models.ChatMessage(session_id=session_id, role="user", content=req.message)
-                    db.add(user_msg)
-                    
-                    # Create assistant message
-                    asst_msg = models.ChatMessage(
-                        session_id=session_id,
-                        role="assistant",
-                        content=response_obj.content,
-                        intent_type=response_obj.intent_type,
-                        project_ids=",".join(response_obj.project_ids) if response_obj.project_ids else None,
-                        data_domains=",".join(response_obj.domains) if response_obj.domains else None,
-                        data_as_of=response_obj.data_as_of,
-                        sources_used={"tables": response_obj.sources_used},
-                        latency_ms=response_obj.latency_ms,
-                    )
-                    db.add(asst_msg)
-                    db.commit()
-                    db.refresh(asst_msg)
-                    
-                    suggestions = []
-                    if response_obj.intent_type == "factual":
-                        suggestions = ["Why is that?", "Compare this to baseline", "Show me the trend"]
-                    elif response_obj.intent_type == "analytical":
-                        suggestions = ["What should we do about it?", "Who is responsible?", "Show detailed breakdown"]
+            yield _sse("run_started", {
+                "run_id": run_id,
+                "conversation_id": session_id,
+                "mode": "analysis" if analysis_requested else "fast",
+                "user": {
+                    "id": current_user.id,
+                    "role": current_user.role,
+                } if current_user else None,
+            })
+            yield _sse("status", {"message": "Classifying request and selecting trusted data."})
+
+            try:
+                server_history = _load_server_history(db, session_id) or req.history
+                for chunk in orchestrator.process_message_stream(
+                    db=db,
+                    message=req.message,
+                    session_id=session_id,
+                    history=server_history,
+                    project_names=project_names,
+                    is_deep_analysis=analysis_requested,
+                    image_data=req.image_data,
+                    user_scope=user_scope,
+                ):
+                    if isinstance(chunk, dict) and chunk.get("type") == "clarification_required":
+                        yield _sse("clarification_required", {
+                            "question": chunk.get("question"),
+                            "candidates": chunk.get("candidates", []),
+                        })
+                    elif isinstance(chunk, dict) and chunk.get("type") == "metadata":
+                        response_obj = chunk["response"]
+                        response_obj.run_id = run_id
+                        message_id = _persist_chat_turn(db, session_id, req.message, response_obj)
+                        suggestions = _suggestions_for_response(response_obj)
+                        completion = {
+                            "run_id": response_obj.run_id or run_id,
+                            "conversation_id": session_id,
+                            "message_id": message_id,
+                            "mode": "analysis" if analysis_requested else "fast",
+                            "intent": response_obj.intent_type,
+                            "project_ids": response_obj.project_ids,
+                            "domains": response_obj.domains,
+                            "sources": response_obj.sources_used,
+                            "freshness": {k: _model_dump(v) for k, v in response_obj.freshness.items()},
+                            "warnings": response_obj.warnings,
+                            "latency_ms": response_obj.latency_ms,
+                            "status": response_obj.status,
+                        }
+                        if response_obj.evidence:
+                            yield _sse("evidence", {"items": [_model_dump(e) for e in response_obj.evidence]})
+                        for warning in response_obj.warnings:
+                            yield _sse("warning", {"message": warning})
+                        yield _sse("run_completed", {
+                            **completion,
+                            "suggestions": suggestions,
+                            "metadata": {
+                                "message_id": message_id,
+                                "data_as_of": response_obj.data_as_of,
+                                "latency_ms": response_obj.latency_ms,
+                                "intent": response_obj.intent_type,
+                                "sources": {"tables": response_obj.sources_used},
+                            },
+                        })
                     else:
-                        suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
-                        
-                    yield f"data: {json.dumps({'type': 'metadata', 'metadata': {'message_id': asst_msg.id, 'data_as_of': response_obj.data_as_of, 'latency_ms': response_obj.latency_ms, 'intent': response_obj.intent_type, 'sources': response_obj.sources_used}, 'suggestions': suggestions})}\n\n"
-                else:
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                        yield _sse("answer_delta", {"content": chunk})
+            except Exception as exc:
+                logger.error(f"AKASHA stream error: {exc}", exc_info=True)
+                yield _sse("error", {"message": "The chatbot run failed before completion."})
+                yield _sse("run_completed", {
+                    "run_id": run_id,
+                    "conversation_id": session_id,
+                    "message_id": None,
+                    "mode": "analysis" if analysis_requested else "fast",
+                    "intent": "unsupported",
+                    "project_ids": [],
+                    "domains": [],
+                    "sources": [],
+                    "freshness": {},
+                    "warnings": [str(exc)],
+                    "latency_ms": 0,
+                    "status": "error",
+                })
 
         return StreamingResponse(event_stream(), media_type="text/event-stream")
     except Exception as e:
         logger.error(f"AKASHA Orchestrator Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+def _load_server_history(db: Session, session_id: str) -> list[dict]:
+    session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
+    if not session:
+        return []
+    messages = (
+        db.query(models.ChatMessage)
+        .filter_by(session_id=session_id)
+        .order_by(models.ChatMessage.created_at.desc())
+        .limit(20)
+        .all()
+    )
+    messages = list(reversed(messages))
+    return [{"role": msg.role, "content": msg.content} for msg in messages]
+
+
+def _persist_chat_turn(db: Session, session_id: str, user_content: str, response_obj) -> int:
+    db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
+    if not db_session:
+        db_session = models.ChatSession(session_id=session_id, title=user_content[:50])
+        db.add(db_session)
+        db.commit()
+        db.refresh(db_session)
+
+    user_msg = models.ChatMessage(session_id=session_id, role="user", content=user_content)
+    db.add(user_msg)
+
+    asst_msg = models.ChatMessage(
+        session_id=session_id,
+        role="assistant",
+        content=response_obj.content,
+        intent_type=response_obj.intent_type,
+        project_ids=",".join(response_obj.project_ids) if response_obj.project_ids else None,
+        data_domains=",".join(response_obj.domains) if response_obj.domains else None,
+        data_as_of=_parse_datetime(response_obj.data_as_of),
+        sources_used={
+            "tables": response_obj.sources_used,
+            "freshness": {k: _model_dump(v) for k, v in response_obj.freshness.items()},
+            "evidence": [_model_dump(e) for e in response_obj.evidence],
+            "warnings": response_obj.warnings,
+        },
+        latency_ms=response_obj.latency_ms,
+    )
+    db.add(asst_msg)
+    db.commit()
+    db.refresh(asst_msg)
+    return asst_msg.id
+
+
+def _suggestions_for_response(response_obj) -> list[str]:
+    """Return follow-up chips only when the completed run has enough evidence.
+
+    These are UI prompts, not model recommendations. They should not appear for
+    clarification, authorization, not-found, or failed runs because there is no
+    resolved evidence base to continue from.
+    """
+    if getattr(response_obj, "status", None) != "success":
+        return []
+
+    project_ids = getattr(response_obj, "project_ids", None) or []
+    sources = set(getattr(response_obj, "sources_used", None) or [])
+    warnings = set(getattr(response_obj, "warnings", None) or [])
+
+    if "project_resolution_required" in warnings:
+        return []
+
+    if getattr(response_obj, "intent_type", None) == "deep_analysis":
+        if not project_ids:
+            return ["List the evidence used", "Show portfolio risk breakdown"]
+        suggestions = ["List the evidence used"]
+        if "p6_project" in sources or "p6_activity" in sources:
+            suggestions.append("Summarize schedule risks")
+        if "mt_poamount" in sources:
+            suggestions.append("Summarize procurement gaps")
+        if "tc_network_edge" in sources:
+            suggestions.append("Summarize transmission risks")
+        if len(suggestions) < 3:
+            suggestions.append("What should management review from this evidence?")
+        return suggestions[:3]
+
+    if getattr(response_obj, "intent_type", None) == "factual":
+        return ["List the evidence used", "Show related schedule risks"] if project_ids else []
+    if getattr(response_obj, "intent_type", None) in {"analytical", "advisory"}:
+        return ["List the evidence used", "Summarize main risks", "What should management review from this evidence?"] if project_ids else []
+
+    return []
+
+
+def _suggestions_for_intent(intent_type: str) -> list[str]:
+    """Backward-compatible fallback for older imports."""
+    class _Response:
+        status = "success"
+        project_ids = ["*"]
+        sources_used = []
+        warnings = []
+
+        def __init__(self, intent_type: str):
+            self.intent_type = intent_type
+
+    return _suggestions_for_response(_Response(intent_type))
+
 
 @router.post("/chat/feedback")
 def submit_chat_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):

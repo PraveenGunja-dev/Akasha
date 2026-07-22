@@ -58,7 +58,9 @@ DOCUMENT_KEYWORDS = [
 SAP_KEYWORDS = [
     "material", "procurement", "purchase order", "po ", "vendor",
     "supplier", "inventory", "stock", "consumption", "delivery",
-    "supply", "sap", "mb51", "mb52", "me2m",
+    "supply", "sap", "mb51", "mb52", "me2m", "capex", "cash flow",
+    "cost", "budget", "payment", "payments", "financial", "lc", "bg",
+    "working capital", "wc",
 ]
 
 TC_KEYWORDS = [
@@ -69,7 +71,30 @@ TC_KEYWORDS = [
 
 PORTFOLIO_KEYWORDS = [
     "all projects", "portfolio", "across all", "every project",
-    "overall", "entire", "riskiest projects", "top", "worst",
+    "overall", "entire", "riskiest projects", "top projects",
+    "worst projects", "which projects", "all solar projects", "portfolio-level",
+]
+
+TC_AGGREGATE_KEYWORDS = [
+    "delayed line", "delayed lines", "transmission delayed",
+    "transmission line", "transmission lines", "grid bottleneck",
+    "grid bottlenecks",
+]
+
+TC_STATUS_AGGREGATE_KEYWORDS = [
+    "transmission readiness", "evacuation readiness", "connectivity status",
+    "grid readiness",
+]
+
+COUNT_OR_LIST_KEYWORDS = [
+    "how many", "count", "count of", "number of", "list", "show",
+]
+
+P6_ACTIVITY_AGGREGATE_KEYWORDS = [
+    "critical path", "critical activities", "which activities",
+    "which activity", "dictates the overall project duration",
+    "dictates overall project duration", "bottleneck activity",
+    "bottleneck activities",
 ]
 
 
@@ -113,7 +138,7 @@ def classify_intent_llm(message: str, history: list = None, project_names: list 
     Uses Ollama (fast ~200ms) to extract structured intent.
     Falls back to local classification if LLM fails.
     """
-    from routers.ai import call_ollama, call_azure_openai_curl, get_ai_provider
+    from engine.model_gateway import complete_text
     
     project_list_hint = ""
     if project_names:
@@ -145,21 +170,12 @@ Output valid JSON only:
 
     try:
         messages = [{"role": "user", "content": prompt}]
-        provider = get_ai_provider()
-        if provider == "azure":
-            result = call_azure_openai_curl(
-                messages=messages,
-                temperature=0,
-                max_tokens=200,
-                json_response=True,
-            )
-        else:
-            result = call_ollama(
-                messages=messages,
-                temperature=0,
-                max_tokens=200,
-                json_response=True,
-            )
+        result = complete_text(
+            messages=messages,
+            temperature=0,
+            max_tokens=200,
+            json_response=True,
+        )
         result = result.strip()
         if result.startswith("```json"):
             result = result[7:-3].strip()
@@ -197,10 +213,61 @@ def classify_intent(message: str, history: list = None, project_names: list = No
     
     Tries LLM first (if enabled), falls back to keyword-based classification.
     """
+    intent = None
     if use_llm:
         try:
-            return classify_intent_llm(message, history, project_names)
+            intent = classify_intent_llm(message, history, project_names)
         except Exception:
             pass
-    
-    return classify_intent_local(message, history)
+
+    if intent is None:
+        intent = classify_intent_local(message, history)
+
+    return normalize_intent(message, intent, has_project_hint=bool(project_names))
+
+
+def normalize_intent(message: str, intent: ChatIntent, *, has_project_hint: bool = False) -> ChatIntent:
+    """Apply deterministic guardrails around common routing mistakes."""
+    msg_lower = message.lower().strip()
+
+    domains = set(intent.domains or [])
+    if any(kw in msg_lower for kw in TC_KEYWORDS):
+        domains.add("tc")
+    if not domains:
+        domains.add("p6")
+    intent.domains = sorted(domains)
+
+    asks_tc_aggregate = (
+        "tc" in domains
+        and not has_project_hint
+        and not intent.projects
+        and any(kw in msg_lower for kw in TC_AGGREGATE_KEYWORDS)
+        and any(kw in msg_lower for kw in COUNT_OR_LIST_KEYWORDS)
+    )
+    if asks_tc_aggregate:
+        intent.is_portfolio = True
+        if any(kw in msg_lower for kw in FACTUAL_KEYWORDS):
+            intent.intent_type = "factual"
+
+    asks_tc_status_aggregate = (
+        "tc" in domains
+        and not has_project_hint
+        and not intent.projects
+        and any(kw in msg_lower for kw in TC_STATUS_AGGREGATE_KEYWORDS)
+    )
+    if asks_tc_status_aggregate:
+        intent.is_portfolio = True
+        intent.intent_type = "factual"
+
+    asks_p6_activity_aggregate = (
+        "p6" in domains
+        and not has_project_hint
+        and not intent.projects
+        and any(kw in msg_lower for kw in P6_ACTIVITY_AGGREGATE_KEYWORDS)
+    )
+    if asks_p6_activity_aggregate:
+        intent.is_portfolio = True
+        if msg_lower.startswith(("which", "what", "show", "list")):
+            intent.intent_type = "factual"
+
+    return intent

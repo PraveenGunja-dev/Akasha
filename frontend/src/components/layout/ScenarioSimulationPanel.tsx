@@ -3,6 +3,7 @@ import { Bot, Send, Sparkles, Loader2, FastForward, Sliders, X, Maximize2, MoreV
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAuth } from '../../context/AuthContext';
+import { streamChat } from '../../features/chatbot/chatSseClient';
 
 interface Message {
   id?: number;
@@ -20,7 +21,7 @@ interface ScenarioSimulationPanelProps {
 }
 
 export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize, projectId }: ScenarioSimulationPanelProps) {
-  const { user } = useAuth();
+  const { user, token } = useAuth();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
@@ -114,37 +115,57 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
       }
     }
     
-    localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(newMessages));
+    const threadId = currentThreadId;
+    localStorage.setItem(`akasha_msgs_${threadId}`, JSON.stringify(newMessages));
     setLoading(true);
 
     try {
-      const res = await fetch('/akasha/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend, history: newMessages.slice(-10), projectId })
-      });
-      const data = await res.json();
-      
+      let botContent = '';
       const botMsg: Message = {
         id: Date.now() + 1,
         type: 'bot',
-        content: res.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`,
+        content: '',
         timestamp: new Date(),
         sources: ['Simulation Engine']
       };
-      const finalMessages = [...newMessages, botMsg];
-      setMessages(finalMessages);
-      localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(finalMessages));
-    } catch {
+      setMessages(prev => [...prev, botMsg]);
+
+      await streamChat({
+        message: textToSend,
+        history: newMessages.slice(-10),
+        projectId,
+        sessionId: String(threadId),
+        client_version: 'akasha-scenario-panel-1',
+      }, {
+        token,
+        onEvent: (event) => {
+          if (event.type === 'answer_delta' || event.type === 'token') {
+            botContent += event.content || '';
+          } else if (event.type === 'clarification_required') {
+            botContent = event.question || 'I need one clarification before I can answer.';
+          } else if (event.type === 'error') {
+            botContent = event.message || 'The chatbot run failed before completion.';
+          }
+
+          if (botContent) {
+            setMessages(prev => {
+              const updated = prev.map(msg => msg.id === botMsg.id ? { ...msg, content: botContent } : msg);
+              localStorage.setItem(`akasha_msgs_${threadId}`, JSON.stringify(updated));
+              return updated;
+            });
+          }
+        },
+      });
+    } catch (error: any) {
       const errorMsg: Message = {
         id: Date.now() + 1,
         type: 'bot',
-        content: 'Simulation engine error. Please try again.',
+        content: `Simulation engine error. ${error?.message || 'Please try again.'}`,
         timestamp: new Date()
       };
       const finalMessages = [...newMessages, errorMsg];
       setMessages(finalMessages);
-      localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(finalMessages));
+      localStorage.setItem(`akasha_msgs_${threadId}`, JSON.stringify(finalMessages));
     } finally {
       setLoading(false);
     }

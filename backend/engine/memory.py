@@ -66,6 +66,8 @@ def store_feedback(
         correction_text=correction_text,
         project_id=project_id,
         question_pattern=question_pattern,
+        is_reviewed=False,
+        trust_level="unreviewed",
         created_at=datetime.utcnow(),
     )
     db.add(feedback)
@@ -95,6 +97,8 @@ def get_relevant_feedback(
     query = db.query(models.ChatFeedback).filter(
         models.ChatFeedback.feedback_type.in_(["thumbs_down", "correction"]),
         models.ChatFeedback.correction_text.isnot(None),
+        models.ChatFeedback.is_reviewed == True,
+        models.ChatFeedback.trust_level == "approved",
     )
     
     # Filter by project if specified

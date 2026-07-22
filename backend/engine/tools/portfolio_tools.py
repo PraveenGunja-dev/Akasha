@@ -9,6 +9,7 @@ import logging
 from sqlalchemy.orm import Session
 
 import models
+from engine.project_resolver import resolve_project
 from engine.tools.p6_tools import p6_get_project_summary, p6_list_all_projects
 from engine.tools.sap_tools import sap_get_po_summary
 from engine.tools.tc_tools import tc_get_project_lines
@@ -50,14 +51,19 @@ def portfolio_get_project_360(db: Session, project_id: str) -> dict:
     sap_data = sap_get_po_summary(db, project_id)
     tc_data = tc_get_project_lines(db, project_id)
     
-    # Get project-specific notifications
-    all_notifs = db.query(models.Notification).filter(models.Notification.project_id == project_id).order_by(models.Notification.created_at.desc()).limit(10).all()
+    # Get project-specific notifications. Notifications are keyed by display name
+    # in the current schema, while chatbot tools work with canonical project IDs.
+    display_name = get_project_display_name(db, project_id)
+    all_notifs = db.query(models.Notification).filter(
+        models.Notification.project_name.in_([project_id, display_name])
+    ).order_by(models.Notification.created_at.desc()).limit(10).all()
     notifications = [{
         "id": n.id,
-        "title": n.title,
+        "title": n.activity_name or n.change_type or "Notification",
         "message": n.message,
         "status": n.action_status,
         "category": n.category,
+        "project_name": n.project_name,
         "ai_suggestion": n.ai_suggestion
     } for n in all_notifs]
     
@@ -164,8 +170,6 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
     if not name_or_id:
         return None
     
-    name_or_id = name_or_id.strip()
-    
     def _build_result(mapping):
         return {
             "project_id": mapping.project_id,
@@ -175,51 +179,46 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
             "category": mapping.category or "",
             "capacity_mwac": mapping.capacity_mwac,
         }
-    
-    # Direct project_id match
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == name_or_id
-    ).first()
-    if m:
-        return _build_result(m)
-    
-    # Match against project_mapping.project
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project == name_or_id
-    ).first()
-    if m and m.project_id:
-        return _build_result(m)
-    
-    # Match against P6 project name
+
+    def _build_p6_result(p6):
+        mapping = db.query(models.ProjectMapping).filter(
+            models.ProjectMapping.project_id == p6.project_id
+        ).first()
+        if mapping:
+            return _build_result(mapping)
+        return {
+            "project_id": p6.project_id,
+            "project_name": p6.name or p6.project_id,
+            "p6_name": p6.name or "",
+            "spv_name": "",
+            "category": "",
+            "capacity_mwac": None,
+        }
+
+    for resolution in (
+        resolve_project(db, name_or_id),
+        resolve_project(db, None, message=name_or_id),
+    ):
+        if resolution.status == "resolved" and resolution.project_ids:
+            p6 = db.query(models.P6Project).filter(
+                models.P6Project.project_id == resolution.project_ids[0]
+            ).first()
+            if p6 and p6.project_id:
+                return _build_p6_result(p6)
+            m = db.query(models.ProjectMapping).filter(
+                models.ProjectMapping.project_id == resolution.project_ids[0]
+            ).first()
+            if m and m.project_id:
+                return _build_result(m)
+
+    # Preserve the older P6-name fallback for mapped projects whose name only
+    # exists in the P6 table.
+    name_or_id = name_or_id.strip()
     p6 = db.query(models.P6Project).filter(
         models.P6Project.name == name_or_id
     ).first()
     if p6:
-        m = db.query(models.ProjectMapping).filter(
-            models.ProjectMapping.project_id == p6.project_id
-        ).first()
-        if m:
-            return _build_result(m)
-    
-    # Match project_name_from_p6
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_name_from_p6 == name_or_id
-    ).first()
-    if m and m.project_id:
-        return _build_result(m)
-    
-    # Case-insensitive fuzzy search (contains)
-    name_lower = name_or_id.lower()
-    all_mappings = db.query(models.ProjectMapping).all()
-    for mapping in all_mappings:
-        candidates = [
-            mapping.project or "",
-            mapping.project_name_from_p6 or "",
-            mapping.spv_name or "",
-        ]
-        for candidate in candidates:
-            if name_lower in candidate.lower() or candidate.lower() in name_lower:
-                return _build_result(mapping)
+        return _build_p6_result(p6)
     return None
 
 def portfolio_get_notifications(db: Session, limit: int = 10, category: str = "All") -> list[dict]:
@@ -237,11 +236,11 @@ def portfolio_get_notifications(db: Session, limit: int = 10, category: str = "A
     for n in notifs:
         result.append({
             "id": n.id,
-            "title": n.title,
+            "title": n.activity_name or n.change_type or "Notification",
             "message": n.message,
             "category": n.category,
             "status": n.action_status,
-            "project_id": n.project_id,
+            "project_name": n.project_name,
             "ai_suggestion": n.ai_suggestion
         })
     return result

@@ -1,0 +1,204 @@
+[
+  {
+    "id": "AK-RES-001",
+    "category": "project_resolution",
+    "severity": "critical",
+    "question": "FY25-BAIYA",
+    "expected_status": "resolved",
+    "expected_project_ids": ["FY25-BAIYA"]
+  },
+  {
+    "id": "AK-RES-002",
+    "category": "project_resolution",
+    "severity": "critical",
+    "question": "Khavda Solar",
+    "expected_status": "ambiguous",
+    "expected_min_candidates": 2
+  },
+  {
+    "id": "AK-AUTH-001",
+    "category": "fast_authorization",
+    "severity": "critical",
+    "intent": {
+      "projects": ["FY25-BAIYA"],
+      "intent_type": "factual",
+      "domains": ["p6"]
+    },
+    "scope": {
+      "role": "projects",
+      "project_ids": ["FY25-OTHER"],
+      "domains": ["p6"],
+      "can_access_portfolio": false
+    },
+    "expected_status": "error",
+    "expected_warning": "unauthorized_project_access"
+  },
+  {
+    "id": "AK-AUTH-002",
+    "category": "fast_authorization",
+    "severity": "critical",
+    "intent": {
+      "projects": ["FY25-BAIYA"],
+      "intent_type": "factual",
+      "domains": ["tc"]
+    },
+    "scope": {
+      "role": "projects",
+      "project_ids": ["FY25-BAIYA"],
+      "domains": ["p6"],
+      "can_access_portfolio": false
+    },
+    "expected_status": "error",
+    "expected_warning": "unauthorized_domain_access"
+  },
+  {
+    "id": "AK-AUTH-003",
+    "category": "tool_authorization",
+    "severity": "critical",
+    "tool_name": "p6_get_project_summary",
+    "arguments": {
+      "project_id": "FY25-BAIYA"
+    },
+    "scope": {
+      "role": "projects",
+      "project_ids": ["FY25-OTHER"],
+      "domains": ["p6"],
+      "can_access_portfolio": false
+    },
+    "expected_tool_status": "unauthorized"
+  },
+  {
+    "id": "AK-AUTH-004",
+    "category": "tool_authorization",
+    "severity": "critical",
+    "tool_name": "p6_list_all_projects",
+    "arguments": {},
+    "scope": {
+      "role": "projects",
+      "project_ids": ["FY25-BAIYA"],
+      "domains": ["p6"],
+      "can_access_portfolio": false
+    },
+    "expected_tool_status": "unauthorized"
+  },
+  {
+    "id": "AK-TOOL-001",
+    "category": "tool_contract",
+    "severity": "critical",
+    "tool_name": "p6_get_project_summary",
+    "arguments": {},
+    "scope": {
+      "role": "admin",
+      "project_ids": ["*"],
+      "domains": ["*"],
+      "can_access_portfolio": true
+    },
+    "expected_tool_status": "error",
+    "expected_error_contains": "Invalid tool arguments",
+    "expected_warning_contains": "project_id"
+  },
+  {
+    "id": "AK-TOOL-002",
+    "category": "tool_contract",
+    "severity": "high",
+    "tool_name": "p6_get_delayed_activities",
+    "arguments": {
+      "project_id": "FY25-BAIYA",
+      "limit": 500
+    },
+    "scope": {
+      "role": "admin",
+      "project_ids": ["*"],
+      "domains": ["*"],
+      "can_access_portfolio": true
+    },
+    "expected_tool_status": "error",
+    "expected_error_contains": "Invalid tool arguments",
+    "expected_warning_contains": "limit"
+  },
+  {
+    "id": "AK-TOOL-003",
+    "category": "tool_contract",
+    "severity": "high",
+    "tool_name": "nonexistent_write_tool",
+    "arguments": {
+      "project_id": "FY25-BAIYA"
+    },
+    "scope": {
+      "role": "admin",
+      "project_ids": ["*"],
+      "domains": ["*"],
+      "can_access_portfolio": true
+    },
+    "expected_tool_status": "error",
+    "expected_error_contains": "Unknown tool"
+  },
+  {
+    "id": "AK-INTENT-001",
+    "category": "intent_classification",
+    "severity": "medium",
+    "question": "What is the SPI formula?",
+    "expected_intent": "document",
+    "expected_is_portfolio": false,
+    "expected_domains": ["p6"]
+  },
+  {
+    "id": "AK-INTENT-002",
+    "category": "intent_classification",
+    "severity": "high",
+    "question": "Show me the top riskiest projects across all projects",
+    "expected_intent": "factual",
+    "expected_is_portfolio": true,
+    "expected_domains": ["p6"]
+  },
+  {
+    "id": "AK-NUM-001",
+    "category": "numeric_verification",
+    "severity": "critical",
+    "answer": "SPI is 0.82 and pending material quantity is 125 units.",
+    "context": {
+      "p6": {
+        "spi": 0.82
+      },
+      "sap": {
+        "pending_quantity": 125
+      }
+    }
+  },
+  {
+    "id": "AK-NUM-002",
+    "category": "numeric_verification",
+    "severity": "critical",
+    "answer": "Recovery will save 45 days.",
+    "context": {
+      "p6": {
+        "spi": 0.82
+      }
+    },
+    "expected_warning": "unverified_numeric_claims"
+  },
+  {
+    "id": "AK-REQ-001",
+    "category": "chat_request_contract",
+    "severity": "high",
+    "payload": {
+      "message": "Why is project FY25-BAIYA at risk?",
+      "projectId": "FY25-BAIYA",
+      "sessionId": "thread-1",
+      "mode": "analysis",
+      "client_version": "akasha-web-1"
+    },
+    "expected_valid": true,
+    "expected_project_id": "FY25-BAIYA",
+    "expected_session_id": "thread-1"
+  },
+  {
+    "id": "AK-REQ-002",
+    "category": "chat_request_contract",
+    "severity": "high",
+    "payload": {
+      "message": "   "
+    },
+    "expected_valid": false
+  }
+]

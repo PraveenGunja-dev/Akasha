@@ -627,6 +627,10 @@ class ChatFeedback(Base):
     correction_text = Column(String, nullable=True)  # User's correction if provided
     project_id = Column(String, nullable=True)       # Which project this feedback is about
     question_pattern = Column(String, nullable=True)  # Normalized question for pattern matching
+    is_reviewed = Column(Boolean, default=False, index=True)
+    trust_level = Column(String, default="unreviewed")  # unreviewed | approved | rejected
+    reviewed_by = Column(String, nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     message = relationship("ChatMessage", back_populates="feedback")

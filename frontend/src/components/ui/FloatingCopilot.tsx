@@ -2,13 +2,17 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MessageSquare, X, Send, Loader2 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { streamChat } from '../../features/chatbot/chatSseClient';
+import { useAuth } from '../../context/AuthContext';
 
 interface Message {
+  id?: number;
   type: 'user' | 'bot';
   content: string;
 }
 
 export default function FloatingCopilot() {
+  const { token } = useAuth();
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,18 +40,31 @@ export default function FloatingCopilot() {
     setLoading(true);
 
     try {
-      const res = await fetch('/akasha/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, history: messages.slice(-10) })
-      });
-      const data = await res.json();
-      setMessages(prev => [...prev, { type: 'bot', content: data.response }]);
-      if (res.ok && data.suggestions) {
-        setSuggestions(data.suggestions);
-      }
-    } catch {
-      setMessages(prev => [...prev, { type: 'bot', content: 'Connection error. Please try again.' }]);
+      let botContent = '';
+      const botId = Date.now() + 1;
+      setMessages(prev => [...prev, { id: botId, type: 'bot', content: '' }]);
+
+      await streamChat(
+        { message: userMsg, history: messages.slice(-10), client_version: 'akasha-floating-copilot-1' },
+        {
+          token,
+          onEvent: (event) => {
+            if (event.type === 'answer_delta' || event.type === 'token') {
+              botContent += event.content || '';
+            } else if (event.type === 'clarification_required') {
+              botContent = event.question || 'I need one clarification before I can answer.';
+            } else if (event.type === 'run_completed' || event.type === 'metadata') {
+              setSuggestions(event.suggestions || []);
+            } else if (event.type === 'error') {
+              botContent = event.message || 'The chatbot run failed before completion.';
+            }
+
+            setMessages(prev => prev.map(msg => msg.id === botId ? { ...msg, content: botContent } : msg));
+          },
+        }
+      );
+    } catch (error: any) {
+      setMessages(prev => [...prev, { type: 'bot', content: `Connection error. ${error?.message || 'Please try again.'}` }]);
     } finally {
       setLoading(false);
     }
