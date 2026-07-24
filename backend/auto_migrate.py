@@ -12,9 +12,21 @@ def auto_upgrade_schema():
     """
     logger.info("🔍 Checking for missing database columns...")
     
+    LEGACY_SAP_TABLES = ["mt_intransit", "mt_underconstruction"]
+
     # Ensure tables are created first
     models.Base.metadata.create_all(bind=engine)
-    
+
+    with engine.begin() as conn:
+        for table_name in LEGACY_SAP_TABLES:
+            try:
+                result = conn.execute(text(f"SELECT 1 FROM information_schema.tables WHERE table_name = '{table_name}'"))
+                if result.fetchone():
+                    logger.info(f"🧹 Dropping legacy SAP table '{table_name}' from the database...")
+                    conn.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            except Exception as e:
+                logger.warning(f"⚠️ Could not drop legacy SAP table '{table_name}': {e}")
+
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
     

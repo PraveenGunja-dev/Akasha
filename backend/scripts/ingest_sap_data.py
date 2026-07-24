@@ -32,7 +32,6 @@ def ingest_data():
     print("Clearing old data...")
     db.query(models.MTInventory).delete()
     db.query(models.MTPOAmount).delete()
-    db.query(models.MTInTransit).delete()
     db.query(models.MTMaterialDocument).delete()
     db.commit()
     

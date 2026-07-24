@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
   Bot, Send, Paperclip, Mic, Image as ImageIcon, Zap, Plus,
   FileText, Database, Sparkles, Calendar, Settings, PanelLeftClose,
@@ -10,6 +10,14 @@ import {
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import ReactECharts from 'echarts-for-react';
+import { motion, AnimatePresence } from 'framer-motion';
+
+interface ChartViz {
+  chart_type?: string;
+  title?: string;
+  spec: any; // ECharts `option` object, built server-side from real DB data
+}
 
 interface Message {
   id: number;
@@ -18,6 +26,7 @@ interface Message {
   timestamp: Date;
   sources?: string[];
   imageData?: string; // Optional base64 image data attached to the message
+  visualizations?: ChartViz[]; // Inline charts streamed from the agent's render_chart tool
   metadata?: {
     message_id?: number;
     data_as_of?: string | null;
@@ -47,6 +56,14 @@ interface AICopilotProps {
   onMinimize?: () => void;
 }
 
+/** Returns a time-of-day greeting string. */
+function getGreeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Good Morning';
+  if (hour < 17) return 'Good Afternoon';
+  return 'Good Evening';
+}
+
 export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -56,7 +73,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
   const [suggestedFollowups, setSuggestedFollowups] = useState<string[]>([]);
-  const [isDeepAnalysis, setIsDeepAnalysis] = useState(false);
+  const [isDeepAnalysis, setIsDeepAnalysis] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
   
   // Voice and Image states
   const [isListening, setIsListening] = useState(false);
@@ -67,6 +85,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+
+  const greeting = useMemo(() => getGreeting(), []);
 
   const startListening = () => {
     const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
@@ -149,6 +169,12 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   }, [input]);
 
   const isLanding = messages.length === 0;
+
+  const filteredThreads = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return threads;
+    return threads.filter(t => (t.title || '').toLowerCase().includes(q));
+  }, [threads, searchQuery]);
 
   const startNewThread = () => {
     const newId = Date.now();
@@ -276,31 +302,41 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       setIsTyping(false);
 
       if (reader) {
+        let buffer = '';
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          
-          const chunk = decoder.decode(value, { stream: true });
-          const lines = chunk.split('\n');
-          
+
+          // Append to a buffer and only process COMPLETE lines — a streamed SSE frame
+          // can be split across two reads, so keep the trailing partial line for next time.
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() ?? '';
+
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              try {
-                const data = JSON.parse(line.slice(6));
-                if (data.type === 'token') {
-                  botContent += data.content;
-                  setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
-                } else if (data.type === 'metadata') {
-                  setSuggestedFollowups(data.suggestions || []);
-                  setMessages(prev => prev.map(m => m.id === botMsgId ? { 
-                    ...m, 
-                    metadata: data.metadata,
-                    sources: data.metadata?.sources?.tables || []
-                  } : m));
-                }
-              } catch (e) {
-                // Ignore parse errors for incomplete chunks
+            const trimmed = line.trimStart();
+            if (!trimmed.startsWith('data: ')) continue;
+            try {
+              const data = JSON.parse(trimmed.slice(6));
+              if (data.type === 'token') {
+                botContent += data.content;
+                setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
+              } else if (data.type === 'visualization' && data.spec) {
+                // Inline chart from the agent — append to this message's chart list.
+                setMessages(prev => prev.map(m => m.id === botMsgId ? {
+                  ...m,
+                  visualizations: [...(m.visualizations || []), { chart_type: data.chart_type, title: data.title, spec: data.spec }]
+                } : m));
+              } else if (data.type === 'metadata') {
+                setSuggestedFollowups(data.suggestions || []);
+                setMessages(prev => prev.map(m => m.id === botMsgId ? {
+                  ...m,
+                  metadata: data.metadata,
+                  sources: data.metadata?.sources?.tables || []
+                } : m));
               }
+            } catch (e) {
+              // Incomplete/non-JSON frame — skip
             }
           }
         }
@@ -365,394 +401,455 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   ];
 
   const currentStage = TYPING_STAGES[typingStage];
-  const StageIcon = currentStage.icon;
 
-  return (
-    <div className="flex h-full w-full overflow-hidden bg-background border-t border-border relative">
-      {/* ── Main Content Area ── */}
-      <div className="flex-1 flex flex-col relative min-w-0">
-
-        {/* Ambient Background */}
-        <div className="absolute inset-0 pointer-events-none overflow-hidden">
-          <div className="absolute top-[20%] left-[30%] w-[600px] h-[600px] bg-primary/[0.03] rounded-full blur-[150px]"></div>
-          <div className="absolute bottom-[10%] right-[20%] w-[400px] h-[400px] bg-violet-500/[0.02] rounded-full blur-[120px]"></div>
-        </div>
-
-        {/* Top Bar */}
-        <div className="h-14 flex items-center justify-between px-5 border-b border-border bg-background/80 backdrop-blur-xl z-20 shrink-0">
-          <div className="flex items-center gap-3 relative">
-            <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sidebarOpen ? 'bg-primary/10 text-primary' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}
-              title="View History"
-            >
-              <History className="w-4 h-4" />
-            </button>
-            
-            {/* History Modal */}
-            {sidebarOpen && (
-              <div className="absolute top-12 left-0 w-80 bg-card border border-border shadow-2xl rounded-xl z-50 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="p-3 flex items-center justify-between border-b border-border/50 bg-muted">
-                  <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">Chat History</span>
-                  <button
-                    onClick={startNewThread}
-                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[11px] font-medium text-primary hover:bg-primary/100/10 transition-colors"
-                  >
-                    <Plus className="w-3 h-3" /> New
-                  </button>
-                </div>
-                <div className="p-2 border-b border-border/50">
-                  <div className="flex items-center gap-2 bg-background rounded-md px-2 py-1.5 border border-border">
-                    <Search className="w-3.5 h-3.5 text-muted-foreground/70 shrink-0" />
-                    <input
-                      type="text"
-                      placeholder="Search conversations..."
-                      className="bg-transparent text-[11px] text-foreground placeholder-muted-foreground outline-none flex-1 min-w-0"
-                    />
-                  </div>
-                </div>
-                <div className="max-h-64 overflow-y-auto scrollbar-hide p-1.5">
-                  {threads.length > 0 ? (
-                    <div className="space-y-0.5">
-                      {threads.map(thread => (
-                        <button
-                          key={thread.id}
-                          onClick={() => { loadThread(thread); setSidebarOpen(false); }}
-                          className={`w-full text-left px-2.5 py-2 rounded-md transition-all duration-150 group/item relative flex items-center gap-2.5 ${
-                            activeThreadId === thread.id
-                              ? 'bg-primary/5 text-primary'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground/90'
-                          }`}
-                        >
-                          <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-70" />
-                          <span className="text-[12px] font-medium truncate flex-1">
-                            {thread.title}
-                          </span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); deleteThread(thread.id, e); }}
-                            className="p-1 rounded hover:bg-destructive/100/10 text-muted-foreground/50 hover:text-destructive opacity-0 group-hover/item:opacity-100 transition-all duration-200"
-                          >
-                            <Trash2 className="w-3 h-3 shrink-0" />
-                          </button>
-                        </button>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="py-6 text-center">
-                      <p className="text-[11px] text-muted-foreground/60">No conversations yet</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            <div className="h-5 w-px bg-border/50 mx-1"></div>
-
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-md">
-                <MessageSquare className="w-3.5 h-3.5 text-primary-foreground" />
-              </div>
-              <div>
-                <h1 className="text-[13px] font-semibold text-foreground tracking-wide">Ask Akasha</h1>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-1.5 ml-3 px-2 py-1 rounded-md bg-success/100/10 border border-success/20">
-              <div className="w-1.5 h-1.5 rounded-full bg-success/100 animate-pulse"></div>
-              <span className="text-[10px] text-success font-semibold tracking-wider uppercase">Online</span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {onMinimize && (
-              <button 
-                onClick={onMinimize}
-                className="px-3 py-1.5 rounded-lg text-xs font-semibold hover:bg-muted text-primary hover:text-primary/80 transition-colors border border-border bg-card"
+  // ──────────────────────────────────────────────
+  // Shared Input Bar (used in both landing & conversation states)
+  // ──────────────────────────────────────────────
+  const renderInputBar = (inLanding: boolean) => (
+    <div className="w-full">
+      <div className="rounded-[1.5rem] border border-border bg-card shadow-[0_2px_12px_rgba(15,23,42,0.06)] focus-within:border-border focus-within:shadow-[0_4px_20px_rgba(15,23,42,0.10)] transition-all duration-200">
+        {/* Image Preview */}
+        {imageFile && (
+          <div className="px-4 pt-3">
+            <div className="relative inline-block">
+              <img src={imageFile} alt="Attached" className="h-16 w-16 object-cover rounded-lg border border-border" />
+              <button
+                onClick={() => setImageFile(null)}
+                className="absolute -top-2 -right-2 w-5 h-5 bg-card border border-border rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground shadow-sm"
               >
-                Minimize
+                <X className="w-3 h-3" />
               </button>
-            )}
-            <button className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors">
-              <Settings className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* ── Landing View (No Messages) ── */}
-        {isLanding ? (
-          <div className="flex-1 flex flex-col items-center justify-center px-6 z-10">
-            {/* Hero */}
-            <div className="text-center mb-12">
-              <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-md">
-                <MessageSquare className="w-8 h-8 text-primary-foreground" />
-              </div>
-              <h2 className="text-3xl font-light text-foreground tracking-tight mb-3">
-                What can I analyze for you<span className="text-primary">?</span>
-              </h2>
-              <p className="text-sm text-muted-foreground/70 max-w-md mx-auto leading-relaxed">
-                I have real-time access to your Primavera P6 schedules, SAP financials, and logistics data.
-                Ask me anything about your portfolio.
-              </p>
-            </div>
-
-            {/* Insight Cards Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-w-2xl w-full mb-10">
-              {insightCards.map((card, i) => (
-                <button
-                  key={i}
-                  onClick={() => handleSend(card.prompt)}
-                  className="group text-left p-5 rounded-2xl bg-white/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-primary/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(59,130,246,0.1)] transition-all duration-300 hover:-translate-y-1 relative overflow-hidden"
-                >
-                  {/* Subtle Colored Glow Overlay on Hover */}
-                  <div 
-                    className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
-                    style={{ background: `radial-gradient(circle at top right, ${card.color}15, transparent 70%)` }}
-                  />
-                  
-                  <div className="relative z-10 flex items-start gap-4">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm"
-                      style={{ backgroundColor: `${card.color}15`, border: `1px solid ${card.color}30` }}
-                    >
-                      <card.icon className="w-5 h-5 transition-colors duration-300" style={{ color: card.color }} />
-                    </div>
-                    <div className="flex-1 min-w-0 pt-0.5">
-                      <h3 className="text-[14px] font-semibold text-foreground mb-1 transition-colors duration-300">{card.title}</h3>
-                      <p className="text-[12px] text-muted-foreground/80 leading-relaxed transition-colors duration-300 group-hover:text-foreground/70">{card.description}</p>
-                    </div>
-                    <ArrowRight 
-                      className="w-4 h-4 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300 shrink-0 mt-1" 
-                      style={{ color: card.color }}
-                    />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        ) : (
-          /* ── Conversation View ── */
-          <div className="flex-1 overflow-y-auto scrollbar-hide z-10" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
-            <div className="w-full px-8 py-6 space-y-1">
-              {messages.map((msg) => (
-                <div key={msg.id} className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-                  {msg.type === 'user' ? (
-                    /* User Message */
-                    <div className="flex justify-end py-3">
-                      <div className="max-w-[85%] bg-primary text-primary-foreground px-4 py-3 rounded-2xl rounded-br-md shadow-md">
-                        <p className="text-[13.5px] leading-relaxed">{msg.content}</p>
-                      </div>
-                    </div>
-                  ) : (
-                    /* Bot Response */
-                    <div className="py-5">
-                      <div className="flex items-center gap-2.5 mb-3">
-                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
-                          <MessageSquare className="w-3 h-3 text-primary-foreground" />
-                        </div>
-                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
-                      </div>
-
-                      <div className="akasha-response prose dark:prose-invert max-w-[60%] prose-p:text-[13.5px] prose-p:leading-relaxed prose-p:text-foreground/90 prose-headings:text-foreground prose-headings:text-[15px] prose-strong:text-primary prose-strong:font-semibold prose-code:text-primary prose-code:bg-primary/100/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-card prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-[13px] prose-li:text-foreground/85">
-                        <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                          {msg.content}
-                        </ReactMarkdown>
-                      </div>
-
-                      {/* Source Badges & Metadata */}
-                      <div className="flex flex-col gap-2 mt-4">
-                        {msg.sources && msg.sources.length > 0 && (
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">Sources:</span>
-                            {msg.sources.map((src, i) => (
-                              <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] text-muted-foreground/70">
-                                <Globe className="w-2.5 h-2.5" />
-                                {src}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        
-                        {msg.metadata && (
-                          <div className="flex items-center gap-4 text-[10px] text-muted-foreground/50">
-                            {msg.metadata.data_as_of && (
-                              <span className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                Data as of: {new Date(msg.metadata.data_as_of).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                              </span>
-                            )}
-                            {msg.metadata.latency_ms && (
-                              <span className="flex items-center gap-1">
-                                <Zap className="w-3 h-3" />
-                                Generated in {(msg.metadata.latency_ms / 1000).toFixed(1)}s
-                              </span>
-                            )}
-                            
-                            {/* Feedback System */}
-                            {msg.metadata.message_id && (
-                              <div className="flex items-center gap-1 ml-auto">
-                                <button 
-                                  onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_up')}
-                                  disabled={msg.feedbackStatus !== 'none'}
-                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'liked' ? 'text-success bg-success/100/10' : ''}`}
-                                  title="Good response"
-                                >
-                                  <ThumbsUp className="w-3.5 h-3.5" />
-                                </button>
-                                <button 
-                                  onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_down')}
-                                  disabled={msg.feedbackStatus !== 'none'}
-                                  className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'disliked' ? 'text-destructive bg-destructive/100/10' : ''}`}
-                                  title="Poor response"
-                                >
-                                  <ThumbsDown className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Suggested Follow-ups */}
-                      {msg.id === messages[messages.length - 1].id && suggestedFollowups.length > 0 && (
-                        <div className="flex items-center gap-2 mt-4 flex-wrap">
-                          {suggestedFollowups.map((followup, i) => (
-                            <button
-                              key={i}
-                              onClick={() => handleSend(followup)}
-                              className="px-3 py-1.5 rounded-lg bg-card border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border/80 transition-all"
-                            >
-                              {followup}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              {/* Typing Indicator — Inline Subtle */}
-              {isTyping && (
-                <div className="py-3 animate-in fade-in duration-300">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
-                      <Loader2 className="w-3 h-3 text-primary-foreground animate-spin" />
-                    </div>
-                    <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
-                    <span className="text-[11px] text-muted-foreground/60 font-mono animate-pulse">{currentStage.text}</span>
-                  </div>
-                </div>
-              )}
-
-              <div ref={messagesEndRef} />
             </div>
           </div>
         )}
+        {/* Textarea */}
+        <textarea
+          ref={inputRef}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSend();
+            }
+          }}
+          placeholder={inLanding ? 'Ask anything about your portfolio…' : 'Reply to Akasha…'}
+          className="w-full bg-transparent text-[15px] text-foreground placeholder-muted-foreground/60 outline-none resize-none min-h-[26px] max-h-[200px] leading-relaxed px-4 pt-3.5"
+          rows={1}
+        />
 
-        {/* ── Floating Command Bar ── */}
-        <div className={`px-5 ${isLanding ? '' : 'pb-5'} z-20 relative`}>
-          <div className="w-full">
-            <div className="bg-card border border-border rounded-2xl shadow-lg overflow-hidden focus-within:border-primary/40 focus-within:shadow-[0_0_0_1px_rgba(59,130,246,0.15)] transition-all duration-200">
-              {/* Image Preview */}
-              {imageFile && (
-                <div className="px-4 pt-3 pb-1">
-                  <div className="relative inline-block">
-                    <img src={imageFile} alt="Attached" className="h-16 w-16 object-cover rounded-md border border-border" />
-                    <button 
-                      onClick={() => setImageFile(null)}
-                      className="absolute -top-2 -right-2 w-5 h-5 bg-background border border-border rounded-full flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted"
+        {/* Toolbar Row */}
+        <div className="flex items-center justify-between px-3 pb-2.5 pt-1.5">
+          <div className="flex items-center gap-0.5">
+            <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleImageChange} />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              title="Attach image"
+            >
+              <Paperclip className="w-[18px] h-[18px]" />
+            </button>
+            <button
+              onClick={startListening}
+              className={`p-2 rounded-lg transition-colors ${isListening ? 'bg-red-50 text-red-500' : 'hover:bg-muted text-muted-foreground hover:text-foreground'}`}
+              title="Voice input"
+            >
+              <Mic className="w-[18px] h-[18px]" />
+            </button>
+            <button
+              onClick={() => setIsDeepAnalysis(!isDeepAnalysis)}
+              className={`ml-1 pl-2 pr-2.5 py-1.5 rounded-full transition-colors flex items-center gap-1.5 text-[12px] font-medium border ${
+                isDeepAnalysis
+                  ? 'bg-primary/10 text-primary border-primary/25'
+                  : 'bg-card text-muted-foreground border-border hover:bg-muted'
+              }`}
+              title="Deep Analysis Agent Mode — grounds answers in live P6/SAP/TC tools"
+            >
+              <Activity className="w-3.5 h-3.5" />
+              <span>{isDeepAnalysis ? 'Deep Analysis' : 'Deep Analysis'}</span>
+            </button>
+          </div>
+
+          {isStreaming ? (
+            <button
+              onClick={handleStop}
+              className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-foreground text-background hover:opacity-90 transition-all"
+              title="Stop generating"
+            >
+              <Square className="w-3 h-3 fill-current" />
+            </button>
+          ) : (
+            <button
+              onClick={() => handleSend()}
+              disabled={(!input.trim() && !imageFile) || isTyping}
+              className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 ${
+                (input.trim() || imageFile) && !isTyping
+                  ? 'bg-primary text-primary-foreground hover:opacity-90'
+                  : 'bg-muted text-muted-foreground/40 cursor-not-allowed'
+              }`}
+              title="Send"
+            >
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          )}
+        </div>
+      </div>
+      {inLanding && (
+        <p className="text-center text-[11px] text-muted-foreground/60 mt-3">
+          Akasha can make mistakes. Verify critical executive decisions independently.
+        </p>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex h-full w-full overflow-hidden bg-background text-foreground">
+
+      {/* ── Chat pane fills the full area (the app already provides the nav sidebar) ── */}
+      <div className="flex-1 flex flex-col relative min-w-0 bg-background">
+
+        {/* Header */}
+        <div className="h-14 flex items-center justify-between px-4 border-b border-border bg-background/90 backdrop-blur-sm z-30 shrink-0">
+          <div className="flex items-center gap-2 relative">
+            <button
+              onClick={() => setSidebarOpen(!sidebarOpen)}
+              className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sidebarOpen ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
+              title="Chat history"
+            >
+              <History className="w-[18px] h-[18px]" />
+            </button>
+
+            {/* Floating history panel (dropdown, not a second sidebar) */}
+            {sidebarOpen && (
+              <>
+                <div className="fixed inset-0 z-30" onClick={() => setSidebarOpen(false)} />
+                <div className="absolute top-11 left-0 w-80 bg-card border border-border shadow-xl rounded-2xl z-40 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                  <div className="p-2.5 border-b border-border">
+                    <button
+                      onClick={() => { startNewThread(); setSidebarOpen(false); }}
+                      className="flex items-center gap-2 w-full px-3 py-2 rounded-xl bg-primary/5 border border-primary/15 text-[13px] font-medium text-primary hover:bg-primary/10 transition-colors"
                     >
-                      <X className="w-3 h-3" />
+                      <Plus className="w-4 h-4" /> New chat
                     </button>
+                    <div className="flex items-center gap-2 px-2.5 py-1.5 mt-2 rounded-lg bg-muted border border-border">
+                      <Search className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
+                      <input
+                        type="text"
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        placeholder="Search chats…"
+                        className="bg-transparent text-[12.5px] text-foreground placeholder-muted-foreground/60 outline-none flex-1 min-w-0"
+                      />
+                    </div>
+                  </div>
+                  <div className="max-h-80 overflow-y-auto scrollbar-hide p-1.5">
+                    <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Recents</div>
+                    {filteredThreads.length > 0 ? (
+                      filteredThreads.map(thread => (
+                        <div
+                          key={thread.id}
+                          onClick={() => { loadThread(thread); setSidebarOpen(false); }}
+                          className={`group flex items-center gap-2.5 px-2.5 py-2 rounded-lg cursor-pointer transition-colors ${
+                            activeThreadId === thread.id ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted'
+                          }`}
+                        >
+                          <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
+                          <span className="text-[13px] truncate flex-1">{thread.title}</span>
+                          <button
+                            onClick={(e) => deleteThread(thread.id, e)}
+                            className="p-1 rounded hover:bg-muted text-muted-foreground/60 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-8 text-center text-[12px] text-muted-foreground/60">
+                        {searchQuery ? 'No matches' : 'No conversations yet'}
+                      </div>
+                    )}
                   </div>
                 </div>
-              )}
-              {/* Input */}
-              <div className="flex items-end px-4 pt-3 pb-2 gap-2">
-                <textarea
-                  ref={inputRef}
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSend();
-                    }
-                  }}
-                  placeholder="Ask anything about your portfolio..."
-                  className="flex-1 bg-transparent text-[14px] text-foreground placeholder-muted-foreground/50 outline-none resize-none min-h-[28px] max-h-[160px] leading-relaxed"
-                  rows={1}
-                />
-                {isStreaming ? (
-                  <button
-                    onClick={handleStop}
-                    className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 bg-destructive/100 text-white shadow-md hover:bg-red-600 animate-pulse"
-                    title="Stop generating"
-                  >
-                    <Square className="w-3.5 h-3.5 fill-current" />
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleSend()}
-                    disabled={(!input.trim() && !imageFile) || isTyping}
-                    className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 transition-all duration-200 mb-0.5 ${
-                      (input.trim() || imageFile) && !isTyping
-                        ? 'bg-primary text-primary-foreground shadow-md hover:bg-primary/90'
-                        : 'bg-muted text-muted-foreground/50 cursor-not-allowed'
-                    }`}
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                )}
-              </div>
-
-              {/* Bottom Tools Row */}
-              <div className="flex items-center justify-between px-4 pb-2.5 pt-0.5">
-                <div className="flex items-center gap-1">
-                  <button className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors" title="Attach file">
-                    <Paperclip className="w-4 h-4" />
-                  </button>
-                  <input type="file" ref={fileInputRef} hidden accept="image/*" onChange={handleImageChange} />
-                  <button 
-                    onClick={() => fileInputRef.current?.click()}
-                    className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground/90 transition-colors" 
-                    title="Image"
-                  >
-                    <ImageIcon className="w-4 h-4" />
-                  </button>
-                  <button 
-                    onClick={startListening}
-                    className={`p-1.5 rounded-lg transition-colors ${isListening ? 'bg-destructive/100/10 text-destructive hover:bg-destructive/100/20' : 'hover:bg-muted text-muted-foreground hover:text-foreground/90'}`}
-                    title="Voice input"
-                  >
-                    <Mic className="w-4 h-4" />
-                  </button>
-                  <div className="h-4 w-px bg-border/50 mx-1"></div>
-                  <button 
-                    onClick={() => setIsDeepAnalysis(!isDeepAnalysis)}
-                    className={`p-1.5 rounded-lg transition-colors flex items-center gap-1 ${
-                      isDeepAnalysis 
-                        ? 'bg-primary/20 text-primary border border-primary/30 shadow-[0_0_10px_rgba(59,130,246,0.3)]' 
-                        : 'hover:bg-muted text-muted-foreground hover:text-foreground/90'
-                    }`} 
-                    title="Deep Analysis Agent Mode"
-                  >
-                    <Activity className={`w-4 h-4 ${isDeepAnalysis ? 'animate-pulse' : ''}`} />
-                    <span className="text-[10px] hidden sm:inline">{isDeepAnalysis ? 'Deep Analysis: ON' : 'Deep Analysis'}</span>
-                  </button>
-                </div>
-                <span className="text-[10px] text-muted-foreground/30 hidden sm:inline">Akasha Platform · Enterprise Data</span>
-              </div>
-            </div>
-
-            {/* Disclaimer */}
-            {!isLanding && (
-              <div className="text-center mt-2">
-                <span className="text-[10px] text-muted-foreground/30">Automated analysis. Verify critical executive decisions independently.</span>
-              </div>
+              </>
+            )}
+            <span className="text-[13.5px] font-semibold text-foreground">Ask Akasha</span>
+            <span className="flex items-center gap-1.5 ml-1 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold tracking-wide uppercase">Online</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <button
+              onClick={startNewThread}
+              className="px-3 py-1.5 rounded-lg text-[12.5px] font-medium text-muted-foreground hover:bg-muted transition-colors flex items-center gap-1.5"
+              title="New chat"
+            >
+              <Plus className="w-3.5 h-3.5" /> New
+            </button>
+            {onMinimize && (
+              <button
+                onClick={onMinimize}
+                className="w-8 h-8 rounded-lg hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground transition-colors"
+                title="Minimize"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
           </div>
         </div>
+
+        {/* ══════════════════════════════════════════ */}
+        {/* ── Landing View (No Messages) ──          */}
+        {/* ══════════════════════════════════════════ */}
+        <AnimatePresence mode="wait">
+          {isLanding ? (
+            <motion.div
+              key="landing"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0, y: -30, scale: 0.98 }}
+              transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
+              className="flex-1 flex flex-col items-center justify-center px-6 z-10"
+            >
+              {/* Greeting */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.15, duration: 0.5 }}
+                className="text-center mb-8"
+              >
+                <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-md mx-auto mb-5">
+                  <Sparkles className="w-6 h-6 text-white" />
+                </div>
+                <h2 className="text-[2rem] font-semibold text-foreground tracking-tight">
+                  {greeting}
+                </h2>
+                <p className="text-[1.05rem] text-muted-foreground mt-1">
+                  How can I help with your portfolio today?
+                </p>
+              </motion.div>
+
+              {/* Centered Input */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.28, duration: 0.5 }}
+                className="w-full max-w-[720px]"
+              >
+                {renderInputBar(true)}
+              </motion.div>
+
+              {/* Quick-action suggestion chips */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4, duration: 0.5 }}
+                className="flex flex-wrap justify-center gap-2 max-w-[720px] mt-5"
+              >
+                {insightCards.map((card, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handleSend(card.prompt)}
+                    className="group flex items-center gap-2 px-3.5 py-2 rounded-full bg-card border border-border text-[12.5px] font-medium text-muted-foreground hover:border-border hover:bg-muted transition-all shadow-sm"
+                  >
+                    <card.icon className="w-3.5 h-3.5" style={{ color: card.color }} />
+                    <span>{card.title}</span>
+                  </button>
+                ))}
+              </motion.div>
+            </motion.div>
+
+          ) : (
+            /* ══════════════════════════════════════════ */
+            /* ── Conversation View ──                    */
+            /* ══════════════════════════════════════════ */
+            <motion.div
+              key="conversation"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.35 }}
+              className="flex-1 flex flex-col min-h-0"
+            >
+              {/* Messages area */}
+              <div className="flex-1 overflow-y-auto scrollbar-hide z-10" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                <div className="max-w-[80%] mx-auto w-full px-4 py-8 space-y-2">
+                  {messages.map((msg, idx) => (
+                    <motion.div
+                      key={msg.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.3, delay: idx === messages.length - 1 ? 0.05 : 0 }}
+                    >
+                      {msg.type === 'user' ? (
+                        /* User Message */
+                        <div className="flex justify-end py-2">
+                          <div className="max-w-[85%] bg-muted text-foreground px-4 py-2.5 rounded-2xl rounded-br-md">
+                            {msg.imageData && (
+                              <img src={msg.imageData} alt="Attached" className="h-32 w-auto rounded-lg mb-2 border border-border" />
+                            )}
+                            <p className="text-[14.5px] leading-relaxed whitespace-pre-wrap">{msg.content}</p>
+                          </div>
+                        </div>
+                      ) : (
+                        /* Bot Response */
+                        <div className="py-4">
+                          <div className="flex items-center gap-2 mb-2.5">
+                            <div className="w-6 h-6 rounded-full bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
+                              <Sparkles className="w-3 h-3 text-white" />
+                            </div>
+                            <span className="text-[12px] font-semibold text-muted-foreground">Akasha</span>
+                          </div>
+
+                          <div className="akasha-response prose max-w-none prose-p:text-[14.5px] prose-p:leading-[1.7] prose-p:text-foreground prose-headings:text-foreground prose-headings:text-[16px] prose-strong:text-foreground prose-strong:font-semibold prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-[14px] prose-li:text-foreground prose-table:text-[13px]">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                              {msg.content}
+                            </ReactMarkdown>
+                          </div>
+
+                          {/* ── Enhanced Chart Cards ── */}
+                          {msg.visualizations && msg.visualizations.length > 0 && (
+                            <div className="flex flex-col gap-5 mt-5 max-w-[85%]">
+                              {msg.visualizations.map((viz, i) => (
+                                <motion.div
+                                  key={i}
+                                  initial={{ opacity: 0, y: 16 }}
+                                  animate={{ opacity: 1, y: 0 }}
+                                  transition={{ duration: 0.45, delay: i * 0.1 }}
+                                  className="copilot-chart-card"
+                                >
+                                  {/* Chart Header with title + type badge */}
+                                  <div className="chart-header">
+                                    <BarChart3 className="w-4 h-4 text-primary/60" />
+                                    <span className="chart-title">
+                                      {viz.title || 'Visualization'}
+                                    </span>
+                                    {viz.chart_type && (
+                                      <span className="chart-type-badge ml-auto">
+                                        {viz.chart_type}
+                                      </span>
+                                    )}
+                                  </div>
+                                  {/* Chart Body */}
+                                  <div className="chart-body">
+                                    <ReactECharts
+                                      option={viz.spec}
+                                      style={{ height: 340, width: '100%' }}
+                                      notMerge={true}
+                                      opts={{ renderer: 'svg' }}
+                                    />
+                                  </div>
+                                </motion.div>
+                              ))}
+                            </div>
+                          )}
+
+                          {/* Source Badges & Metadata */}
+                          <div className="flex flex-col gap-2 mt-4">
+                            {msg.sources && msg.sources.length > 0 && (
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">Sources:</span>
+                                {msg.sources.map((src, i) => (
+                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] text-muted-foreground/70">
+                                    <Globe className="w-2.5 h-2.5" />
+                                    {src}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
+                            
+                            {msg.metadata && (
+                              <div className="flex items-center gap-4 text-[10px] text-muted-foreground/50">
+                                {msg.metadata.data_as_of && (
+                                  <span className="flex items-center gap-1">
+                                    <Clock className="w-3 h-3" />
+                                    Data as of: {new Date(msg.metadata.data_as_of).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                  </span>
+                                )}
+                                {msg.metadata.latency_ms && (
+                                  <span className="flex items-center gap-1">
+                                    <Zap className="w-3 h-3" />
+                                    Generated in {(msg.metadata.latency_ms / 1000).toFixed(1)}s
+                                  </span>
+                                )}
+                                
+                                {/* Feedback System */}
+                                {msg.metadata.message_id && (
+                                  <div className="flex items-center gap-1 ml-auto">
+                                    <button 
+                                      onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_up')}
+                                      disabled={msg.feedbackStatus !== 'none'}
+                                      className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'liked' ? 'text-success bg-success/10' : ''}`}
+                                      title="Good response"
+                                    >
+                                      <ThumbsUp className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button 
+                                      onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_down')}
+                                      disabled={msg.feedbackStatus !== 'none'}
+                                      className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'disliked' ? 'text-destructive bg-destructive/10' : ''}`}
+                                      title="Poor response"
+                                    >
+                                      <ThumbsDown className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                )}
+                              </div>
+                            )}
+                          </div>
+
+                          {/* Suggested Follow-ups */}
+                          {msg.id === messages[messages.length - 1].id && suggestedFollowups.length > 0 && (
+                            <div className="flex items-center gap-2 mt-4 flex-wrap">
+                              {suggestedFollowups.map((followup, i) => (
+                                <button
+                                  key={i}
+                                  onClick={() => handleSend(followup)}
+                                  className="px-3 py-1.5 rounded-lg bg-card border border-border text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted hover:border-border/80 transition-all"
+                                >
+                                  {followup}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </motion.div>
+                  ))}
+
+                  {/* Typing Indicator — Inline Subtle */}
+                  {isTyping && (
+                    <motion.div
+                      initial={{ opacity: 0, y: 8 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="py-3"
+                    >
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center">
+                          <Loader2 className="w-3 h-3 text-primary-foreground animate-spin" />
+                        </div>
+                        <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
+                        <span className="text-[11px] text-muted-foreground/60 font-mono animate-pulse">{currentStage.text}</span>
+                      </div>
+                    </motion.div>
+                  )}
+
+                  <div ref={messagesEndRef} />
+                </div>
+              </div>
+
+              {/* ── Bottom Input Bar (conversation mode) ── */}
+              <div className="px-4 pb-4 pt-2 z-20 relative bg-gradient-to-t from-background via-background to-transparent">
+                <div className="max-w-[80%] mx-auto w-full">
+                  {renderInputBar(false)}
+                  <p className="text-center text-[11px] text-muted-foreground/60 mt-2">
+                    Akasha can make mistakes. Verify critical executive decisions independently.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
       </div>
     </div>

@@ -9,7 +9,8 @@ from sqlalchemy import text
 
 def ingest_mapping():
     db = SessionLocal()
-    mapping_file = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")
+    mapping_file_old = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")
+    mapping_file_new = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "SAP Master sheet AKASHA (1).xlsx")
     
     try:
         # Create table if not exists
@@ -21,29 +22,37 @@ def ingest_mapping():
         db.query(models.ProjectMapping).delete()
         db.commit()
 
-        print(f"Reading {mapping_file}...")
-        df = pd.read_excel(mapping_file).fillna("")
+        print(f"Reading new mapping {mapping_file_new}...")
+        df_new = pd.read_excel(mapping_file_new)
+        
+        print(f"Reading old mapping {mapping_file_old}...")
+        df_old = pd.read_excel(mapping_file_old)
+        
+        print("Merging mapping data...")
+        df = pd.merge(df_new, df_old, left_on='P6 ID', right_on='Project ID', how='left').fillna("")
         
         mappings = []
         for _, row in df.iterrows():
             project = str(row.get('Project', '')).strip()
-            spv_name = str(row.get('SPVName', '')).strip()
-            project_id = str(row.get('Project ID', '')).strip()
-            project_name_from_p6 = str(row.get('Project name from\nP6', '')).strip()
             plot_no = str(row.get('Plot No', '')).strip()
             category = str(row.get('Category', '')).strip()
             mms_type = str(row.get('MMS Type', '')).strip()
             ol = str(row.get('OL', '')).strip()
-            plant_code = str(row.get('SPVPlantCode -  machinery', '')).strip()
-            if plant_code.lower() == 'nan': plant_code = ""
-            agel = str(row.get('AGEL - Supplay material', '')).strip()
-            if agel.lower() == 'nan': agel = ""
             wbs = str(row.get('Module WBS', '')).strip()
-            age6l = str(row.get('AGE6L - ', '')).strip()
-            cluster = str(row.get('Cluster', '')).strip()
             not_allocated = str(row.get('Not Allocated', '')).strip()
             priority = str(row.get('Priority', '')).strip()
             source_of_origin = str(row.get('SourceOfOrigin', '')).strip()
+            
+            project_id = str(row.get('P6 ID', '')).strip()
+            project_name_from_p6 = str(row.get('Project Name', '')).strip()
+            if not project:
+                project = project_name_from_p6
+                
+            spv_name = str(row.get('SPV', '')).strip()
+            plant_code = str(row.get('SPV.1', '')).strip()
+            agel = str(row.get('AGEL', '')).strip()
+            age6l = str(row.get('AGE6L', '')).strip()
+            cluster = str(row.get('Type (Cluster)', '')).strip()
             
             # Safely parse capacity
             def parse_float(val):

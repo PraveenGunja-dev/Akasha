@@ -4,7 +4,7 @@ import { Network, X, RotateCcw, ChevronDown, ChevronRight, Calendar, Package, Za
 import { useSearchParams } from 'react-router-dom';
 
 interface GNode {
-  id: string; name: string; category: number; value?: string;
+  id: string; project_id?: string; name: string; category: number; value?: string;
   health?: string; progress?: number; delayed?: number; on_track?: number;
   x: number; y: number; radius: number;
   targetX: number; targetY: number;
@@ -609,7 +609,7 @@ export default function KnowledgeGraph() {
                     {/* Live Transmission Portal Link */}
                     <div className="flex justify-end mb-2">
                       <a
-                        href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${selectedNode.id}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
+                        href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${encodeURIComponent(selectedNode.project_id || '')}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[9px] uppercase tracking-wider px-2.5 py-1.5 rounded font-bold transition-all w-fit group"

@@ -178,7 +178,10 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
                 session_id=session_id,
                 history=req.history,
                 project_names=project_names,
-                is_deep_analysis=req.isDeepAnalysis,
+                # Deep Analysis (tool-calling ReAct agent) is now the default for ALL chat, so
+                # every question gets grounded tool access — forecasts, charts, cross-domain data —
+                # instead of the limited fast pipeline. The client toggle can no longer downgrade it.
+                is_deep_analysis=True,
                 image_data=req.imageData
             ):
                 if isinstance(chunk, dict) and chunk.get("type") == "metadata":
@@ -222,10 +225,21 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
                         suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
                         
                     yield f"data: {json.dumps({'type': 'metadata', 'metadata': {'message_id': asst_msg.id, 'data_as_of': response_obj.data_as_of, 'latency_ms': response_obj.latency_ms, 'intent': response_obj.intent_type, 'sources': response_obj.sources_used}, 'suggestions': suggestions})}\n\n"
+                elif isinstance(chunk, dict) and chunk.get("type") == "visualization":
+                    # Chart spec from the agent — forward the ECharts option to the frontend.
+                    yield f"data: {json.dumps({'type': 'visualization', 'chart_type': chunk.get('chart_type'), 'title': chunk.get('title'), 'spec': chunk.get('spec')})}\n\n"
                 else:
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
 
-        return StreamingResponse(event_stream(), media_type="text/event-stream")
+        return StreamingResponse(
+            event_stream(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",  # disable nginx/proxy buffering so tokens flush live
+            },
+        )
     except Exception as e:
         logger.error(f"AKASHA Orchestrator Error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

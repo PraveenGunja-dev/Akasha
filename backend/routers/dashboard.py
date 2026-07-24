@@ -124,6 +124,13 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
 
     all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
     all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
+    # PO aggregates grouped by WBS element. The plant_code join below is unreliable — a
+    # project's spv_plant_code (e.g. 'H-51PA') is NOT the SAP plant_code (e.g. '51Y1'), so
+    # plant lookups returned 0 for every project (PO value tiles showed ₹0). WBS element
+    # matches on both sides (mapping.module_wbs 'H-51Y1-01-01' == mt_poamount.wbs_element).
+    all_po_qty_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.wbs_element).all()
+    all_po_val_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.wbs_element).all()
+    all_po_delivered_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.wbs_element).all()
 
     all_tc_entries = db.query(models.TcProjectEntry).all()
     all_tc_edges = db.query(models.TcNetworkEdge).all()
@@ -221,19 +228,24 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             clean_wbs = str(m.module_wbs).strip().lower()
             inv_qty = sum(qty for wbs, qty in all_inv_wbs if wbs and qty and clean_wbs in str(wbs).lower())
             it_qty = sum(qty for wbs, qty in all_it_wbs if wbs and qty and clean_wbs in str(wbs).lower())
+            # PO qty/value/delivered join on WBS too (see aggregate note above). WBS is
+            # project-specific, so no plant-sharing allocation ratio is applied here.
+            po_qty = sum(v for wbs, v in all_po_qty_wbs if wbs and v and clean_wbs in str(wbs).lower())
+            po_value = sum(v for wbs, v in all_po_val_wbs if wbs and v and clean_wbs in str(wbs).lower())
+            po_delivered_cr = sum(v for wbs, v in all_po_delivered_wbs if wbs and v and clean_wbs in str(wbs).lower())
             allocation_ratio_inv = 1.0
         else:
             inv_qty = (inv_by_plant.get(plant_code_str, 0) or inv_by_plant.get(agel_code_str, 0)) or 0
             it_qty = (it_by_plant.get(plant_code_str, 0) or it_by_plant.get(agel_code_str, 0)) or 0
+            # Fallback to plant lookup only when the project has no WBS (legacy behavior).
+            po_qty = ((po_qty_by_plant.get(plant_code_str, 0) or po_qty_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
+            po_value = ((po_val_by_plant.get(plant_code_str, 0) or po_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
+            po_delivered_cr = ((po_delivered_val_by_plant.get(plant_code_str, 0) or po_delivered_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
             allocation_ratio_inv = allocation_ratio
-            
+
         inv_qty *= allocation_ratio_inv
         it_qty *= allocation_ratio_inv
         req_qty = (req_mw or 0) * allocation_ratio
-
-        po_qty = ((po_qty_by_plant.get(plant_code_str, 0) or po_qty_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
-        po_value = ((po_val_by_plant.get(plant_code_str, 0) or po_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
-        po_delivered_cr = ((po_delivered_val_by_plant.get(plant_code_str, 0) or po_delivered_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
 
         portfolio_summary["total_inventory_qty"] += inv_qty
         portfolio_summary["total_po_qty"] += po_qty
@@ -877,7 +889,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             computed_capacity = base_cap
 
         portfolio_groups[port_name][eps].append({
-            "id": m.id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
+            "id": m.id, "project_id": m.project_id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
             "capacity": computed_capacity, "health": health,
             "progress": progress, "spv": m.spv_name or "?",
             "plant_code": plant_code,
@@ -920,7 +932,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             for p in projects:
                 proj_id = f"proj_{p['id']}"
                 nodes.append({
-                    "id": proj_id, "name": p["name"], "category": 3 if p["health"] == "on_track" else 4,
+                    "id": proj_id, "project_id": p.get("project_id"), "name": p["name"], "category": 3 if p["health"] == "on_track" else 4,
                     "symbolSize": max(15, min(35, p["capacity"] / 30)),
                     "value": f"{p['capacity']} MW · {p['progress']}%",
                     "health": p["health"], "progress": p["progress"],
@@ -1018,8 +1030,16 @@ def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends
         display_name = matching_p6.name or pm.project_name_from_p6 or pm.project
         obj_id_to_p_name[obj_id] = display_name
         
-        p_type = 'Wind' if 'wind' in str(pm.project).lower() else 'Solar'
+        # Type by CLUSTER, not project name — wind projects are named like "AGE25CL PSS-11",
+        # with no "wind" text, so name-matching mis-typed them as Solar (capacity came out 0).
+        p_type = 'Wind' if 'wind' in str(pm.cluster or '').lower() else 'Solar'
         total_cap = float(pm.capacity_mwac or 0)
+        # Fallback: many projects (e.g. Rajasthan BANDHA_500MW) have capacity_mwac=0 but carry
+        # the MW in their name. Extract it so their COD capacity isn't computed as zero.
+        if total_cap <= 0:
+            mw_match = re.search(r'(\d+(?:\.\d+)?)[\s_]*MW', str(pm.project_name_from_p6 or pm.project or ''), re.IGNORECASE)
+            if mw_match:
+                total_cap = float(mw_match.group(1))
         wtg_mw = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW) if p_type == 'Wind' else 0
         
         project_map[obj_id] = {
@@ -1043,7 +1063,11 @@ def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends
             (P6Activity.name.ilike('%trail run certificate%')) |
             (P6Activity.name.ilike('%cod%'))
         ),
-        ~P6Activity.wbs_name.ilike('%milestone%'),
+        # COD/Trial-Run milestones are taken per project type: Solar from the CONSTRUCTION WBS
+        # ('CONSTRUCTION-COMMISSIONING'), Wind from the TESTING & COMMISSIONING WBS (wind files
+        # no CODs under a construction WBS). Fetch both branches here; the per-type filter that
+        # decides which branch applies to each project is enforced in the loop below.
+        (P6Activity.wbs_name.ilike('%construction%') | P6Activity.wbs_name.ilike('%testing%')),
         ~P6Activity.type.ilike('%milestone%')
     ).all()
 
@@ -1053,9 +1077,18 @@ def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends
         obj_id = str(act.project_object_id)
         
         # CRUCIAL: ONLY process activities for tracked projects in ProjectMapping
-        if obj_id not in project_map: 
+        if obj_id not in project_map:
             continue
-            
+
+        # Per-type WBS rule: Solar CODs come from the CONSTRUCTION WBS, Wind CODs from the
+        # TESTING & COMMISSIONING WBS. Skip activities that aren't in this project's branch.
+        wbs_lc = (act.wbs_name or '').lower()
+        if project_map[obj_id]['type'] == 'Wind':
+            if 'testing' not in wbs_lc:
+                continue
+        elif 'construction' not in wbs_lc:
+            continue
+
         p_name = obj_id_to_p_name.get(obj_id)
         act_name = (act.name or "").lower()
         

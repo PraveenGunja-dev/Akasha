@@ -202,31 +202,6 @@ class MTTrialRun(Base):
     is_start_before_upload = Column(String)
     upload_time = Column(DateTime, default=datetime.utcnow)
 
-class MTInTransit(Base):
-    __tablename__ = "mt_intransit"
-
-    id = Column(Integer, primary_key=True, index=True)
-    material_code = Column(String, index=True)
-    inbound_delivery_quantity = Column(Float)
-    company_code = Column(String)
-    plant_code = Column(String, index=True)
-    gr_posting_date = Column(DateTime, nullable=True)
-    ariba_invoice_date = Column(DateTime, nullable=True)
-    vendor_code = Column(String)
-    vendor_name = Column(String)
-    po_number = Column(String)
-    wbs_element = Column(String, index=True)
-    mw_multiplication_factor = Column(Float)
-    quantity_mw = Column(Float)  # IT_Quantity_MW
-    
-    # New columns from analysis
-    grn_quantity = Column(Float, nullable=True)
-    ibd_creation_date = Column(DateTime, nullable=True)
-    po_quantity = Column(Float, nullable=True)
-    rejected_quantity = Column(Float, nullable=True)
-    
-    upload_time = Column(DateTime, default=datetime.utcnow)
-
 class MTPOAmount(Base):
     __tablename__ = "mt_poamount"
 
@@ -321,23 +296,6 @@ class MTMaterialDocument(Base):
     block_plot_name = Column(String, nullable=True)
     purchase_order = Column(String, nullable=True)
     base_unit = Column(String, nullable=True)
-    upload_time = Column(DateTime, default=datetime.utcnow)
-
-class MTUnderConstruction(Base):
-    __tablename__ = "mt_underconstruction"
-
-    id = Column(Integer, primary_key=True, index=True)
-    company_code = Column(String)
-    plant_code = Column(String, index=True)
-    material_code = Column(String)
-    quantity_uc = Column(Float)
-    vendor_code = Column(String)
-    posting_date = Column(DateTime)
-    purchase_order = Column(String)
-    storage_location_mapping = Column(String)
-    movement_type_validation = Column(String)
-    mw_multiplication_factor = Column(Float)
-    quantity_mw = Column(Float)  # UC_Quantity_MW
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class ProjectMapping(Base):

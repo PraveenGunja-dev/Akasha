@@ -35,13 +35,25 @@ app = FastAPI(
     root_path="/akasha"
 )
 
-# Middleware to rewrite /akasha/api to /api for local testing
-from fastapi import Request
-@app.middleware("http")
-async def rewrite_akasha_api(request: Request, call_next):
-    if request.url.path.startswith("/akasha/api/"):
-        request.scope["path"] = request.url.path.replace("/akasha/api/", "/api/", 1)
-    return await call_next(request)
+# Rewrite /akasha/api -> /api. Implemented as PURE ASGI middleware, NOT @app.middleware
+# (BaseHTTPMiddleware): BaseHTTPMiddleware buffers the whole response body before sending,
+# which broke token-by-token SSE streaming in the chat endpoint. Pure ASGI passes the
+# stream straight through.
+class AkashaPathRewriteMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope.get("type") == "http":
+            path = scope.get("path", "")
+            if path.startswith("/akasha/api/"):
+                new_path = path.replace("/akasha/api/", "/api/", 1)
+                scope["path"] = new_path
+                if scope.get("raw_path"):
+                    scope["raw_path"] = new_path.encode("utf-8")
+        await self.app(scope, receive, send)
+
+app.add_middleware(AkashaPathRewriteMiddleware)
 
 # CORS config to allow frontend
 app.add_middleware(

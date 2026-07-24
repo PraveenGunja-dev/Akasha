@@ -139,8 +139,13 @@ class ChatOrchestrator:
             tools_used = []
             
             for chunk in run_deep_analysis_agent_stream(db, message, history):
-                if isinstance(chunk, dict) and chunk.get("type") == "tools_used":
-                    tools_used = chunk["tools"]
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "tools_used":
+                        tools_used = chunk["tools"]
+                    elif chunk.get("type") == "visualization":
+                        # Forward chart specs straight to the router (not part of text content).
+                        yield chunk
+                    # Unknown dict types are ignored — never concatenated into text.
                 else:
                     full_content += chunk
                     yield chunk
@@ -203,6 +208,46 @@ class ChatOrchestrator:
             )
         }
 
+    def _get_portfolio_facts(self, db: Session) -> dict:
+        """Portfolio-level facts for non-project-specific questions: capacity/COD MW,
+        cluster/region project counts, and status breakdown. Capacity numbers come from
+        the same source the dashboard uses (get_capacity_overview) so the chatbot agrees
+        with the UI's COD figure."""
+        from sqlalchemy import func
+        import models
+
+        # Cluster breakdown (e.g. 'Solar Khavda' -> 46, 'Wind' -> 9, ...)
+        clusters = {}
+        for cluster, cnt in db.query(
+            models.ProjectMapping.cluster, func.count()
+        ).group_by(models.ProjectMapping.cluster).all():
+            if cluster and str(cluster).strip():
+                clusters[str(cluster).strip()] = cnt
+
+        # Capacity / COD — reuse the dashboard's authoritative computation.
+        capacity = {}
+        try:
+            from routers.dashboard import get_capacity_overview
+            cap = get_capacity_overview(None, db)
+            totals = cap.get("totals", {}) or {}
+            total_cod = (totals.get("solar_cod", 0) or 0) + (totals.get("wind_cod", 0) or 0)
+            total_tr = (totals.get("solar_tr", 0) or 0) + (totals.get("wind_tr", 0) or 0)
+            total_installed = sum((p.get("total_capacity") or 0) for p in cap.get("projects", []))
+            capacity = {
+                "total_cod_mw": round(total_cod, 1),
+                "total_trial_run_mw": round(total_tr, 1),
+                "total_installed_capacity_mw": round(total_installed, 1),
+                "note": "COD = capacity at Commercial Operation Date; trial_run = capacity under trial.",
+            }
+        except Exception as e:
+            logger.warning(f"portfolio capacity facts unavailable: {e}")
+
+        return {
+            "total_projects": db.query(models.ProjectMapping).count(),
+            "capacity_mw": capacity,
+            "projects_by_cluster": clusters,
+        }
+
     def _gather_context(self, db: Session, intent: ChatIntent) -> tuple[dict, dict, list]:
         """Gather context data for the requested projects and domains."""
         from engine.tools.portfolio_tools import portfolio_resolve_project_id
@@ -221,17 +266,24 @@ class ChatOrchestrator:
                 resolved_pids.append(pid)
         
         if not resolved_pids:
+            # Portfolio-level question (no specific project). Always attach portfolio facts —
+            # capacity/COD MW and cluster/region counts — so questions like "what is the COD
+            # generated" or "how many Khavda projects" can be answered instead of getting
+            # "I don't have that". Previously only 'riskiest projects' was gathered here.
+            context_data["portfolio_facts"] = self._get_portfolio_facts(db)
+            sources.add("portfolio_facts")
+
             if "tc" in intent.domains:
                 from engine.tools.tc_tools import tc_get_at_risk_lines, tc_get_network_summary
                 context_data["transmission_lines"] = tc_get_at_risk_lines(db, limit=15)
                 context_data["transmission_summary"] = tc_get_network_summary(db)
                 sources.add("tc_network")
-            
+
             if intent.is_portfolio or "p6" in intent.domains:
                 from engine.tools.portfolio_tools import portfolio_get_riskiest_projects
                 context_data["portfolio_risks"] = portfolio_get_riskiest_projects(db, top_n=5)
                 sources.add("portfolio_aggregate")
-            
+
             return context_data, {}, list(sources)
 
         # Update intent with resolved IDs

@@ -1928,7 +1928,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </div>
 
                 <a
-                  href={`https://adani.unada.in/transmission/v1/dashboard/${(detail?.mapping?.cluster || 'khavda').toLowerCase().includes('rajasthan') ? 'rajasthan' : 'khavda'}/commissioning-team?project=${encodeURIComponent(project?.projectName || projectId)}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
+                  href={`https://adani.unada.in/transmission/v1/dashboard/${(detail?.mapping?.cluster || 'khavda').toLowerCase().includes('rajasthan') ? 'rajasthan' : 'khavda'}/commissioning-team?project=${encodeURIComponent(projectId || '')}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all whitespace-nowrap shrink-0 group"

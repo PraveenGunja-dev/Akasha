@@ -143,7 +143,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
     for m in mappings:
         # 1. P6 Data
-        t('start queries'); p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
+        p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
         
         proj_name_check = p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "")
         if "demo" in proj_name_check.lower():
@@ -205,7 +205,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
                 models.MTMaterialDocument.wbs_element == wbs_exact
             ).all()
         
-        t('before mb51'); mb51_materials = set()
+        mb51_materials = set()
         for rec in mb51_records:
             # If falling back to plant, strictly require material to be in POs
             mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
@@ -542,15 +542,11 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
 
 def get_project_360_detail(db: Session, project_id: str):
-    import time
-    t0 = time.time()
-    def t(msg): print(f'{msg}: {time.time()-t0}')
-
     """
     Returns enriched per-project intelligence detail:
     - All P6 fields (dates, floats, costs, baselines)
     - SAP vendor breakdown (from MTPOAmount) — pro-rata allocated to this project
-    - SAP in-transit details (from MTInTransit) — WBS-filtered or pro-rata
+    - SAP pending delivery details (derived from ME2J still_to_deliver_qty) — WBS-filtered or pro-rata
     - SAP inventory details (from MTInventory) — WBS-filtered or pro-rata
     """
     # 1. Resolve mapping
@@ -559,7 +555,7 @@ def get_project_360_detail(db: Session, project_id: str):
     ).first()
     
     from sqlalchemy.orm import selectinload
-    t('start queries'); p6_proj = db.query(models.P6Project).options(
+    p6_proj = db.query(models.P6Project).options(
         selectinload(models.P6Project.activities).selectinload(models.P6Activity.resource_assignments)
     ).filter(
         models.P6Project.project_id == project_id
@@ -572,7 +568,7 @@ def get_project_360_detail(db: Session, project_id: str):
     allocation_ratio = 1.0
 
     # ── Purchase Orders (ME2J) ──
-    t('after p6 proj'); po_records_all = []
+    po_records_all = []
     wbs_exact = None
     if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
         wbs_exact = str(mapping.module_wbs).strip()
@@ -588,7 +584,7 @@ def get_project_360_detail(db: Session, project_id: str):
                 po_materials.add(mat_str)
                 
     # ── SAP: Reverse Engineering Logic (MB51) ──
-    t('before mb51'); mb51_materials = set()
+    mb51_materials = set()
     consumed_qty = 0.0
     expenditure_inr = 0.0
     sap_consumption = []
@@ -626,94 +622,10 @@ def get_project_360_detail(db: Session, project_id: str):
         if mat_str:
             mb51_materials.add(mat_str)
     
-    t('before vendors'); sap_vendors = []
-    vendor_summary = {}
-    total_po_qty = 0.0
-    total_budget_inr = 0.0
-    total_delivered_inr = 0.0
-    sap_intransit = []
-    total_transit_qty = 0.0
-
-    for po in po_records_all:
-        mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
-        
-        vendor_name = po.vendor_name or "Unknown Vendor"
-        vendor_code = po.vendor_code or ""
-        
-        if not vendor_code and vendor_name != "Unknown Vendor":
-            parts = vendor_name.split(" ", 1)
-            if len(parts) == 2 and parts[0].isdigit():
-                vendor_code = parts[0]
-                vendor_name = parts[1]
-                
-        sap_vendors.append({
-            "poNumber": po.purchasing_document,
-            "vendorCode": vendor_code,
-            "vendorName": vendor_name,
-            "materialCode": po.material_code,
-            "materialName": po.material_name,
-            "materialType": po.material_type,
-            "orderedQty": (po.order_quantity or 0) * allocation_ratio,
-            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio,
-            "companyCode": po.company_code,
-            "plantCode": po.plant_code,
-            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio,
-            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio,
-            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio,
-            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
-            "storageLocation": getattr(po, "storage_location", None),
-        })
-        
-        transit_qty = getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio
-        if transit_qty > 0:
-            sap_intransit.append({
-                "poNumber": po.purchasing_document,
-                "materialCode": po.material_code,
-                "materialName": po.material_name,
-                "inTransitQty": transit_qty,
-                "inTransitINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
-                "plantCode": po.plant_code,
-                "vendorName": vendor_name,
-            })
-            total_transit_qty += transit_qty
-        
-        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
-        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
-        
-        del_cr = getattr(po, "delivered_value_inr_cr", 0.0)
-        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0)
-        
-        if vendor_name not in vendor_summary:
-            vendor_summary[vendor_name] = {
-                "vendorName": vendor_name,
-                "vendorCode": vendor_code,
-                "totalOrderedQty": 0,
-                "totalBudgetINR": 0,
-                "poCount": 0,
-                "materials": set(),
-            }
-        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0)
-        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0)
-        vendor_summary[vendor_name]["poCount"] += 1
-        if po.material_code:
-            vendor_summary[vendor_name]["materials"].add(po.material_code)
-
-    vendor_breakdown = []
-    for v in vendor_summary.values():
-        vendor_breakdown.append({
-            "vendorName": v["vendorName"],
-            "vendorCode": v["vendorCode"],
-            "totalOrderedQty": v["totalOrderedQty"],
-            "totalBudgetINR": v["totalBudgetINR"],
-            "poCount": v["poCount"],
-            "materialCount": len(v["materials"]),
-        })
-    vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
-
     # ── In-Transit (Calculated from PO still_to_deliver) ──
 
     # ── Inventory (MB52) ──
-    t('before inv'); inv_records = []
+    inv_records = []
     if wbs_exact:
         inv_records = db.query(models.MTInventory).filter(
             models.MTInventory.wbs_element == wbs_exact,
@@ -746,7 +658,7 @@ def get_project_360_detail(db: Session, project_id: str):
     material_breakdown = []
 
     # ── True EVM Calculation (SPI / CPI) ──
-    t('before evm'); total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
+    total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
     actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
     progress_val = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
     pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
@@ -772,7 +684,7 @@ def get_project_360_detail(db: Session, project_id: str):
     dynamic_cpi = (ev / ac) if ac > 0 else 1.0
 
     # ── P6: Full Project Data ──
-    t('before return dict'); p6_full = {
+    p6_full = {
         "projectId": p6_proj.project_id,
         "name": p6_proj.name,
         "status": p6_proj.status,
@@ -1071,3 +983,90 @@ def get_project_360_detail(db: Session, project_id: str):
             }
         }
     }
+
+# ── SAP Vendor / Transit Aggregation (ME2J) ──
+    sap_vendors = []
+    vendor_summary = {}
+    total_po_qty = 0.0
+    total_budget_inr = 0.0
+    total_delivered_inr = 0.0
+    sap_intransit = []
+    total_transit_qty = 0.0
+
+    for po in po_records_all:
+        mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
+
+        vendor_name = po.vendor_name or "Unknown Vendor"
+        vendor_code = po.vendor_code or ""
+
+        if not vendor_code and vendor_name != "Unknown Vendor":
+            parts = vendor_name.split(" ", 1)
+            if len(parts) == 2 and parts[0].isdigit():
+                vendor_code = parts[0]
+                vendor_name = parts[1]
+
+        sap_vendors.append({
+            "poNumber": po.purchasing_document,
+            "vendorCode": vendor_code,
+            "vendorName": vendor_name,
+            "materialCode": po.material_code,
+            "materialName": po.material_name,
+            "materialType": po.material_type,
+            "orderedQty": (po.order_quantity or 0) * allocation_ratio,
+            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio,
+            "companyCode": po.company_code,
+            "plantCode": po.plant_code,
+            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio,
+            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio,
+            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio,
+            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
+            "storageLocation": getattr(po, "storage_location", None),
+        })
+
+        transit_qty = getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio
+        if transit_qty > 0:
+            sap_intransit.append({
+                "poNumber": po.purchasing_document,
+                "materialCode": po.material_code,
+                "materialName": po.material_name,
+                "inTransitQty": transit_qty,
+                "inTransitINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
+                "plantCode": po.plant_code,
+                "vendorName": vendor_name,
+            })
+            total_transit_qty += transit_qty
+
+        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
+        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
+
+        del_cr = getattr(po, "delivered_value_inr_cr", 0.0)
+        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0)
+
+        if vendor_name not in vendor_summary:
+            vendor_summary[vendor_name] = {
+                "vendorName": vendor_name,
+                "vendorCode": vendor_code,
+                "totalOrderedQty": 0,
+                "totalBudgetINR": 0,
+                "poCount": 0,
+                "materials": set(),
+            }
+        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0)
+        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0)
+        vendor_summary[vendor_name]["poCount"] += 1
+        if po.material_code:
+            vendor_summary[vendor_name]["materials"].add(po.material_code)
+
+    vendor_breakdown = []
+    for v in vendor_summary.values():
+        vendor_breakdown.append({
+            "vendorName": v["vendorName"],
+            "vendorCode": v["vendorCode"],
+            "totalOrderedQty": v["totalOrderedQty"],
+            "totalBudgetINR": v["totalBudgetINR"],
+            "poCount": v["poCount"],
+            "materialCount": len(v["materials"]),
+        })
+    vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
+
+    material_breakdown = []

@@ -11,6 +11,8 @@ def run_migration():
     db = SessionLocal()
     
     statements = [
+        "DROP TABLE IF EXISTS mt_intransit",
+        "DROP TABLE IF EXISTS mt_underconstruction",
         "ALTER TABLE project_mapping ADD COLUMN source_of_origin VARCHAR",
         "ALTER TABLE project_mapping ADD COLUMN priority VARCHAR",
         "ALTER TABLE mt_poamount ADD COLUMN material_name VARCHAR",

@@ -567,7 +567,7 @@ def get_project_360_detail(db: Session, project_id: str):
     Returns enriched per-project intelligence detail:
     - All P6 fields (dates, floats, costs, baselines)
     - SAP vendor breakdown (from MTPOAmount) — pro-rata allocated to this project
-    - SAP in-transit details (from MTInTransit) — WBS-filtered or pro-rata
+    - SAP pending delivery details (derived from ME2J still_to_deliver_qty) — WBS-filtered or pro-rata
     - SAP inventory details (from MTInventory) — WBS-filtered or pro-rata
     """
     # 1. Resolve mapping
