@@ -1,20 +1,23 @@
 """
 Akasha KPI Engine
 
-Computes project KPIs from available P6, SAP, and TC data without substituting proxy
-values for unavailable business indicators.
+Computes project schedule and risk facts from available P6, SAP, and TC data. Formula-derived
+EVM and health metrics are added only for an explicit specific-project health request.
 
 Methodology (adapted to the data that actually exists):
 - Overall progress              = P6 SummaryDurationPercentComplete.
 - Activity completion ratio     = completed activities / total activities (descriptive only).
-- SPI and CPI                   = reported only when supplied by P6; never reconstructed.
+- Earned value (EV)             = actual cost * P6 duration completion fraction.
+- Planned value (PV / BCWS)     = P6 SummaryPlannedCost.
+- SPI / CPI                     = EV / PV and EV / actual cost.
+- Schedule / cost variance      = EV - PV and EV - actual cost.
 - Baseline deadline exposure    = overdue incomplete activities / total activities.
 - Procurement risk              = PO lines still pending delivery / total PO lines (SAP).
 - Execution risk                = delayed transmission lines / total lines (TC; transmission only).
 - Overall risk                  = 0.40*schedule + 0.30*procurement + 0.30*execution,
                                    RENORMALIZED over whichever components have data.
-- Health score                  = weighted blend of SPI, progress and (100 - risk),
-                                   renormalized over available KPIs; higher = healthier.
+- Risk score                    = 1 - overall risk exposure fraction; higher = healthier.
+- Health index                  = 0.40*SPI + 0.30*CPI + 0.30*risk score.
 
 Any KPI whose data doesn't exist is returned as None with a reason, never faked. KPIs
 that need data absent from this schema (DPC daily targets, manpower productivity, resource
@@ -45,24 +48,71 @@ def _normalize_percentage(value) -> float | None:
     return round(percentage, 1)
 
 
+def compute_evm_metrics(actual_cost, progress_pct, planned_value) -> dict:
+    """Calculate EVM using AC, duration completion, and BCWS/PV without fallbacks."""
+    ac = float(actual_cost) if actual_cost is not None else None
+    pv = float(planned_value) if planned_value is not None else None
+    completion_pct = float(progress_pct) if progress_pct is not None else None
+    if completion_pct is not None and completion_pct <= 1.5:
+        completion_pct *= 100
+    ev = ac * completion_pct / 100 if ac is not None and completion_pct is not None else None
+
+    spi = ev / pv if ev is not None and pv is not None and pv > 0 else None
+    cpi = ev / ac if ev is not None and ac is not None and ac > 0 else None
+    sv = ev - pv if ev is not None and pv is not None else None
+    cv = ev - ac if ev is not None and ac is not None else None
+
+    limitations = []
+    if ac is None:
+        limitations.append("Actual Cost (AC) is unavailable.")
+    elif ac <= 0:
+        limitations.append("Actual Cost (AC) must be greater than zero to calculate CPI.")
+    if completion_pct is None:
+        limitations.append("P6 duration percentage complete is unavailable.")
+    if pv is None:
+        limitations.append("Planned Value (PV/BCWS) is unavailable.")
+    elif pv <= 0:
+        limitations.append("Planned Value (PV/BCWS) must be greater than zero to calculate SPI.")
+
+    return {
+        "actual_cost": round(ac, 2) if ac is not None else None,
+        "percentage_complete": round(completion_pct, 4) if completion_pct is not None else None,
+        "earned_value": round(ev, 2) if ev is not None else None,
+        "planned_value": round(pv, 2) if pv is not None else None,
+        "spi": round(spi, 4) if spi is not None else None,
+        "cpi": round(cpi, 4) if cpi is not None else None,
+        "schedule_variance": round(sv, 2) if sv is not None else None,
+        "cost_variance": round(cv, 2) if cv is not None else None,
+        "formula": {
+            "ev": "AC * (Percentage Complete / 100)",
+            "pv": "BCWS (P6 SummaryPlannedCost)",
+            "spi": "EV / PV",
+            "cpi": "EV / AC",
+            "sv": "EV - PV",
+            "cv": "EV - AC",
+        },
+        "limitations": limitations,
+    }
+
+
 def compute_schedule_kpis(p6, activities: list, as_of: datetime = None) -> dict:
-    """Schedule facts for one project, preserving unavailable P6 indicators as null."""
+    """General schedule facts for one project using native P6 performance indicators."""
     as_of = as_of or p6.data_date or p6.last_synced_at or datetime.utcnow()
     total = len(activities)
-    if total == 0:
-        return {"has_data": False, "reason": "No activities for this project."}
 
     completed = [a for a in activities if _is_complete(a)]
     in_progress = [a for a in activities if a.status and 'progress' in a.status.lower()]
     not_started = [a for a in activities if a.status and 'not started' in a.status.lower()]
-    activity_completion_pct = round(len(completed) / total * 100, 1)
+    activity_completion_pct = round(len(completed) / total * 100, 1) if total else None
     progress_pct = _normalize_percentage(p6.duration_percent_complete)
-    spi = round(float(p6.schedule_performance_index), 2) if p6.schedule_performance_index is not None else None
-    cpi = round(float(p6.cost_performance_index), 2) if p6.cost_performance_index is not None else None
+    source_spi = getattr(p6, "schedule_performance_index", None)
+    source_cpi = getattr(p6, "cost_performance_index", None)
+    spi = round(float(source_spi), 4) if source_spi is not None else None
+    cpi = round(float(source_cpi), 4) if source_cpi is not None else None
 
     # Activities behind schedule: incomplete AND their baseline finish has already passed
     behind = [a for a in activities if not _is_complete(a) and a.baseline_finish_date and a.baseline_finish_date < as_of]
-    deadline_exposure_pct = round(len(behind) / total * 100, 1)
+    deadline_exposure_pct = round(len(behind) / total * 100, 1) if total else None
 
     # Critical path (float <= 0 among activities that report float)
     with_float = [a for a in activities if a.total_float is not None]
@@ -92,10 +142,10 @@ def compute_schedule_kpis(p6, activities: list, as_of: datetime = None) -> dict:
         "cpi": cpi,
         "schedule_variance_pct": None,
         "performance_limitation": (
-            "SPI is unavailable; schedule performance cannot be classified from SPI."
+            "Native P6 SPI is unavailable; schedule performance cannot be classified from SPI."
             if spi is None else None
         ),
-        "schedule_risk_pct": None,
+        "schedule_risk_pct": deadline_exposure_pct,
         "baseline_deadline_exposure_pct": deadline_exposure_pct,
         "activities_behind": len(behind),
         "critical_activities": len(critical),
@@ -155,34 +205,35 @@ def combine_risk(schedule_risk, procurement_risk, execution_risk) -> dict:
     }
 
 
-def compute_health_score(spi, progress_pct, overall_risk_pct) -> dict:
-    """Composite health (0-100, higher = healthier) from the KPIs that exist here:
-    SPI, physical progress, and inverse risk. Weights renormalized over what's available."""
-    if spi is None:
+def compute_health_score(spi, cpi, risk_score) -> dict:
+    """Health = 0.40*SPI + 0.30*CPI + 0.30*risk score; no weight renormalization."""
+    missing = [
+        name for name, value in (("SPI", spi), ("CPI", cpi), ("Risk Score", risk_score))
+        if value is None
+    ]
+    if missing:
         return {
             "health_score": None,
+            "health_index": None,
             "health_status": "UNKNOWN",
-            "reason": "SPI is unavailable; project health is not classified.",
+            "reason": f"{', '.join(missing)} unavailable; all formula inputs are required.",
+            "formula": "(SPI * 0.4) + (CPI * 0.3) + (Risk Score * 0.3)",
         }
-    parts = [("spi", min(spi / 1.0, 1.0) * 100, 0.45)]
-    if progress_pct is not None:
-        parts.append(("progress", progress_pct, 0.25))
-    if overall_risk_pct is not None:
-        parts.append(("low_risk", 100 - overall_risk_pct, 0.30))
-    if not parts:
-        return {"health_score": None}
-    total_w = sum(w for _, _, w in parts)
-    score = sum(v * w for _, v, w in parts) / total_w
+    health_index = spi * 0.40 + cpi * 0.30 + risk_score * 0.30
+    score = health_index * 100
     return {
         "health_score": round(score, 1),
+        "health_index": round(health_index, 4),
         "health_status": "CRITICAL" if score < 55 else "AT RISK" if score < 75 else "HEALTHY",
+        "components": {"spi": spi, "cpi": cpi, "risk_score": risk_score},
+        "formula": "(SPI * 0.4) + (CPI * 0.3) + (Risk Score * 0.3)",
     }
 
 
 def compute_project_kpis(db: Session, project_id: str, activities: list = None,
-                         pos: list = None, tc_total: int = None, tc_delayed: int = None) -> dict:
-    """Full KPI bundle for one project. Prefetched inputs may be passed for portfolio-scale use;
-    otherwise they're queried here."""
+                         pos: list = None, tc_total: int = None, tc_delayed: int = None,
+                         calculate_health: bool = False) -> dict:
+    """Project exposure bundle; formula EVM and health require an explicit opt-in."""
     p6 = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
     if not p6:
         return {"project_id": project_id, "error": "Project not found"}
@@ -213,24 +264,60 @@ def compute_project_kpis(db: Session, project_id: str, activities: list = None,
         proc.get("procurement_risk_pct") if proc.get("has_data") else None,
         execu.get("execution_risk_pct") if execu.get("has_data") else None,
     )
-    health = compute_health_score(
-        sched.get("spi") if sched.get("has_data") else None,
-        sched.get("progress_pct") if sched.get("has_data") else None,
-        risk.get("overall_risk_pct"),
-    )
+    health = None
+    if calculate_health:
+        evm = compute_evm_metrics(
+            p6.actual_total_cost,
+            p6.duration_percent_complete,
+            p6.planned_cost,
+        )
+        source_spi = sched.get("spi")
+        source_cpi = sched.get("cpi")
+        sched.update({
+            "spi": evm["spi"],
+            "cpi": evm["cpi"],
+            "source_spi": source_spi,
+            "source_cpi": source_cpi,
+            "actual_cost": evm["actual_cost"],
+            "percentage_complete": evm["percentage_complete"],
+            "earned_value": evm["earned_value"],
+            "planned_value": evm["planned_value"],
+            "schedule_variance": evm["schedule_variance"],
+            "cost_variance": evm["cost_variance"],
+            "evm_formula": evm["formula"],
+            "performance_limitation": " ".join(evm["limitations"]) or None,
+            "schedule_status": (
+                "BEHIND" if evm["spi"] < 0.95 else
+                "AHEAD" if evm["spi"] > 1.05 else "ON TRACK"
+            ) if evm["spi"] is not None else "UNKNOWN",
+        })
+        overall_risk_pct = risk.get("overall_risk_pct")
+        risk_score = (
+            1 - max(0.0, min(overall_risk_pct, 100.0)) / 100
+            if overall_risk_pct is not None else None
+        )
+        risk.update({
+            "risk_score": round(risk_score, 4) if risk_score is not None else None,
+            "risk_score_basis": "1 - (overall risk exposure / 100); 1.0 is lowest risk",
+            "risk_score_method": "Derived exposure score; no manual subjective risk rating is stored.",
+        })
+        health = compute_health_score(evm["spi"], evm["cpi"], risk_score)
 
     from engine.tools.portfolio_tools import get_project_display_name
-    return {
+    result = {
         "project_id": project_id,
         "project_name": get_project_display_name(db, project_id),
         "schedule": sched,
         "procurement": proc,
         "execution": execu,
         "overall_risk": risk,
-        "health": health,
-        "_note": "P6 progress, SPI, and CPI retain their source semantics; unavailable indicators are not replaced with proxies.",
-        "_source_tables": ["p6_activity", "mt_poamount", "tc_network_edge"],
+        "_note": "General schedule and risk data only; project health was not requested.",
+        "_source_tables": ["p6_project", "p6_activity", "mt_poamount", "tc_network_edge"],
     }
+    if calculate_health:
+        result["health"] = health
+        result["_note"] = "Specific-project health calculation requested. SPI, CPI, SV, and CV use the documented AC/completion/PV formulas; native P6 SPI/CPI are reconciliation fields."
+    return result
 
 
 def compute_portfolio_kpis(db: Session) -> list[dict]:
@@ -277,8 +364,15 @@ def compute_portfolio_kpis(db: Session) -> list[dict]:
                     pos.extend(lst)
         tc = tc_by_mapping.get(m.id, {"total": 0, "delayed": 0})
 
-        kpi = compute_project_kpis(db, m.project_id, activities=activities, pos=pos,
-                                   tc_total=tc["total"], tc_delayed=tc["delayed"])
+        kpi = compute_project_kpis(
+            db,
+            m.project_id,
+            activities=activities,
+            pos=pos,
+            tc_total=tc["total"],
+            tc_delayed=tc["delayed"],
+            calculate_health=False,
+        )
         results.append(kpi)
 
     results.sort(key=lambda r: (r.get("overall_risk", {}).get("overall_risk_pct") or -1), reverse=True)

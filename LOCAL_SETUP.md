@@ -558,14 +558,20 @@ Verify:
 - Completed/total activity ratio is not substituted for duration progress.
 - Completed, in-progress, and not-started counts match the database.
 - P6 data date and last synchronization are disclosed when available.
-- Null SPI/CPI remain unavailable.
-- The assistant does not classify ahead/behind or health from a fabricated SPI.
+- Native P6 SPI/CPI remain unchanged.
+- Formula-derived EVM and health fields are not calculated for this progress request.
 
 Database cross-check:
 
 ```powershell
 python -c "from database import SessionLocal; import models; d=SessionLocal(); p=d.query(models.P6Project).filter(models.P6Project.project_id=='FY26-P18').first(); print({'name':p.name,'progress_raw':p.duration_percent_complete,'completed':p.completed_activity_count,'in_progress':p.in_progress_activity_count,'not_started':p.not_started_activity_count,'spi':p.schedule_performance_index,'cpi':p.cost_performance_index,'data_date':p.data_date,'last_sync':p.last_synced_at} if p else 'Project not found'); d.close()"
 ```
+
+#### Specific Project Health
+
+Ask `What is the health of ASEJ6PL_S07_FT_300MW_PPA?` and verify the project is resolved before
+`get_project_kpis` calculates EV, PV, SPI, CPI, SV, CV, risk score, and weighted health. Missing
+actual cost, completion, planned value, or zero denominators must leave health `UNKNOWN`.
 
 ### 18.3 Follow-Up Context and Activities
 

@@ -8,6 +8,7 @@ from typing import Iterable
 
 
 RESOLVER = "portfolio_resolve_project_id"
+PROJECT_HEALTH_TOOL = "get_project_kpis"
 
 P6_TOOLS = {
     "p6_get_project_summary",
@@ -141,6 +142,7 @@ def select_tool_route(
     """Select a high-recall subset; uncertain operational requests retain the full catalog."""
     available = tuple(dict.fromkeys(available_tool_names))
     available_set = set(available)
+    non_health_tools = tuple(name for name in available if name != PROJECT_HEALTH_TOOL)
     current = (question or "").strip()
     prior = (context or "").strip()
     current_domains = _detected_domains(current)
@@ -205,7 +207,7 @@ def select_tool_route(
 
     # A live operational request with no discernible domain is genuinely ambiguous.
     if not current_domains:
-        return ToolRoute(available, ("all",), "ambiguous_operational", True, True)
+        return ToolRoute(non_health_tools, ("all",), "ambiguous_operational", True, False)
 
     selected = {RESOLVER}
     intent_parts = []
@@ -219,7 +221,7 @@ def select_tool_route(
             selected.add("p6_get_critical_activities")
         if re.search(r"\b(?:delay|delays|delayed|late|slip|behind)\b", current, re.IGNORECASE):
             selected.update({"p6_get_delayed_activities", "p6_get_critical_activities"})
-        if re.search(r"\b(?:health|performance|risk|exposure|overall)\b", current, re.IGNORECASE):
+        if re.search(r"\b(?:health|health score|project health)\b", current, re.IGNORECASE):
             selected.add("get_project_kpis")
         if re.search(r"\b(?:all projects|how many projects|portfolio)\b", current, re.IGNORECASE):
             selected.add("p6_list_all_projects")
@@ -295,15 +297,10 @@ def select_tool_route(
         intent_parts.append("visualization")
         selected.add("render_chart")
 
-    # Cross-domain project health should retain the deterministic aggregate tool as well as
-    # source-specific options so the model can answer either summary or drill-down wording.
-    if {"p6", "sap", "transmission"}.issubset(current_domains):
-        selected.add("get_project_kpis")
-
     selected &= available_set
     ordered = _ordered_names(selected, available)
     if not ordered:
-        return ToolRoute(available, ("all",), "routing_fallback", True, True)
+        return ToolRoute(non_health_tools, ("all",), "routing_fallback", True, False)
     return ToolRoute(
         ordered,
         tuple(sorted(current_domains)),

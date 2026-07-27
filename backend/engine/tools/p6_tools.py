@@ -25,7 +25,7 @@ def _normalize_percentage(value) -> float | None:
 
 
 def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
-    """Get high-level project summary: dates, progress, SPI, CPI, activity counts.
+    """Get high-level project summary: dates, native P6 metrics, activity counts.
     
     Use when: user asks about a specific project's overall status.
     Returns: dict with schedule, cost, and progress metrics, or None if not found.
@@ -64,8 +64,8 @@ def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
         "planned_duration": int(p6.planned_duration) if p6.planned_duration is not None else None,
         "actual_duration": int(p6.actual_duration) if p6.actual_duration is not None else None,
         "remaining_duration": int(p6.remaining_duration) if p6.remaining_duration is not None else None,
-        "spi": round(p6.schedule_performance_index, 2) if p6.schedule_performance_index is not None else None,
-        "cpi": round(p6.cost_performance_index, 2) if p6.cost_performance_index is not None else None,
+        "spi": round(p6.schedule_performance_index, 4) if p6.schedule_performance_index is not None else None,
+        "cpi": round(p6.cost_performance_index, 4) if p6.cost_performance_index is not None else None,
         "total_float_hours": int(p6.total_float) if p6.total_float is not None else None,
         "finish_date_variance_hours": int(p6.finish_date_variance) if p6.finish_date_variance is not None else None,
         "activity_count": len(activities),
@@ -283,8 +283,8 @@ def p6_list_all_projects(db: Session) -> dict:
             "project_name": display_name,
             "p6_name": p.name,
             "status": p.status,
-            "spi": round(p.schedule_performance_index, 2) if p.schedule_performance_index is not None else None,
-            "cpi": round(p.cost_performance_index, 2) if p.cost_performance_index is not None else None,
+            "spi": round(p.schedule_performance_index, 4) if p.schedule_performance_index is not None else None,
+            "cpi": round(p.cost_performance_index, 4) if p.cost_performance_index is not None else None,
             "duration_pct_complete": _normalize_percentage(p.duration_percent_complete),
             "finish_date": p.finish_date.isoformat() if p.finish_date else None,
             "total_float_hours": int(p.total_float) if p.total_float is not None else None,

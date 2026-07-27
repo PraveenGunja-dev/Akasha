@@ -486,14 +486,17 @@ flowchart LR
 
     Query --> Progress["P6 Duration Progress\nnormalized fraction to percent"]
     Query --> Counts["Completed / In Progress / Not Started"]
-    Query --> Indicators{"SPI / CPI present?"}
     Query --> Freshness["Data Date + Last Sync"]
+    Query --> HealthIntent{"Explicit health request\nfor one named project?"}
 
-    Indicators -->|yes| Classify["Use source indicator semantics"]
-    Indicators -->|no| Unknown["Keep UNKNOWN\nno proxy classification"]
+    HealthIntent -->|no| Native["Keep native/general metrics"]
+    HealthIntent -->|yes| Indicators{"AC, completion, and PV usable?"}
+    Indicators -->|yes| Classify["Calculate EV / SPI / CPI / variances / health"]
+    Indicators -->|no| Unknown["Health remains UNKNOWN\nstate missing formula inputs"]
 
     Progress --> Synthesis["Grounded Answer Synthesis"]
     Counts --> Synthesis
+    Native --> Synthesis
     Classify --> Synthesis
     Unknown --> Synthesis
     Freshness --> Synthesis
@@ -505,7 +508,7 @@ flowchart LR
 
     classDef fact fill:#ecfdf5,stroke:#059669,color:#0f172a;
     classDef warning fill:#fff7ed,stroke:#ea580c,color:#0f172a;
-    class Progress,Counts,Freshness,Classify fact;
+    class Progress,Counts,Freshness,Native,Classify fact;
     class Unknown,Repair warning;
 ```
 
@@ -528,15 +531,34 @@ normalized to a displayed percentage and is the authoritative overall P6 duratio
 Completed activities divided by total activities is retained as a separate
 `activity_completion_pct`; it is not substituted for overall progress.
 
-### 11.3 SPI, CPI, and Classification
+### 11.3 EVM, Health, and Classification
 
-Null SPI/CPI values remain unavailable. Akasha no longer manufactures an SPI proxy from
-activity counts or baseline-finish counts. When SPI is unavailable:
+Akasha calculates this EVM and health chain only when the user explicitly requests the health or
+health score of one named project. It is not invoked for general project summaries, progress,
+activity status, risk-only analysis, procurement, transmission, portfolio listings or rankings,
+reports, or forecasts. The explicit health calculation uses documented P6 project fields rather
+than activity-count or baseline-finish proxies:
+
+- `AC = SummaryActualTotalCost`.
+- `Percentage Complete = SummaryDurationPercentComplete`.
+- `EV = AC * (Percentage Complete / 100)`.
+- `PV / BCWS = SummaryPlannedCost`.
+- `SPI = EV / PV`; `CPI = EV / AC`.
+- `SV = EV - PV`; `CV = EV - AC`.
+
+The risk engine combines schedule deadline exposure, pending procurement, and delayed execution
+exposure. Because the health formula is additive, its `Risk Score` is health-oriented:
+`1 - (overall risk exposure / 100)`, where `1.0` is lowest risk. Health is calculated without
+renormalizing missing components:
+`(SPI * 0.4) + (CPI * 0.3) + (Risk Score * 0.3)`.
+
+Native P6 SPI/CPI values remain available separately as reconciliation fields. When a required
+formula input is unavailable or a denominator is zero:
 
 - Schedule status remains `UNKNOWN`.
 - Schedule percentage variance is not invented.
 - Composite project health remains `UNKNOWN`.
-- The answer explicitly states why ahead/behind classification is unavailable.
+- The answer explicitly states which formula input is unavailable.
 
 Descriptive facts such as completed/in-progress/not-started counts, critical activities,
 baseline deadline exposure, dates, and freshness can still be reported under their actual

@@ -15,7 +15,12 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from database import Base
-from engine.kpi_engine import compute_schedule_kpis
+from engine.kpi_engine import (
+    compute_evm_metrics,
+    compute_health_score,
+    compute_project_kpis,
+    compute_schedule_kpis,
+)
 from engine.tools.p6_tools import p6_get_activities, p6_get_project_summary
 import models
 
@@ -58,7 +63,42 @@ class P6ScheduleAccuracyTests(unittest.TestCase):
         self.assertIsNone(result["planned_pct"])
         self.assertIsNone(result["schedule_variance_pct"])
         self.assertEqual(result["schedule_status"], "UNKNOWN")
-        self.assertIn("SPI is unavailable", result["performance_limitation"])
+        self.assertIn("Native P6 SPI is unavailable", result["performance_limitation"])
+
+    def test_evm_uses_supplied_ac_completion_and_bcws_formulas(self):
+        result = compute_evm_metrics(
+            actual_cost=800,
+            progress_pct=25,
+            planned_value=250,
+        )
+
+        self.assertEqual(result["earned_value"], 200.0)
+        self.assertEqual(result["planned_value"], 250.0)
+        self.assertEqual(result["spi"], 0.8)
+        self.assertEqual(result["cpi"], 0.25)
+        self.assertEqual(result["schedule_variance"], -50.0)
+        self.assertEqual(result["cost_variance"], -600.0)
+
+    def test_evm_does_not_default_missing_or_zero_denominators(self):
+        missing = compute_evm_metrics(None, 25, 250)
+        zero = compute_evm_metrics(0, 25, 0)
+
+        self.assertIsNone(missing["earned_value"])
+        self.assertIsNone(missing["spi"])
+        self.assertIsNone(missing["cpi"])
+        self.assertIsNone(zero["spi"])
+        self.assertIsNone(zero["cpi"])
+
+    def test_health_uses_fixed_weights_without_renormalizing(self):
+        result = compute_health_score(spi=0.8, cpi=0.25, risk_score=0.9)
+
+        self.assertEqual(result["health_index"], 0.665)
+        self.assertEqual(result["health_score"], 66.5)
+        self.assertEqual(result["health_status"], "AT RISK")
+
+        unavailable = compute_health_score(spi=0.8, cpi=None, risk_score=0.9)
+        self.assertIsNone(unavailable["health_score"])
+        self.assertEqual(unavailable["health_status"], "UNKNOWN")
 
 
 class P6ToolAccuracyTests(unittest.TestCase):
@@ -129,6 +169,65 @@ class P6ToolAccuracyTests(unittest.TestCase):
         self.assertEqual(summary["duration_percent_complete"], 23.1)
         self.assertIsNone(summary["spi"])
         self.assertIsNone(summary["cpi"])
+
+    def test_project_summary_keeps_native_p6_performance_indicators(self):
+        db = self.Session()
+        try:
+            project = db.query(models.P6Project).filter(
+                models.P6Project.project_id == "FY26-P18"
+            ).one()
+            project.actual_total_cost = 800
+            project.planned_cost = 250
+            project.schedule_performance_index = 1.1
+            project.cost_performance_index = 0.9
+            db.commit()
+
+            summary = p6_get_project_summary(db, "FY26-P18")
+        finally:
+            db.close()
+
+        self.assertEqual(summary["spi"], 1.1)
+        self.assertEqual(summary["cpi"], 0.9)
+        self.assertNotIn("earned_value", summary)
+        self.assertNotIn("health", summary)
+
+    def test_formula_metrics_require_explicit_project_health_opt_in(self):
+        db = self.Session()
+        try:
+            project = db.query(models.P6Project).filter(
+                models.P6Project.project_id == "FY26-P18"
+            ).one()
+            project.actual_total_cost = 800
+            project.planned_cost = 250
+            project.schedule_performance_index = 1.1
+            project.cost_performance_index = 0.9
+            db.commit()
+
+            general = compute_project_kpis(
+                db,
+                "FY26-P18",
+                pos=[],
+                tc_total=0,
+                calculate_health=False,
+            )
+            health = compute_project_kpis(
+                db,
+                "FY26-P18",
+                pos=[],
+                tc_total=0,
+                calculate_health=True,
+            )
+        finally:
+            db.close()
+
+        self.assertEqual(general["schedule"]["spi"], 1.1)
+        self.assertNotIn("earned_value", general["schedule"])
+        self.assertNotIn("health", general)
+
+        self.assertEqual(health["schedule"]["earned_value"], 184.77)
+        self.assertEqual(health["schedule"]["spi"], 0.7391)
+        self.assertEqual(health["schedule"]["source_spi"], 1.1)
+        self.assertEqual(health["health"]["health_score"], 66.5)
 
     def test_activity_listing_filters_counts_and_orders_results(self):
         db = self.Session()

@@ -502,10 +502,10 @@ TOOLS = [
         "function": {
             "name": "get_project_kpis",
             "description": (
-                "Get a project's P6 progress and available performance indicators plus descriptive "
-                "activity, procurement, and transmission exposure. SPI, CPI, schedule classification, "
-                "and health remain unavailable when their required source indicators are null; the tool "
-                "does not manufacture proxy SPI/CPI values. Resolve the project name to project_id first."
+                "Calculate health for one specific project when the user explicitly asks for project "
+                "health or a health score. Returns EV, PV, SPI, CPI, SV, CV, risk score, and weighted "
+                "health. Do not use for general summaries, progress, risk, procurement, transmission, "
+                "portfolio, report, or forecast questions. Resolve the named project first."
             ),
             "parameters": {
                 "type": "object",
@@ -683,6 +683,17 @@ TOOLS = [
 ]
 
 
+def _tools_for_request(message: str) -> list[dict]:
+    """Do not expose the project-health formula tool without an explicit health intent."""
+    from engine.graph.tool_router import select_tool_route
+
+    tool_names = tuple(tool["function"]["name"] for tool in TOOLS)
+    route = select_tool_route(message, available_tool_names=tool_names)
+    if "get_project_kpis" in route.tool_names:
+        return TOOLS
+    return [tool for tool in TOOLS if tool["function"]["name"] != "get_project_kpis"]
+
+
 def build_chart_result(db: Session, kwargs: dict):
     """Build a chart spec from real DB data and a compact confirmation for the LLM.
 
@@ -832,7 +843,7 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
             return json.dumps(res, default=str)
 
         elif name == "get_project_kpis":
-            res = compute_project_kpis(db, kwargs.get("project_id"))
+            res = compute_project_kpis(db, kwargs.get("project_id"), calculate_health=True)
             return json.dumps(res, default=str)
 
         elif name == "render_chart":
@@ -948,6 +959,7 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
     Returns: (final_response_string, list_of_tools_used)
     """
     provider = _get_llm_client()
+    request_tools = _tools_for_request(message)
     # Initialize messages
     messages = [
         {
@@ -995,7 +1007,7 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
         
         result = provider.invoke(
             messages,
-            tools=TOOLS,
+            tools=request_tools,
             tool_choice="auto",
             temperature=0.2,
             max_tokens=2048,
@@ -1052,6 +1064,7 @@ def run_deep_analysis_agent_stream(
     Run the ReAct loop until the agent decides to return a final answer, then streams it.
     """
     provider = _get_llm_client()
+    request_tools = _tools_for_request(message)
     
     # Initialize messages
     messages = [
@@ -1087,7 +1100,7 @@ def run_deep_analysis_agent_stream(
                 "SCHEDULE PERFORMANCE / KPIs:\n"
                 "- For overall project progress and status, call `p6_get_project_summary`; duration_percent_complete is the authoritative P6 duration progress.\n"
                 "- Completed activities / total activities is an activity-count ratio, not overall P6 progress. Label it separately if useful.\n"
-                "- For broader project exposure, call `get_project_kpis`, but never replace null SPI/CPI with a calculated proxy or classify ahead/behind/health when the tool says the required indicator is unavailable.\n\n"
+                "- Call `get_project_kpis` only when the user explicitly asks for the health or health score of one named project. Never use it for general summaries, progress, risk, procurement, transmission, portfolio, report, or forecast questions. Use its returned EV/PV/SPI/CPI/SV/CV and health values without calculating alternatives.\n\n"
                 + EXECUTIVE_RESPONSE_GUIDANCE
             )
         }
@@ -1109,7 +1122,7 @@ def run_deep_analysis_agent_stream(
         
         result = provider.invoke(
             messages,
-            tools=TOOLS,
+            tools=request_tools,
             tool_choice="auto",
             temperature=0.2,
             max_tokens=2048,

@@ -18,7 +18,7 @@ from engine.graph.context_policy import (
     render_summary_input,
 )
 from engine.graph.state import AkashaState
-from engine.graph.tool_router import RESOLVER, ToolRoute, select_tool_route
+from engine.graph.tool_router import PROJECT_HEALTH_TOOL, RESOLVER, ToolRoute, select_tool_route
 from engine.graph.tools import (
     ToolRunCancelled,
     ToolRuntimeContext,
@@ -142,6 +142,9 @@ def build_chat_graph(
         for schema in all_tool_schemas
         if (schema.get("function") or {}).get("name")
     )
+    non_health_tool_names = tuple(
+        name for name in all_tool_names if name != PROJECT_HEALTH_TOOL
+    )
     schemas_by_name = {
         str(schema["function"]["name"]): schema
         for schema in all_tool_schemas
@@ -226,6 +229,11 @@ def build_chat_graph(
         iteration = int(state.get("agent_iterations") or 0) + 1
         force_final = iteration >= max_model_calls
         route = route_for_state(state)
+        recovery_model = (
+            all_tool_model
+            if PROJECT_HEALTH_TOOL in route.tool_names
+            else model_for_route(ToolRoute(non_health_tool_names, ("all",), "recovery", True, False))
+        )
         if iteration == 1:
             logger.info(
                 "Selected tool route (request_id=%s intent=%s domains=%s tool_count=%s all_tools=%s)",
@@ -276,7 +284,7 @@ def build_chat_graph(
                 iteration,
                 route.intent,
             )
-            response = all_tool_model.invoke([
+            response = recovery_model.invoke([
                 SystemMessage(content=(
                     "The latest request is operational and requires current evidence, but the prior "
                     "attempt did not call a data tool. Re-answer now using the full supplied tool "
@@ -288,6 +296,8 @@ def build_chat_graph(
             response_text = _response_text(response.content)
             raw_markup = _contains_raw_tool_markup(response_text)
         parsed_raw_call = parse_raw_tool_call(response_text) if raw_markup else None
+        if parsed_raw_call is not None and parsed_raw_call[0] not in route.tool_names:
+            parsed_raw_call = None
 
         if parsed_raw_call is not None and not force_final:
             name, arguments = parsed_raw_call
@@ -314,7 +324,7 @@ def build_chat_graph(
                 "(request_id=%s iteration=%s reason=%s)",
                 state.get("request_id"), iteration, reason,
             )
-            repair_model = all_tool_model if route.operational else model
+            repair_model = recovery_model if route.operational else model
             response = repair_model.invoke([
                 SystemMessage(content=(
                     "Your previous response was not usable. Re-answer the latest user request now. "
@@ -326,6 +336,8 @@ def build_chat_graph(
             response_text = _response_text(response.content)
             raw_markup = _contains_raw_tool_markup(response_text)
             parsed_raw_call = parse_raw_tool_call(response_text) if raw_markup else None
+            if parsed_raw_call is not None and parsed_raw_call[0] not in route.tool_names:
+                parsed_raw_call = None
             if parsed_raw_call is not None:
                 name, arguments = parsed_raw_call
                 logger.warning(

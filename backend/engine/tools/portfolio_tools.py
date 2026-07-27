@@ -133,8 +133,7 @@ def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> dict:
 
     Risk is computed by the KPI engine from the underlying P6 activities + SAP POs + TC lines
     (schedule risk = activities behind / total, procurement risk = pending POs / total, execution
-    risk = delayed lines / total). It does NOT use the stored SPI/float columns, which are null
-    in this database and previously made every project score 0.
+    risk = delayed lines / total). This portfolio risk path does not calculate project health.
     """
     from engine.kpi_engine import compute_portfolio_kpis
 
@@ -147,21 +146,21 @@ def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> dict:
             "project_id": r["project_id"],
             "project_name": r["project_name"],
             "risk_score": ov.get("overall_risk_pct"),          # 0-100, higher = riskier
-            "spi": s.get("spi"),                                # computed from activities
+            "spi": s.get("spi"),
+            "cpi": s.get("cpi"),
             "progress_pct": s.get("progress_pct"),
             "schedule_status": s.get("schedule_status"),
             "activities_behind": s.get("activities_behind"),
             "critical_activities": s.get("critical_activities"),
             "procurement_risk_pct": r.get("procurement", {}).get("procurement_risk_pct"),
             "execution_risk_pct": r.get("execution", {}).get("execution_risk_pct"),
-            "health_score": r.get("health", {}).get("health_score"),
             "risk_drivers": ov.get("components"),
         })
     return {
         "total_portfolio_projects": len(kpis),
         "showing_top_n": top_n,
         "riskiest_projects": riskiest,
-        "_note": "P6 SPI is retained when available and is not replaced with an activity-count proxy.",
+        "_note": "Portfolio risk ranking does not calculate or aggregate project health scores.",
     }
 
 

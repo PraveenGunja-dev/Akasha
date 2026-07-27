@@ -57,7 +57,7 @@ def build_project_progress_dataset(db, project_id: str) -> dict:
     if project is None:
         raise ValueError("Unknown project.")
     summary = p6_get_project_summary(db, project_id)
-    kpis = compute_project_kpis(db, project_id)
+    kpis = compute_project_kpis(db, project_id, calculate_health=False)
     procurement = sap_get_po_summary(db, project_id)
     transmission = tc_get_project_lines(db, project_id)
     quality = _quality_summary(db, project)
