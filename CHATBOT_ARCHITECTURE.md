@@ -542,7 +542,24 @@ meaning.
 completed, in-progress, or not-started status. This prevents the model from inventing an
 unsupported activity-listing tool on follow-up questions.
 
-### 11.5 Output Quality Boundaries
+### 11.5 Monthly and Yearly Activity Finish Forecasts
+
+`sim_forecast_activity_finishes` answers how many activities are scheduled to finish in a
+calendar month or year. The exact target is the count of current P6 activity `finish_date` values
+inside the requested period. The tool then adds a transparent predictive outlook:
+
+- Completed activities are confirmed finishes.
+- In-progress activities with usable start/progress data receive an independent pace projection.
+- Not-started or insufficient-progress activities remain schedule-only candidates rather than
+  receiving invented dates.
+- The result reports an evidence-supported minimum and a maximum if schedule-only candidates hold.
+- Overdue carry-ins, critical due work, baseline drift, historical on-time adherence, data
+  freshness, forecast confidence, and bounded activity details explain the range and risk.
+
+This is a deterministic schedule forecast, not a trained machine-learning probability. It does not
+claim to model future resource changes, dependencies, calendars, weather, or unrecorded constraints.
+
+### 11.6 Output Quality Boundaries
 
 - Empty final answers are repaired once and cannot be persisted as successful blank turns.
 - Raw tool markup is normalized safely or rejected.
@@ -551,7 +568,7 @@ unsupported activity-listing tool on follow-up questions.
 - Missing data remains missing rather than becoming zero or a healthy status.
 - Provider errors are reduced to stable public codes while details stay server-side.
 
-### 11.6 Evaluation Status
+### 11.7 Evaluation Status
 
 The repository includes a deterministic provisional evaluator seeded from workbook questions.
 Its fixtures are synthetic and explicitly not a production accuracy measurement. A business-
@@ -687,6 +704,7 @@ conversation/tool payloads are not logged by the observability contract.
 | Authenticated tools | `backend/engine/graph/tools.py`, `backend/engine/agent.py` |
 | Provider adapters | `backend/engine/model_provider.py`, `openrouter_config.py` |
 | P6 accuracy logic | `backend/engine/kpi_engine.py`, `backend/engine/tools/p6_tools.py` |
+| Activity finish forecasting | `backend/engine/tools/simulation_tools.py` |
 | Run lifecycle | `backend/services/chat_run_service.py` |
 | Report dataset/narrative | `backend/services/report_mvp_service.py` |
 | Report rendering/download | `backend/services/report_renderers.py`, `backend/routers/reports_mvp.py` |
