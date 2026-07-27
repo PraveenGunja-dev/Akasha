@@ -744,6 +744,8 @@ approved snapshot or source credentials.
 - Never commit `.env`, PATs, provider keys, passwords, source tokens, database dumps, or
   generated reports.
 - Treat `AKASHA_AUTH_MODE=development` as local-only.
+- Development chat ownership uses a stable browser-local profile per role. Clearing site data
+  creates a new identity; pulling code does not transfer chat rows from another database.
 - Use approved provider privacy terms for project data.
 - Keep TLS verification enabled; configure the corporate CA through standard CA-bundle
   environment variables.

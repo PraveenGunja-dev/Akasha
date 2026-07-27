@@ -2,6 +2,11 @@ import { createContext, useContext, useEffect, useState } from 'react';
 import type { AccountInfo } from '@azure/msal-browser';
 import type { ReactNode } from 'react';
 import { configureAuthenticatedFetch } from '../auth/authenticatedFetch';
+import {
+  clearDevelopmentSession,
+  getDevelopmentIdentity,
+  startDevelopmentSession,
+} from '../auth/developmentIdentity';
 import { authMode, entraApiScopes, getMsalInstance, type AuthMode } from '../auth/msal';
 
 
@@ -26,16 +31,6 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-const DEV_USER_KEY = 'akasha_dev_user';
-const DEV_ROLE_KEY = 'akasha_dev_role';
-
-function getDevelopmentIdentity() {
-  const userId = sessionStorage.getItem(DEV_USER_KEY);
-  const role = sessionStorage.getItem(DEV_ROLE_KEY);
-  if (!userId || (role !== 'executive' && role !== 'pmag')) return null;
-  return { userId, role } as const;
-}
-
 async function acquireToken(account?: AccountInfo | null): Promise<string | null> {
   const instance = await getMsalInstance();
   const selectedAccount = account || instance.getActiveAccount() || instance.getAllAccounts()[0];
@@ -96,9 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setIsLoading(true);
     try {
       if (authMode === 'development') {
-        const userId = crypto.randomUUID();
-        sessionStorage.setItem(DEV_USER_KEY, userId);
-        sessionStorage.setItem(DEV_ROLE_KEY, role);
+        startDevelopmentSession(role);
         const response = await fetch('/akasha/api/auth/me');
         if (!response.ok) throw new Error('Development login was rejected by the backend.');
         const developmentUser: User = { ...(await response.json()), auth_mode: 'development' };
@@ -127,8 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = async () => {
     if (authMode === 'development') {
-      sessionStorage.removeItem(DEV_USER_KEY);
-      sessionStorage.removeItem(DEV_ROLE_KEY);
+      clearDevelopmentSession();
       setUser(null);
       return;
     }

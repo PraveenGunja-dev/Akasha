@@ -119,6 +119,7 @@ function mapStoredMessages(messages: StoredChatMessage[]): Message[] {
 
 export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const { user } = useAuth();
+  const userId = user?.id;
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
@@ -128,6 +129,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isDeepAnalysis, setIsDeepAnalysis] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isHistoryLoading, setIsHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState('');
   
   // Voice and Image states
   const [isListening, setIsListening] = useState(false);
@@ -140,7 +143,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const activeRunIdRef = useRef<string | null>(null);
-  const legacyMigrationStarted = useRef(false);
+  const migrationRef = useRef<{ userId: string; promise: Promise<void> } | null>(null);
 
   const greeting = useMemo(() => getGreeting(), []);
 
@@ -191,27 +194,58 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   });
 
   const refreshThreads = async () => {
-    const sessions = await listChatSessions();
-    setThreads(sessions.map(mapThread));
+    setIsHistoryLoading(true);
+    setHistoryError('');
+    try {
+      const sessions = await listChatSessions();
+      setThreads(sessions.map(mapThread));
+    } catch (error) {
+      setHistoryError(error instanceof Error ? error.message : 'Unable to load chat history.');
+      throw error;
+    } finally {
+      setIsHistoryLoading(false);
+    }
   };
 
   useEffect(() => {
-    if (!user || legacyMigrationStarted.current) return;
-    legacyMigrationStarted.current = true;
+    if (!userId) {
+      setThreads([]);
+      return;
+    }
+    let active = true;
+    setIsHistoryLoading(true);
+    setHistoryError('');
     const initializeHistory = async () => {
-      const migrationKey = `akasha_chat_migration_${user.id}`;
-      if (!localStorage.getItem(migrationKey) && hasLegacyBrowserChats()) {
-        const shouldImport = window.confirm(
-          'Legacy chats are stored in this browser without user isolation. Select OK to import them into your private account, or Cancel to remove them from this browser.'
-        );
-        await migrateLegacyBrowserChats(shouldImport);
-        localStorage.setItem(migrationKey, 'complete');
+      if (!migrationRef.current || migrationRef.current.userId !== userId) {
+        const migrationKey = `akasha_chat_migration_${userId}`;
+        const promise = (async () => {
+          if (!localStorage.getItem(migrationKey) && hasLegacyBrowserChats()) {
+            const shouldImport = window.confirm(
+              'Legacy chats are stored in this browser without user isolation. Select OK to import them into your private account, or Cancel to remove them from this browser.'
+            );
+            await migrateLegacyBrowserChats(shouldImport);
+            localStorage.setItem(migrationKey, 'complete');
+          }
+        })();
+        migrationRef.current = { userId, promise };
       }
+      await migrationRef.current.promise;
       const sessions = await listChatSessions();
-      setThreads(sessions.map(mapThread));
+      if (active) {
+        setThreads(sessions.map(mapThread));
+        setHistoryError('');
+        setIsHistoryLoading(false);
+      }
     };
-    initializeHistory().catch(error => console.error('Unable to initialize chat history:', error));
-  }, [user]);
+    initializeHistory().catch(error => {
+      console.error('Unable to initialize chat history:', error);
+      if (active) {
+        setHistoryError(error instanceof Error ? error.message : 'Unable to load chat history.');
+        setIsHistoryLoading(false);
+      }
+    });
+    return () => { active = false; };
+  }, [userId]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -624,7 +658,13 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
         <div className="h-14 flex items-center justify-between px-4 border-b border-border bg-background/90 backdrop-blur-sm z-30 shrink-0">
           <div className="flex items-center gap-2 relative">
             <button
-              onClick={() => setSidebarOpen(!sidebarOpen)}
+              onClick={() => {
+                const opening = !sidebarOpen;
+                setSidebarOpen(opening);
+                if (opening) {
+                  refreshThreads().catch(error => console.error('Unable to refresh chat history:', error));
+                }
+              }}
               className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${sidebarOpen ? 'bg-muted text-foreground' : 'text-muted-foreground hover:bg-muted hover:text-foreground'}`}
               title="Chat history"
             >
@@ -656,7 +696,32 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                   </div>
                   <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
                     <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">All chats ({filteredThreads.length})</div>
-                    {filteredThreads.length > 0 ? (
+                    {historyError && threads.length > 0 && (
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          refreshThreads().catch(error => console.error('Unable to refresh chat history:', error));
+                        }}
+                        className="w-full px-2 py-1.5 mb-1 text-left text-[11px] text-red-500 hover:bg-muted rounded-lg"
+                      >
+                        Refresh failed. Showing saved results; select to retry.
+                      </button>
+                    )}
+                    {isHistoryLoading && threads.length === 0 ? (
+                      <div className="px-3 py-8 text-center text-[12px] text-muted-foreground/60">
+                        Loading conversations...
+                      </div>
+                    ) : historyError && threads.length === 0 ? (
+                      <button
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          refreshThreads().catch(error => console.error('Unable to refresh chat history:', error));
+                        }}
+                        className="w-full px-3 py-6 text-center text-[12px] text-red-500 hover:bg-muted rounded-lg"
+                      >
+                        Unable to load conversations. Select to retry.
+                      </button>
+                    ) : filteredThreads.length > 0 ? (
                       filteredThreads.map(thread => (
                         <div
                           key={thread.id}

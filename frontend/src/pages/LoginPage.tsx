@@ -19,7 +19,7 @@ export default function LoginPage() {
       <div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/5 p-8 text-center">
         <Lock className="w-10 h-10 text-primary mx-auto mb-4" />
         <h1 className="text-2xl font-bold text-white">Sign in to Akasha</h1>
-        <p className="text-sm text-white/45 mt-2 mb-6">{authMode === 'development' ? 'Select a temporary development role.' : 'Use your organization Microsoft account.'}</p>
+        <p className="text-sm text-white/45 mt-2 mb-6">{authMode === 'development' ? 'Select a local development profile.' : 'Use your organization Microsoft account.'}</p>
         {authMode === 'development' ? (
           <div className="space-y-3">
             <button onClick={() => handleLogin('executive')} disabled={loading} className="w-full py-3 rounded-xl bg-primary text-white font-semibold flex items-center justify-center gap-2">{loading && <Loader2 className="w-4 h-4 animate-spin" />} Continue as CEO</button>

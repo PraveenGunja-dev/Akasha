@@ -256,9 +256,15 @@ sequenceDiagram
 
 ### 6.1 Development Mode
 
-Development mode is intended only for a trusted local machine. The browser creates a
-temporary identifier in session storage and lets the developer select `executive` or
-`pmag`. The backend accepts only bounded development IDs and those two roles.
+Development mode is intended only for a trusted local machine. The browser keeps a stable,
+opaque profile identifier per CEO/PMAG role in local storage and activates it in session storage
+after login. This preserves private chat ownership across refreshes, browser restarts, logout, and
+later login while keeping the two development roles separate. Existing session-only identifiers
+are migrated automatically. Clearing site data creates a new identity. The backend accepts only
+bounded development IDs and the `executive` or `pmag` role.
+
+Chat transcripts remain in the application database, not in Git or browser storage. Developers
+using different local databases or browser profile identifiers do not share history.
 
 ### 6.2 Microsoft Entra Mode
 

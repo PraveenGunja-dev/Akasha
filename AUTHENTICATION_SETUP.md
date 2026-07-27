@@ -11,7 +11,9 @@ AKASHA_AUTH_MODE=development
 VITE_AUTH_MODE=development
 ```
 
-The login dialog allows anyone with application access to continue as CEO or PMAG. The browser generates a temporary identifier in `sessionStorage`, and same-origin Akasha API calls send that identifier and selected role through development-only headers. This provides stable private chat sessions for local development but is not authentication.
+The login dialog allows anyone with application access to continue as CEO or PMAG. The browser keeps one opaque development profile identifier per role in `localStorage`, activates it in `sessionStorage` after login, and sends it with the selected role through development-only headers on same-origin Akasha API calls. Logout clears the active session but retains the local profile so private chat ownership survives later logins. Clearing browser site data creates a new identity and makes sessions owned by the previous identifier inaccessible through the UI.
+
+Development profiles are browser-local. Two developers see the same history only if they deliberately use the same profile identifier and the same application database; pulling Git code does not copy chat-session rows. Production Entra identities use the stable directory object ID instead.
 
 Never expose a deployment using development mode to an untrusted network.
 
