@@ -235,7 +235,79 @@ replacement where appropriate. They provide:
 - Phase 2: engine/run/message lifecycle and cancellation state.
 - Report MVP: temporary report-artifact records.
 
-If using DBeaver/pgAdmin, connect to `akasha_local` and execute those files in the same order.
+### 9.1 Apply the Application Migrations with DBeaver
+
+Use this procedure instead of the three `psql` commands when DBeaver is preferred:
+
+1. Start PostgreSQL and open DBeaver.
+2. Create or open a PostgreSQL connection with:
+   - Host: `localhost`
+   - Port: `5432`
+   - Database: `akasha_local`
+   - Username: `postgres` or the application migration user
+   - Password: the password used in `DATABASE_URL`
+3. Click **Test Connection** and confirm it succeeds.
+4. In **Database Navigator**, expand the connection and confirm the active database is
+   `akasha_local`. Do not run these scripts against the default `postgres` database or an
+   unrelated shared database.
+5. Use **SQL Editor > Open SQL Script** (or the open-file button in the SQL editor) and open:
+
+   ```text
+   <repository>\backend\migrations\phase1_chat_ownership.sql
+   ```
+
+6. Check the connection selector in the editor toolbar again; it must show
+   `akasha_local`.
+7. Run the entire file with **Execute SQL Script**. In common DBeaver keymaps this is
+   `Alt+X`; use the toolbar/script action if the shortcut differs. Do not use an action that
+   executes only the statement under the cursor.
+8. Confirm the **Output** panel ends without an error. The scripts control their own
+   transaction where required; if DBeaver reports an error, stop and resolve it before
+   continuing.
+9. Repeat Steps 5-8 in this exact order for:
+
+   ```text
+   phase2_langgraph_context.sql
+   phase5_mvp_reports.sql
+   ```
+
+10. In Database Navigator, right-click `Schemas > public > Tables` and select
+    **Refresh**.
+
+The expected application changes are:
+
+- `chat_session`: tenant/user ownership, engine assignment, and deletion lifecycle columns.
+- `chat_message`: request, visualization, run, engine, model, status, error, and completion
+  columns.
+- `chat_run`: durable pending/running/completed/failed/cancelled/interrupted turn state.
+- `report_artifact`: owner-scoped temporary PDF/DOCX metadata and expiry.
+
+### 9.2 Verify the Application Migrations in DBeaver
+
+Open **SQL Editor > New SQL Script** on the `akasha_local` connection and execute:
+
+```sql
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public'
+  AND table_name IN ('chat_session', 'chat_message', 'chat_run', 'report_artifact')
+ORDER BY table_name;
+
+SELECT table_name, column_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND (
+    (table_name = 'chat_session' AND column_name IN ('owner_subject', 'tenant_id', 'chat_engine'))
+    OR (table_name = 'chat_message' AND column_name IN ('status', 'run_id', 'engine', 'model'))
+    OR (table_name = 'chat_run' AND column_name IN ('status', 'graph_checkpoint_id'))
+    OR (table_name = 'report_artifact' AND column_name IN ('artifact_id', 'expires_at'))
+  )
+ORDER BY table_name, column_name;
+```
+
+The first result should contain all four application tables. The second should contain every
+listed lifecycle/ownership column. Missing rows mean a migration was skipped, run against the
+wrong database, or rolled back after an error.
 
 ## 10. Provision LangGraph Checkpoints
 
@@ -255,6 +327,41 @@ This idempotently creates/upgrades LangGraph-owned tables such as `checkpoints`,
 `checkpoint_blobs`, `checkpoint_writes`, and `checkpoint_migrations`. API startup checks
 readiness but does not create them.
 
+### 10.1 Important DBeaver Note for LangGraph Checkpoints
+
+The four LangGraph checkpoint tables are not created by one of the repository SQL migration
+files. Their schema is versioned by `langgraph-checkpoint-postgres`, so the supported setup
+method is the Python command above. Do not manually invent or copy checkpoint DDL into
+DBeaver because it can drift from the installed LangGraph package version.
+
+You can keep DBeaver open while running the command in PowerShell. After the command prints
+`LangGraph checkpoint schema is ready`:
+
+1. Return to DBeaver.
+2. Right-click `Schemas > public > Tables` and select **Refresh**.
+3. Confirm these tables appear:
+   - `checkpoint_migrations`
+   - `checkpoints`
+   - `checkpoint_blobs`
+   - `checkpoint_writes`
+4. Open a new SQL script on `akasha_local` and run:
+
+   ```sql
+   SELECT table_schema, table_name
+   FROM information_schema.tables
+   WHERE table_name IN (
+       'checkpoint_migrations',
+       'checkpoints',
+       'checkpoint_blobs',
+       'checkpoint_writes'
+   )
+   ORDER BY table_schema, table_name;
+   ```
+
+All four rows should be in the same PostgreSQL database/schema used by the backend checkpoint
+DSN. If they appear in another database, correct `DATABASE_URL` or
+`AKASHA_LANGGRAPH_CHECKPOINT_DSN`, then rerun the Python setup command.
+
 ## 11. Verify Database Readiness
 
 Application connection:
@@ -270,6 +377,9 @@ Required tables:
 ```powershell
 psql -h localhost -U postgres -d akasha_local -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('chat_session','chat_message','chat_run','report_artifact','checkpoints','checkpoint_blobs','checkpoint_writes') ORDER BY table_name;"
 ```
+
+The same query can be pasted into a DBeaver SQL editor connected to `akasha_local`; no
+command-line substitution is required.
 
 ## 12. Load Business Data
 
