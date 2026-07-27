@@ -28,6 +28,8 @@ def safe_float(val):
 
 def ingest_data():
     db = SessionLocal()
+    errors = []
+    counts = {"inventory": 0, "po_amounts": 0, "material_documents": 0}
     
     print("Clearing old data...")
     db.query(models.MTInventory).delete()
@@ -67,11 +69,14 @@ def ingest_data():
                     inventories.append(inv)
             db.add_all(inventories)
             db.commit()
+            counts["inventory"] = len(inventories)
             print(f"Inserted {len(inventories)} MB52 inventory records.")
         except Exception as e:
             db.rollback()
+            errors.append(f"MB52: {e}")
             print(f"Error processing MB52: {e}")
     else:
+        errors.append(f"MB52 file not found: {mb52_path}")
         print(f"File not found: {mb52_path}")
 
     # Process ME2J (PO Amount) - Replacing ME2K
@@ -137,11 +142,14 @@ def ingest_data():
                     po_amounts.append(po)
             db.add_all(po_amounts)
             db.commit()
+            counts["po_amounts"] = len(po_amounts)
             print(f"Inserted {len(po_amounts)} ME2J PO Amount records.")
         except Exception as e:
             db.rollback()
+            errors.append(f"ME2J: {e}")
             print(f"Error processing ME2J: {e}")
     else:
+        errors.append(f"ME2J file not found: {me2j_path}")
         print(f"File not found: {me2j_path}")
 
     # Process MB51 (Material Documents/Consumption) from Local
@@ -191,15 +199,24 @@ def ingest_data():
                 material_docs.append(m_doc)
             db.add_all(material_docs)
             db.commit()
+            counts["material_documents"] = len(material_docs)
             print(f"Inserted {len(material_docs)} MB51 Material Document records.")
         except Exception as e:
             db.rollback()
+            errors.append(f"MB51: {e}")
             print(f"Error processing MB51: {e}")
     else:
+        errors.append(f"MB51 file not found: {mb51_path}")
         print(f"File not found: {mb51_path}")
 
+    result = {"success": not errors, "counts": counts, "errors": errors}
+    if result["success"]:
+        print("Ingestion complete!")
+    else:
+        print("Ingestion incomplete.")
+
     db.close()
-    print("Ingestion complete!")
+    return result
 
 if __name__ == "__main__":
     ingest_data()

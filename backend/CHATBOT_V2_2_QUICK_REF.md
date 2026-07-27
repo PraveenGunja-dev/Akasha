@@ -1,11 +1,13 @@
 # Akasha Chatbot v2.2 - Quick Reference Card
 
+> **Historical, inactive design:** v2.2 is not registered in `backend/main.py` and is not the production chatbot path. Every accuracy, ambiguity-resolution, latency, and improvement percentage below is an unvalidated design estimate or target, not a measured result. No executable benchmark supports these figures.
+
 ## 🎯 What's New
 
 | Feature | v2.1 | v2.2 | Gain |
 |---------|------|------|------|
-| Accuracy | 85% | 95-99%+ | +12-14% |
-| Ambiguity Handling | None | 95%+ resolved | NEW |
+| Accuracy (unvalidated estimate/target) | 85% | 95-99%+ | +12-14% |
+| Ambiguity Handling (unvalidated target) | None | 95%+ resolved | NEW |
 | Data Validation | Basic | Cross-source (P6+SAP+TC) | NEW |
 | Confidence Scoring | None | Transparent (4 factors) | NEW |
 | Health Analysis | Basic | Multi-dimensional (5 metrics) | NEW |
@@ -15,7 +17,7 @@
 
 ---
 
-## 📦 New Files (Deploy These)
+## 📦 Historical Prototype File Set
 
 ```
 ✅ backend/engine/accuracy_engines.py (1000+ lines)
@@ -51,7 +53,9 @@
 
 ---
 
-## 🚀 Deploy in 3 Steps
+## Archival Conditional Activation in 3 Steps
+
+These steps are retained for historical reference only. Do not apply them to the current production application without renewed validation and explicit approval.
 
 ### Step 1: Verify Files
 ```bash
@@ -219,13 +223,13 @@ curl -X POST http://localhost:8000/api/confidence \
 | **Confidence** | Shows data quality level | +4-6% |
 | **Metrics** | Multi-dimensional health (5 dimensions) | +6-8% |
 
-**Combined Effect:** 85% → 99%+ accuracy
+**Unvalidated combined target:** 85% -> 99%+ accuracy
 
 ---
 
 ## ✅ Verification Checklist
 
-After deployment, verify:
+If conditionally activated in an isolated environment, verify:
 - [ ] Server starts without errors
 - [ ] `/api/status/v2.2` returns 200 OK
 - [ ] `/api/chat-v2.2` accepts POST
@@ -254,7 +258,7 @@ After deployment, verify:
 
 | File | Purpose | Length |
 |------|---------|--------|
-| `CHATBOT_V2_2_INTEGRATION.md` | Complete deployment guide with examples | 400+ lines |
+| `CHATBOT_V2_2_INTEGRATION.md` | Archival conditional integration guide with examples | 400+ lines |
 | `CHATBOT_V2_2_DELIVERY.md` | Delivery summary & checklist | 300+ lines |
 | `accuracy_engines.py` | Source code with detailed comments | 1000+ lines |
 | `orchestrator_v2_2.py` | Integration orchestrator | 500+ lines |
@@ -297,20 +301,20 @@ If v2.2 causes issues:
 
 ---
 
-## 🚀 You're Ready!
+## Archived Activation Example
 
-1. Deploy: `python deploy_v2_2.py && python run.py`
+1. Conditional isolated activation: `python deploy_v2_2.py && python run.py`
 2. Test: `curl http://localhost:8000/api/status/v2.2`
 3. Monitor: Watch logs for errors
-4. Celebrate: 99%+ accuracy! 🎉
+4. Benchmark the unvalidated 99%+ target
 
 ---
 
 **Version:** 2.2  
-**Status:** ✅ Production Ready  
-**Deployment Time:** 5-10 minutes  
+**Status:** Inactive historical prototype; not deployed or production-ready
+**Historical Activation Estimate:** 5-10 minutes, before required validation
 **Rollback Time:** <2 minutes  
-**Expected Accuracy:** 99%+  
+**Unvalidated Accuracy Target:** 99%+
 
 ---
 
@@ -340,4 +344,4 @@ app.include_router(ai_v2_2.router)
 
 ---
 
-**Ready to transform your chatbot? 🚀 Deploy now!**
+**Inactive historical prototype: retain for reference; do not deploy without validation and approval.**

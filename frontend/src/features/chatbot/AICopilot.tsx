@@ -1,43 +1,79 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import {
-  Bot, Send, Paperclip, Mic, Image as ImageIcon, Zap, Plus,
-  FileText, Database, Sparkles, Calendar, Settings, PanelLeftClose,
-  PanelLeft, MessageSquare, BarChart3, ShieldAlert, TrendingUp,
-  Clock, ArrowRight, Trash2, Search, Globe, Cpu, BrainCircuit,
-  Activity, ChevronDown, ThumbsUp, ThumbsDown, CheckCircle2, History, X,
-  Square, Loader2
+  Paperclip, Mic, Plus, Database, Sparkles, Calendar,
+  MessageSquare, BarChart3, ShieldAlert, TrendingUp,
+  Clock, ArrowRight, Trash2, Search, Activity, History, X,
+  Square, Loader2, Pencil, ThumbsUp, ThumbsDown, Download
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import rehypeRaw from 'rehype-raw';
 import ReactECharts from 'echarts-for-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  ChatStreamError,
+  formatChatError,
+  getChatRequestId,
+  getChatStreamError,
+  readChatStream,
+} from './chatStream';
+import {
+  cancelChatRun,
+  createChatSession,
+  deleteChatSession,
+  getStoredChatMetadata,
+  getChatSession,
+  hasLegacyBrowserChats,
+  listChatSessions,
+  migrateLegacyBrowserChats,
+  renameChatSession,
+  sendChatMessage,
+  submitChatFeedback,
+  type StoredChatMessage,
+  type ChatSessionSummary,
+} from './chatApi';
+import { mergeChatMetadata, type ChatMessageMetadata } from './chatContract';
+import { useAuth } from '../../context/AuthContext';
 
 interface ChartViz {
   chart_type?: string;
   title?: string;
-  spec: any; // ECharts `option` object, built server-side from real DB data
+  spec: unknown; // ECharts `option` object, built server-side from real DB data
 }
+
+interface SpeechRecognitionResultLike {
+  [index: number]: { transcript: string };
+}
+
+interface SpeechRecognitionEventLike {
+  results: ArrayLike<SpeechRecognitionResultLike>;
+}
+
+interface SpeechRecognitionLike {
+  continuous: boolean;
+  interimResults: boolean;
+  onstart: (() => void) | null;
+  onend: (() => void) | null;
+  onresult: ((event: SpeechRecognitionEventLike) => void) | null;
+  start: () => void;
+}
+
+type SpeechRecognitionConstructor = new () => SpeechRecognitionLike;
 
 interface Message {
   id: number;
   type: 'user' | 'bot';
   content: string;
   timestamp: Date;
-  sources?: string[];
   imageData?: string; // Optional base64 image data attached to the message
   visualizations?: ChartViz[]; // Inline charts streamed from the agent's render_chart tool
-  metadata?: {
-    message_id?: number;
-    data_as_of?: string | null;
-    latency_ms?: number;
-    intent?: string;
-  };
+  metadata?: ChatMessageMetadata;
+  suggestions?: string[];
   feedbackStatus?: 'none' | 'liked' | 'disliked';
+  status?: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 }
 
 interface Thread {
-  id: number;
+  id: string;
   title: string;
   preview: string;
   timestamp: Date;
@@ -64,15 +100,32 @@ function getGreeting(): string {
   return 'Good Evening';
 }
 
+function mapStoredMessages(messages: StoredChatMessage[]): Message[] {
+  return messages.map(message => {
+    const metadata = getStoredChatMetadata(message);
+    return {
+      id: message.id,
+      type: message.role === 'assistant' ? 'bot' : 'user',
+      content: message.content,
+      timestamp: new Date(message.created_at),
+      visualizations: message.visualizations as ChartViz[],
+      metadata,
+      suggestions: metadata.suggestions,
+      feedbackStatus: message.feedback_status,
+      status: message.status,
+    };
+  });
+}
+
 export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
+  const { user } = useAuth();
   const [input, setInput] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [isTyping, setIsTyping] = useState(false);
   const [typingStage, setTypingStage] = useState(0);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [activeThreadId, setActiveThreadId] = useState<number | null>(null);
-  const [suggestedFollowups, setSuggestedFollowups] = useState<string[]>([]);
+  const [activeThreadId, setActiveThreadId] = useState<string | null>(null);
   const [isDeepAnalysis, setIsDeepAnalysis] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   
@@ -80,16 +133,23 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [isListening, setIsListening] = useState(false);
   const [imageFile, setImageFile] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
+  const [backendStatus, setBackendStatus] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRunIdRef = useRef<string | null>(null);
+  const legacyMigrationStarted = useRef(false);
 
   const greeting = useMemo(() => getGreeting(), []);
 
   const startListening = () => {
-    const SpeechRecognitionAPI = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const speechWindow = window as Window & {
+      SpeechRecognition?: SpeechRecognitionConstructor;
+      webkitSpeechRecognition?: SpeechRecognitionConstructor;
+    };
+    const SpeechRecognitionAPI = speechWindow.SpeechRecognition || speechWindow.webkitSpeechRecognition;
     if (!SpeechRecognitionAPI) {
       alert('Your browser does not support Speech Recognition.');
       return;
@@ -101,9 +161,9 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     recognition.onstart = () => setIsListening(true);
     recognition.onend = () => setIsListening(false);
     
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       const transcript = Array.from(event.results)
-        .map((result: any) => result[0].transcript)
+        .map(result => result[0].transcript)
         .join('');
       setInput(transcript);
     };
@@ -122,29 +182,36 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     }
   };
 
-  // Load threads from localStorage on mount
-  useEffect(() => {
-    const savedThreads = localStorage.getItem('akasha_threads_v2');
-    if (savedThreads) {
-      setThreads(JSON.parse(savedThreads));
-    }
-    // We intentionally do not auto-load the last active thread
-    // so the user starts with the landing view every time.
-  }, []);
+  const mapThread = (thread: ChatSessionSummary): Thread => ({
+    id: thread.session_id,
+    title: thread.title,
+    preview: thread.preview,
+    timestamp: new Date(thread.updated_at),
+    messageCount: thread.message_count,
+  });
 
-  // Persist messages when they change
-  useEffect(() => {
-    if (activeThreadId && messages.length > 0) {
-      localStorage.setItem(`akasha_msgs_${activeThreadId}`, JSON.stringify(messages));
-    }
-  }, [messages, activeThreadId]);
+  const refreshThreads = async () => {
+    const sessions = await listChatSessions();
+    setThreads(sessions.map(mapThread));
+  };
 
-  // Persist threads
   useEffect(() => {
-    if (threads.length > 0) {
-      localStorage.setItem('akasha_threads_v2', JSON.stringify(threads));
-    }
-  }, [threads]);
+    if (!user || legacyMigrationStarted.current) return;
+    legacyMigrationStarted.current = true;
+    const initializeHistory = async () => {
+      const migrationKey = `akasha_chat_migration_${user.id}`;
+      if (!localStorage.getItem(migrationKey) && hasLegacyBrowserChats()) {
+        const shouldImport = window.confirm(
+          'Legacy chats are stored in this browser without user isolation. Select OK to import them into your private account, or Cancel to remove them from this browser.'
+        );
+        await migrateLegacyBrowserChats(shouldImport);
+        localStorage.setItem(migrationKey, 'complete');
+      }
+      const sessions = await listChatSessions();
+      setThreads(sessions.map(mapThread));
+    };
+    initializeHistory().catch(error => console.error('Unable to initialize chat history:', error));
+  }, [user]);
 
   // Auto-scroll to bottom
   useEffect(() => {
@@ -177,59 +244,79 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   }, [threads, searchQuery]);
 
   const startNewThread = () => {
-    const newId = Date.now();
-    setActiveThreadId(newId);
+    setActiveThreadId(null);
     setMessages([]);
-    localStorage.setItem('akasha_active_thread', String(newId));
     inputRef.current?.focus();
   };
 
-  const loadThread = (thread: Thread) => {
-    setActiveThreadId(thread.id);
-    localStorage.setItem('akasha_active_thread', String(thread.id));
-    const saved = localStorage.getItem(`akasha_msgs_${thread.id}`);
-    if (saved) setMessages(JSON.parse(saved));
-    else setMessages([]);
-  };
-
-  const deleteThread = (threadId: number, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setThreads(prev => prev.filter(t => t.id !== threadId));
-    localStorage.removeItem(`akasha_msgs_${threadId}`);
-    if (activeThreadId === threadId) {
-      setActiveThreadId(null);
-      setMessages([]);
-    }
-  };
-
-  const submitFeedback = async (msgId: number, backendMessageId: number, type: 'thumbs_up' | 'thumbs_down') => {
+  const loadThread = async (thread: Thread) => {
     try {
-      await fetch('/akasha/api/chat/feedback', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messageId: backendMessageId,
-          feedbackType: type,
-        })
-      });
-      setMessages(prev => prev.map(m => 
-        m.id === msgId ? { ...m, feedbackStatus: type === 'thumbs_up' ? 'liked' : 'disliked' } : m
-      ));
-    } catch (e) {
-      console.error("Failed to submit feedback", e);
+      const detail = await getChatSession(thread.id);
+      setActiveThreadId(thread.id);
+      setMessages(mapStoredMessages(detail.messages));
+    } catch (error) {
+      console.error('Unable to load chat:', error);
     }
+  };
+
+  const deleteThread = async (threadId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      await deleteChatSession(threadId);
+      setThreads(prev => prev.filter(t => t.id !== threadId));
+      if (activeThreadId === threadId) startNewThread();
+    } catch (error) {
+      console.error('Unable to delete chat:', error);
+    }
+  };
+
+  const renameThread = async (thread: Thread, e: React.MouseEvent) => {
+    e.stopPropagation();
+    const title = window.prompt('Rename conversation', thread.title)?.trim();
+    if (!title || title === thread.title) return;
+    try {
+      const updated = await renameChatSession(thread.id, title);
+      setThreads(prev => prev.map(item => item.id === thread.id ? mapThread(updated) : item));
+    } catch (error) {
+      console.error('Unable to rename chat:', error);
+    }
+  };
+
+  const submitFeedback = async (
+    msgId: number,
+    backendMessageId: number,
+    type: 'thumbs_up' | 'thumbs_down',
+  ) => {
+    await submitChatFeedback({ messageId: backendMessageId, feedbackType: type });
+    setMessages(prev => prev.map(m =>
+      m.id === msgId ? { ...m, feedbackStatus: type === 'thumbs_up' ? 'liked' : 'disliked' } : m
+    ));
   };
 
   const handleSend = async (overrideInput?: string) => {
     const text = overrideInput || input.trim();
-    if (!text && !imageFile) return;
+    if ((!text && !imageFile) || isStreaming) return;
+    let requestId: string | undefined;
+    let streamedBotMessageId: number | undefined;
+    let requestController: AbortController | undefined;
 
-    // Create thread if needed
     let currentThreadId = activeThreadId;
     if (!currentThreadId) {
-      currentThreadId = Date.now();
-      setActiveThreadId(currentThreadId);
-      localStorage.setItem('akasha_active_thread', String(currentThreadId));
+      try {
+        const created = await createChatSession(text.substring(0, 100) || 'Image conversation');
+        currentThreadId = created.session_id;
+        setActiveThreadId(currentThreadId);
+        setThreads(prev => [mapThread(created), ...prev.filter(thread => thread.id !== created.session_id)]);
+      } catch (error) {
+        setMessages(prev => [...prev, {
+          id: Date.now(),
+          type: 'bot',
+          content: `System Error: ${error instanceof Error ? error.message : 'Unable to create a private chat session.'}`,
+          timestamp: new Date(),
+          feedbackStatus: 'none',
+        }]);
+        return;
+      }
     }
 
     const userMsg: Message = {
@@ -246,126 +333,151 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
     setImageFile(null);
     setIsTyping(true);
 
-    // Update thread list
-    if (messages.length === 0) {
-      const newThread: Thread = {
-        id: currentThreadId,
-        title: text.substring(0, 50),
-        preview: text.substring(0, 80),
-        timestamp: new Date(),
-        messageCount: 1
-      };
-      setThreads(prev => [newThread, ...prev.filter(t => t.id !== currentThreadId)].slice(0, 20));
-    } else {
-      setThreads(prev => prev.map(t =>
-        t.id === currentThreadId ? { ...t, messageCount: t.messageCount + 1 } : t
-      ));
-    }
-
     try {
       const controller = new AbortController();
+      requestController = controller;
       abortControllerRef.current = controller;
       setIsStreaming(true);
 
-      const response = await fetch('/akasha/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          message: text, 
-          history: messages,
-          sessionId: currentThreadId.toString(),
-          isDeepAnalysis: isDeepAnalysis,
-          imageData: currentImageData
-        }),
-        signal: controller.signal
-      });
+      const response = await sendChatMessage({
+        message: text,
+        sessionId: currentThreadId,
+        isDeepAnalysis: isDeepAnalysis,
+        imageData: currentImageData,
+      }, controller.signal);
+      requestId = getChatRequestId(response);
 
-      if (!response.ok) {
-        throw new Error('Connection failed');
-      }
-
-      const reader = response.body?.getReader();
-      const decoder = new TextDecoder();
-      
       let botContent = '';
       const botMsgId = Date.now() + 1;
+      streamedBotMessageId = botMsgId;
+      let botMessageAdded = false;
+      let streamError: ChatStreamError | undefined;
+      let hasVisualization = false;
+      const ensureBotMessage = () => {
+        if (botMessageAdded) return;
+        botMessageAdded = true;
+        setMessages(prev => [...prev, {
+          id: botMsgId,
+          type: 'bot',
+          content: '',
+          timestamp: new Date(),
+          metadata: requestId ? { request_id: requestId } : undefined,
+          feedbackStatus: 'none',
+          status: 'running',
+        }]);
+      };
       
-      // Add empty bot message that we will append to
-      setMessages(prev => [...prev, {
-        id: botMsgId,
-        type: 'bot',
-        content: '',
-        timestamp: new Date(),
-        feedbackStatus: 'none'
-      }]);
-      
-      setIsTyping(false);
-
-      if (reader) {
-        let buffer = '';
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-
-          // Append to a buffer and only process COMPLETE lines — a streamed SSE frame
-          // can be split across two reads, so keep the trailing partial line for next time.
-          buffer += decoder.decode(value, { stream: true });
-          const lines = buffer.split('\n');
-          buffer = lines.pop() ?? '';
-
-          for (const line of lines) {
-            const trimmed = line.trimStart();
-            if (!trimmed.startsWith('data: ')) continue;
-            try {
-              const data = JSON.parse(trimmed.slice(6));
-              if (data.type === 'token') {
-                botContent += data.content;
-                setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
-              } else if (data.type === 'visualization' && data.spec) {
-                // Inline chart from the agent — append to this message's chart list.
-                setMessages(prev => prev.map(m => m.id === botMsgId ? {
-                  ...m,
-                  visualizations: [...(m.visualizations || []), { chart_type: data.chart_type, title: data.title, spec: data.spec }]
-                } : m));
-              } else if (data.type === 'metadata') {
-                setSuggestedFollowups(data.suggestions || []);
-                setMessages(prev => prev.map(m => m.id === botMsgId ? {
-                  ...m,
-                  metadata: data.metadata,
-                  sources: data.metadata?.sources?.tables || []
-                } : m));
-              }
-            } catch (e) {
-              // Incomplete/non-JSON frame — skip
-            }
-          }
+      for await (const data of readChatStream(response)) {
+        requestId = data.request_id || requestId;
+        if (data.type === 'start') {
+          activeRunIdRef.current = data.run_id || null;
+          setMessages(prev => prev.map(message => message.id === userMsg.id ? { ...message, id: data.user_message_id } : message));
+        } else if (data.type === 'status') {
+          setBackendStatus(data.status.replaceAll('_', ' '));
+        } else if (data.type === 'token') {
+          setIsTyping(false);
+          ensureBotMessage();
+          botContent += data.content;
+          setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, content: botContent } : m));
+        } else if (data.type === 'visualization' && data.spec) {
+          setIsTyping(false);
+          ensureBotMessage();
+          hasVisualization = true;
+          // Inline chart from the agent — append to this message's chart list.
+          setMessages(prev => prev.map(m => m.id === botMsgId ? {
+            ...m,
+            visualizations: [...(m.visualizations || []), { chart_type: data.chart_type, title: data.title, spec: data.spec }]
+          } : m));
+        } else if (data.type === 'metadata') {
+          setIsTyping(false);
+          ensureBotMessage();
+          setMessages(prev => prev.map(m => m.id === botMsgId ? {
+            ...m,
+            metadata: mergeChatMetadata(m.metadata, { ...data.metadata, request_id: requestId }),
+            suggestions: data.metadata.suggestions ?? m.suggestions,
+          } : m));
+        } else if (data.type === 'error') {
+          streamError = new ChatStreamError(getChatStreamError(data), data.request_id || requestId);
+          ensureBotMessage();
+          setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, status: 'failed' } : m));
+        } else if (data.type === 'cancelled') {
+          ensureBotMessage();
+          setMessages(prev => prev.map(m => m.id === botMsgId ? { ...m, status: 'cancelled' } : m));
+        } else if (data.type === 'done') {
+          setIsTyping(false);
+          ensureBotMessage();
+          setMessages(prev => prev.map(m => m.id === botMsgId ? {
+            ...m,
+            id: data.message_id,
+            metadata: mergeChatMetadata(m.metadata, { message_id: data.message_id, request_id: requestId }),
+            status: data.status,
+          } : m));
         }
       }
+
+      if (streamError) throw streamError;
+      if (!botContent.trim() && !hasVisualization) {
+        throw new ChatStreamError('The chat stream ended without a response.', requestId);
+      }
+      await refreshThreads();
       
-    } catch (err: any) {
-      if (err?.name === 'AbortError') {
-        // User stopped the generation — keep partial content
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        if (streamedBotMessageId !== undefined) {
+          setMessages(prev => prev.map(message => message.id === streamedBotMessageId
+            ? { ...message, status: 'cancelled' }
+            : message));
+        }
       } else {
         setIsTyping(false);
+        const detail = formatChatError(err, requestId);
         setMessages(prev => [...prev, {
           id: Date.now() + 1,
           type: 'bot',
-          content: '⚠️ System Error: Could not reach the AKASHA AI backend. Please verify the server is running.',
+          content: `System Error: ${detail}`,
           timestamp: new Date(),
           feedbackStatus: 'none'
         }]);
       }
     } finally {
-      setIsStreaming(false);
-      abortControllerRef.current = null;
+      if (abortControllerRef.current === requestController) {
+        setIsStreaming(false);
+        abortControllerRef.current = null;
+        activeRunIdRef.current = null;
+        setBackendStatus('');
+      }
+      refreshThreads().catch(error => console.error('Unable to refresh chat history:', error));
     }
   };
 
-  const handleStop = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      setIsTyping(false);
-      setIsStreaming(false);
+  const handleStop = async () => {
+    const controller = abortControllerRef.current;
+    if (!controller) return;
+    setBackendStatus('cancelling');
+    const runId = activeRunIdRef.current;
+    if (runId) {
+      await cancelChatRun(runId).catch(() => undefined);
+    }
+    controller.abort();
+    setIsTyping(false);
+  };
+
+  const downloadReport = async (url: string, fallbackName: string) => {
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`Download failed (${response.status})`);
+      const blob = await response.blob();
+      const disposition = response.headers.get('Content-Disposition') || '';
+      const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
+      const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : fallbackName;
+      const objectUrl = URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = objectUrl;
+      anchor.download = filename;
+      anchor.click();
+      URL.revokeObjectURL(objectUrl);
+    } catch (error) {
+      console.error('Unable to download report:', error);
     }
   };
 
@@ -554,8 +666,15 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                           }`}
                         >
                           <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
-                          <span className="text-[13px] truncate flex-1">{thread.title}</span>
-                          <button
+                           <span className="text-[13px] truncate flex-1">{thread.title}</span>
+                           <button
+                             onClick={(e) => renameThread(thread, e)}
+                             className="p-1 rounded hover:bg-muted text-muted-foreground/60 hover:text-primary opacity-0 group-hover:opacity-100 transition-all"
+                             title="Rename"
+                           >
+                             <Pencil className="w-3 h-3" />
+                           </button>
+                           <button
                             onClick={(e) => deleteThread(thread.id, e)}
                             className="p-1 rounded hover:bg-muted text-muted-foreground/60 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                             title="Delete"
@@ -699,10 +818,31 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                               <Sparkles className="w-3 h-3 text-white" />
                             </div>
                             <span className="text-[12px] font-semibold text-muted-foreground">Akasha</span>
+                            {msg.status && msg.status !== 'completed' && (
+                              <span className="text-[10px] capitalize text-muted-foreground">{msg.status}</span>
+                            )}
                           </div>
 
                           <div className="akasha-response prose max-w-none prose-p:text-[14.5px] prose-p:leading-[1.7] prose-p:text-foreground prose-headings:text-foreground prose-headings:text-[16px] prose-strong:text-foreground prose-strong:font-semibold prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-[14px] prose-li:text-foreground prose-table:text-[13px]">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                            <ReactMarkdown
+                              remarkPlugins={[remarkGfm]}
+                              components={{
+                                a: ({ href, children }) => {
+                                  const isReport = Boolean(href?.match(/^\/akasha\/api\/reports\/artifacts\/[a-f0-9]+\/download$/));
+                                  if (!isReport) return <a href={href}>{children}</a>;
+                                  return (
+                                    <button
+                                      type="button"
+                                      onClick={() => downloadReport(href!, String(children))}
+                                      className="not-prose inline-flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary/15"
+                                    >
+                                      <Download className="h-3.5 w-3.5" />
+                                      {children}
+                                    </button>
+                                  );
+                                },
+                              }}
+                            >
                               {msg.content}
                             </ReactMarkdown>
                           </div>
@@ -744,64 +884,31 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                             </div>
                           )}
 
-                          {/* Source Badges & Metadata */}
-                          <div className="flex flex-col gap-2 mt-4">
-                            {msg.sources && msg.sources.length > 0 && (
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-[10px] text-muted-foreground/50 uppercase tracking-wider font-medium">Sources:</span>
-                                {msg.sources.map((src, i) => (
-                                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-muted border border-border text-[10px] text-muted-foreground/70">
-                                    <Globe className="w-2.5 h-2.5" />
-                                    {src}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            
-                            {msg.metadata && (
-                              <div className="flex items-center gap-4 text-[10px] text-muted-foreground/50">
-                                {msg.metadata.data_as_of && (
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="w-3 h-3" />
-                                    Data as of: {new Date(msg.metadata.data_as_of).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                                  </span>
-                                )}
-                                {msg.metadata.latency_ms && (
-                                  <span className="flex items-center gap-1">
-                                    <Zap className="w-3 h-3" />
-                                    Generated in {(msg.metadata.latency_ms / 1000).toFixed(1)}s
-                                  </span>
-                                )}
-                                
-                                {/* Feedback System */}
-                                {msg.metadata.message_id && (
-                                  <div className="flex items-center gap-1 ml-auto">
-                                    <button 
-                                      onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_up')}
-                                      disabled={msg.feedbackStatus !== 'none'}
-                                      className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'liked' ? 'text-success bg-success/10' : ''}`}
-                                      title="Good response"
-                                    >
-                                      <ThumbsUp className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button 
-                                      onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_down')}
-                                      disabled={msg.feedbackStatus !== 'none'}
-                                      className={`p-1 rounded hover:bg-muted transition-colors ${msg.feedbackStatus === 'disliked' ? 'text-destructive bg-destructive/10' : ''}`}
-                                      title="Poor response"
-                                    >
-                                      <ThumbsDown className="w-3.5 h-3.5" />
-                                    </button>
-                                  </div>
-                                )}
-                              </div>
-                            )}
-                          </div>
+                          {msg.metadata?.message_id && (
+                            <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground/50">
+                              <button
+                                onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_up')}
+                                disabled={msg.feedbackStatus !== 'none'}
+                                className={`p-1 rounded hover:bg-muted ${msg.feedbackStatus === 'liked' ? 'text-success bg-success/10' : ''}`}
+                                title="Good response"
+                              >
+                                <ThumbsUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                onClick={() => submitFeedback(msg.id, msg.metadata!.message_id!, 'thumbs_down')}
+                                disabled={msg.feedbackStatus !== 'none'}
+                                className={`p-1 rounded hover:bg-muted ${msg.feedbackStatus === 'disliked' ? 'text-destructive bg-destructive/10' : ''}`}
+                                title="Poor response"
+                              >
+                                <ThumbsDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          )}
 
                           {/* Suggested Follow-ups */}
-                          {msg.id === messages[messages.length - 1].id && suggestedFollowups.length > 0 && (
+                          {msg.id === messages[messages.length - 1].id && msg.suggestions && msg.suggestions.length > 0 && (
                             <div className="flex items-center gap-2 mt-4 flex-wrap">
-                              {suggestedFollowups.map((followup, i) => (
+                              {msg.suggestions.map((followup, i) => (
                                 <button
                                   key={i}
                                   onClick={() => handleSend(followup)}
@@ -829,7 +936,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                           <Loader2 className="w-3 h-3 text-primary-foreground animate-spin" />
                         </div>
                         <span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">AKASHA</span>
-                        <span className="text-[11px] text-muted-foreground/60 font-mono animate-pulse">{currentStage.text}</span>
+                        <span className="text-[11px] text-muted-foreground/60 font-mono animate-pulse">{backendStatus || currentStage.text}</span>
                       </div>
                     </motion.div>
                   )}

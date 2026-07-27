@@ -1,21 +1,46 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from typing import List
-from pydantic import BaseModel
+from typing import List, Literal
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 import os
 import json
 import logging
-import subprocess
+import re
 import time
 import uuid
 from database import get_db
 import models
 from services.project_service import calculate_project_360_metrics
-from engine.orchestrator import ChatOrchestrator
-from engine.memory import store_feedback
+from engine.orchestrator import ChatOrchestrator, ChatResponse
+from engine.graph import chat_graph_service, select_chat_engine
+from engine.graph.builder import GraphRunCancelled
+from engine.observability import (
+    log_observability_event,
+    resolve_request_id,
+    safe_exception_trace,
+    serialize_sse_event,
+)
+from engine.simulation_directives import (
+    DirectiveValidationError,
+    SIMULATION_DIRECTIVE_CODES,
+    build_simulation_directives,
+)
+from engine.model_provider import configured_provider_name, get_model_provider
+from engine.provider_errors import classify_provider_error
+from auth_claims import AuthenticatedIdentity
+from routers.chat_sessions import build_agent_history, get_owned_session
+from security import get_current_user
+from services.chat_run_service import (
+    chat_run_is_cancelled,
+    complete_chat_run,
+    create_chat_run,
+    finish_chat_run,
+    request_chat_run_cancellation,
+)
+from services.chat_feedback_service import submit_message_feedback
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
@@ -25,142 +50,129 @@ orchestrator = ChatOrchestrator(default_llm=os.environ.get("AI_PROVIDER", "ollam
 from typing import Optional, List
 
 class ChatRequest(BaseModel):
-    message: str
-    history: List[dict] = []
+    model_config = ConfigDict(extra="forbid")
+
+    message: str = Field(default="", max_length=20_000)
     projectId: Optional[str] = None
-    sessionId: Optional[str] = None
+    sessionId: str = Field(pattern=r"^[a-f0-9]{32}$")
     isDeepAnalysis: bool = False
-    imageData: Optional[str] = None
+    imageData: Optional[str] = Field(default=None, max_length=15_000_000)
+
+    @model_validator(mode="after")
+    def validate_content(self):
+        if not self.message.strip() and not self.imageData:
+            raise ValueError("A message or image is required.")
+        return self
 
 class FeedbackRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", strict=True)
+
     messageId: int
-    feedbackType: str
-    correctionText: str = None
-    projectId: str = None
-    questionPattern: str = None
+    feedbackType: Literal["thumbs_up", "thumbs_down"]
 
 def call_azure_openai_curl(messages, temperature, max_tokens, json_response=False):
-    endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
-    api_key = os.environ.get("AZURE_OPENAI_API_KEY")
-    api_version = os.environ.get("AZURE_OPENAI_API_VERSION")
-    deployment = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
-    
-    if not all([endpoint, api_key, api_version, deployment]):
-        raise Exception("Azure OpenAI credentials missing from environment.")
-        
-    # Strip trailing slash from endpoint if present
-    endpoint = endpoint.rstrip("/")
-    url = f"{endpoint}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
-    
-    payload = {
-        "messages": messages,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }
-    if json_response:
-        payload["response_format"] = {"type": "json_object"}
-        
-    # Write payload to a temporary file to avoid command-line length limits or escaping issues
-    import uuid
-    temp_file = f"temp_payload_{uuid.uuid4().hex}.json"
-    with open(temp_file, "w", encoding="utf-8") as f:
-        json.dump(payload, f)
-        
-    cmd = [
-        "curl.exe",
-        "-k",
-        "--noproxy", "*",
-        "-X", "POST",
-        url,
-        "-H", "Content-Type: application/json",
-        "-H", f"api-key: {api_key}",
-        "-d", f"@{temp_file}",
-        "-s"
-    ]
-    
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
-    finally:
-        if os.path.exists(temp_file):
-            os.remove(temp_file)
-            
-    if result.returncode != 0:
-        raise Exception(f"Curl failed: {result.stderr}")
-        
-    try:
-        data = json.loads(result.stdout)
-        if "error" in data:
-            raise Exception(f"Azure Error: {data['error'].get('message', str(data['error']))}")
-        return data["choices"][0]["message"]["content"]
-    except Exception as e:
-        raise Exception(f"Failed to parse Azure response. Output: {result.stdout[:200]}... Error: {str(e)}")
+    result = get_model_provider("azure").invoke(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_mode=json_response,
+    )
+    return result.content
 
 
 def get_ai_provider():
     from dotenv import load_dotenv
-    load_dotenv(override=True)
-    return os.environ.get("AI_PROVIDER", "ollama").lower()
+    load_dotenv(override=False)
+    return configured_provider_name()
+
+def call_openrouter(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
+    provider = get_model_provider("openrouter")
+    response = provider.create_completion(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_mode=json_response,
+        stream=stream,
+    )
+    if stream:
+        return response
+    return response.choices[0].message.content
 
 def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
-    import os
-    from groq import Groq
-    api_key = os.environ.get("AKASHA_AI_API_KEY")
-    if not api_key:
-        raise Exception("Groq API key missing in environment")
-    client = Groq(api_key=api_key)
-    
-    kwargs = {
-        "messages": messages,
-        "model": "llama-3.3-70b-versatile",
-        "temperature": temperature,
-        "max_tokens": max_tokens,
-        "stream": stream
-    }
-    if json_response:
-        kwargs["response_format"] = {"type": "json_object"}
-        
-    chat_completion = client.chat.completions.create(**kwargs)
-    
+    chat_completion = get_model_provider("groq").create_completion(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_mode=json_response,
+        stream=stream,
+    )
     if stream:
         return chat_completion
     return chat_completion.choices[0].message.content
 
 def call_ollama(messages, temperature, max_tokens, json_response=False, stream=False):
-    import openai
-    import httpx
-    import os
-    
-    endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-    
-    client = openai.OpenAI(
-        base_url=endpoint,
-        api_key="ollama",
-        timeout=httpx.Timeout(300.0, connect=30.0)
+    response = get_model_provider("ollama").create_completion(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_mode=json_response,
+        stream=stream,
     )
-    
-    kwargs = {
-        "messages": messages,
-        "model": model_name,
-        "temperature": temperature,
-        "max_tokens": max_tokens
-    }
-    if json_response:
-        kwargs["response_format"] = {"type": "json_object"}
-        
-    if stream:
-        kwargs["stream"] = True
-        response = client.chat.completions.create(**kwargs)
-        return response
-    else:
-        response = client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content
+    return response if stream else response.choices[0].message.content
+
+def call_configured_llm(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
+    response = get_model_provider().create_completion(
+        messages,
+        temperature=temperature,
+        max_tokens=max_tokens,
+        json_mode=json_response,
+        stream=stream,
+    )
+    return response if stream else response.choices[0].message.content
 
 
 @router.post("/chat")
-def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
-    """Main chat endpoint powered by the 6-step Intelligent Pipeline."""
-    session_id = req.sessionId or uuid.uuid4().hex
+def chat_with_copilot(
+    req: ChatRequest,
+    db: Session = Depends(get_db),
+    user: AuthenticatedIdentity = Depends(get_current_user),
+):
+    """Stream one owned conversation turn through the selected server-side engine."""
+    request_id = resolve_request_id()
+    session_id = req.sessionId
+    started_at = time.perf_counter()
+    tool_names = []
+
+    db_session = get_owned_session(db, user, session_id)
+    history_rows = db.query(models.ChatMessage).filter(
+        models.ChatMessage.session_id == session_id
+    ).order_by(models.ChatMessage.created_at.asc(), models.ChatMessage.id.asc()).all()
+    history = build_agent_history(history_rows)
+    engine_name = select_chat_engine(db_session, user.tenant_id, user.subject)
+    run_id = uuid.uuid4().hex
+    user_msg, assistant_msg, _run = create_chat_run(
+        db,
+        session=db_session,
+        user=user,
+        request_id=request_id,
+        run_id=run_id,
+        engine=engine_name,
+        content=req.message if req.message.strip() else "[Image attachment]",
+    )
+    user_message_id = user_msg.id
+    assistant_message_id = assistant_msg.id
+
+    log_observability_event(
+        logger,
+        "chat_started",
+        request_id=request_id,
+        session_id=session_id,
+        elapsed_ms=0,
+        response_intent=engine_name,
+        tool_names=tool_names,
+        run_id=run_id,
+        chat_engine=engine_name,
+    )
     
     # We pass the projectId as a hint to the intent classifier if provided by the UI
     project_names = [req.projectId] if req.projectId else None
@@ -168,68 +180,247 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
     try:
         # We need to stream the response
         from fastapi.responses import StreamingResponse
-        import json
         
         def event_stream():
-            # Run orchestrator as a generator
-            for chunk in orchestrator.process_message_stream(
-                db=db,
-                message=req.message,
-                session_id=session_id,
-                history=req.history,
-                project_names=project_names,
-                # Deep Analysis (tool-calling ReAct agent) is now the default for ALL chat, so
-                # every question gets grounded tool access — forecasts, charts, cross-domain data —
-                # instead of the limited fast pipeline. The client toggle can no longer downgrade it.
-                is_deep_analysis=True,
-                image_data=req.imageData
-            ):
-                if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                    # End of stream metadata
-                    response_obj = chunk["response"]
-                    
-                    # Ensure session exists
-                    db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
-                    if not db_session:
-                        db_session = models.ChatSession(session_id=session_id, title=req.message[:50])
-                        db.add(db_session)
-                        db.commit()
-                        db.refresh(db_session)
-                        
-                    # Create user message
-                    user_msg = models.ChatMessage(session_id=session_id, role="user", content=req.message)
-                    db.add(user_msg)
-                    
-                    # Create assistant message
-                    asst_msg = models.ChatMessage(
+            response_intent = "deep_analysis"
+            visualizations = []
+            full_content = ""
+            terminal = False
+            sequence = 0
+
+            def event(event_type: str, **payload):
+                nonlocal sequence
+                sequence += 1
+                return serialize_sse_event(
+                    event_type,
+                    request_id,
+                    stream_version="2.0",
+                    sequence=sequence,
+                    session_id=session_id,
+                    run_id=run_id,
+                    **payload,
+                )
+
+            try:
+                yield event(
+                    "start",
+                    user_message_id=user_message_id,
+                    assistant_message_id=assistant_message_id,
+                    engine=engine_name,
+                )
+                yield event(
+                    "status",
+                    status="running",
+                    engine=engine_name,
+                )
+                checkpoint_id = None
+                response_obj = None
+
+                if engine_name == "langgraph":
+                    graph_message = req.message
+                    if req.imageData:
+                        from engine.agent import analyze_image_context
+                        image_context = analyze_image_context(
+                            req.imageData,
+                            req.message,
+                            request_id=request_id,
+                            session_id=session_id,
+                        )
+                        graph_message = (
+                            f"[IMAGE CONTEXT EXTRACTED BY VISION MODEL: {image_context}]\n\n"
+                            f"User Question: {req.message}"
+                        )
+                    graph_result = chat_graph_service.run(
                         session_id=session_id,
-                        role="assistant",
-                        content=response_obj.content,
-                        intent_type=response_obj.intent_type,
-                        project_ids=",".join(response_obj.project_ids) if response_obj.project_ids else None,
-                        data_domains=",".join(response_obj.domains) if response_obj.domains else None,
-                        data_as_of=response_obj.data_as_of,
-                        sources_used={"tables": response_obj.sources_used},
-                        latency_ms=response_obj.latency_ms,
+                        user_id=user.subject,
+                        tenant_id=user.tenant_id,
+                        role=user.role,
+                        run_id=run_id,
+                        request_id=request_id,
+                        user_message_id=user_message_id,
+                        assistant_message_id=assistant_message_id,
+                        message=graph_message,
+                        history_rows=history_rows,
+                        active_project_ids=[req.projectId] if req.projectId else [],
                     )
-                    db.add(asst_msg)
-                    db.commit()
-                    db.refresh(asst_msg)
-                    
-                    suggestions = []
-                    if response_obj.intent_type == "factual":
-                        suggestions = ["Why is that?", "Compare this to baseline", "Show me the trend"]
-                    elif response_obj.intent_type == "analytical":
-                        suggestions = ["What should we do about it?", "Who is responsible?", "Show detailed breakdown"]
-                    else:
-                        suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
-                        
-                    yield f"data: {json.dumps({'type': 'metadata', 'metadata': {'message_id': asst_msg.id, 'data_as_of': response_obj.data_as_of, 'latency_ms': response_obj.latency_ms, 'intent': response_obj.intent_type, 'sources': response_obj.sources_used}, 'suggestions': suggestions})}\n\n"
-                elif isinstance(chunk, dict) and chunk.get("type") == "visualization":
-                    # Chart spec from the agent — forward the ECharts option to the frontend.
-                    yield f"data: {json.dumps({'type': 'visualization', 'chart_type': chunk.get('chart_type'), 'title': chunk.get('title'), 'spec': chunk.get('spec')})}\n\n"
+                    tool_names.extend(graph_result.tool_names)
+                    visualizations.extend(graph_result.visualizations)
+                    checkpoint_id = graph_result.checkpoint_id
+                    full_content = graph_result.content
+                    response_obj = ChatResponse(
+                        content=full_content,
+                        intent_type="deep_analysis",
+                        project_ids=project_names or [],
+                        domains=[],
+                        data_as_of=None,
+                        sources_used=tool_names,
+                        latency_ms=int((time.perf_counter() - started_at) * 1000),
+                    )
                 else:
-                    yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
+                    legacy_content = ""
+                    for chunk in orchestrator.process_message_stream(
+                        db=db,
+                        message=req.message,
+                        session_id=session_id,
+                        history=history,
+                        project_names=project_names,
+                        is_deep_analysis=True,
+                        image_data=req.imageData,
+                        request_id=request_id,
+                        tool_names_out=tool_names,
+                    ):
+                        if chat_run_is_cancelled(db, run_id):
+                            raise GraphRunCancelled("Chat run was cancelled.")
+                        if isinstance(chunk, dict) and chunk.get("type") == "metadata":
+                            response_obj = chunk["response"]
+                            response_intent = response_obj.intent_type
+                        elif isinstance(chunk, dict) and chunk.get("type") == "visualization":
+                            visualization = {
+                                "chart_type": chunk.get("chart_type"),
+                                "title": chunk.get("title"),
+                                "spec": chunk.get("spec"),
+                            }
+                            visualizations.append(visualization)
+                        elif not isinstance(chunk, dict):
+                            legacy_content += chunk
+
+                    full_content = legacy_content
+                    response_obj.content = full_content
+
+                if response_obj is None:
+                    raise RuntimeError("Chat engine completed without response metadata.")
+                if chat_run_is_cancelled(db, run_id):
+                    raise GraphRunCancelled("Chat run was cancelled.")
+
+                asst_msg = complete_chat_run(
+                    db,
+                    run_id=run_id,
+                    content=response_obj.content,
+                    intent_type=response_obj.intent_type,
+                    project_ids=response_obj.project_ids,
+                    domains=response_obj.domains,
+                    data_as_of=response_obj.data_as_of,
+                    sources=response_obj.sources_used,
+                    visualizations=visualizations,
+                    latency_ms=response_obj.latency_ms,
+                    checkpoint_id=checkpoint_id,
+                    model_name=graph_result.model_name if engine_name == "langgraph" else None,
+                )
+                terminal = True
+                for visualization in visualizations:
+                    yield event("visualization", **visualization)
+                for token in re.split(r"(\n)", full_content):
+                    if token:
+                        yield event("token", content=token)
+                suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
+                if response_obj.intent_type == "factual":
+                    suggestions = ["Why is that?", "Compare this to baseline", "Show me the trend"]
+                elif response_obj.intent_type == "analytical":
+                    suggestions = ["What should we do about it?", "Who is responsible?", "Show detailed breakdown"]
+
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+                log_observability_event(
+                    logger,
+                    "chat_completed",
+                    request_id=request_id,
+                    session_id=session_id,
+                    elapsed_ms=elapsed_ms,
+                    response_intent=response_intent,
+                    tool_names=tool_names,
+                    run_id=run_id,
+                    chat_engine=engine_name,
+                    model_name=graph_result.model_name if engine_name == "langgraph" else None,
+                )
+                yield event(
+                    "metadata",
+                    metadata={
+                        "message_id": asst_msg.id,
+                        "data_as_of": response_obj.data_as_of,
+                        "latency_ms": response_obj.latency_ms,
+                        "intent": response_obj.intent_type,
+                        "sources": response_obj.sources_used,
+                        "session_id": session_id,
+                        "run_id": run_id,
+                        "engine": engine_name,
+                        "model": graph_result.model_name if engine_name == "langgraph" else None,
+                    },
+                    suggestions=suggestions,
+                )
+                yield event("done", message_id=asst_msg.id, status="completed", engine=engine_name)
+            except (GraphRunCancelled, GeneratorExit) as exc:
+                db.rollback()
+                if engine_name == "langgraph":
+                    try:
+                        chat_graph_service.reset_interrupted_thread(session_id)
+                    except Exception as cleanup_exc:
+                        logger.error(
+                            "Unable to reset cancelled graph thread (%s)",
+                            type(cleanup_exc).__name__,
+                        )
+                finish_chat_run(
+                    db,
+                    run_id=run_id,
+                    status="cancelled",
+                    error_code="user_cancelled",
+                    partial_content=full_content,
+                )
+                terminal = True
+                if isinstance(exc, GeneratorExit):
+                    raise
+                yield event("cancelled", message_id=assistant_message_id, status="cancelled")
+                yield event("done", message_id=assistant_message_id, status="cancelled", engine=engine_name)
+            except Exception as exc:
+                db.rollback()
+                public_error = classify_provider_error(exc)
+                if engine_name == "langgraph":
+                    try:
+                        chat_graph_service.reset_interrupted_thread(session_id)
+                    except Exception as cleanup_exc:
+                        logger.error(
+                            "Unable to reset failed graph thread (%s)",
+                            type(cleanup_exc).__name__,
+                        )
+                finish_chat_run(
+                    db,
+                    run_id=run_id,
+                    status="failed",
+                    error_code=public_error.code,
+                    partial_content="",
+                )
+                terminal = True
+                elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+                log_observability_event(
+                    logger,
+                    "chat_failed",
+                    request_id=request_id,
+                    session_id=session_id,
+                    elapsed_ms=elapsed_ms,
+                    response_intent=response_intent,
+                    tool_names=tool_names,
+                    level=logging.ERROR,
+                    error_type=type(exc).__name__,
+                    failure_trace=safe_exception_trace(exc),
+                    run_id=run_id,
+                    chat_engine=engine_name,
+                )
+                yield event(
+                    "error",
+                    error={
+                        "code": public_error.code,
+                        "message": public_error.message,
+                    },
+                )
+                yield event("done", message_id=assistant_message_id, status="failed", engine=engine_name)
+            finally:
+                if not terminal:
+                    db.rollback()
+                    finish_chat_run(
+                        db,
+                        run_id=run_id,
+                        status="interrupted",
+                        error_code="stream_interrupted",
+                        partial_content=full_content,
+                    )
 
         return StreamingResponse(
             event_stream(),
@@ -238,28 +429,55 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
                 "Cache-Control": "no-cache",
                 "Connection": "keep-alive",
                 "X-Accel-Buffering": "no",  # disable nginx/proxy buffering so tokens flush live
+                "X-Request-ID": request_id,
+                "X-Session-ID": session_id,
             },
         )
-    except Exception as e:
-        logger.error(f"AKASHA Orchestrator Error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as exc:
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        log_observability_event(
+            logger,
+            "chat_failed",
+            request_id=request_id,
+            session_id=session_id,
+            elapsed_ms=elapsed_ms,
+            response_intent="deep_analysis",
+            tool_names=tool_names,
+            level=logging.ERROR,
+            error_type=type(exc).__name__,
+        )
+        raise HTTPException(
+            status_code=500,
+            detail="The chat request could not be started.",
+            headers={"X-Request-ID": request_id},
+        )
+
+
+@router.post("/chat/runs/{run_id}/cancel")
+def cancel_chat_run(
+    run_id: str,
+    db: Session = Depends(get_db),
+    user: AuthenticatedIdentity = Depends(get_current_user),
+):
+    if not re.fullmatch(r"[a-f0-9]{32}", run_id):
+        raise HTTPException(status_code=404, detail="Chat run not found.")
+    run = request_chat_run_cancellation(db, run_id=run_id, user=user)
+    return {"run_id": run.run_id, "status": run.status}
 
 @router.post("/chat/feedback")
-def submit_chat_feedback(req: FeedbackRequest, db: Session = Depends(get_db)):
-    """Store user feedback and corrections for self-improving memory (Step 6)."""
-    try:
-        feedback = store_feedback(
-            db=db,
-            message_id=req.messageId,
-            feedback_type=req.feedbackType,
-            correction_text=req.correctionText,
-            project_id=req.projectId,
-            question_pattern=req.questionPattern
-        )
-        return {"status": "success", "feedback_id": feedback.id}
-    except Exception as e:
-        logger.error(f"Feedback storage error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+def submit_chat_feedback(
+    req: FeedbackRequest,
+    db: Session = Depends(get_db),
+    user: AuthenticatedIdentity = Depends(get_current_user),
+):
+    """Compatibility alias for the canonical message-scoped feedback endpoint."""
+    feedback, changed = submit_message_feedback(
+        db,
+        message_id=req.messageId,
+        user=user,
+        feedback_type=req.feedbackType,
+    )
+    return {"status": "success", "feedback_id": feedback.id, "changed": changed}
 
 
 @router.get("/generate-briefing")
@@ -314,10 +532,7 @@ Live Portfolio Context:
     messages = [{"role": "user", "content": prompt}]
     
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+        content = call_configured_llm(messages, temperature=0.2, max_tokens=4000, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
@@ -431,10 +646,7 @@ You MUST output ONLY valid JSON with no markdown or extra text:
         messages = [{"role": "user", "content": prompt}]
 
         try:
-            if provider == "azure":
-                content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
-            else:
-                content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+            content = call_configured_llm(messages, temperature=0.2, max_tokens=4000, json_response=True)
                 
             content = content.strip()
             if content.startswith("```json"):
@@ -513,10 +725,7 @@ You MUST output ONLY valid json in the exact structure below, with no markdown f
     messages = [{"role": "user", "content": prompt}]
     
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+        content = call_configured_llm(messages, temperature=0.2, max_tokens=4000, json_response=True)
             
         content = content.strip()
         if content.startswith("```json"):
@@ -641,10 +850,7 @@ IMPORTANT: You do NOT provide cost or time impact. The deterministic Monte Carlo
 """
     messages = [{"role": "user", "content": prompt}]
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=2000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=2000, json_response=True)
+        content = call_configured_llm(messages, temperature=0.2, max_tokens=2000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -741,7 +947,9 @@ def execute_strategy(req: SimulationExecuteRequest, db: Session = Depends(get_db
     resolved_id = _resolve_project_id(db, p6_id) or p6_id
     tc_variance = compute_tc_variance(db, resolved_id)
     
-    prompt = f"""You are the AKASHA AI Execution Engine. Generate the automated task directives that will be pushed to integrated systems (SAP, PMAG, Contractor Portal) based on the chosen strategy.
+    prompt = f"""You are the AKASHA AI Directive Planning Assistant. Select local advisory directive template codes based on the chosen strategy.
+
+Codes select fixed backend-owned local-review templates only. They do not create, update, send, sync, push, or execute anything in SAP, P6, PMAG, Contractor Portal, HRMS, or any other external system.
     
 Project Context:
 {json.dumps(req.project, indent=2)}
@@ -752,35 +960,33 @@ Transmission (TC) Context:
 Strategy Applied:
 {json.dumps(req.strategy, indent=2)}
 
-If the Transmission Context shows at-risk lines, make sure to generate at least one transmission-related task (e.g. expediting stringing, Contractor mobilization).
+Select between 1 and 5 unique codes from this exact allowlist:
+{json.dumps(SIMULATION_DIRECTIVE_CODES)}
 
-You MUST output valid JSON consisting of 3 to 5 highly specific execution tasks tailored to the Strategy Applied.
-DO NOT use generic examples. Make the tasks extremely specific to the project's actual situation and constraints!
+Use `P6_SCHEDULE_REVIEW` for schedule recovery review, `CREW_PLAN_REVIEW` for field crew planning, `PROCUREMENT_REVIEW` for material or supplier recovery, `TC_RECOVERY_REVIEW` for transmission recovery, and `PMAG_ACTION_REVIEW` for PMAG-governed action review.
+
+You MUST output only this exact JSON shape. Do not return tasks, prose, explanations, objects, system names, actions, descriptions, statuses, or any keys other than `directive_codes`:
 {{
-  "tasks": [
-    {{
-      "system": "<System Name>", 
-      "action": "<Specific Action>", 
-      "description": "<Detailed dynamic description of exactly what needs to be done>", 
-      "status": "Pending"
-    }}
-  ]
+  "directive_codes": ["P6_SCHEDULE_REVIEW"]
 }}
-Systems can be SAP, PMAG, Contractor Portal, HRMS, etc.
 """
     messages = [{"role": "user", "content": prompt}]
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+        content = call_configured_llm(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
         try:
-            return json.loads(content)
-        except Exception:
-            return {"tasks": []}
+            return build_simulation_directives(json.loads(content))
+        except (json.JSONDecodeError, DirectiveValidationError):
+            raise HTTPException(
+                status_code=502,
+                detail="AI directive output did not satisfy the advisory review contract.",
+            )
+    except HTTPException:
+        raise
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -859,10 +1065,7 @@ Output valid JSON only matching this exact structure:
 """
     messages = [{"role": "user", "content": prompt}]
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.1, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.1, max_tokens=4000, json_response=True)
+        content = call_configured_llm(messages, temperature=0.1, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()
@@ -917,10 +1120,7 @@ Output valid JSON only matching this exact structure:
 """
     messages = [{"role": "user", "content": prompt}]
     try:
-        if provider == "azure":
-            content = call_azure_openai_curl(messages, temperature=0.2, max_tokens=4000, json_response=True)
-        else:
-            content = call_ollama(messages, temperature=0.2, max_tokens=4000, json_response=True)
+        content = call_configured_llm(messages, temperature=0.2, max_tokens=4000, json_response=True)
         content = content.strip()
         if content.startswith("```json"): content = content[7:-3].strip()
         elif content.startswith("```"): content = content[3:-3].strip()

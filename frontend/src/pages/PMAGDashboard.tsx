@@ -48,7 +48,8 @@ export default function PMAGDashboard() {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
   const [activeSection, setActiveSection] = useState(() => {
-    return sessionStorage.getItem('pmagActiveSection') || 'overview';
+    const stored = sessionStorage.getItem('pmagActiveSection');
+    return stored === 'ai_copilot' ? 'overview' : stored || 'overview';
   });
   const [previousSection, setPreviousSection] = useState('overview');
   const [data, setData] = useState<DashboardData | null>(null);
@@ -130,7 +131,7 @@ export default function PMAGDashboard() {
     setIsSyncing(false);
   };
 
-  const handleLogout = () => { logout(); navigate('/', { replace: true }); };
+  const handleLogout = async () => { await logout(); navigate('/', { replace: true }); };
 
   // ─── Sidebar Groups ───
   const sidebarGroups = [
@@ -417,14 +418,9 @@ export default function PMAGDashboard() {
       </div>
 
       {/* 4. Floating AI Copilot Panel */}
-      <ScenarioSimulationPanel 
+      <ScenarioSimulationPanel
         isOpen={isCopilotOpen}
         setIsOpen={setIsCopilotOpen}
-        onMaximize={() => {
-          setActiveSection('ai_copilot');
-          sessionStorage.setItem('pmagActiveSection', 'ai_copilot');
-          setIsCopilotOpen(false);
-        }} 
       />
     </div>
   );

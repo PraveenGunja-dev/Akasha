@@ -9,6 +9,11 @@ import time
 _FIN_CACHE = {}
 _FIN_TTL = 300  # 5 minutes
 
+
+def clear_financial_cache():
+    """Clear financial responses derived from SAP data."""
+    _FIN_CACHE.clear()
+
 router = APIRouter(prefix="/api")
 
 @router.get("/financials")

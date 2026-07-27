@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, text
 from dotenv import load_dotenv
 
 def prepare_database():
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     db_url = os.getenv("DATABASE_URL")
     if not db_url or not db_url.startswith("postgres"):
         return
@@ -65,7 +65,7 @@ def prepare_database():
         print(f"Auto-migration error: {e}")
 
 if __name__ == "__main__":
-    load_dotenv(override=True)
+    load_dotenv(override=False)
     
     if os.getenv("AUTO_SETUP_DB", "False").lower() == "true":
         print("Preparing Database Infrastructure...")

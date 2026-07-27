@@ -1,79 +1,148 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useEffect, useState } from 'react';
+import type { AccountInfo } from '@azure/msal-browser';
 import type { ReactNode } from 'react';
+import { configureAuthenticatedFetch } from '../auth/authenticatedFetch';
+import { authMode, entraApiScopes, getMsalInstance, type AuthMode } from '../auth/msal';
 
-interface User {
-  id: number;
+
+export interface User {
+  id: string;
+  tenant_id: string;
   username: string;
   display_name: string;
-  role: string;
+  role: 'executive' | 'pmag';
   email: string;
+  auth_mode?: AuthMode;
 }
 
 interface AuthContextType {
   user: User | null;
-  token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
-  logout: () => void;
+  authMode: AuthMode;
+  login: (role?: 'executive' | 'pmag') => Promise<{ success: boolean; message: string }>;
+  logout: () => Promise<void>;
+  getAccessToken: () => Promise<string | null>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const DEV_USER_KEY = 'akasha_dev_user';
+const DEV_ROLE_KEY = 'akasha_dev_role';
+
+function getDevelopmentIdentity() {
+  const userId = sessionStorage.getItem(DEV_USER_KEY);
+  const role = sessionStorage.getItem(DEV_ROLE_KEY);
+  if (!userId || (role !== 'executive' && role !== 'pmag')) return null;
+  return { userId, role } as const;
+}
+
+async function acquireToken(account?: AccountInfo | null): Promise<string | null> {
+  const instance = await getMsalInstance();
+  const selectedAccount = account || instance.getActiveAccount() || instance.getAllAccounts()[0];
+  if (!selectedAccount) return null;
+  instance.setActiveAccount(selectedAccount);
+  const result = await instance.acquireTokenSilent({ account: selectedAccount, scopes: entraApiScopes });
+  return result.accessToken;
+}
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
-  const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-
-  // Restore session from localStorage on mount
-  useEffect(() => {
-    const savedUser = localStorage.getItem('akasha_user');
-    const savedToken = localStorage.getItem('akasha_token');
-    if (savedUser && savedToken) {
-      setUser(JSON.parse(savedUser));
-      setToken(savedToken);
-    }
-    setIsLoading(false);
-  }, []);
-
-  const login = async (username: string, password: string): Promise<{ success: boolean; message: string }> => {
+  const getAccessToken = async () => {
+    if (authMode === 'development') return null;
     try {
-      const res = await fetch('/akasha/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
-      });
-
-      if (!res.ok) {
-        const err = await res.json();
-        return { success: false, message: err.detail || 'Login failed' };
-      }
-
-      const data = await res.json();
-      setUser(data.user);
-      setToken(data.token);
-      localStorage.setItem('akasha_user', JSON.stringify(data.user));
-      localStorage.setItem('akasha_token', data.token);
-      return { success: true, message: data.message };
+      return await acquireToken();
     } catch {
-      return { success: false, message: 'Network error. Please try again.' };
+      setUser(null);
+      return null;
     }
   };
 
-  const logout = () => {
-    setUser(null);
-    setToken(null);
+  useEffect(() => {
+    let active = true;
     localStorage.removeItem('akasha_user');
     localStorage.removeItem('akasha_token');
+    configureAuthenticatedFetch(getAccessToken, () => setUser(null), getDevelopmentIdentity);
+    const restore = async () => {
+      try {
+        if (authMode === 'development') {
+          if (!getDevelopmentIdentity()) return;
+          const response = await fetch('/akasha/api/auth/me');
+          if (!response.ok) throw new Error('Unable to restore the development identity.');
+          if (active) setUser({ ...(await response.json()), auth_mode: 'development' });
+          return;
+        }
+        const instance = await getMsalInstance();
+        const redirectResult = await instance.handleRedirectPromise();
+        const account = redirectResult?.account || instance.getAllAccounts()[0];
+        if (!account) return;
+        instance.setActiveAccount(account);
+        await acquireToken(account);
+        const response = await fetch('/akasha/api/auth/me');
+        if (!response.ok) throw new Error('Unable to validate the Akasha account.');
+        if (active) setUser(await response.json());
+      } catch (error) {
+        console.error('Authentication restore failed:', error);
+        if (active) setUser(null);
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+    restore();
+    return () => { active = false; };
+  }, []);
+
+  const login = async (role: 'executive' | 'pmag' = 'executive'): Promise<{ success: boolean; message: string }> => {
+    setIsLoading(true);
+    try {
+      if (authMode === 'development') {
+        const userId = crypto.randomUUID();
+        sessionStorage.setItem(DEV_USER_KEY, userId);
+        sessionStorage.setItem(DEV_ROLE_KEY, role);
+        const response = await fetch('/akasha/api/auth/me');
+        if (!response.ok) throw new Error('Development login was rejected by the backend.');
+        const developmentUser: User = { ...(await response.json()), auth_mode: 'development' };
+        setUser(developmentUser);
+        return { success: true, message: `Development access: ${developmentUser.display_name}.` };
+      }
+      const instance = await getMsalInstance();
+      const result = await instance.loginPopup({ scopes: entraApiScopes, prompt: 'select_account' });
+      instance.setActiveAccount(result.account);
+      await acquireToken(result.account);
+      const response = await fetch('/akasha/api/auth/me');
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || 'This account is not authorized for Akasha.');
+      }
+      const authenticatedUser: User = await response.json();
+      setUser(authenticatedUser);
+      return { success: true, message: `Welcome, ${authenticatedUser.display_name}.` };
+    } catch (error) {
+      setUser(null);
+      return { success: false, message: error instanceof Error ? error.message : 'Microsoft sign-in failed.' };
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, isLoading, login, logout }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  const logout = async () => {
+    if (authMode === 'development') {
+      sessionStorage.removeItem(DEV_USER_KEY);
+      sessionStorage.removeItem(DEV_ROLE_KEY);
+      setUser(null);
+      return;
+    }
+    const instance = await getMsalInstance();
+    const account = instance.getActiveAccount();
+    setUser(null);
+    await instance.logoutPopup({ account, mainWindowRedirectUri: `${window.location.origin}/akasha/` });
+  };
+
+  return <AuthContext.Provider value={{ user, isAuthenticated: Boolean(user), isLoading, authMode, login, logout, getAccessToken }}>{children}</AuthContext.Provider>;
 }
 
+// Context and hook intentionally share this module so all existing consumers keep one import path.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (!context) throw new Error('useAuth must be used within an AuthProvider');

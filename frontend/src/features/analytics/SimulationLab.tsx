@@ -112,7 +112,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   const steps = [
     { id: 1, label: 'Detect', status: activeStep === 1 ? 'in-progress' : activeStep > 1 ? 'completed' : 'pending' },
     { id: 2, label: 'Strategies', status: activeStep === 2 ? 'in-progress' : activeStep > 2 ? 'completed' : 'pending' },
-    { id: 3, label: 'Execute', status: activeStep === 3 ? 'in-progress' : activeStep > 3 ? 'completed' : 'pending' }
+    { id: 3, label: 'Directives', status: activeStep === 3 ? 'in-progress' : activeStep > 3 ? 'completed' : 'pending' }
   ];
 
   // Helpers
@@ -361,15 +361,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
     setSimIterations(0);
     setSimConvergence([]);
 
-    // Simulate loading animation
+    // The disabled detailed simulation path is configured for 1,000 backend iterations.
     let iters = 0;
     const loader = setInterval(() => {
-      iters += 300;
-      if (iters >= 10000) {
+      iters = Math.min(iters + 100, 1000);
+      setSimIterations(iters);
+      if (iters >= 1000) {
         clearInterval(loader);
         setSimulationPhase('complete');
       } else {
-        setSimIterations(iters);
         setSimConvergence(prev => [...prev, 70 + Math.random() * 20]);
       }
     }, 150);
@@ -393,6 +393,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
   const executeStrategy = async () => {
     setActiveStep(3);
     setExecutionProgress(0);
+    setExecutionTasks([]);
+    setResolvedTasks([]);
+    setSelectedTasks([]);
     try {
       const projectDetails = getProjectPayload();
       const selStrat = strategies.find(s => s.id === selectedStrategyId) || {};
@@ -660,7 +663,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                       <Activity className="w-4 h-4 text-primary" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Simulating</p>
+                      <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Analyzing</p>
                       <p className="text-sm font-bold text-foreground">{isAll ? 'Entire Portfolio' : (projects.find((p: any) => p.id === selectedProject)?.name || selectedProject)}</p>
                     </div>
                     {!isAll && (() => {
@@ -758,7 +761,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                 <div className="bg-card rounded-xl border border-blue-500/30 shadow-lg p-6 animate-in fade-in slide-in-from-bottom-4">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2 text-primary font-bold">
-                      <Search className="w-5 h-5 animate-pulse" /> Scanning Data...
+                      <Search className="w-5 h-5 animate-pulse" /> Analyzing Stored Data...
                     </div>
                     <div className="text-primary font-mono font-bold">{scanProgress}%</div>
                   </div>
@@ -772,9 +775,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                         <Eye className="w-4 h-4" /> Seeing
                       </div>
                       <ul className="space-y-2 text-xs font-medium text-foreground/80 list-disc pl-4">
-                        <li className={scanProgress > 10 ? 'opacity-100' : 'opacity-30 transition-opacity'}>Reading live schedules for {selectedProject}...</li>
+                        <li className={scanProgress > 10 ? 'opacity-100' : 'opacity-30 transition-opacity'}>Reading available schedule records for {selectedProject}...</li>
                         <li className={scanProgress > 30 ? 'opacity-100' : 'opacity-30 transition-opacity'}>Scanning SPI/CPI metrics...</li>
-                        <li className={scanProgress > 50 ? 'opacity-100 text-primary font-semibold' : 'opacity-30 transition-opacity'}>Pulling supply chain data from SAP MM...</li>
+                        <li className={scanProgress > 50 ? 'opacity-100 text-primary font-semibold' : 'opacity-30 transition-opacity'}>Reviewing available supply-chain records...</li>
                       </ul>
                     </div>
                     <div className="bg-primary/10/50 border border-primary/20 rounded-lg p-4">
@@ -783,7 +786,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                       </div>
                       <ul className="space-y-2 text-xs font-medium text-foreground/80 list-disc pl-4">
                         <li className={scanProgress > 40 ? 'opacity-100' : 'opacity-0 transition-opacity'}>{selectedProject} SPI vs threshold...</li>
-                        <li className={scanProgress > 60 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Analyzing weather overlap...</li>
+                        <li className={scanProgress > 60 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Reviewing schedule variance...</li>
                         <li className={scanProgress > 80 ? 'opacity-100 text-primary font-semibold' : 'opacity-0 transition-opacity'}>Cross-referencing budget variance...</li>
                       </ul>
                     </div>
@@ -793,7 +796,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                       </div>
                       <ul className="space-y-2 text-xs font-medium text-foreground/80 list-disc pl-4">
                         <li className={scanProgress > 60 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Querying baselines...</li>
-                        <li className={scanProgress > 80 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Running anomaly detection...</li>
+                        <li className={scanProgress > 80 ? 'opacity-100' : 'opacity-0 transition-opacity'}>Computing variance indicators...</li>
                         <li className={scanProgress > 95 ? 'opacity-100 text-success font-semibold' : 'opacity-0 transition-opacity'}>Classifying issues...</li>
                       </ul>
                     </div>
@@ -892,7 +895,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     ) : (
                       <div className="bg-card rounded-xl border border-border shadow-sm p-5 flex flex-col h-[400px]">
                         {/* Schedule Impact Chart Panel */}
-                        <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-muted-foreground border-b border-border pb-2 shrink-0">Schedule Impact Forecast</h3>
+                        <h3 className="text-sm font-bold mb-4 uppercase tracking-widest text-muted-foreground border-b border-border pb-2 shrink-0">Schedule Variance Impact</h3>
                         <div className="flex-1 min-h-0">
                           <ReactECharts option={scheduleImpactChartOptions} style={{height: '100%', width: '100%'}} />
                         </div>
@@ -1022,13 +1025,17 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               </div>
 
               <div className="border-t border-border pt-4 space-y-3">
-                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Execution Constraints</h4>
+                <h4 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Scenario Inputs</h4>
                 <label className="flex items-center gap-3 cursor-pointer">
                   <div className={`w-10 h-5 rounded-full p-1 transition-colors ${allowOvertime ? 'bg-success/100' : 'bg-muted-foreground/30'}`} onClick={() => setAllowOvertime(!allowOvertime)}>
                     <div className={`w-3 h-3 bg-white rounded-full transition-transform ${allowOvertime ? 'translate-x-5' : 'translate-x-0'}`}></div>
                   </div>
                   <span className="text-sm font-medium">Allow overtime shifts</span>
                 </label>
+              </div>
+
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-3 text-[11px] leading-relaxed text-muted-foreground">
+                <span className="font-bold text-foreground">Modeled decision support.</span> Schedule estimates sample historical activity durations and approximate the network from scheduled starts; they do not reproduce full P6 dependency or resource logic. Weather, crew, and crew-cost effects use simplified rules.
               </div>
 
               <button
@@ -1048,7 +1055,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   <div className="text-center max-w-sm">
                     <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4"><Activity className="w-8 h-8 text-muted-foreground" /></div>
                     <h3 className="font-bold text-lg mb-2">Ready to Generate</h3>
-                    <p className="text-sm text-muted-foreground">Configure your recovery priority and constraints, then click <strong className="text-foreground">Generate Strategies</strong> to get optimized recovery options.</p>
+                    <p className="text-sm text-muted-foreground">Configure your recovery priority and constraints, then click <strong className="text-foreground">Generate Strategies</strong> to get modeled recovery options.</p>
                   </div>
                 </div>
               ) : isGeneratingStrategies ? (
@@ -1056,7 +1063,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   <div className="text-center max-w-sm">
                     <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse"><Activity className="w-8 h-8 text-purple-600" /></div>
                     <h3 className="font-bold text-lg mb-2 animate-pulse">Running Strategy Models...</h3>
-                    <p className="text-sm text-muted-foreground">Simulating thousands of permutations against your constraints.</p>
+                    <p className="text-sm text-muted-foreground">Comparing schedule-risk estimates under the configured assumptions. Iteration count is managed by the backend and is not reported in this view.</p>
                   </div>
                 </div>
               ) : (
@@ -1079,15 +1086,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                             {selectedStrategyId === strat.id && <div className="w-2 h-2 bg-primary rounded-full" />}
                           </div>
                           <h4 className="font-bold text-foreground">{strat.title}</h4>
-                          {strat.recommended && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded">Recommended</span>}
-                          <span className="text-[10px] font-bold uppercase tracking-wider bg-success/10 text-success px-2 py-0.5 rounded">Viable</span>
+                          {strat.recommended && <span className="ml-auto text-[10px] font-bold uppercase tracking-wider bg-purple-100 text-purple-700 px-2 py-0.5 rounded">AI Suggested</span>}
+                          <span className="text-[10px] font-bold uppercase tracking-wider bg-success/10 text-success px-2 py-0.5 rounded">Modeled Option</span>
                         </div>
                         <p className="text-sm text-muted-foreground pl-7 mb-4">{strat.description}</p>
                         <div className="pl-7 flex items-center gap-4">
                           <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-warning font-bold">Cost ∆:</span> +₹{strat.cost_impact_cr} Cr</div>
                           <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-success font-bold">Time ∆:</span> {strat.time_saved_days < 0 ? '' : '+'}{strat.time_saved_days} days</div>
                           <div className="text-xs font-medium border border-border px-2 py-1 rounded bg-background"><span className="text-success font-bold">Risk -:</span> {strat.risk_reduction_pct}%</div>
-                          <div className="text-xs font-medium text-muted-foreground ml-auto">Confidence: {strat.ai_confidence_pct}%</div>
+                          <div className="text-xs font-medium text-muted-foreground ml-auto">AI confidence estimate: {strat.ai_confidence_pct}%</div>
                         </div>
                       </div>
                     ))}
@@ -1116,7 +1123,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   onClick={executeStrategy}
                   className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-auto"
                 >
-                  <CheckCircle2 className="w-5 h-5 fill-current" /> Execute Strategy
+                  <CheckCircle2 className="w-5 h-5 fill-current" /> Generate Action Directives
                 </button>
               )}
             </div>
@@ -1132,8 +1139,8 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               <div className="w-20 h-20 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-6 shadow-[0_0_30px_rgba(16,185,129,0.3)]">
                 <Activity className="w-10 h-10 text-success animate-pulse" />
               </div>
-              <h2 className="text-2xl font-bold">Executing AI Strategy</h2>
-              <p className="text-muted-foreground">Pushing tasks and automated decisions to SAP and PMAG...</p>
+              <h2 className="text-2xl font-bold">Proposed Action Directives</h2>
+              <p className="text-muted-foreground">{executionTasks.length > 0 ? 'Generated locally for review. No external action was taken.' : 'Generating a local review list from the selected strategy...'}</p>
 
               <div className="w-full max-w-md mx-auto h-2 bg-muted rounded-full overflow-hidden mt-8">
                 <div className="h-full bg-success/100 transition-all duration-300" style={{ width: `${executionProgress}%` }}></div>
@@ -1141,7 +1148,10 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             </div>
 
             <div className="bg-card border border-border rounded-xl shadow-sm p-6 mt-8 space-y-4">
-              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest border-b border-border pb-3">Automated Actions</h3>
+              <div className="border-b border-border pb-3">
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-widest">Local Directive Review</h3>
+                <p className="text-[11px] text-muted-foreground mt-2">System labels are suggested destinations only. This page does not create, update, or send records in SAP, PMAG, Contractor Portal, HRMS, P6, or any other external platform.</p>
+              </div>
               {executionTasks.map((t: any, i: number) => {
                 const isResolved = resolvedTasks.includes(i);
                 const isSelected = selectedTasks.includes(i);
@@ -1158,13 +1168,13 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     </button>
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="text-[10px] font-bold uppercase tracking-wider bg-background border border-border px-1.5 py-0.5 rounded">{t.system}</span>
+                        <span className="text-[10px] font-bold uppercase tracking-wider bg-background border border-border px-1.5 py-0.5 rounded">Suggested: {t.system}</span>
                         <span className="font-bold text-sm text-foreground">{t.action}</span>
                       </div>
                       <p className="text-xs text-muted-foreground">{t.description}</p>
                     </div>
                     <div className={`ml-auto text-[10px] font-bold uppercase tracking-wider ${isResolved ? 'text-success' : 'text-muted-foreground'}`}>
-                      {isResolved ? 'Success' : 'Pending'}
+                      {isResolved ? 'Reviewed' : 'Not Reviewed'}
                     </div>
                   </div>
                 );
@@ -1181,15 +1191,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                 disabled={selectedTasks.length === 0}
                 className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 disabled:from-gray-400 disabled:to-gray-500 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-6 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <CheckCircle2 className="w-5 h-5 fill-current" /> Execute Selected Actions ({selectedTasks.length})
+                <CheckCircle2 className="w-5 h-5 fill-current" /> Mark Selected as Reviewed ({selectedTasks.length})
               </button>
             )}
 
             {executionTasks.length > 0 && resolvedTasks.length === executionTasks.length && (
               <div className="mt-8 bg-success/10 dark:bg-success/100/10 border border-success/20 dark:border-success/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">
                 <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-4" />
-                <h3 className="text-xl font-bold text-success dark:text-success">Issue Resolved</h3>
-                <p className="text-success/80 dark:text-success/80 mt-2 font-medium">All automated actions and required tasks have been successfully processed and pushed to their respective systems.</p>
+                <h3 className="text-xl font-bold text-success dark:text-success">Directive Review Complete</h3>
+                <p className="text-success/80 dark:text-success/80 mt-2 font-medium">All proposed directives are marked reviewed in this session. No external systems were updated.</p>
               </div>
             )}
           </div>

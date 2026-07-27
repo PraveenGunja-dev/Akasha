@@ -30,12 +30,15 @@ def sync_sharepoint_data():
         from scripts.ingest_sap_data import ingest_data
         
         # Run database ingestion
-        ingest_data()
+        ingestion = ingest_data()
+        if not ingestion.get("success"):
+            raise RuntimeError("SAP ingestion incomplete: " + "; ".join(ingestion.get("errors", [])))
                 
         return {
             "status": "success",
             "message": f"Downloaded and ingested {len(downloaded_files)} files from SharePoint into the Database",
-            "files": downloaded_files
+            "files": downloaded_files,
+            "ingestion": ingestion,
         }
     except Exception as e:
         logger.error(f"SharePoint sync failed: {e}")

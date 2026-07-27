@@ -52,6 +52,12 @@ _KG_CACHE = {"data": None, "timestamp": 0}
 _SUMMARY_CACHE = {"data": None, "timestamp": 0}
 _CACHE_TTL = 300  # 5 minutes
 
+
+def clear_dashboard_caches():
+    """Clear dashboard responses derived from synchronized source data."""
+    _KG_CACHE.clear()
+    _SUMMARY_CACHE.clear()
+
 @router.get("/summary")
 def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     """

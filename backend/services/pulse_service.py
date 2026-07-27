@@ -18,6 +18,10 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
+class PulseSyncError(RuntimeError):
+    """Raised when Pulse cannot provide a complete paginated response."""
+
 # OData $expand queries from the Postman collection
 NC_EXPAND = (
     "WORKAREA($expand=PROJECT($expand=SPV)),"
@@ -85,10 +89,12 @@ class PulseService:
         while True:
             url = f"{self.base_url}{endpoint}?$top={page_size}&$skip={skip}&$expand={expand}"
             try:
-                resp = requests.get(url, headers=self.headers, timeout=60, verify=False)
+                resp = requests.get(url, headers=self.headers, timeout=60)
                 resp.raise_for_status()
                 data = resp.json()
                 records = data.get("value", [])
+                if not isinstance(records, list):
+                    raise ValueError("Pulse response 'value' is not a list")
                 if not records:
                     break
                 all_records.extend(records)
@@ -97,7 +103,9 @@ class PulseService:
                     break
             except Exception as e:
                 logger.error(f"Error fetching {endpoint} at skip={skip}: {e}")
-                break
+                raise PulseSyncError(
+                    f"Failed to fetch complete Pulse data from {endpoint} at offset {skip}"
+                ) from e
         return all_records
 
     def fetch_all_ncs(self) -> List[Dict]:
@@ -305,4 +313,6 @@ class PulseService:
             db.commit()
             logger.info(f"Added {new_mappings_added} new Pulse projects to ProjectMapping.")
 
-        return {"ncs": nc_count, "rfis": rfi_count, "new_projects": new_mappings_added}
+        result = {"ncs": nc_count, "rfis": rfi_count, "new_projects": new_mappings_added}
+
+        return result

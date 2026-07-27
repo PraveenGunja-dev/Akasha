@@ -62,8 +62,8 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
     return () => clearInterval(interval);
   }, []);
 
-  const handleSignOut = () => {
-    logout();
+  const handleSignOut = async () => {
+    await logout();
     navigate('/', { replace: true });
   };
 

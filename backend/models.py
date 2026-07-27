@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger, JSON, Index
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -540,12 +540,24 @@ class ChatSession(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, nullable=False, unique=True, index=True)
+    owner_subject = Column(String, nullable=True, index=True)
+    tenant_id = Column(String, nullable=True, index=True)
+    owner_role = Column(String, nullable=True)
+    source = Column(String, nullable=False, default="chat")
+    chat_engine = Column(String, nullable=True)     # Stable canary assignment: legacy | langgraph
     title = Column(String, nullable=True)        # Auto-generated from first message
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     is_active = Column(Boolean, default=True)
+    deleted_at = Column(DateTime, nullable=True)
+    deletion_status = Column(String, nullable=True)
 
     messages = relationship("ChatMessage", back_populates="session", cascade="all, delete-orphan")
+    runs = relationship("ChatRun", back_populates="session", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("ix_chat_session_owner_updated", "tenant_id", "owner_subject", "updated_at"),
+    )
 
 
 class ChatMessage(Base):
@@ -558,6 +570,11 @@ class ChatMessage(Base):
     session_id = Column(String, ForeignKey("chat_session.session_id", ondelete="CASCADE"), nullable=False, index=True)
     role = Column(String, nullable=False)          # 'user' | 'assistant'
     content = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="completed", index=True)
+    run_id = Column(String, nullable=True, index=True)
+    engine = Column(String, nullable=True)
+    model = Column(String, nullable=True)
+    error_code = Column(String, nullable=True)
     # Intent metadata (from Step 1)
     intent_type = Column(String, nullable=True)    # 'factual' | 'analytical' | 'advisory' | 'document'
     project_ids = Column(String, nullable=True)    # Comma-separated project IDs referenced
@@ -565,29 +582,78 @@ class ChatMessage(Base):
     # Provenance (from Step 5)
     data_as_of = Column(DateTime, nullable=True)   # Freshness timestamp of data used
     sources_used = Column(JSON, nullable=True)     # {"tables": [...], "cache_hit": true}
+    visualizations = Column(JSON, nullable=True)
     # Performance
     latency_ms = Column(Integer, nullable=True)
+    request_id = Column(String, nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
 
     session = relationship("ChatSession", back_populates="messages")
     feedback = relationship("ChatFeedback", back_populates="message", cascade="all, delete-orphan")
 
 
+class ChatRun(Base):
+    """Durable lifecycle for one user request and its assistant response."""
+    __tablename__ = "chat_run"
+
+    id = Column(Integer, primary_key=True, index=True)
+    run_id = Column(String, nullable=False, unique=True, index=True)
+    session_id = Column(String, ForeignKey("chat_session.session_id", ondelete="CASCADE"), nullable=False, index=True)
+    user_message_id = Column(Integer, nullable=False)
+    assistant_message_id = Column(Integer, nullable=False)
+    request_id = Column(String, nullable=False, index=True)
+    engine = Column(String, nullable=False)
+    model = Column(String, nullable=True)
+    status = Column(String, nullable=False, default="pending", index=True)
+    error_code = Column(String, nullable=True)
+    graph_checkpoint_id = Column(String, nullable=True)
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    session = relationship("ChatSession", back_populates="runs")
+
+    __table_args__ = (
+        Index("ix_chat_run_session_status", "session_id", "status"),
+    )
+
+
+class ReportArtifact(Base):
+    """Temporary, owner-scoped files generated synchronously from chatbot reports."""
+    __tablename__ = "report_artifact"
+
+    id = Column(Integer, primary_key=True, index=True)
+    artifact_id = Column(String, nullable=False, unique=True, index=True)
+    session_id = Column(String, ForeignKey("chat_session.session_id", ondelete="CASCADE"), nullable=False, index=True)
+    owner_subject = Column(String, nullable=False, index=True)
+    tenant_id = Column(String, nullable=False, index=True)
+    project_id = Column(String, nullable=False, index=True)
+    report_type = Column(String, nullable=False)
+    format = Column(String, nullable=False)
+    file_path = Column(String, nullable=False)
+    filename = Column(String, nullable=False)
+    mime_type = Column(String, nullable=False)
+    checksum_sha256 = Column(String, nullable=False)
+    size_bytes = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
 class ChatFeedback(Base):
-    """User feedback on chatbot responses — the self-improving memory loop (Step 6).
-    Corrections get injected into future prompts for the same project/question pattern.
-    """
+    """Simple feedback attached to an assistant response."""
     __tablename__ = "chat_feedback"
 
     id = Column(Integer, primary_key=True, index=True)
     message_id = Column(Integer, ForeignKey("chat_message.id", ondelete="CASCADE"), nullable=False, index=True)
-    feedback_type = Column(String, nullable=False)   # 'thumbs_up' | 'thumbs_down' | 'correction'
+    feedback_type = Column(String, nullable=False)   # 'thumbs_up' | 'thumbs_down'
     correction_text = Column(String, nullable=True)  # User's correction if provided
     project_id = Column(String, nullable=True)       # Which project this feedback is about
     question_pattern = Column(String, nullable=True)  # Normalized question for pattern matching
     created_at = Column(DateTime, default=datetime.utcnow)
 
     message = relationship("ChatMessage", back_populates="feedback")
+
 
 
 # ==========================================

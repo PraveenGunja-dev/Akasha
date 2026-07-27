@@ -9,6 +9,11 @@ import time
 _LOG_CACHE = {}
 _LOG_TTL = 300  # 5 minutes
 
+
+def clear_logistics_cache():
+    """Clear logistics responses derived from SAP data."""
+    _LOG_CACHE.clear()
+
 router = APIRouter(prefix="/api")
 
 @router.get("/logistics")

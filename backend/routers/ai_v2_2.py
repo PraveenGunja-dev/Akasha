@@ -28,7 +28,7 @@ from engine.orchestrator_v2_2 import ChatbotV22Orchestrator
 from engine.memory import store_feedback
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)

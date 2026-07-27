@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Moon, Sun, Lock, User, Eye, EyeOff, Loader2, X } from "lucide-react";
+import { Moon, Sun, Lock, Loader2, X } from "lucide-react";
 import adaniLogo from "../assets/adani-dpr-icon.ico";
 import PhotonBeam from "../components/ui/photon-beam";
 import PresentationModal from "../components/ui/PresentationModal";
@@ -20,12 +20,8 @@ export default function LandingPage() {
   const [showPresentation, setShowPresentation] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
-  const { login, isAuthenticated, user } = useAuth();
+  const { login, authMode, isAuthenticated, isLoading, user } = useAuth();
 
-  // Login form state
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -39,20 +35,19 @@ export default function LandingPage() {
 
   // If already logged in, redirect to their dashboard
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (!isLoading && isAuthenticated && user) {
       navigate(ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
     }
-  }, [isAuthenticated, user, navigate]);
+  }, [isLoading, isAuthenticated, user, navigate]);
 
   const toggleTheme = () => {
     setTheme(theme === "light" ? "dark" : "light");
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleLogin = async (role?: 'executive' | 'pmag') => {
     setLoading(true);
     setError('');
-    const res = await login(username, password);
+    const res = await login(role);
     setLoading(false);
     if (res.success) {
       // useEffect will handle the redirect based on user role
@@ -188,19 +183,25 @@ export default function LandingPage() {
                 </div>
               </div>
 
-              <div className="space-y-4">
-                <button
-                  onClick={() => navigate('/ceo-dashboard')}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
-                >
-                  Login as CEO
-                </button>
-                <button
-                  onClick={() => navigate('/pmag')}
-                  className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#4a60c5] to-accent text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(74,96,197,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2"
-                >
-                  Login as PMAG
-                </button>
+              <div className="space-y-3">
+                {authMode === 'development' ? (
+                  <>
+                    <div className="rounded-xl border border-amber-400/25 bg-amber-400/10 px-3 py-2 text-center text-xs text-amber-200">Development authentication is open. Do not use this mode in production.</div>
+                    <button onClick={() => handleLogin('executive')} disabled={loading} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-[#75479c] text-white font-bold text-[15px] flex items-center justify-center gap-2">
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />} Continue as CEO
+                    </button>
+                    <button onClick={() => handleLogin('pmag')} disabled={loading} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#4a60c5] to-accent text-white font-bold text-[15px] flex items-center justify-center gap-2">
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />} Continue as PMAG
+                    </button>
+                  </>
+                ) : (
+                  <button onClick={() => handleLogin()} disabled={loading} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2">
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Lock className="w-4 h-4" />}
+                    Sign in with Microsoft
+                  </button>
+                )}
+                {error && <p className="text-center text-xs text-red-300">{error}</p>}
+                {authMode === 'entra' && <p className="text-center text-xs text-white/35">Your Entra assignment determines CEO or PMAG access.</p>}
               </div>
 
               {/* Footer hint */}

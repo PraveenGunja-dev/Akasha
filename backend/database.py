@@ -3,7 +3,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from dotenv import load_dotenv
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
 # Fetch DATABASE_URL from .env.
 DATABASE_URL = os.getenv("DATABASE_URL")

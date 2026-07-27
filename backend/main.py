@@ -1,39 +1,39 @@
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from contextlib import asynccontextmanager
 import logging
-import models
 import os
-from database import engine
+from security import get_auth_mode, require_ceo_or_pmag
 
 # Import Routers
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, chat_feedback, chat_sessions, pmag, notifications, quality, reports_mvp
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- FIX FOR CORPORATE PROXIES (SSL CERTIFICATE VERIFY FAILED) ---
-import urllib3
-import requests
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-old_request = requests.Session.request
-def new_request(self, method, url, **kwargs):
-    kwargs['verify'] = False
-    return old_request(self, method, url, **kwargs)
-requests.Session.request = new_request
-# ----------------------------------------------------------------
+# Corporate proxy trust must be configured with REQUESTS_CA_BUNDLE/SSL_CERT_FILE.
+# TLS verification is never disabled process-wide.
 
-# Automatically create tables and add missing columns dynamically
-from auto_migrate import auto_upgrade_schema
-auto_upgrade_schema()
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    from engine.graph import chat_graph_service
+    chat_graph_service.startup()
+    try:
+        yield
+    finally:
+        chat_graph_service.shutdown()
 
 app = FastAPI(
     title="Akasha Intelligence API",
     description="Cross-Platform Intelligence System Backend",
     version="1.0.0",
-    root_path="/akasha"
+    root_path="/akasha",
+    lifespan=lifespan,
 )
+if get_auth_mode() == "development":
+    logger.warning("AKASHA DEVELOPMENT AUTH IS ENABLED: any browser user can select CEO or PMAG access.")
 
 # Rewrite /akasha/api -> /api. Implemented as PURE ASGI middleware, NOT @app.middleware
 # (BaseHTTPMiddleware): BaseHTTPMiddleware buffers the whole response body before sending,
@@ -55,29 +55,42 @@ class AkashaPathRewriteMiddleware:
 
 app.add_middleware(AkashaPathRewriteMiddleware)
 
-# CORS config to allow frontend
+# Bearer-token API access does not require credentialed wildcard CORS.
+allowed_origins = [
+    origin.strip()
+    for origin in os.getenv(
+        "AKASHA_ALLOWED_ORIGINS",
+        "http://localhost:5173,http://localhost:3510",
+    ).split(",")
+    if origin.strip()
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=allowed_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Akasha-Dev-User", "X-Akasha-Dev-Role"],
+    expose_headers=["X-Request-ID", "X-Session-ID"],
 )
 
 
 # Include Routers
-app.include_router(projects.router)
-app.include_router(logistics.router)
-app.include_router(financials.router)
-app.include_router(ai.router)
-app.include_router(sync.router)
-app.include_router(tc_router.router)
-app.include_router(dashboard.router)
-app.include_router(mappings.router)
+protected_api = [Depends(require_ceo_or_pmag)]
 app.include_router(auth.router)
-app.include_router(pmag.router)
-app.include_router(notifications.router)
-app.include_router(quality.router)
+app.include_router(chat_sessions.router, dependencies=protected_api)
+app.include_router(chat_feedback.router, dependencies=protected_api)
+app.include_router(projects.router, dependencies=protected_api)
+app.include_router(logistics.router, dependencies=protected_api)
+app.include_router(financials.router, dependencies=protected_api)
+app.include_router(ai.router, dependencies=protected_api)
+app.include_router(sync.router, dependencies=protected_api)
+app.include_router(tc_router.router, dependencies=protected_api)
+app.include_router(dashboard.router, dependencies=protected_api)
+app.include_router(mappings.router, dependencies=protected_api)
+app.include_router(pmag.router, dependencies=protected_api)
+app.include_router(notifications.router, dependencies=protected_api)
+app.include_router(quality.router, dependencies=protected_api)
+app.include_router(reports_mvp.router, dependencies=protected_api)
 
 # Mount Frontend static files
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

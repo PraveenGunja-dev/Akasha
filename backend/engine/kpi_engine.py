@@ -1,20 +1,14 @@
 """
 Akasha KPI Engine
 
-Computes project KPIs (progress, SPI, schedule variance, risk, health) using the
-enterprise methodology — but derived from the PROJECT'S UNDERLYING DATA (P6 activities,
-SAP POs, TC lines), NEVER from the stored summary columns. The stored
-`schedule_performance_index`, `total_float`, and `duration_percent_complete` on
-`p6_project` are null/unreliable in this database, so every KPI here is recomputed
-from the activity-level truth.
+Computes project KPIs from available P6, SAP, and TC data without substituting proxy
+values for unavailable business indicators.
 
 Methodology (adapted to the data that actually exists):
-- Physical / schedule progress  = completed activities / total activities.
-- SPI (EV/PV proxy)             = actual progress % / planned progress % as of the data date,
-                                   where planned % = share of activities whose BASELINE finish
-                                   is on/before the data date (i.e. should be done by now).
-- Schedule Variance (SV)        = actual progress % - planned progress % (negative = behind).
-- Schedule risk                 = activities behind schedule / total activities.
+- Overall progress              = P6 SummaryDurationPercentComplete.
+- Activity completion ratio     = completed activities / total activities (descriptive only).
+- SPI and CPI                   = reported only when supplied by P6; never reconstructed.
+- Baseline deadline exposure    = overdue incomplete activities / total activities.
 - Procurement risk              = PO lines still pending delivery / total PO lines (SAP).
 - Execution risk                = delayed transmission lines / total lines (TC; transmission only).
 - Overall risk                  = 0.40*schedule + 0.30*procurement + 0.30*execution,
@@ -42,26 +36,33 @@ def _is_complete(a) -> bool:
     return bool(a.status and 'complet' in a.status.lower())
 
 
+def _normalize_percentage(value) -> float | None:
+    if value is None:
+        return None
+    percentage = float(value)
+    if percentage <= 1.5:
+        percentage *= 100
+    return round(percentage, 1)
+
+
 def compute_schedule_kpis(p6, activities: list, as_of: datetime = None) -> dict:
-    """Schedule KPIs for one project, computed purely from its activities."""
+    """Schedule facts for one project, preserving unavailable P6 indicators as null."""
     as_of = as_of or p6.data_date or p6.last_synced_at or datetime.utcnow()
     total = len(activities)
     if total == 0:
         return {"has_data": False, "reason": "No activities for this project."}
 
     completed = [a for a in activities if _is_complete(a)]
-    progress_pct = round(len(completed) / total * 100, 1)
-
-    # Planned progress as-of the data date = share of activities that SHOULD be finished by now
-    planned_done = [a for a in activities if a.baseline_finish_date and a.baseline_finish_date <= as_of]
-    planned_pct = round(len(planned_done) / total * 100, 1)
-
-    spi = round(progress_pct / planned_pct, 2) if planned_pct > 0 else None
-    sv_pct = round(progress_pct - planned_pct, 1)  # earned - planned, in progress-% points
+    in_progress = [a for a in activities if a.status and 'progress' in a.status.lower()]
+    not_started = [a for a in activities if a.status and 'not started' in a.status.lower()]
+    activity_completion_pct = round(len(completed) / total * 100, 1)
+    progress_pct = _normalize_percentage(p6.duration_percent_complete)
+    spi = round(float(p6.schedule_performance_index), 2) if p6.schedule_performance_index is not None else None
+    cpi = round(float(p6.cost_performance_index), 2) if p6.cost_performance_index is not None else None
 
     # Activities behind schedule: incomplete AND their baseline finish has already passed
     behind = [a for a in activities if not _is_complete(a) and a.baseline_finish_date and a.baseline_finish_date < as_of]
-    schedule_risk_pct = round(len(behind) / total * 100, 1)
+    deadline_exposure_pct = round(len(behind) / total * 100, 1)
 
     # Critical path (float <= 0 among activities that report float)
     with_float = [a for a in activities if a.total_float is not None]
@@ -75,13 +76,27 @@ def compute_schedule_kpis(p6, activities: list, as_of: datetime = None) -> dict:
     return {
         "has_data": True,
         "as_of": as_of.date().isoformat(),
+        "project_status": p6.status,
+        "scheduled_finish": p6.scheduled_finish_date.isoformat() if p6.scheduled_finish_date else None,
+        "data_date": p6.data_date.isoformat() if p6.data_date else None,
+        "last_synced_at": p6.last_synced_at.isoformat() if p6.last_synced_at else None,
         "total_activities": total,
         "completed_activities": len(completed),
-        "progress_pct": progress_pct,              # physical/schedule progress
-        "planned_pct": planned_pct,                # where the baseline says we should be
-        "spi": spi,                                # >1 ahead, <1 behind
-        "schedule_variance_pct": sv_pct,           # negative = behind schedule
-        "schedule_risk_pct": schedule_risk_pct,    # activities behind / total
+        "in_progress_activities": len(in_progress),
+        "not_started_activities": len(not_started),
+        "progress_pct": progress_pct,
+        "progress_basis": "P6 SummaryDurationPercentComplete",
+        "activity_completion_pct": activity_completion_pct,
+        "planned_pct": None,
+        "spi": spi,
+        "cpi": cpi,
+        "schedule_variance_pct": None,
+        "performance_limitation": (
+            "SPI is unavailable; schedule performance cannot be classified from SPI."
+            if spi is None else None
+        ),
+        "schedule_risk_pct": None,
+        "baseline_deadline_exposure_pct": deadline_exposure_pct,
         "activities_behind": len(behind),
         "critical_activities": len(critical),
         "avg_slip_days": avg_slip,
@@ -143,9 +158,13 @@ def combine_risk(schedule_risk, procurement_risk, execution_risk) -> dict:
 def compute_health_score(spi, progress_pct, overall_risk_pct) -> dict:
     """Composite health (0-100, higher = healthier) from the KPIs that exist here:
     SPI, physical progress, and inverse risk. Weights renormalized over what's available."""
-    parts = []
-    if spi is not None:
-        parts.append(("spi", min(spi / 1.0, 1.0) * 100, 0.45))     # SPI 1.0 = full marks
+    if spi is None:
+        return {
+            "health_score": None,
+            "health_status": "UNKNOWN",
+            "reason": "SPI is unavailable; project health is not classified.",
+        }
+    parts = [("spi", min(spi / 1.0, 1.0) * 100, 0.45)]
     if progress_pct is not None:
         parts.append(("progress", progress_pct, 0.25))
     if overall_risk_pct is not None:
@@ -209,7 +228,7 @@ def compute_project_kpis(db: Session, project_id: str, activities: list = None,
         "execution": execu,
         "overall_risk": risk,
         "health": health,
-        "_note": "All KPIs computed from underlying activities/PO/TC data, not from stored summary columns.",
+        "_note": "P6 progress, SPI, and CPI retain their source semantics; unavailable indicators are not replaced with proxies.",
         "_source_tables": ["p6_activity", "mt_poamount", "tc_network_edge"],
     }
 

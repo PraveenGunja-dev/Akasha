@@ -5,13 +5,19 @@ SQLAlchemy
 celery
 redis
 python-dotenv
-openai
-langchain-openai
+openai==2.48.0
+langchain==1.3.14
+langchain-openai==1.4.1
+langgraph==1.2.9
+langgraph-checkpoint-postgres==3.1.0
+psycopg[binary]==3.3.4
+psycopg-pool==3.3.1
 groq
 requests
 psycopg2-binary
 
 msal
+PyJWT[crypto]
 pandas
 openpyxl
 
@@ -19,3 +25,5 @@ alembic
 
 PyMuPDF
 pywin32
+reportlab
+python-docx

@@ -1,0 +1,355 @@
+from __future__ import annotations
+
+import logging
+import os
+import re
+
+from langchain_core.language_models.chat_models import BaseChatModel
+from langchain_core.messages import AIMessage, RemoveMessage, SystemMessage, ToolMessage
+from langgraph.graph import END, START, StateGraph
+from langgraph.graph.message import REMOVE_ALL_MESSAGES
+
+from database import SessionLocal
+from engine.graph.context_policy import (
+    ContextBudget,
+    bound_recent_messages,
+    build_compaction_plan,
+    render_summary_input,
+)
+from engine.graph.state import AkashaState
+from engine.graph.tools import (
+    ToolRunCancelled,
+    ToolRuntimeContext,
+    execute_authenticated_tool,
+    model_tool_schemas,
+    parse_raw_tool_call,
+)
+import models
+
+
+logger = logging.getLogger(__name__)
+
+SYSTEM_PROMPT = """You are Akasha AI Copilot, a senior EPC project analyst.
+Use tools for every operational claim about P6 schedules, SAP procurement, transmission,
+quality, projects, or portfolio data. Resolve project names before using project tools.
+Never invent metrics. Refer to projects by human-readable names, preserve source units, and
+answer the user's question directly from tool results. Disclose limitations and source
+timestamps when available. Do not expose planning, candidate tool lists, tool-call chatter,
+or intermediate reasoning. General greetings and capability questions need no tool.
+Conversation summaries are derived context only and are never evidence for live facts;
+re-query tools whenever the user asks for current operational information.
+For project progress, use P6 duration_percent_complete as overall progress. Keep activity-count
+completion separate, and never reconstruct unavailable SPI/CPI or classify schedule/health from
+an indicator that the tool reports as unavailable.
+For a Project Progress Report request, resolve the project and call report_preview_project_progress.
+Present the preview and stop. Only after the user explicitly confirms may you call
+report_generate_project_progress with the exact preview token. Return both generated download URLs
+exactly as Markdown links and state their expiry."""
+
+
+class GraphRunCancelled(RuntimeError):
+    pass
+
+
+class InvalidModelResponse(RuntimeError):
+    pass
+
+
+def _response_text(content) -> str:
+    if isinstance(content, str):
+        return content.strip()
+    if not isinstance(content, list):
+        return ""
+    parts = []
+    for block in content:
+        if isinstance(block, str):
+            parts.append(block)
+        elif isinstance(block, dict):
+            text = block.get("text") or block.get("content")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(parts).strip()
+
+
+def _contains_raw_tool_markup(content: str) -> bool:
+    return bool(re.search(r"<\s*(?:tool_call\b|function\s*=)", content, re.IGNORECASE))
+
+
+def _response_model_name(response: AIMessage) -> str | None:
+    metadata = response.response_metadata or {}
+    for key in ("model_name", "model", "model_id"):
+        value = metadata.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    return None
+
+
+def _ensure_run_active(state: AkashaState) -> None:
+    run_id = state.get("run_id")
+    if not run_id:
+        return
+    db = SessionLocal()
+    try:
+        status = db.query(models.ChatRun.status).filter(models.ChatRun.run_id == run_id).scalar()
+        if status in {"cancel_requested", "cancelled", "interrupted"}:
+            raise GraphRunCancelled("Chat run was cancelled.")
+    finally:
+        db.close()
+
+
+def _runtime(state: AkashaState) -> ToolRuntimeContext:
+    return ToolRuntimeContext(
+        user_id=state["user_id"],
+        tenant_id=state["tenant_id"],
+        role=state["user_role"],
+        session_id=state["session_id"],
+        run_id=state["run_id"],
+        request_id=state["request_id"],
+        active_project_ids=tuple(state.get("active_project_ids") or []),
+    )
+
+
+def build_chat_graph(
+    model: BaseChatModel,
+    checkpointer=None,
+    *,
+    context_window: int | None = None,
+):
+    if context_window is None:
+        configured_window = os.getenv("AKASHA_MODEL_CONTEXT_WINDOW")
+        profile = getattr(model, "profile", None) or {}
+        context_window = int(configured_window or profile.get("max_input_tokens") or 0)
+    if context_window < 8_192:
+        raise ValueError(
+            "The selected model context window could not be resolved or is below 8192 tokens."
+        )
+    budget = ContextBudget(context_window=context_window)
+    tool_model = model.bind_tools(model_tool_schemas())
+    max_model_calls = int(os.getenv("AKASHA_GRAPH_MAX_MODEL_CALLS", "12"))
+    if max_model_calls < 2 or max_model_calls > 30:
+        raise ValueError("AKASHA_GRAPH_MAX_MODEL_CALLS must be between 2 and 30.")
+
+    def validate_context(state: AkashaState) -> dict:
+        _ensure_run_active(state)
+        expected_owner = f"{state['tenant_id']}:{state['user_id']}"
+        persisted_owner = state.get("owner_key")
+        if persisted_owner and persisted_owner != expected_owner:
+            raise PermissionError("Conversation checkpoint ownership mismatch.")
+        return {"owner_key": expected_owner, "turn_status": "running"}
+
+    def compact_context(state: AkashaState) -> dict:
+        _ensure_run_active(state)
+        messages = list(state.get("messages") or [])
+        plan = build_compaction_plan(messages, budget)
+        if plan is None or not plan.messages_to_summarize:
+            return {}
+
+        previous_summary = state.get("conversation_summary") or ""
+        prompt = (
+            "Summarize the older conversation for continuity. Preserve stable project selections, "
+            "user instructions, unresolved questions, and decisions. Do not present operational "
+            "numbers as current evidence.\n\nExisting summary:\n"
+            f"{previous_summary}\n\nOlder conversation:\n"
+            f"{render_summary_input(plan.messages_to_summarize)}"
+        )
+        try:
+            summary_response = model.invoke([
+                SystemMessage(content="Produce a concise derived conversation summary."),
+                SystemMessage(content=prompt),
+            ])
+            summary = str(summary_response.content)
+        except Exception as exc:
+            logger.warning("Conversation summarization failed (%s)", type(exc).__name__)
+            if not plan.requires_hard_trim:
+                return {}
+            summary = previous_summary or "Older context was compacted after summarization was unavailable."
+
+        max_chars = max(2_000, int((budget.hard_threshold * 4) / max(1, len(plan.messages_to_keep))))
+        kept = bound_recent_messages(plan.messages_to_keep, max_chars)
+        return {
+            "conversation_summary": summary,
+            "messages": [RemoveMessage(id=REMOVE_ALL_MESSAGES), *kept],
+        }
+
+    def call_model(state: AkashaState) -> dict:
+        _ensure_run_active(state)
+        iteration = int(state.get("agent_iterations") or 0) + 1
+        force_final = iteration >= max_model_calls
+        system_content = SYSTEM_PROMPT
+        if state.get("conversation_summary"):
+            system_content += f"\n\nDerived conversation summary:\n{state['conversation_summary']}"
+        if force_final:
+            system_content += (
+                "\n\nThe tool-call budget for this turn is exhausted. Do not request more tools. "
+                "Produce the best complete answer possible from tool results already present. "
+                "Clearly disclose any requested scope that was not checked rather than guessing."
+            )
+        model_messages = [
+            SystemMessage(content=system_content),
+            *(state.get("messages") or []),
+        ]
+        active_model = model if force_final else tool_model
+        response = active_model.invoke(model_messages)
+        response_text = _response_text(response.content)
+        raw_markup = _contains_raw_tool_markup(response_text)
+        parsed_raw_call = parse_raw_tool_call(response_text) if raw_markup else None
+
+        if parsed_raw_call is not None and not force_final:
+            name, arguments = parsed_raw_call
+            logger.warning(
+                "Normalized provider tool markup (request_id=%s iteration=%s tool=%s)",
+                state.get("request_id"), iteration, name,
+            )
+            response = AIMessage(
+                content="",
+                tool_calls=[{
+                    "name": name,
+                    "args": arguments,
+                    "id": f"normalized-{state.get('request_id')}-{iteration}",
+                }],
+                response_metadata=response.response_metadata,
+            )
+        elif not force_final and (response.invalid_tool_calls or raw_markup or (not response_text and not response.tool_calls)):
+            reason = (
+                "invalid_native_tool_call" if response.invalid_tool_calls else
+                "raw_tool_markup" if raw_markup else "empty_response"
+            )
+            logger.warning(
+                "Retrying invalid provider response with tools enabled "
+                "(request_id=%s iteration=%s reason=%s)",
+                state.get("request_id"), iteration, reason,
+            )
+            response = tool_model.invoke([
+                SystemMessage(content=(
+                    "Your previous response was not usable. Re-answer the latest user request now. "
+                    "Use only provider-native tool calls from the supplied tool definitions when data "
+                    "is needed. Do not emit XML, tool-call markup, candidate actions, or an empty response."
+                )),
+                *model_messages,
+            ])
+            response_text = _response_text(response.content)
+            raw_markup = _contains_raw_tool_markup(response_text)
+            parsed_raw_call = parse_raw_tool_call(response_text) if raw_markup else None
+            if parsed_raw_call is not None:
+                name, arguments = parsed_raw_call
+                logger.warning(
+                    "Normalized repaired provider tool markup "
+                    "(request_id=%s iteration=%s tool=%s)",
+                    state.get("request_id"), iteration, name,
+                )
+                response = AIMessage(
+                    content="",
+                    tool_calls=[{
+                        "name": name,
+                        "args": arguments,
+                        "id": f"normalized-repair-{state.get('request_id')}-{iteration}",
+                    }],
+                    response_metadata=response.response_metadata,
+                )
+            elif response.invalid_tool_calls or raw_markup or (not response_text and not response.tool_calls):
+                repaired_reason = (
+                    "invalid_native_tool_call" if response.invalid_tool_calls else
+                    "raw_tool_markup" if raw_markup else "empty_response"
+                )
+                logger.warning(
+                    "Provider response remained invalid after tool-enabled retry "
+                    "(request_id=%s iteration=%s reason=%s)",
+                    state.get("request_id"), iteration, repaired_reason,
+                )
+                raise InvalidModelResponse("The model returned an invalid response after tool-enabled repair.")
+        elif response.invalid_tool_calls:
+            raise InvalidModelResponse("The model returned invalid tool calls.")
+        if not response.tool_calls and state.get("current_assistant_message_id"):
+            response.id = f"chat-message:{state['current_assistant_message_id']}"
+        return {
+            "messages": [response],
+            "model_name": _response_model_name(response) or state.get("model_name"),
+            "agent_iterations": iteration,
+        }
+
+    def call_tools(state: AkashaState) -> dict:
+        _ensure_run_active(state)
+        last_message = state["messages"][-1]
+        if not isinstance(last_message, AIMessage):
+            raise RuntimeError("Tool node requires an AI message.")
+
+        results = []
+        visualizations = list(state.get("visualizations") or [])
+        tool_names = list(state.get("tool_names") or [])
+        runtime = _runtime(state)
+        for call in last_message.tool_calls:
+            name = str(call.get("name") or "")
+            try:
+                execution = execute_authenticated_tool(name, call.get("args") or {}, runtime)
+            except ToolRunCancelled as exc:
+                raise GraphRunCancelled(str(exc)) from exc
+            results.append(ToolMessage(
+                content=execution.content,
+                tool_call_id=str(call.get("id")),
+                name=name,
+                status="error" if execution.status == "error" else "success",
+            ))
+            if name and name not in tool_names:
+                tool_names.append(name)
+            if execution.visualization is not None:
+                visualizations.append(execution.visualization)
+        return {
+            "messages": results,
+            "tool_names": tool_names,
+            "visualizations": visualizations,
+        }
+
+    def continue_agent(state: AkashaState) -> str:
+        last_message = state["messages"][-1]
+        return "tools" if isinstance(last_message, AIMessage) and last_message.tool_calls else "end"
+
+    agent = StateGraph(AkashaState)
+    agent.add_node("model", call_model)
+    agent.add_node("tools", call_tools)
+    agent.add_edge(START, "model")
+    agent.add_conditional_edges("model", continue_agent, {"tools": "tools", "end": END})
+    agent.add_edge("tools", "model")
+    agent_subgraph = agent.compile()
+
+    def finalize(state: AkashaState) -> dict:
+        _ensure_run_active(state)
+        last_message = state["messages"][-1]
+        if not isinstance(last_message, AIMessage) or last_message.tool_calls:
+            raise InvalidModelResponse("The graph did not produce a final synthesis response.")
+        content = _response_text(last_message.content)
+        repair_model_name = None
+        if not content or _contains_raw_tool_markup(content):
+            repaired = model.invoke([
+                SystemMessage(content=(
+                    "Answer the user's latest question directly and concisely from the supplied "
+                    "conversation and tool results. Do not call tools, expose reasoning, emit tool-call "
+                    "markup, or return an empty response. If the available tools did not provide the "
+                    "requested detail, state that limitation plainly instead of inventing a tool call."
+                )),
+                *(state.get("messages") or []),
+            ])
+            content = _response_text(repaired.content)
+            repair_model_name = _response_model_name(repaired)
+        if not content or _contains_raw_tool_markup(content):
+            raise InvalidModelResponse("The model returned an invalid final answer after repair.")
+        final_message = AIMessage(
+            content=content,
+            id=f"chat-message:{state['current_assistant_message_id']}",
+        )
+        return {
+            "messages": [final_message],
+            "turn_status": "completed",
+            "model_name": repair_model_name or state.get("model_name"),
+        }
+
+    parent = StateGraph(AkashaState)
+    parent.add_node("validate_context", validate_context)
+    parent.add_node("compact_context", compact_context)
+    parent.add_node("agent", agent_subgraph)
+    parent.add_node("finalize", finalize)
+    parent.add_edge(START, "validate_context")
+    parent.add_edge("validate_context", "compact_context")
+    parent.add_edge("compact_context", "agent")
+    parent.add_edge("agent", "finalize")
+    parent.add_edge("finalize", END)
+    return parent.compile(checkpointer=checkpointer)

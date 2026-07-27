@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "phase0-provisional-v1",
+  "description": "Generated responses over synthetic fixture values. They are executable examples, not measured chatbot output or certified business answers.",
+  "responses": [
+    {
+      "case_id": "execution-current-progress-001",
+      "validation_status": "generated",
+      "response": "In this synthetic example, Project X at Y is 42% complete as of 2026-07-01. This is grounded only in Synthetic DPR fixture SYN-DPR-001 and requires business validation.",
+      "evidence_ids": [
+        "synthetic:dpr:SYN-DPR-001"
+      ]
+    },
+    {
+      "case_id": "execution-plan-comparison-001",
+      "validation_status": "generated",
+      "response": "For the synthetic period, actual progress is 42% and planned progress is 50%, so the example is 8 percentage points behind plan. This comparison uses synthetic DPR and plan fixtures, not production data.",
+      "evidence_ids": [
+        "synthetic:dpr:SYN-DPR-001",
+        "synthetic:plan:SYN-PLAN-001"
+      ]
+    },
+    {
+      "case_id": "execution-completion-variance-001",
+      "validation_status": "pending_validation",
+      "response": "In the synthetic schedule, forecast completion is 2026-09-15 and baseline completion is 2026-09-01, which is 14 calendar days later. Source: Synthetic schedule fixture SYN-SCHEDULE-001. This generated result is pending validation.",
+      "evidence_ids": [
+        "synthetic:schedule:SYN-SCHEDULE-001"
+      ]
+    }
+  ]
+}

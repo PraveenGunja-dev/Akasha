@@ -9,6 +9,12 @@ import time
 _SUMMARY_CACHE = {}
 _SUMMARY_TTL = 300  # 5 minutes
 
+
+def clear_project_caches():
+    """Clear project responses derived from synchronized source data."""
+    _SUMMARY_CACHE.clear()
+    _P360_CACHE.clear()
+
 router = APIRouter(prefix="/api")
 
 @router.get("/master-projects")

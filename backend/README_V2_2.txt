@@ -1,12 +1,18 @@
 ╔════════════════════════════════════════════════════════════════════════════════╗
 ║                                                                                ║
-║            🎯 AKASHA CHATBOT v2.2 - DEPLOYMENT COMPLETE 🎯                    ║
+║           AKASHA CHATBOT v2.2 - INACTIVE HISTORICAL PROTOTYPE                 ║
 ║                                                                                ║
-║                    Accuracy: 85% → 99%+ ✅                                    ║
+║             Unvalidated accuracy target: 85% → 99%+                          ║
 ║                   User Satisfaction: 3.2/5 → 4.5+/5 ✅                        ║
 ║                   Deployment Time: 5-10 minutes ⏱️                            ║
 ║                                                                                ║
 ╚════════════════════════════════════════════════════════════════════════════════╝
+
+HISTORICAL, INACTIVE DESIGN NOTICE
+v2.2 is not registered in backend/main.py and is not the production chatbot path.
+Every accuracy, ambiguity-resolution, satisfaction, latency, and improvement
+percentage in this document is an unvalidated design estimate or target, not a
+measured result. No executable benchmark supports these figures.
 
 
 📦 WHAT YOU'RE GETTING (8 Files, 3000+ Lines of Code)
@@ -17,7 +23,7 @@
 ───────────────────────────────────
 
 ✅ backend/engine/accuracy_engines.py (1000+ lines)
-   └─ 5 Production-Ready Accuracy Engines
+   └─ 5 Prototype Accuracy Engines (production readiness not validated)
       ├─ SemanticUnderstandingEngine (254 lines)
       │  └─ Extract canonical concepts from questions
       ├─ CrossSourceValidator (368 lines)
@@ -106,7 +112,7 @@
 
 
 ═══════════════════════════════════════════════════════════════════════════════
-🎯 ACCURACY IMPROVEMENTS (85% → 99%+)
+🎯 UNVALIDATED ACCURACY TARGET (85% → 99%+)
 ═══════════════════════════════════════════════════════════════════════════════
 
 ┌─ Semantic Understanding Engine ────────────────────────┐
@@ -353,7 +359,7 @@ After deployment, verify:
 Response Time:
 ├─ v2.1 baseline: 200-300ms
 ├─ v2.2 total: 300-500ms
-└─ Acceptable tradeoff for +14% accuracy gain ✅
+└─ Unvalidated projected tradeoff for +14% accuracy gain
 
 Accuracy:
 ├─ v2.1: 85%
@@ -397,11 +403,11 @@ STEP 4: Optimize (This Week/Next Week)
 ├─ Add optimizations if needed
 └─ Prepare for production
 
-STEP 5: Production Rollout (Next Week)
+STEP 5: HISTORICAL PRODUCTION ROLLOUT PROPOSAL (NOT EXECUTED)
 ├─ Update frontend to use v2.2
 ├─ Monitor closely (first 24 hours)
 ├─ Watch accuracy metrics
-└─ Celebrate 99%+ accuracy! 🎉
+└─ Benchmark the unvalidated 99%+ target
 
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -462,7 +468,7 @@ For Different Audiences:
 
 
 ═══════════════════════════════════════════════════════════════════════════════
-⚡ QUICK START (Copy-Paste Ready)
+ARCHIVAL QUICK START (CONDITIONAL TEST ENVIRONMENT ONLY)
 ═══════════════════════════════════════════════════════════════════════════════
 
 # Test Health Check
@@ -499,27 +505,27 @@ curl -X POST http://localhost:8000/api/health-score \
 ✨ FINAL CHECKLIST
 ═══════════════════════════════════════════════════════════════════════════════
 
-Before Deploying:
+Before Conditional Test Activation:
 ☐ Read CHATBOT_V2_2_QUICK_REF.md (2 min)
 ☐ Verify Python 3.8+ installed
 ☐ Check backend runs currently
 ☐ Plan migration strategy
 
-Deploying:
+Conditional Test Activation:
 ☐ Run deploy_v2_2.py (or manually update main.py)
 ☐ Start backend server
 ☐ Test health check endpoint
 ☐ Test sample chat query
 ☐ Verify confidence scores returned
 
-After Deploying:
+After Conditional Test Activation:
 ☐ Monitor logs for errors
 ☐ Collect performance metrics
 ☐ Test with real data
 ☐ Gather user feedback
 ☐ Plan frontend updates
 
-Going Live:
+Historical Go-Live Checklist (Not Executed or Approved):
 ☐ Update frontend to use /api/chat-v2.2
 ☐ Update UI to display confidence level
 ☐ Update UI to display health status
@@ -529,11 +535,16 @@ Going Live:
 
 ═══════════════════════════════════════════════════════════════════════════════
 
-🎊 YOU'RE READY TO DEPLOY 99%+ ACCURACY CHATBOT! 🎊
+UNVALIDATED 99%+ ACCURACY TARGET - INACTIVE DESIGN
 
-All files created. All code tested. All documentation provided.
-Deployment time: 5-10 minutes. Expected accuracy: 99%+.
+Historical package notes claimed that all files were created, all code was tested,
+and all documentation was provided. This is an unverified historical claim, not
+current test evidence or proof of production readiness.
+Historical deployment estimate: 5-10 minutes. Unvalidated accuracy target: 99%+.
 
 ═══════════════════════════════════════════════════════════════════════════════
 
-Next: Run "python deploy_v2_2.py" to get started!
+Archival conditional instruction: only after current code/security review and an
+executable evaluation, an explicitly approved isolated test may run
+"python deploy_v2_2.py". Running it is otherwise not recommended, and it must not
+be used to activate v2.2 in production.

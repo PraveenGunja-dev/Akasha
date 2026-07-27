@@ -2,7 +2,9 @@
 Akasha Chatbot Accuracy Analysis & Strategic Improvements v2.1+
 
 Analysis of current architecture and recommendations for achieving
-99%+ accuracy in responses.
+an unvalidated target of 99%+ accuracy in responses. This historical design
+document is not an evaluation result; no executable benchmark supports its
+accuracy percentages, and the described v2.2 path is not active.
 """
 
 # ============================================
@@ -11,10 +13,10 @@ Analysis of current architecture and recommendations for achieving
 
 """
 Current Enhancement (v2.1) Status:
-- Intent Classification: 90-95% accuracy
+- Intent Classification: 90-95% accuracy (unvalidated estimate)
 - Data Understanding: 85-90% accuracy  
 - Response Accuracy: 80-85% accuracy
-- Visualization Correctness: 95%+ accuracy
+- Visualization Correctness: 95%+ accuracy (unvalidated estimate)
 
 Bottlenecks Identified:
 1. Missing context from multi-turn conversations
@@ -24,7 +26,7 @@ Bottlenecks Identified:
 5. Threshold-based logic (not AI-driven)
 
 Current Score: ~85% Overall Accuracy
-Target Score: 99%+ Overall Accuracy
+Unvalidated Target Score: 99%+ Overall Accuracy
 """
 
 # ============================================
@@ -628,7 +630,7 @@ class CompositeMetricsEngine:
 # ============================================
 
 RECOMMENDED_PIPELINE = """
-Enhanced Chatbot Pipeline v2.2+ (99%+ Accuracy Target)
+Enhanced Chatbot Pipeline v2.2+ (Unvalidated 99%+ Accuracy Target)
 
 User Question
     ↓
@@ -675,7 +677,7 @@ User Question
     ↓
 RESPONSE WITH HIGH CONFIDENCE & TRANSPARENCY
 
-Expected Accuracy: 95-99%
+Unvalidated Accuracy Target: 95-99%
 """
 
 print(RECOMMENDED_PIPELINE)

@@ -16,6 +16,10 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
+
+class TcSyncError(RuntimeError):
+    """Raised when the transmission source cannot complete a sync."""
+
 AUTH_URL = "https://powerback-api.unada.in/api/v1/user/login"
 BASE_URL = "https://transmission-api-v3.unada.in"
 CREDENTIALS = {
@@ -25,7 +29,7 @@ CREDENTIALS = {
 
 def get_auth_token():
     try:
-        res = requests.post(AUTH_URL, json=CREDENTIALS, verify=False)
+        res = requests.post(AUTH_URL, json=CREDENTIALS)
         res.raise_for_status()
         data = res.json()
         if "token" in data: return data["token"]
@@ -38,36 +42,33 @@ def get_auth_token():
 def fetch_data(endpoint: str, token: str):
     headers = {"Authorization": f"Bearer {token}"}
     try:
-        res = requests.get(f"{BASE_URL}{endpoint}", headers=headers, verify=False)
+        res = requests.get(f"{BASE_URL}{endpoint}", headers=headers)
         res.raise_for_status()
         return res.json()
     except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
+        if e.response is not None and e.response.status_code == 404:
             # 404 is expected for unmapped or non-existent projects
             return None
         logger.error(f"Failed to fetch {endpoint}: {e}")
-        return None
+        raise TcSyncError(f"Failed to fetch TC endpoint {endpoint}") from e
     except Exception as e:
         logger.error(f"Failed to fetch {endpoint}: {e}")
-        return None
+        raise TcSyncError(f"Failed to fetch TC endpoint {endpoint}") from e
 
 
 def get_global_topology(token: str, region: str):
     """Fetches the global snapshot to get accurate node coordinates and edge from/to links"""
     proj_data = fetch_data(f"/api/{region}/projects", token)
     if not proj_data or "projects" not in proj_data:
-        logger.error(f"No {region} global projects found")
-        return None
+        raise TcSyncError(f"No valid {region} global projects response")
         
     current_proj = next((p for p in proj_data["projects"] if p.get("is_current")), None)
     if not current_proj:
-        logger.error(f"No current {region} global project found")
-        return None
+        raise TcSyncError(f"No current {region} global project found")
         
     data = fetch_data(f"/api/{region}/projects/{current_proj['id']}", token)
     if not data or "data" not in data or "network" not in data["data"]:
-        logger.error(f"Invalid {region} global network data")
-        return None
+        raise TcSyncError(f"Invalid {region} global network data")
         
     network = data["data"]["network"]
     
@@ -307,22 +308,28 @@ def sync_region_data(db: Session, token: str, region: str):
             
     db.commit()
     logger.info(f"Synced {region} Data")
+    return True
 
 def run_sync():
     logger.info("Starting Transmission Data Sync...")
     token = get_auth_token()
     if not token:
         logger.error("Sync aborted: No auth token.")
-        return
+        return False
 
     db = SessionLocal()
     try:
-        sync_region_data(db, token, "Khavda")
-        sync_region_data(db, token, "Rajasthan")
+        khavda_complete = sync_region_data(db, token, "Khavda")
+        rajasthan_complete = sync_region_data(db, token, "Rajasthan")
+        if not khavda_complete or not rajasthan_complete:
+            raise TcSyncError("One or more TC regions did not complete")
+
         logger.info("Transmission Data Sync Complete!")
+        return True
     except Exception as e:
         logger.error(f"Error during sync: {e}")
         db.rollback()
+        return False
     finally:
         db.close()
 

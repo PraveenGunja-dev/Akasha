@@ -8,6 +8,7 @@ import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
 import AdminDashboard from './pages/AdminDashboard';
 import PMAGDashboard from './pages/PMAGDashboard';
 import { Toaster } from 'sonner';
+import ProtectedRoute from './components/auth/ProtectedRoute';
 
 function App() {
   return (
@@ -18,17 +19,17 @@ function App() {
           <Routes>
             <Route path="/" element={<LandingPage />} />
             {/* Executive / CEO Dashboard */}
-            <Route path="/ceo-dashboard" element={<CEODashboard />} />
-            <Route path="/ceo-dashboard/project/:projectId" element={<CEODashboard />} />
-            <Route path="/ceo-dashboard/knowledge-graph" element={<KnowledgeGraphPage />} />
+            <Route path="/ceo-dashboard" element={<ProtectedRoute roles={['executive']}><CEODashboard /></ProtectedRoute>} />
+            <Route path="/ceo-dashboard/project/:projectId" element={<ProtectedRoute roles={['executive']}><CEODashboard /></ProtectedRoute>} />
+            <Route path="/ceo-dashboard/knowledge-graph" element={<ProtectedRoute roles={['executive']}><KnowledgeGraphPage /></ProtectedRoute>} />
             {/* PMAG Dashboard */}
-            <Route path="/pmag" element={<PMAGDashboard />} />
+            <Route path="/pmag" element={<ProtectedRoute roles={['pmag']}><PMAGDashboard /></ProtectedRoute>} />
             {/* Placeholder routes for other roles */}
-            <Route path="/projects" element={<PMAGDashboard />} />
-            <Route path="/tc-ordering" element={<PMAGDashboard />} />
-            <Route path="/tc-stores" element={<PMAGDashboard />} />
+            <Route path="/projects" element={<ProtectedRoute roles={['pmag']}><PMAGDashboard /></ProtectedRoute>} />
+            <Route path="/tc-ordering" element={<ProtectedRoute roles={['pmag']}><PMAGDashboard /></ProtectedRoute>} />
+            <Route path="/tc-stores" element={<ProtectedRoute roles={['pmag']}><PMAGDashboard /></ProtectedRoute>} />
             {/* Admin */}
-            <Route path="/admin/*" element={<AdminDashboard />} />
+            <Route path="/admin/*" element={<ProtectedRoute roles={['executive']}><AdminDashboard /></ProtectedRoute>} />
           </Routes>
         </div>
       </BrowserRouter>

@@ -1,5 +1,7 @@
 # Akasha Chatbot Enhancement Guide v2.1
 
+> **Historical, inactive prototype:** This enhanced-orchestrator alternative is not registered as the production chatbot path. The integration steps below are archival and conditional, not current deployment instructions.
+
 ## Overview
 
 This enhancement package significantly improves the Akasha Platform chatbot with:
@@ -513,9 +515,9 @@ A: Enable caching and consider materialized views for expensive queries.
 
 ---
 
-## Next Steps
+## Archived Conditional Next Steps
 
-1. ✅ Deploy new modules to backend
+1. Conditionally load new modules in an isolated test backend after approval
 2. ✅ Update AI router with v2 endpoint
 3. ✅ Update frontend to handle visualizations
 4. ✅ Test with real project data
@@ -526,7 +528,7 @@ A: Enable caching and consider materialized views for expensive queries.
 
 ## Support & Maintenance
 
-- All modules are production-ready
+- Modules are prototypes; production readiness was not validated
 - Backward compatible with existing orchestrator
 - Can run v1 and v2 simultaneously during transition
 - Comprehensive error handling included
@@ -535,4 +537,4 @@ A: Enable caching and consider materialized views for expensive queries.
 
 **Version:** 2.1  
 **Updated:** 2026-07-22  
-**Status:** Ready for Integration
+**Status:** Inactive historical prototype; not integrated or production-ready

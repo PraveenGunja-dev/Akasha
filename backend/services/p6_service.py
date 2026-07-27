@@ -12,6 +12,10 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
+class P6SyncError(RuntimeError):
+    """Raised when P6 cannot provide a complete sync response."""
+
 # ==========================================
 # P6 Field Constants — Construction Focused
 # ==========================================
@@ -330,7 +334,7 @@ class P6Service:
             }
             headers = {"Content-Type": "application/x-www-form-urlencoded"}
             
-            response = requests.post(self.token_url, data=data, headers=headers, timeout=15, verify=False, proxies=self.proxies)
+            response = requests.post(self.token_url, data=data, headers=headers, timeout=15, proxies=self.proxies)
             response.raise_for_status()
             
             # P6 token endpoint sometimes returns the raw JWT string directly instead of JSON
@@ -366,7 +370,7 @@ class P6Service:
             params["Filter"] = " and ".join(filters)
 
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, proxies=self.proxies)
 
             response.raise_for_status()
             data = response.json()
@@ -374,10 +378,10 @@ class P6Service:
             return data
         except requests.exceptions.HTTPError as e:
             logger.error(f"P6 HTTP Error fetching projects: {e} - {e.response.text if hasattr(e, 'response') and e.response else ''}")
-            return []
+            raise P6SyncError("Failed to fetch P6 projects") from e
         except Exception as e:
             logger.error(f"Error fetching P6 projects: {e}")
-            return []
+            raise P6SyncError("Failed to fetch P6 projects") from e
 
     # ------------------------------------------
     # 2. Fetch Baseline Projects from P6 API
@@ -394,17 +398,17 @@ class P6Service:
             params["Filter"] = f"OriginalProjectObjectId={project_object_id}"
 
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, proxies=self.proxies)
             response.raise_for_status()
             data = response.json()
             logger.info(f"Fetched {len(data)} baseline projects from P6")
             return data
         except requests.exceptions.HTTPError as e:
             logger.error(f"P6 HTTP Error fetching baselines: {e} - {e.response.text if hasattr(e, 'response') and e.response else ''}")
-            return []
+            raise P6SyncError("Failed to fetch P6 baselines") from e
         except Exception as e:
             logger.error(f"Error fetching P6 baseline projects: {e}")
-            return []
+            raise P6SyncError("Failed to fetch P6 baselines") from e
 
 
     # ------------------------------------------
@@ -419,8 +423,7 @@ class P6Service:
 
         raw_projects_list = self.fetch_projects(project_object_id=project_object_id)
         if not raw_projects_list:
-            logger.warning("No projects returned from P6 API")
-            return 0
+            raise P6SyncError("P6 returned no projects; sync cannot be verified as complete")
             
         mapped_ids = {m.project_id for m in db.query(ProjectMapping).all()}
             
@@ -594,7 +597,7 @@ class P6Service:
             return data
         except Exception as e:
             logger.error(f"[REAL P6 API] Error fetching WBS: {e}")
-            return []
+            raise P6SyncError(f"Failed to fetch P6 WBS for project {project_object_id}") from e
 
     def fetch_resource_assignments(self, project_object_id: int) -> List[Dict[str, Any]]:
         """
@@ -615,7 +618,9 @@ class P6Service:
             return data
         except Exception as e:
             logger.error(f"[REAL P6 API] Error fetching Resource Assignments: {e}")
-            return []
+            raise P6SyncError(
+                f"Failed to fetch P6 resource assignments for project {project_object_id}"
+            ) from e
 
     def sync_wbs_to_db(self, db: Session, project_object_id: int) -> int:
         from models import P6WBSNode
@@ -747,12 +752,14 @@ class P6Service:
             params["Filter"] = f"ProjectObjectId={project_object_id}"
         
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, proxies=self.proxies)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
             logger.error(f"Error fetching activities from P6: {e}")
-            return []
+            raise P6SyncError(
+                f"Failed to fetch P6 activities for project {project_object_id}"
+            ) from e
 
     def sync_activities_to_db(self, db: Session, project_object_id: int = None) -> int:
         from models import P6Activity
@@ -971,12 +978,14 @@ class P6Service:
             params["Filter"] = f"ProjectObjectId={project_object_id}"
         
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, proxies=self.proxies)
             response.raise_for_status()
             return response.json()
         except Exception as e:
             logger.error(f"Error fetching ActivityRisk from P6: {e}")
-            return []
+            raise P6SyncError(
+                f"Failed to fetch P6 activity risks for project {project_object_id}"
+            ) from e
 
     def sync_activity_risks_to_db(self, db: Session, project_object_id: int = None) -> int:
         from models import P6ActivityRisk

@@ -119,7 +119,9 @@ class ChatOrchestrator:
         history: list[dict],
         project_names: list[str] = None,
         is_deep_analysis: bool = False,
-        image_data: str = None
+        image_data: str = None,
+        request_id: str = None,
+        tool_names_out: list[str] = None,
     ):
         """Streaming version of process_message."""
         t0 = time.time()
@@ -128,7 +130,12 @@ class ChatOrchestrator:
         if image_data:
             from engine.agent import analyze_image_context
             logger.info("Image uploaded, extracting vision context before ReAct loop.")
-            vision_context = analyze_image_context(image_data, message)
+            vision_context = analyze_image_context(
+                image_data,
+                message,
+                request_id=request_id,
+                session_id=session_id,
+            )
             message = f"[IMAGE CONTEXT EXTRACTED BY VISION MODEL: {vision_context}]\n\nUser Question: {message}"
         
         # Branch 1: Deep Analysis Mode
@@ -136,12 +143,21 @@ class ChatOrchestrator:
             from engine.agent import run_deep_analysis_agent_stream
             logger.info("Routing to Deep Analysis Agent Stream (ReAct Loop)")
             full_content = ""
-            tools_used = []
+            tools_used = tool_names_out if tool_names_out is not None else []
             
-            for chunk in run_deep_analysis_agent_stream(db, message, history):
+            for chunk in run_deep_analysis_agent_stream(
+                db,
+                message,
+                history,
+                request_id=request_id,
+                session_id=session_id,
+                tool_names_out=tools_used,
+            ):
                 if isinstance(chunk, dict):
                     if chunk.get("type") == "tools_used":
-                        tools_used = chunk["tools"]
+                        for tool_name in chunk["tools"]:
+                            if tool_name not in tools_used:
+                                tools_used.append(tool_name)
                     elif chunk.get("type") == "visualization":
                         # Forward chart specs straight to the router (not part of text content).
                         yield chunk
@@ -388,20 +404,23 @@ User Request: {message}
 
     def _generate(self, prompt: str) -> str:
         """Call the appropriate LLM backend."""
-        from routers.ai import call_ollama, call_azure_openai_curl
-        if self.default_llm == "azure":
-            return call_azure_openai_curl([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048)
-        else:
-            return call_ollama([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048)
+        from routers.ai import call_configured_llm
+        return call_configured_llm(
+            [{"role": "user", "content": prompt}],
+            temperature=0.3,
+            max_tokens=2048,
+        )
 
     def _generate_stream(self, prompt: str):
         """Call the appropriate LLM backend with streaming."""
-        from routers.ai import call_ollama, call_azure_openai_curl
-        if self.default_llm == "azure":
-            yield call_azure_openai_curl([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048)
-        else:
-            response = call_ollama([{"role": "user", "content": prompt}], temperature=0.3, max_tokens=2048, stream=True)
-            for chunk in response:
-                if chunk.choices and chunk.choices[0].delta.content:
-                    yield chunk.choices[0].delta.content
+        from routers.ai import call_configured_llm, get_ai_provider
+        messages = [{"role": "user", "content": prompt}]
+        if get_ai_provider() == "azure":
+            yield call_configured_llm(messages, temperature=0.3, max_tokens=2048)
+            return
+
+        response = call_configured_llm(messages, temperature=0.3, max_tokens=2048, stream=True)
+        for chunk in response:
+            if chunk.choices and chunk.choices[0].delta.content:
+                yield chunk.choices[0].delta.content
 

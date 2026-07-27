@@ -8,13 +8,20 @@ Naming convention: p6_* prefix on all tools (per MCP builder best practices).
 """
 
 import logging
-from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 import models
 
 logger = logging.getLogger(__name__)
+
+
+def _normalize_percentage(value) -> float | None:
+    if value is None:
+        return None
+    percentage = float(value)
+    if percentage <= 1.5:
+        percentage *= 100
+    return round(percentage, 1)
 
 
 def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
@@ -53,12 +60,12 @@ def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
         "scheduled_finish": p6.scheduled_finish_date.isoformat() if p6.scheduled_finish_date else None,
         "must_finish_by": p6.must_finish_by_date.isoformat() if p6.must_finish_by_date else None,
         "data_date": p6.data_date.isoformat() if p6.data_date else None,
-        "duration_percent_complete": round(p6.duration_percent_complete, 1) if p6.duration_percent_complete else None,
-        "planned_duration": int(p6.planned_duration) if p6.planned_duration else None,
-        "actual_duration": int(p6.actual_duration) if p6.actual_duration else None,
-        "remaining_duration": int(p6.remaining_duration) if p6.remaining_duration else None,
-        "spi": round(p6.schedule_performance_index, 2) if p6.schedule_performance_index else None,
-        "cpi": round(p6.cost_performance_index, 2) if p6.cost_performance_index else None,
+        "duration_percent_complete": _normalize_percentage(p6.duration_percent_complete),
+        "planned_duration": int(p6.planned_duration) if p6.planned_duration is not None else None,
+        "actual_duration": int(p6.actual_duration) if p6.actual_duration is not None else None,
+        "remaining_duration": int(p6.remaining_duration) if p6.remaining_duration is not None else None,
+        "spi": round(p6.schedule_performance_index, 2) if p6.schedule_performance_index is not None else None,
+        "cpi": round(p6.cost_performance_index, 2) if p6.cost_performance_index is not None else None,
         "total_float_hours": int(p6.total_float) if p6.total_float is not None else None,
         "finish_date_variance_hours": int(p6.finish_date_variance) if p6.finish_date_variance is not None else None,
         "activity_count": len(activities),
@@ -90,7 +97,11 @@ def p6_get_critical_activities(db: Session, project_id: str, limit: int = 20) ->
     activities = db.query(models.P6Activity).filter(
         models.P6Activity.project_object_id == p6.p6_object_id,
         models.P6Activity.total_float <= 0
-    ).order_by(models.P6Activity.total_float.asc()).limit(limit).all()
+    ).order_by(
+        models.P6Activity.total_float.asc(),
+        models.P6Activity.activity_id.asc(),
+        models.P6Activity.p6_object_id.asc(),
+    ).limit(limit).all()
     
     return [{
         "activity_id": a.activity_id,
@@ -146,7 +157,7 @@ def p6_get_delayed_activities(db: Session, project_id: str, min_drift_days: int 
                 "_source_table": "p6_activity",
             })
     
-    delayed.sort(key=lambda x: x["drift_days"], reverse=True)
+    delayed.sort(key=lambda x: (-x["drift_days"], str(x["activity_id"])))
     return delayed[:limit]
 
 
@@ -159,7 +170,12 @@ def p6_get_activity_status_breakdown(db: Session, project_id: str) -> dict:
         models.P6Project.project_id == project_id
     ).first()
     if not p6:
-        return {"total": 0, "breakdown": {}}
+        return {
+            "project_id": project_id,
+            "has_data": False,
+            "total": None,
+            "breakdown": None,
+        }
     
     activities = db.query(models.P6Activity).filter(
         models.P6Activity.project_object_id == p6.p6_object_id
@@ -174,10 +190,72 @@ def p6_get_activity_status_breakdown(db: Session, project_id: str) -> dict:
     return {
         "project_id": project_id,
         "project_name": get_project_display_name(db, project_id),
+        "has_data": True,
         "total": len(activities),
         "breakdown": breakdown,
         "_source_table": "p6_activity",
         "_synced_at": p6.last_synced_at.isoformat() if p6.last_synced_at else None,
+    }
+
+
+def p6_get_activities(
+    db: Session,
+    project_id: str,
+    status: str = "all",
+    limit: int = 20,
+    offset: int = 0,
+) -> dict:
+    """List project activities, optionally filtered by a canonical activity status."""
+    p6 = db.query(models.P6Project).filter(
+        models.P6Project.project_id == project_id
+    ).first()
+    if not p6:
+        return {
+            "project_id": project_id,
+            "has_data": False,
+            "total_matching": None,
+            "activities": [],
+        }
+
+    status_values = {
+        "completed": "Completed",
+        "in_progress": "In Progress",
+        "not_started": "Not Started",
+    }
+    query = db.query(models.P6Activity).filter(
+        models.P6Activity.project_object_id == p6.p6_object_id
+    )
+    if status != "all":
+        query = query.filter(models.P6Activity.status == status_values[status])
+
+    total_matching = query.count()
+    activities = query.order_by(
+        models.P6Activity.activity_id.asc(),
+        models.P6Activity.p6_object_id.asc(),
+    ).offset(offset).limit(limit).all()
+
+    from engine.tools.portfolio_tools import get_project_display_name
+    return {
+        "project_id": project_id,
+        "project_name": get_project_display_name(db, project_id),
+        "has_data": total_matching > 0,
+        "status_filter": status,
+        "total_matching": total_matching,
+        "returned": len(activities),
+        "offset": offset,
+        "activities": [{
+            "activity_id": activity.activity_id,
+            "name": activity.name,
+            "status": activity.status,
+            "percent_complete": _normalize_percentage(activity.percent_complete),
+            "start_date": activity.start_date.isoformat() if activity.start_date else None,
+            "finish_date": activity.finish_date.isoformat() if activity.finish_date else None,
+            "wbs_name": activity.wbs_name,
+            "wbs_code": activity.wbs_code,
+        } for activity in activities],
+        "data_date": p6.data_date.isoformat() if p6.data_date else None,
+        "last_synced_at": p6.last_synced_at.isoformat() if p6.last_synced_at else None,
+        "_source_table": "p6_activity",
     }
 
 
@@ -186,32 +264,35 @@ def p6_list_all_projects(db: Session) -> dict:
     
     Use when: user asks about portfolio overview, all projects, or doesn't specify a project.
     """
-    projects = db.query(models.P6Project).all()
+    projects = db.query(models.P6Project).order_by(
+        models.P6Project.project_id.asc(), models.P6Project.p6_object_id.asc()
+    ).all()
     
     # Build a mapping lookup for project names
     all_mappings = db.query(models.ProjectMapping).all()
     mapping_by_pid = {m.project_id: m for m in all_mappings}
     
-    result = []
+    result_by_project_id = {}
     for p in projects:
         m = mapping_by_pid.get(p.project_id)
         display_name = (m.project_name_from_p6 or m.project or p.name) if m else p.name
         if "demo" in display_name.lower():
             continue
-        result.append({
+        result_by_project_id[str(p.project_id)] = {
             "project_id": p.project_id,
             "project_name": display_name,
             "p6_name": p.name,
             "status": p.status,
-            "spi": round(p.schedule_performance_index, 2) if p.schedule_performance_index else None,
-            "cpi": round(p.cost_performance_index, 2) if p.cost_performance_index else None,
-            "duration_pct_complete": round(p.duration_percent_complete, 1) if p.duration_percent_complete else None,
+            "spi": round(p.schedule_performance_index, 2) if p.schedule_performance_index is not None else None,
+            "cpi": round(p.cost_performance_index, 2) if p.cost_performance_index is not None else None,
+            "duration_pct_complete": _normalize_percentage(p.duration_percent_complete),
             "finish_date": p.finish_date.isoformat() if p.finish_date else None,
             "total_float_hours": int(p.total_float) if p.total_float is not None else None,
             "activity_count": p.activity_count,
             "last_synced_at": p.last_synced_at.isoformat() if p.last_synced_at else None,
             "_source_table": "p6_project",
-        })
+        }
+    result = [result_by_project_id[key] for key in sorted(result_by_project_id)]
     return {
         "total_projects": len(result),
         "projects": result

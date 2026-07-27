@@ -6,7 +6,7 @@ The key insight: only recompute when upstream data has actually changed.
 
 Cache lifecycle:
 1. On first question about a project → compute + cache (SLOW PATH)
-2. On subsequent questions → check if P6/SAP/TC sync times have changed
+2. On subsequent questions → check if P6/SAP/TC/Pulse sync times have changed
 3. If unchanged → return cached data (FAST PATH, ~5ms)
 4. If changed → recompute, validate sanity, update cache (SLOW PATH)
 """
@@ -18,15 +18,19 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
-from engine.tools.p6_tools import p6_get_freshness
-from engine.tools.sap_tools import sap_get_freshness
-from engine.tools.tc_tools import tc_get_freshness
 
 logger = logging.getLogger(__name__)
 
 
 # In-memory hot cache for ultra-fast lookups (survives within a single process run)
 _hot_cache: dict[str, dict] = {}
+_SYNC_KEYS = (
+    "p6_synced_at",
+    "sap_synced_at",
+    "tc_synced_at",
+    "pulse_synced_at",
+)
+_CACHE_ENVELOPE_KEY = "__akasha_metrics_cache_v1__"
 
 
 def get_current_sync_times(db: Session, project_id: str) -> dict:
@@ -34,14 +38,29 @@ def get_current_sync_times(db: Session, project_id: str) -> dict:
     
     This is a cheap lookup (~3ms) — just reading timestamp columns.
     """
+    from engine.tools.p6_tools import p6_get_freshness
+    from engine.tools.sap_tools import sap_get_freshness
+    from engine.tools.tc_tools import tc_get_freshness
+
     p6_fresh = p6_get_freshness(db, project_id)
     sap_fresh = sap_get_freshness(db, project_id)
     tc_fresh = tc_get_freshness(db)
+    pulse_synced_at = db.query(
+        func.max(models.PulseNC.last_synced_at)
+    ).scalar()
+    pulse_rfi_synced_at = db.query(
+        func.max(models.PulseRFI.last_synced_at)
+    ).scalar()
+    pulse_latest = max(
+        (value for value in (pulse_synced_at, pulse_rfi_synced_at) if value is not None),
+        default=None,
+    )
     
     return {
         "p6_synced_at": p6_fresh.get("synced_at"),
         "sap_synced_at": sap_fresh.get("synced_at"),
         "tc_synced_at": tc_fresh.get("synced_at"),
+        "pulse_synced_at": pulse_latest.isoformat() if pulse_latest else None,
     }
 
 
@@ -91,10 +110,12 @@ def check_freshness(db: Session, project_id: str, cache_key: str = "project_360"
             "cached_at": None,
         }
     
+    cached_data, cached_extra_sync = _unpack_cache_data(cache_entry.data)
     cached_sync = {
         "p6_synced_at": cache_entry.p6_synced_at.isoformat() if cache_entry.p6_synced_at else None,
         "sap_synced_at": cache_entry.sap_synced_at.isoformat() if cache_entry.sap_synced_at else None,
         "tc_synced_at": cache_entry.tc_synced_at.isoformat() if cache_entry.tc_synced_at else None,
+        "pulse_synced_at": cached_extra_sync.get("pulse_synced_at"),
     }
     
     is_stale = _compare_sync_times(current_sync, cached_sync)
@@ -102,7 +123,7 @@ def check_freshness(db: Session, project_id: str, cache_key: str = "project_360"
     # Populate hot cache if fresh
     if not is_stale:
         _hot_cache[hot_key] = {
-            "data": cache_entry.data,
+            "data": cached_data,
             "sync_times": cached_sync,
             "computed_at": cache_entry.computed_at.isoformat() if cache_entry.computed_at else None,
         }
@@ -134,17 +155,19 @@ def get_cached_data(db: Session, project_id: str, cache_key: str = "project_360"
     
     if cache_entry:
         logger.debug(f"Cache HIT (db): {project_id}/{cache_key}")
+        cached_data, cached_extra_sync = _unpack_cache_data(cache_entry.data)
         # Promote to hot cache
         _hot_cache[hot_key] = {
-            "data": cache_entry.data,
+            "data": cached_data,
             "sync_times": {
                 "p6_synced_at": cache_entry.p6_synced_at.isoformat() if cache_entry.p6_synced_at else None,
                 "sap_synced_at": cache_entry.sap_synced_at.isoformat() if cache_entry.sap_synced_at else None,
                 "tc_synced_at": cache_entry.tc_synced_at.isoformat() if cache_entry.tc_synced_at else None,
+                "pulse_synced_at": cached_extra_sync.get("pulse_synced_at"),
             },
             "computed_at": cache_entry.computed_at.isoformat() if cache_entry.computed_at else None,
         }
-        return cache_entry.data
+        return cached_data
     
     logger.debug(f"Cache MISS: {project_id}/{cache_key}")
     return None
@@ -159,6 +182,7 @@ def update_cache(db: Session, project_id: str, cache_key: str, data: dict, sync_
     p6_dt = _parse_iso(sync_times.get("p6_synced_at"))
     sap_dt = _parse_iso(sync_times.get("sap_synced_at"))
     tc_dt = _parse_iso(sync_times.get("tc_synced_at"))
+    stored_data = _pack_cache_data(data, sync_times)
     
     # Upsert into DB
     cache_entry = db.query(models.MetricsCache).filter(
@@ -167,7 +191,7 @@ def update_cache(db: Session, project_id: str, cache_key: str, data: dict, sync_
     ).first()
     
     if cache_entry:
-        cache_entry.data = data
+        cache_entry.data = stored_data
         cache_entry.computed_at = now
         cache_entry.p6_synced_at = p6_dt
         cache_entry.sap_synced_at = sap_dt
@@ -176,7 +200,7 @@ def update_cache(db: Session, project_id: str, cache_key: str, data: dict, sync_
         cache_entry = models.MetricsCache(
             project_id=project_id,
             cache_key=cache_key,
-            data=data,
+            data=stored_data,
             computed_at=now,
             p6_synced_at=p6_dt,
             sap_synced_at=sap_dt,
@@ -253,12 +277,39 @@ def validate_sanity(old_data: dict, new_data: dict) -> list[str]:
 
 def _compare_sync_times(current: dict, cached: dict) -> bool:
     """Returns True if data is stale (sync times differ)."""
-    for key in ("p6_synced_at", "sap_synced_at", "tc_synced_at"):
-        current_val = current.get(key)
-        cached_val = cached.get(key)
-        if current_val and cached_val and current_val != cached_val:
+    for key in _SYNC_KEYS:
+        current_val = _normalize_sync_time(current.get(key))
+        cached_val = _normalize_sync_time(cached.get(key))
+        if current_val != cached_val:
             return True
     return False
+
+
+def _normalize_sync_time(value):
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if not isinstance(value, str):
+        return value
+    try:
+        return datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
+    except ValueError:
+        return value
+
+
+def _pack_cache_data(data: dict, sync_times: dict) -> dict:
+    """Persist sync metadata not represented by the legacy cache columns."""
+    return {
+        _CACHE_ENVELOPE_KEY: True,
+        "data": data,
+        "sync_times": {"pulse_synced_at": sync_times.get("pulse_synced_at")},
+    }
+
+
+def _unpack_cache_data(stored_data: dict) -> tuple[dict, dict]:
+    """Read both legacy plain payloads and metadata-enveloped payloads."""
+    if isinstance(stored_data, dict) and stored_data.get(_CACHE_ENVELOPE_KEY) is True:
+        return stored_data.get("data", {}), stored_data.get("sync_times", {})
+    return stored_data, {}
 
 
 def _parse_iso(val) -> datetime | None:

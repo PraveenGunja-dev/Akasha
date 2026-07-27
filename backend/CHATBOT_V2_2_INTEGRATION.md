@@ -1,14 +1,16 @@
 # Akasha Chatbot v2.2 Integration Guide
 
-**Target Accuracy:** 99%+  
-**Deployment Status:** Ready for Integration  
+> **Historical, inactive design:** v2.2 is not registered in `backend/main.py` and is not the production chatbot path. Every accuracy, ambiguity-resolution, satisfaction, latency, and improvement percentage below is an unvalidated design estimate or target, not a measured result. No executable benchmark supports these figures.
+
+**Unvalidated Target Accuracy:** 99%+
+**Deployment Status:** Inactive historical prototype; not integrated, deployed, or production-ready
 **Backward Compatibility:** 100% (v2.1 endpoints unaffected)
 
 ---
 
 ## 📋 Overview
 
-Akasha Chatbot v2.2 represents a major accuracy upgrade through 5 strategic architectural improvements:
+Akasha Chatbot v2.2 proposed a major accuracy upgrade through 5 strategic architectural improvements; the proposal was not activated or benchmark-validated:
 
 | Component | Purpose | Expected Gain |
 |-----------|---------|---------------|
@@ -17,11 +19,13 @@ Akasha Chatbot v2.2 represents a major accuracy upgrade through 5 strategic arch
 | **Clarifying Questions** | Detect and resolve ambiguity | +5-8% |
 | **Confidence Scoring** | Transparent data quality assessment | +4-6% |
 | **Composite Metrics** | Multi-dimensional health analysis | +6-8% |
-| **TOTAL EXPECTED GAIN** | **95% → 99%+** | **+41-52%** |
+| **TOTAL UNVALIDATED PROJECTED GAIN** | **95% -> 99%+ target** | **+41-52%** |
 
 ---
 
-## 🚀 Quick Start
+## Archival Conditional Integration Procedure
+
+The following instructions are preserved for historical reference. They must not be applied to the current production application without renewed testing, security review, benchmark validation, and explicit approval.
 
 ### 1. Installation (5 minutes)
 
@@ -506,13 +510,15 @@ eventSource.onmessage = (event) => {
 
 ---
 
-## 🔄 Migration Path
+## Archived Migration Proposal
 
-### Option 1: Gradual Rollout (Recommended)
+These options describe an unexecuted historical rollout proposal, not a current recommendation.
+
+### Option 1: Historical Gradual Rollout Proposal
 
 **Phase 1: Dual Operation (Week 1)**
-- Keep v2.1 endpoints active in production
-- Deploy v2.2 endpoints alongside
+- Preserve the then-active endpoints
+- Conditionally activate v2.2 endpoints in an isolated environment
 - Route new chat through v2.2
 - Keep dashboards using v2.1 temporarily
 
@@ -533,9 +539,9 @@ eventSource.onmessage = (event) => {
 - Archive old models
 - Keep v2.1 code for reference
 
-### Option 2: Big Bang Cutover (Fast but Risky)
+### Option 2: Historical Big Bang Proposal (Not Recommended)
 
-- Deploy v2.2
+- Conditionally activate v2.2 after validation and approval
 - Immediately route all traffic through new endpoints
 - Monitor closely for issues
 - Rollback available if needed
@@ -685,17 +691,17 @@ SELECT * FROM where version='2.1';
 
 ---
 
-## 📈 Expected Results
+## 📈 Unvalidated Projected Results
 
 ### Before v2.2 (v2.1):
-- Overall Accuracy: ~85%
-- Intent Classification: 90-95%
+- Overall Accuracy: ~85% unvalidated baseline estimate
+- Intent Classification: 90-95% unvalidated estimate
 - False Positives: ~8-10%
 - Response Time: 200-300ms
 - User Satisfaction: 3.2/5
 
 ### After v2.2:
-- Overall Accuracy: 95-99%+ ✅
+- Overall Accuracy: 95-99%+ unvalidated target
 - Intent Classification: 97-98%
 - False Positives: <2%
 - Response Time: 300-500ms
@@ -703,16 +709,16 @@ SELECT * FROM where version='2.1';
 
 ### Per-Module Gains:
 1. Semantic Understanding: Foundation for all others
-2. Clarifying Questions: Reduces misunderstandings by 95%+
+2. Clarifying Questions: Unvalidated target of reducing misunderstandings by 95%+
 3. Cross-Source Validation: Catches ~12-15% more issues
 4. Confidence Scoring: Builds trust (transparent failures, not false successes)
 5. Composite Metrics: Multi-dimensional analysis prevents tunnel vision
 
 ---
 
-## 📚 Next Steps
+## Archived Conditional Next Steps
 
-1. **Deploy Infrastructure**
+1. **Validate in Isolated Infrastructure**
    - Add v2.2 router to main.py
    - Start backend
    - Verify endpoints respond
@@ -765,4 +771,4 @@ SELECT * FROM where version='2.1';
 
 ---
 
-**Ready to deploy? Deploy to production and watch the accuracy soar! 🚀**
+**Inactive historical prototype: do not deploy to production without current validation and explicit approval.**

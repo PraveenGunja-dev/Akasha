@@ -8,7 +8,7 @@ Covers: Purchase Orders (ME2J), Material Consumption (MB51), Inventory (MB52).
 import logging
 from collections import defaultdict
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 
 import models
 
@@ -50,9 +50,8 @@ def _query_po_by_project(db: Session, sap_filter: dict):
     plant_code = sap_filter.get("plant_code")
     
     if wbs:
-        # Use prefix match (tighter than contains) to avoid cross-project contamination
         pos = db.query(models.MTPOAmount).filter(
-            models.MTPOAmount.wbs_element.ilike(f"{wbs}%")
+            _wbs_membership(models.MTPOAmount.wbs_element, wbs)
         ).all()
         if pos:
             return pos
@@ -66,6 +65,41 @@ def _query_po_by_project(db: Session, sap_filter: dict):
             return pos
     
     return []
+
+
+def _wbs_membership(column, root: str):
+    """Match an exact WBS or a delimiter-bounded child, never a raw prefix."""
+    escaped = root.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+    return or_(
+        column == root,
+        column.like(f"{escaped}.%", escape="\\"),
+        column.like(f"{escaped}-%", escape="\\"),
+        column.like(f"{escaped}/%", escape="\\"),
+    )
+
+
+def sap_get_source_records(db: Session, project_id: str, source_entity: str) -> list:
+    """Return records used by a SAP graph tool through authoritative mappings."""
+    sap_filter = _resolve_sap_filter(db, project_id)
+    if source_entity == "mt_poamount":
+        return _query_po_by_project(db, sap_filter)
+
+    model = {
+        "mt_inventory": models.MTInventory,
+        "mt_materialdocument": models.MTMaterialDocument,
+    }.get(source_entity)
+    if model is None:
+        return []
+    wbs = sap_filter.get("wbs")
+    plant_code = sap_filter.get("plant_code")
+    extra_filters = [model.quantity_inv > 0] if source_entity == "mt_inventory" else []
+    records = (
+        db.query(model).filter(_wbs_membership(model.wbs_element, wbs), *extra_filters).all()
+        if wbs else []
+    )
+    if not records and plant_code:
+        records = db.query(model).filter(model.plant_code == plant_code, *extra_filters).all()
+    return records
 
 
 def _safe_int(val) -> int:
@@ -146,7 +180,7 @@ def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list
                 "_source_table": "mt_poamount",
             })
     
-    gaps.sort(key=lambda x: x["pending"], reverse=True)
+    gaps.sort(key=lambda x: (-x["pending"], str(x["material"])))
     return gaps[:limit]
 
 
@@ -184,7 +218,7 @@ def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
                 "_source_table": "mt_poamount",
             })
     
-    result.sort(key=lambda x: x["total_pending"], reverse=True)
+    result.sort(key=lambda x: (-x["total_pending"], str(x["vendor"])))
     return result
 
 
@@ -201,7 +235,7 @@ def sap_get_inventory(db: Session, project_id: str) -> dict:
     inv_records = []
     if wbs:
         inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.wbs_element.ilike(f"{wbs}%"),
+            _wbs_membership(models.MTInventory.wbs_element, wbs),
             models.MTInventory.quantity_inv > 0
         ).all()
     
@@ -243,7 +277,7 @@ def sap_get_consumption(db: Session, project_id: str) -> dict:
     records = []
     if wbs:
         records = db.query(models.MTMaterialDocument).filter(
-            models.MTMaterialDocument.wbs_element.ilike(f"{wbs}%")
+            _wbs_membership(models.MTMaterialDocument.wbs_element, wbs)
         ).all()
     
     if not records and plant_code:
@@ -263,7 +297,8 @@ def sap_get_consumption(db: Session, project_id: str) -> dict:
             returned_qty += qty
         else:
             issued_qty += qty
-    
+
+    latest_upload = max((record.upload_time for record in records if record.upload_time), default=None)
     return {
         "project_id": project_id,
         "project_name": project_name,
@@ -273,6 +308,7 @@ def sap_get_consumption(db: Session, project_id: str) -> dict:
         "returned_qty": returned_qty,
         "net_consumed": issued_qty - returned_qty,
         "_source_table": "mt_materialdocument",
+        "_synced_at": latest_upload.isoformat() if latest_upload else None,
     }
 
 
@@ -288,7 +324,7 @@ def sap_get_freshness(db: Session, project_id: str) -> dict:
     latest = None
     if wbs:
         latest = db.query(func.max(models.MTPOAmount.upload_time)).filter(
-            models.MTPOAmount.wbs_element.ilike(f"{wbs}%")
+            _wbs_membership(models.MTPOAmount.wbs_element, wbs)
         ).scalar()
     
     if not latest and plant_code:

@@ -161,7 +161,7 @@ def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> dict:
         "total_portfolio_projects": len(kpis),
         "showing_top_n": top_n,
         "riskiest_projects": riskiest,
-        "_note": "Risk/SPI computed from underlying activities + SAP + TC, not stored summary columns.",
+        "_note": "P6 SPI is retained when available and is not replaced with an activity-count proxy.",
     }
 
 

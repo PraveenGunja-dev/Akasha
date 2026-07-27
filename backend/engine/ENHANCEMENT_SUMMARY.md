@@ -1,8 +1,10 @@
 # Akasha Chatbot Enhancement v2.1 - Summary
 
-## 🎯 Mission Accomplished
+> **Historical, inactive prototype:** This enhanced-orchestrator alternative is not registered as the production chatbot path. Capabilities and instructions below describe a prototype and do not establish deployment or production readiness.
 
-Your Akasha Platform chatbot has been comprehensively enhanced with **high accuracy**, **deep data intelligence**, and **visualization capabilities**. Below is what has been delivered.
+## Historical Prototype Summary
+
+This prototype proposed **high accuracy**, **deep data intelligence**, and **visualization capabilities**. The package was not activated on the production chatbot path, and its accuracy was not benchmark-validated.
 
 ---
 
@@ -302,9 +304,9 @@ def generate_custom_chart(self, project_id: str):
 
 ---
 
-## ✅ Testing Checklist
+## Archival Prototype Testing Checklist
 
-- [ ] Deploy new modules (`data_schema.py`, `visualizations.py`, etc.)
+- [ ] Conditionally load new modules in an isolated test environment (`data_schema.py`, `visualizations.py`, etc.)
 - [ ] Update `routers/ai.py` with v2 endpoint
 - [ ] Test intent classification with sample queries
 - [ ] Verify data schema analysis works
@@ -400,8 +402,8 @@ viz_list = orchestrator.get_available_visualizations_for_project(project_id)
 - **Generic responses?** Adjust thresholds or increase confidence levels
 - **Performance issues?** Enable caching or use materialized views
 
-### Next Steps
-1. Deploy modules to production
+### Archived Conditional Next Steps
+1. Validate modules in an isolated test environment; do not deploy them to production without approval
 2. Create `/chat-v2` endpoint
 3. Update frontend UI
 4. Run comprehensive tests
@@ -411,10 +413,12 @@ viz_list = orchestrator.get_available_visualizations_for_project(project_id)
 
 ## 📊 Impact Summary
 
+> The percentage accuracy values in this historical enhancement summary are unvalidated design estimates or targets, not measured results. This alternative enhanced-orchestrator path is not the registered production chatbot path.
+
 | Metric | Before | After |
 |--------|--------|-------|
 | **Response Depth** | Generic | Contextual & Detailed |
-| **Accuracy** | 70% | 95%+ |
+| **Accuracy (unvalidated estimate/target)** | 70% | 95%+ |
 | **Visualization Support** | None | 10+ chart types |
 | **Risk Detection** | Manual | Automatic |
 | **Response Time** | 200ms | 500-1500ms* |
@@ -432,17 +436,17 @@ viz_list = orchestrator.get_available_visualizations_for_project(project_id)
 ✅ **Risk Detection** - Automatic alerts & recommendations  
 ✅ **Portfolio Analysis** - Cross-project comparison  
 ✅ **Backward Compatible** - Can run alongside existing v1  
-✅ **Production Ready** - Comprehensive error handling  
+**Prototype Error Handling** - Comprehensive handling was designed, but production readiness was not validated
 ✅ **Well Documented** - Complete guides & examples  
 
 ---
 
-## 🎉 Ready to Deploy!
+## Archival Conditional Integration
 
-All modules are production-ready and thoroughly documented. See **CHATBOT_ENHANCEMENT_GUIDE.md** for complete integration instructions.
+The modules are historical prototypes and are not deployed or production-ready. See **CHATBOT_ENHANCEMENT_GUIDE.md** for archival integration instructions that require renewed validation and approval before use.
 
 **Version:** 2.1  
-**Status:** ✅ Complete & Ready for Integration  
+**Status:** Inactive historical prototype; not integrated or production-ready
 **Date:** 2026-07-22
 
 ---

@@ -1,20 +1,10 @@
-"""
-Akasha Engine — Feedback Memory (Step 6 of Pipeline)
-
-Self-improving memory loop:
-- Stores user feedback (thumbs up/down, corrections)
-- Retrieves relevant past corrections to inject into future prompts
-- Normalizes questions into patterns for matching
-
-This is NOT model retraining — it's building a memory of what worked
-and what didn't, so the LLM gets better context on repeated question types.
-"""
+"""Application-owned feedback helpers."""
 
 import re
 import logging
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import func, desc
+from sqlalchemy import desc
 
 import models
 
@@ -66,7 +56,6 @@ def store_feedback(
         correction_text=correction_text,
         project_id=project_id,
         question_pattern=question_pattern,
-        created_at=datetime.utcnow(),
     )
     db.add(feedback)
     db.commit()
@@ -85,67 +74,38 @@ def get_relevant_feedback(
     question: str = None,
     limit: int = 5,
 ) -> list[dict]:
-    """Retrieve relevant past corrections to inject into the LLM prompt.
-    
-    Looks for:
-    1. Corrections on the same project
-    2. Corrections on similar question patterns
-    3. Most recent negative feedback
-    """
+    """Return previous corrections relevant to a project or similar question."""
     query = db.query(models.ChatFeedback).filter(
-        models.ChatFeedback.feedback_type.in_(["thumbs_down", "correction"]),
-        models.ChatFeedback.correction_text.isnot(None),
+        models.ChatFeedback.correction_text.isnot(None)
     )
-    
-    # Filter by project if specified
     if project_id:
-        query = query.filter(
-            (models.ChatFeedback.project_id == project_id) |
-            (models.ChatFeedback.project_id.is_(None))
-        )
-    
-    # Order by most recent
-    results = query.order_by(desc(models.ChatFeedback.created_at)).limit(limit * 2).all()
-    
-    # If we have a question, score by pattern similarity
-    if question and results:
-        pattern = normalize_question(question)
-        scored = []
-        for fb in results:
-            similarity = _pattern_similarity(pattern, fb.question_pattern or "")
-            scored.append((similarity, fb))
-        scored.sort(key=lambda x: x[0], reverse=True)
-        results = [fb for _, fb in scored[:limit]]
-    else:
-        results = results[:limit]
-    
+        query = query.filter(models.ChatFeedback.project_id == project_id)
+    rows = query.order_by(desc(models.ChatFeedback.created_at)).limit(limit * 4).all()
+    normalized = normalize_question(question) if question else None
+    ranked = sorted(
+        rows,
+        key=lambda item: _pattern_similarity(item.question_pattern, normalized)
+        if normalized and item.question_pattern else 0,
+        reverse=True,
+    )
     return [{
-        "correction": fb.correction_text,
-        "project_id": fb.project_id,
-        "question_pattern": fb.question_pattern,
-        "created_at": fb.created_at.isoformat() if fb.created_at else None,
-    } for fb in results]
+        "feedback_type": item.feedback_type,
+        "correction_text": item.correction_text,
+        "project_id": item.project_id,
+        "question_pattern": item.question_pattern,
+    } for item in ranked[:limit]]
 
 
 def build_memory_context(db: Session, project_id: str = None, question: str = None) -> str:
-    """Build a memory context string to inject into the LLM prompt.
-    
-    Returns a formatted string of past corrections, or empty string if none.
-    """
-    feedback = get_relevant_feedback(db, project_id, question)
-    
+    """Build runtime context from current time and relevant prior corrections."""
     current_time = datetime.now().strftime("%I:%M %p")
-    context_str = f"Current System Time: {current_time}\n"
-    
-    if not feedback:
-        return context_str
-    
-    lines = ["## Past Corrections (learn from these):"]
-    for i, fb in enumerate(feedback, 1):
-        proj = f" (Project: {fb['project_id']})" if fb['project_id'] else ""
-        lines.append(f"{i}. {fb['correction']}{proj}")
-    
-    return context_str + "\n".join(lines)
+    feedback = get_relevant_feedback(db, project_id, question)
+    context = f"Current System Time: {current_time}\n"
+    if feedback:
+        context += "\nRelevant corrections from previous user feedback:\n"
+        for item in feedback:
+            context += f"- {item['correction_text']}\n"
+    return context
 
 
 def get_feedback_stats(db: Session) -> dict:

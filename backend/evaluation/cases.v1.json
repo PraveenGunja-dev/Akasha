@@ -1,0 +1,111 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "phase0-provisional-v1",
+  "description": "Provisional contract cases using workbook-derived questions and explicitly synthetic rubric values. These are not business-certified answers.",
+  "quality_gates": {
+    "minimum_overall_score": 1.0,
+    "minimum_provisional_score": 1.0,
+    "require_response_for_every_case": true
+  },
+  "cases": [
+    {
+      "id": "execution-current-progress-001",
+      "validation_status": "provisional",
+      "question": "What is the current progress of X solar project at Y location for TIME_PERIOD?",
+      "source": {
+        "type": "workbook_question",
+        "path": "Qns_AKASHA.xlsx",
+        "sheet": "Execution",
+        "business_answer_imported": false
+      },
+      "expected_facts": [
+        {
+          "id": "synthetic-progress",
+          "expected_text": "42% complete"
+        },
+        {
+          "id": "synthetic-as-of-date",
+          "expected_text": "as of 2026-07-01"
+        }
+      ],
+      "grounded_claims": [
+        {
+          "id": "synthetic-dpr-grounding",
+          "expected_text": "Synthetic DPR fixture SYN-DPR-001",
+          "required_evidence_ids": [
+            "synthetic:dpr:SYN-DPR-001"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "execution-plan-comparison-001",
+      "validation_status": "provisional",
+      "question": "How does the current progress compare with the planned progress for TIME_PERIOD?",
+      "source": {
+        "type": "workbook_question",
+        "path": "Qns_AKASHA.xlsx",
+        "sheet": "Execution",
+        "business_answer_imported": false
+      },
+      "expected_facts": [
+        {
+          "id": "synthetic-actual",
+          "expected_text": "actual progress is 42%"
+        },
+        {
+          "id": "synthetic-plan",
+          "expected_text": "planned progress is 50%"
+        },
+        {
+          "id": "synthetic-variance",
+          "expected_text": "8 percentage points behind plan"
+        }
+      ],
+      "grounded_claims": [
+        {
+          "id": "synthetic-plan-grounding",
+          "expected_text": "synthetic DPR and plan fixtures",
+          "required_evidence_ids": [
+            "synthetic:dpr:SYN-DPR-001",
+            "synthetic:plan:SYN-PLAN-001"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "execution-completion-variance-001",
+      "validation_status": "pending_validation",
+      "question": "What is the expected completion date vs baseline?",
+      "source": {
+        "type": "workbook_question",
+        "path": "Qns_AKASHA.xlsx",
+        "sheet": "Execution",
+        "business_answer_imported": false
+      },
+      "expected_facts": [
+        {
+          "id": "synthetic-forecast-date",
+          "expected_text": "forecast completion is 2026-09-15"
+        },
+        {
+          "id": "synthetic-baseline-date",
+          "expected_text": "baseline completion is 2026-09-01"
+        },
+        {
+          "id": "synthetic-calendar-variance",
+          "expected_text": "14 calendar days later"
+        }
+      ],
+      "grounded_claims": [
+        {
+          "id": "synthetic-schedule-grounding",
+          "expected_text": "Synthetic schedule fixture SYN-SCHEDULE-001",
+          "required_evidence_ids": [
+            "synthetic:schedule:SYN-SCHEDULE-001"
+          ]
+        }
+      ]
+    }
+  ]
+}

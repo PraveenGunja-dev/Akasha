@@ -2,7 +2,7 @@ from sqlalchemy.orm import Session
 from database import SessionLocal
 import models
 import logging
-from routers.ai import call_groq, call_azure_openai_curl, get_ai_provider
+from routers.ai import call_configured_llm
 
 logger = logging.getLogger(__name__)
 
@@ -59,13 +59,9 @@ Provide ONLY the suggestion text, no conversational filler."""
 
         messages = [{"role": "user", "content": prompt}]
         
-        provider = get_ai_provider()
         suggestion = "Fast-track parallel works or assign an extra crew to recover the delay." # fallback
         try:
-            if provider == "azure":
-                suggestion = call_azure_openai_curl(messages, temperature=0.3, max_tokens=60)
-            else:
-                suggestion = call_groq(messages, temperature=0.3, max_tokens=60)
+            suggestion = call_configured_llm(messages, temperature=0.3, max_tokens=60)
         except Exception as e:
             logger.error(f"AI generation failed: {e}")
 

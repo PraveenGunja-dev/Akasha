@@ -10,21 +10,30 @@ reason through complex multi-step queries.
 import json
 import logging
 import os
+import time
 from sqlalchemy.orm import Session
 from sqlalchemy.orm import Session
+
+from engine.observability import log_observability_event
+from engine.model_provider import get_model_provider
+from engine.openrouter_config import openrouter_extra_body
 
 from engine.tools.p6_tools import (
     p6_get_project_summary, p6_list_all_projects,
     p6_get_critical_activities, p6_get_delayed_activities,
-    p6_get_activity_status_breakdown, p6_get_wbs_tree
+    p6_get_activities, p6_get_activity_status_breakdown, p6_get_wbs_tree
 )
 from engine.tools.sap_tools import (
     sap_get_po_summary, sap_get_material_gaps,
     sap_get_vendor_performance, sap_get_inventory,
     sap_get_consumption
 )
-from engine.tools.tc_tools import tc_get_project_lines, tc_get_at_risk_lines, tc_get_network_summary
-from engine.tools.portfolio_tools import portfolio_resolve_project_id, portfolio_get_riskiest_projects, portfolio_get_notifications
+from engine.tools.tc_tools import (
+    tc_get_project_lines, tc_get_at_risk_lines, tc_get_network_summary,
+)
+from engine.tools.portfolio_tools import (
+    portfolio_get_notifications, portfolio_get_riskiest_projects, portfolio_resolve_project_id,
+)
 from engine.tools.simulation_tools import (
     sim_get_activity_productivity, sim_project_duration_what_if,
     sim_monsoon_impact, sim_material_bottlenecks, sim_forecast_completion
@@ -33,6 +42,14 @@ from engine.tools.viz_tools import build_chart, CHART_TYPES
 from engine.kpi_engine import compute_project_kpis
 
 logger = logging.getLogger(__name__)
+
+
+def _openrouter_request_options() -> dict:
+    return (
+        {"extra_body": openrouter_extra_body()}
+        if os.environ.get("AI_PROVIDER", "ollama").lower() == "openrouter"
+        else {}
+    )
 
 # --- Tool Schemas for the LLM ---
 TOOLS = [
@@ -74,7 +91,11 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "p6_get_project_summary",
-            "description": "Get Primavera P6 schedule data for a specific project_id (SPI, CPI, variances, float).",
+            "description": (
+                "Get the authoritative Primavera P6 project summary, including duration progress, "
+                "activity counts, status, dates, SPI/CPI when available, data date, and sync time. "
+                "A null SPI or CPI means unavailable and must not be replaced with a proxy."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
@@ -236,6 +257,40 @@ TOOLS = [
                     "project_id": {
                         "type": "string",
                         "description": "The canonical project_id."
+                    }
+                },
+                "required": ["project_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "p6_get_activities",
+            "description": (
+                "List P6 activities for a project, optionally filtered to completed, in-progress, "
+                "or not-started activities. Use this when the user asks which activities are in a "
+                "particular status. The result includes the total matching count and a bounded page."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The canonical project_id."
+                    },
+                    "status": {
+                        "type": "string",
+                        "enum": ["all", "completed", "in_progress", "not_started"],
+                        "description": "Canonical activity status filter."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum activities to return, from 1 to 100."
+                    },
+                    "offset": {
+                        "type": "integer",
+                        "description": "Zero-based offset for the next page."
                     }
                 },
                 "required": ["project_id"]
@@ -407,13 +462,10 @@ TOOLS = [
         "function": {
             "name": "get_project_kpis",
             "description": (
-                "Get a project's real KPIs — SPI, schedule variance, physical progress, schedule/"
-                "procurement/execution risk, overall risk and a health score — COMPUTED FROM the "
-                "underlying P6 activities, SAP POs and TC lines. Use this for 'what is the SPI/health/"
-                "risk of X?', 'is X behind schedule?', 'schedule performance', 'how healthy is X'. "
-                "These are the correct values: the stored SPI/float/percent columns are null/unreliable, "
-                "so ALWAYS use this tool for SPI/schedule-performance/health rather than any stored field. "
-                "Resolve the project name to project_id first."
+                "Get a project's P6 progress and available performance indicators plus descriptive "
+                "activity, procurement, and transmission exposure. SPI, CPI, schedule classification, "
+                "and health remain unavailable when their required source indicators are null; the tool "
+                "does not manufacture proxy SPI/CPI values. Resolve the project name to project_id first."
             ),
             "parameters": {
                 "type": "object",
@@ -507,6 +559,43 @@ TOOLS = [
                 "required": ["chart_type"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "report_preview_project_progress",
+            "description": (
+                "Prepare a Project Progress Report preview for one project. Call this when the user "
+                "asks to create or generate a project report. Show its scope, sources, missing data, "
+                "and PDF/DOCX formats, then wait for explicit user confirmation."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "The canonical project_id."}
+                },
+                "required": ["project_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "report_generate_project_progress",
+            "description": (
+                "Synchronously generate PDF and DOCX files from a previously previewed Project "
+                "Progress Report. Call only after the user explicitly confirms the preview, and pass "
+                "the exact preview_token returned by the preview tool. Preserve returned download URLs."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {"type": "string", "description": "The canonical project_id."},
+                    "preview_token": {"type": "string", "description": "Opaque token returned by the preview tool."}
+                },
+                "required": ["project_id", "preview_token"]
+            }
+        }
     }
 ]
 
@@ -547,7 +636,7 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
         elif name == "portfolio_get_riskiest_projects":
             res = portfolio_get_riskiest_projects(db, kwargs.get("top_n", 5))
             return json.dumps(res, default=str)
-            
+
         elif name == "p6_get_project_summary":
             res = p6_get_project_summary(db, kwargs.get("project_id"))
             return json.dumps(res, default=str)
@@ -561,9 +650,14 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
             return json.dumps(res, default=str)
             
         elif name == "tc_get_at_risk_lines":
-            res = tc_get_at_risk_lines(db, kwargs.get("days_threshold", 60))
+            res = tc_get_at_risk_lines(
+                db,
+                kwargs.get("days_threshold", 60),
+                kwargs.get("limit", 15),
+                kwargs.get("region"),
+            )
             return json.dumps(res, default=str)
-            
+
         elif name == "tc_get_network_summary":
             res = tc_get_network_summary(db)
             return json.dumps(res, default=str)
@@ -586,6 +680,16 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
         
         elif name == "p6_get_activity_status_breakdown":
             res = p6_get_activity_status_breakdown(db, kwargs.get("project_id"))
+            return json.dumps(res, default=str)
+
+        elif name == "p6_get_activities":
+            res = p6_get_activities(
+                db,
+                kwargs.get("project_id"),
+                kwargs.get("status", "all"),
+                kwargs.get("limit", 20),
+                kwargs.get("offset", 0),
+            )
             return json.dumps(res, default=str)
         
         elif name == "sap_get_material_gaps":
@@ -637,31 +741,39 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
         else:
             return json.dumps({"error": f"Unknown tool: {name}"})
     except Exception as e:
-        logger.error(f"Tool {name} failed: {e}")
+        logger.error("Tool %s failed (%s)", name, type(e).__name__)
         return json.dumps({"error": str(e)})
 
 
-def analyze_image_context(base64_image: str, prompt: str) -> str:
-    """Uses a vision model to extract data/context from an image to feed into the ReAct agent."""
+def _tool_result_status(result_str: str) -> str:
+    """Reduce a tool result to a safe, bounded status for telemetry."""
     try:
-        import openai
-        import os
-        
-        import httpx
-        
-        provider = os.environ.get("AI_PROVIDER", "ollama").lower()
-        if provider == "azure":
-            client = openai.AzureOpenAI(
-                azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
-                api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-                api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
-                http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
-            )
-            model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
-        else:
-            endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-            client = openai.OpenAI(base_url=endpoint, api_key="ollama", timeout=httpx.Timeout(300.0, connect=15.0))
-            model_name = "qwen3-vl:32b"
+        result = json.loads(result_str)
+    except (TypeError, json.JSONDecodeError):
+        return "success"
+
+    if isinstance(result, dict):
+        if "error" in result:
+            return "error"
+        if result.get("status") == "no_data":
+            return "no_data"
+    return "success"
+
+
+def _get_llm_client(vision: bool = False):
+    return get_model_provider(vision=vision)
+
+
+def analyze_image_context(
+    base64_image: str,
+    prompt: str,
+    request_id: str | None = None,
+    session_id: str | None = None,
+) -> str:
+    """Uses a vision model to extract data/context from an image to feed into the ReAct agent."""
+    started_at = time.perf_counter()
+    try:
+        provider = _get_llm_client(vision=True)
         
         # Determine if base64 has a data URI prefix, if not add a default jpeg one
         image_url = base64_image if base64_image.startswith("data:image") else f"data:image/jpeg;base64,{base64_image}"
@@ -674,9 +786,8 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
             "Provide a highly detailed factual extraction. Do not try to answer the question directly, just extract the facts from the image."
         )
         
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=[
+        result = provider.invoke(
+            [
                 {
                     "role": "user",
                     "content": [
@@ -687,11 +798,24 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
             ],
             temperature=0.1,
             max_tokens=1024,
+            vision=True,
         )
-        return response.choices[0].message.content
-    except Exception as e:
-        logger.error(f"Vision extraction failed: {e}")
-        return f"Failed to extract image context: {str(e)}"
+        return result.content or ""
+    except Exception:
+        elapsed_ms = int((time.perf_counter() - started_at) * 1000)
+        log_observability_event(
+            logger,
+            "vision_context_failed",
+            request_id=request_id,
+            session_id=session_id,
+            elapsed_ms=elapsed_ms,
+            response_intent="deep_analysis",
+            tool_names=[],
+            level=logging.ERROR,
+            operation="vision_context_extraction",
+            status="failure",
+        )
+        return "Image context extraction was unavailable."
 
 
 def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[str, list]:
@@ -699,23 +823,7 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
     Run the ReAct loop until the agent decides to return a final answer.
     Returns: (final_response_string, list_of_tools_used)
     """
-    import openai
-    import os
-    import httpx
-    provider = os.environ.get("AI_PROVIDER", "ollama").lower()
-    if provider == "azure":
-        client = openai.AzureOpenAI(
-            azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-            api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
-            http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
-        )
-        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
-    else:
-        endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-        model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-        # connect=15s fails fast if the Ollama host is down; read=300s tolerates a 30B cold-load.
-        client = openai.OpenAI(base_url=endpoint, api_key="ollama", timeout=httpx.Timeout(300.0, connect=15.0))
+    provider = _get_llm_client()
     # Initialize messages
     messages = [
         {
@@ -760,16 +868,14 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
         loop_count += 1
         logger.info(f"Agent Loop {loop_count} starting...")
         
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
+        result = provider.invoke(
+            messages,
             tools=TOOLS,
             tool_choice="auto",
             temperature=0.2,
             max_tokens=2048,
         )
-        
-        response_message = response.choices[0].message
+        response_message = result.message
         
         # If the LLM didn't call any tools, it means it has formulated a final answer.
         if not response_message.tool_calls:
@@ -785,7 +891,7 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
             
             try:
                 args = json.loads(tool_call.function.arguments)
-                logger.info(f"Agent calling tool: {tool_name} with args: {args}")
+                logger.info("Agent calling tool: %s", tool_name)
             except Exception as e:
                 logger.warning(f"Failed to parse tool args: {e}")
                 args = {}
@@ -804,27 +910,18 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
     logger.warning("Agent loop reached max iterations without final answer.")
     return "Deep analysis timed out. I was able to gather some data but could not synthesize a final answer in time. Try asking a more specific question.", list(tools_used)
 
-def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
+def run_deep_analysis_agent_stream(
+    db: Session,
+    message: str,
+    history: list,
+    request_id: str | None = None,
+    session_id: str | None = None,
+    tool_names_out: list[str] | None = None,
+):
     """
     Run the ReAct loop until the agent decides to return a final answer, then streams it.
     """
-    import openai
-    import os
-    import httpx
-    provider = os.environ.get("AI_PROVIDER", "ollama").lower()
-    if provider == "azure":
-        client = openai.AzureOpenAI(
-            azure_endpoint=os.environ.get("AZURE_OPENAI_ENDPOINT"),
-            api_key=os.environ.get("AZURE_OPENAI_API_KEY"),
-            api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
-            http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
-        )
-        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
-    else:
-        endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-        model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-        # connect=15s fails fast if the Ollama host is down; read=300s tolerates a 30B cold-load.
-        client = openai.OpenAI(base_url=endpoint, api_key="ollama", timeout=httpx.Timeout(300.0, connect=15.0))
+    provider = _get_llm_client()
     
     # Initialize messages
     messages = [
@@ -857,8 +954,9 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
                 "- Report the forecast's dates, whether it's ahead/behind baseline, the confidence level, and its stated assumptions. If the tool says the project hasn't started, say the date is the planned baseline, not a forecast.\n"
                 "- Only say you can't answer when NO tool can produce the number from data (e.g. external market prices, weather) — never for schedule/cost/progress projections your tools cover.\n"
                 "SCHEDULE PERFORMANCE / KPIs:\n"
-                "- For SPI, schedule variance, physical progress, risk, or project health, ALWAYS call `get_project_kpis` (single project) or `portfolio_get_riskiest_projects` (portfolio). These compute from the underlying activities/SAP/TC.\n"
-                "- Do NOT report SPI, float, or % complete from `p6_get_project_summary` — those stored fields are null/unreliable in this data. The KPI tools are the source of truth for performance metrics."
+                "- For overall project progress and status, call `p6_get_project_summary`; duration_percent_complete is the authoritative P6 duration progress.\n"
+                "- Completed activities / total activities is an activity-count ratio, not overall P6 progress. Label it separately if useful.\n"
+                "- For broader project exposure, call `get_project_kpis`, but never replace null SPI/CPI with a calculated proxy or classify ahead/behind/health when the tool says the required indicator is unavailable."
             )
         }
     ]
@@ -877,16 +975,14 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
     while loop_count < max_loops:
         loop_count += 1
         
-        response = client.chat.completions.create(
-            model=model_name,
-            messages=messages,
+        result = provider.invoke(
+            messages,
             tools=TOOLS,
             tool_choice="auto",
             temperature=0.2,
             max_tokens=2048,
         )
-        
-        response_message = response.choices[0].message
+        response_message = result.message
         
         # If the LLM didn't call any tools, it means it has formulated a final answer.
         if not response_message.tool_calls:
@@ -911,25 +1007,49 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
         for tool_call in response_message.tool_calls:
             tool_name = tool_call.function.name
             tools_used.add(tool_name)
+            if tool_names_out is not None and tool_name not in tool_names_out:
+                tool_names_out.append(tool_name)
 
             try:
                 args = json.loads(tool_call.function.arguments)
             except Exception:
                 args = {}
 
-            if tool_name == "render_chart":
-                # Build the chart from real DB data, stream the spec straight to the UI, and
-                # feed the LLM only a compact confirmation (never the full option JSON).
-                spec, result_str = build_chart_result(db, args)
-                if spec is not None:
-                    yield {
-                        "type": "visualization",
-                        "chart_type": spec.get("chart_type"),
-                        "title": spec.get("title"),
-                        "spec": spec.get("option"),
-                    }
-            else:
-                result_str = execute_tool(db, tool_name, args)
+            tool_started_at = time.perf_counter()
+            tool_status = "error"
+            visualization = None
+            try:
+                if tool_name == "render_chart":
+                    # Build the chart from real DB data, stream the spec straight to the UI, and
+                    # feed the LLM only a compact confirmation (never the full option JSON).
+                    spec, result_str = build_chart_result(db, args)
+                    if spec is not None:
+                        visualization = {
+                            "type": "visualization",
+                            "chart_type": spec.get("chart_type"),
+                            "title": spec.get("title"),
+                            "spec": spec.get("option"),
+                        }
+                else:
+                    result_str = execute_tool(db, tool_name, args)
+                tool_status = _tool_result_status(result_str)
+            finally:
+                tool_elapsed_ms = int((time.perf_counter() - tool_started_at) * 1000)
+                log_observability_event(
+                    logger,
+                    "chat_tool_completed",
+                    request_id=request_id,
+                    session_id=session_id,
+                    elapsed_ms=tool_elapsed_ms,
+                    response_intent="deep_analysis",
+                    tool_names=[tool_name],
+                    tool_name=tool_name,
+                    tool_status=tool_status,
+                    tool_elapsed_ms=tool_elapsed_ms,
+                )
+
+            if visualization is not None:
+                yield visualization
 
             messages.append({
                 "tool_call_id": tool_call.id,

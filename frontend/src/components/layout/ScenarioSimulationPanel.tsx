@@ -1,15 +1,35 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Bot, Send, Sparkles, Loader2, FastForward, Sliders, X, Maximize2, MoreVertical, Search, Lightbulb, Plus, Settings2, PictureInPicture } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { Send, Sparkles, Loader2, X, MoreVertical, Search, Lightbulb, Plus, Settings2, PictureInPicture, Square } from 'lucide-react';
 import { useAuth } from '../../context/AuthContext';
+import {
+  ChatStreamError,
+  formatChatError,
+  getChatRequestId,
+  getChatStreamError,
+  readChatStream,
+  type ChatStreamMetadata,
+} from '../../features/chatbot/chatStream';
+import {
+  cancelChatRun,
+  createChatSession,
+  getStoredChatMetadata,
+  getChatSession,
+  listChatSessions,
+  sendChatMessage,
+  type ChatSessionSummary,
+} from '../../features/chatbot/chatApi';
+import { mergeChatMetadata } from '../../features/chatbot/chatContract';
 
 interface Message {
   id?: number;
   type: 'user' | 'bot';
   content: string;
   timestamp?: Date | string;
-  sources?: string[];
+  metadata?: ChatStreamMetadata;
+  suggestions?: string[];
+  status?: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 }
 
 interface ScenarioSimulationPanelProps {
@@ -25,44 +45,53 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
-  const [threads, setThreads] = useState<any[]>([]);
+  const [threads, setThreads] = useState<ChatSessionSummary[]>([]);
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [backendStatus, setBackendStatus] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const sendingRef = useRef(false);
+  const nextLocalIdRef = useRef(-1);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const activeRunIdRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (showHistory) {
-      const savedThreadsStr = localStorage.getItem('akasha_threads_v2');
-      if (savedThreadsStr) setThreads(JSON.parse(savedThreadsStr));
-    }
+    if (showHistory) listChatSessions().then(setThreads).catch(error => console.error('Unable to list chats:', error));
   }, [showHistory]);
 
-  const loadThread = (tid: number) => {
-    localStorage.setItem('akasha_active_thread', String(tid));
-    const savedMsgs = localStorage.getItem(`akasha_msgs_${tid}`);
-    if (savedMsgs) {
-      setMessages(JSON.parse(savedMsgs));
-    } else {
-      setMessages([]);
+  const loadThread = async (sessionId: string) => {
+    if (sendingRef.current) return;
+    try {
+      const session = await getChatSession(sessionId);
+      setActiveSessionId(sessionId);
+      setMessages(session.messages.map(message => {
+        const metadata = getStoredChatMetadata(message);
+        return {
+          id: message.id,
+          type: message.role === 'assistant' ? 'bot' : 'user',
+          content: message.content,
+          timestamp: message.created_at,
+          metadata,
+          suggestions: metadata.suggestions,
+          status: message.status,
+        };
+      }));
+      setShowHistory(false);
+    } catch (error) {
+      console.error('Unable to load chat:', error);
     }
-    setShowHistory(false);
   };
 
   const startNewChat = () => {
-    localStorage.removeItem('akasha_active_thread');
+    if (sendingRef.current) return;
+    setActiveSessionId(null);
     setMessages([]);
     setInput('');
   };
 
   useEffect(() => {
     if (isOpen) {
-      const savedActive = localStorage.getItem('akasha_active_thread');
-      if (savedActive) {
-        const tid = parseInt(savedActive);
-        const savedMsgs = localStorage.getItem(`akasha_msgs_${tid}`);
-        if (savedMsgs) {
-          setMessages(JSON.parse(savedMsgs));
-        }
-      }
+      listChatSessions().then(setThreads).catch(error => console.error('Unable to list chats:', error));
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
     }
   }, [isOpen]);
@@ -74,12 +103,13 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
 
   const sendMessage = async (overrideText?: string) => {
     const textToSend = overrideText || input.trim();
-    if (!textToSend || loading) return;
-    
+    if (!textToSend || sendingRef.current) return;
+    sendingRef.current = true;
+
     setInput('');
     
     const userMsg: Message = {
-      id: Date.now(),
+      id: nextLocalIdRef.current--,
       type: 'user',
       content: textToSend,
       timestamp: new Date()
@@ -88,66 +118,140 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
     const newMessages = [...messages, userMsg];
     setMessages(newMessages);
     
-    let activeThreadId = localStorage.getItem('akasha_active_thread');
-    let currentThreadId = activeThreadId ? parseInt(activeThreadId) : null;
-    
-    if (!currentThreadId) {
-      currentThreadId = Date.now();
-      localStorage.setItem('akasha_active_thread', String(currentThreadId));
-      
-      const newThread = {
-        id: currentThreadId,
-        title: textToSend.substring(0, 50),
-        preview: textToSend.substring(0, 80),
-        timestamp: new Date(),
-        messageCount: 1
-      };
-      const savedThreadsStr = localStorage.getItem('akasha_threads_v2');
-      const savedThreads = savedThreadsStr ? JSON.parse(savedThreadsStr) : [];
-      localStorage.setItem('akasha_threads_v2', JSON.stringify([newThread, ...savedThreads].slice(0, 20)));
-    } else {
-      const savedThreadsStr = localStorage.getItem('akasha_threads_v2');
-      if (savedThreadsStr) {
-        let savedThreads = JSON.parse(savedThreadsStr);
-        savedThreads = savedThreads.map((t: any) => t.id === currentThreadId ? { ...t, messageCount: t.messageCount + 1 } : t);
-        localStorage.setItem('akasha_threads_v2', JSON.stringify(savedThreads));
+    let currentSessionId = activeSessionId;
+    if (!currentSessionId) {
+      try {
+        const created = await createChatSession(textToSend.substring(0, 100));
+        currentSessionId = created.session_id;
+        setActiveSessionId(currentSessionId);
+        setThreads(prev => [created, ...prev.filter(thread => thread.session_id !== created.session_id)]);
+      } catch (error) {
+        setMessages([...newMessages, { type: 'bot', content: error instanceof Error ? error.message : 'Unable to create chat.' }]);
+        sendingRef.current = false;
+        return;
       }
     }
-    
-    localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(newMessages));
+
     setLoading(true);
 
     try {
-      const res = await fetch('/akasha/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend, history: newMessages.slice(-10), projectId })
-      });
-      const data = await res.json();
-      
-      const botMsg: Message = {
-        id: Date.now() + 1,
-        type: 'bot',
-        content: res.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`,
-        timestamp: new Date(),
-        sources: ['Simulation Engine']
+      const controller = new AbortController();
+      abortControllerRef.current = controller;
+      const res = await sendChatMessage({
+        message: textToSend,
+        projectId,
+        sessionId: currentSessionId,
+      }, controller.signal);
+      let requestId = getChatRequestId(res);
+
+      const botMsgId = (userMsg.id ?? 0) + 1;
+      let botContent = '';
+      let botMetadata: ChatStreamMetadata | undefined;
+      let botSuggestions: string[] | undefined;
+      let hasVisualization = false;
+      let streamError: ChatStreamError | undefined;
+      let botStatus: Message['status'] = 'running';
+
+      const updateBotMessage = () => {
+        const botMsg: Message = {
+          id: botMsgId,
+          type: 'bot',
+          content: botContent,
+          timestamp: new Date(),
+          metadata: botMetadata,
+          suggestions: botSuggestions,
+          status: botStatus,
+        };
+        const updatedMessages = [...newMessages, botMsg];
+        setMessages(updatedMessages);
+        return updatedMessages;
       };
-      const finalMessages = [...newMessages, botMsg];
-      setMessages(finalMessages);
-      localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(finalMessages));
-    } catch {
+
+      try {
+        for await (const event of readChatStream(res)) {
+          requestId = event.request_id || requestId;
+          if (requestId) {
+            botMetadata = { ...botMetadata, request_id: requestId };
+          }
+          if (event.type === 'start') {
+            activeRunIdRef.current = event.run_id || null;
+          } else if (event.type === 'status') {
+            setBackendStatus(event.status.replaceAll('_', ' '));
+          } else if (event.type === 'token') {
+            botContent += event.content;
+            updateBotMessage();
+          } else if (event.type === 'metadata') {
+            botMetadata = mergeChatMetadata(botMetadata, { ...event.metadata, request_id: requestId });
+            botSuggestions = event.metadata.suggestions ?? botSuggestions;
+            updateBotMessage();
+          } else if (event.type === 'visualization') {
+            // The compact panel intentionally omits charts; the full copilot renders the same event.
+            hasVisualization = true;
+          } else if (event.type === 'error') {
+            streamError = new ChatStreamError(getChatStreamError(event), event.request_id || requestId);
+            botStatus = 'failed';
+            updateBotMessage();
+          } else if (event.type === 'cancelled') {
+            botStatus = 'cancelled';
+            updateBotMessage();
+          } else if (event.type === 'done') {
+            botMetadata = mergeChatMetadata(botMetadata, { message_id: event.message_id, request_id: requestId });
+            botStatus = event.status;
+            updateBotMessage();
+          }
+        }
+
+        if (streamError) throw streamError;
+        if (!botContent.trim() && hasVisualization) {
+          botContent = 'A visualization was generated. Open the full chat to view it.';
+        } else if (!botContent.trim()) {
+          throw new ChatStreamError('The chat stream ended without a response.', requestId);
+        }
+
+        const finalMessages = updateBotMessage();
+        setMessages(finalMessages);
+        setThreads(await listChatSessions());
+      } catch (error) {
+        if (error instanceof Error && error.name === 'AbortError') {
+          botStatus = 'cancelled';
+        } else {
+          const detail = formatChatError(error, requestId, 'Unknown chat stream error.');
+          botContent = botContent ? `${botContent}\n\nError: ${detail}` : `Error: ${detail}`;
+          botSuggestions = undefined;
+          botStatus = 'failed';
+        }
+        const finalMessages = updateBotMessage();
+        setMessages(finalMessages);
+      }
+    } catch (error) {
+      const detail = formatChatError(error, undefined, 'Unknown connection error.');
       const errorMsg: Message = {
-        id: Date.now() + 1,
+        id: nextLocalIdRef.current--,
         type: 'bot',
-        content: 'Simulation engine error. Please try again.',
+        content: `Error: ${detail}`,
         timestamp: new Date()
       };
       const finalMessages = [...newMessages, errorMsg];
       setMessages(finalMessages);
-      localStorage.setItem(`akasha_msgs_${currentThreadId}`, JSON.stringify(finalMessages));
     } finally {
       setLoading(false);
+      sendingRef.current = false;
+      abortControllerRef.current = null;
+      activeRunIdRef.current = null;
+      setBackendStatus('');
+      listChatSessions().then(setThreads).catch(error => console.error('Unable to refresh chats:', error));
     }
+  };
+
+  const cancelActiveRun = async () => {
+    const controller = abortControllerRef.current;
+    if (!controller) return;
+    setBackendStatus('cancelling');
+    const runId = activeRunIdRef.current;
+    if (runId) {
+      await cancelChatRun(runId).catch(() => undefined);
+    }
+    controller.abort();
   };
 
   if (!isOpen) {
@@ -174,8 +278,8 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
                  {threads.length === 0 ? (
                    <div className="px-4 py-3 text-sm text-muted-foreground italic">No recent chats</div>
                  ) : (
-                   threads.map(t => (
-                     <button key={t.id} onClick={() => loadThread(t.id)} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors truncate">
+                    threads.map(t => (
+                      <button key={t.session_id} onClick={() => loadThread(t.session_id)} className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors truncate">
                        {t.title}
                      </button>
                    ))
@@ -189,7 +293,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
               <PictureInPicture className="w-5 h-5" />
             </button>
           )}
-          <button onClick={() => setIsOpen(false)} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Close">
+          <button onClick={() => { if (loading) void cancelActiveRun(); setIsOpen(false); }} className="p-2 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground transition-colors" title="Close">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -229,12 +333,31 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
                 <div className="flex items-center gap-3 mb-2">
                   <Sparkles className="w-4 h-4 text-[#4285f4]" />
                   <span className="text-xs font-semibold text-foreground/70">AKASHA AI</span>
+                  {msg.status && msg.status !== 'completed' && (
+                    <span className="text-[10px] capitalize text-muted-foreground">{msg.status}</span>
+                  )}
                 </div>
               )}
               {msg.type === 'bot' ? (
-                <div className="akasha-response prose prose-sm max-w-none dark:prose-invert ml-7">
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
-                </div>
+                <>
+                  <div className="akasha-response prose prose-sm max-w-none dark:prose-invert ml-7">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                  </div>
+                  {idx === messages.length - 1 && msg.suggestions && msg.suggestions.length > 0 && (
+                    <div className="ml-7 mt-3 flex flex-wrap gap-2">
+                      {msg.suggestions.map(suggestion => (
+                        <button
+                          key={suggestion}
+                          onClick={() => sendMessage(suggestion)}
+                          disabled={loading}
+                          className="px-3 py-1.5 rounded-xl border border-border/30 bg-muted text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-50"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </>
               ) : msg.content}
             </div>
           </div>
@@ -249,7 +372,7 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
               </div>
               <div className="flex items-center gap-2 ml-7">
                 <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                <span className="text-sm text-muted-foreground">Thinking...</span>
+                <span className="text-sm capitalize text-muted-foreground">{backendStatus || 'Thinking...'}</span>
               </div>
             </div>
           </div>
@@ -277,9 +400,9 @@ export default function ScenarioSimulationPanel({ isOpen, setIsOpen, onMaximize,
                 <Settings2 className="w-4 h-4" />
               </button>
             </div>
-            <button onClick={() => sendMessage()} disabled={!input.trim() || loading}
+            <button onClick={() => loading ? void cancelActiveRun() : void sendMessage()} disabled={!input.trim() && !loading}
               className="p-2.5 rounded-full text-foreground hover:bg-muted transition-colors disabled:opacity-30 disabled:cursor-not-allowed">
-              <Send className="w-4 h-4" />
+              {loading ? <Square className="w-4 h-4" /> : <Send className="w-4 h-4" />}
             </button>
           </div>
         </div>
