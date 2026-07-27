@@ -7,7 +7,7 @@ import logging
 import re
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from database import SessionLocal
 from engine.agent import TOOLS, build_chart_result, execute_tool
@@ -86,6 +86,21 @@ class WhatIfArguments(ActivityArguments):
     manpower_multiplier: float = Field(default=1.0, ge=0.1, le=5.0)
 
 
+class ActivityFinishForecastArguments(ProjectArguments):
+    period: Literal["month", "year"] = "month"
+    target_year: int | None = Field(default=None, ge=2000, le=2100)
+    target_month: int | None = Field(default=None, ge=1, le=12)
+    limit: int = Field(default=25, ge=1, le=100)
+
+    @model_validator(mode="after")
+    def validate_target_period(self):
+        if self.period == "month" and (self.target_year is None) != (self.target_month is None):
+            raise ValueError("target_year and target_month must be provided together for a month")
+        if self.period == "year" and self.target_month is not None:
+            raise ValueError("target_month must be omitted for a year")
+        return self
+
+
 class ReportGenerateArguments(ProjectArguments):
     preview_token: str = Field(min_length=40, max_length=1_000)
 
@@ -126,6 +141,7 @@ ARGUMENT_MODELS: dict[str, type[ToolArguments]] = {
     "sim_material_bottlenecks": ActivityArguments,
     "get_project_kpis": ProjectArguments,
     "sim_forecast_completion": ProjectArguments,
+    "sim_forecast_activity_finishes": ActivityFinishForecastArguments,
     "render_chart": ChartArguments,
     "report_preview_project_progress": ProjectArguments,
     "report_generate_project_progress": ReportGenerateArguments,

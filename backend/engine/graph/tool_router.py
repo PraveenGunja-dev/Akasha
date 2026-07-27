@@ -42,6 +42,7 @@ SIMULATION_TOOLS = {
     "sim_monsoon_impact",
     "sim_material_bottlenecks",
     "sim_forecast_completion",
+    "sim_forecast_activity_finishes",
 }
 REPORT_TOOLS = {
     "report_preview_project_progress",
@@ -222,6 +223,15 @@ def select_tool_route(
             selected.add("get_project_kpis")
         if re.search(r"\b(?:all projects|how many projects|portfolio)\b", current, re.IGNORECASE):
             selected.add("p6_list_all_projects")
+        if re.search(
+            r"\b(?:this|current|next|target) (?:month|year)\b|\b(?:monthly|yearly|annual)\b|"
+            r"\bscheduled to finish\b|\bdue (?:in|this|next)\b|"
+            r"\b(?:january|february|march|april|may|june|july|august|september|october|november|december)\b|"
+            r"\b20\d{2}\b",
+            current,
+            re.IGNORECASE,
+        ) and re.search(r"\b(?:activity|activities|finish|finishes|due|completion)\b", current, re.IGNORECASE):
+            selected.add("sim_forecast_activity_finishes")
 
     if "sap" in current_domains:
         intent_parts.append("procurement")
@@ -255,7 +265,18 @@ def select_tool_route(
     if "simulation" in current_domains:
         intent_parts.append("simulation")
         selected.add("p6_get_project_summary")
-        if re.search(r"\b(?:forecast|predict|projection|finish|completion|on track|slip)\b", current, re.IGNORECASE):
+        period_activity_forecast = bool(
+            re.search(r"\b(?:activity|activities)\b", current, re.IGNORECASE)
+            and re.search(
+                r"\b(?:month|monthly|year|yearly|annual|january|february|march|april|may|june|july|august|"
+                r"september|october|november|december)\b|\b20\d{2}\b",
+                current,
+                re.IGNORECASE,
+            )
+        )
+        if period_activity_forecast:
+            selected.add("sim_forecast_activity_finishes")
+        elif re.search(r"\b(?:forecast|predict|projection|finish|completion|on track|slip)\b", current, re.IGNORECASE):
             selected.add("sim_forecast_completion")
         if re.search(r"\b(?:productivity|production rate)\b", current, re.IGNORECASE):
             selected.add("sim_get_activity_productivity")

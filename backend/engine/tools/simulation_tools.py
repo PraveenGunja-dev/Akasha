@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 import models
 from datetime import datetime, timedelta
+from statistics import median
 
 logger = logging.getLogger(__name__)
 
@@ -393,4 +394,276 @@ def sim_forecast_completion(db: Session, project_id: str) -> dict:
     result["milestones_at_risk_count"] = len(at_risk)
 
     return result
+
+
+def sim_forecast_activity_finishes(
+    db: Session,
+    project_id: str,
+    period: str = "month",
+    target_year: int | None = None,
+    target_month: int | None = None,
+    limit: int = 25,
+) -> dict:
+    """Forecast activities scheduled to finish in one calendar month or year.
+
+    The exact target count comes from each activity's current P6 finish date. For unfinished
+    in-progress activities, an independent pace projection uses actual progress since start.
+    Not-started activities remain schedule-only candidates rather than receiving invented dates.
+    """
+    p6 = db.query(models.P6Project).filter(
+        models.P6Project.project_id == project_id
+    ).first()
+    if not p6:
+        return {
+            "project_id": project_id,
+            "has_data": False,
+            "error": "Project not found",
+        }
+
+    now = datetime.utcnow()
+    period = period.strip().lower()
+    if period not in {"month", "year"}:
+        raise ValueError("period must be 'month' or 'year'.")
+    if period == "month":
+        if target_year is None and target_month is None:
+            target_year, target_month = now.year, now.month
+        elif target_year is None or target_month is None:
+            raise ValueError("target_year and target_month must be provided together for a month.")
+        if target_year < 2000 or target_year > 2100 or target_month < 1 or target_month > 12:
+            raise ValueError("Invalid target month.")
+        period_start = datetime(target_year, target_month, 1)
+        period_end = (
+            datetime(target_year + 1, 1, 1)
+            if target_month == 12
+            else datetime(target_year, target_month + 1, 1)
+        )
+        period_label = period_start.strftime("%B %Y")
+    else:
+        if target_month is not None:
+            raise ValueError("target_month must be omitted for a yearly forecast.")
+        target_year = target_year or now.year
+        if target_year < 2000 or target_year > 2100:
+            raise ValueError("Invalid target year.")
+        period_start = datetime(target_year, 1, 1)
+        period_end = datetime(target_year + 1, 1, 1)
+        period_label = str(target_year)
+    data_as_of = p6.data_date or p6.last_synced_at
+    activities = db.query(models.P6Activity).filter(
+        models.P6Activity.project_object_id == p6.p6_object_id
+    ).all()
+
+    def is_completed(activity) -> bool:
+        return bool(activity.status and "complet" in activity.status.lower())
+
+    def in_target(value) -> bool:
+        return bool(value and period_start <= value < period_end)
+
+    scheduled = [activity for activity in activities if in_target(activity.finish_date)]
+    remaining = [activity for activity in scheduled if not is_completed(activity)]
+    confirmed = [activity for activity in scheduled if is_completed(activity)]
+    actual_completed_in_period = [
+        activity for activity in activities
+        if is_completed(activity) and in_target(activity.actual_finish_date)
+    ]
+
+    historical_delays = []
+    for activity in activities:
+        if not is_completed(activity) or not activity.actual_finish_date:
+            continue
+        comparison_finish = activity.baseline_finish_date or activity.planned_finish_date
+        if comparison_finish:
+            historical_delays.append((activity.actual_finish_date - comparison_finish).days)
+    historical_on_time = sum(1 for delay in historical_delays if delay <= 7)
+    historical_on_time_pct = (
+        round(historical_on_time * 100 / len(historical_delays), 1)
+        if historical_delays else None
+    )
+
+    pace_likely = []
+    pace_at_risk = []
+    schedule_only = []
+    details = []
+    for activity in scheduled:
+        pct = _norm_pct(activity.percent_complete)
+        pace_finish = None
+        pace_variance_days = None
+        bucket = "confirmed_finished" if is_completed(activity) else "schedule_only"
+        if not is_completed(activity) and data_as_of and period_end > data_as_of:
+            pace_start = activity.actual_start_date
+            if pace_start is None and activity.status and "progress" in activity.status.lower():
+                pace_start = activity.start_date
+            if pace_start and 0 < pct < 100 and data_as_of > pace_start:
+                elapsed_days = max((data_as_of - pace_start).total_seconds() / 86_400, 1.0)
+                remaining_days = elapsed_days * (100.0 - pct) / pct
+                pace_finish = data_as_of + timedelta(days=remaining_days)
+                pace_variance_days = (
+                    round((pace_finish - activity.finish_date).total_seconds() / 86_400, 1)
+                    if activity.finish_date else None
+                )
+                if pace_finish < period_end:
+                    bucket = "pace_supported_likely_by_period_end"
+                    pace_likely.append(activity)
+                else:
+                    bucket = "pace_at_risk_beyond_period_end"
+                    pace_at_risk.append(activity)
+            else:
+                schedule_only.append(activity)
+        elif not is_completed(activity):
+            schedule_only.append(activity)
+
+        baseline_drift_days = (
+            (activity.finish_date - activity.baseline_finish_date).days
+            if activity.finish_date and activity.baseline_finish_date else None
+        )
+        details.append({
+            "activity_id": activity.activity_id,
+            "name": activity.name,
+            "wbs_name": activity.wbs_name,
+            "status": activity.status,
+            "percent_complete": pct,
+            "current_p6_finish": activity.finish_date.date().isoformat() if activity.finish_date else None,
+            "planned_finish": activity.planned_finish_date.date().isoformat() if activity.planned_finish_date else None,
+            "baseline_finish": activity.baseline_finish_date.date().isoformat() if activity.baseline_finish_date else None,
+            "baseline_drift_days": baseline_drift_days,
+            "pace_forecast_finish": pace_finish.date().isoformat() if pace_finish else None,
+            "pace_vs_p6_days": pace_variance_days,
+            "forecast_bucket": bucket,
+            "is_critical": bool(
+                activity.is_critical
+                or (activity.total_float is not None and activity.total_float <= 0)
+            ),
+        })
+
+    bucket_order = {
+        "pace_at_risk_beyond_period_end": 0,
+        "schedule_only": 1,
+        "pace_supported_likely_by_period_end": 2,
+        "confirmed_finished": 3,
+    }
+    details.sort(key=lambda item: (
+        bucket_order[item["forecast_bucket"]],
+        item["current_p6_finish"] or "",
+        str(item["activity_id"]),
+    ))
+
+    overdue_carry_in = [
+        activity for activity in activities
+        if not is_completed(activity) and activity.finish_date and activity.finish_date < period_start
+    ]
+    overdue_as_of_data_date = [
+        activity for activity in activities
+        if data_as_of and not is_completed(activity)
+        and activity.finish_date and activity.finish_date < data_as_of
+    ]
+    critical_due = [
+        activity for activity in remaining
+        if activity.is_critical or (activity.total_float is not None and activity.total_float <= 0)
+    ]
+    drifted_due = [
+        activity for activity in remaining
+        if activity.baseline_finish_date
+        and activity.finish_date
+        and (activity.finish_date - activity.baseline_finish_date).days > 7
+    ]
+
+    remaining_count = len(remaining)
+    pace_coverage_pct = (
+        round((len(pace_likely) + len(pace_at_risk)) * 100 / remaining_count, 1)
+        if remaining_count else 100.0
+    )
+    data_age_days = max((now - data_as_of).days, 0) if data_as_of else None
+    if data_age_days is None or data_age_days > 30 or pace_coverage_pct < 25:
+        confidence = "LOW"
+    elif data_age_days <= 14 and pace_coverage_pct >= 60 and len(historical_delays) >= 10:
+        confidence = "HIGH"
+    else:
+        confidence = "MEDIUM"
+
+    scheduled_count = len(scheduled)
+    likely_minimum = len(confirmed) + len(pace_likely)
+    possible_maximum = max(likely_minimum, scheduled_count - len(pace_at_risk))
+    at_risk_ratio = len(pace_at_risk) / remaining_count if remaining_count else 0
+    if at_risk_ratio >= 0.3 or (
+        historical_on_time_pct is not None
+        and len(historical_delays) >= 10
+        and historical_on_time_pct < 50
+    ):
+        outlook = "HIGH_RISK"
+    elif pace_at_risk or overdue_carry_in or drifted_due:
+        outlook = "AT_RISK"
+    else:
+        outlook = "ON_PLAN"
+
+    from engine.tools.portfolio_tools import get_project_display_name
+    return {
+        "project_id": project_id,
+        "project_name": get_project_display_name(db, project_id),
+        "has_data": True,
+        "target_period": {
+            "type": period,
+            "year": target_year,
+            "month": target_month if period == "month" else None,
+            "label": period_label,
+            "start": period_start.date().isoformat(),
+            "end_exclusive": period_end.date().isoformat(),
+        },
+        "definition": (
+            "Scheduled count uses activities whose current P6 finish_date falls in the target period."
+        ),
+        "data_as_of": data_as_of.date().isoformat() if data_as_of else None,
+        "last_synced_at": p6.last_synced_at.isoformat() if p6.last_synced_at else None,
+        "data_age_days": data_age_days,
+        "p6_schedule_target": {
+            "scheduled_to_finish": scheduled_count,
+            "confirmed_finished_in_cohort": len(confirmed),
+            "remaining_scheduled": remaining_count,
+            "actual_finishes_in_period": len(actual_completed_in_period),
+            "in_progress": sum(
+                1 for activity in remaining
+                if activity.status and "progress" in activity.status.lower()
+            ),
+            "not_started": sum(
+                1 for activity in remaining
+                if activity.status and "not started" in activity.status.lower()
+            ),
+        },
+        "prediction": {
+            "likely_finish_range_by_period_end": {
+                "minimum_evidence_supported": likely_minimum,
+                "maximum_if_schedule_only_candidates_hold": possible_maximum,
+            },
+            "pace_supported_likely": len(pace_likely),
+            "pace_at_risk": len(pace_at_risk),
+            "schedule_only_candidates": len(schedule_only),
+            "pace_coverage_pct_of_remaining": pace_coverage_pct,
+            "outlook": outlook,
+            "confidence": confidence,
+            "method": (
+                "In-progress pace = elapsed days since actual/current start divided by percent "
+                "complete; not-started or insufficient-progress activities retain only their P6 date."
+            ),
+        },
+        "schedule_pressure": {
+            "overdue_carry_in_before_period": len(overdue_carry_in),
+            "overdue_as_of_data_date": len(overdue_as_of_data_date),
+            "critical_remaining_due": len(critical_due),
+            "remaining_drifted_over_7_days_vs_baseline": len(drifted_due),
+        },
+        "historical_delivery": {
+            "completed_sample": len(historical_delays),
+            "on_time_within_7_days_pct": historical_on_time_pct,
+            "median_finish_variance_days": (
+                round(float(median(historical_delays)), 1) if historical_delays else None
+            ),
+            "comparison_basis": "Actual finish versus baseline finish, falling back to planned finish.",
+        },
+        "returned": min(len(details), limit),
+        "total_scheduled": scheduled_count,
+        "activities": details[:limit],
+        "_source_table": "p6_project, p6_activity",
+        "_limitations": (
+            "The pace projection is deterministic, not a trained ML probability. It does not model "
+            "future resource changes, dependencies, calendars, weather, or unrecorded constraints."
+        ),
+    }
 

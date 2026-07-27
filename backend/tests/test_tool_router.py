@@ -93,6 +93,22 @@ class ToolRouterTests(unittest.TestCase):
             "sim_forecast_completion",
         )
 
+    def test_monthly_activity_finish_question_gets_period_forecast(self):
+        result = route("How many activities are scheduled to finish this month for Project X?")
+
+        self.assertIncludes(
+            result,
+            "portfolio_resolve_project_id",
+            "sim_forecast_activity_finishes",
+        )
+        self.assertExcludes(result, "sim_forecast_completion")
+
+    def test_yearly_activity_finish_question_gets_period_forecast(self):
+        result = route("Forecast how many activities will finish in 2027 for Project X")
+
+        self.assertIncludes(result, "sim_forecast_activity_finishes")
+        self.assertExcludes(result, "sim_forecast_completion")
+
     def test_report_confirmation_inherits_report_context(self):
         result = route(
             "Yes, confirm and generate it.",

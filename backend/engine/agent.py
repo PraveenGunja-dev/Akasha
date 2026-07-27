@@ -36,7 +36,8 @@ from engine.tools.portfolio_tools import (
 )
 from engine.tools.simulation_tools import (
     sim_get_activity_productivity, sim_project_duration_what_if,
-    sim_monsoon_impact, sim_material_bottlenecks, sim_forecast_completion
+    sim_monsoon_impact, sim_material_bottlenecks, sim_forecast_completion,
+    sim_forecast_activity_finishes,
 )
 from engine.tools.viz_tools import build_chart, CHART_TYPES
 from engine.kpi_engine import compute_project_kpis
@@ -602,6 +603,49 @@ TOOLS = [
     {
         "type": "function",
         "function": {
+            "name": "sim_forecast_activity_finishes",
+            "description": (
+                "Forecast how many activities for one project are scheduled to finish in a target "
+                "calendar month or year. USE THIS for questions such as 'how many activities this "
+                "month?', 'what is scheduled to finish in August?', 'how many finish this year?', "
+                "or an annual/monthly activity completion outlook. "
+                "Returns the exact current P6 finish-date count, completed/remaining breakdown, "
+                "pace-supported likely range, at-risk activities, historical adherence, confidence, "
+                "schedule pressure, and source freshness. Use period='month' or period='year'. "
+                "Omit target values for the current month or year."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_id": {
+                        "type": "string",
+                        "description": "The canonical project_id (resolve the name first)."
+                    },
+                    "period": {
+                        "type": "string",
+                        "enum": ["month", "year"],
+                        "description": "Forecast period. Defaults to 'month'."
+                    },
+                    "target_year": {
+                        "type": "integer",
+                        "description": "Four-digit target year. Omit for the current month/year."
+                    },
+                    "target_month": {
+                        "type": "integer",
+                        "description": "Target month number from 1 to 12. Use only with period='month'; omit both target values for the current month."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum forecast activity details to return. Default is 25."
+                    }
+                },
+                "required": ["project_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
             "name": "report_preview_project_progress",
             "description": (
                 "Prepare a Project Progress Report preview for one project. Call this when the user "
@@ -774,6 +818,17 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
 
         elif name == "sim_forecast_completion":
             res = sim_forecast_completion(db, kwargs.get("project_id"))
+            return json.dumps(res, default=str)
+
+        elif name == "sim_forecast_activity_finishes":
+            res = sim_forecast_activity_finishes(
+                db,
+                kwargs.get("project_id"),
+                kwargs.get("period", "month"),
+                kwargs.get("target_year"),
+                kwargs.get("target_month"),
+                kwargs.get("limit", 25),
+            )
             return json.dumps(res, default=str)
 
         elif name == "get_project_kpis":
@@ -1026,6 +1081,7 @@ def run_deep_analysis_agent_stream(
                 "- After a chart renders, briefly say in words what it shows. If render_chart returns status 'no_data', tell the user plainly instead of describing a chart that wasn't drawn.\n"
                 "FORECASTS / FUTURE QUESTIONS:\n"
                 "- For forward-looking questions ('when will X finish?', 'expected completion month', 'will it slip?', 'on track for commissioning?', 'forecast vs baseline'), CALL `sim_forecast_completion`. Projecting a completion date from real progress data is expected of you — it is NOT guessing or hallucinating, so do not refuse these.\n"
+                "- For monthly or yearly activity questions ('how many activities this month/year?', 'scheduled to finish in August', or a period finish outlook), CALL `sim_forecast_activity_finishes`. Lead with the exact P6 scheduled count, then briefly state the likely range, risk, confidence, and data date.\n"
                 "- Report the forecast's dates, whether it's ahead/behind baseline, the confidence level, and its stated assumptions. If the tool says the project hasn't started, say the date is the planned baseline, not a forecast.\n"
                 "- Only say you can't answer when NO tool can produce the number from data (e.g. external market prices, weather) — never for schedule/cost/progress projections your tools cover.\n"
                 "SCHEDULE PERFORMANCE / KPIs:\n"
