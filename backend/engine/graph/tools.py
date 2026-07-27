@@ -50,8 +50,7 @@ class RiskLineArguments(ToolArguments):
 
 
 class TransmissionCollectionArguments(ToolArguments):
-    region: str | None = Field(default=None, min_length=1, max_length=100)
-    project_id: str | None = Field(default=None, min_length=1, max_length=200)
+    region: str = Field(min_length=1, max_length=100)
     delayed_only: bool = False
     limit: int = Field(default=100, ge=1, le=200)
 
@@ -108,6 +107,7 @@ ARGUMENT_MODELS: dict[str, type[ToolArguments]] = {
     "p6_get_project_summary": ProjectArguments,
     "sap_get_po_summary": ProjectArguments,
     "tc_get_project_lines": ProjectArguments,
+    "tc_search_lines": TransmissionCollectionArguments,
     "portfolio_get_notifications": NotificationArguments,
     "tc_get_at_risk_lines": RiskLineArguments,
     "tc_get_network_summary": EmptyArguments,
@@ -133,7 +133,7 @@ ARGUMENT_MODELS: dict[str, type[ToolArguments]] = {
 
 PORTFOLIO_TOOLS = {
     "portfolio_get_riskiest_projects", "tc_get_at_risk_lines",
-    "tc_get_network_summary", "p6_list_all_projects",
+    "tc_get_network_summary", "tc_search_lines", "p6_list_all_projects",
     "portfolio_get_notifications",
 }
 

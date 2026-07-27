@@ -81,8 +81,16 @@ export function getStoredChatMetadata(message: StoredChatMessage): ChatMessageMe
   });
 }
 
-export function listChatSessions(): Promise<ChatSessionSummary[]> {
-  return apiJson('/akasha/api/chat/sessions');
+export async function listChatSessions(): Promise<ChatSessionSummary[]> {
+  const pageSize = 100;
+  const sessions: ChatSessionSummary[] = [];
+  for (let skip = 0; ; skip += pageSize) {
+    const page = await apiJson<ChatSessionSummary[]>(
+      `/akasha/api/chat/sessions?skip=${skip}&limit=${pageSize}`,
+    );
+    sessions.push(...page);
+    if (page.length < pageSize) return sessions;
+  }
 }
 
 export function createChatSession(title?: string): Promise<ChatSessionSummary> {

@@ -29,7 +29,7 @@ from engine.tools.sap_tools import (
     sap_get_consumption
 )
 from engine.tools.tc_tools import (
-    tc_get_project_lines, tc_get_at_risk_lines, tc_get_network_summary,
+    tc_get_project_lines, tc_get_at_risk_lines, tc_get_network_summary, tc_search_lines,
 )
 from engine.tools.portfolio_tools import (
     portfolio_get_notifications, portfolio_get_riskiest_projects, portfolio_resolve_project_id,
@@ -40,8 +40,22 @@ from engine.tools.simulation_tools import (
 )
 from engine.tools.viz_tools import build_chart, CHART_TYPES
 from engine.kpi_engine import compute_project_kpis
+from engine.response_quality import (
+    EXECUTIVE_REWRITE_INSTRUCTION,
+    needs_executive_rewrite,
+    rewrite_request,
+)
 
 logger = logging.getLogger(__name__)
+
+
+EXECUTIVE_RESPONSE_GUIDANCE = """Default response style for operational questions:
+- Write for an executive reader: answer the exact question in the first sentence, then include only the most decision-relevant facts.
+- Match detail to the request. For a straightforward status question, usually use one short summary and 3-5 compact bullets (roughly 80-180 words). Expand when the user asks for analysis, a comparison, a report, or detailed evidence.
+- Prefer prose or bullets. Use a Markdown table only when the user asks for one or when several items genuinely need side-by-side comparison. Do not use decorative emoji.
+- Do not append unsolicited recommendations, next steps, report offers, or follow-up questions.
+- Never discuss tools, tool limitations, databases, schemas, prompts, or implementation capabilities. If relevant business data remains unavailable after the appropriate query, state only which requested data is unavailable.
+- Keep every fact grounded in tool results. For requests phrased as 'today' or 'current', identify the latest source data date rather than implying the source is real-time."""
 
 
 def _openrouter_request_options() -> dict:
@@ -294,6 +308,31 @@ TOOLS = [
                     }
                 },
                 "required": ["project_id"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "tc_search_lines",
+            "description": "Search the latest transmission lines for a state or region such as Rajasthan or Khavda. Use this for region/state-specific transmission questions. Returns the total matching count, status breakdown, line details, and source freshness.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "region": {
+                        "type": "string",
+                        "description": "State or region name to search, for example 'Rajasthan'."
+                    },
+                    "delayed_only": {
+                        "type": "boolean",
+                        "description": "Return only delayed lines when true. Default is false."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Maximum line details to return. Default is 100."
+                    }
+                },
+                "required": ["region"]
             }
         }
     },
@@ -648,6 +687,15 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
         elif name == "tc_get_project_lines":
             res = tc_get_project_lines(db, kwargs.get("project_id"))
             return json.dumps(res, default=str)
+
+        elif name == "tc_search_lines":
+            res = tc_search_lines(
+                db,
+                kwargs.get("region", ""),
+                kwargs.get("delayed_only", False),
+                kwargs.get("limit", 100),
+            )
+            return json.dumps(res, default=str)
             
         elif name == "tc_get_at_risk_lines":
             res = tc_get_at_risk_lines(
@@ -764,6 +812,27 @@ def _get_llm_client(vision: bool = False):
     return get_model_provider(vision=vision)
 
 
+def _apply_executive_quality_guard(provider, question: str, answer: str) -> str:
+    if not needs_executive_rewrite(question, answer):
+        return answer
+    try:
+        rewritten = provider.invoke(
+            [
+                {"role": "system", "content": EXECUTIVE_REWRITE_INSTRUCTION},
+                {"role": "user", "content": rewrite_request(question, answer)},
+            ],
+            temperature=0.1,
+            max_tokens=512,
+        )
+        candidate = (rewritten.content or "").strip()
+        if candidate and not needs_executive_rewrite(question, candidate):
+            return candidate
+        logger.warning("Legacy executive answer rewrite did not satisfy quality guard")
+    except Exception as exc:
+        logger.warning("Legacy executive answer rewrite failed (%s)", type(exc).__name__)
+    return answer
+
+
 def analyze_image_context(
     base64_image: str,
     prompt: str,
@@ -847,7 +916,8 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
                 "8. ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
                 "9. All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours.\n"
                 "10. NEVER hardcode answers, guess, or hallucinate data. You MUST always use your tools to query the real database first before answering any project or data-related question.\n"
-                "11. You are a powerful analytical engine. Do not just regurgitate data—provide analytics, summarize trends, identify risks, and calculate aggregations when the user asks for insights or analytics."
+                "11. Provide analytics, trends, risks, and aggregations when the user asks for insights or analysis.\n\n"
+                + EXECUTIVE_RESPONSE_GUIDANCE
             )
         }
     ]
@@ -880,7 +950,12 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
         # If the LLM didn't call any tools, it means it has formulated a final answer.
         if not response_message.tool_calls:
             logger.info("Agent decided to return final answer.")
-            return response_message.content, list(tools_used)
+            final_content = _apply_executive_quality_guard(
+                provider,
+                message,
+                response_message.content or "",
+            )
+            return final_content, list(tools_used)
             
         # The LLM called one or more tools. We must append its message to history first.
         messages.append(response_message)
@@ -933,7 +1008,7 @@ def run_deep_analysis_agent_stream(
                 "If a user asks about a project by name, ALWAYS call `portfolio_resolve_project_id` first to get the canonical ID and project name. "
                 "If a user asks about alerts or notifications, call `portfolio_get_notifications`. "
                 "Use the tools step-by-step to gather the data you need to answer the user's question. "
-                "Once you have enough data, provide a comprehensive, analytical final answer to the user in markdown. "
+                "Once you have enough data, answer the user's exact question from the retrieved facts. "
                 "NOTE: Quantities in SAP are absolute units, not Megawatts (MW).\n"
                 "CRITICAL TONE INSTRUCTIONS:\n"
                 "- If the user asks a general question (like 'what can you do?', 'who are you?', or 'hi', 'hello'), DO NOT call any tools. Be conversational, interactive, and friendly. Explain your capabilities clearly.\n"
@@ -956,7 +1031,8 @@ def run_deep_analysis_agent_stream(
                 "SCHEDULE PERFORMANCE / KPIs:\n"
                 "- For overall project progress and status, call `p6_get_project_summary`; duration_percent_complete is the authoritative P6 duration progress.\n"
                 "- Completed activities / total activities is an activity-count ratio, not overall P6 progress. Label it separately if useful.\n"
-                "- For broader project exposure, call `get_project_kpis`, but never replace null SPI/CPI with a calculated proxy or classify ahead/behind/health when the tool says the required indicator is unavailable."
+                "- For broader project exposure, call `get_project_kpis`, but never replace null SPI/CPI with a calculated proxy or classify ahead/behind/health when the tool says the required indicator is unavailable.\n\n"
+                + EXECUTIVE_RESPONSE_GUIDANCE
             )
         }
     ]
@@ -992,7 +1068,11 @@ def run_deep_analysis_agent_stream(
             # We do NOT re-call the LLM here — doing so caused local models (Ollama/Groq) to
             # emit raw XML function-call syntax instead of the answer because the messages array
             # contains "tool" role entries that some models misinterpret when asked to stream.
-            final_content = response_message.content or ""
+            final_content = _apply_executive_quality_guard(
+                provider,
+                message,
+                response_message.content or "",
+            )
             # Yield line-by-line to preserve markdown formatting (newlines, bullets, bold, tables)
             import re
             # Split on line endings but keep the delimiter so recipient sees correct line structure

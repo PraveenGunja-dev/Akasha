@@ -468,7 +468,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       if (!response.ok) throw new Error(`Download failed (${response.status})`);
       const blob = await response.blob();
       const disposition = response.headers.get('Content-Disposition') || '';
-      const match = disposition.match(/filename\*?=(?:UTF-8''|\")?([^";]+)/i);
+      const match = disposition.match(/filename\*?=(?:UTF-8''|")?([^";]+)/i);
       const filename = match ? decodeURIComponent(match[1].replace(/"/g, '')) : fallbackName;
       const objectUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
@@ -635,7 +635,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
             {sidebarOpen && (
               <>
                 <div className="fixed inset-0 z-30" onClick={() => setSidebarOpen(false)} />
-                <div className="absolute top-11 left-0 w-80 bg-card border border-border shadow-xl rounded-2xl z-40 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="absolute top-11 left-0 w-80 max-h-[calc(100vh-5rem)] bg-card border border-border shadow-xl rounded-2xl z-40 flex flex-col overflow-hidden animate-in fade-in slide-in-from-top-2 duration-150">
                   <div className="p-2.5 border-b border-border">
                     <button
                       onClick={() => { startNewThread(); setSidebarOpen(false); }}
@@ -654,8 +654,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                       />
                     </div>
                   </div>
-                  <div className="max-h-80 overflow-y-auto scrollbar-hide p-1.5">
-                    <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">Recents</div>
+                  <div className="flex-1 min-h-0 overflow-y-auto p-1.5">
+                    <div className="px-2 py-1.5 text-[11px] font-semibold text-muted-foreground/60 uppercase tracking-wider">All chats ({filteredThreads.length})</div>
                     {filteredThreads.length > 0 ? (
                       filteredThreads.map(thread => (
                         <div

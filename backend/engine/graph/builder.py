@@ -5,11 +5,12 @@ import os
 import re
 
 from langchain_core.language_models.chat_models import BaseChatModel
-from langchain_core.messages import AIMessage, RemoveMessage, SystemMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, RemoveMessage, SystemMessage, ToolMessage
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import REMOVE_ALL_MESSAGES
 
 from database import SessionLocal
+from engine.agent import EXECUTIVE_RESPONSE_GUIDANCE
 from engine.graph.context_policy import (
     ContextBudget,
     bound_recent_messages,
@@ -17,6 +18,7 @@ from engine.graph.context_policy import (
     render_summary_input,
 )
 from engine.graph.state import AkashaState
+from engine.graph.tool_router import RESOLVER, ToolRoute, select_tool_route
 from engine.graph.tools import (
     ToolRunCancelled,
     ToolRuntimeContext,
@@ -25,6 +27,11 @@ from engine.graph.tools import (
     parse_raw_tool_call,
 )
 import models
+from engine.response_quality import (
+    EXECUTIVE_REWRITE_INSTRUCTION,
+    needs_executive_rewrite,
+    rewrite_request,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -44,7 +51,9 @@ an indicator that the tool reports as unavailable.
 For a Project Progress Report request, resolve the project and call report_preview_project_progress.
 Present the preview and stop. Only after the user explicitly confirms may you call
 report_generate_project_progress with the exact preview token. Return both generated download URLs
-exactly as Markdown links and state their expiry."""
+exactly as Markdown links and state their expiry.
+
+""" + EXECUTIVE_RESPONSE_GUIDANCE
 
 
 class GraphRunCancelled(RuntimeError):
@@ -124,10 +133,48 @@ def build_chat_graph(
             "The selected model context window could not be resolved or is below 8192 tokens."
         )
     budget = ContextBudget(context_window=context_window)
-    tool_model = model.bind_tools(model_tool_schemas())
+    all_tool_schemas = model_tool_schemas()
+    all_tool_names = tuple(
+        str((schema.get("function") or {}).get("name") or "")
+        for schema in all_tool_schemas
+        if (schema.get("function") or {}).get("name")
+    )
+    schemas_by_name = {
+        str(schema["function"]["name"]): schema
+        for schema in all_tool_schemas
+    }
+    all_tool_model = model.bind_tools(all_tool_schemas)
+    routed_models = {all_tool_names: all_tool_model}
     max_model_calls = int(os.getenv("AKASHA_GRAPH_MAX_MODEL_CALLS", "12"))
     if max_model_calls < 2 or max_model_calls > 30:
         raise ValueError("AKASHA_GRAPH_MAX_MODEL_CALLS must be between 2 and 30.")
+
+    def model_for_route(route: ToolRoute):
+        if not route.tool_names:
+            return model
+        cached = routed_models.get(route.tool_names)
+        if cached is None:
+            schemas = [schemas_by_name[name] for name in route.tool_names]
+            cached = model.bind_tools(schemas)
+            routed_models[route.tool_names] = cached
+        return cached
+
+    def route_for_state(state: AkashaState) -> ToolRoute:
+        human_messages = [
+            _response_text(message.content)
+            for message in state.get("messages") or []
+            if isinstance(message, HumanMessage)
+        ]
+        latest_question = human_messages[-1] if human_messages else ""
+        prior_questions = human_messages[:-1][-3:]
+        context_parts = [*(prior_questions or [])]
+        if state.get("conversation_summary"):
+            context_parts.append(str(state["conversation_summary"]))
+        return select_tool_route(
+            latest_question,
+            context="\n".join(context_parts),
+            available_tool_names=all_tool_names,
+        )
 
     def validate_context(state: AkashaState) -> dict:
         _ensure_run_active(state)
@@ -175,6 +222,16 @@ def build_chat_graph(
         _ensure_run_active(state)
         iteration = int(state.get("agent_iterations") or 0) + 1
         force_final = iteration >= max_model_calls
+        route = route_for_state(state)
+        if iteration == 1:
+            logger.info(
+                "Selected tool route (request_id=%s intent=%s domains=%s tool_count=%s all_tools=%s)",
+                state.get("request_id"),
+                route.intent,
+                ",".join(route.domains),
+                len(route.tool_names),
+                route.uses_all_tools,
+            )
         system_content = SYSTEM_PROMPT
         if state.get("conversation_summary"):
             system_content += f"\n\nDerived conversation summary:\n{state['conversation_summary']}"
@@ -188,10 +245,45 @@ def build_chat_graph(
             SystemMessage(content=system_content),
             *(state.get("messages") or []),
         ]
-        active_model = model if force_final else tool_model
+        active_model = model if force_final else model_for_route(route)
         response = active_model.invoke(model_messages)
         response_text = _response_text(response.content)
         raw_markup = _contains_raw_tool_markup(response_text)
+
+        executed_tools = set(state.get("tool_names") or [])
+        route_requires_domain_evidence = any(name != RESOLVER for name in route.tool_names)
+        has_relevant_evidence = (
+            any(name != RESOLVER for name in executed_tools)
+            if route_requires_domain_evidence
+            else bool(executed_tools)
+        )
+        if (
+            not force_final
+            and route.operational
+            and not has_relevant_evidence
+            and not response.tool_calls
+            and not response.invalid_tool_calls
+            and response_text
+            and not raw_markup
+        ):
+            logger.warning(
+                "Retrying operational answer with full tool catalog after no evidence call "
+                "(request_id=%s iteration=%s intent=%s)",
+                state.get("request_id"),
+                iteration,
+                route.intent,
+            )
+            response = all_tool_model.invoke([
+                SystemMessage(content=(
+                    "The latest request is operational and requires current evidence, but the prior "
+                    "attempt did not call a data tool. Re-answer now using the full supplied tool "
+                    "catalog. Resolve project names first when needed. Do not answer from memory or "
+                    "describe tool availability."
+                )),
+                *model_messages,
+            ])
+            response_text = _response_text(response.content)
+            raw_markup = _contains_raw_tool_markup(response_text)
         parsed_raw_call = parse_raw_tool_call(response_text) if raw_markup else None
 
         if parsed_raw_call is not None and not force_final:
@@ -219,7 +311,8 @@ def build_chat_graph(
                 "(request_id=%s iteration=%s reason=%s)",
                 state.get("request_id"), iteration, reason,
             )
-            response = tool_model.invoke([
+            repair_model = all_tool_model if route.operational else model
+            response = repair_model.invoke([
                 SystemMessage(content=(
                     "Your previous response was not usable. Re-answer the latest user request now. "
                     "Use only provider-native tool calls from the supplied tool definitions when data "
@@ -265,6 +358,8 @@ def build_chat_graph(
             "messages": [response],
             "model_name": _response_model_name(response) or state.get("model_name"),
             "agent_iterations": iteration,
+            "intent": route.intent,
+            "requested_domains": list(route.domains),
         }
 
     def call_tools(state: AkashaState) -> dict:
@@ -321,10 +416,12 @@ def build_chat_graph(
         if not content or _contains_raw_tool_markup(content):
             repaired = model.invoke([
                 SystemMessage(content=(
-                    "Answer the user's latest question directly and concisely from the supplied "
+                    "Answer the user's latest question directly and concisely for an executive reader from the supplied "
                     "conversation and tool results. Do not call tools, expose reasoning, emit tool-call "
-                    "markup, or return an empty response. If the available tools did not provide the "
-                    "requested detail, state that limitation plainly instead of inventing a tool call."
+                    "markup, discuss internal capabilities, or return an empty response. Include only "
+                    "facts relevant to the request and do not add unsolicited next steps or offers. If "
+                    "the available evidence did not provide the requested detail, state only which "
+                    "business data is unavailable instead of inventing a tool call."
                 )),
                 *(state.get("messages") or []),
             ])
@@ -332,6 +429,40 @@ def build_chat_graph(
             repair_model_name = _response_model_name(repaired)
         if not content or _contains_raw_tool_markup(content):
             raise InvalidModelResponse("The model returned an invalid final answer after repair.")
+
+        latest_question = next(
+            (
+                _response_text(message.content)
+                for message in reversed(state.get("messages") or [])
+                if isinstance(message, HumanMessage)
+            ),
+            "",
+        )
+        if needs_executive_rewrite(latest_question, content):
+            try:
+                rewritten = model.invoke([
+                    SystemMessage(content=EXECUTIVE_REWRITE_INSTRUCTION),
+                    HumanMessage(content=rewrite_request(latest_question, content)),
+                ])
+                candidate = _response_text(rewritten.content)
+                if (
+                    candidate
+                    and not _contains_raw_tool_markup(candidate)
+                    and not needs_executive_rewrite(latest_question, candidate)
+                ):
+                    content = candidate
+                    repair_model_name = _response_model_name(rewritten) or repair_model_name
+                else:
+                    logger.warning(
+                        "Executive answer rewrite did not satisfy quality guard (request_id=%s)",
+                        state.get("request_id"),
+                    )
+            except Exception as exc:
+                logger.warning(
+                    "Executive answer rewrite failed (request_id=%s error=%s)",
+                    state.get("request_id"),
+                    type(exc).__name__,
+                )
         final_message = AIMessage(
             content=content,
             id=f"chat-message:{state['current_assistant_message_id']}",

@@ -413,6 +413,26 @@ semantic retry. Raw tool syntax is never rendered to the user. Diagnostics recor
 failure category, request ID, iteration, and validated tool name, not response content or
 arguments.
 
+### 8.4 Adaptive Tool Routing
+
+The graph does not expose the complete tool catalog for every clear request. Before each
+tool-enabled model call, `backend/engine/graph/tool_router.py` deterministically selects a
+high-recall subset from the latest question and bounded conversation context:
+
+- Clear P6, SAP, transmission, portfolio, simulation, visualization, and report intents receive
+  the union of their relevant tools plus project resolution when applicable.
+- Generic follow-ups inherit a domain only when recent context identifies one unambiguous domain.
+- Mixed-domain questions receive the union of all identified domain tools.
+- Greetings, capability questions, and short definitions receive no operational tools.
+- Genuinely ambiguous operational requests retain the complete registered catalog rather than
+  risking an incorrect narrow route.
+- If an operational response reaches synthesis without calling a relevant evidence tool, the
+  graph retries once with the complete catalog and an explicit evidence requirement.
+
+Routing changes only which schemas the model sees. Every executed call still passes through the
+same strict validation, authorization, project-scope, cancellation, and bounded-result controls.
+Malformed-provider recovery also retains the complete catalog as a safety fallback.
+
 ## 9. Provider Abstraction
 
 `backend/engine/model_provider.py` centralizes invocation, structured JSON, tool calling,
@@ -660,9 +680,10 @@ conversation/tool payloads are not logged by the observability contract.
 | Authenticated frontend fetch | `frontend/src/auth/authenticatedFetch.ts`, `msal.ts` |
 | Chat/session API | `backend/routers/ai.py`, `chat_sessions.py`, `chat_feedback.py` |
 | Identity/authorization | `backend/security.py`, `backend/auth_claims.py` |
-| Graph construction | `backend/engine/graph/builder.py` |
+| Graph construction and tool routing | `backend/engine/graph/builder.py`, `backend/engine/graph/tool_router.py` |
 | Graph lifecycle/checkpoints | `backend/engine/graph/service.py` |
 | Context policy | `backend/engine/graph/context_policy.py` |
+| Final response quality | `backend/engine/response_quality.py` |
 | Authenticated tools | `backend/engine/graph/tools.py`, `backend/engine/agent.py` |
 | Provider adapters | `backend/engine/model_provider.py`, `openrouter_config.py` |
 | P6 accuracy logic | `backend/engine/kpi_engine.py`, `backend/engine/tools/p6_tools.py` |

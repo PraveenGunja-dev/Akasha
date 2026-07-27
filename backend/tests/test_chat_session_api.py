@@ -104,6 +104,30 @@ class ChatSessionApiTests(unittest.TestCase):
             404,
         )
 
+    def test_session_history_is_paginated_without_hiding_older_chats(self):
+        created_ids = []
+        for index in range(5):
+            response = self.client.post("/api/chat/sessions", json={"title": f"Chat {index}"})
+            created_ids.append(response.json()["session_id"])
+
+        first_page = self.client.get("/api/chat/sessions?skip=0&limit=2")
+        second_page = self.client.get("/api/chat/sessions?skip=2&limit=2")
+        final_page = self.client.get("/api/chat/sessions?skip=4&limit=2")
+
+        self.assertEqual(
+            [item["session_id"] for item in first_page.json()],
+            list(reversed(created_ids))[:2],
+        )
+        self.assertEqual(
+            [item["session_id"] for item in second_page.json()],
+            list(reversed(created_ids))[2:4],
+        )
+        self.assertEqual(
+            [item["session_id"] for item in final_page.json()],
+            list(reversed(created_ids))[4:],
+        )
+        self.assertEqual(self.client.get("/api/chat/sessions?limit=201").status_code, 422)
+
     def test_legacy_import_is_private_and_resumable(self):
         imported = self.client.post("/api/chat/sessions/legacy-import", json={
             "title": "Imported",

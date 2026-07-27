@@ -168,6 +168,85 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
     }
 
 
+def tc_search_lines(
+    db: Session,
+    region: str,
+    delayed_only: bool = False,
+    limit: int = 100,
+) -> dict:
+    """Search the latest transmission-line records for one state or region."""
+    normalized_region = region.strip()
+    query = _latest_edges_query(db).filter(
+        func.lower(models.TcNetworkEdge.region) == normalized_region.lower()
+    )
+    if delayed_only:
+        query = query.filter(models.TcNetworkEdge.is_delayed.is_(True))
+
+    total_matching = query.count()
+    latest_upload = query.with_entities(func.max(models.TcNetworkEdge.upload_time)).scalar()
+    edges = query.order_by(models.TcNetworkEdge.edge_id.asc()).limit(limit).all()
+    completed = in_progress = not_started = unknown = delayed = 0
+    lines = []
+    for edge in edges:
+        foundation_pct = _parse_pct(edge.foundation)
+        erection_pct = _parse_pct(edge.erection)
+        stringing_pct = _parse_pct(edge.stringing)
+        average_progress = _average_pct(foundation_pct, erection_pct, stringing_pct)
+        status_lower = (edge.normalized_status or edge.status or "").lower()
+        if "completed" in status_lower or "commissioned" in status_lower:
+            completed += 1
+        elif "progress" in status_lower or (average_progress is not None and average_progress > 0):
+            in_progress += 1
+        elif "not started" in status_lower or (
+            all(value is not None for value in (foundation_pct, erection_pct, stringing_pct))
+            and average_progress == 0
+        ):
+            not_started += 1
+        else:
+            unknown += 1
+        if edge.is_delayed:
+            delayed += 1
+
+        lines.append({
+            "edge_id": edge.edge_id,
+            "region": edge.region,
+            "from_label": edge.from_label,
+            "to_label": edge.to_label,
+            "status": edge.status,
+            "contractor": edge.contractor,
+            "projects": edge.projects,
+            "voltage": edge.voltage,
+            "length": edge.length,
+            "foundation_pct": foundation_pct,
+            "erection_pct": erection_pct,
+            "stringing_pct": stringing_pct,
+            "avg_progress": average_progress,
+            "is_delayed": edge.is_delayed,
+            "expected_date": edge.expected_date,
+            "scd": edge.scd,
+            "charged_date": edge.charged_date,
+            "days_delayed": _calc_delay_days(edge.expected_date, edge.scd),
+        })
+
+    return {
+        "region": edges[0].region if edges else normalized_region,
+        "has_data": total_matching > 0,
+        "total_matching": total_matching,
+        "returned": len(lines),
+        "delayed_only": delayed_only,
+        "status_breakdown_for_returned_lines": {
+            "completed": completed,
+            "in_progress": in_progress,
+            "not_started": not_started,
+            "unknown": unknown,
+            "delayed": delayed,
+        },
+        "lines": lines,
+        "_source_table": "tc_network_edge",
+        "_synced_at": latest_upload.isoformat() if latest_upload else None,
+    }
+
+
 def tc_get_at_risk_lines(
     db: Session,
     days_threshold: int = 60,

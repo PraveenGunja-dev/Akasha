@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   createChatSession,
   hasLegacyBrowserChats,
+  listChatSessions,
   migrateLegacyBrowserChats,
   sendChatMessage,
   submitChatFeedback,
@@ -39,6 +40,26 @@ test('creates a session through the server-generated session API', async () => {
   assert.equal(request.url, '/akasha/api/chat/sessions');
   assert.equal(request.init.method, 'POST');
   assert.deepEqual(JSON.parse(request.init.body), { title: 'Test' });
+});
+
+test('loads every page of chat history', async () => {
+  const firstPage = Array.from({ length: 100 }, (_, index) => ({
+    session_id: `session-${index}`,
+  }));
+  const secondPage = [{ session_id: 'session-100' }, { session_id: 'session-101' }];
+  const requests = [];
+  globalThis.fetch = async url => {
+    requests.push(url);
+    return jsonResponse(requests.length === 1 ? firstPage : secondPage);
+  };
+
+  const sessions = await listChatSessions();
+
+  assert.equal(sessions.length, 102);
+  assert.deepEqual(requests, [
+    '/akasha/api/chat/sessions?skip=0&limit=100',
+    '/akasha/api/chat/sessions?skip=100&limit=100',
+  ]);
 });
 
 test('legacy migration clears imported items incrementally and is retry-safe', async () => {

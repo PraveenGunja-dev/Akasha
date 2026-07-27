@@ -3,7 +3,7 @@
 from datetime import datetime, timedelta
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -161,13 +161,15 @@ def create_session(
 
 @router.get("")
 def list_sessions(
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=200),
     db: Session = Depends(get_db),
     user: AuthenticatedIdentity = Depends(get_current_user),
 ):
     sessions = _owned_session_query(db, user).order_by(
         models.ChatSession.updated_at.desc(),
         models.ChatSession.id.desc(),
-    ).limit(100).all()
+    ).offset(skip).limit(limit).all()
     return [_session_payload(session) for session in sessions]
 
 

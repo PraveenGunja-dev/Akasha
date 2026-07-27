@@ -3,6 +3,7 @@ import sys
 from pathlib import Path
 import unittest
 from unittest.mock import patch
+from typing import ClassVar
 
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -14,13 +15,23 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage, HumanMessage
 from langgraph.checkpoint.memory import InMemorySaver
 
-from engine.graph.builder import InvalidModelResponse, build_chat_graph
+from engine.graph.builder import InvalidModelResponse, SYSTEM_PROMPT, build_chat_graph
 from engine.graph.service import ChatGraphService
 from engine.graph.tools import ToolExecution, parse_raw_tool_call
 
 
 class ToolCapableFakeModel(GenericFakeChatModel):
     def bind_tools(self, _tools, **_kwargs):
+        return self
+
+
+class ToolBindingCaptureFakeModel(ToolCapableFakeModel):
+    bound_tool_sets: ClassVar[list[tuple[str, ...]]] = []
+
+    def bind_tools(self, tools, **_kwargs):
+        self.bound_tool_sets.append(tuple(
+            tool["function"]["name"] for tool in tools
+        ))
         return self
 
 
@@ -45,6 +56,13 @@ def graph_input(user_id: str, user_message_id: int, assistant_message_id: int, t
 
 
 class GraphStructureTests(unittest.TestCase):
+    def test_system_prompt_defaults_to_adaptive_executive_answers(self):
+        self.assertIn("answer the exact question in the first sentence", SYSTEM_PROMPT)
+        self.assertIn("roughly 80-180 words", SYSTEM_PROMPT)
+        self.assertIn("Expand when the user asks", SYSTEM_PROMPT)
+        self.assertIn("Never discuss tools", SYSTEM_PROMPT)
+        self.assertIn("Do not append unsolicited recommendations", SYSTEM_PROMPT)
+
     def test_tool_loop_forces_final_answer_at_configured_model_call_limit(self):
         model = ToolCapableFakeModel(messages=iter([
             AIMessage(content="", tool_calls=[{
@@ -68,6 +86,50 @@ class GraphStructureTests(unittest.TestCase):
         self.assertEqual(result["tool_names"], ["tc_get_network_summary"])
         self.assertEqual(result["messages"][-1].content, "bounded final answer")
 
+    def test_graph_binds_only_routed_tools_for_clear_progress_question(self):
+        ToolBindingCaptureFakeModel.bound_tool_sets = []
+        model = ToolBindingCaptureFakeModel(messages=iter([
+            AIMessage(content="", tool_calls=[{
+                "name": "portfolio_resolve_project_id",
+                "args": {"name": "BAIYA solar project"},
+                "id": "call-1",
+            }]),
+            AIMessage(content="", tool_calls=[{
+                "name": "p6_get_project_summary",
+                "args": {"project_id": "FY25-BAIYA_600MW"},
+                "id": "call-2",
+            }]),
+            AIMessage(content="The project is 61.2% complete as of 11 July 2026."),
+        ]))
+        graph = build_chat_graph(model, context_window=32_768)
+        state = graph_input(
+            "user-a",
+            1,
+            2,
+            "What is the current progress of the BAIYA solar project?",
+        )
+        state["run_id"] = "a" * 32
+
+        with patch("engine.graph.builder._ensure_run_active", return_value=None), patch(
+            "engine.graph.builder.execute_authenticated_tool",
+            side_effect=[
+                ToolExecution('{"status":"ok","data":{"project_id":"FY25-BAIYA_600MW"}}', "ok"),
+                ToolExecution('{"status":"ok","data":{"duration_percent_complete":61.2}}', "ok"),
+            ],
+        ):
+            result = graph.invoke(state)
+
+        routed_tools = ToolBindingCaptureFakeModel.bound_tool_sets[-1]
+        self.assertIn("portfolio_resolve_project_id", routed_tools)
+        self.assertIn("p6_get_project_summary", routed_tools)
+        self.assertNotIn("sap_get_po_summary", routed_tools)
+        self.assertNotIn("tc_search_lines", routed_tools)
+        self.assertLess(len(routed_tools), len(ToolBindingCaptureFakeModel.bound_tool_sets[0]))
+        self.assertEqual(
+            result["tool_names"],
+            ["portfolio_resolve_project_id", "p6_get_project_summary"],
+        )
+
     def test_empty_final_answer_is_repaired_once(self):
         model = ToolCapableFakeModel(messages=iter([
             AIMessage(content=""),
@@ -80,6 +142,102 @@ class GraphStructureTests(unittest.TestCase):
         result = graph.invoke(graph_input("user-a", 1, 2, "answer me"))
         self.assertIn("repaired answer", result["messages"][-1].content)
         self.assertEqual(result["model_name"], "fallback/model")
+
+    def test_overproduced_status_answer_is_rewritten_without_tools(self):
+        verbose_answer = """# Project Status
+
+| Metric | Value |
+|---|---|
+| Progress | 61.2% |
+| Forecast finish | 29 March 2027 |
+
+## Schedule
+The project is approximately 12 months behind its 26 March 2026 baseline finish.
+
+## Key Observations
+SPI and CPI are unavailable.
+
+## Suggested Next Steps
+Generate a chart and run another forecast. Would you like me to do that?"""
+        concise_answer = (
+            "The project is 61.2% complete and is forecast to finish on 29 March 2027, "
+            "approximately 12 months after its 26 March 2026 baseline finish. SPI and CPI "
+            "are unavailable."
+        )
+        model = ToolCapableFakeModel(messages=iter([
+            AIMessage(content=verbose_answer),
+            AIMessage(content=concise_answer),
+        ]))
+        graph = build_chat_graph(model, context_window=32_768)
+
+        result = graph.invoke(graph_input(
+            "user-a",
+            1,
+            2,
+            "What is the current progress of the BAIYA solar project as of today?",
+        ))
+
+        self.assertEqual(result["messages"][-1].content, concise_answer)
+
+    def test_explicit_detailed_table_request_is_not_rewritten(self):
+        detailed_answer = """# Detailed Project Status
+
+| Metric | Value |
+|---|---|
+| Progress | 61.2% |
+| Forecast finish | 29 March 2027 |
+
+## Schedule Analysis
+The requested detailed schedule analysis is included here."""
+        model = ToolCapableFakeModel(messages=iter([
+            AIMessage(content=detailed_answer),
+        ]))
+        graph = build_chat_graph(model, context_window=32_768)
+        state = graph_input(
+            "user-a",
+            1,
+            2,
+            "Give me a detailed project analysis with a comparison table.",
+        )
+        state["tool_names"] = ["p6_get_project_summary"]
+
+        result = graph.invoke(state)
+
+        self.assertEqual(result["messages"][-1].content, detailed_answer)
+
+    def test_operational_answer_without_evidence_retries_with_full_catalog(self):
+        model = ToolCapableFakeModel(messages=iter([
+            AIMessage(content="The project is 50% complete."),
+            AIMessage(content="", tool_calls=[{
+                "name": "p6_get_project_summary",
+                "args": {"project_id": "FY25-BAIYA_600MW"},
+                "id": "call-1",
+            }]),
+            AIMessage(content="The project is 61.2% complete as of 11 July 2026."),
+        ]))
+        graph = build_chat_graph(model, context_window=32_768)
+        state = graph_input(
+            "user-a",
+            1,
+            2,
+            "What is the current progress of FY25-BAIYA_600MW?",
+        )
+        state["run_id"] = "a" * 32
+
+        with patch("engine.graph.builder._ensure_run_active", return_value=None), patch(
+            "engine.graph.builder.execute_authenticated_tool",
+            return_value=ToolExecution(
+                '{"status":"ok","data":{"duration_percent_complete":61.2}}',
+                "ok",
+            ),
+        ):
+            result = graph.invoke(state)
+
+        self.assertEqual(result["tool_names"], ["p6_get_project_summary"])
+        self.assertEqual(
+            result["messages"][-1].content,
+            "The project is 61.2% complete as of 11 July 2026.",
+        )
 
     def test_repeated_empty_final_answer_fails_instead_of_completing_blank(self):
         model = ToolCapableFakeModel(messages=iter([
@@ -149,6 +307,7 @@ class GraphStructureTests(unittest.TestCase):
                 "args": {"name": "ASEJ6PL_S07_FT_300MW_PPA"},
                 "id": "call-1",
             }]),
+            AIMessage(content="The project risk data is unavailable."),
             AIMessage(content="The project risk data is unavailable."),
         ]))
         graph = build_chat_graph(model, context_window=32_768)
