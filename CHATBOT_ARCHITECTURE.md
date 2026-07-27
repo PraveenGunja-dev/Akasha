@@ -73,6 +73,67 @@ control.
 
 ## 4. High-Level Runtime Architecture
 
+```mermaid
+flowchart LR
+    subgraph Client["React Client"]
+        UI["AICopilot"]
+        Compact["Compact Chat"]
+        Transport["Authenticated Fetch + SSE Parser"]
+        UI --> Transport
+        Compact --> Transport
+    end
+
+    subgraph API["FastAPI Application"]
+        Auth["Entra / Development Identity"]
+        Session["Session Ownership + Chat Run"]
+        Select{"Server-Owned Engine Selection"}
+        Legacy["Legacy ReAct Rollback Path"]
+
+        subgraph Graph["LangGraph Runtime"]
+            Validate["Validate Owner + Run"]
+            Context["Token-Aware Context"]
+            Agent["Tool-Calling Agent"]
+            Final["Final Response Guard"]
+            Validate --> Context --> Agent --> Final
+        end
+
+        Auth --> Session --> Select
+        Select -->|legacy| Legacy
+        Select -->|langgraph / canary| Validate
+    end
+
+    subgraph Data["Data and Persistence"]
+        AppDB[("Application PostgreSQL")]
+        Checkpoints[("LangGraph Checkpoints")]
+        Sources[("P6 / SAP / TC / Pulse Tables")]
+        Files[("Temporary Report Files")]
+    end
+
+    subgraph Models["Provider Abstraction"]
+        Provider["Normalized Provider Adapter"]
+        Azure["Azure OpenAI"]
+        OpenRouter["OpenRouter"]
+        Groq["Groq"]
+        Ollama["Ollama"]
+        Provider --> Azure
+        Provider --> OpenRouter
+        Provider --> Groq
+        Provider --> Ollama
+    end
+
+    Transport -->|"POST /akasha/api/chat"| Auth
+    Session <--> AppDB
+    Validate <--> Checkpoints
+    Agent --> Sources
+    Agent <--> Provider
+    Agent --> Files
+    Final -->|"Versioned SSE"| Transport
+```
+
+The diagram separates four important boundaries: the browser is not authoritative for
+history or identity, FastAPI owns authorization and run lifecycle, LangGraph owns resumable
+execution, and PostgreSQL/source tables own durable facts.
+
 ```text
 React AICopilot / compact chat
         |
@@ -150,6 +211,45 @@ A clean network EOF without `done` is treated as interrupted, not successful.
 The current backend generates the final model answer before splitting it into textual SSE
 chunks. The protocol is streaming-safe, but this is not provider-token streaming.
 
+### 5.4 End-to-End Chat Request Sequence
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant UI as AICopilot
+    participant API as FastAPI Chat Route
+    participant DB as Application PostgreSQL
+    participant LG as LangGraph
+    participant CP as PostgresSaver
+    participant Tool as Authenticated Tool Runtime
+    participant LLM as Configured Model
+
+    User->>UI: Submit one new message
+    UI->>API: POST /akasha/api/chat + session ID
+    API->>API: Validate identity and session ownership
+    API->>DB: Create user message, assistant placeholder, chat_run
+    API-->>UI: SSE start + running status
+    API->>LG: Invoke with canonical new turn
+    LG->>CP: Restore checkpoint by thread_id
+    LG->>LLM: Prompt + bounded context + tool schemas
+    alt Model requests operational data
+        LLM-->>LG: Native or safely normalized tool call
+        LG->>Tool: Execute with server-injected identity/scope
+        Tool->>DB: Query deterministic source data
+        DB-->>Tool: P6 / SAP / TC / Pulse facts
+        Tool-->>LG: Bounded typed result
+        LG->>LLM: Complete tool-call/result group
+    else Conversational request
+        LLM-->>LG: Direct response
+    end
+    LG->>CP: Save execution checkpoint
+    LG-->>API: Final guarded answer + model + tools
+    API->>DB: Complete assistant message and chat_run
+    API-->>UI: SSE tokens, metadata, done
+    UI-->>User: Markdown, sources, charts, or downloads
+```
+
 ## 6. API, Identity, and Authorization
 
 `backend/main.py` registers all business routers behind CEO/PMAG authentication.
@@ -178,6 +278,33 @@ and user. Unknown or cross-user session/artifact identifiers return non-disclosi
 The model cannot supply user identity, tenant, role, session ownership, or run ownership.
 
 ## 7. Conversation and Execution Persistence
+
+```mermaid
+flowchart TB
+    Identity["Authenticated Tenant + User"] --> Session["chat_session\ncanonical private thread"]
+    Session --> Message["chat_message\nvisible transcript + status"]
+    Session --> Run["chat_run\none lifecycle per turn"]
+    Message --> Feedback["chat_feedback\nowner-checked rating"]
+    Session --> Artifact["report_artifact\n24-hour file metadata"]
+    Session -. "same random session_id" .-> Thread["LangGraph thread_id"]
+    Thread --> Checkpoint["checkpoints"]
+    Checkpoint --> Blob["checkpoint_blobs"]
+    Checkpoint --> Writes["checkpoint_writes"]
+
+    Source[("P6 / SAP / TC / Pulse")] -->|"live facts only"| Message
+    Summary["Derived Conversation Summary"] -->|"continuity, never evidence"| Checkpoint
+
+    classDef app fill:#e8f1ff,stroke:#2563eb,color:#0f172a;
+    classDef graph fill:#f3e8ff,stroke:#7c3aed,color:#0f172a;
+    classDef source fill:#ecfdf5,stroke:#059669,color:#0f172a;
+    class Session,Message,Run,Feedback,Artifact app;
+    class Thread,Checkpoint,Blob,Writes,Summary graph;
+    class Source source;
+```
+
+The solid application-table relationships represent user-visible ownership and lifecycle.
+The dotted `session_id`/`thread_id` relationship joins that application thread to LangGraph
+execution without making checkpoints the canonical transcript.
 
 ### 7.1 Application Tables
 
@@ -208,6 +335,30 @@ so an incomplete tool protocol cannot poison resumed history.
 ## 8. LangGraph Execution
 
 The parent graph in `backend/engine/graph/builder.py` is:
+
+```mermaid
+flowchart TD
+    Start((START)) --> Validate["validate_context\nowner key + active run"]
+    Validate --> Compact{"Context above\nsummary threshold?"}
+    Compact -->|yes| Summarize["Summarize older complete turns"]
+    Compact -->|no| Model
+    Summarize --> Model["Agent model node"]
+
+    Model --> Response{"Response shape"}
+    Response -->|native tool call| Tools["Authenticated tools"]
+    Response -->|valid XML-style registered call| Normalize["Normalize + Pydantic validate"]
+    Normalize --> Tools
+    Response -->|empty / malformed| Repair["One tool-enabled semantic retry"]
+    Repair --> Response
+    Response -->|final text| Finalize["finalize\nvisible-text + markup guard"]
+    Tools --> Cancel{"Run cancelled?"}
+    Cancel -->|no| Model
+    Cancel -->|yes| Cancelled((CANCELLED))
+    Finalize --> End((END))
+
+    Model -. "model-call budget" .-> Forced["Final call with tools disabled"]
+    Forced --> Finalize
+```
 
 ```text
 START
@@ -301,6 +452,41 @@ Project Progress Report MVP.
 
 ## 11. Facts and Accuracy Improvements
 
+```mermaid
+flowchart LR
+    Question["Operational Question"] --> Resolve["Resolve Canonical Project"]
+    Resolve --> Authorize["Authorize Project Scope"]
+    Authorize --> Query["Deterministic Tool Query"]
+
+    Query --> Progress["P6 Duration Progress\nnormalized fraction to percent"]
+    Query --> Counts["Completed / In Progress / Not Started"]
+    Query --> Indicators{"SPI / CPI present?"}
+    Query --> Freshness["Data Date + Last Sync"]
+
+    Indicators -->|yes| Classify["Use source indicator semantics"]
+    Indicators -->|no| Unknown["Keep UNKNOWN\nno proxy classification"]
+
+    Progress --> Synthesis["Grounded Answer Synthesis"]
+    Counts --> Synthesis
+    Classify --> Synthesis
+    Unknown --> Synthesis
+    Freshness --> Synthesis
+
+    Synthesis --> Guard{"Output Guard"}
+    Guard -->|supported| Answer["Answer + limitations + sources"]
+    Guard -->|empty / raw tool markup| Repair["Bounded repair or safe failure"]
+    Repair --> Guard
+
+    classDef fact fill:#ecfdf5,stroke:#059669,color:#0f172a;
+    classDef warning fill:#fff7ed,stroke:#ea580c,color:#0f172a;
+    class Progress,Counts,Freshness,Classify fact;
+    class Unknown,Repair warning;
+```
+
+The accuracy strategy is deliberately semantic rather than cosmetic: code computes or reads
+facts under documented meanings, while the model selects tools and explains returned facts.
+Missing indicators are never replaced with plausible-looking substitutes.
+
 ### 11.1 Evidence-First Prompt and Tool Use
 
 Operational claims must come from tools. The system prompt requires project-name resolution,
@@ -355,6 +541,46 @@ accuracy percentage should be claimed yet.
 ## 12. Project Progress Report MVP
 
 ### 12.1 Chat Flow
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User
+    participant Chat as AICopilot
+    participant Graph as LangGraph Agent
+    participant Preview as Preview Tool
+    participant Dataset as Canonical Dataset Builder
+    participant Narrative as Structured Narrative
+    participant Render as PDF / DOCX Renderers
+    participant DB as report_artifact
+    participant Download as Authorized Download API
+
+    User->>Chat: Generate Project Progress Report for Project X
+    Chat->>Graph: New chat turn
+    Graph->>Preview: Resolve project and prepare latest-data preview
+    Preview->>Dataset: Query P6, SAP, TC, Pulse and freshness
+    Dataset-->>Preview: Scope + missing sources + cutoff
+    Preview-->>Graph: Preview + session/project-bound token
+    Graph-->>Chat: Show sections, formats, warnings, cutoff
+    Chat-->>User: Ask for explicit confirmation
+
+    User->>Chat: Confirm and generate PDF and DOCX
+    Chat->>Graph: Confirmation turn
+    Graph->>Dataset: Validate token and rebuild latest dataset
+    Dataset->>Narrative: Deterministic facts only
+    alt Valid structured AI paragraph
+        Narrative-->>Dataset: Polished executive summary
+    else Provider failure or reasoning leakage
+        Narrative-->>Dataset: Deterministic fallback summary
+    end
+    Dataset->>Render: One shared dataset
+    Render-->>DB: Opaque IDs, checksums, MIME, owner, 24h expiry
+    DB-->>Graph: Authenticated PDF and DOCX links
+    Graph-->>Chat: Download buttons + expiry
+    User->>Download: Download artifact
+    Download->>DB: Re-authorize tenant and owner
+    Download-->>User: PDF or DOCX file
+```
 
 ```text
 User asks for a Project Progress Report
