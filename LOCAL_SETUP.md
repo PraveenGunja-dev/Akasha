@@ -1,475 +1,650 @@
+# Akasha Complete Local Setup and Test Guide
 
-# Akasha local setup guide
+## 1. Purpose
 
-This guide is for a developer who has just cloned the main branch and wants to run Akasha on a Windows laptop.
+This runbook takes a coworker from a fresh clone of `feature/langgraph-refactor` to a
+working local Akasha application with:
 
-The repository has two applications:
+- Private server-backed chat sessions.
+- LangGraph execution and PostgreSQL checkpoints.
+- P6/SAP/TC/Pulse-backed tools when source data is available.
+- Corrected project progress and SPI/CPI behavior.
+- Chat cancellation and durable failed/cancelled states.
+- Project Progress Report previews and PDF/DOCX downloads.
+- Development authentication or optional Microsoft Entra authentication.
 
-- backend/: Python FastAPI API, SQLAlchemy models, and Alembic database migrations.
-- frontend/: React + TypeScript application built with Vite.
+The commands target Windows PowerShell. Run repository commands from the directory stated
+in each section.
 
-The normal local setup runs the backend on port 3510, the Vite frontend on port 5173, and PostgreSQL on port 5432.
+## 2. What a Fresh Clone Does and Does Not Include
 
-## 1. Clone the main branch
+The repository contains application code, schema models, incremental SQL migrations, and
+tests. It does not contain:
 
-Open PowerShell or Command Prompt and run:
+- `backend/.env` or any provider/source credentials.
+- A production database dump.
+- LangGraph checkpoint tables until the setup command is run.
+- `node_modules`, Python virtual environments, or generated report files.
+- Guaranteed current P6, SAP, TC, or Pulse business data.
 
-~~~powershell
-git clone <repository-url> Akasha
-cd Akasha
-git switch main
-git pull --ff-only origin main
-~~~
+Schema setup is enough to test authentication, sessions, lifecycle, greetings, and mocked
+automated tests. Data-backed questions and reports require an approved database snapshot or
+successful source synchronization.
 
-Replace <repository-url> with the repository URL supplied by the project owner.
+## 3. Prerequisites
 
-Confirm that the correct branch is checked out:
+Install:
 
-~~~powershell
-git branch --show-current
-git status
-~~~
+1. Git.
+2. Python 3.12 (recommended project baseline).
+3. Node.js 20.19+ with npm. Node 22.13+ is also suitable.
+4. PostgreSQL with the `psql` client; PostgreSQL 16 or 17 is recommended.
+5. Optional: DBeaver or pgAdmin for database inspection.
 
-The branch should be main. Do not copy generated folders such as node_modules, Python virtual environments, or a .env file from another machine.
+Verify:
 
-## 2. Install the required software
-
-Install these applications before installing project dependencies:
-
-1. Git - required to clone and update the repository.
-2. Python 3.12 - used by the backend. Python 3.11 or newer may work, but Python 3.12 is the recommended local version for this project.
-3. Node.js - install Node.js 20.19 or newer. Node.js 22.13+ or 24+ also satisfies the dependency requirements in the lock file. npm is included with Node.js.
-4. PostgreSQL 17 - the database server. Use the default port 5432 unless another local PostgreSQL installation is already using it.
-5. DBeaver Community - the database GUI used in this guide.
-
-Optional:
-
-- Ollama if local AI/chat functionality is required. The backend can start without Ollama, but AI requests need either a local Ollama server or credentials for another configured provider.
-- VS Code or another editor for editing backend/.env and source code.
-
-Check that the command-line tools are available:
-
-~~~powershell
+```powershell
 git --version
-python --version
+py -3.12 --version
 node --version
 npm --version
-~~~
+psql --version
+```
 
-If PowerShell blocks npm.ps1, use npm.cmd instead, for example npm.cmd --version and npm.cmd run dev.
+If `npm.ps1` is blocked, use `npm.cmd` for npm commands. If `psql` is not on `PATH`, use
+its full installation path or execute the SQL files through DBeaver/pgAdmin.
 
-## 3. Install and configure PostgreSQL
+## 4. Clone the Feature Branch
 
-### 3.1 Install PostgreSQL
+```powershell
+git clone --branch feature/langgraph-refactor --single-branch https://github.com/PraveenGunja-dev/Akasha.git
+Set-Location Akasha
+git status
+git branch --show-current
+```
 
-During PostgreSQL installation:
+Expected branch:
 
-- Keep the PostgreSQL service enabled.
-- Keep the default port as 5432.
-- Keep the default administrative username as postgres.
-- Choose a local password and remember it. This password is not defined by the repository.
-The PostgreSQL password chosen during installation is the password used by the backend in DATABASE_URL and by DBeaver when connecting to PostgreSQL.
+```text
+feature/langgraph-refactor
+```
 
-### 3.2 Create the Akasha database with DBeaver
+Do not copy `.env`, `.venv`, `node_modules`, `dist`, report artifacts, or database files
+from another developer.
 
-Use DBeaver to create and verify the local PostgreSQL database.
+## 5. Create PostgreSQL Database
 
-1. Open DBeaver and select New Database Connection.
-2. Select PostgreSQL.
-3. Enter:
-   - Host: localhost
-   - Port: 5432
-   - Database: postgres
-   - Username: postgres
-   - Password: The password chosen during PostgreSQL installation
-4. Click Test Connection, then save the connection.
-5. Open a SQL editor for the connection and run:
+Use a local PostgreSQL administrator account to create the database once:
 
-~~~sql
-CREATE DATABASE akasha_local OWNER postgres;
-~~~
+```powershell
+psql -h localhost -U postgres -d postgres -c "CREATE DATABASE akasha_local;"
+```
 
-6. Create a second DBeaver connection using database akasha_local, or edit the connection to use that database.
+If it already exists, PostgreSQL will report that fact; do not delete a database containing
+data you need.
 
-If the database already exists, do not run the CREATE DATABASE statement again.
+Test the connection:
 
-## 4. Create the Python environment and install backend packages
+```powershell
+psql -h localhost -U postgres -d akasha_local -c "SELECT current_database(), current_user;"
+```
 
-All backend dependency installation, scripts, tests, and server commands must use
-`backend/.venv`. Do not install Akasha dependencies into the system or user-level
-Python environment. When automation cannot activate the environment, invoke
-`backend/.venv/Scripts/python.exe` explicitly.
+## 6. Backend Virtual Environment
 
-Open a new terminal at the repository root and run:
+From the repository root:
 
-~~~powershell
-cd backend
+```powershell
+Set-Location backend
 py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
+& ".venv\Scripts\Activate.ps1"
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
-~~~
+python -m pip check
+```
 
-If py -3.12 is not available, use the installed Python executable:
+If activation is blocked:
 
-~~~powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-~~~
-
-If PowerShell refuses to activate the virtual environment, run this once as the current Windows user and then retry:
-
-~~~powershell
+```powershell
 Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
-~~~
+```
 
-The backend must be run from the backend directory. This matters because the code loads backend/.env using the current working directory.
+All backend scripts, tests, and server commands should use `backend/.venv`. You can always
+replace `python` below with `& ".venv\Scripts\python.exe"`.
 
-## 5. Install frontend packages
+## 7. Create `backend/.env`
 
-Open a second terminal at the repository root and run:
+Create `backend/.env`; it is ignored by Git. Never commit or share it.
 
-~~~powershell
-cd frontend
-npm ci
-~~~
+### 7.1 Recommended Local Configuration: OpenRouter + LangGraph
 
-npm ci uses the committed package-lock.json and is the preferred command after a fresh clone. If PowerShell blocks npm scripts, use:
+```dotenv
+# Application database used by SQLAlchemy.
+DATABASE_URL=postgresql+psycopg2://postgres:<URL_ENCODED_PASSWORD>@localhost:5432/akasha_local
 
-~~~powershell
-npm.cmd ci
-~~~
+# Optional. Use a plain PostgreSQL DSN when checkpoints use another database.
+# AKASHA_LANGGRAPH_CHECKPOINT_DSN=postgresql://postgres:<URL_ENCODED_PASSWORD>@localhost:5432/akasha_local
 
-No frontend .env file is required for the normal local run. The Vite configuration in frontend/vite.config.ts proxies /akasha/api requests to http://localhost:3510.
+# Local-only identity selector. Never expose this mode to an untrusted network.
+AKASHA_AUTH_MODE=development
+AKASHA_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3510
 
-## 6. Create the database schema
+# Activate the new graph for all local chat sessions.
+AKASHA_CHAT_ENGINE=langgraph
+AKASHA_LANGGRAPH_ROLLOUT_PERCENT=100
 
-Make sure PostgreSQL is running and that backend/.env contains a working DATABASE_URL.
+# Model provider. The selected model and every fallback must support tools/tool_choice.
+AI_PROVIDER=openrouter
+OPENROUTER_API_KEY=<YOUR_OPENROUTER_KEY>
+OPENROUTER_MODEL=<TOOL_CAPABLE_OPENROUTER_MODEL_ID>
 
-In the backend terminal, from the backend directory with the virtual environment active, run:
+# Set an approved ordered list, or leave empty to disable cross-model fallbacks.
+OPENROUTER_FALLBACK_MODELS=
+OPENROUTER_APP_URL=http://localhost:5173/akasha/
+OPENROUTER_APP_NAME=Akasha
 
-~~~powershell
-alembic upgrade head
-~~~
+# Optional runtime tuning. Defaults are normally suitable.
+AKASHA_MODEL_OUTPUT_TOKENS=2048
+AKASHA_GRAPH_MAX_MODEL_CALLS=12
+AKASHA_GRAPH_RECURSION_LIMIT=40
+AKASHA_CHAT_RUN_STALE_SECONDS=600
+AKASHA_LANGGRAPH_POOL_SIZE=10
 
-This applies the database migrations tracked in backend/alembic/versions/ and creates the tables in akasha_local. The migration history is loaded from backend/.env; do not edit the placeholder sqlalchemy.url in backend/alembic.ini for normal local setup.
+# The provider/model context window is discovered automatically.
+# Set this only as an intentional upper-bound override.
+# AKASHA_MODEL_CONTEXT_WINDOW=32768
 
-You can confirm that the database connection works with:
+# Report MVP.
+AKASHA_REPORT_AI_NARRATIVE=true
+# AKASHA_REPORT_ARTIFACT_DIR=D:\akasha-report-artifacts
 
-~~~powershell
-python -c "from sqlalchemy import text; from database import engine; print(engine.connect().execute(text('SELECT 1')).scalar())"
-~~~
+# Do not perform runtime schema changes during normal startup.
+AUTO_SETUP_DB=false
+```
 
-The command should print 1.
+Use only provider/model combinations approved for the sensitivity of project data. Free
+model endpoints may log prompts or use data under provider-specific terms.
 
-In DBeaver, refresh the akasha_local database and look under the public schema. You should see the application tables and an alembic_version table.
+### 7.2 Ollama Alternative
 
-### 6.1 Prepare Phase 2 chat persistence
+The Ollama model must actually support native tool calls. Report AI narrative also requires
+structured JSON; otherwise set `AKASHA_REPORT_AI_NARRATIVE=false` and the deterministic
+narrative will be used.
 
-Run `backend/migrations/phase2_langgraph_context.sql` against the Akasha PostgreSQL
-database using pgAdmin, DBeaver, or `psql`. This creates the application-owned
-`chat_run` table and adds the Phase 2 lifecycle columns and indexes to the chat tables.
+```dotenv
+AI_PROVIDER=ollama
+OLLAMA_ENDPOINT=http://localhost:11434/v1
+OLLAMA_MODEL=<INSTALLED_TOOL_CAPABLE_MODEL>
+OLLAMA_SUPPORTS_TOOL_CALLING=true
+OLLAMA_SUPPORTS_STRUCTURED_JSON=true
+```
 
-Then provision the separate LangGraph-owned checkpoint tables from the `backend`
-directory. Use the project virtual environment explicitly:
+Do not set capability flags to `true` unless the selected model has been tested for them.
 
-~~~powershell
-.\.venv\Scripts\python.exe scripts\setup_langgraph_checkpoint.py
-~~~
+### 7.3 Azure OpenAI Alternative
 
-The setup command requires `DATABASE_URL` or `AKASHA_LANGGRAPH_CHECKPOINT_DSN` to
-reference PostgreSQL. `AKASHA_LANGGRAPH_CHECKPOINT_DSN` takes precedence when both are
-configured. The selected database user must be allowed to create and migrate tables.
-API startup does not run checkpoint DDL.
+```dotenv
+AI_PROVIDER=azure
+AZURE_OPENAI_ENDPOINT=<AZURE_ENDPOINT>
+AZURE_OPENAI_API_KEY=<AZURE_KEY>
+AZURE_OPENAI_DEPLOYMENT_NAME=<DEPLOYMENT>
+AZURE_OPENAI_MODEL=<UNDERLYING_MODEL_NAME>
+AZURE_OPENAI_API_VERSION=<API_VERSION>
+```
 
-The command is idempotent and creates or upgrades these LangGraph tables in the selected
-database's default schema, normally `public`:
+`AZURE_OPENAI_MODEL` should be the underlying model identity so context-window metadata can
+be resolved when the deployment has a custom name.
 
-- `checkpoint_migrations`
-- `checkpoints`
-- `checkpoint_blobs`
-- `checkpoint_writes`
+### 7.4 Groq Alternative
 
-To verify the result in pgAdmin, open the database used by the selected connection string,
-then refresh `Schemas > public > Tables`. The four checkpoint tables should be visible.
-They can also be verified in the pgAdmin query tool:
+```dotenv
+AI_PROVIDER=groq
+AKASHA_AI_API_KEY=<GROQ_KEY>
+GROQ_MODEL=llama-3.3-70b-versatile
+```
 
-~~~sql
-SELECT table_schema, table_name
-FROM information_schema.tables
-WHERE table_name IN (
-    'checkpoint_migrations',
-    'checkpoints',
-    'checkpoint_blobs',
-    'checkpoint_writes'
-)
-ORDER BY table_schema, table_name;
-~~~
+## 8. Create the Application Schema
 
-Creating the LangGraph tables does not replace
-`backend/migrations/phase2_langgraph_context.sql`; both setup steps are required before
-enabling `canary` or `langgraph` chat traffic.
+This branch does not yet contain a complete Alembic baseline for a completely empty
+database. Use the explicit local bootstrap below, then apply all reviewed incremental SQL
+migrations. Do not use `alembic upgrade head`; there is no active migration tree for this
+branch.
 
-Keep the legacy engine active while validating the deployment:
+From `backend` with `.venv` active:
 
-~~~dotenv
-AKASHA_CHAT_ENGINE=legacy
-AKASHA_LANGGRAPH_ROLLOUT_PERCENT=0
-~~~
+```powershell
+python -c "from database import Base, engine; import models; Base.metadata.create_all(bind=engine); print('Application tables ready')"
+```
 
-The LangGraph context budget is resolved automatically from the selected model. Recognized
-OpenAI/Azure models use LangChain model-profile metadata; OpenRouter, Ollama, and Groq use
-their provider model metadata. `AKASHA_MODEL_CONTEXT_WINDOW` is optional and should only
-be set as an explicit override for a custom deployment that cannot report its input limit.
-Unknown limits fail LangGraph startup rather than silently assuming a potentially unsafe
-window size. For Azure deployments with a custom deployment name, set `AZURE_OPENAI_MODEL`
-to the underlying model name so its profile can be resolved.
+This creates missing application tables from current SQLAlchemy metadata. It does not load
+business data.
 
-### 6.2 OpenRouter model fallbacks
+## 9. Apply Reviewed SQL Migrations
 
-When `AI_PROVIDER=openrouter`, Akasha sends an ordered OpenRouter-native model fallback
-list. OpenRouter tries the primary `OPENROUTER_MODEL` first and then the configured
-fallbacks when a model is rate-limited, unavailable, moderated, or rejects the request.
-The same `OPENROUTER_API_KEY` is used for every model.
+Still from `backend`, run these in order:
 
-The default fallback order is:
+```powershell
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase1_chat_ownership.sql
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase2_langgraph_context.sql
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase5_mvp_reports.sql
+```
 
-1. `google/gemma-4-31b-it:free`
-2. `poolside/laguna-m.1:free`
-3. `nvidia/nemotron-3-super-120b-a12b:free`
+The migrations are designed to be rerunnable using `IF NOT EXISTS` and reviewed constraint
+replacement where appropriate. They provide:
 
-Override the order with a comma-separated value, or set an empty value to disable
-cross-model fallbacks:
+- Phase 1: session ownership and canonical chat metadata.
+- Phase 2: engine/run/message lifecycle and cancellation state.
+- Report MVP: temporary report-artifact records.
 
-~~~dotenv
-OPENROUTER_FALLBACK_MODELS=google/gemma-4-31b-it:free,poolside/laguna-m.1:free,nvidia/nemotron-3-super-120b-a12b:free
-~~~
+If using DBeaver/pgAdmin, connect to `akasha_local` and execute those files in the same order.
 
-Startup validates that every configured model exists, supports `tools` and `tool_choice`,
-and reports a context window. The conversation context budget uses the smallest window
-across the primary and fallback models. OpenRouter is also instructed to route only to
-endpoints that support all requested parameters.
+## 10. Provision LangGraph Checkpoints
 
-The selected response model is stored on `chat_run.model` and `chat_message.model`.
-After updating to a version containing this feature, rerun
-`backend/migrations/phase2_langgraph_context.sql`; it adds these columns idempotently.
+From `backend`:
 
-Security warning: the configured defaults are free endpoints. Their provider terms may
-permit prompt/output logging or use for model improvement, and NVIDIA explicitly advises
-against sending confidential information to its free endpoint. Do not enable these
-fallbacks for sensitive project data without organizational privacy and security approval.
-An OpenRouter account-wide credit or key-level rate limit can still affect every fallback;
-model fallback primarily addresses model-specific and upstream-provider limits.
+```powershell
+python scripts/setup_langgraph_checkpoint.py
+```
 
-For a stable canary rollout, set `AKASHA_CHAT_ENGINE=canary` and increase
-`AKASHA_LANGGRAPH_ROLLOUT_PERCENT` from 0 to 100. Setting
-`AKASHA_CHAT_ENGINE=legacy` is the immediate rollback switch. Use
-`AKASHA_CHAT_ENGINE=langgraph` only after checkpoint and configured-model smoke tests
-pass. The client cannot select or override the engine.
+Expected output:
 
-### Alternative: let run.py create the database
+```text
+LangGraph checkpoint schema is ready.
+```
 
-backend/run.py contains an optional automatic setup path. If you have not created akasha_local manually, you can set:
+This idempotently creates/upgrades LangGraph-owned tables such as `checkpoints`,
+`checkpoint_blobs`, `checkpoint_writes`, and `checkpoint_migrations`. API startup checks
+readiness but does not create them.
 
-~~~dotenv
-AUTO_SETUP_DB=true
-~~~
+## 11. Verify Database Readiness
 
-Then start the backend with python run.py. The script connects to the default postgres database, creates akasha_local if it does not exist, and performs automatic table/column setup. The PostgreSQL user must have permission to create databases.
+Application connection:
 
-For a predictable team setup, manual database creation plus alembic upgrade head is preferred. Do not run automatic setup against a shared or production database.
+```powershell
+python -c "from sqlalchemy import text; from database import engine; c=engine.connect(); print(c.execute(text('SELECT 1')).scalar()); c.close()"
+```
 
-## 7. Start the backend
+Expected: `1`.
 
-In the backend terminal:
+Required tables:
 
-~~~powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-python run.py
-~~~
+```powershell
+psql -h localhost -U postgres -d akasha_local -c "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('chat_session','chat_message','chat_run','report_artifact','checkpoints','checkpoint_blobs','checkpoint_writes') ORDER BY table_name;"
+```
 
-Expected behavior:
+## 12. Load Business Data
 
-- The backend listens on http://localhost:3510.
-- Uvicorn reload mode is enabled, so code changes restart the server.
-- The FastAPI API documentation is available at http://localhost:3510/docs.
+### 12.1 Recommended: Approved Snapshot
 
-Keep this terminal open. Stop the backend with Ctrl+C.
+For repeatable chatbot testing, restore an approved sanitized PostgreSQL snapshot supplied by
+the project owner. Never commit the dump. After restoring, rerun Sections 9 and 10 because the
+snapshot may predate chat/report tables.
 
-## 8. Seed local application users
+### 12.2 Source Synchronization
 
-The database schema does not automatically contain login users. After the backend is running, open another PowerShell window and run:
+To synchronize live sources, obtain approved credentials/configuration for the relevant
+services. Typical backend variables include:
 
-~~~powershell
-Invoke-RestMethod -Method Post -Uri "http://localhost:3510/api/auth/seed"
-~~~
+- P6: `ORACLE_P6_BASE_URL`, `ORACLE_P6_AUTH_TOKEN`, and any required corporate CA/proxy.
+- SAP/SharePoint: `SHAREPOINT_TENANT_ID`, `SHAREPOINT_CLIENT_ID`,
+  `SHAREPOINT_CLIENT_SECRET`, `SHAREPOINT_SITE_URL`, and optional base folder.
+- Pulse: organization-specific Pulse base configuration and NC/RFI endpoint values.
+- TC: organization-specific Transmission Portal configuration required by `tc_sync.py`.
 
-The endpoint is idempotent: existing users are skipped.
+All sync API routes are authenticated. In development mode, trigger them from the
+application's integration UI or send the same development identity headers used by the
+frontend. Do not expose sync or credential-update routes outside a trusted development
+environment.
 
-The local demo accounts defined by the main branch are:
+### 12.3 Included SAP Loader
 
-| Username | Password | Role |
-|---|---|---|
-| praveen | akasha@2026 | Executive |
-| pmag_lead | akasha@2026 | PMAG |
-| site_lead | akasha@2026 | Projects |
-| tc_ordering | akasha@2026 | TC Ordering |
-| tc_stores | akasha@2026 | TC Stores |
+If the tracked sample input files are available and disposable local data is acceptable:
 
-These are demo credentials for local development only. Do not use them in a shared, UAT, or production environment. The seed endpoint should also be protected or removed before exposing the application outside a local machine.
-
-## 9. Start the frontend
-
-In the frontend terminal:
-
-~~~powershell
-cd frontend
-npm run dev
-~~~
-
-If necessary on PowerShell:
-
-~~~powershell
-npm.cmd run dev
-~~~
-
-Open the URL printed by Vite. With the current repository configuration, the application path is normally:
-
-    http://localhost:5173/akasha/
-
-Use the seeded username and password to sign in. Keep both the backend and frontend terminals running at the same time.
-
-The request flow is:
-
-    Browser: http://localhost:5173/akasha/api/...
-            -> Vite proxy
-    Backend: http://localhost:3510/api/...
-            -> PostgreSQL: localhost:5432/akasha_local
-
-## 10. Optional: load the repository's sample SAP data
-
-A fresh database contains the schema but not necessarily the business data needed to populate every dashboard. The main branch includes sample files under Data/ and a loader at backend/scripts/ingest_sap_data.py.
-
-After running the migrations and while backend/.env is configured, run this from the backend directory:
-
-~~~powershell
+```powershell
 python scripts/ingest_sap_data.py
-~~~
+```
 
-The script reads the sample Excel files from the repository's Data/ directory and loads selected SAP inventory, purchase-order, and material-document tables. It clears the existing records in those tables before loading, so do not run it against a database whose data must be preserved.
+The loader can clear and replace selected SAP tables. Never run it against a database whose
+data must be preserved.
 
-The repository does not include a general PostgreSQL dump that automatically fills every dashboard. SharePoint, Oracle P6, TC, and other integration data require the appropriate source files or credentials from the project owner.
+### 12.4 Confirm Useful Chat Data
 
-The tracked Data/akasha.db file is an old SQLite data file and is not the PostgreSQL database used by the normal backend setup. Do not use it as the value of DATABASE_URL for this guide.
+```powershell
+python -c "from database import SessionLocal; import models; d=SessionLocal(); print({'projects': d.query(models.P6Project).count(), 'activities': d.query(models.P6Activity).count(), 'po_rows': d.query(models.MTPOAmount).count(), 'tc_rows': d.query(models.TcNetworkEdge).count(), 'pulse_nc': d.query(models.PulseNC).count(), 'pulse_rfi': d.query(models.PulseRFI).count()}); d.close()"
+```
 
-## 11. Daily startup after the first setup
+If projects/activities are zero, data-backed P6 prompts and reports cannot return meaningful
+results. The chatbot must report missing data rather than fabricate it.
 
-After the first setup, the normal routine is:
+## 13. Install Frontend Dependencies
 
-**Terminal 1 - backend**
+Open a second PowerShell terminal at the repository root:
 
-~~~powershell
-cd <path-to-Akasha>\backend
-.\.venv\Scripts\Activate.ps1
-python run.py
-~~~
-
-**Terminal 2 - frontend**
-
-~~~powershell
-cd <path-to-Akasha>\frontend
-npm run dev
-~~~
-
-Then open http://localhost:5173/akasha/.
-
-To update the code later:
-
-~~~powershell
-cd <path-to-Akasha>
-git switch main
-git pull --ff-only origin main
-~~~
-
-After a dependency or migration change, repeat the relevant setup commands:
-
-~~~powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-alembic upgrade head
-cd ..\frontend
+```powershell
+Set-Location frontend
 npm ci
-~~~
+```
 
-## 12. Common problems
+Let `npm ci` complete; interrupting it can leave `node_modules` incomplete. No frontend
+`.env` is needed for local development auth. Vite proxies `/akasha/api` to
+`http://localhost:3510`.
 
-### DATABASE_URL environment variable is not set
+## 14. Start the Backend
 
-Check all of the following:
+Terminal 1, from `backend` with `.venv` active:
 
-- The file is named exactly .env, not .env.txt.
-- It is located at backend/.env.
-- The command is being run from the backend directory.
-- The line starts with DATABASE_URL=.
-- The database password is correct and URL-encoded if necessary.
+```powershell
+python run.py
+```
 
-### connection refused or could not connect to server
+Expected:
 
-PostgreSQL is probably stopped, using a different port, or blocked by another local installation. Start the PostgreSQL service and verify that the host and port are localhost and 5432.
+- API: `http://localhost:3510`
+- Swagger: `http://localhost:3510/docs`
+- Reload mode enabled.
+- A startup log showing the resolved LangGraph model context window.
+- No checkpoint-readiness or missing-provider error.
 
-### password authentication failed for user postgres
+Do not use `AUTO_SETUP_DB=true` for normal startup. Explicit setup makes schema changes
+reviewable and repeatable.
 
-The password in backend/.env does not match the password assigned to the PostgreSQL postgres user. Test the same credentials in DBeaver first, then update DATABASE_URL.
+## 15. Start the Frontend
 
-### database akasha_local does not exist
+Terminal 2, from `frontend`:
 
-Create the database in DBeaver, or set AUTO_SETUP_DB=true and start the backend as a PostgreSQL user with permission to create databases.
+```powershell
+npm run dev
+```
 
-### Alembic cannot import database or cannot find the .env values
+Open:
 
-Activate the virtual environment and run Alembic from backend, not from the repository root:
+```text
+http://localhost:5173/akasha/
+```
 
-~~~powershell
-cd backend
-.\.venv\Scripts\Activate.ps1
-alembic upgrade head
-~~~
+Select a development CEO or PMAG identity. Local development mode does not use password
+accounts. The old `/api/auth/seed` and local password login paths return HTTP 410 and should
+not be used.
 
-### The frontend is blank or API calls return 404
+## 16. Optional Entra Setup
 
-Check that:
+For real Microsoft Entra login, configure both sides:
 
-- The backend is running on port 3510.
-- The frontend is running with npm run dev.
-- The browser URL includes /akasha/.
-- The backend terminal does not show import or database errors.
+Backend `backend/.env`:
 
-### Login says Invalid username or password
+```dotenv
+AKASHA_AUTH_MODE=entra
+ENTRA_TENANT_ID=<TENANT_ID>
+ENTRA_CLIENT_ID=<API_CLIENT_ID>
+ENTRA_AUDIENCE=<API_AUDIENCE>
+ENTRA_CEO_APP_ROLE=Akasha.CEO
+ENTRA_PMAG_APP_ROLE=Akasha.PMAG
+```
 
-Run the seed command after starting the backend:
+Frontend `frontend/.env.local`:
 
-~~~powershell
-Invoke-RestMethod -Method Post -Uri "http://localhost:3510/api/auth/seed"
-~~~
+```dotenv
+VITE_AUTH_MODE=entra
+VITE_ENTRA_CLIENT_ID=<SPA_CLIENT_ID>
+VITE_ENTRA_TENANT_ID=<TENANT_ID>
+VITE_ENTRA_API_SCOPE=api://<API_CLIENT_ID>/access_as_user
+```
 
-Then use one of the demo accounts listed above.
+Restart both processes after environment changes. See `AUTHENTICATION_SETUP.md` for app
+registration, redirect URI, scope, role, and group details.
 
-### AI/chat requests fail but the dashboards load
+## 17. Automated Verification
 
-This usually means Ollama is not running, the configured model is missing, or the selected cloud provider credentials are absent. Check AI_PROVIDER, OLLAMA_ENDPOINT, and OLLAMA_MODEL in backend/.env, or ask the project owner for the required Azure/Groq credentials.
+### 17.1 Backend
 
-### Dashboards load but show little or no data
+From `backend`:
 
-Database setup creates the schema; it does not guarantee that all business data has been loaded. Run the optional SAP loader for the included sample files, or obtain the approved data-sync credentials/files for SharePoint, P6, TC, and related integrations.
+```powershell
+python -m unittest discover -s tests -v
+python -m pip check
+python evaluation/evaluate.py
+```
 
-## 13. Security reminders
+The evaluator is explicitly provisional/synthetic and is not a production accuracy score.
 
-- Never commit backend/.env.
-- Never paste passwords, API keys, SharePoint secrets, P6 tokens, or cloud credentials into this document or into the frontend.
-- Use a separate local PostgreSQL password, not a production password.
-- Treat the seeded demo accounts and /api/auth/seed endpoint as local-development-only functionality.
-- Do not set AUTO_SETUP_DB=true against a shared or production database.
+### 17.2 Frontend
+
+From `frontend`:
+
+```powershell
+node --experimental-strip-types --test tests/*.test.mjs
+npm run build
+```
+
+The production build currently reports a known large-chunk warning; a successful build still
+ends with `built`/success output.
+
+## 18. Manual Chatbot Test Script
+
+Use a project that exists in your database. The examples below use
+`AGE26AL_S06A_FT_234MW_PPA` / `FY26-P18`; values can change after source synchronization.
+Always compare results with the current database rather than treating this guide as a golden
+answer.
+
+### 18.1 General and Session Behavior
+
+1. Ask: `Hello. What can you help me with?`
+2. Confirm no operational tool is needed for the greeting.
+3. Create a second conversation, return to the first, refresh the page, and reopen it.
+4. Confirm the canonical transcript remains available.
+5. Rename and delete a test conversation.
+
+### 18.2 Corrected P6 Progress
+
+Ask:
+
+```text
+What is the progress of AGE26AL_S06A_FT_234MW?
+```
+
+Verify:
+
+- The alias resolves to the canonical project.
+- Overall progress is P6 duration progress.
+- Completed/total activity ratio is not substituted for duration progress.
+- Completed, in-progress, and not-started counts match the database.
+- P6 data date and last synchronization are disclosed when available.
+- Null SPI/CPI remain unavailable.
+- The assistant does not classify ahead/behind or health from a fabricated SPI.
+
+Database cross-check:
+
+```powershell
+python -c "from database import SessionLocal; import models; d=SessionLocal(); p=d.query(models.P6Project).filter(models.P6Project.project_id=='FY26-P18').first(); print({'name':p.name,'progress_raw':p.duration_percent_complete,'completed':p.completed_activity_count,'in_progress':p.in_progress_activity_count,'not_started':p.not_started_activity_count,'spi':p.schedule_performance_index,'cpi':p.cost_performance_index,'data_date':p.data_date,'last_sync':p.last_synced_at} if p else 'Project not found'); d.close()"
+```
+
+### 18.3 Follow-Up Context and Activities
+
+In the same conversation ask:
+
+```text
+What activities are in progress for that project?
+```
+
+Verify that the prior project is retained, actual activities are listed, pagination/limits
+are disclosed when applicable, and no literal `<tool_call>` markup appears.
+
+### 18.4 Risk and Missing Indicators
+
+Ask:
+
+```text
+Why is ASEJ6PL_S07_FT_300MW_PPA project at risk?
+```
+
+Verify the project is resolved and every stated cause comes from returned tool facts. Missing
+indicators must be disclosed. If the provider emits malformed textual tool syntax internally,
+the graph should normalize a valid registered call or perform one tool-enabled retry rather
+than exposing markup.
+
+### 18.5 Visualization
+
+Ask:
+
+```text
+Show an activity-status chart for AGE26AL_S06A_FT_234MW_PPA.
+```
+
+Verify an inline chart appears and the accompanying text describes only database-backed chart
+data.
+
+### 18.6 Cancellation
+
+Start a broad analytical question and press Stop while it is running. Verify the turn becomes
+cancelled, remains visible after reopening, and does not corrupt the next turn.
+
+### 18.7 Project Progress Report MVP
+
+Ask:
+
+```text
+Generate a Project Progress Report for AGE26AL_S06A_FT_234MW_PPA.
+```
+
+The first answer must be a preview showing:
+
+- Canonical project and latest reporting cutoff.
+- PDF and DOCX formats.
+- P6, SAP, TC, Pulse, and freshness sections.
+- Missing/unmapped source warnings.
+
+Then reply:
+
+```text
+Confirm and generate the PDF and DOCX reports.
+```
+
+Verify:
+
+- Both authenticated download buttons appear.
+- PDF and DOCX download successfully.
+- Both display the same deterministic metrics.
+- The executive summary contains no model planning/reasoning text.
+- Null SPI/CPI and missing sources remain explicit.
+- The response states the 24-hour expiry.
+
+Generated files are ignored by Git and normally stored under
+`backend/report_artifacts/`.
+
+## 19. Daily Startup
+
+Backend terminal:
+
+```powershell
+Set-Location <PATH_TO_AKASHA>\backend
+& ".venv\Scripts\Activate.ps1"
+python run.py
+```
+
+Frontend terminal:
+
+```powershell
+Set-Location <PATH_TO_AKASHA>\frontend
+npm run dev
+```
+
+After pulling updates:
+
+```powershell
+Set-Location <PATH_TO_AKASHA>
+git switch feature/langgraph-refactor
+git pull --ff-only origin feature/langgraph-refactor
+
+Set-Location backend
+& ".venv\Scripts\Activate.ps1"
+python -m pip install -r requirements.txt
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase1_chat_ownership.sql
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase2_langgraph_context.sql
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase5_mvp_reports.sql
+python scripts/setup_langgraph_checkpoint.py
+
+Set-Location ..\frontend
+npm ci
+```
+
+Only rerun `npm ci` after a fresh clone or lock-file/dependency change.
+
+## 20. Troubleshooting
+
+### Backend says `DATABASE_URL` is missing
+
+- Confirm the file is exactly `backend/.env`, not `.env.txt`.
+- Run backend commands from `backend`.
+- Confirm the URL password is URL-encoded.
+
+### Phase 1 migration says `chat_session` does not exist
+
+Run the Section 8 SQLAlchemy bootstrap first, then rerun migrations in order.
+
+### LangGraph checkpoint storage is unavailable
+
+- Confirm PostgreSQL is running.
+- Confirm `DATABASE_URL` or `AKASHA_LANGGRAPH_CHECKPOINT_DSN` is PostgreSQL.
+- Run `python scripts/setup_langgraph_checkpoint.py`.
+- Verify the checkpoint tables in Section 11.
+
+### OpenRouter startup fails while validating models
+
+- Confirm the API key and exact model IDs.
+- Confirm the primary and every fallback supports `tools` and `tool_choice`.
+- Remove unavailable fallback IDs or set `OPENROUTER_FALLBACK_MODELS=`.
+- Do not use `AKASHA_MODEL_CONTEXT_WINDOW` to hide an invalid/nonexistent model.
+
+### `InvalidModelResponse` appears intermittently
+
+The graph repairs empty, malformed native, and XML-like tool responses once. Restart after
+pulling the latest branch. If it persists, capture the request ID and safe server log category;
+do not log or paste full sensitive prompts/tool payloads.
+
+### Frontend is blank or API requests return 404
+
+- Open `http://localhost:5173/akasha/`, including the trailing application path.
+- Confirm backend port 3510 and Vite port 5173.
+- Confirm the Vite proxy is running through `npm run dev`.
+
+### `npm run dev` fails after interrupted `npm ci`
+
+Run `npm ci` again and let it finish before starting Vite.
+
+### Chat sessions work but data answers are empty
+
+Schema setup does not load P6/SAP/TC/Pulse facts. Check Section 12 counts and obtain an
+approved snapshot or source credentials.
+
+### Report preview works but generation fails
+
+- Install `reportlab` and `python-docx` via `requirements.txt`.
+- Apply `phase5_mvp_reports.sql`.
+- Confirm the artifact directory is writable.
+- Recreate a preview after backend restart; preview tokens are process-local and expire in
+  one hour.
+
+### Report download returns 404 or 410
+
+- Ensure the same development/Entra user that generated it is signed in.
+- Artifacts expire after 24 hours.
+- Local files disappear if the artifact directory is manually cleared.
+
+## 21. Security and Operational Notes
+
+- Never commit `.env`, PATs, provider keys, passwords, source tokens, database dumps, or
+  generated reports.
+- Treat `AKASHA_AUTH_MODE=development` as local-only.
+- Use approved provider privacy terms for project data.
+- Keep TLS verification enabled; configure the corporate CA through standard CA-bundle
+  environment variables.
+- Do not use `AUTO_SETUP_DB=true` against shared/UAT/production databases.
+- Do not claim measured business accuracy until a business-validated evaluation suite exists.
+- The report MVP is synchronous and local-file based; it is not the full durable Phase 5
+  worker architecture.
+
+## 22. Architecture References
+
+- Implemented design: `CHATBOT_ARCHITECTURE.md`
+- Program roadmap and phase ledger: `CHATBOT_IMPLEMENTATION_PLAN.md`
+- Entra setup: `AUTHENTICATION_SETUP.md`
+- Historical pre-LangGraph path: `backend/ACTIVE_CHATBOT_PATH.md`
