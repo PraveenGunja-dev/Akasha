@@ -7,7 +7,6 @@ from langchain_openai import ChatOpenAI
 
 DEFAULT_OPENROUTER_FALLBACK_MODELS = (
     "google/gemma-4-31b-it:free",
-    "poolside/laguna-m.1:free",
     "nvidia/nemotron-3-super-120b-a12b:free",
 )
 
