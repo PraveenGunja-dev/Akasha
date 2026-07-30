@@ -53,13 +53,13 @@ _SUMMARY_CACHE = {"data": None, "timestamp": 0}
 _CACHE_TTL = 300  # 5 minutes
 
 @router.get("/summary")
-def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a global portfolio summary and a unified list of all mapped projects
     with data from P6, SAP, and Transmission. Includes all P6 projects even if unmapped.
     """
     global _SUMMARY_CACHE
-    cache_key = str(portfolio).lower() if portfolio else "all"
+    cache_key = f"{str(portfolio).lower() if portfolio else 'all'}_{str(phase).lower() if phase else 'all'}"
     
     if not nocache and cache_key in _SUMMARY_CACHE:
         entry = _SUMMARY_CACHE[cache_key]
@@ -78,6 +78,10 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                 (func.lower(models.ProjectMapping.project).contains(part))
             )
             
+    if phase and phase != "ALL":
+        is_comm = True if phase == "Commissioned" else False
+        query = query.filter(models.ProjectMapping.is_commissioned == is_comm)
+        
     raw_mappings = query.all()
     raw_p6_projects = db.query(models.P6Project).all()
     

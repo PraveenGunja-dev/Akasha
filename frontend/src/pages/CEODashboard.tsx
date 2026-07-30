@@ -92,6 +92,8 @@ export default function CEODashboard() {
       const queryParams = new URLSearchParams();
       if (selectedProject !== 'All') queryParams.append('project_name', selectedProject);
       if (portfolio) queryParams.append('portfolio', portfolio);
+      const phase = searchParams.get('phase') || 'Ongoing';
+      if (phase && phase !== 'ALL') queryParams.append('phase', phase);
       const queryStr = queryParams.toString() ? `?${queryParams.toString()}` : '';
       
       const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
@@ -146,7 +148,7 @@ export default function CEODashboard() {
 
   useEffect(() => {
     loadAllData();
-  }, [selectedProject, portfolio]);
+  }, [selectedProject, portfolio, searchParams]);
 
   const handleNavigateToSimulation = (projId: string, context?: any) => {
     setSelectedProject(projId);

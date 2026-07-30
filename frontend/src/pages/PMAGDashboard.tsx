@@ -78,7 +78,11 @@ export default function PMAGDashboard() {
 
   const loadAllData = () => {
     setLoading(true);
-    const portfolioQuery = portfolio ? `?portfolio=${encodeURIComponent(portfolio)}` : '';
+    const phase = searchParams.get('phase') || 'Ongoing';
+    const queryParams = new URLSearchParams();
+    if (portfolio) queryParams.append('portfolio', portfolio);
+    if (phase && phase !== 'ALL') queryParams.append('phase', phase);
+    const portfolioQuery = queryParams.toString() ? `?${queryParams.toString()}` : '';
     
     fetch(`/akasha/api/pmag/dashboard${portfolioQuery}`)
       .then(r => r.json())
@@ -111,7 +115,7 @@ export default function PMAGDashboard() {
 
   useEffect(() => {
     loadAllData();
-  }, [portfolio]);
+  }, [portfolio, searchParams]);
 
   const handleSyncData = async () => {
     setIsSyncing(true);
