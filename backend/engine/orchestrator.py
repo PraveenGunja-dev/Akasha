@@ -258,8 +258,16 @@ class ChatOrchestrator:
         except Exception as e:
             logger.warning(f"portfolio capacity facts unavailable: {e}")
 
+        mapped_projects = db.query(models.ProjectMapping).filter(
+            ~func.lower(func.coalesce(
+                models.ProjectMapping.project_name_from_p6,
+                models.ProjectMapping.project,
+                "",
+            )).contains("demo")
+        )
+
         return {
-            "total_projects": db.query(models.ProjectMapping).count(),
+            "total_projects": mapped_projects.count(),
             "capacity_mw": capacity,
             "projects_by_cluster": clusters,
         }

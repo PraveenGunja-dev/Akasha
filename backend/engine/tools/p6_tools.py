@@ -260,41 +260,47 @@ def p6_get_activities(
 
 
 def p6_list_all_projects(db: Session) -> dict:
-    """List all P6 projects with core metrics.
+    """List all portfolio projects with P6 metrics when available.
     
-    Use when: user asks about portfolio overview, all projects, or doesn't specify a project.
+    The project mapping is the authoritative portfolio population, matching the
+    dashboard. P6 fields are optional because some mapped projects have not yet
+    been synchronized into the P6 project table.
     """
-    projects = db.query(models.P6Project).order_by(
-        models.P6Project.project_id.asc(), models.P6Project.p6_object_id.asc()
+    mappings = db.query(models.ProjectMapping).order_by(
+        models.ProjectMapping.project_id.asc(), models.ProjectMapping.id.asc()
     ).all()
+    p6_by_pid = {
+        p.project_id: p
+        for p in db.query(models.P6Project).order_by(
+            models.P6Project.project_id.asc(), models.P6Project.p6_object_id.asc()
+        ).all()
+    }
     
-    # Build a mapping lookup for project names
-    all_mappings = db.query(models.ProjectMapping).all()
-    mapping_by_pid = {m.project_id: m for m in all_mappings}
-    
-    result_by_project_id = {}
-    for p in projects:
-        m = mapping_by_pid.get(p.project_id)
-        display_name = (m.project_name_from_p6 or m.project or p.name) if m else p.name
+    result = []
+    for m in mappings:
+        display_name = m.project_name_from_p6 or m.project or "Unknown project"
         if "demo" in display_name.lower():
             continue
-        result_by_project_id[str(p.project_id)] = {
-            "project_id": p.project_id,
+        p = p6_by_pid.get(m.project_id)
+        result.append({
+            "project_id": m.project_id,
             "project_name": display_name,
-            "p6_name": p.name,
-            "status": p.status,
-            "spi": round(p.schedule_performance_index, 4) if p.schedule_performance_index is not None else None,
-            "cpi": round(p.cost_performance_index, 4) if p.cost_performance_index is not None else None,
-            "duration_pct_complete": _normalize_percentage(p.duration_percent_complete),
-            "finish_date": p.finish_date.isoformat() if p.finish_date else None,
-            "total_float_hours": int(p.total_float) if p.total_float is not None else None,
-            "activity_count": p.activity_count,
-            "last_synced_at": p.last_synced_at.isoformat() if p.last_synced_at else None,
-            "_source_table": "p6_project",
-        }
-    result = [result_by_project_id[key] for key in sorted(result_by_project_id)]
+            "p6_name": p.name if p else None,
+            "status": p.status if p else "P6 data unavailable",
+            "p6_available": p is not None,
+            "spi": round(p.schedule_performance_index, 4) if p and p.schedule_performance_index is not None else None,
+            "cpi": round(p.cost_performance_index, 4) if p and p.cost_performance_index is not None else None,
+            "duration_pct_complete": _normalize_percentage(p.duration_percent_complete) if p else None,
+            "finish_date": p.finish_date.isoformat() if p and p.finish_date else None,
+            "total_float_hours": int(p.total_float) if p and p.total_float is not None else None,
+            "activity_count": p.activity_count if p else None,
+            "last_synced_at": p.last_synced_at.isoformat() if p and p.last_synced_at else None,
+            "_source_table": "project_mapping+p6_project",
+        })
+    result.sort(key=lambda project: (str(project["project_id"]), project["project_name"]))
     return {
         "total_projects": len(result),
+        "projects_with_p6_data": sum(1 for project in result if project["p6_available"]),
         "projects": result
     }
 

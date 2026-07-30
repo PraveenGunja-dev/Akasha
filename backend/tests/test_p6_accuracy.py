@@ -21,7 +21,7 @@ from engine.kpi_engine import (
     compute_project_kpis,
     compute_schedule_kpis,
 )
-from engine.tools.p6_tools import p6_get_activities, p6_get_project_summary
+from engine.tools.p6_tools import p6_get_activities, p6_get_project_summary, p6_list_all_projects
 import models
 
 
@@ -169,6 +169,38 @@ class P6ToolAccuracyTests(unittest.TestCase):
         self.assertEqual(summary["duration_percent_complete"], 23.1)
         self.assertIsNone(summary["spi"])
         self.assertIsNone(summary["cpi"])
+
+    def test_project_list_uses_mappings_and_marks_missing_p6_data(self):
+        db = self.Session()
+        try:
+            db.add_all([
+                models.ProjectMapping(
+                    project_id="FY26-P18",
+                    project="Mapped P6 project",
+                    project_name_from_p6="Mapped P6 project",
+                ),
+                models.ProjectMapping(
+                    project_id="MAPPED-ONLY",
+                    project="Mapped-only project",
+                    project_name_from_p6="Mapped-only project",
+                ),
+                models.ProjectMapping(
+                    project_id="DEMO-001",
+                    project="Demo project",
+                    project_name_from_p6="Demo project",
+                ),
+            ])
+            db.commit()
+
+            result = p6_list_all_projects(db)
+        finally:
+            db.close()
+
+        self.assertEqual(result["total_projects"], 2)
+        self.assertEqual(result["projects_with_p6_data"], 1)
+        mapped_only = next(row for row in result["projects"] if row["project_id"] == "MAPPED-ONLY")
+        self.assertFalse(mapped_only["p6_available"])
+        self.assertEqual(mapped_only["status"], "P6 data unavailable")
 
     def test_project_summary_keeps_native_p6_performance_indicators(self):
         db = self.Session()

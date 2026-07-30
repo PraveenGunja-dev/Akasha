@@ -208,7 +208,7 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "p6_list_all_projects",
-            "description": "Get the total count of all active projects in the portfolio and their core metrics. Returns a dictionary with 'total_projects' and 'projects' list.",
+            "description": "Get the total count of all non-demo portfolio projects from the authoritative project mapping and their core P6 metrics when available. Returns 'total_projects', 'projects_with_p6_data', and 'projects'.",
             "parameters": {
                 "type": "object",
                 "properties": {}
