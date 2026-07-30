@@ -474,6 +474,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         results.append({
             # Identifiers
             "projectId": p6_proj.project_id if p6_proj else (m.project_id or ""),
+            "mapping_id": m.id,
             "projectName": p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "Unmapped Project"),
             "sapPlantCode": m.spv_plant_code,
             "agelCode": m.agel,

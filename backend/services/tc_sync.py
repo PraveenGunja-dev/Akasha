@@ -16,6 +16,37 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 logger = logging.getLogger(__name__)
 
+
+def find_mapping_id(db: Session, project_names):
+    """Resolve a local ProjectMapping.id from one or more TC project names.
+
+    Used by the offline TC loader (scripts/load_tc_data_from_json.py): a dumped
+    edge/entry carries a mapping_id from the *source* DB that is invalid locally,
+    so we recompute it here by matching the TC project name(s) against
+    ProjectMapping.project (stored comma-separated). Returns None if unmatched —
+    the FK is nullable, so unmapped edges still load and get resolved at read time
+    via the `projects` ILIKE fallback in tc_tools.tc_get_project_lines.
+
+    NOTE: the live API sync below does NOT use this — it maps via direct
+    per-project API resolution. This helper exists only for the offline loader.
+    """
+    if not project_names:
+        return None
+
+    names = project_names if isinstance(project_names, list) else [project_names]
+    all_maps = db.query(ProjectMapping).all()
+
+    for name in names:
+        if not name:
+            continue
+        for m in all_maps:
+            if m.project:
+                tc_names = [t.strip() for t in m.project.split(',')]
+                if name in tc_names:
+                    return m.id
+    return None
+
+
 AUTH_URL = "https://powerback-api.unada.in/api/v1/user/login"
 BASE_URL = "https://transmission-api-v3.unada.in"
 CREDENTIALS = {

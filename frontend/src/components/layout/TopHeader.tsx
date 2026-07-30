@@ -13,7 +13,9 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const { user, logout } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPortfolio = searchParams.get('portfolio') || 'All Portfolios';
+  const currentPhase = searchParams.get('phase') || 'Ongoing';
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
+  const [isPhaseOpen, setIsPhaseOpen] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [hasMoreNotifs, setHasMoreNotifs] = useState(true);
@@ -21,6 +23,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
   const portfolioRef = useRef<HTMLDivElement>(null);
+  const phaseRef = useRef<HTMLDivElement>(null);
   const LIMIT = 50;
 
   useEffect(() => {
@@ -31,6 +34,9 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
       if (portfolioRef.current && !portfolioRef.current.contains(event.target as Node)) {
         setIsPortfolioOpen(false);
       }
+      if (phaseRef.current && !phaseRef.current.contains(event.target as Node)) {
+        setIsPhaseOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
@@ -40,7 +46,10 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const fetchNotifications = async (reset = false) => {
     try {
       const currentSkip = reset ? 0 : notifications.length;
-      const res = await fetch(`/akasha/api/notifications/?skip=${currentSkip}&limit=${LIMIT}`);
+      let url = `/akasha/api/notifications/?skip=${currentSkip}&limit=${LIMIT}`;
+      if (projectId) url += `&project_id=${projectId}`;
+      if (currentPhase && currentPhase !== 'ALL') url += `&phase=${currentPhase}`;
+      const res = await fetch(url);
       if (res.ok) {
         const data = await res.json();
         if (data.length < LIMIT) setHasMoreNotifs(false);
@@ -60,7 +69,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
     fetchNotifications(true);
     const interval = setInterval(() => fetchNotifications(true), 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [projectId, currentPhase]);
 
   const handleSignOut = () => {
     logout();
@@ -95,6 +104,41 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
       {/* Right: project selector + actions */}
       <div className="flex items-center gap-1 sm:gap-2">
         
+        {/* Phase Dropdown */}
+        <div 
+          className="relative mr-1"
+          ref={phaseRef}
+        >
+          <button 
+            onClick={() => setIsPhaseOpen(!isPhaseOpen)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
+          >
+            <span>{currentPhase === 'ALL' ? 'All Phases' : currentPhase}</span>
+            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPhaseOpen ? 'rotate-180' : ''}`} />
+          </button>
+          <div className={`absolute top-full right-0 mt-1 w-36 py-1 bg-card rounded-lg shadow-lg border border-muted dark:border-gray-700 transition-all z-50 ${isPhaseOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
+            {['Ongoing', 'Commissioned', 'ALL'].map(p => (
+              <button
+                key={p}
+                onClick={() => {
+                  setSearchParams(prev => {
+                    if (p === 'Ongoing') {
+                      prev.delete('phase'); // Ongoing is default
+                    } else {
+                      prev.set('phase', p);
+                    }
+                    return prev;
+                  });
+                  setIsPhaseOpen(false);
+                }}
+                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPhase === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-gray-700/50'}`}
+              >
+                {p === 'ALL' ? 'All Phases' : p}
+              </button>
+            ))}
+          </div>
+        </div>
+
         {/* Portfolio Dropdown */}
         <div 
           className="relative mr-2"

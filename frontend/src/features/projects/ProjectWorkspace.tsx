@@ -4,7 +4,7 @@ import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
   Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
-  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2
+  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
 import QualityProjectTab from '../quality/QualityProjectTab';
@@ -254,6 +254,22 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [syncingP6, setSyncingP6] = useState(false);
+
+  const [slrData, setSlrData] = useState<any>(null);
+  const [slrLoading, setSlrLoading] = useState(false);
+  const [slrFilter, setSlrFilter] = useState<'ALL' | 'SPV' | 'AGEL' | 'AGE6L'>('ALL');
+  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('ALL');
+  const [sapSubTab, setSapSubTab] = useState<'old' | 'slr'>('old');
+
+  useEffect(() => {
+    if (!projectId) return;
+    setSlrLoading(true);
+    fetch(`/akasha/api/dashboard/api/projects/${projectId}/slr?filter_code=${slrFilter}`)
+      .then(res => res.json())
+      .then(data => setSlrData(data))
+      .catch(err => console.error(err))
+      .finally(() => setSlrLoading(false));
+  }, [projectId, slrFilter]);
 
   useEffect(() => {
     setActiveTab('overview');
@@ -1041,9 +1057,24 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <Database className="w-5 h-5 text-primary/70" /> SAP Intelligence
                     </h2>
+                    <div className="flex bg-muted/50 p-1 rounded-lg">
+                      <button 
+                        onClick={() => setSapSubTab('old')}
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${sapSubTab === 'old' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        PO (Old)
+                      </button>
+                      <button 
+                        onClick={() => setSapSubTab('slr')}
+                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${sapSubTab === 'slr' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                      >
+                        SLR Data (New)
+                      </button>
+                    </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center bg-muted border border-border rounded-lg p-0.5">
-                        {[
+                        {sapSubTab === 'old' ? (
+                        [
                           { key: 'all' as const, label: 'All', disabled: false },
                           {
                             key: 'spv' as const,
@@ -1070,7 +1101,29 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           >
                             {opt.label}
                           </button>
-                        ))}
+                        ))
+                      ) : (
+                        [
+                          { key: 'ALL' as const, label: 'All', disabled: false },
+                          { key: 'SPV' as const, label: `SPV (${project?.sapPlantCode || '—'})`, disabled: !project?.sapPlantCode },
+                          { key: 'AGEL' as const, label: `AGEL (${project?.agelCode || '—'})`, disabled: !project?.agelCode },
+                          { key: 'AGE6L' as const, label: `AGE6L (${project?.age6lCode || '—'})`, disabled: false },
+                        ].map(opt => (
+                          <button
+                            key={opt.key}
+                            onClick={() => !opt.disabled && setSlrFilter(opt.key)}
+                            disabled={opt.disabled}
+                            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${opt.disabled
+                              ? 'opacity-40 cursor-not-allowed border border-dashed border-muted-foreground/30 text-muted-foreground'
+                              : slrFilter === opt.key
+                                ? 'bg-primary text-primary-foreground shadow-sm'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                              }`}
+                          >
+                            {opt.label}
+                          </button>
+                        ))
+                      )}
                       </div>
                       <button
                         onClick={downloadSAPReport}
@@ -1082,7 +1135,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
                   </div>
 
-                  {!sap || sap.summary.totalPOs === 0 ? (
+                  {sapSubTab === 'old' && (
+                    <>
+                      {!sap || sap.summary.totalPOs === 0 ? (
                     <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
                       <Database className="w-10 h-10 text-muted-foreground/20 mb-3" />
                       <p className="text-muted-foreground/60 text-sm">No SAP procurement data found for this plant code.</p>
@@ -1544,7 +1599,189 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       </div>
                     </>
                   )}
-                </div>
+                </>
+              )}
+
+
+                  {sapSubTab === 'slr' && (
+                    <div className="space-y-6">
+                      {slrLoading ? (
+                        <div className="flex items-center justify-center h-[300px]">
+                          <div className="flex items-center gap-3">
+                            <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                            <span className="text-sm text-muted-foreground/60">Loading SLR data...</span>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="space-y-6">
+                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                            <div className="intelligence-card p-4">
+                              <div className="text-sm text-muted-foreground font-semibold mb-1">TOTAL POs</div>
+                              <div className="text-2xl font-bold text-foreground">{slrData?.total_pos || 0}</div>
+                            </div>
+                            <div className="intelligence-card p-4">
+                              <div className="text-sm text-muted-foreground font-semibold mb-1">OPEN POs</div>
+                              <div className="text-2xl font-bold text-primary">{slrData?.open_pos || 0}</div>
+                            </div>
+                            <div className="intelligence-card p-4">
+                              <div className="text-sm text-muted-foreground font-semibold mb-1">CLOSED POs</div>
+                              <div className="text-2xl font-bold text-muted-foreground">{slrData?.closed_pos || 0}</div>
+                            </div>
+                            <div className="intelligence-card p-4">
+                              <div className="text-sm text-muted-foreground font-semibold mb-1">TOTAL AMOUNT</div>
+                              <div className="text-2xl font-bold text-foreground">₹{slrData?.total_amount ? (slrData.total_amount / 10000000).toFixed(2) : 0} Cr</div>
+                            </div>
+                          </div>
+
+                          {slrData?.data && slrData.data.length > 0 && (
+                            <>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="intelligence-card p-4 h-[300px] flex flex-col">
+                                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground">PO Status Distribution</h3>
+                                  <div className="flex-1 min-h-0">
+                                    <ReactECharts
+                                      option={{
+                                        tooltip: { trigger: 'item' },
+                                        color: ['#3b82f6', '#94a3b8'],
+                                        legend: { bottom: 0, textStyle: { color: '#888' } },
+                                        series: [{
+                                          type: 'pie',
+                                          radius: ['50%', '70%'],
+                                          center: ['50%', '45%'],
+                                          data: [
+                                            { value: slrData.open_pos, name: 'Open' },
+                                            { value: slrData.closed_pos, name: 'Closed' }
+                                          ]
+                                        }]
+                                      }}
+                                      style={{ height: '100%', width: '100%' }}
+                                    />
+                                  </div>
+                                </div>
+                                
+                                <div className="intelligence-card p-4 h-[300px] flex flex-col">
+                                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Amount by Category</h3>
+                                  <div className="flex-1 min-h-0">
+                                    <ReactECharts
+                                      option={{
+                                        tooltip: { trigger: 'item', formatter: (params: any) => `${params.name}: ₹${params.value.toLocaleString()}` },
+                                        color: ['#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899', '#10b981', '#3b82f6', '#f43f5e', '#84cc16', '#6366f1', '#14b8a6', '#94a3b8'],
+                                        legend: { type: 'scroll', bottom: 0, textStyle: { color: '#888', fontSize: 10 } },
+                                        series: [{
+                                          type: 'pie',
+                                          radius: ['40%', '70%'],
+                                          center: ['50%', '45%'],
+                                          data: (() => {
+                                            const entries = Object.entries(slrData.data.reduce((acc: any, row: any) => { 
+                                              const desc = row.description ? row.description.trim() : 'Unknown';
+                                              acc[desc] = (acc[desc] || 0) + row.total; 
+                                              return acc; 
+                                            }, {})).map(([k, v]) => ({ name: k, value: v as number })).sort((a: any, b: any) => b.value - a.value);
+                                            
+                                            if (entries.length <= 10) return entries;
+                                            
+                                            const top10 = entries.slice(0, 10);
+                                            const othersValue = entries.slice(10).reduce((sum: number, item: any) => sum + item.value, 0);
+                                            return [...top10, { name: 'Others', value: othersValue }];
+                                          })(),
+                                          itemStyle: {
+                                            borderRadius: 4,
+                                            borderColor: 'rgba(0,0,0,0.1)',
+                                            borderWidth: 2
+                                          },
+                                          label: { show: false }
+                                        }]
+                                      }}
+                                      style={{ height: '100%', width: '100%' }}
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="intelligence-card p-4 h-[300px] flex flex-col">
+                                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Amount by Type</h3>
+                                  <div className="flex-1 min-h-0">
+                                    <ReactECharts
+                                      option={{
+                                        tooltip: { trigger: 'axis', formatter: (params: any) => `₹${params[0].value.toLocaleString()}` },
+                                        grid: { top: 10, right: 20, bottom: 20, left: 70 },
+                                        xAxis: {
+                                          type: 'value',
+                                          axisLabel: { formatter: (val: number) => `₹${(val/10000000).toFixed(0)}Cr`, fontSize: 9, color: '#888' },
+                                          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+                                        },
+                                        yAxis: {
+                                          type: 'category',
+                                          data: Object.entries(slrData.data.reduce((acc: any, row: any) => { acc[row.type || 'Unknown'] = (acc[row.type || 'Unknown'] || 0) + row.total; return acc; }, {})).map(([k, v]) => ({ name: k, amount: v as number })).sort((a: any, b: any) => b.amount - a.amount).slice(0, 5).reverse().map((d: any) => d.name),
+                                          axisLabel: { fontSize: 9, color: '#888' }
+                                        },
+                                        series: [{
+                                          data: Object.entries(slrData.data.reduce((acc: any, row: any) => { acc[row.type || 'Unknown'] = (acc[row.type || 'Unknown'] || 0) + row.total; return acc; }, {})).map(([k, v]) => ({ name: k, amount: v as number })).sort((a: any, b: any) => b.amount - a.amount).slice(0, 5).reverse().map((d: any) => d.amount),
+                                          type: 'bar',
+                                          itemStyle: { color: '#ec4899', borderRadius: [0, 4, 4, 0] }
+                                        }]
+                                      }}
+                                      style={{ height: '100%', width: '100%' }}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="intelligence-card overflow-hidden flex flex-col">
+                                <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
+                                  <h3 className="text-sm font-semibold text-foreground">SLR Line Items ({slrData.data.filter((r: any) => slrTypeFilter === 'ALL' || r.type === slrTypeFilter).length})</h3>
+                                  <select 
+                                    value={slrTypeFilter}
+                                    onChange={(e) => setSlrTypeFilter(e.target.value)}
+                                    className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
+                                  >
+                                    <option value="ALL">All Types</option>
+                                    {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (
+                                      <option key={type} value={type}>{type}</option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
+                                  <table className="w-full text-sm text-left relative">
+                                    <thead className="bg-muted border-b border-border sticky top-0 z-10">
+                                      <tr>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground">PO Number</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground">Type</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground">Description</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Total Amount</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Actual</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Commitment</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-border">
+                                      {slrData.data.filter((r: any) => slrTypeFilter === 'ALL' || r.type === slrTypeFilter).map((row: any, i: number) => (
+                                        <tr key={i} className="hover:bg-muted/30 transition-colors">
+                                          <td className="px-4 py-3 font-medium text-foreground">{row.po_document || '—'}</td>
+                                          <td className="px-4 py-3 text-muted-foreground">{row.type || '—'}</td>
+                                          <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
+                                          <td className="px-4 py-3 text-right">₹{row.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                          <td className="px-4 py-3 text-right text-emerald-500/80">₹{row.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                          <td className="px-4 py-3 text-right text-amber-500/80">₹{row.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                          <td className="px-4 py-3 text-center">
+                                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                              row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                                            }`}>
+                                              {row.status}
+                                            </span>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  </div>
               )}
             </div>
           )}

@@ -22,7 +22,15 @@ class PushPayload(BaseModel):
     delete_thread: bool = False
 
 @router.get("/")
-def get_notifications(background_tasks: BackgroundTasks, skip: int = 0, limit: int = 50, tab: str = "All", db: Session = Depends(get_db)):
+def get_notifications(
+    background_tasks: BackgroundTasks, 
+    skip: int = 0, 
+    limit: int = 50, 
+    tab: str = "All", 
+    project_id: Optional[str] = None,
+    phase: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     query = db.query(models.Notification)
     if tab != "All":
         if tab == "Transmission":
@@ -30,10 +38,37 @@ def get_notifications(background_tasks: BackgroundTasks, skip: int = 0, limit: i
         else:
             query = query.filter(models.Notification.category == tab)
             
+    if project_id or (phase and phase != "ALL"):
+        mapping_query = db.query(models.ProjectMapping.project)
+        if project_id:
+            mapping_query = mapping_query.filter(models.ProjectMapping.project_id == project_id)
+        if phase and phase != "ALL":
+            is_comm = True if phase == "Commissioned" else False
+            mapping_query = mapping_query.filter(models.ProjectMapping.is_commissioned == is_comm)
+            
+        allowed_projects = [m[0] for m in mapping_query.all()]
+        # Include Global notifications (project_name is None) along with filtered projects
+        query = query.filter((models.Notification.project_name.in_(allowed_projects)) | (models.Notification.project_name == None))
+            
     notifs = query.order_by(models.Notification.created_at.desc()).offset(skip).limit(limit).all()
+    
+    project_names = {n.project_name for n in notifs if n.project_name}
+    mapping_dict = {}
+    if project_names:
+        mappings = db.query(models.ProjectMapping.project, models.ProjectMapping.project_name_from_p6).filter(
+            models.ProjectMapping.project.in_(project_names)
+        ).all()
+        mapping_dict = {m.project: m.project_name_from_p6 for m in mappings}
+        
+    results = []
+    for n in notifs:
+        n_dict = {c.name: getattr(n, c.name) for c in n.__table__.columns}
+        n_dict["p6_project_name"] = mapping_dict.get(n.project_name, n.project_name)
+        results.append(n_dict)
+        
     # Trigger background task to populate any missing AI suggestions
     background_tasks.add_task(populate_missing_ai_suggestions_bg)
-    return notifs
+    return results
 
 @router.post("/{notification_id}/read")
 def mark_read(notification_id: int, db: Session = Depends(get_db)):

@@ -27,6 +27,7 @@ class ProjectMappingBase(BaseModel):
     not_allocated: Optional[str] = None
     source_of_origin: Optional[str] = None
     priority: Optional[str] = None
+    is_commissioned: bool = False
 
 class ProjectMappingCreate(ProjectMappingBase):
     pass

@@ -495,7 +495,9 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "projectName": p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "Unmapped Project"),
             "sapPlantCode": m.spv_plant_code,
             "agelCode": m.agel,
+            "age6lCode": m.age6l,
             "capacityMW": round(m.capacity_mwac, 2) if m.capacity_mwac is not None else 0.0,
+            "isCommissioned": m.is_commissioned,
             # Intelligence Fields (card-facing)
             "statusTier": status_tier,
             "primaryIssue": primary_issue,

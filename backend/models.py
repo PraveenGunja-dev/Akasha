@@ -298,6 +298,20 @@ class MTMaterialDocument(Base):
     base_unit = Column(String, nullable=True)
     upload_time = Column(DateTime, default=datetime.utcnow)
 
+class MTSLRData(Base):
+    __tablename__ = "mt_slr_data"
+
+    id = Column(Integer, primary_key=True, index=True)
+    po_document = Column(String, index=True)      # 'A.Document' (PO Number)
+    description = Column(String)                  # 'Description'
+    actual_amount = Column(Float, nullable=True)  # 'Actual Amount'
+    commitment_amount = Column(Float, nullable=True) # 'Commitment Amt'
+    wbs_element = Column(String, index=True)      # 'WBS Element'
+    type = Column(String, index=True)             # 'Type' (POrd, PReq, etc.)
+    plant_code = Column(String, index=True)       # Parsed from first 6 chars of WBS
+    
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
 class ProjectMapping(Base):
     __tablename__ = "project_mapping"
 
@@ -321,6 +335,7 @@ class ProjectMapping(Base):
     not_allocated = Column(String)                  # 'Not Allocated'
     source_of_origin = Column(String, nullable=True)
     priority = Column(String, nullable=True)
+    is_commissioned = Column(Boolean, default=False)
     tc_progress = Column(JSON, nullable=True)  # Added for rich transmission data# ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------

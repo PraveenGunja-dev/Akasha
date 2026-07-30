@@ -132,8 +132,9 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
         ) : (
           <>
             {Object.entries(tabNotifications.reduce((acc: any, n: any) => {
-              if (!acc[n.project_name]) acc[n.project_name] = [];
-              acc[n.project_name].push(n);
+              const dispName = n.p6_project_name || n.project_name || 'Global';
+              if (!acc[dispName]) acc[dispName] = [];
+              acc[dispName].push(n);
               return acc;
             }, {})).map(([projectName, group]: [string, any]) => (
               <div 

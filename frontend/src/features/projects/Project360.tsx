@@ -5,7 +5,7 @@ import {
   Clock, Package, CheckCircle2, XCircle, Eye,
   Zap, Target, Layers, Info,
   Brain, Truck, DollarSign, Users,
-  CalendarClock, Factory, SlidersHorizontal, X
+  CalendarClock, Factory, SlidersHorizontal, X, Bell
 } from 'lucide-react';
 
 /* ═══════════════════════════════════════════════════════════
@@ -221,6 +221,7 @@ const MetricBreakdownModal = ({
   );
 };
 
+
 /* ═══════════════════════════════════════════════════════════
    PORTFOLIO BRIEFING CARD
    ═══════════════════════════════════════════════════════════ */
@@ -309,7 +310,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             <div>
               <h3 className="text-base font-semibold text-foreground flex items-center gap-2 tracking-tight">
                 Portfolio Briefing
-                <span className="text-[10px] bg-success/100/10 text-success dark:text-success px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-success/20 flex items-center gap-1">
+                <span className="text-[10px] bg-success/10 text-success dark:text-success px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider border border-success/20 flex items-center gap-1">
                   <span className="w-1.5 h-1.5 rounded-full bg-success/100 animate-pulse"></span> Live
                 </span>
               </h3>
@@ -507,6 +508,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
   // Otherwise, assume it's already a percentage (e.g. 3.9 = 3.9%)
   const progressPct = progressRaw > 0 && progressRaw <= 1 ? progressRaw * 100 : progressRaw;
 
+  const isCommissioned = Boolean(project.isCommissioned);
+
   const accentColor =
     project.statusTier === 'Critical' ? '#EF4444' :
       project.statusTier === 'High Risk' ? '#F97316' :
@@ -529,10 +532,11 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
           </h3>
           <div className={`w-2 h-2 rounded-full shrink-0 ${statusCfg.bgColor}`} style={{ backgroundColor: accentColor, boxShadow: `0 0 6px ${accentColor}80` }}></div>
         </div>
-        <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground">
+        <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground mt-1">
            <span className="bg-muted px-1.5 py-0.5 rounded text-foreground/80 font-semibold">{project.capacityMW} MW</span>
-           <span className="opacity-80 border-l border-border pl-2">SPV: {project.sapPlantCode}</span>
-           <span className="opacity-80 border-l border-border pl-2">P6: {project.projectId}</span>
+           <span className="opacity-80 border-l border-border pl-2 flex items-center gap-1">
+             P6: {project.projectId}
+           </span>
         </div>
       </div>
 
@@ -637,6 +641,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   const [searchParams] = useSearchParams();
   const rawPortfolio = searchParams.get('portfolio');
   const portfolio = rawPortfolio ? rawPortfolio.replace(/\+/g, ' ') : null;
+  const phaseFilter = searchParams.get('phase') || 'Ongoing';
 
   useEffect(() => {
     setLoading(true);
@@ -658,8 +663,10 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         (d.sapPlantCode?.toLowerCase().includes(searchLower) ?? false) ||
         (d.primaryIssue?.toLowerCase().includes(searchLower) ?? false);
       const matchesStatus = statusFilter === 'All' || d.statusTier === statusFilter;
-      const matchesRisk = riskFilters.length === 0 || riskFilters.some(rf => d.riskCategories.includes(rf));
-      return matchesSearch && matchesStatus && matchesRisk;
+      const isCommissioned = Boolean(d.isCommissioned);
+      const matchesPhase = phaseFilter === 'ALL' ? true : phaseFilter === 'Commissioned' ? isCommissioned : !isCommissioned;
+      const matchesRisk = riskFilters.length === 0 || riskFilters.every(rf => d.riskCategories?.includes(rf));
+      return matchesSearch && matchesStatus && matchesPhase && matchesRisk;
     })
     .sort((a, b) => {
       switch (sortBy) {
@@ -701,23 +708,11 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
             Project Intelligence
           </h2>
         </div>
-        <span className="text-[11px] font-mono text-muted-foreground">
-          {data.length} projects · Live Data
-        </span>
       </div>
 
       {/* ── Executive Briefing ── */}
       {!loading && data.length > 0 && <PortfolioBriefingCard data={data} />}
 
-      {/* ── Status Tier Distribution ── */}
-      <div className="flex flex-wrap gap-2.5 mb-5">
-        <StatusPill tier="All" count={data.length} active={statusFilter === 'All'}
-          onClick={() => setStatusFilter('All')} />
-        {Object.entries(statusCounts).map(([tier, count]) => (
-          <StatusPill key={tier} tier={tier} count={count} active={statusFilter === tier}
-            onClick={() => setStatusFilter(statusFilter === tier ? 'All' : tier)} />
-        ))}
-      </div>
 
       {/* ── Search + Sort + Filters Bar ── */}
       <div className="flex flex-col gap-3 mb-5">
