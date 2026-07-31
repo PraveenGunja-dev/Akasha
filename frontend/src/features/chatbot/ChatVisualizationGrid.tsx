@@ -1,7 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
-import { BarChart3, CalendarDays, Maximize2, Table2, X } from 'lucide-react';
+import { BarChart3, CalendarDays, Maximize2, Minimize2, Table2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 import { visualizationSpecToECharts } from './visualizationAdapter';
@@ -49,10 +50,26 @@ function VisualizationCard({ visualization, index }: { visualization: ChartVisua
       : visualization.spec as EChartsOption,
     [semanticSpec, visualization.spec],
   );
+
+  useEffect(() => {
+    if (!expanded) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExpanded(false);
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [expanded]);
+
   const renderChart = (isExpanded = false) => (
     <ReactECharts
       option={option}
-      style={{ height: isExpanded ? 'min(72vh, 680px)' : 390, width: '100%' }}
+      style={{ height: isExpanded ? '100%' : 390, width: '100%' }}
+      className={isExpanded ? 'chat-chart-expanded-canvas' : undefined}
       notMerge
       lazyUpdate
       opts={{ renderer: 'svg' }}
@@ -92,17 +109,35 @@ function VisualizationCard({ visualization, index }: { visualization: ChartVisua
         <footer className="chart-freshness"><CalendarDays className="h-3.5 w-3.5" /> Data as of {visualization.data_as_of}</footer>
       )}
 
-      {expanded && (
-        <div className="chat-chart-modal" role="dialog" aria-modal="true" aria-label={visualization.title}>
+      {expanded && typeof document !== 'undefined' && createPortal(
+        <div
+          className="chat-chart-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-label={visualization.title || 'Expanded visualization'}
+          onMouseDown={event => {
+            if (event.currentTarget === event.target) setExpanded(false);
+          }}
+        >
           <div className="chat-chart-modal-card">
             <div className="chat-chart-modal-header">
               <div><h3>{visualization.title}</h3>{visualization.subtitle && <p>{visualization.subtitle}</p>}</div>
-              <button type="button" onClick={() => setExpanded(false)} aria-label="Close expanded chart"><X className="h-5 w-5" /></button>
+              <button
+                type="button"
+                className="chat-chart-restore-button"
+                onClick={() => setExpanded(false)}
+                aria-label="Restore chart to dashboard"
+                title="Exit full screen"
+              >
+                <Minimize2 className="h-5 w-5" />
+                <span>Restore</span>
+              </button>
             </div>
-            {renderChart(true)}
+            <div className="chat-chart-modal-body">{renderChart(true)}</div>
             {visualization.summary && <p className="chart-insight">{visualization.summary}</p>}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </motion.article>
   );

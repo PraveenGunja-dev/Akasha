@@ -64,9 +64,10 @@ class ChartSpecServiceTests(unittest.TestCase):
         }])
         self.assertEqual(data["fulfillment_pct"], 60.0)
         self.assertFalse(chart.get("no_data", False))
-        self.assertEqual(chart["option"]["series"][0]["data"], [15])
-        self.assertEqual(chart["option"]["series"][1]["data"], [9])
-        self.assertEqual(chart["option"]["series"][2]["data"], [6])
+        self.assertEqual([series["name"] for series in chart["option"]["series"]], ["Delivered", "Pending"])
+        self.assertEqual(chart["option"]["series"][0]["data"], [9])
+        self.assertEqual(chart["option"]["series"][1]["data"], [6])
+        self.assertEqual(chart["option"]["series"][0]["stack"], "ordered")
 
     def test_project_comparison_uses_canonical_schedule_progress(self):
         self.db.add(models.P6Project(

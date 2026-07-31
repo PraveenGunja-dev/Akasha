@@ -49,14 +49,14 @@ STATUS_COLORS = {
 
 # Chart types this engine can render, with the data shape each one fits.
 CHART_TYPES = {
-    "activity_status": "Donut of a project's activities by status (Completed / In Progress / Not Started).",
+    "activity_status": "Rose chart of a project's activities by status (Completed / In Progress / Not Started).",
     "project_comparison": "Horizontal bar comparing % complete across multiple projects.",
     "delayed_activities": "Horizontal bar of a project's most-delayed activities by days of drift.",
     "material_gaps": "Horizontal bar of a project's materials with the largest pending-delivery quantities.",
     "vendor_performance": "Grouped bar of ordered vs delivered vs pending quantity per vendor for a project.",
     "sap_po_fulfillment": "Grouped bar of SAP PO ordered vs delivered vs pending per material for a project.",
-    "transmission_status": "Donut of a project's (or the portfolio's) transmission lines by status.",
-    "portfolio_risk": "Horizontal bar of the riskiest projects across the portfolio by risk score.",
+    "transmission_status": "Rose chart of a project's (or the portfolio's) transmission lines by status.",
+    "portfolio_risk": "Lollipop ranking of the riskiest projects across the portfolio by risk score.",
     "daily_completion_trend": "Daily activity actual-finish events with cumulative completion-event context.",
     "block_progress": "Horizontal bar of the current average activity completion by project block.",
 }
@@ -223,6 +223,143 @@ def _finalize_chart(chart: dict) -> dict:
     }
 
 
+def _rose_option(title: str, subtitle: str, data: list) -> dict:
+    """A compact polar-area view for small categorical status distributions."""
+    series_data = [
+        {"value": item["value"], "name": item["name"], "itemStyle": {"color": item["color"]}}
+        for item in data
+    ]
+    return {
+        **_base_option(f"{title}. {subtitle}."),
+        "tooltip": {**_tooltip("item"), "formatter": "{b}<br/><b>{c}</b> ({d}%)"},
+        "legend": {
+            "bottom": 0,
+            "left": "center",
+            "textStyle": {"color": "var(--foreground)", "fontSize": 11},
+        },
+        "series": [{
+            "name": title,
+            "type": "pie",
+            "roseType": "radius",
+            "radius": [34, "68%"],
+            "center": ["50%", "44%"],
+            "minAngle": 8,
+            "itemStyle": {
+                "borderRadius": 9,
+                "borderColor": "var(--card)",
+                "borderWidth": 3,
+            },
+            "label": {
+                "show": True,
+                "color": "var(--foreground)",
+                "formatter": "{b}\n{c}",
+                "fontSize": 11,
+            },
+            "labelLine": {"length": 10, "length2": 8},
+            "emphasis": {"scaleSize": 8},
+            "data": series_data,
+        }],
+    }
+
+
+def _lollipop_option(
+    title: str,
+    subtitle: str,
+    categories: list,
+    values: list,
+    colors: list | None = None,
+    value_formatter: str = "{value}",
+) -> dict:
+    """A low-ink ranking chart that emphasizes endpoints instead of heavy bars."""
+    item_colors = colors or [PALETTE[0]] * len(values)
+    points = [
+        {
+            "value": [value, index],
+            "itemStyle": {"color": item_colors[index]},
+            "label": {
+                "show": True,
+                "position": "right",
+                "formatter": str(value) if value_formatter == "{value}" else f"{value}d",
+                "color": "var(--foreground)",
+                "fontWeight": 700,
+            },
+        }
+        for index, value in enumerate(values)
+    ]
+    stems = [
+        {"value": value, "itemStyle": {"color": item_colors[index], "opacity": 0.72}}
+        for index, value in enumerate(values)
+    ]
+    return {
+        **_base_option(f"{title}. {subtitle}."),
+        "tooltip": _tooltip("axis"),
+        "grid": {"left": "3%", "right": "12%", "top": 24, "bottom": 30, "containLabel": True},
+        "xAxis": _value_axis(value_formatter),
+        "yAxis": {**_cat_axis(categories), "inverse": True},
+        "series": [
+            {"name": title, "type": "bar", "data": stems, "barWidth": 4, "silent": True},
+            {"name": title, "type": "scatter", "data": points, "symbolSize": 18, "z": 3},
+        ],
+    }
+
+
+def _vertical_grouped_option(title: str, subtitle: str, categories: list, series: list) -> dict:
+    """Grouped columns for side-by-side entity comparisons."""
+    return {
+        **_base_option(f"{title}. {subtitle}."),
+        "tooltip": _tooltip("axis"),
+        "legend": {"bottom": 0, "textStyle": {"color": "var(--foreground)"}},
+        "grid": {"left": 44, "right": 20, "top": 24, "bottom": 78, "containLabel": True},
+        "xAxis": {
+            **_cat_axis(categories),
+            "axisLabel": {
+                "color": "var(--muted-foreground)",
+                "width": 86,
+                "overflow": "truncate",
+                "rotate": 18 if len(categories) > 5 else 0,
+            },
+        },
+        "yAxis": _value_axis(),
+        "series": [{
+            "name": item["name"],
+            "type": "bar",
+            "data": item["data"],
+            "barMaxWidth": 30,
+            "itemStyle": {"color": item["color"], "borderRadius": [7, 7, 0, 0]},
+        } for item in series],
+    }
+
+
+def _fulfillment_option(title: str, subtitle: str, categories: list, delivered: list, pending: list) -> dict:
+    """A 100%-meaningful stacked fulfillment bar: delivered plus pending equals ordered scope."""
+    return {
+        **_base_option(f"{title}. {subtitle}."),
+        "tooltip": _tooltip("axis"),
+        "legend": {"bottom": 0, "textStyle": {"color": "var(--foreground)"}},
+        "grid": {"left": "3%", "right": "8%", "top": 24, "bottom": 44, "containLabel": True},
+        "xAxis": _value_axis(),
+        "yAxis": {**_cat_axis(categories), "inverse": True},
+        "series": [
+            {
+                "name": "Delivered",
+                "type": "bar",
+                "stack": "ordered",
+                "data": delivered,
+                "barMaxWidth": 24,
+                "itemStyle": {"color": STATUS_COLORS["completed"], "borderRadius": [7, 0, 0, 7]},
+            },
+            {
+                "name": "Pending",
+                "type": "bar",
+                "stack": "ordered",
+                "data": pending,
+                "barMaxWidth": 24,
+                "itemStyle": {"color": STATUS_COLORS["at_risk"], "borderRadius": [0, 7, 7, 0]},
+            },
+        ],
+    }
+
+
 def _display_name(db: Session, project_id: str) -> str:
     project = ProjectCatalogService.get_by_project_id(db, project_id)
     return project.display_name if project else project_id
@@ -291,7 +428,7 @@ def _chart_activity_status(db: Session, project_id: str) -> dict:
         "chart_type": "activity_status",
         "title": f"{name} — Activity Status",
         "data_points": b.get("total", 0),
-        "option": _donut_option(f"{name} — Activity Status", f"{b.get('total', 0)} activities", data),
+        "option": _rose_option(f"{name} — Activity Status", f"{b.get('total', 0)} activities", data),
         "_source_tables": b["sources"],
     }
 
@@ -339,13 +476,12 @@ def _chart_delayed_activities(db: Session, project_id: str, limit: int = 12) -> 
         "chart_type": "delayed_activities",
         "title": f"{name} — Most Delayed Activities",
         "data_points": len(acts),
-        "option": _hbar_option(
-            f"{name} — Most Delayed Activities", "days drifted from baseline finish",
+        "option": _lollipop_option(
+            f"{name} — Most Delayed Activities",
+            "days drifted from baseline finish",
             categories,
-            [{"name": "Days delayed",
-              "data": [{"value": v, "itemStyle": {"color": c, "borderRadius": [0, 4, 4, 0]}}
-                       for v, c in zip(values, colors_per_bar)],
-              "color": STATUS_COLORS["delayed"]}],
+            values,
+            colors_per_bar,
             value_formatter="{value}d",
         ),
         "_source_tables": data["sources"],
@@ -362,22 +498,18 @@ def _chart_material_gaps(db: Session, project_id: str, limit: int = 12) -> dict:
     # Sort by pending descending so most critical gap is at the top
     gaps_sorted = sorted(gaps, key=lambda g: g.get("pending", 0), reverse=True)[:limit]
     categories = [g["name"][:40] for g in gaps_sorted]
-    ordered  = [g.get("ordered", 0) for g in gaps_sorted]
     delivered = [g.get("delivered", 0) for g in gaps_sorted]
     pending  = [g.get("pending", 0) for g in gaps_sorted]
     return {
         "chart_type": "material_gaps",
         "title": f"{name} — Pending Material Deliveries",
         "data_points": len(gaps_sorted),
-        "option": _hbar_option(
+        "option": _fulfillment_option(
             f"{name} — Pending Material Deliveries",
             "ordered / delivered / pending quantity by material",
             categories,
-            [
-                {"name": "Ordered",   "data": ordered,   "color": PALETTE[3]},
-                {"name": "Delivered", "data": delivered, "color": STATUS_COLORS["completed"]},
-                {"name": "Pending",   "data": pending,   "color": STATUS_COLORS["at_risk"]},
-            ],
+            delivered,
+            pending,
         ),
         "_source_tables": data["sources"],
     }
@@ -398,7 +530,7 @@ def _chart_vendor_performance(db: Session, project_id: str, limit: int = 8) -> d
         "chart_type": "vendor_performance",
         "title": f"{name} — Vendor Delivery",
         "data_points": len(vendors),
-        "option": _hbar_option(
+        "option": _vertical_grouped_option(
             f"{name} — Vendor Delivery", "ordered vs delivered vs pending quantity by vendor",
             categories,
             [
@@ -420,7 +552,6 @@ def _chart_sap_po_fulfillment(db: Session, project_id: str, limit: int = 12) -> 
     name = po.get("project_name", project_id)
     mats = po["rows"]
     categories = [m["name"][:40] for m in mats]
-    ordered = [m["ordered"] for m in mats]
     delivered = [m["delivered"] for m in mats]
     pending = [m["pending"] for m in mats]
     fulfill_pct = round(po.get("fulfillment_pct", 0), 1)
@@ -428,15 +559,12 @@ def _chart_sap_po_fulfillment(db: Session, project_id: str, limit: int = 12) -> 
         "chart_type": "sap_po_fulfillment",
         "title": f"{name} — SAP PO Fulfillment",
         "data_points": len(mats),
-        "option": _hbar_option(
+        "option": _fulfillment_option(
             f"{name} — SAP PO Fulfillment",
             f"Overall fulfillment: {fulfill_pct}%  |  ordered / delivered / pending by material",
             categories,
-            [
-                {"name": "Ordered",   "data": ordered,   "color": PALETTE[3]},
-                {"name": "Delivered", "data": delivered, "color": STATUS_COLORS["completed"]},
-                {"name": "Pending",   "data": pending,   "color": STATUS_COLORS["at_risk"]},
-            ],
+            delivered,
+            pending,
         ),
         "_source_tables": po["sources"],
     }
@@ -471,7 +599,7 @@ def _chart_transmission_status(db: Session, project_id: str = None) -> dict:
         "chart_type": "transmission_status",
         "title": title,
         "data_points": total,
-        "option": _donut_option(title, f"{total} lines", data),
+        "option": _rose_option(title, f"{total} lines", data),
         "_source_tables": t["sources"],
     }
 
@@ -491,10 +619,15 @@ def _chart_portfolio_risk(db: Session, limit: int = 8) -> dict:
         "chart_type": "portfolio_risk",
         "title": "Portfolio — Riskiest Projects",
         "data_points": len(rows),
-        "option": _hbar_option(
-            "Portfolio — Riskiest Projects", subtitle,
-            categories, [{"name": "Risk", "data": values, "color": STATUS_COLORS["delayed"]}],
-            value_formatter="{value}",
+        "option": _lollipop_option(
+            "Portfolio — Riskiest Projects",
+            subtitle,
+            categories,
+            values,
+            [
+                STATUS_COLORS["delayed"] if value >= 2 else STATUS_COLORS["at_risk"]
+                for value in values
+            ],
         ),
         "_source_tables": data["sources"],
     }
