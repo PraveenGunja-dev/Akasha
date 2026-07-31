@@ -3,6 +3,7 @@ import {
   Shield, AlertTriangle, CheckCircle2, Clock, Users, XCircle,
   Package, MapPin, Search, Filter, ChevronDown
 } from 'lucide-react';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   raised: { label: 'Raised', color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20' },
@@ -33,8 +34,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
   useEffect(() => {
     if (!projectName) return;
     setLoading(true);
-    fetch(`/akasha/api/quality/project/${encodeURIComponent(projectName)}`)
-      .then(r => r.json())
+    getCachedDashboardJson<any>(`/akasha/api/quality/project/${encodeURIComponent(projectName)}`)
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
   }, [projectName]);

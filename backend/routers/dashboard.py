@@ -4,11 +4,16 @@ from sqlalchemy import func
 from typing import List, Dict, Any, Optional
 import json
 import time
-from datetime import datetime
 
 from database import get_db
 import models
-from services.project_service import filter_tc_edges_by_kps
+from services.project_catalog_service import has_portfolio_filter, list_project_mappings
+from services.capacity_milestone_service import CapacityMilestoneService
+from services.schedule_metrics_service import ScheduleMetricsService, calculate_schedule_metrics
+from services.sap_project_data_service import get_sap_project_data, get_sap_projects_data
+from services.quality_analytics_service import QualityAnalyticsService
+from services.freshness_service import cache_version_token
+from services import transmission_service
 
 def _safe_parse_phase(projects_json):
     if not projects_json:
@@ -58,47 +63,193 @@ def clear_dashboard_caches():
     _KG_CACHE.clear()
     _SUMMARY_CACHE.clear()
 
+
+def _serialize_dashboard_quality(overview, scorecard, snapshots, mappings):
+    """Adapt canonical quality DTOs to the established dashboard contract."""
+    mapping_by_project = {mapping.project_id: mapping for mapping in mappings if mapping.project_id}
+    mappings_by_name = {
+        str(name).strip().casefold(): mapping
+        for mapping in mappings
+        for name in (mapping.project, mapping.project_name_from_p6)
+        if name
+    }
+    projects_by_contractor = {}
+    for snapshot in snapshots:
+        mapping = mapping_by_project.get(snapshot.project_id)
+        if mapping is None and snapshot.project_name:
+            mapping = mappings_by_name.get(snapshot.project_name.strip().casefold())
+        open_by_contractor = {}
+        for nc in snapshot.ncs:
+            if nc.status == "completed":
+                continue
+            name = " ".join(str(nc.vendor_name or "Unknown").strip().split()) or "Unknown"
+            key = name.casefold()
+            open_by_contractor[key] = open_by_contractor.get(key, 0) + 1
+        for contractor, count in open_by_contractor.items():
+            projects_by_contractor.setdefault(contractor, []).append({
+                "project_name": (mapping.project if mapping else snapshot.project_name) or "Unknown Project",
+                "p6_name": (mapping.project_name_from_p6 if mapping else snapshot.project_name) or "Unknown Project",
+                "mapping_id": mapping.id if mapping else None,
+                "p6_id": snapshot.project_id,
+                "open_ncs": count,
+            })
+
+    contractors = sorted(
+        (contractor for contractor in scorecard.contractors if contractor.open),
+        key=lambda contractor: (-contractor.open, contractor.name.casefold()),
+    )[:15]
+    provenance = overview.provenance
+    return {
+        "total_ncs": overview.total_ncs,
+        "open_ncs": overview.open_ncs,
+        "resolved_ncs": overview.completed_ncs,
+        "closure_rate": overview.closure_rate,
+        "total_rfis": overview.total_rfis,
+        "completed_rfis": overview.rfis_completed,
+        "top_contractors": [
+            {
+                "name": contractor.name,
+                "value": contractor.open,
+                "projects": sorted(
+                    projects_by_contractor.get(contractor.name.casefold(), []),
+                    key=lambda project: project["open_ncs"],
+                    reverse=True,
+                ),
+            }
+            for contractor in contractors
+        ],
+        "freshness": {
+            "data_as_of": provenance.data_as_of,
+            "nc_last_synced_at": provenance.nc_last_synced_at,
+            "rfi_last_synced_at": provenance.rfi_last_synced_at,
+        },
+        "warnings": [
+            {
+                "source": warning.source,
+                "source_id": warning.source_id,
+                "reason": warning.reason,
+                "candidates": list(warning.candidates),
+            }
+            for warning in overview.warnings
+        ],
+    }
+
+
+def _serialize_knowledge_graph_schedule(schedule):
+    """Adapt canonical schedule metrics to the established graph payload."""
+    if not schedule.p6_available:
+        return "unknown", 0, None, "Unassigned"
+
+    progress = round(schedule.progress_pct or 0)
+    eps = getattr(schedule, "parent_eps_name", None) or "Unassigned"
+    return (
+        "delayed" if schedule.is_delayed else "on_track",
+        progress,
+        {
+            "start_date": str(schedule.start_date) if schedule.start_date else None,
+            "finish_date": str(schedule.finish_date) if schedule.finish_date else None,
+            "planned_finish": str(schedule.scheduled_finish) if schedule.scheduled_finish else None,
+            "variance_days": round(schedule.finish_date_variance or 0),
+            "duration_pct": progress,
+            "construction_pct": progress,
+            "schedule_pct": progress,
+            "status": schedule.status or "N/A",
+            "eps_name": eps if eps != "Unassigned" else "",
+        },
+        eps,
+    )
+
+
+def _serialize_knowledge_graph_sap(mapping, snapshot):
+    """Adapt canonical project SAP aggregates to the legacy graph contract."""
+    plant_code = str(mapping.spv_plant_code or "").strip()
+    agel_code = str(mapping.agel or "").strip()
+    if not plant_code and not agel_code:
+        return None
+
+    totals = snapshot["totals"]
+    purchase_orders = totals["purchase_orders"]
+    logistics = totals["logistics"]
+    vendors = []
+    for vendor in snapshot["vendors"][:3]:
+        name = vendor["name"].strip()
+        parts = name.split(" ", 1)
+        if len(parts) == 2 and parts[0].isdigit():
+            name = parts[1].strip()
+        vendors.append({
+            "name": name[:25],
+            "value_cr": round(vendor["order_value"] / 10000000, 2),
+        })
+
+    return {
+        "plant_code": plant_code,
+        "po_count": round(logistics["purchase_order_count"]),
+        "po_total_cr": round(purchase_orders["order_value"] / 10000000, 2),
+        "po_mw": round(logistics["ordered_mw"], 1),
+        "requirement_count": 0,
+        "requirement_mw": 0,
+        "inventory_items": round(logistics["inventory_item_count"]),
+        "inventory_mw": round(logistics["inventory_mw"], 1),
+        "in_transit_count": round(logistics["in_transit_count"]),
+        "in_transit_mw": round(logistics["in_transit_mw"], 1),
+        "top_vendors": vendors,
+    }
+
+
+def _serialize_knowledge_graph_transmission(mapping, edges):
+    """Adapt canonical transmission line DTOs and mapped overrides."""
+    progress = mapping.tc_progress or {}
+    lines_charged = progress.get("linesCharged", {})
+    if not edges and not progress:
+        return None
+    return {
+        "total_lines": lines_charged.get("total", len(edges)),
+        "charged_lines": lines_charged.get(
+            "count", sum(line["canonical_status"] == "completed" for line in edges)
+        ),
+        "delayed_lines": progress.get("delayed", {}).get(
+            "count", sum(bool(line["is_delayed"]) for line in edges)
+        ),
+        "lines": [
+            {
+                "name": f'{line["from_label"]} \u2192 {line["to_label"]}',
+                "status": line["status"],
+                "normalized_status": line["normalized_status"],
+                "foundation": line["foundation"],
+                "erection": line["erection"],
+                "stringing": line["stringing"],
+                "expected_date": line["expected_date"],
+            }
+            for line in edges
+        ],
+    }
+
 @router.get("/summary")
 def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a global portfolio summary and a unified list of all mapped projects
-    with data from P6, SAP, and Transmission. Includes all P6 projects even if unmapped.
+    with optional data from P6, SAP, and Transmission.
     """
     global _SUMMARY_CACHE
     cache_key = str(portfolio).lower() if portfolio else "all"
+    cache_version = cache_version_token(db, ("P6", "SAP", "TC", "Pulse", "Mapping", "Capacity"))
     
     if not nocache and cache_key in _SUMMARY_CACHE:
         entry = _SUMMARY_CACHE[cache_key]
-        if time.time() - entry["timestamp"] < _CACHE_TTL:
+        if time.time() - entry["timestamp"] < _CACHE_TTL and entry.get("version") == cache_version:
             return entry["data"]
             
-    query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        p_clean = portfolio.replace('+', ' ').strip().lower()
-        # Make filtering robust by splitting into words
-        parts = p_clean.split()
-        for part in parts:
-            query = query.filter(
-                (func.lower(models.ProjectMapping.cluster).contains(part)) |
-                (func.lower(models.ProjectMapping.category).contains(part)) |
-                (func.lower(models.ProjectMapping.project).contains(part))
-            )
-            
-    raw_mappings = query.all()
+    mappings = list_project_mappings(db, portfolio)
+    sap_by_project = get_sap_projects_data(
+        db, [m.project_id for m in mappings if m.project_id], mappings=list_project_mappings(db)
+    )
+    tc_snapshot = transmission_service.build_transmission_snapshot(db)
     raw_p6_projects = db.query(models.P6Project).all()
-    
-    # Filter out Demo projects
-    filtered_mappings = []
-    for m in raw_mappings:
-        name_check = m.project_name_from_p6 or m.project or ""
-        if "demo" not in name_check.lower():
-            filtered_mappings.append(m)
-            
-    if portfolio and portfolio.lower() != "all portfolios":
-        mapped_ids = [m.project_id for m in filtered_mappings if m.project_id]
+
+    if has_portfolio_filter(portfolio):
+        mapped_ids = [m.project_id for m in mappings if m.project_id]
         raw_p6_projects = [p for p in raw_p6_projects if p.project_id in mapped_ids]
-    
-    mappings = filtered_mappings
+
     p6_projects = raw_p6_projects
     
     portfolio_summary = {
@@ -114,40 +265,9 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
     project_list = []
     mapped_p6_ids = set()
     
-    # --- PRE-FETCH DATA FOR N+1 OPTIMIZATION ---
-    cap_data = db.query(models.ProjectMapping.spv_plant_code, func.sum(models.ProjectMapping.capacity_mwac)).group_by(models.ProjectMapping.spv_plant_code).all()
-    capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
-    
-    inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.plant_code).all() if r[0]}
+    # Requirements are not WBS-addressable; retain the legacy requirement source
+    # while all project-addressable SAP tables come from the shared snapshot.
     req_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTRequirement.spv_plant_code, func.sum(models.MTRequirement.budgeted_units_mw)).group_by(models.MTRequirement.spv_plant_code).all() if r[0]}
-    
-    # We will compute in-transit QTY inline
-    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    
-    po_qty_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-
-    all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
-    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
-    # PO aggregates grouped by WBS element. The plant_code join below is unreliable — a
-    # project's spv_plant_code (e.g. 'H-51PA') is NOT the SAP plant_code (e.g. '51Y1'), so
-    # plant lookups returned 0 for every project (PO value tiles showed ₹0). WBS element
-    # matches on both sides (mapping.module_wbs 'H-51Y1-01-01' == mt_poamount.wbs_element).
-    all_po_qty_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.wbs_element).all()
-    all_po_val_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.wbs_element).all()
-    all_po_delivered_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.wbs_element).all()
-
-    all_tc_entries = db.query(models.TcProjectEntry).all()
-    all_tc_edges = db.query(models.TcNetworkEdge).all()
-    
-    parsed_edge_phases = {}
-    for edge in all_tc_edges:
-        parsed_edge_phases[edge.id] = set()
-        if edge.projects:
-            phase_val = _safe_parse_phase(edge.projects)
-            if phase_val and phase_val != "Unknown Phase":
-                parsed_edge_phases[edge.id] = {str(phase_val).strip().upper()}
     # Pre-fetch Capacity Overview to get accurate COD and Trial Run MW (and dynamically computed WTG capacity)
     cap_data = get_capacity_overview(portfolio, db)
     proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
@@ -180,35 +300,14 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             if not p6_data:
                 p6_data = next((p for p in p6_projects if p.name and clean_name in str(p.name).strip().lower()), None)
 
-        is_delayed = False
+        schedule = calculate_schedule_metrics(p6_data)
+        is_delayed = bool(schedule.is_delayed)
         schedule_health = "Unknown"
-        progress = 0
-        
-        if p6_data:
+        progress = schedule.progress_pct if schedule.progress_pct is not None else 0
+
+        if schedule.p6_available:
             mapped_p6_ids.add(p6_data.project_id)
-            if getattr(p6_data, 'at_completion_non_labor_units', 0) and p6_data.at_completion_non_labor_units > 0:
-                calc_val = (getattr(p6_data, 'actual_non_labor_units', 0) or 0) / p6_data.at_completion_non_labor_units
-                p6_pct = calc_val * 100
-            else:
-                p6_pct = getattr(p6_data, 'construction_percent_complete', None)
-                if p6_pct is None:
-                    p6_pct = p6_data.duration_percent_complete or 0
-                if p6_pct <= 1.0 and p6_pct > 0:
-                    p6_pct *= 100
-                    
-            progress = p6_pct
-            is_delayed_proj = False
-            
-            if p6_data.finish_date_variance and p6_data.finish_date_variance < 0:
-                is_delayed_proj = True
-            elif p6_data.finish_date and progress < 100:
-                if p6_data.baseline_finish_date and p6_data.finish_date.date() > p6_data.baseline_finish_date.date():
-                    is_delayed_proj = True
-                elif p6_data.scheduled_finish_date and p6_data.finish_date.date() > p6_data.scheduled_finish_date.date():
-                    is_delayed_proj = True
-                    
-            if is_delayed_proj:
-                is_delayed = True
+            if is_delayed:
                 schedule_health = "Delayed"
                 portfolio_summary["delayed_projects"] += 1
             else:
@@ -219,72 +318,31 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             portfolio_summary["on_track_projects"] += 1
                 
         # SAP Data Mapping
+        sap_data = sap_by_project.get(m.project_id or f"mapping:{m.id}")
+        sap_po = sap_data["totals"]["purchase_orders"]
+        sap_inventory = sap_data["totals"]["inventory"]
         plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""
         agel_code_str = str(m.agel).strip() if m.agel else ""
         
-        # Calculate allocation ratio using primary spv_plant_code
-        total_capacity = capacity_by_plant.get(plant_code_str, 1.0)
-        project_capacity = m.capacity_mwac or 0
-        allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
+        allocation_ratio = sap_data["scope"]["allocation_ratio"]
 
         # We will use whichever code has the data (often AGEL code for PO/Inventory)
         req_mw = req_by_plant.get(plant_code_str, 0) or req_by_plant.get(agel_code_str, 0)
         
-        if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-            clean_wbs = str(m.module_wbs).strip().lower()
-            inv_qty = sum(qty for wbs, qty in all_inv_wbs if wbs and qty and clean_wbs in str(wbs).lower())
-            it_qty = sum(qty for wbs, qty in all_it_wbs if wbs and qty and clean_wbs in str(wbs).lower())
-            # PO qty/value/delivered join on WBS too (see aggregate note above). WBS is
-            # project-specific, so no plant-sharing allocation ratio is applied here.
-            po_qty = sum(v for wbs, v in all_po_qty_wbs if wbs and v and clean_wbs in str(wbs).lower())
-            po_value = sum(v for wbs, v in all_po_val_wbs if wbs and v and clean_wbs in str(wbs).lower())
-            po_delivered_cr = sum(v for wbs, v in all_po_delivered_wbs if wbs and v and clean_wbs in str(wbs).lower())
-            allocation_ratio_inv = 1.0
-        else:
-            inv_qty = (inv_by_plant.get(plant_code_str, 0) or inv_by_plant.get(agel_code_str, 0)) or 0
-            it_qty = (it_by_plant.get(plant_code_str, 0) or it_by_plant.get(agel_code_str, 0)) or 0
-            # Fallback to plant lookup only when the project has no WBS (legacy behavior).
-            po_qty = ((po_qty_by_plant.get(plant_code_str, 0) or po_qty_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
-            po_value = ((po_val_by_plant.get(plant_code_str, 0) or po_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
-            po_delivered_cr = ((po_delivered_val_by_plant.get(plant_code_str, 0) or po_delivered_val_by_plant.get(agel_code_str, 0)) or 0) * allocation_ratio
-            allocation_ratio_inv = allocation_ratio
-
-        inv_qty *= allocation_ratio_inv
-        it_qty *= allocation_ratio_inv
+        inv_qty = sap_inventory["quantity"]
+        it_qty = sap_po["pending_quantity"]
+        po_qty = sap_po["ordered_quantity"]
+        po_value = sap_po["order_value"]
+        po_delivered_cr = sap_po["delivered_value_inr_cr"]
         req_qty = (req_mw or 0) * allocation_ratio
 
         portfolio_summary["total_inventory_qty"] += inv_qty
         portfolio_summary["total_po_qty"] += po_qty
 
         # TC Data
-        project_entries = [pe for pe in all_tc_entries if pe.mapping_id == m.id]
-        phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
-        
-        tc_khavda = []
-        tc_rajasthan = []
-        
-        if phases:
-            for edge in all_tc_edges:
-                if phases.intersection(parsed_edge_phases.get(edge.id, set())):
-                    if edge.region == "Khavda":
-                        tc_khavda.append(edge)
-                    elif edge.region == "Rajasthan":
-                        tc_rajasthan.append(edge)
-                        
-        # Direct mappings
-        for edge in all_tc_edges:
-            if edge.mapping_id == m.id:
-                if edge.region == "Khavda":
-                    tc_khavda.append(edge)
-                elif edge.region == "Rajasthan":
-                    tc_rajasthan.append(edge)
-
-        # Deduplicate
-        tc_khavda = list({e.id: e for e in tc_khavda}.values())
-        tc_rajasthan = list({e.id: e for e in tc_rajasthan}.values())
-        
-        tc_khavda = filter_tc_edges_by_kps(tc_khavda, project_entries)
-        tc_rajasthan = filter_tc_edges_by_kps(tc_rajasthan, project_entries)
+        _, project_entries, tc_edges = transmission_service.project_edges(db, m.project_id, tc_snapshot)
+        tc_khavda = [e for e in tc_edges if transmission_service.normalize_region(e.region) == "Khavda"]
+        tc_rajasthan = [e for e in tc_edges if transmission_service.normalize_region(e.region) == "Rajasthan"]
         
         tc_summary = "0 Edges"
         if tc_khavda and tc_rajasthan:
@@ -296,6 +354,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
             
         project_list.append({
             "mapping_id": m.id,
+            "project_id": m.project_id,
             "project_name": m.project or "Unknown Entity",
             "p6_project_name": m.project_name_from_p6 or (p6_data.name if p6_data else "Unknown P6 Name"),
             "capacity_mwac": computed_capacity,
@@ -321,6 +380,11 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                 "planned_cost": p6_data.planned_cost if p6_data else 0,
                 "current_budget": p6_data.current_budget if p6_data else 0,
                 "finish_date_variance": p6_data.finish_date_variance if p6_data else 0,
+                "p6_available": schedule.p6_available,
+                "progress_unit": schedule.progress_units,
+                "progress_formula_version": schedule.progress_formula_version,
+                "finish_date_variance_unit": schedule.finish_date_variance_units,
+                "last_synced_at": schedule.last_synced_at,
             },
             "sap": {
                 "req_qty": round(req_qty, 2),
@@ -328,7 +392,13 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                 "in_transit_qty": round(it_qty, 2),
                 "inventory_qty": round(inv_qty, 2),
                 "po_value": round(po_value, 2),
-                "po_delivered_cr": round(po_delivered_cr, 2)
+                "po_delivered_cr": round(po_delivered_cr, 2),
+                "scope": sap_data["scope"],
+                "units": sap_data["units"],
+                "freshness": sap_data["freshness"],
+                "warnings": sap_data["warnings"],
+                "po_row_count": sap_data["counts"]["po_row_count"],
+                "distinct_po_count": sap_data["counts"]["distinct_po_count"],
             },
             "tc": {
                 "status": tc_summary,
@@ -336,108 +406,27 @@ def get_dashboard_summary(portfolio: Optional[str] = None, nocache: bool = False
                 "data": {
                     "khavda": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
                     "rajasthan": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
-                }
+                },
+                "freshness": transmission_service.freshness(db, snapshot=tc_snapshot),
             }
         })
         
     # ... inside get_dashboard_summary ...
     portfolio_summary["total_projects"] = len(project_list)
     
-    # Global Quality (Pulse) Metrics
-    total_ncs = db.query(func.count(models.PulseNC.id)).scalar() or 0
-    resolved_ncs = db.query(func.count(models.PulseNC.id)).filter(models.PulseNC.status == 'completed').scalar() or 0
-    total_rfis = db.query(func.count(models.PulseRFI.id)).scalar() or 0
-    completed_rfis = db.query(func.count(models.PulseRFI.id)).filter(models.PulseRFI.status == 'completed').scalar() or 0
-    
-    closure_rate = 0
-    if total_ncs > 0:
-        closure_rate = round((resolved_ncs / total_ncs) * 100, 1)
-        
-    vendor_col = func.coalesce(models.PulseNC.vendor_name, models.PulseNC.contractor_name, 'Unknown Contractor')
-    open_ncs_query = db.query(
-        vendor_col, func.count(models.PulseNC.id)
-    ).filter(
-        models.PulseNC.status != 'completed'
-    ).group_by(vendor_col).order_by(func.count(models.PulseNC.id).desc()).limit(15).all()
-    
-    top_contractor_names = [r[0] for r in open_ncs_query]
-    
-    contractor_project_ncs = {}
-    if top_contractor_names:
-        project_ncs_query = db.query(
-            vendor_col, models.PulseNC.project_name, func.count(models.PulseNC.id)
-        ).filter(
-            models.PulseNC.status != 'completed',
-            vendor_col.in_(top_contractor_names)
-        ).group_by(vendor_col, models.PulseNC.project_name).all()
-        
-        for vendor, proj, count in project_ncs_query:
-            if vendor not in contractor_project_ncs:
-                contractor_project_ncs[vendor] = []
-                
-            matched_mapping = None
-            if proj:
-                p_lower = proj.lower().strip()
-                # Try exact match
-                for m in raw_mappings:
-                    m_name = (m.project or "").lower().strip()
-                    m_p6_name = (m.project_name_from_p6 or "").lower().strip()
-                    if (m_name and p_lower == m_name) or (m_p6_name and p_lower == m_p6_name):
-                        matched_mapping = m
-                        break
-                # Try partial match if no exact match
-                if not matched_mapping:
-                    for m in raw_mappings:
-                        m_name = (m.project or "").lower().strip()
-                        m_p6_name = (m.project_name_from_p6 or "").lower().strip()
-                        if (m_name and m_name in p_lower) or (m_p6_name and m_p6_name in p_lower):
-                            matched_mapping = m
-                            break
-
-            mapping_id = matched_mapping.id if matched_mapping else None
-            p6_id = matched_mapping.project_id if matched_mapping else None
-            
-            p6_name = proj
-            if matched_mapping:
-                if matched_mapping.project_name_from_p6:
-                    p6_name = matched_mapping.project_name_from_p6
-                else:
-                    p6_proj = next((p for p in raw_p6_projects if p.project_id == matched_mapping.project_id), None)
-                    if p6_proj and p6_proj.name:
-                        p6_name = p6_proj.name
-
-            contractor_project_ncs[vendor].append({
-                "project_name": proj or "Unknown Project",
-                "p6_name": p6_name or "Unknown Project",
-                "mapping_id": mapping_id,
-                "p6_id": p6_id,
-                "open_ncs": count
-            })
-            
-    top_contractors = [
-        {
-            "name": r[0], 
-            "value": r[1],
-            "projects": sorted(contractor_project_ncs.get(r[0], []), key=lambda x: x["open_ncs"], reverse=True)
-        } for r in open_ncs_query
-    ]
-        
-    portfolio_summary["quality"] = {
-        "total_ncs": total_ncs,
-        "open_ncs": total_ncs - resolved_ncs,
-        "resolved_ncs": resolved_ncs,
-        "closure_rate": closure_rate,
-        "total_rfis": total_rfis,
-        "completed_rfis": completed_rfis,
-        "top_contractors": top_contractors
-    }
+    quality_overview = QualityAnalyticsService.portfolio_overview(db, portfolio)
+    quality_scorecard = QualityAnalyticsService.contractor_scorecard(db, portfolio)
+    quality_projects = QualityAnalyticsService.project_snapshots(db, portfolio)
+    portfolio_summary["quality"] = _serialize_dashboard_quality(
+        quality_overview, quality_scorecard, quality_projects, mappings
+    )
     
     result = {
         "summary": portfolio_summary,
         "projects": project_list
     }
     
-    _SUMMARY_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
+    _SUMMARY_CACHE[cache_key] = {"data": result, "timestamp": time.time(), "version": cache_version}
     return result
 
 @router.get("/projects/{mapping_id}")
@@ -449,30 +438,12 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
         
     p6_data = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
     
-    # SAP Items
-    # 1. Inventory Mapping (MB52)
-    inv_query = db.query(models.MTInventory)
-    if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        clean_wbs = str(m.module_wbs).strip()
-        inv_query = inv_query.filter(models.MTInventory.wbs_element.ilike(f"%{clean_wbs}%"))
-    else:
-        inv_query = inv_query.filter(
-            (models.MTInventory.plant_code == str(m.spv_plant_code).strip()) |
-            (models.MTInventory.plant_code == str(m.agel).strip())
-        )
-    inventory = inv_query.all()
-    
-    # 2. PO Items (ME2M) - only has Plant Code
-    po_items = db.query(models.MTPOAmount).filter(
-        (models.MTPOAmount.plant_code == str(m.spv_plant_code).strip()) |
-        (models.MTPOAmount.plant_code == str(m.agel).strip())
-    ).all()
-    
-    # 3. In-Transit Mapping (ME2K Still to Deliver)
+    sap_data = get_sap_project_data(db, m.project_id)
+    inventory = sap_data["inventory"]
+    po_items = sap_data["purchase_orders"]
     in_transit = [po for po in po_items if (po.still_to_deliver_qty or 0) > 0]
-    
-    # TC Data from Local DB (Exactly mapped by mapping_id)
-    tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
+
+    _, _, tc_edges = transmission_service.project_edges(db, m.project_id)
     
     tc_k_dicts = []
     tc_r_dicts = []
@@ -481,9 +452,9 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
         d = {c: getattr(t, c) for c in t.__table__.columns.keys()}
         d["project"] = m.project or m.project_name_from_p6
         d["phase"] = _safe_parse_phase(t.projects)
-        if t.region == "Khavda":
+        if transmission_service.normalize_region(t.region) == "Khavda":
             tc_k_dicts.append(d)
-        elif t.region == "Rajasthan":
+        elif transmission_service.normalize_region(t.region) == "Rajasthan":
             tc_r_dicts.append(d)
     
     return {
@@ -497,8 +468,8 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
         },
         "p6": p6_data,
         "sap": {
-            "inventory_summary": sum((i.quantity_mw or 0) for i in inventory),
-            "po_summary": sum((p.po_quantities_mw or 0) for p in po_items),
+            "inventory_summary": sap_data["totals"]["inventory"]["quantity"],
+            "po_summary": sap_data["totals"]["purchase_orders"]["ordered_quantity"],
             "inventory": inventory,
             "po": po_items,
             "in_transit": in_transit
@@ -607,10 +578,11 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
     """
     global _KG_CACHE
     cache_key = str(portfolio).lower() if portfolio else "all"
+    cache_version = cache_version_token(db, ("P6", "SAP", "TC", "Pulse", "Mapping", "Capacity"))
     
     if not nocache and cache_key in _KG_CACHE:
         entry = _KG_CACHE[cache_key]
-        if time.time() - entry["timestamp"] < _CACHE_TTL:
+        if time.time() - entry["timestamp"] < _CACHE_TTL and entry.get("version") == cache_version:
             return entry["data"]
         
     nodes = []
@@ -623,40 +595,30 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         "symbolSize": 70, "value": "Enterprise Root"
     })
     
-    query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
-    
-    all_mappings = query.all()
+    all_mappings = list_project_mappings(db, portfolio)
+    catalog_mappings = list_project_mappings(db)
+    sap_by_project = get_sap_projects_data(
+        db,
+        [mapping.project_id for mapping in all_mappings if mapping.project_id],
+        mappings=catalog_mappings,
+    )
+    tc_snapshot = transmission_service.build_transmission_snapshot(db)
     portfolio_groups = {}
-    
-    # Pre-load Capacity Overview to get accurate COD and Trial Run MW
-    cap_data = get_capacity_overview(portfolio, db)
-    proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
-    
-    # Pre-load TC data for exact project association
-    import json
-    all_tc_edges = db.query(models.TcNetworkEdge).all()
-    all_tc_project_entries = db.query(models.TcProjectEntry).all()
-    parsed_edge_phases = {}
-    for edge in all_tc_edges:
-        parsed_edge_phases[edge.id] = set()
-        if edge.projects:
-            try:
-                parsed = json.loads(edge.projects)
-                if isinstance(parsed, dict):
-                    parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in parsed.get("phases", []))
-                elif isinstance(parsed, list):
-                    parsed_edge_phases[edge.id] = set()
-            except:
-                pass
+    cap_data = CapacityMilestoneService.get_portfolio_overview(db, portfolio)
+    capacity_by_mapping = {
+        project.get("source_facts", {}).get("mapping_id"): project
+        for project in cap_data.get("projects", [])
+    }
+    schedules = {
+        project_id: ScheduleMetricsService.get_by_project_id(db, project_id)
+        for project_id in dict.fromkeys(
+            mapping.project_id for mapping in all_mappings if mapping.project_id
+        )
+    }
     
     for m in all_mappings:
-        p6 = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
-        eps = (p6.parent_eps_name if p6 else None) or "Unassigned"
+        schedule = schedules.get(m.project_id, calculate_schedule_metrics(None))
+        health, progress, p6_data, eps = _serialize_knowledge_graph_schedule(schedule)
         
         raw_port = m.cluster or m.category or "Other"
         p_lower = raw_port.lower()
@@ -672,233 +634,24 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         if eps not in portfolio_groups[port_name]:
             portfolio_groups[port_name][eps] = []
         
-        # ── P6 Schedule Data ──
-        health = "unknown"
-        progress = 0
-        p6_data = None
-        if p6:
-            if getattr(p6, 'at_completion_non_labor_units', 0) and p6.at_completion_non_labor_units > 0:
-                raw_progress = (getattr(p6, 'actual_non_labor_units', 0) or 0) / p6.at_completion_non_labor_units
-            else:
-                raw_progress = getattr(p6, 'construction_percent_complete', None)
-                if raw_progress is None:
-                    raw_progress = p6.duration_percent_complete or 0
-            progress = round(raw_progress * 100)
-            # Multi-signal delay detection:
-            # 1. finish_date_variance < 0 (if available)
-            # 2. scheduled finish date has passed and project is not complete
-            # 3. significant number of delayed activities
-            is_delayed = False
-            if p6.finish_date_variance and p6.finish_date_variance < 0:
-                is_delayed = True
-            elif p6.scheduled_finish_date and p6.scheduled_finish_date < datetime.now() and (p6.duration_percent_complete or 0) < 1.0:
-                is_delayed = True
-            else:
-                # Check for delayed activities (in progress past planned finish)
-                delayed_act_count = db.query(models.P6Activity).filter(
-                    models.P6Activity.project_object_id == p6.p6_object_id,
-                    models.P6Activity.status == 'In Progress',
-                    models.P6Activity.planned_finish_date < datetime.now()
-                ).count()
-                total_act_count = db.query(models.P6Activity).filter(
-                    models.P6Activity.project_object_id == p6.p6_object_id
-                ).count()
-                if total_act_count > 0 and delayed_act_count / total_act_count > 0.05:
-                    is_delayed = True
-            health = "delayed" if is_delayed else "on_track"
-            p6_data = {
-                "start_date": str(p6.start_date) if p6.start_date else None,
-                "finish_date": str(p6.finish_date) if p6.finish_date else None,
-                "planned_finish": str(p6.scheduled_finish_date) if p6.scheduled_finish_date else None,
-                "variance_days": round(p6.finish_date_variance) if p6.finish_date_variance else 0,
-                "duration_pct": progress,
-                "construction_pct": progress,
-                "schedule_pct": progress,
-                "status": p6.status or "N/A",
-                "eps_name": p6.parent_eps_name or ""
-            }
-        
-        # ── SAP Data ──
-        wbs_str = str(m.module_wbs or "").strip()
-        sap_data = None
-        plant_code = str(m.spv_plant_code or "").strip()
-        agel_code = str(m.agel or "").strip()
-        if plant_code or agel_code:
-            # Calculate allocation ratio
-            total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
-                models.ProjectMapping.spv_plant_code == plant_code
-            ).scalar() or 1.0
-            project_capacity = m.capacity_mwac or 0
-            
-            if project_capacity == 0:
-                mapping_count = db.query(models.ProjectMapping).filter(models.ProjectMapping.spv_plant_code == plant_code).count()
-                allocation_ratio = (1.0 / mapping_count) if mapping_count > 0 else 1.0
-            else:
-                allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
-            
-            if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
-                wbs_prefix = wbs_str[:6]
-                po_count = db.query(models.MTPOAmount.purchasing_document).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).distinct().count()
-                
-                po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-                
-                po_mw = db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-            else:
-                po_count = db.query(models.MTPOAmount.purchasing_document).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-                ).distinct().count() * allocation_ratio
-                
-                po_total = (db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-                ).scalar() or 0) * allocation_ratio
-                
-                po_mw = (db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-                ).scalar() or 0) * allocation_ratio
-            
-            req_count = db.query(models.MTRequirement).filter(
-                (models.MTRequirement.spv_plant_code == plant_code) | (models.MTRequirement.spv_plant_code == agel_code)
-                # Requirement doesn't have wbs_element mapped usually, but we can set to 0 or leave as is. We'll set to 0 since it's not WBS specific yet.
-            ).count() * 0 # Hardcoded to 0 since we can't reliably filter by WBS without a WBS column in MTRequirement.
-            
-            req_total_mw = 0
-            
-            if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
-                inv_count = db.query(models.MTInventory).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code),
-                    models.MTInventory.wbs_element.startswith(wbs_prefix)
-                ).count()
-                
-                inv_mw = db.query(func.sum(models.MTInventory.quantity_mw)).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code),
-                    models.MTInventory.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
+        sap_snapshot = sap_by_project.get(m.project_id or f"mapping:{m.id}")
+        sap_data = _serialize_knowledge_graph_sap(m, sap_snapshot)
+        top_vendor = next(iter(sap_snapshot["vendors"]), None)
+        _, _, tc_edges = transmission_service.project_edges(db, m.project_id, tc_snapshot)
+        tc_data = _serialize_knowledge_graph_transmission(
+            m, [transmission_service.edge_dict(edge) for edge in tc_edges]
+        )
 
-                
-                transit_count = db.query(models.MTPOAmount).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix),
-                    models.MTPOAmount.still_to_deliver_qty > 0
-                ).count()
-                
-                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-                
-                top_vendors = db.query(
-                    models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
-                ).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
-                inv_alloc = 1.0
-            else:
-                inv_count = db.query(models.MTInventory).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code)
-                ).count() * allocation_ratio
-                
-                inv_mw = (db.query(func.sum(models.MTInventory.quantity_mw)).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code)
-                ).scalar() or 0) * allocation_ratio
-                
-                transit_count = db.query(models.MTPOAmount).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code),
-                    models.MTPOAmount.still_to_deliver_qty > 0
-                ).count() * allocation_ratio
-                
-                transit_mw = (db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-                ).scalar() or 0) * allocation_ratio
-                
-                top_vendors = db.query(
-                    models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
-                ).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code)
-                ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
-                inv_alloc = allocation_ratio
-            
-            top_vendors_list = []
-            for v in top_vendors:
-                vname = (v[0] or "Unknown").strip()
-                parts = vname.split(" ", 1)
-                if len(parts) == 2 and parts[0].isdigit():
-                    vname = parts[1].strip()
-                top_vendors_list.append({
-                    "name": vname[:25], 
-                    "value_cr": round((v[1] * inv_alloc) / 10000000, 2) if v[1] else 0
-                })
-            
-            sap_data = {
-                "plant_code": plant_code,
-                "po_count": round(po_count),
-                "po_total_cr": round(po_total / 10000000, 2) if po_total else 0,
-                "po_mw": round(po_mw, 1) if po_mw else 0,
-                "requirement_count": 0,
-                "requirement_mw": 0,
-                "inventory_items": round(inv_count),
-                "inventory_mw": round(inv_mw, 1) if inv_mw else 0,
-                "in_transit_count": round(transit_count),
-                "in_transit_mw": round(transit_mw, 1) if transit_mw else 0,
-                "top_vendors": top_vendors_list
-            }
-        
-        # ── Transmission Data (Local DB) ──
-        tc_data = None
-        if m.id:
-            tc_progress = m.tc_progress or {}
-            lines_charged = tc_progress.get("linesCharged", {})
-            
-            tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
-            if tc_edges or tc_progress:
-                tc_data = {
-                    "total_lines": lines_charged.get("total", len(tc_edges)),
-                    "charged_lines": lines_charged.get("count", sum(1 for e in tc_edges if str(e.status).strip().lower() == "charged")),
-                    "delayed_lines": tc_progress.get("delayed", {}).get("count", sum(1 for e in tc_edges if str(e.status).strip().lower() == "delayed")),
-                    "lines": [
-                        {
-                            "name": f"{e.from_label} \u2192 {e.to_label}", 
-                            "status": e.status,
-                            "normalized_status": e.normalized_status,
-                            "foundation": e.foundation,
-                            "erection": e.erection,
-                            "stringing": e.stringing,
-                            "expected_date": e.expected_date
-                        } for e in tc_edges
-                    ]
-                }
-        
-        # ── Capacity COD & TR ──
-        pm_cap = proj_cap_dict.get(m.project_id, {})
+        pm_cap = capacity_by_mapping.get(m.id, {})
         cod_mw = pm_cap.get("cod_mw", 0)
         tr_mw = pm_cap.get("tr_mw", 0)
-        
-        fallback_cap = 0
-        p6_name_for_cap = str(m.project_name_from_p6 or m.project or "").upper()
-        import re
-        mw_match = re.search(r'(\d+(?:\.\d+)?)[\s_]*MW', p6_name_for_cap)
-        if mw_match:
-            fallback_cap = float(mw_match.group(1))
-            
-        base_cap = m.capacity_mwac if (m.capacity_mwac and m.capacity_mwac > 0) else fallback_cap
-        computed_capacity = pm_cap.get("total_capacity", base_cap)
-        if computed_capacity == 0:
-            computed_capacity = base_cap
+        computed_capacity = pm_cap.get("total_capacity", m.capacity_mwac or 0)
 
         portfolio_groups[port_name][eps].append({
             "id": m.id, "project_id": m.project_id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
             "capacity": computed_capacity, "health": health,
             "progress": progress, "spv": m.spv_name or "?",
-            "plant_code": plant_code,
+            "vendor_key": (top_vendor or {}).get("vendor_code") or (top_vendor or {}).get("name"),
             "cod_mw": cod_mw, "tr_mw": tr_mw,
             "p6": p6_data, "sap": sap_data, "tc": tc_data
         })
@@ -947,370 +700,28 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
                 })
                 links.append({"source": eps_id, "target": proj_id})
                 
-                # Top vendor per project
-                if p["plant_code"]:
-                    top_po = db.query(models.MTPOAmount).filter(
-                        models.MTPOAmount.plant_code == p["plant_code"]
-                    ).order_by(models.MTPOAmount.net_order_value.desc()).first()
-                    
-                    if top_po and top_po.vendor_name:
-                        vcode = top_po.vendor_code or top_po.vendor_name
-                        vname = (top_po.vendor_name or "Unknown").strip()[:22]
-                        
-                        if vcode not in seen_vendors:
-                            vendor_id = f"vendor_{len(seen_vendors)}"
-                            seen_vendors[vcode] = vendor_id
-                            nodes.append({
-                                "id": vendor_id, "name": vname, "category": 5,
-                                "symbolSize": 22,
-                                "value": f"Vendor · {vcode}"
-                            })
-                        
-                        links.append({
-                            "source": proj_id, "target": seen_vendors[vcode],
-                            "lineStyle": {"type": "dashed", "width": 1, "color": "rgba(245,158,11,0.3)"}
+                top_vendor = next(iter((p["sap"] or {}).get("top_vendors", [])), None)
+                if top_vendor:
+                    vcode = p["vendor_key"] or top_vendor["name"]
+                    if vcode not in seen_vendors:
+                        vendor_id = f"vendor_{len(seen_vendors)}"
+                        seen_vendors[vcode] = vendor_id
+                        nodes.append({
+                            "id": vendor_id, "name": top_vendor["name"][:22], "category": 5,
+                            "symbolSize": 22,
+                            "value": f"Vendor · {vcode}"
                         })
+
+                    links.append({
+                        "source": proj_id, "target": seen_vendors[vcode],
+                        "lineStyle": {"type": "dashed", "width": 1, "color": "rgba(245,158,11,0.3)"}
+                    })
     
     result = {"nodes": nodes, "links": links}
-    _KG_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
+    _KG_CACHE[cache_key] = {"data": result, "timestamp": time.time(), "version": cache_version}
     return result
 
 @router.get("/capacity-overview")
 def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
-    """
-    Returns Capacity overview based on actual COD and Trial Run milestones.
-    Logic:
-      - All block/WTG data comes from P6 (MTTrialRun)
-      - Solar total capacity from ProjectMapping
-      - Wind total capacity = total WTGs from P6 × MW per WTG multiplier
-      - If a block has COD → count as COD only (ignore its Trial Run)
-      - If a block has Trial Run but NO COD → count as Trial Run only
-    """
-    # Wind MW per WTG multipliers keyed by p6_object_id
-    WIND_MW_PER_WTG = {
-        "3074": 5.2, "4707": 5.0, "3075": 5.2, "3076": 5.2,
-        "3072": 5.2, "3073": 5.2, "6733": 5.2, "3105": 3.3,
-    }
-    DEFAULT_WIND_MW = 3.3
-
-    import re
-
-    # Source 1: ProjectMapping for source of truth
-    query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
-            
-    mappings = query.all()
-    
-    # Filter out demo projects
-    filtered_mappings = []
-    for m in mappings:
-        name_check = m.project_name_from_p6 or m.project or ""
-        if "demo" not in name_check.lower():
-            filtered_mappings.append(m)
-            
-    mappings = filtered_mappings
-    
-    p6_projs = db.query(models.P6Project).all()
-    
-    project_map = {}
-    obj_id_to_p_name = {}
-    
-    for pm in mappings:
-        # Find corresponding P6 project using robust project_id match
-        matching_p6 = next((p for p in p6_projs if p.project_id and pm.project_id and p.project_id.strip() == pm.project_id.strip()), None)
-        
-        # Fallback to name matching
-        if not matching_p6:
-            name_to_match = pm.project_name_from_p6 or pm.project
-            if name_to_match:
-                matching_p6 = next((p for p in p6_projs if p.name and p.name.strip().lower() == name_to_match.strip().lower()), None)
-                
-        if not matching_p6:
-            continue
-            
-        obj_id = str(matching_p6.p6_object_id)
-        display_name = matching_p6.name or pm.project_name_from_p6 or pm.project
-        obj_id_to_p_name[obj_id] = display_name
-        
-        # Type by CLUSTER, not project name — wind projects are named like "AGE25CL PSS-11",
-        # with no "wind" text, so name-matching mis-typed them as Solar (capacity came out 0).
-        p_type = 'Wind' if 'wind' in str(pm.cluster or '').lower() else 'Solar'
-        total_cap = float(pm.capacity_mwac or 0)
-        # Fallback: many projects (e.g. Rajasthan BANDHA_500MW) have capacity_mwac=0 but carry
-        # the MW in their name. Extract it so their COD capacity isn't computed as zero.
-        if total_cap <= 0:
-            mw_match = re.search(r'(\d+(?:\.\d+)?)[\s_]*MW', str(pm.project_name_from_p6 or pm.project or ''), re.IGNORECASE)
-            if mw_match:
-                total_cap = float(mw_match.group(1))
-        wtg_mw = WIND_MW_PER_WTG.get(obj_id, DEFAULT_WIND_MW) if p_type == 'Wind' else 0
-        
-        project_map[obj_id] = {
-            'project_id': pm.project_id or '-',
-            'project_name': display_name,
-            'type': p_type,
-            'total_capacity': total_cap,
-            'total_blocks': 0,
-            'tr_blocks': 0,
-            'tr_mw': 0,
-            'cod_blocks': 0,
-            'cod_mw': 0,
-            '_wtg_mw': wtg_mw
-        }
-
-    # Source 3: All block/WTG data from P6 (P6Activity table)
-    from models import P6Activity
-    activities = db.query(P6Activity).filter(
-        (
-            (P6Activity.name.ilike('%trial run certificate%')) |
-            (P6Activity.name.ilike('%trail run certificate%')) |
-            (P6Activity.name.ilike('%cod%'))
-        ),
-        # COD/Trial-Run milestones are taken per project type: Solar from the CONSTRUCTION WBS
-        # ('CONSTRUCTION-COMMISSIONING'), Wind from the TESTING & COMMISSIONING WBS (wind files
-        # no CODs under a construction WBS). Fetch both branches here; the per-type filter that
-        # decides which branch applies to each project is enforced in the loop below.
-        (P6Activity.wbs_name.ilike('%construction%') | P6Activity.wbs_name.ilike('%testing%')),
-        ~P6Activity.type.ilike('%milestone%')
-    ).all()
-
-    # Step 1: Group into unique blocks per project
-    block_map = {}
-    for act in activities:
-        obj_id = str(act.project_object_id)
-        
-        # CRUCIAL: ONLY process activities for tracked projects in ProjectMapping
-        if obj_id not in project_map:
-            continue
-
-        # Per-type WBS rule: Solar CODs come from the CONSTRUCTION WBS, Wind CODs from the
-        # TESTING & COMMISSIONING WBS. Skip activities that aren't in this project's branch.
-        wbs_lc = (act.wbs_name or '').lower()
-        if project_map[obj_id]['type'] == 'Wind':
-            if 'testing' not in wbs_lc:
-                continue
-        elif 'construction' not in wbs_lc:
-            continue
-
-        p_name = obj_id_to_p_name.get(obj_id)
-        act_name = (act.name or "").lower()
-        
-        # Parse Block/WTG name
-        b_name = "Unknown Block"
-        block_match = re.search(r'(Block-\d+|WTG\d+)', act.name, re.IGNORECASE)
-        if block_match:
-            b_name = block_match.group(1).upper()
-        else:
-            continue # Skip project-level CODs that aren't tied to a specific block/WTG
-            
-        b_key = f"{obj_id}::{b_name}"
-        actual_dt = act.actual_finish_date or act.actual_start_date or act.start_date
-        is_cod = "cod" in act_name
-        is_tr = "trial run certificate" in act_name or "trail run certificate" in act_name
-        is_completed = (act.status == 'Completed')
-        
-        if b_key not in block_map:
-            block_map[b_key] = {
-                "_obj_id": obj_id,
-                "project": p_name,
-                "block": b_name,
-                "type": project_map[obj_id]['type'],
-                "capacity": 0, # Distributed later
-                "has_tr": False,
-                "has_cod": False,
-                "tr_start": None,
-                "tr_finish": None,
-                "cod_start": None,
-                "cod_finish": None,
-                "latest_date": actual_dt
-            }
-
-        b = block_map[b_key]
-        if actual_dt and (b["latest_date"] is None or actual_dt > b["latest_date"]):
-            b["latest_date"] = actual_dt
-
-        if is_cod and is_completed and actual_dt:
-            b["has_cod"] = True
-            b["cod_start"] = act.actual_start_date or actual_dt
-            b["cod_finish"] = act.actual_finish_date or actual_dt
-        elif is_tr and is_completed and actual_dt:
-            b["has_tr"] = True
-            b["tr_start"] = act.actual_start_date or actual_dt
-            b["tr_finish"] = act.actual_finish_date or actual_dt
-
-    # Group blocks by project to distribute capacity
-    projects_blocks = {}
-    for b_key, b in block_map.items():
-        obj_id = b["_obj_id"]
-        if obj_id not in projects_blocks:
-            projects_blocks[obj_id] = []
-        projects_blocks[obj_id].append(b)
-
-    # Step 2: Aggregate into project-level and FY-level data
-    fy_data = {}
-    recent = []
-    
-    for obj_id, blocks in projects_blocks.items():
-        blocks.sort(key=lambda x: x["block"])
-        pm = project_map[obj_id]
-
-        # Distribute capacity to blocks
-        if pm['type'] == 'Solar':
-            import math
-            total_cap = pm['total_capacity']
-            expected_blocks = math.ceil(total_cap / 12.5) if total_cap > 0 else 0
-            cap_per_block = (total_cap / expected_blocks) if expected_blocks > 0 else 0
-            
-            pm['total_blocks'] = expected_blocks
-            for b in blocks:
-                b["capacity"] = cap_per_block
-        else:
-            for b in blocks:
-                b["capacity"] = pm['_wtg_mw']
-                
-        # Now process the blocks for aggregation
-        for b in blocks:
-            cap = b["capacity"]
-            if pm['type'] == 'Wind':
-                pm['total_blocks'] += 1
-
-            # Determine the FY for this block based on its milestone date
-            actual_dt = b["cod_finish"] or b["cod_start"] or b["tr_finish"] or b["tr_start"]
-
-            # STRICT LOGIC: COD takes priority
-            if b["has_cod"]:
-                pm['cod_blocks'] += 1
-                pm['cod_mw'] += cap
-
-                if actual_dt:
-                    fy = f"FY{str(actual_dt.year)[-2:]}" if actual_dt.month >= 4 else f"FY{str(actual_dt.year - 1)[-2:]}"
-                    if fy not in fy_data:
-                        fy_data[fy] = {"name": fy, "solar_cod": 0, "solar_tr": 0, "wind_cod": 0, "wind_tr": 0}
-                    if pm['type'] == 'Solar':
-                        fy_data[fy]["solar_cod"] += cap
-                    else:
-                        fy_data[fy]["wind_cod"] += cap
-
-            elif b["has_tr"]:
-                # ONLY if NO COD
-                pm['tr_blocks'] += 1
-                pm['tr_mw'] += cap
-
-                if actual_dt:
-                    fy = f"FY{str(actual_dt.year)[-2:]}" if actual_dt.month >= 4 else f"FY{str(actual_dt.year - 1)[-2:]}"
-                    if fy not in fy_data:
-                        fy_data[fy] = {"name": fy, "solar_cod": 0, "solar_tr": 0, "wind_cod": 0, "wind_tr": 0}
-                    if pm['type'] == 'Solar':
-                        fy_data[fy]["solar_tr"] += cap
-                    else:
-                        fy_data[fy]["wind_tr"] += cap
-
-            # Build recent milestones list
-            tr_duration = None
-            cod_duration = None
-            gap_days = None
-            if b["tr_start"] and b["tr_finish"]:
-                tr_duration = (b["tr_finish"] - b["tr_start"]).days
-            if b["cod_start"] and b["cod_finish"]:
-                cod_duration = (b["cod_finish"] - b["cod_start"]).days
-            if b["tr_finish"] and b["cod_start"]:
-                gap_days = (b["cod_start"] - b["tr_finish"]).days
-
-            status = "Pending"
-            if b["has_cod"]:
-                status = "COD"
-            elif b["has_tr"]:
-                status = "Trial Run"
-
-            recent.append({
-                "project": b["project"],
-                "block": b["block"],
-                "type": b["type"],
-                "capacity": b["capacity"],
-                "status": status,
-                "tr_start": b["tr_start"].strftime("%Y-%m-%d") if b["tr_start"] else None,
-                "tr_finish": b["tr_finish"].strftime("%Y-%m-%d") if b["tr_finish"] else None,
-                "cod_start": b["cod_start"].strftime("%Y-%m-%d") if b["cod_start"] else None,
-                "cod_finish": b["cod_finish"].strftime("%Y-%m-%d") if b["cod_finish"] else None,
-                "tr_duration": tr_duration,
-                "cod_duration": cod_duration,
-                "gap_days": gap_days,
-                "raw_date": b["latest_date"]
-            })
-
-    # Post-processing: Calculate capacity and clean up
-    for p in project_map.values():
-        # For wind projects with parsed blocks, update total capacity based on WTG count dynamically
-        if p['type'] == 'Wind' and p['total_blocks'] > 0:
-            p['total_capacity'] = round(p['total_blocks'] * p['_wtg_mw'], 2)
-            
-        p['remaining_capacity'] = max(0, round(p['total_capacity'] - p['cod_mw'] - p['tr_mw'], 2))
-        p['remaining_blocks'] = p['total_blocks'] - p['cod_blocks'] - p['tr_blocks']
-        del p['_wtg_mw']
-
-    # Sort FYs
-    sorted_fys = sorted(list(fy_data.values()), key=lambda x: x["name"])
-
-    # Calculate Monthly Trends across ALL data, plotting TR and COD events independently
-    monthly_data_map = {}
-    for b in block_map.values():
-        if b["has_tr"]:
-            dt = b["tr_finish"] or b["tr_start"]
-            if dt:
-                month_str = dt.strftime("%Y-%m")
-                type_key = 'Solar Trial Run' if b['type'] == 'Solar' else 'Wind Trial Run'
-                if month_str not in monthly_data_map:
-                    monthly_data_map[month_str] = {"Solar COD": 0, "Solar Trial Run": 0, "Wind COD": 0, "Wind Trial Run": 0}
-                monthly_data_map[month_str][type_key] += b["capacity"]
-                
-        if b["has_cod"]:
-            dt = b["cod_finish"] or b["cod_start"]
-            if dt:
-                month_str = dt.strftime("%Y-%m")
-                type_key = 'Solar COD' if b['type'] == 'Solar' else 'Wind COD'
-                if month_str not in monthly_data_map:
-                    monthly_data_map[month_str] = {"Solar COD": 0, "Solar Trial Run": 0, "Wind COD": 0, "Wind Trial Run": 0}
-                monthly_data_map[month_str][type_key] += b["capacity"]
-
-    sorted_months = sorted(monthly_data_map.keys())
-    cum_solar_cod = cum_solar_tr = cum_wind_cod = cum_wind_tr = 0
-    monthly_trends = []
-    for m in sorted_months:
-        cum_solar_cod += monthly_data_map[m]["Solar COD"]
-        cum_solar_tr += monthly_data_map[m]["Solar Trial Run"]
-        cum_wind_cod += monthly_data_map[m]["Wind COD"]
-        cum_wind_tr += monthly_data_map[m]["Wind Trial Run"]
-        monthly_trends.append({
-            "name": m,
-            "Solar COD": round(cum_solar_cod, 2),
-            "Solar Trial Run": round(cum_solar_tr, 2),
-            "Wind COD": round(cum_wind_cod, 2),
-            "Wind Trial Run": round(cum_wind_tr, 2)
-        })
-
-    # Sort blocks descending by latest date for the recent feed
-    recent.sort(key=lambda x: x["raw_date"].isoformat() if x["raw_date"] else "", reverse=True)
-    for r in recent:
-        del r["raw_date"]
-
-    # Totals
-    totals = {
-        "solar_cod": sum(f["solar_cod"] for f in sorted_fys),
-        "solar_tr": sum(f["solar_tr"] for f in sorted_fys),
-        "wind_cod": sum(f["wind_cod"] for f in sorted_fys),
-        "wind_tr": sum(f["wind_tr"] for f in sorted_fys)
-    }
-
-    # Project-level breakdown
-    projects_list = sorted(project_map.values(), key=lambda x: x['total_capacity'], reverse=True)
-
-    return {
-        "financial_years": sorted_fys,
-        "monthly_trends": monthly_trends,
-        "recent_milestones": recent[:50],
-        "totals": totals,
-        "projects": projects_list
-    }
+    """Return the canonical capacity overview using the existing route contract."""
+    return CapacityMilestoneService.get_portfolio_overview(db, portfolio)

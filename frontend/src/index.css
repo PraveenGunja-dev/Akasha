@@ -782,9 +782,9 @@
 
 /* Enhanced chart card */
 .copilot-chart-card {
-  background: var(--card);
+  background: color-mix(in srgb, var(--card) 96%, var(--primary) 4%);
   border: 1px solid var(--border);
-  border-radius: 16px;
+  border-radius: 18px;
   overflow: hidden;
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.02);
   animation: copilot-fade-up 0.5s ease-out both;
@@ -796,8 +796,10 @@
 }
 
 .copilot-chart-card .chart-header {
-  padding: 14px 18px;
-  background: linear-gradient(135deg, rgba(11, 116, 177, 0.05), rgba(118, 72, 157, 0.03));
+  padding: 16px 18px;
+  background:
+    radial-gradient(circle at 0 0, rgba(11, 116, 177, 0.13), transparent 42%),
+    linear-gradient(135deg, rgba(11, 116, 177, 0.06), rgba(118, 72, 157, 0.035));
   border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
@@ -805,9 +807,55 @@
 }
 
 .copilot-chart-card .chart-header .chart-title {
-  font-size: 13px;
-  font-weight: 600;
+  margin: 0;
+  font-size: 13.5px;
+  font-weight: 700;
   color: var(--foreground);
+}
+
+.copilot-chart-card .chart-subtitle {
+  margin: 3px 0 0;
+  color: var(--muted-foreground);
+  font-size: 10.5px;
+  line-height: 1.4;
+}
+
+.copilot-chart-card .chart-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex: 0 0 30px;
+  border-radius: 9px;
+  color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 20%, transparent);
+}
+
+.copilot-chart-card .chart-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.copilot-chart-card .chart-actions button,
+.chat-chart-modal-header button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--card) 90%, transparent);
+  transition: 160ms ease;
+}
+
+.copilot-chart-card .chart-actions button:hover,
+.chat-chart-modal-header button:hover {
+  color: var(--primary);
+  border-color: color-mix(in srgb, var(--primary) 40%, var(--border));
+  transform: translateY(-1px);
 }
 
 .copilot-chart-card .chart-header .chart-type-badge {
@@ -823,7 +871,122 @@
 }
 
 .copilot-chart-card .chart-body {
-  padding: 12px;
+  padding: 8px 12px 2px;
+}
+
+.chat-visualization-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+  width: min(100%, 1040px);
+  margin-top: 20px;
+}
+
+.chat-visualization-grid.is-multi {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.chart-insight {
+  margin: 14px 18px 0;
+  padding: 10px 12px;
+  border-left: 3px solid var(--primary);
+  border-radius: 0 9px 9px 0;
+  background: color-mix(in srgb, var(--primary) 7%, transparent);
+  color: var(--foreground);
+  font-size: 11.5px;
+  line-height: 1.55;
+}
+
+.chart-freshness {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 18px 13px;
+  color: var(--muted-foreground);
+  font-size: 10px;
+}
+
+.chat-chart-table-wrap {
+  max-height: 280px;
+  margin: 0 16px 12px;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.chat-chart-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10.5px;
+}
+
+.chat-chart-table th,
+.chat-chart-table td {
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.chat-chart-table th {
+  position: sticky;
+  top: 0;
+  color: var(--foreground);
+  background: var(--muted);
+  font-weight: 650;
+}
+
+.chat-chart-modal {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(3, 10, 20, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.chat-chart-modal-card {
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+  overflow: auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: var(--card);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.35);
+}
+
+.chat-chart-modal-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 4px 4px 12px;
+}
+
+.chat-chart-modal-header h3 {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 17px;
+  font-weight: 750;
+}
+
+.chat-chart-modal-header p {
+  margin: 4px 0 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+
+@media (max-width: 980px) {
+  .chat-visualization-grid.is-multi { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 640px) {
+  .copilot-chart-card .chart-header { align-items: flex-start; }
+  .copilot-chart-card .chart-actions { flex-wrap: wrap; justify-content: flex-end; }
+  .copilot-chart-card .chart-header .chart-type-badge { display: none; }
+  .chat-chart-modal { padding: 10px; }
 }
 
 /* Quick-action chip buttons */

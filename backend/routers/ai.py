@@ -215,6 +215,7 @@ def chat_with_copilot(
                 )
                 checkpoint_id = None
                 response_obj = None
+                evidence = []
 
                 if engine_name == "langgraph":
                     graph_message = req.message
@@ -244,6 +245,7 @@ def chat_with_copilot(
                         active_project_ids=[req.projectId] if req.projectId else [],
                     )
                     tool_names.extend(graph_result.tool_names)
+                    evidence.extend(graph_result.evidence)
                     visualizations.extend(graph_result.visualizations)
                     checkpoint_id = graph_result.checkpoint_id
                     full_content = graph_result.content
@@ -268,6 +270,7 @@ def chat_with_copilot(
                         image_data=req.imageData,
                         request_id=request_id,
                         tool_names_out=tool_names,
+                        evidence_out=evidence,
                     ):
                         if chat_run_is_cancelled(db, run_id):
                             raise GraphRunCancelled("Chat run was cancelled.")
@@ -276,11 +279,18 @@ def chat_with_copilot(
                             response_intent = response_obj.intent_type
                         elif isinstance(chunk, dict) and chunk.get("type") == "visualization":
                             visualization = {
+                                "schema_version": chunk.get("schema_version"),
                                 "chart_type": chunk.get("chart_type"),
                                 "title": chunk.get("title"),
+                                "subtitle": chunk.get("subtitle"),
+                                "summary": chunk.get("summary"),
+                                "accessibility_description": chunk.get("accessibility_description"),
+                                "data_as_of": chunk.get("data_as_of"),
+                                "data_table": chunk.get("data_table"),
                                 "spec": chunk.get("spec"),
                             }
-                            visualizations.append(visualization)
+                            if len(visualizations) < 4:
+                                visualizations.append(visualization)
                         elif not isinstance(chunk, dict):
                             legacy_content += chunk
 
@@ -301,6 +311,7 @@ def chat_with_copilot(
                     domains=response_obj.domains,
                     data_as_of=response_obj.data_as_of,
                     sources=response_obj.sources_used,
+                    evidence=evidence,
                     visualizations=visualizations,
                     latency_ms=response_obj.latency_ms,
                     checkpoint_id=checkpoint_id,
@@ -335,10 +346,15 @@ def chat_with_copilot(
                     "metadata",
                     metadata={
                         "message_id": asst_msg.id,
-                        "data_as_of": response_obj.data_as_of,
+                        "data_as_of": asst_msg.data_as_of.isoformat() if asst_msg.data_as_of else None,
+                        "last_synced_at": (asst_msg.sources_used or {}).get("last_synced_at"),
+                        "answer_generated_at": (asst_msg.sources_used or {}).get("answer_generated_at"),
+                        "source_freshness": (asst_msg.sources_used or {}).get("systems", []),
+                        "evidence": (asst_msg.sources_used or {}).get("evidence", []),
+                        "provenance": asst_msg.sources_used or {},
                         "latency_ms": response_obj.latency_ms,
                         "intent": response_obj.intent_type,
-                        "sources": response_obj.sources_used,
+                        "sources": (asst_msg.sources_used or {}).get("tables", []),
                         "session_id": session_id,
                         "run_id": run_id,
                         "engine": engine_name,

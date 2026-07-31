@@ -1,341 +1,228 @@
-"""
-Akasha Tools Layer — SAP Procurement/Supply Chain Tools
+"""Thin chatbot adapters over the shared SAP project data service."""
 
-MCP-style tool functions for deterministic, read-only access to SAP data.
-Covers: Purchase Orders (ME2J), Material Consumption (MB51), Inventory (MB52).
-"""
-
-import logging
 from collections import defaultdict
+
 from sqlalchemy.orm import Session
-from sqlalchemy import func, or_
 
-import models
-
-logger = logging.getLogger(__name__)
+from services.sap_project_data_service import get_sap_project_data, wbs_membership
 
 
-def _resolve_sap_filter(db: Session, project_id: str) -> dict:
-    """Resolve project_id to SAP WBS element and/or plant_code via project_mapping.
-    
-    Returns dict with 'wbs', 'plant_code', and 'project_name' for display.
-    Uses WBS as primary key, plant_code as fallback.
-    """
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == project_id
-    ).first()
-    if not mapping:
-        return {"wbs": None, "plant_code": None, "project_name": project_id}
-    
-    project_name = mapping.project_name_from_p6 or mapping.project or project_id
-    
-    wbs = mapping.module_wbs
-    if wbs and str(wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        wbs = str(wbs).strip()
-    else:
-        wbs = None
-    
-    plant_code = mapping.spv_plant_code
-    if plant_code and str(plant_code).strip().lower() not in ('nan', 'none', 'null', ''):
-        plant_code = str(plant_code).strip()
-    else:
-        plant_code = None
-    
-    return {"wbs": wbs, "plant_code": plant_code, "project_name": project_name}
+def _final_quantity(value):
+    """Preserve legacy integer fields while rounding only after aggregation."""
+    return int(round(float(value or 0)))
 
 
-def _query_po_by_project(db: Session, sap_filter: dict):
-    """Query MTPOAmount records using WBS (primary) or plant_code (fallback)."""
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    
-    if wbs:
-        pos = db.query(models.MTPOAmount).filter(
-            _wbs_membership(models.MTPOAmount.wbs_element, wbs)
-        ).all()
-        if pos:
-            return pos
-    
-    # Fallback: match by plant_code
-    if plant_code:
-        pos = db.query(models.MTPOAmount).filter(
-            models.MTPOAmount.plant_code == plant_code
-        ).all()
-        if pos:
-            return pos
-    
-    return []
-
-
-def _wbs_membership(column, root: str):
-    """Match an exact WBS or a delimiter-bounded child, never a raw prefix."""
-    escaped = root.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
-    return or_(
-        column == root,
-        column.like(f"{escaped}.%", escape="\\"),
-        column.like(f"{escaped}-%", escape="\\"),
-        column.like(f"{escaped}/%", escape="\\"),
-    )
-
-
-def sap_get_source_records(db: Session, project_id: str, source_entity: str) -> list:
-    """Return records used by a SAP graph tool through authoritative mappings."""
-    sap_filter = _resolve_sap_filter(db, project_id)
-    if source_entity == "mt_poamount":
-        return _query_po_by_project(db, sap_filter)
-
-    model = {
-        "mt_inventory": models.MTInventory,
-        "mt_materialdocument": models.MTMaterialDocument,
-    }.get(source_entity)
-    if model is None:
-        return []
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    extra_filters = [model.quantity_inv > 0] if source_entity == "mt_inventory" else []
-    records = (
-        db.query(model).filter(_wbs_membership(model.wbs_element, wbs), *extra_filters).all()
-        if wbs else []
-    )
-    if not records and plant_code:
-        records = db.query(model).filter(model.plant_code == plant_code, *extra_filters).all()
-    return records
-
-
-def _safe_int(val) -> int:
-    """Convert a float quantity to int safely. SAP quantities are whole units."""
-    if val is None:
-        return 0
-    return int(round(float(val)))
-
-
-def sap_get_po_summary(db: Session, project_id: str) -> dict:
-    """Get purchase order summary: total ordered, delivered, pending, value.
-    
-    Use when: user asks about procurement status, PO progress, material delivery.
-    """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    project_name = sap_filter["project_name"]
-    
-    pos = _query_po_by_project(db, sap_filter)
-    
-    if not pos:
-        return {"project_id": project_id, "project_name": project_name, "has_data": False, "summary": {}}
-    
-    total_ordered = sum(_safe_int(po.order_quantity) for po in pos)
-    total_delivered = sum(_safe_int(po.delivered_qty) for po in pos)
-    total_pending = sum(_safe_int(po.still_to_deliver_qty) for po in pos)
-    total_value_inr = sum(po.net_order_value_inr or 0 for po in pos)
-    
-    # Find latest upload time for freshness
-    latest_upload = max((po.upload_time for po in pos if po.upload_time), default=None)
-    
+def _metadata(data: dict) -> dict:
     return {
-        "project_id": project_id,
-        "project_name": project_name,
-        "has_data": True,
-        "summary": {
-            "total_po_count": len(pos),
-            "total_ordered_qty": total_ordered,
-            "total_delivered_qty": total_delivered,
-            "total_pending_qty": total_pending,
-            "fulfillment_pct": round(total_delivered / total_ordered * 100, 1) if total_ordered > 0 else 0,
-            "total_value_inr": round(total_value_inr, 2),
-        },
-        "_source_table": "mt_poamount",
-        "_synced_at": latest_upload.isoformat() if latest_upload else None,
+        "scope": data["scope"],
+        "counts": data["counts"],
+        "units": data["units"],
+        "warnings": data["warnings"],
+        "freshness": data["freshness"],
     }
 
 
+def _resolve_sap_filter(db: Session, project_id: str) -> dict:
+    """Compatibility helper retained for KPI consumers."""
+    data = get_sap_project_data(db, project_id)
+    return {
+        "wbs": data["scope"]["wbs"],
+        "plant_code": data["scope"]["selected_plant"],
+        "project_name": data["project_name"],
+        "project_id": project_id,
+    }
+
+
+def _wbs_membership(column, root: str):
+    return wbs_membership(column, root)
+
+
+def _query_po_by_project(db: Session, sap_filter: dict):
+    project_id = sap_filter.get("project_id")
+    if project_id:
+        return get_sap_project_data(db, project_id)["purchase_orders"]
+    # Older callers may pass a manually constructed filter.
+    import models
+    if sap_filter.get("wbs"):
+        return db.query(models.MTPOAmount).filter(
+            wbs_membership(models.MTPOAmount.wbs_element, sap_filter["wbs"])
+        ).all()
+    if sap_filter.get("plant_code"):
+        return db.query(models.MTPOAmount).filter(
+            models.MTPOAmount.plant_code == sap_filter["plant_code"]
+        ).all()
+    return []
+
+
+def sap_get_source_records(db: Session, project_id: str, source_entity: str) -> list:
+    data = get_sap_project_data(db, project_id)
+    return {
+        "mt_poamount": data["purchase_orders"],
+        "mt_inventory": data["inventory"],
+        "mt_materialdocument": data["material_documents"],
+    }.get(source_entity, [])
+
+
+def sap_get_po_summary(db: Session, project_id: str) -> dict:
+    data = get_sap_project_data(db, project_id)
+    totals = data["totals"]["purchase_orders"]
+    result = {
+        "project_id": project_id,
+        "project_name": data["project_name"],
+        "has_data": bool(data["purchase_orders"]),
+        "summary": {},
+        **_metadata(data),
+    }
+    if not data["purchase_orders"]:
+        return result
+    ordered = totals["ordered_quantity"]
+    result.update({
+        "summary": {
+            "total_po_count": data["counts"]["po_row_count"],
+            "po_row_count": data["counts"]["po_row_count"],
+            "distinct_po_count": data["counts"]["distinct_po_count"],
+            "total_ordered_qty": _final_quantity(ordered),
+            "total_ordered_qty_raw": ordered,
+            "total_delivered_qty": _final_quantity(totals["delivered_quantity"]),
+            "total_delivered_qty_raw": totals["delivered_quantity"],
+            "total_pending_qty": _final_quantity(totals["pending_quantity"]),
+            "total_pending_qty_raw": totals["pending_quantity"],
+            "fulfillment_pct": round(totals["delivered_quantity"] / ordered * 100, 1) if ordered > 0 else 0,
+            "total_value_inr": round(totals["order_value"], 2),
+            "currency": data["units"]["po_value_currencies"],
+            "quantity_units": data["units"]["po_quantity_units"],
+        },
+        "_source_table": "mt_poamount",
+        "_synced_at": data["freshness"]["mt_poamount"],
+    })
+    return result
+
+
 def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list[dict]:
-    """Get materials with pending deliveries, sorted by gap severity.
-    
-    Use when: user asks about material shortages, supply gaps, pending deliveries.
-    """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    pos = _query_po_by_project(db, sap_filter)
-    
-    if not pos:
-        return []
-    
-    material_agg = defaultdict(lambda: {"ordered": 0, "delivered": 0, "pending": 0, "name": ""})
-    
-    for po in pos:
-        mat_key = po.material_name or po.material_code or "Unknown"
-        material_agg[mat_key]["ordered"] += _safe_int(po.order_quantity)
-        material_agg[mat_key]["delivered"] += _safe_int(po.delivered_qty)
-        material_agg[mat_key]["pending"] += _safe_int(po.still_to_deliver_qty)
-        material_agg[mat_key]["name"] = mat_key
-    
-    gaps = []
-    for mat_key, agg in material_agg.items():
-        if agg["pending"] > 0:
-            gaps.append({
-                "material": mat_key,
-                "ordered": agg["ordered"],
-                "delivered": agg["delivered"],
-                "pending": agg["pending"],
-                "gap_pct": round(agg["pending"] / agg["ordered"] * 100, 1) if agg["ordered"] > 0 else 0,
-                "project_name": sap_filter["project_name"],
+    data = get_sap_project_data(db, project_id)
+    ratio = data["scope"]["allocation_ratio"]
+    aggregates = defaultdict(lambda: {"ordered": 0.0, "delivered": 0.0, "pending": 0.0})
+    for po in data["purchase_orders"]:
+        material = po.material_name or po.material_code or "Unknown"
+        aggregates[material]["ordered"] += float(po.order_quantity or 0) * ratio
+        aggregates[material]["delivered"] += float(po.delivered_qty or 0) * ratio
+        aggregates[material]["pending"] += float(po.still_to_deliver_qty or 0) * ratio
+    result = []
+    for material, aggregate in aggregates.items():
+        if aggregate["pending"] > 0:
+            result.append({
+                "material": material,
+                "ordered": _final_quantity(aggregate["ordered"]),
+                "delivered": _final_quantity(aggregate["delivered"]),
+                "pending": _final_quantity(aggregate["pending"]),
+                "gap_pct": round(aggregate["pending"] / aggregate["ordered"] * 100, 1) if aggregate["ordered"] > 0 else 0,
+                "project_name": data["project_name"],
+                "quantity_units": data["units"]["po_quantity_units"],
+                "scope": data["scope"],
+                "freshness": data["freshness"]["mt_poamount"],
+                "warnings": data["warnings"],
                 "_source_table": "mt_poamount",
             })
-    
-    gaps.sort(key=lambda x: (-x["pending"], str(x["material"])))
-    return gaps[:limit]
+    result.sort(key=lambda row: (-row["pending"], str(row["material"])))
+    return result[:limit]
 
 
 def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
-    """Get vendor delivery performance for a project.
-    
-    Use when: user asks about vendor risk, vendor performance, supplier delays.
-    """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    pos = _query_po_by_project(db, sap_filter)
-    
-    if not pos:
-        return []
-    
-    vendor_agg = defaultdict(lambda: {"ordered": 0, "delivered": 0, "pending": 0, "po_count": 0})
-    
-    for po in pos:
-        vendor = po.vendor_name or "Unknown"
-        vendor_agg[vendor]["ordered"] += _safe_int(po.order_quantity)
-        vendor_agg[vendor]["delivered"] += _safe_int(po.delivered_qty)
-        vendor_agg[vendor]["pending"] += _safe_int(po.still_to_deliver_qty)
-        vendor_agg[vendor]["po_count"] += 1
-    
+    data = get_sap_project_data(db, project_id)
+    ratio = data["scope"]["allocation_ratio"]
+    aggregates = defaultdict(lambda: {
+        "ordered": 0.0, "delivered": 0.0, "pending": 0.0,
+        "rows": 0, "po_numbers": set(),
+    })
+    for po in data["purchase_orders"]:
+        aggregate = aggregates[po.vendor_name or "Unknown"]
+        aggregate["ordered"] += float(po.order_quantity or 0) * ratio
+        aggregate["delivered"] += float(po.delivered_qty or 0) * ratio
+        aggregate["pending"] += float(po.still_to_deliver_qty or 0) * ratio
+        aggregate["rows"] += 1
+        if po.purchasing_document:
+            aggregate["po_numbers"].add(str(po.purchasing_document).strip())
     result = []
-    for vendor, agg in vendor_agg.items():
-        if agg["ordered"] > 0:
+    for vendor, aggregate in aggregates.items():
+        if aggregate["ordered"] > 0:
             result.append({
                 "vendor": vendor,
-                "total_ordered": agg["ordered"],
-                "total_delivered": agg["delivered"],
-                "total_pending": agg["pending"],
-                "po_count": agg["po_count"],
-                "fulfillment_pct": round((agg["ordered"] - agg["pending"]) / agg["ordered"] * 100, 1) if agg["ordered"] > 0 else 0,
-                "project_name": sap_filter["project_name"],
+                "total_ordered": _final_quantity(aggregate["ordered"]),
+                "total_delivered": _final_quantity(aggregate["delivered"]),
+                "total_pending": _final_quantity(aggregate["pending"]),
+                "po_count": aggregate["rows"],
+                "po_row_count": aggregate["rows"],
+                "distinct_po_count": len(aggregate["po_numbers"]),
+                "fulfillment_pct": round((aggregate["ordered"] - aggregate["pending"]) / aggregate["ordered"] * 100, 1),
+                "project_name": data["project_name"],
+                "quantity_units": data["units"]["po_quantity_units"],
+                "scope": data["scope"],
+                "freshness": data["freshness"]["mt_poamount"],
+                "warnings": data["warnings"],
                 "_source_table": "mt_poamount",
             })
-    
-    result.sort(key=lambda x: (-x["total_pending"], str(x["vendor"])))
+    result.sort(key=lambda row: (-row["total_pending"], str(row["vendor"])))
     return result
 
 
 def sap_get_inventory(db: Session, project_id: str) -> dict:
-    """Get current inventory (MB52) for a project.
-    
-    Use when: user asks about stock on hand, inventory levels, available materials.
-    """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    project_name = sap_filter["project_name"]
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    
-    inv_records = []
-    if wbs:
-        inv_records = db.query(models.MTInventory).filter(
-            _wbs_membership(models.MTInventory.wbs_element, wbs),
-            models.MTInventory.quantity_inv > 0
-        ).all()
-    
-    if not inv_records and plant_code:
-        inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.plant_code == plant_code,
-            models.MTInventory.quantity_inv > 0
-        ).all()
-    
-    if not inv_records:
-        return {"project_id": project_id, "project_name": project_name, "has_data": False}
-    
-    total_qty = sum(_safe_int(r.quantity_inv) for r in inv_records)
-    total_value = sum(r.value_unrestricted or 0 for r in inv_records)
-    latest_upload = max((r.upload_time for r in inv_records if r.upload_time), default=None)
-    
-    return {
+    data = get_sap_project_data(db, project_id)
+    totals = data["totals"]["inventory"]
+    result = {
         "project_id": project_id,
-        "project_name": project_name,
-        "has_data": True,
-        "total_items": len(inv_records),
-        "total_quantity": total_qty,
-        "total_value_inr": round(total_value, 2),
-        "_source_table": "mt_inventory",
-        "_synced_at": latest_upload.isoformat() if latest_upload else None,
+        "project_name": data["project_name"],
+        "has_data": bool(data["inventory"]),
+        **_metadata(data),
     }
+    if not data["inventory"]:
+        return result
+    result.update({
+        "total_items": data["counts"]["inventory_row_count"],
+        "inventory_row_count": data["counts"]["inventory_row_count"],
+        "total_quantity": _final_quantity(totals["quantity"]),
+        "total_quantity_raw": totals["quantity"],
+        "total_value_inr": round(totals["value"], 2),
+        "quantity_units": data["units"]["inventory_quantity_units"],
+        "value_currency": data["units"]["inventory_value_currency"],
+        "_source_table": "mt_inventory",
+        "_synced_at": data["freshness"]["mt_inventory"],
+    })
+    return result
 
 
 def sap_get_consumption(db: Session, project_id: str) -> dict:
-    """Get material consumption (MB51) data for a project.
-    
-    Use when: user asks about material usage, consumption rates, issued quantities.
-    """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    project_name = sap_filter["project_name"]
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    
-    records = []
-    if wbs:
-        records = db.query(models.MTMaterialDocument).filter(
-            _wbs_membership(models.MTMaterialDocument.wbs_element, wbs)
-        ).all()
-    
-    if not records and plant_code:
-        records = db.query(models.MTMaterialDocument).filter(
-            models.MTMaterialDocument.plant_code == plant_code
-        ).all()
-    
-    if not records:
-        return {"project_id": project_id, "project_name": project_name, "has_data": False}
-    
-    issued_qty = 0
-    returned_qty = 0
-    for r in records:
-        mvt = str(r.movement_type).strip() if r.movement_type else ""
-        qty = abs(_safe_int(r.quantity))
-        if mvt == "222":
-            returned_qty += qty
-        else:
-            issued_qty += qty
-
-    latest_upload = max((record.upload_time for record in records if record.upload_time), default=None)
-    return {
+    data = get_sap_project_data(db, project_id)
+    totals = data["totals"]["consumption"]
+    result = {
         "project_id": project_id,
-        "project_name": project_name,
-        "has_data": True,
-        "total_records": len(records),
-        "issued_qty": issued_qty,
-        "returned_qty": returned_qty,
-        "net_consumed": issued_qty - returned_qty,
-        "_source_table": "mt_materialdocument",
-        "_synced_at": latest_upload.isoformat() if latest_upload else None,
+        "project_name": data["project_name"],
+        "has_data": bool(data["material_documents"]),
+        **_metadata(data),
     }
+    if not data["material_documents"]:
+        return result
+    result.update({
+        "total_records": data["counts"]["material_document_row_count"],
+        "material_document_row_count": data["counts"]["material_document_row_count"],
+        "issued_qty": _final_quantity(totals["issued_quantity"]),
+        "returned_qty": _final_quantity(totals["reversal_quantity"]),
+        "net_consumed": _final_quantity(totals["net_quantity"]),
+        "quantity_units": data["units"]["material_document_quantity_units"],
+        "value_currency": data["units"]["material_document_value_currency"],
+        "_source_table": "mt_materialdocument",
+        "_synced_at": data["freshness"]["mt_materialdocument"],
+    })
+    return result
 
 
 def sap_get_freshness(db: Session, project_id: str) -> dict:
-    """Get the latest upload timestamp for SAP data of a project.
-    
-    Use when: determining if cached SAP data is still valid (Step 2 of pipeline).
-    """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    
-    latest = None
-    if wbs:
-        latest = db.query(func.max(models.MTPOAmount.upload_time)).filter(
-            _wbs_membership(models.MTPOAmount.wbs_element, wbs)
-        ).scalar()
-    
-    if not latest and plant_code:
-        latest = db.query(func.max(models.MTPOAmount.upload_time)).filter(
-            models.MTPOAmount.plant_code == plant_code
-        ).scalar()
-    
+    data = get_sap_project_data(db, project_id)
+    latest = max((value for value in data["freshness"].values() if value), default=None)
     return {
         "project_id": project_id,
-        "project_name": sap_filter["project_name"],
-        "synced_at": latest.isoformat() if latest else None,
+        "project_name": data["project_name"],
+        "synced_at": data["freshness"]["mt_poamount"],
         "exists": latest is not None,
+        "freshness": data["freshness"],
+        "scope": data["scope"],
     }
-

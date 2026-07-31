@@ -123,6 +123,18 @@ class Phase2LifecycleTests(unittest.TestCase):
         session_id = self.create_session()
 
         def successful_stream(**_kwargs):
+            _kwargs["evidence_out"].append({
+                "evidence_id": "p6-1",
+                "tool_call_id": "call-1",
+                "tool_name": "p6_get_project_summary",
+                "status": "ok",
+                "source_system": "P6",
+                "source_entity": "p6_project",
+                "project_id": "P-1",
+                "record_ids": [],
+                "data_as_of": None,
+                "last_synced_at": None,
+            })
             yield "answer"
             yield {"type": "metadata", "response": SimpleNamespace(
                 content="answer",
@@ -140,6 +152,10 @@ class Phase2LifecycleTests(unittest.TestCase):
         self.assertIn('"run_id":', response.text)
         detail = self.client.get(f"/api/chat/sessions/{session_id}").json()
         self.assertEqual([message["status"] for message in detail["messages"]], ["completed", "completed"])
+        assistant = detail["messages"][1]
+        self.assertEqual(assistant["metadata"]["sources"], ["p6_project"])
+        self.assertEqual(assistant["metadata"]["provenance"]["tables"], ["p6_project"])
+        self.assertEqual(assistant["metadata"]["evidence"][0]["tool_call_id"], "call-1")
 
 
 if __name__ == "__main__":

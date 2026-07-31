@@ -5,39 +5,12 @@ import logging
 import json
 import re
 import ast
+from services.project_catalog_service import list_project_mappings
+from services.capacity_milestone_service import CapacityMilestoneService, normalize_block_name
+from services.risk_analytics_service import RiskAnalyticsService
+from services.schedule_metrics_service import calculate_schedule_metrics
+from services.sap_project_data_service import get_sap_project_data, get_sap_projects_data
 logger = logging.getLogger(__name__)
-
-def filter_tc_edges_by_kps(edges, project_entries):
-    kps_mapping = {'1': 'I', '2': 'II', '3': 'III', '4': 'IV', '5': 'V'}
-    kps_nodes = set()
-    for pe in project_entries:
-        if pe.kps:
-            kps_upper = pe.kps.upper()
-            if '-' in kps_upper:
-                parts = kps_upper.split('-')
-                if len(parts) == 2 and parts[1] in kps_mapping:
-                    kps_nodes.add(f"KPS-{kps_mapping[parts[1]]}")
-                else:
-                    kps_nodes.add(kps_upper)
-            else:
-                num = kps_upper.replace("KPS", "").strip()
-                if num in kps_mapping:
-                    kps_nodes.add(f"KPS-{kps_mapping[num]}")
-                else:
-                    kps_nodes.add(kps_upper)
-    if not kps_nodes:
-        return edges
-    touching_edges = []
-    for edge in edges:
-        labels = [
-            str(edge.from_label).upper() if edge.from_label else "",
-            str(edge.to_label).upper() if edge.to_label else "",
-            str(edge.from_node).upper() if edge.from_node else "",
-            str(edge.to_node).upper() if edge.to_node else ""
-        ]
-        if any(kps in label for label in labels for kps in kps_nodes):
-            touching_edges.append(edge)
-    return touching_edges if touching_edges else edges
 
 def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
     if not p6_proj:
@@ -97,17 +70,21 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
     return dynamic_spi, dynamic_cpi
 
 def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
-    query = db.query(models.ProjectMapping)
-    if portfolio_type and portfolio_type.lower() != "all portfolios":
-        import re
-        portfolio_type = re.sub(r'[\+]+', ' ', portfolio_type).strip()
-        portfolio_type = re.sub(r'\s+', ' ', portfolio_type)
-        query = query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio_type}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio_type}%"))
-        )
-    mappings = query.all()
-    all_tc_edges = db.query(models.TcNetworkEdge).all()
+    mappings = list_project_mappings(db, portfolio_type)
+    capacity_snapshot = CapacityMilestoneService.get_portfolio_overview(db, portfolio_type)
+    capacity_by_project = {
+        row["project_id"]: row for row in capacity_snapshot.get("projects", [])
+    }
+    sap_by_project = get_sap_projects_data(
+        db, [m.project_id for m in mappings if m.project_id], mappings=list_project_mappings(db)
+    )
+    from services import transmission_service
+    tc_snapshot = transmission_service.build_transmission_snapshot(db)
+    p6_by_project = {
+        project.project_id: project
+        for project in db.query(models.P6Project).all()
+        if project.project_id
+    }
     
     # Pre-calculate activity stats for exact progress
     from sqlalchemy import func
@@ -162,135 +139,43 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             'delayed': row.delayed or 0
         }
     
-    # Pre-parse edge phases ONCE for extreme performance
-    parsed_edge_phases = {}
-    for edge in all_tc_edges:
-        parsed_edge_phases[edge.id] = set()
-        if edge.projects:
-            try:
-                parsed = json.loads(edge.projects)
-                if isinstance(parsed, dict):
-                    parsed_edge_phases[edge.id] = set(str(p).strip().upper() for p in parsed.get("phases", []))
-                elif isinstance(parsed, list):
-                    parsed_edge_phases[edge.id] = set()
-            except:
-                pass
-                
-    # Pre-calculate capacity by plant for pro-rata allocation
-
     results = []
 
     for m in mappings:
         # 1. P6 Data
-        p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
+        p6_proj = p6_by_project.get(m.project_id)
+        capacity = capacity_by_project.get(m.project_id, {})
         
-        proj_name_check = p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "")
-        if "demo" in proj_name_check.lower():
-            continue
-            
+        schedule = calculate_schedule_metrics(p6_proj)
         spi = 1.0
         cpi = 1.0
-        sched_var = p6_proj.finish_date_variance if p6_proj and p6_proj.finish_date_variance is not None else 0
+        sched_var = schedule.finish_date_variance if schedule.finish_date_variance is not None else 0
         cost_var = p6_proj.total_cost_variance if p6_proj and p6_proj.total_cost_variance is not None else 0
         
         # Exact activity tracking
         activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
 
         
-        # STRICT user-requested formula:
-        # Progress = SummaryActualNonLaborUnits / SummaryAtCompletionNonLaborUnits
-        if p6_proj and getattr(p6_proj, 'at_completion_non_labor_units', 0) and p6_proj.at_completion_non_labor_units > 0:
-            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.at_completion_non_labor_units
-        elif p6_proj:
-            # Fallback for projects that don't have labor units tracked yet
-            raw_pct = getattr(p6_proj, 'construction_percent_complete', None)
-            if raw_pct is None:
-                raw_pct = p6_proj.duration_percent_complete or 0.0
-            progress = float(raw_pct) if raw_pct <= 1.0 else float(raw_pct) / 100.0
-        else:
-            progress = 0.0
-            
-        # Cap progress between 0 and 1 to prevent exceeding 100% in UI
-        progress = max(0.0, min(1.0, float(progress)))
+        # Project 360 keeps its legacy 0-1 representation at the adapter boundary.
+        progress = (schedule.progress_pct or 0.0) / 100.0
+        progress = max(0.0, min(1.0, progress))
 
-        # 2. SAP Data - WBS Only Mapping
-        allocation_ratio = 1.0
+        # 2. SAP Data
+        sap_data = sap_by_project.get(m.project_id or f"mapping:{m.id}")
+        sap_po = sap_data["totals"]["purchase_orders"]
+        sap_inventory = sap_data["totals"]["inventory"]
+        sap_consumption = sap_data["totals"]["consumption"]
+        me2j_records = sap_data["purchase_orders"]
+        mb51_records = sap_data["material_documents"]
+        mb52_records = sap_data["inventory"]
+        ordered_qty = sap_po["ordered_quantity"]
+        budget_inr = sap_po["order_value"]
+        in_transit_qty = sap_po["pending_quantity"]
+        consumed_qty = sap_consumption["net_quantity"]
+        expenditure_inr = sap_consumption["net_value"]
+        inventory_qty = sap_inventory["quantity"]
+        inventory_value_inr = sap_inventory["value"]
 
-        budget_inr = 0.0
-        expenditure_inr = 0.0
-        inventory_value_inr = 0.0
-        
-        ordered_qty = 0.0
-        consumed_qty = 0.0
-        inventory_qty = 0.0
-        in_transit_qty = 0.0
-        
-        po_vol = 0.0
-        inv_vol = 0.0
-        transit_vol = 0.0
-        
-        po_materials = set()
-        me2j_records = []
-        wbs_exact = None
-        if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-            wbs_exact = str(m.module_wbs).strip()
-            me2j_records = db.query(models.MTPOAmount).filter(
-                models.MTPOAmount.wbs_element.ilike(f"%{wbs_exact}%")
-            ).all()
-            
-            for rec in me2j_records:
-                ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
-                budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio
-                in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio
-                if rec.material_code:
-                    mat_str = str(rec.material_code).strip().lstrip('0')
-                    if mat_str:
-                        po_materials.add(mat_str)
-        
-        # --- STEP A: MB51 Consumption ---
-        mb51_records = []
-        if wbs_exact:
-            mb51_records = db.query(models.MTMaterialDocument).filter(
-                models.MTMaterialDocument.wbs_element.ilike(f"%{wbs_exact}%")
-            ).all()
-        
-        mb51_materials = set()
-        for rec in mb51_records:
-            # If falling back to plant, strictly require material to be in POs
-            mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
-            if not m.module_wbs and mat_str not in po_materials:
-                continue
-                
-            qty = rec.quantity or 0.0
-            cost = rec.amount_in_lc or 0.0
-            m_type = str(rec.movement_type).strip()
-            consumed_qty -= (qty * allocation_ratio)
-            expenditure_inr -= (cost * allocation_ratio)
-            
-            if mat_str:
-                mb51_materials.add(mat_str)
-        
-        # (Moved to before MB51 for material matching)
-
-        mb52_records = []
-        if wbs_exact:
-            mb52_records = db.query(models.MTInventory).filter(
-                models.MTInventory.wbs_element.ilike(f"%{wbs_exact}%"),
-                models.MTInventory.quantity_inv > 0
-            ).all()
-            for rec in mb52_records:
-                mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
-                # Only include inventory for materials that exist in the POs
-                if mat_str in po_materials:
-                    inventory_qty += (rec.quantity_inv or 0.0) * allocation_ratio
-                    inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio
-
-        # --- STEP C: ME2J Purchase Orders ---
-        # Already processed above to get po_materials
-
-        # --- STEP D: In-Transit (ME2J Still to Deliver) ---
-
-        # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
         po_vol = ordered_qty
         inv_vol = inventory_qty
         transit_vol = in_transit_qty
@@ -310,74 +195,50 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         # 3. Business Logic — Intelligence-Grade Enrichment
         # ─────────────────────────────────────────────────
 
-        # Fallback for sched_var if None
-        if p6_proj and sched_var == 0 and p6_proj.baseline_finish_date:
-            compare_date = p6_proj.scheduled_finish_date or p6_proj.finish_date
-            if compare_date:
-                sched_var = (p6_proj.baseline_finish_date - compare_date).days
+        risk_inputs = RiskAnalyticsService.project360_inputs(p6_proj, schedule, sap_data)
+        risk_sched_var = risk_inputs["schedule_variance_days"]
+        risk_spi = risk_inputs["spi"]
+        risk_cpi = risk_inputs["cpi"]
+        has_sap_data = sap_data["has_data"]
 
-        # ── True EVM Calculation (SPI / CPI) ──
-        total_budget_evm = budget_inr if budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
-        actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
-        pct_complete = (progress / 100.0) if progress > 1.0 else progress
-        
-        planned_pct = pct_complete
-        if p6_proj:
-            import datetime
-            today = datetime.datetime.now().date()
-            start_dt = p6_proj.baseline_start_date or p6_proj.start_date
-            finish_dt = p6_proj.baseline_finish_date or p6_proj.scheduled_finish_date or p6_proj.finish_date
-            if start_dt and finish_dt:
-                start_d = start_dt.date() if isinstance(start_dt, datetime.datetime) else start_dt
-                finish_d = finish_dt.date() if isinstance(finish_dt, datetime.datetime) else finish_dt
-                if finish_d > start_d:
-                    total_days = (finish_d - start_d).days
-                    elapsed_days = (today - start_d).days
-                    planned_pct = min(1.0, max(0.0, elapsed_days / total_days))
-                    
-        ev = pct_complete * total_budget_evm
-        pv = planned_pct * total_budget_evm
-        ac = actual_cost_evm
-        
-        if pv > 0:
-            spi = ev / pv
-        elif planned_pct > 0:
-            spi = pct_complete / planned_pct
-        else:
-            spi = 1.0
-            
-        if ac > 0:
-            cpi = ev / ac
-        else:
-            cpi = 1.0
+        pct_complete = progress * 100
+        risk_flags = RiskAnalyticsService.project360_risk_flags(
+            material_availability_pct=mat_avail if has_sap_data else None,
+            po_volume=po_vol if has_sap_data else None,
+            schedule_variance_days=risk_sched_var,
+            spi=risk_spi,
+            in_transit_volume=transit_vol if has_sap_data else None,
+            cost_variance_inr=risk_inputs["cost_variance_inr"],
+            progress_pct=risk_inputs["progress_pct"],
+        )
+        flags = risk_flags.value
+        has_material_risk = flags["material_risk"]
+        has_schedule_risk = flags["schedule_risk"]
+        has_vendor_risk = flags["vendor_risk"]
+        has_financial_risk = flags["financial_risk"]
+        has_procurement_risk = flags["procurement_risk"]
+        cod_risk = RiskAnalyticsService.project360_cod_risk(
+            schedule_variance_days=risk_sched_var,
+            material_risk=has_material_risk,
+            material_availability_pct=mat_avail if has_sap_data else None,
+            vendor_risk=has_vendor_risk,
+        )
+        cod_at_risk = bool(cod_risk.value)
+        delay_days = cod_risk.components["delay_days"]
+        status_metric = RiskAnalyticsService.project360_status_tier(
+            progress_pct=risk_inputs["progress_pct"],
+            schedule_variance_days=risk_sched_var,
+            spi=risk_spi,
+            material_availability_pct=mat_avail if has_sap_data else None,
+            ordered_quantity=ordered_qty if has_sap_data else None,
+            vendor_risk=has_vendor_risk,
+        )
+        status_tier = status_metric.value or "Healthy"
 
-        # ── Multi-dimensional Risk Flags ──
-        has_material_risk   = mat_avail < 80 and po_vol > 0
-        has_schedule_risk   = sched_var < -10 or spi < 0.95
-        has_vendor_risk     = transit_vol == 0 and po_vol > 0
-        has_financial_risk  = cost_var < -1000000
-        has_procurement_risk = po_vol == 0 and progress < 50
-        
-        # COD Risk Detection
-        cod_at_risk = False
-        delay_days = abs(round(sched_var)) if sched_var < 0 else 0
-        if delay_days > 14 or (has_material_risk and mat_avail < 50) or has_vendor_risk:
-            cod_at_risk = True
-
-
-        
-        # ── 5-Tier Status Classification ──
-        pct_complete = progress * 100 if progress < 1 else progress
-        if pct_complete >= 99:
-            status_tier = "Completed"
-        elif (sched_var < -30 and spi < 0.8) or (mat_avail < 30 and ordered_qty > 0):
-            status_tier = "Critical"
-        elif sched_var < -20 or (mat_avail < 50 and ordered_qty > 0) or has_vendor_risk:
-            status_tier = "High Risk"
-        elif sched_var < -10 or (mat_avail < 80 and ordered_qty > 0):
-            status_tier = "Watchlist"
-        else:
-            status_tier = "Healthy"
+        # Preserve legacy card placeholders without feeding them into canonical risk facts.
+        sched_var = risk_sched_var if risk_sched_var is not None else 0
+        spi = risk_spi if risk_spi is not None else 1.0
+        cpi = risk_cpi if risk_cpi is not None else 1.0
 
         # ── Primary Issue (intelligence-first labeling) ──
         primary_issue = "On Track"
@@ -466,9 +327,9 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         tc_progress = m.tc_progress or {}
         lines_charged = tc_progress.get("linesCharged", {})
         
-        # Read exact edges from local DB
-        tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
-        tc_edges_count = lines_charged.get("total", len(tc_edges))
+        # Read the shared direct + phase/KPS transmission snapshot.
+        _, _, tc_edges = transmission_service.project_edges(db, m.project_id, tc_snapshot)
+        tc_edges_count = len(tc_edges)
         
         m.tc_data = {
             "progress": tc_progress,
@@ -495,7 +356,18 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "projectName": p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "Unmapped Project"),
             "sapPlantCode": m.spv_plant_code,
             "agelCode": m.agel,
-            "capacityMW": round(m.capacity_mwac, 2) if m.capacity_mwac is not None else 0.0,
+            "capacityMW": capacity.get("total_capacity", 0.0),
+            "codMW": capacity.get("cod_mw", 0.0),
+            "trialRunMW": capacity.get("tr_mw", 0.0),
+            "codBlocksDone": capacity.get("cod_blocks", 0),
+            "trialRunBlocks": capacity.get("tr_blocks", 0),
+            "totalBlocksCount": capacity.get("total_blocks", 0),
+            "capacityMetadata": {
+                "sourceFacts": capacity.get("source_facts", {}),
+                "freshness": capacity.get("freshness", {}),
+                "warnings": capacity.get("warnings", []),
+                "formula": capacity_snapshot.get("metadata", {}).get("formula", {}),
+            },
             # Intelligence Fields (card-facing)
             "statusTier": status_tier,
             "primaryIssue": primary_issue,
@@ -505,9 +377,16 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "aiInsight": ai_insight,
             "riskCategories": risk_categories,
             "codAtRisk": cod_at_risk,
+            "namedRiskMetrics": {
+                risk_flags.metric_id: risk_flags.to_dict(),
+                cod_risk.metric_id: cod_risk.to_dict(),
+                status_metric.metric_id: status_metric.to_dict(),
+            },
             "delayDays": delay_days,
             # Underlying Metrics (drill-down only)
             "progress": round(progress, 3),
+            "p6Available": schedule.p6_available,
+            "progressFormulaVersion": schedule.progress_formula_version,
             "spi": round(spi, 2),
             "cpi": round(cpi, 2),
             "scheduleVariance": round(sched_var),
@@ -522,6 +401,10 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "inventoryValueINR": inventory_value_inr,
             "costRemainingINR": cost_remaining_inr,
             "materialAvailability": mat_avail,
+            "sapScope": sap_data["scope"],
+            "sapUnits": sap_data["units"],
+            "sapFreshness": sap_data["freshness"],
+            "sapWarnings": sap_data["warnings"],
             "tcEdgesCount": tc_edges_count,
             "integrationCount": sum([1 if p6_proj else 0, 1 if ordered_qty > 0 or inventory_qty > 0 or consumed_qty > 0 else 0, 1 if tc_edges_count > 0 else 0]),
             "forecastFinish": forecast_finish,
@@ -585,107 +468,34 @@ def get_project_360_detail(db: Session, project_id: str):
     if not p6_proj:
         return {"error": "Project not found"}
         
-    # Block/WTG Logic
-    cod_done = 0
-    pending_cod = 0
-    tr_done_cod_not = 0
-    mw_generated = 0.0
-    total_blocks_count = 0
-    
-    all_blocks = set()
-    obj_id = p6_proj.p6_object_id
-    
-    wbs_nodes = db.query(models.P6WBSNode).filter(models.P6WBSNode.project_object_id == obj_id).all()
-    for w in wbs_nodes:
-        m = re.search(r'(Block-\d+|WTG\s*\d+)', w.wbs_name or "", re.IGNORECASE)
-        if m:
-            all_blocks.add(normalize_block(m.group(1)))
-            
-    cod_acts = db.query(models.P6Activity).filter(models.P6Activity.project_object_id == obj_id, models.P6Activity.name.ilike('%COD%')).all()
-    tr_acts = db.query(models.P6Activity).filter(models.P6Activity.project_object_id == obj_id, models.P6Activity.name.ilike('%Trial%')).all()
-    
-    for a in cod_acts + tr_acts:
-        m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
-        if m:
-            all_blocks.add(normalize_block(m.group(1)))
-            
-    blocks_status = {b: {'cod': 'Not Started', 'tr': 'Not Started', 'cod_forecast_date': None, 'cod_actual_date': None, 'tr_actual_date': None} for b in all_blocks}
-    
-    for a in cod_acts:
-        m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
-        if m:
-            b_name = normalize_block(m.group(1))
-            forecast = a.planned_finish_date.strftime("%Y-%m-%d") if a.planned_finish_date else None
-            actual = a.actual_finish_date.strftime("%Y-%m-%d") if a.actual_finish_date else None
-            if not blocks_status[b_name]['cod_forecast_date']:
-                blocks_status[b_name]['cod_forecast_date'] = forecast
-                
-            if a.status == 'Completed':
-                blocks_status[b_name]['cod'] = 'Completed'
-                blocks_status[b_name]['cod_actual_date'] = actual
-    
-    for a in tr_acts:
-        m = re.search(r'(Block-\d+|WTG\s*\d+)', a.name or "", re.IGNORECASE)
-        if m:
-            b_name = normalize_block(m.group(1))
-            actual = a.actual_finish_date.strftime("%Y-%m-%d") if a.actual_finish_date else None
-            if a.status == 'Completed':
-                blocks_status[b_name]['tr'] = 'Completed'
-                blocks_status[b_name]['tr_actual_date'] = actual
-    
-    for b, status in blocks_status.items():
-        is_cod = (status['cod'] == 'Completed')
-        is_tr = (status['tr'] == 'Completed')
-        
-        if is_cod:
-            cod_done += 1
-        else:
-            pending_cod += 1
-            if is_tr:
-                tr_done_cod_not += 1
-                
-    total_blocks_count = len(all_blocks)
-    
-    all_trs = db.query(models.MTTrialRun).all()
-    proj_name = mapping.project_name_from_p6 if mapping and mapping.project_name_from_p6 else p6_proj.name
-    
-    is_solar = any('BLOCK' in b for b in all_blocks)
-    is_wind = any('WTG' in b for b in all_blocks)
-    
-    if is_solar:
-        total_blocks = len(all_blocks)
-        cap = mapping.capacity_mwac if mapping and mapping.capacity_mwac else (mapping.capacity_mwdc if mapping and mapping.capacity_mwdc else 0.0)
-        mw_per_unit = cap / total_blocks if total_blocks > 0 else 0.0
-        mw_generated = mw_per_unit * cod_done
-    elif is_wind:
-        proj_name_nospace = proj_name.replace(" ", "").lower() if proj_name else ""
-        mw_per_wtg = 0.0
-        for tr in all_trs:
-            tr_proj_name = (tr.project_name_p6 or tr.project_name or "").replace(" ", "").lower()
-            if tr_proj_name == proj_name_nospace:
-                if tr.tr_quantity_mw:
-                    mw_per_wtg = tr.tr_quantity_mw
-                    break
-        mw_generated = mw_per_wtg * cod_done
-    else:
-        proj_name_nospace = proj_name.replace(" ", "").lower() if proj_name else ""
-        for tr in all_trs:
-            tr_proj_name = (tr.project_name_p6 or tr.project_name or "").replace(" ", "").lower()
-            if tr_proj_name == proj_name_nospace:
-                if tr.activity_name and 'COD' in tr.activity_name.upper():
-                    mw_generated += (tr.tr_quantity_mw or 0.0)
+    capacity_snapshot = CapacityMilestoneService.get_project_status(db, project_id)
+    capacity = next(iter(capacity_snapshot.get("projects", [])), {})
+    block_capacity = {
+        normalize_block(block["block"]): block.get("capacity", 0.0)
+        for block in capacity.get("blocks", [])
+    }
+    blocks_status = {
+        normalize_block(block["block"]): {
+            "cod": block["cod_status"],
+            "tr": block["trial_run_status"],
+            "cod_forecast_date": (block["cod_forecast_date"] or "").split("T")[0] or None,
+            "cod_actual_date": (block["cod_actual_date"] or "").split("T")[0] or None,
+            "tr_actual_date": (block["trial_run_actual_date"] or "").split("T")[0] or None,
+        }
+        for block in capacity.get("blocks", [])
+    }
+    cod_done = capacity.get("cod_blocks", 0)
+    pending_cod = capacity.get("total_blocks", 0) - cod_done
+    tr_done_cod_not = capacity.get("tr_blocks", 0)
+    mw_generated = capacity.get("cod_mw", 0.0)
+    total_blocks_count = capacity.get("total_blocks", 0)
 
-    # SAP Data - WBS Only Mapping
-    allocation_ratio = 1.0
+    # SAP Data
+    sap_data_shared = get_sap_project_data(db, project_id)
+    allocations = sap_data_shared["record_allocations"]
 
     # ── Purchase Orders (ME2J) ──
-    po_records_all = []
-    wbs_exact = None
-    if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        wbs_exact = str(mapping.module_wbs).strip()
-        po_records_all = db.query(models.MTPOAmount).filter(
-            models.MTPOAmount.wbs_element.ilike(f"%{wbs_exact}%")
-        ).all()
+    po_records_all = sap_data_shared["purchase_orders"]
             
     po_materials = set()
     for po in po_records_all:
@@ -700,17 +510,10 @@ def get_project_360_detail(db: Session, project_id: str):
     expenditure_inr = 0.0
     sap_consumption = []
 
-    mb51_records = []
-    if wbs_exact:
-        mb51_records = db.query(models.MTMaterialDocument).filter(
-           models.MTMaterialDocument.wbs_element.ilike(f"%{wbs_exact}%")
-        ).all()
+    mb51_records = sap_data_shared["material_documents"]
 
     for rec in mb51_records:
         mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
-        if not (mapping and mapping.module_wbs) and mat_str not in po_materials:
-            continue
-            
         qty = rec.quantity or 0.0
         cost = rec.amount_in_lc or 0.0
         m_type = str(rec.movement_type).strip()
@@ -719,16 +522,17 @@ def get_project_360_detail(db: Session, project_id: str):
             "materialCode": rec.material_code,
             "materialDescription": rec.material_description,
             "movementType": m_type,
-            "quantity": qty * allocation_ratio,
-            "amountINR": cost * allocation_ratio,
+            "quantity": qty * allocations["mt_materialdocument"].get(rec.id, 1.0),
+            "amountINR": cost * allocations["mt_materialdocument"].get(rec.id, 1.0),
             "wbsElement": rec.wbs_element,
             "plantCode": rec.plant_code,
             "postingDate": rec.posting_date.isoformat() if rec.posting_date else None,
             "baseUnit": getattr(rec, "base_unit", None),
         })
         
-        consumed_qty -= (qty * allocation_ratio)
-        expenditure_inr -= (cost * allocation_ratio)
+        record_ratio = allocations["mt_materialdocument"].get(rec.id, 1.0)
+        consumed_qty -= (qty * record_ratio)
+        expenditure_inr -= (cost * record_ratio)
         
         if mat_str:
             mb51_materials.add(mat_str)
@@ -742,6 +546,7 @@ def get_project_360_detail(db: Session, project_id: str):
     total_transit_qty = 0.0
 
     for po in po_records_all:
+        po_ratio = allocations["mt_poamount"].get(po.id, 1.0)
         mat_str = str(po.material_code).strip().lstrip('0') if po.material_code else ''
         
         vendor_name = po.vendor_name or "Unknown Vendor"
@@ -760,35 +565,35 @@ def get_project_360_detail(db: Session, project_id: str):
             "materialCode": po.material_code,
             "materialName": po.material_name,
             "materialType": po.material_type,
-            "orderedQty": (po.order_quantity or 0) * allocation_ratio,
-            "budgetINR": (po.net_order_value_inr or 0) * allocation_ratio,
+            "orderedQty": (po.order_quantity or 0) * po_ratio,
+            "budgetINR": (po.net_order_value_inr or 0) * po_ratio,
             "companyCode": po.company_code,
             "plantCode": po.plant_code,
-            "deliveredQty": getattr(po, "delivered_qty", 0.0) * allocation_ratio,
-            "stillToDeliverQty": getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio,
-            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * allocation_ratio,
-            "stillToDeliverINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
+            "deliveredQty": (getattr(po, "delivered_qty", 0.0) or 0.0) * po_ratio,
+            "stillToDeliverQty": (getattr(po, "still_to_deliver_qty", 0.0) or 0.0) * po_ratio,
+            "deliveredINR": (getattr(po, "delivered_value_inr_cr", 0.0) * 10000000 if getattr(po, "delivered_value_inr_cr", None) else 0.0) * po_ratio,
+            "stillToDeliverINR": (getattr(po, "still_to_deliver_inr", 0.0) or 0.0) * po_ratio,
             "storageLocation": getattr(po, "storage_location", None),
         })
         
-        transit_qty = getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio
+        transit_qty = (getattr(po, "still_to_deliver_qty", 0.0) or 0.0) * po_ratio
         if transit_qty > 0:
             sap_intransit.append({
                 "poNumber": po.purchasing_document,
                 "materialCode": po.material_code,
                 "materialName": po.material_name,
                 "inTransitQty": transit_qty,
-                "inTransitINR": getattr(po, "still_to_deliver_inr", 0.0) * allocation_ratio,
+                "inTransitINR": (getattr(po, "still_to_deliver_inr", 0.0) or 0.0) * po_ratio,
                 "plantCode": po.plant_code,
                 "vendorName": vendor_name,
             })
             total_transit_qty += transit_qty
         
-        total_po_qty += (po.order_quantity or 0.0) * allocation_ratio
-        total_budget_inr += (po.net_order_value_inr or 0.0) * allocation_ratio
+        total_po_qty += (po.order_quantity or 0.0) * po_ratio
+        total_budget_inr += (po.net_order_value_inr or 0.0) * po_ratio
         
         del_cr = getattr(po, "delivered_value_inr_cr", 0.0)
-        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0)
+        total_delivered_inr += (del_cr * 10000000 if del_cr else 0.0) * po_ratio
         
         if vendor_name not in vendor_summary:
             vendor_summary[vendor_name] = {
@@ -799,9 +604,9 @@ def get_project_360_detail(db: Session, project_id: str):
                 "poCount": 0,
                 "materials": set(),
             }
-        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0)
-        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0)
-        vendor_summary[vendor_name]["poCount"] += 1
+        vendor_summary[vendor_name]["totalOrderedQty"] += (po.order_quantity or 0.0) * po_ratio
+        vendor_summary[vendor_name]["totalBudgetINR"] += (po.net_order_value_inr or 0.0) * po_ratio
+        vendor_summary[vendor_name].setdefault("poNumbers", set()).add(po.purchasing_document or f"row:{po.id}")
         if po.material_code:
             vendor_summary[vendor_name]["materials"].add(po.material_code)
 
@@ -812,7 +617,7 @@ def get_project_360_detail(db: Session, project_id: str):
             "vendorCode": v["vendorCode"],
             "totalOrderedQty": v["totalOrderedQty"],
             "totalBudgetINR": v["totalBudgetINR"],
-            "poCount": v["poCount"],
+            "poCount": len(v["poNumbers"]),
             "materialCount": len(v["materials"]),
         })
     vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
@@ -820,12 +625,7 @@ def get_project_360_detail(db: Session, project_id: str):
     # ── In-Transit (Calculated from PO still_to_deliver) ──
 
     # ── Inventory (MB52) ──
-    inv_records = []
-    if wbs_exact:
-        inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.wbs_element.ilike(f"%{wbs_exact}%"),
-            models.MTInventory.quantity_inv > 0
-        ).all()
+    inv_records = sap_data_shared["inventory"]
 
     sap_inventory = []
     total_inv_qty = 0.0
@@ -833,30 +633,43 @@ def get_project_360_detail(db: Session, project_id: str):
     
             
     for inv in inv_records:
+        inv_ratio = allocations["mt_inventory"].get(inv.id, 1.0)
         mat_str = str(inv.material_code).strip().lstrip('0') if inv.material_code else ''
-        # Filter inventory to only materials that are in POs
-        if mat_str in po_materials:
+        if (inv.quantity_inv or 0) > 0:
             sap_inventory.append({
                 "materialCode": inv.material_code,
                 "materialName": inv.material_description or inv.material_name,
                 "purchaseOrder": inv.purchase_order,
-                "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio,
-                "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio,
+                "inventoryQty": (inv.quantity_inv or 0.0) * inv_ratio,
+                "inventoryValueINR": (inv.value_unrestricted or 0.0) * inv_ratio,
                 "wbsElement": inv.wbs_element,
                 "storageLocation": inv.storage_location_mapping,
                 "plantCode": inv.plant_code,
                 "baseUnit": getattr(inv, "base_unit", None),
             })
-            total_inv_qty += (inv.quantity_inv or 0.0) * allocation_ratio
-            total_inv_inr += (inv.value_unrestricted or 0.0) * allocation_ratio
+            total_inv_qty += (inv.quantity_inv or 0.0) * inv_ratio
+            total_inv_inr += (inv.value_unrestricted or 0.0) * inv_ratio
+
+    # Summary and detail rows share the service's source-specific allocation.
+    shared_po = sap_data_shared["totals"]["purchase_orders"]
+    shared_inventory = sap_data_shared["totals"]["inventory"]
+    shared_consumption = sap_data_shared["totals"]["consumption"]
+    total_po_qty = shared_po["ordered_quantity"]
+    total_budget_inr = shared_po["order_value"]
+    total_transit_qty = shared_po["pending_quantity"]
+    total_delivered_inr = shared_po["delivered_value_inr_cr"] * 10000000
+    total_inv_qty = shared_inventory["quantity"]
+    total_inv_inr = shared_inventory["value"]
+    consumed_qty = shared_consumption["net_quantity"]
+    expenditure_inr = shared_consumption["net_value"]
 
     material_breakdown = []
 
     # ── True EVM Calculation (SPI / CPI) ──
     total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
     actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
-    progress_val = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
-    pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
+    schedule = calculate_schedule_metrics(p6_proj)
+    pct_complete = (schedule.progress_pct or 0) / 100.0
     
     planned_pct = pct_complete
     import datetime
@@ -892,7 +705,10 @@ def get_project_360_detail(db: Session, project_id: str):
         "dataDate": p6_proj.data_date.strftime("%Y-%m-%d") if p6_proj.data_date else None,
         "mustFinishByDate": p6_proj.must_finish_by_date.strftime("%Y-%m-%d") if p6_proj.must_finish_by_date else None,
         # Progress & Duration
-        "durationPercentComplete": (p6_proj.duration_percent_complete * 100) if p6_proj.duration_percent_complete is not None and p6_proj.duration_percent_complete <= 1.0 and p6_proj.duration_percent_complete > 0 else p6_proj.duration_percent_complete,
+        "durationPercentComplete": schedule.duration_percent_complete,
+        "progressPercentComplete": schedule.progress_pct,
+        "progressFormulaVersion": schedule.progress_formula_version,
+        "p6Available": schedule.p6_available,
         "plannedDuration": p6_proj.planned_duration,
         "actualDuration": p6_proj.actual_duration,
         "remainingDuration": p6_proj.remaining_duration,
@@ -972,19 +788,6 @@ def get_project_360_detail(db: Session, project_id: str):
     # ── Delayed Activities & MW Capacity ──
     delayed_activities = []
     
-    WIND_MW_PER_WTG = {
-        "3074": 5.2, "4707": 5.0, "3075": 5.2, "3076": 5.2,
-        "3072": 5.2, "3073": 5.2, "6733": 5.2, "3105": 3.3,
-    }
-    DEFAULT_WIND_MW = 3.3
-
-    p_type = 'Solar'
-    name_check = (p6_proj.name or "").lower() + " " + (mapping.project_name_from_p6 if mapping and mapping.project_name_from_p6 else "").lower()
-    if "wind" in name_check:
-        p_type = 'Wind'
-        
-    wtg_mw = WIND_MW_PER_WTG.get(str(p6_proj.p6_object_id), DEFAULT_WIND_MW)
-
     if p6_proj.data_date:
         for act in p6_proj.activities:
             # Filter for construction activities only
@@ -1009,14 +812,8 @@ def get_project_360_detail(db: Session, project_id: str):
                     delay_days = (p6_proj.data_date - act.planned_start_date).days
                     
             if is_delayed:
-                mw_capacity = 0
-                act_name = (act.name or "").lower()
-                wbs_name = (act.wbs_name or "").lower()
-                
-                if p_type == 'Wind' and ('wtg' in act_name or 'wtg' in wbs_name):
-                    mw_capacity = wtg_mw
-                elif p_type == 'Solar' and ('block' in act_name or 'block' in wbs_name):
-                    mw_capacity = 12.5 # Default block allocation as per capacity_overview
+                block_name = normalize_block_name(act.name) or normalize_block_name(act.wbs_name)
+                mw_capacity = block_capacity.get(normalize_block(block_name), 0.0) if block_name else 0.0
                     
                 delayed_activities.append({
                     "activityId": act.activity_id,
@@ -1057,7 +854,7 @@ def get_project_360_detail(db: Session, project_id: str):
 
     # ── Mapping info ──
     mapping_info = {
-        "capacityMW": mapping.capacity_mwac if mapping else 0,
+        "capacityMW": capacity.get("total_capacity", 0.0),
         "p6ProjectName": p6_proj.name,
         "tcProjectName": mapping.project_name_from_p6 or mapping.project if mapping else "Unmapped",
         "mwGenerated": round(mw_generated, 2),
@@ -1065,16 +862,27 @@ def get_project_360_detail(db: Session, project_id: str):
         "pendingCodBlocks": pending_cod,
         "trDoneCodPending": tr_done_cod_not,
         "totalBlocksCount": total_blocks_count,
-        "unitType": "WTG" if is_wind else "Blocks",
+        "unitType": "WTG" if capacity.get("type") == "Wind" else "Blocks",
         "cluster": mapping.cluster if mapping else None,
         "blocksStatus": blocks_status,
+        "codMW": capacity.get("cod_mw", 0.0),
+        "trialRunMW": capacity.get("tr_mw", 0.0),
+        "remainingCapacityMW": capacity.get("remaining_capacity", 0.0),
+        "capacityMetadata": {
+            "sourceFacts": capacity.get("source_facts", {}),
+            "freshness": capacity.get("freshness", {}),
+            "warnings": capacity.get("warnings", []),
+            "formula": capacity_snapshot.get("metadata", {}).get("formula", {}),
+        },
     }
 
     # ── TC Data ──
     tc_network_edges = []
     
+    from services import transmission_service
+    tc_entries = []
     if mapping:
-        tc_network_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == mapping.id).all()
+        _, tc_entries, tc_network_edges = transmission_service.project_edges(db, project_id)
 
     tc_khavda = []
     tc_rajasthan = []
@@ -1161,9 +969,9 @@ def get_project_360_detail(db: Session, project_id: str):
             "isDelayed": getattr(edge, "is_delayed", False),
             "region": edge.region,
         }
-        if edge.region == "Khavda":
+        if transmission_service.normalize_region(edge.region) == "Khavda":
             tc_khavda.append(edge_data)
-        elif edge.region == "Rajasthan":
+        elif transmission_service.normalize_region(edge.region) == "Rajasthan":
             tc_rajasthan.append(edge_data)
 
     # ── Collect Connected Nodes ──
@@ -1174,7 +982,12 @@ def get_project_360_detail(db: Session, project_id: str):
         
     tc_nodes_data = []
     if connected_node_ids:
-        nodes = db.query(models.TcNetworkNode).filter(models.TcNetworkNode.node_id.in_(connected_node_ids)).all()
+        edge_regions = {transmission_service.normalize_region(e.region) for e in tc_network_edges}
+        nodes = [
+            node for node in transmission_service.latest_nodes(db)
+            if node.node_id in connected_node_ids
+            and transmission_service.normalize_region(node.region) in edge_regions
+        ]
         for n in nodes:
             tc_nodes_data.append({
                 "nodeId": n.node_id,
@@ -1186,7 +999,6 @@ def get_project_360_detail(db: Session, project_id: str):
 
     total_tc_mw = 0
     if mapping:
-        tc_entries = db.query(models.TcProjectEntry).filter(models.TcProjectEntry.mapping_id == mapping.id).all()
         for e in tc_entries:
             try:
                 total_tc_mw += float(e.mw)
@@ -1219,8 +1031,13 @@ def get_project_360_detail(db: Session, project_id: str):
             "inventory": sap_inventory,
             "consumption": sap_consumption,
             "materialBreakdown": material_breakdown,
+            "scope": sap_data_shared["scope"],
+            "units": sap_data_shared["units"],
+            "freshness": sap_data_shared["freshness"],
+            "warnings": sap_data_shared["warnings"],
             "summary": {
-                "totalPOs": len(sap_vendors),
+                "totalPOs": sap_data_shared["counts"]["distinct_po_count"],
+                "totalPORows": sap_data_shared["counts"]["po_row_count"],
                 "totalVendors": len(vendor_breakdown),
                 "totalOrderedQty": total_po_qty,
                 "totalInTransitQty": total_transit_qty,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { rajasthanApi } from '../../services/rajasthanApi';
 import { khavdaApi } from '../../services/khavdaApi';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 export default function TransmissionDataViewer({ dashboardData }: { dashboardData?: any }) {
   const [data, setData] = useState<any>({
@@ -10,13 +11,13 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchTransmissionData = async () => {
+  const fetchTransmissionData = async (force = false) => {
     setLoading(true);
     setError(null);
     try {
       const [kProjectsRes, rNetworkRes] = await Promise.all([
-        fetch('/akasha/api/tc/khavda/projects').then(r => r.json()).catch(e => ({ error: e.message })),
-        fetch('/akasha/api/tc/rajasthan/network').then(r => r.json()).catch(e => ({ error: e.message }))
+        getCachedDashboardJson('/akasha/api/tc/khavda/projects', { force }).catch(e => ({ error: e.message })),
+        getCachedDashboardJson('/akasha/api/tc/rajasthan/network', { force }).catch(e => ({ error: e.message }))
       ]);
 
       setData({
@@ -44,7 +45,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
           <p className="text-sm text-muted-foreground mt-1">Raw API Data from Rajasthan & Khavda Endpoints</p>
         </div>
         <button 
-          onClick={fetchTransmissionData}
+          onClick={() => fetchTransmissionData(true)}
           className="px-4 py-2 bg-primary/20 text-primary border border-primary/30 rounded-full hover:bg-primary/30 transition-colors"
           disabled={loading}
         >
@@ -84,25 +85,25 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                 {dashboardData?.projects?.map((proj: any, idx: number) => (
                   <tr key={idx} className="hover:bg-muted transition-colors group">
                     <td className="px-6 py-4 font-medium text-foreground">{proj.project_name}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mw} MW</td>
+                    <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mwac ?? 0} MW</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        proj.p6.health === 'On Track' ? 'bg-success/100/10 text-success' :
-                        proj.p6.health === 'Delayed' ? 'bg-destructive/100/10 text-destructive' : 'bg-muted0/10 text-muted-foreground'
+                        proj.p6?.health === 'On Track' ? 'bg-success/100/10 text-success' :
+                        proj.p6?.health === 'Delayed' ? 'bg-destructive/100/10 text-destructive' : 'bg-muted0/10 text-muted-foreground'
                       }`}>
-                        {proj.p6.health}
+                        {proj.p6?.health || 'Unavailable'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono">{proj.sap.inventory_mw} MW</td>
+                    <td className="px-6 py-4 font-mono">{proj.sap?.inventory_qty ?? 0}</td>
                     <td className="px-6 py-4">
                       <div className="relative group/tc">
                         <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border cursor-help ${
-                          proj.tc.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
+                          proj.tc?.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
                         }`}>
-                          {proj.tc.status}
+                          {proj.tc?.status || 'No data'}
                         </span>
                         {/* Hover JSON Tooltip */}
-                        {proj.tc.has_data && (
+                        {proj.tc?.has_data && (
                           <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tc:block z-50">
                             <div className="bg-black/90 dark:bg-[#0B1020]/95 backdrop-blur-xl border border-white/20 p-4 rounded-xl shadow-2xl w-[300px]">
                               <h4 className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-2">Transmission JSON</h4>

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { X } from 'lucide-react';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
@@ -30,6 +30,8 @@ import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPane
 import SimulationLab from '../features/analytics/SimulationLab';
 import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 import QualityCommandCenter from '../features/quality/QualityCommandCenter';
+import { clearDashboardQueryCache, getCachedDashboardJson } from '../services/dashboardQueryCache';
+import { replayPaneAnimations } from '../features/dashboard/replayPaneAnimations';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -37,6 +39,9 @@ export default function CEODashboard() {
   const [activeTab, setActiveTab] = useState<string>(() => {
     return sessionStorage.getItem('ceoActiveTab') || "overview";
   });
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(() => new Set([
+    sessionStorage.getItem('ceoActiveTab') || 'overview',
+  ]));
   const [previousTab, setPreviousTab] = useState<string>("overview");
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -56,6 +61,17 @@ export default function CEODashboard() {
       setActiveTab(savedTab);
     }
   }, []);
+
+  useEffect(() => {
+    setVisitedTabs(current => {
+      if (current.has(activeTab)) return current;
+      return new Set([...current, activeTab]);
+    });
+  }, [activeTab]);
+
+  useEffect(() => {
+    replayPaneAnimations(activeTab);
+  }, [activeTab]);
 
   // Reset project when returning to root dashboard via explicit back button
   useEffect(() => {
@@ -80,63 +96,64 @@ export default function CEODashboard() {
   const [finDetails, setFinDetails] = useState<any[]>([]);
   const [logDetails, setLogDetails] = useState<any[]>([]);
   const [isSyncing, setIsSyncing] = useState(false);
+  const selectedProjectId = selectedProject === 'All'
+    ? undefined
+    : dashboardData?.projects?.find((project: any) =>
+        project.project_name === selectedProject || project.p6_project_name === selectedProject
+      )?.project_id || '__unavailable__';
 
   const handleOpenProject = (id: string) => {
     navigate(`/ceo-dashboard/project/${id}`);
   };
 
-  // Fetch Data
-  const loadAllData = async () => {
-    setLoading(true);
+  const loadActivePaneData = async (force = false) => {
+    if (force || !dashboardData || !visitedTabs.has(activeTab)) setLoading(true);
     try {
-      const queryParams = new URLSearchParams();
-      if (selectedProject !== 'All') queryParams.append('project_name', selectedProject);
-      if (portfolio) queryParams.append('portfolio', portfolio);
-      const queryStr = queryParams.toString() ? `?${queryParams.toString()}` : '';
-      
-      const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
-        fetch(`/akasha/api/dashboard/summary${queryStr}`),
-        fetch(`/akasha/api/summary${queryStr}`),
-        fetch(`/akasha/api/financials${queryStr}`),
-        fetch(`/akasha/api/logistics${queryStr}`),
-        fetch(`/akasha/api/financials/details${queryStr}`),
-        fetch(`/akasha/api/logistics/details${queryStr}`)
-      ]);
+      const portfolioParams = new URLSearchParams();
+      if (portfolio) portfolioParams.set('portfolio', portfolio);
+      const portfolioQuery = portfolioParams.size ? `?${portfolioParams.toString()}` : '';
+      const scopedParams = new URLSearchParams(portfolioParams);
+      if (selectedProject !== 'All') scopedParams.set('project_name', selectedProject);
+      const scopedQuery = scopedParams.size ? `?${scopedParams.toString()}` : '';
 
-      const [dash, p6, sap, log, fDet, lDet] = await Promise.all([
-        dashRes.json(),
-        p6Res.json(),
-        sapRes.json(),
-        logRes.json(),
-        finDetRes.json(),
-        logDetRes.json()
-      ]);
+      const dashboard = await getCachedDashboardJson<any>(
+        `/akasha/api/dashboard/summary${portfolioQuery}`,
+        { force },
+      );
+      setDashboardData(dashboard);
 
-      setDashboardData(dash);
-      setP6Data(p6);
-      setSapData(sap);
-      setLogisticsData(log);
-      setFinDetails(fDet);
-      setLogDetails(lDet);
-      // Only fetch briefing once if not loaded
-      if (!briefing && selectedProject === 'All') {
-        try {
-          const bRes = await fetch('/akasha/api/generate-briefing');
-          if (bRes.ok) {
-            const bData = await bRes.json();
-            setBriefing(bData);
-          } else {
-            setBriefingError('Failed to generate AI Briefing');
-          }
-        } catch (e: any) {
-          setBriefingError(e.message || 'Error connecting to AI Core');
-        } finally {
-          setBriefingLoading(false);
-        }
-      } else if (selectedProject !== 'All') {
-         setBriefingLoading(false);
+      const needsP6 = new Set(['health', 'schedule', 'simulation_lab', 'admin', 'reports']);
+      const needsFinancialSummary = new Set(['financial', 'reports']);
+      const needsLogisticsSummary = new Set(['health', 'financial', 'material']);
+      const needsFinancialDetails = new Set(['financial', 'procurement', 'admin', 'reports']);
+      const needsLogisticsDetails = new Set(['financial', 'material']);
+      const requests: Promise<void>[] = [];
+
+      if (needsP6.has(activeTab)) {
+        requests.push(getCachedDashboardJson<any[]>(`/akasha/api/summary${scopedQuery}`, { force }).then(setP6Data));
       }
+      if (needsFinancialSummary.has(activeTab)) {
+        requests.push(getCachedDashboardJson<any[]>(`/akasha/api/financials${scopedQuery}`, { force }).then(setSapData));
+      }
+      if (needsLogisticsSummary.has(activeTab)) {
+        requests.push(getCachedDashboardJson<any[]>(`/akasha/api/logistics${scopedQuery}`, { force }).then(setLogisticsData));
+      }
+      if (needsFinancialDetails.has(activeTab)) {
+        requests.push(getCachedDashboardJson<any[]>(`/akasha/api/financials/details${scopedQuery}`, { force }).then(setFinDetails));
+      }
+      if (needsLogisticsDetails.has(activeTab)) {
+        requests.push(getCachedDashboardJson<any[]>(`/akasha/api/logistics/details${scopedQuery}`, { force }).then(setLogDetails));
+      }
+      await Promise.all(requests);
 
+      if (activeTab === 'overview' && !briefing && selectedProject === 'All') {
+        getCachedDashboardJson<any>('/akasha/api/generate-briefing', { force })
+          .then(setBriefing)
+          .catch(error => setBriefingError(error.message || 'Error connecting to AI Core'))
+          .finally(() => setBriefingLoading(false));
+      } else if (selectedProject !== 'All') {
+        setBriefingLoading(false);
+      }
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
     } finally {
@@ -145,8 +162,8 @@ export default function CEODashboard() {
   };
 
   useEffect(() => {
-    loadAllData();
-  }, [selectedProject, portfolio]);
+    loadActivePaneData();
+  }, [activeTab, selectedProject, portfolio]);
 
   const handleNavigateToSimulation = (projId: string, context?: any) => {
     setSelectedProject(projId);
@@ -172,7 +189,8 @@ export default function CEODashboard() {
     } catch (error) {
       console.error("Sync failed:", error);
     }
-    await loadAllData();
+    clearDashboardQueryCache();
+    await loadActivePaneData(true);
     setIsSyncing(false);
   };
 
@@ -250,8 +268,9 @@ export default function CEODashboard() {
         </div>
         
         {/* 3a. Full-bleed AI Copilot or Simulation Lab (no padding, no scroll wrapper) */}
-        {activeTab === 'ai_copilot' || activeTab === 'simulation_lab' ? (
-          <div className="flex-1 min-h-0 p-4 overflow-hidden flex flex-col">
+        <div className={activeTab === 'ai_copilot' || activeTab === 'simulation_lab'
+          ? 'flex-1 min-h-0 p-4 overflow-hidden flex flex-col'
+          : 'hidden'}>
             {activeTab === 'ai_copilot' && (
               <AICopilot 
                 onMinimize={() => {
@@ -262,10 +281,10 @@ export default function CEODashboard() {
               />
             )}
             {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} initialProject={selectedProject} simulationContext={simulationContext} />}
-          </div>
-        ) : (
-          /* 3b. Normal Dashboard Area */
-          <main className="flex-1 p-4">
+        </div>
+
+        {/* 3b. Normal Dashboard Area remains mounted to preserve pane state. */}
+        <main className={activeTab === 'ai_copilot' || activeTab === 'simulation_lab' ? 'hidden' : 'flex-1 p-4'}>
             <div className="w-full">
               {projectId ? (
                 <div className="w-full h-full min-h-[calc(100vh-120px)]">
@@ -275,50 +294,50 @@ export default function CEODashboard() {
                   />
                 </div>
               ) : (
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activeTab}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.2 }}
-                  >
-                    {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
-                    {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
-                    {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
-                    {activeTab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
-                    {activeTab === 'financial' && <SAPView sapData={sapData} logisticsData={logisticsData} finDetails={finDetails} logDetails={logDetails} loading={loading} />}
-                    {activeTab === 'procurement' && <ProcurementIntelligence finDetails={finDetails} />}
-                    {activeTab === 'material' && <MaterialIntelligence logDetails={logDetails} logisticsData={logisticsData} />}
-                    {activeTab === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
-                    {activeTab === 'risk' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} />}
-                    {activeTab === 'predictive' && <PredictiveAnalytics p6Data={p6Data} />}
-                    {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
-                    {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
-                    
-                    {activeTab === 'capacity_overview' && <CapacityOverview />}
-                    {/* AI Modules */}
-                    {activeTab === 'executive_brief' && <ExecutiveBriefing />}
-                    {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
-                    {activeTab === 'project_map' && <ProjectMap projects={dashboardData?.projects || []} onOpenProject={handleOpenProject} />}
-                    {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
-                    {activeTab === 'quality' && <QualityCommandCenter />}
-                    
-                    {/* Placeholders for unbuilt sections */}
-                    {!implementedModules.includes(activeTab) && (
-                      <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-border dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-gray-900/50">
-                        <div className="text-center">
-                          <h2 className="text-2xl font-semibold text-muted-foreground mb-2">{activeTab.replace('_', ' ')} Module</h2>
-                          <p className="text-sm text-muted-foreground">This module is currently in development.</p>
+                <>
+                  {Array.from(visitedTabs).map(tab => (
+                    <motion.div
+                      key={tab}
+                      data-dashboard-pane={tab}
+                      className={tab === activeTab ? 'block' : 'hidden'}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={tab === activeTab
+                        ? { opacity: 1, y: 0 }
+                        : { opacity: 0, y: 10 }}
+                      transition={{ duration: 0.2 }}
+                    >
+                      {tab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
+                      {tab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
+                      {tab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
+                      {tab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
+                      {tab === 'financial' && <SAPView sapData={sapData} logisticsData={logisticsData} finDetails={finDetails} logDetails={logDetails} loading={loading} />}
+                      {tab === 'procurement' && <ProcurementIntelligence finDetails={finDetails} />}
+                      {tab === 'material' && <MaterialIntelligence logDetails={logDetails} logisticsData={logisticsData} />}
+                      {tab === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
+                      {tab === 'risk' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} selectedProjectId={selectedProjectId} />}
+                      {tab === 'predictive' && <PredictiveAnalytics p6Data={p6Data} selectedProjectId={selectedProjectId} />}
+                      {tab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
+                      {tab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
+                      {tab === 'capacity_overview' && <CapacityOverview />}
+                      {tab === 'executive_brief' && <ExecutiveBriefing />}
+                      {tab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
+                      {tab === 'project_map' && <ProjectMap projects={dashboardData?.projects || []} onOpenProject={handleOpenProject} />}
+                      {tab === 'knowledge_graph' && <KnowledgeGraph />}
+                      {tab === 'quality' && <QualityCommandCenter />}
+                      {!implementedModules.includes(tab) && (
+                        <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-border dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-gray-900/50">
+                          <div className="text-center">
+                            <h2 className="text-2xl font-semibold text-muted-foreground mb-2">{tab.replace('_', ' ')} Module</h2>
+                            <p className="text-sm text-muted-foreground">This module is currently in development.</p>
+                          </div>
                         </div>
-                      </div>
-                    )}
-                  </motion.div>
-                </AnimatePresence>
+                      )}
+                    </motion.div>
+                  ))}
+                </>
               )}
             </div>
-          </main>
-        )}
+        </main>
       </div>
       
       {/* 4. Floating AI Copilot Panel */}

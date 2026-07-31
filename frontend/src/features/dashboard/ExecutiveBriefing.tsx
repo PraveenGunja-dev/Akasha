@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { FileText, AlertTriangle, TrendingDown, Clock, ShieldAlert, CheckCircle2, ChevronRight, Play, ServerCrash } from 'lucide-react';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 export default function ExecutiveBriefing() {
   const [loading, setLoading] = useState(true);
@@ -10,9 +11,7 @@ export default function ExecutiveBriefing() {
   useEffect(() => {
     const fetchBriefing = async () => {
       try {
-        const response = await fetch('/akasha/api/generate-briefing');
-        if (!response.ok) throw new Error('Failed to generate AI Briefing');
-        const data = await response.json();
+        const data = await getCachedDashboardJson<any>('/akasha/api/generate-briefing');
         setBriefing(data);
       } catch (err: any) {
         setError(err.message || 'Error connecting to AI Core');

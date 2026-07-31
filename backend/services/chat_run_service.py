@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from auth_claims import AuthenticatedIdentity
 import models
+from services.freshness_service import build_answer_provenance
 
 
 ACTIVE_RUN_STATUSES = {"pending", "running", "cancel_requested"}
@@ -82,6 +83,7 @@ def complete_chat_run(
     domains: list[str],
     data_as_of,
     sources: list[str],
+    evidence: list[dict] | None,
     visualizations: list[dict],
     latency_ms: int,
     checkpoint_id: str | None = None,
@@ -103,8 +105,17 @@ def complete_chat_run(
     message.intent_type = intent_type
     message.project_ids = ",".join(project_ids) if project_ids else None
     message.data_domains = ",".join(domains) if domains else None
-    message.data_as_of = data_as_of
-    message.sources_used = {"tables": sources}
+    provenance = build_answer_provenance(
+        db,
+        sources,
+        evidence=evidence or (),
+        answer_generated_at=now,
+    )
+    effective_data_as_of = data_as_of or provenance["data_as_of"]
+    if isinstance(effective_data_as_of, str):
+        effective_data_as_of = datetime.fromisoformat(effective_data_as_of.replace("Z", "+00:00")).replace(tzinfo=None)
+    message.data_as_of = effective_data_as_of
+    message.sources_used = provenance
     message.visualizations = visualizations or None
     message.latency_ms = latency_ms
     message.completed_at = now

@@ -1,0 +1,2557 @@
+{
+  "business_validation": "pending_business_validation",
+  "case_results": [
+    {
+      "case_id": "total-project-count-001",
+      "category": "total_scope",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:catalog:SNAP-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:catalog:SNAP-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 12,
+              "dimension": "value",
+              "expected": 12,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "projects",
+              "dimension": "unit",
+              "expected": "projects",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:catalog:SNAP-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:catalog:SNAP-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "active_project_count",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "total-portfolio-progress-001",
+      "category": "total_scope",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:PORTFOLIO-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:PORTFOLIO-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 58.45,
+              "dimension": "value",
+              "expected": 58.4,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:PORTFOLIO-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:PORTFOLIO-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "weighted_progress",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "project-current-progress-001",
+      "category": "project_progress",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:ATLAS-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:ATLAS-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 42.3,
+              "dimension": "value",
+              "expected": 42.3,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "progress",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "date",
+              "dimension": "value_type",
+              "expected": "date",
+              "passed": true
+            },
+            {
+              "actual": "2026-07-01",
+              "dimension": "value",
+              "expected": "2026-07-01",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "data_as_of",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "project-plan-variance-001",
+      "category": "project_progress",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:ATLAS-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:ATLAS-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 42.3,
+              "dimension": "value",
+              "expected": 42.3,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "actual_progress",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 50.0,
+              "dimension": "value",
+              "expected": 50.0,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "planned_progress",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": -7.7,
+              "dimension": "value",
+              "expected": -7.7,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percentage_points",
+              "dimension": "unit",
+              "expected": "percentage_points",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "variance",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 16,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 16,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "delay-completion-baseline-001",
+      "category": "delay",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:ATLAS-SCHEDULE-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:ATLAS-SCHEDULE-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "date",
+              "dimension": "value_type",
+              "expected": "date",
+              "passed": true
+            },
+            {
+              "actual": "2026-09-15",
+              "dimension": "value",
+              "expected": "2026-09-15",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-SCHEDULE-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-SCHEDULE-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "forecast_finish",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "date",
+              "dimension": "value_type",
+              "expected": "date",
+              "passed": true
+            },
+            {
+              "actual": "2026-09-01",
+              "dimension": "value",
+              "expected": "2026-09-01",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-SCHEDULE-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-SCHEDULE-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "baseline_finish",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 14,
+              "dimension": "value",
+              "expected": 14,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "calendar_days_late",
+              "dimension": "unit",
+              "expected": "calendar_days_late",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-SCHEDULE-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-SCHEDULE-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "finish_variance",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 16,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 16,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "delay-portfolio-projects-001",
+      "category": "delay",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:PORTFOLIO-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:PORTFOLIO-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 3,
+              "dimension": "value",
+              "expected": 3,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "projects",
+              "dimension": "unit",
+              "expected": "projects",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:PORTFOLIO-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:PORTFOLIO-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "behind_schedule_count",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 2,
+              "dimension": "value",
+              "expected": 2,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "projects",
+              "dimension": "unit",
+              "expected": "projects",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:PORTFOLIO-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:PORTFOLIO-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "ahead_schedule_count",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "sap-capex-utilization-001",
+      "category": "sap",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:sap:ATLAS-FI-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:sap:ATLAS-FI-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 63.25,
+              "dimension": "value",
+              "expected": 63.2,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:sap:ATLAS-FI-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:sap:ATLAS-FI-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "capex_utilization",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 632.2,
+              "dimension": "value",
+              "expected": 632.0,
+              "passed": true,
+              "tolerance": 0.5
+            },
+            {
+              "actual": "INR_million",
+              "dimension": "unit",
+              "expected": "INR_million",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:sap:ATLAS-FI-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:sap:ATLAS-FI-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "actual_cost",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "sap-delayed-pos-001",
+      "category": "sap",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:sap:ATLAS-PO-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:sap:ATLAS-PO-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 4,
+              "dimension": "value",
+              "expected": 4,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "purchase_orders",
+              "dimension": "unit",
+              "expected": "purchase_orders",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:sap:ATLAS-PO-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:sap:ATLAS-PO-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "delayed_po_count",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "sap-material-availability-001",
+      "category": "sap",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:sap:ATLAS-MB52-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:sap:ATLAS-MB52-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 12500,
+              "dimension": "value",
+              "expected": 12500,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "modules",
+              "dimension": "unit",
+              "expected": "modules",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:sap:ATLAS-MB52-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:sap:ATLAS-MB52-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "available_modules",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "tc-readiness-001",
+      "category": "tc",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:tc:ATLAS-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:tc:ATLAS-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "string",
+              "dimension": "value_type",
+              "expected": "string",
+              "passed": true
+            },
+            {
+              "actual": "partially_ready",
+              "dimension": "value",
+              "expected": "partially_ready",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:tc:ATLAS-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:tc:ATLAS-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "readiness_status",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 7,
+              "dimension": "value",
+              "expected": 7,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "milestones",
+              "dimension": "unit",
+              "expected": "milestones",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:tc:ATLAS-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:tc:ATLAS-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "ready_milestones",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "tc-connectivity-alignment-001",
+      "category": "tc",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:ATLAS-20260701",
+            "synthetic:tc:ATLAS-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:ATLAS-20260701",
+            "synthetic:tc:ATLAS-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "boolean",
+              "dimension": "value_type",
+              "expected": "boolean",
+              "passed": true
+            },
+            {
+              "actual": false,
+              "dimension": "value",
+              "expected": false,
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701",
+                "synthetic:tc:ATLAS-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701",
+                "synthetic:tc:ATLAS-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "is_aligned",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 12.0,
+              "dimension": "value",
+              "expected": 12.0,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percentage_points",
+              "dimension": "unit",
+              "expected": "percentage_points",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701",
+                "synthetic:tc:ATLAS-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701",
+                "synthetic:tc:ATLAS-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "readiness_gap",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "capacity-portfolio-001",
+      "category": "capacity",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:capacity:PORTFOLIO-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:capacity:PORTFOLIO-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 1840.0,
+              "dimension": "value",
+              "expected": 1840.0,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "MWac",
+              "dimension": "unit",
+              "expected": "MWac",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:capacity:PORTFOLIO-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:capacity:PORTFOLIO-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "total_capacity",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 720.0,
+              "dimension": "value",
+              "expected": 720.0,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "MWac",
+              "dimension": "unit",
+              "expected": "MWac",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:capacity:PORTFOLIO-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:capacity:PORTFOLIO-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "commissioned_capacity",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "capacity-project-remaining-001",
+      "category": "capacity",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:capacity:ATLAS-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:capacity:ATLAS-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 57.5,
+              "dimension": "value",
+              "expected": 57.5,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "MWac",
+              "dimension": "unit",
+              "expected": "MWac",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:capacity:ATLAS-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:capacity:ATLAS-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "remaining_capacity",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "quality-open-ncr-001",
+      "category": "quality",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:quality:ATLAS-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:quality:ATLAS-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 6,
+              "dimension": "value",
+              "expected": 6,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "NCRs",
+              "dimension": "unit",
+              "expected": "NCRs",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:quality:ATLAS-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:quality:ATLAS-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "open_ncr_count",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "quality-contractor-rate-001",
+      "category": "quality",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:quality:ATLAS-ORION-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:quality:ATLAS-ORION-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 91.7,
+              "dimension": "value",
+              "expected": 91.7,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:quality:ATLAS-ORION-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:quality:ATLAS-ORION-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "first_pass_rate",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "risk-named-001",
+      "category": "named_risk",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:risk:ATLAS-RISK-07"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:risk:ATLAS-RISK-07"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "string",
+              "dimension": "value_type",
+              "expected": "string",
+              "passed": true
+            },
+            {
+              "actual": "Module delivery slippage",
+              "dimension": "value",
+              "expected": "Module delivery slippage",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:risk:ATLAS-RISK-07"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:risk:ATLAS-RISK-07"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "risk_name",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "string",
+              "dimension": "value_type",
+              "expected": "string",
+              "passed": true
+            },
+            {
+              "actual": "high",
+              "dimension": "value",
+              "expected": "high",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:risk:ATLAS-RISK-07"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:risk:ATLAS-RISK-07"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "risk_rating",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 18,
+              "dimension": "value",
+              "expected": 18,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "calendar_days",
+              "dimension": "unit",
+              "expected": "calendar_days",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:risk:ATLAS-RISK-07"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:risk:ATLAS-RISK-07"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "days_at_risk",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 16,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 16,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "risk-project-current-001",
+      "category": "named_risk",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:risk:ATLAS-REGISTER-01"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:risk:ATLAS-REGISTER-01"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "integer",
+              "dimension": "value_type",
+              "expected": "integer",
+              "passed": true
+            },
+            {
+              "actual": 2,
+              "dimension": "value",
+              "expected": 2,
+              "passed": true,
+              "tolerance": 0
+            },
+            {
+              "actual": "risks",
+              "dimension": "unit",
+              "expected": "risks",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:risk:ATLAS-REGISTER-01"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:risk:ATLAS-REGISTER-01"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "open_high_risks",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "freshness-stale-progress-001",
+      "category": "stale_data",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:ATLAS-20260720"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:ATLAS-20260720"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [
+            "stale_data"
+          ],
+          "dimension": "warning_codes",
+          "expected": [
+            "stale_data"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 44.0,
+              "dimension": "value",
+              "expected": 44.0,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260720"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260720"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "progress",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "date",
+              "dimension": "value_type",
+              "expected": "date",
+              "passed": true
+            },
+            {
+              "actual": "2026-07-20",
+              "dimension": "value",
+              "expected": "2026-07-20",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260720"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260720"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "data_as_of",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "missing-capex-data-001",
+      "category": "missing_data",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-CEDAR",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-CEDAR",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "source_ids",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [
+            "missing_data"
+          ],
+          "dimension": "warning_codes",
+          "expected": [
+            "missing_data"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "null",
+              "dimension": "value_type",
+              "expected": "null",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "value",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [],
+              "dimension": "source_ids",
+              "expected": [],
+              "passed": true
+            }
+          ],
+          "fact_id": "capex_utilization",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "blocked_missing_source"
+    },
+    {
+      "case_id": "missing-forecast-date-001",
+      "category": "missing_data",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-CEDAR",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-CEDAR",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "source_ids",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [
+            "missing_data"
+          ],
+          "dimension": "warning_codes",
+          "expected": [
+            "missing_data"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "null",
+              "dimension": "value_type",
+              "expected": "null",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "value",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "unit",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": [],
+              "dimension": "source_ids",
+              "expected": [],
+              "passed": true
+            }
+          ],
+          "fact_id": "forecast_finish",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "blocked_missing_source"
+    },
+    {
+      "case_id": "ambiguous-project-name-001",
+      "category": "ambiguity",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [
+              "SYN-SUNRISE-EAST",
+              "SYN-SUNRISE-WEST"
+            ],
+            "project_id": null,
+            "status": "ambiguous"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [
+              "SYN-SUNRISE-EAST",
+              "SYN-SUNRISE-WEST"
+            ],
+            "project_id": null,
+            "status": "ambiguous"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:catalog:SNAP-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:catalog:SNAP-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [
+            "ambiguous_project"
+          ],
+          "dimension": "warning_codes",
+          "expected": [
+            "ambiguous_project"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "null",
+              "dimension": "value_type",
+              "expected": "null",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "value",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [],
+              "dimension": "source_ids",
+              "expected": [],
+              "passed": true
+            }
+          ],
+          "fact_id": "progress",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    },
+    {
+      "case_id": "unsupported-machinery-source-001",
+      "category": "unsupported_source",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [],
+            "project_id": "SYN-ATLAS",
+            "status": "resolved"
+          },
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "source_ids",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [
+            "unsupported_source"
+          ],
+          "dimension": "warning_codes",
+          "expected": [
+            "unsupported_source"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "null",
+              "dimension": "value_type",
+              "expected": "null",
+              "passed": true
+            },
+            {
+              "actual": null,
+              "dimension": "value",
+              "expected": null,
+              "passed": true
+            },
+            {
+              "actual": "machines",
+              "dimension": "unit",
+              "expected": "machines",
+              "passed": true
+            },
+            {
+              "actual": [],
+              "dimension": "source_ids",
+              "expected": [],
+              "passed": true
+            }
+          ],
+          "fact_id": "deployed_machinery",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 8,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 8,
+      "unsupported_fact_ids": [],
+      "validation_status": "blocked_missing_source"
+    },
+    {
+      "case_id": "project-comparison-scope-001",
+      "category": "project_scope",
+      "checks": [
+        {
+          "actual": {
+            "candidate_project_ids": [
+              "SYN-ATLAS",
+              "SYN-BEACON"
+            ],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "dimension": "resolution",
+          "expected": {
+            "candidate_project_ids": [
+              "SYN-ATLAS",
+              "SYN-BEACON"
+            ],
+            "project_id": null,
+            "status": "not_applicable"
+          },
+          "passed": true
+        },
+        {
+          "actual": [
+            "synthetic:p6:ATLAS-20260701",
+            "synthetic:p6:BEACON-20260701"
+          ],
+          "dimension": "source_ids",
+          "expected": [
+            "synthetic:p6:ATLAS-20260701",
+            "synthetic:p6:BEACON-20260701"
+          ],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "warning_codes",
+          "expected": [],
+          "passed": true
+        },
+        {
+          "actual": [],
+          "dimension": "unsupported_fact_ids",
+          "expected": [],
+          "passed": true
+        }
+      ],
+      "facts": [
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 42.3,
+              "dimension": "value",
+              "expected": 42.3,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:ATLAS-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "atlas_progress",
+          "passed": true
+        },
+        {
+          "checks": [
+            {
+              "actual": "number",
+              "dimension": "value_type",
+              "expected": "number",
+              "passed": true
+            },
+            {
+              "actual": 61.8,
+              "dimension": "value",
+              "expected": 61.8,
+              "passed": true,
+              "tolerance": 0.1
+            },
+            {
+              "actual": "percent",
+              "dimension": "unit",
+              "expected": "percent",
+              "passed": true
+            },
+            {
+              "actual": [
+                "synthetic:p6:BEACON-20260701"
+              ],
+              "dimension": "source_ids",
+              "expected": [
+                "synthetic:p6:BEACON-20260701"
+              ],
+              "passed": true
+            }
+          ],
+          "fact_id": "beacon_progress",
+          "passed": true
+        }
+      ],
+      "passed": true,
+      "passed_checks": 12,
+      "response_present": true,
+      "response_status": "sample_generated",
+      "score": 1.0,
+      "total_checks": 12,
+      "unsupported_fact_ids": [],
+      "validation_status": "pending_business_validation"
+    }
+  ],
+  "case_status_counts": {
+    "blocked_missing_source": 3,
+    "pending_business_validation": 20
+  },
+  "category_counts": {
+    "ambiguity": 1,
+    "capacity": 2,
+    "delay": 2,
+    "missing_data": 2,
+    "named_risk": 2,
+    "project_progress": 2,
+    "project_scope": 1,
+    "quality": 2,
+    "sap": 3,
+    "stale_data": 1,
+    "tc": 2,
+    "total_scope": 2,
+    "unsupported_source": 1
+  },
+  "dataset_version": "phase10-golden-v1",
+  "production_accuracy_claim": false,
+  "quality_gate_passed": true,
+  "quality_gates": [
+    {
+      "actual": 1.0,
+      "gate": "minimum_overall_score",
+      "passed": true,
+      "threshold": 1.0
+    },
+    {
+      "actual": 1.0,
+      "gate": "minimum_case_pass_rate",
+      "passed": true,
+      "threshold": 1.0
+    },
+    {
+      "actual": 0,
+      "gate": "maximum_unsupported_claims",
+      "passed": true,
+      "threshold": 0
+    },
+    {
+      "actual": true,
+      "gate": "require_response_for_every_case",
+      "passed": true,
+      "threshold": true
+    }
+  ],
+  "report_type": "phase10_structured_golden_evaluation",
+  "schema_version": "2.0",
+  "summary": {
+    "case_count": 23,
+    "case_pass_rate": 1.0,
+    "failed_cases": 0,
+    "missing_response_count": 0,
+    "overall_score": 1.0,
+    "passed_cases": 23,
+    "passed_checks": 240,
+    "total_checks": 240,
+    "unsupported_claim_count": 0
+  }
+}

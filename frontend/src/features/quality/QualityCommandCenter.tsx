@@ -5,6 +5,7 @@ import {
   RefreshCw, ChevronDown, ChevronRight, XCircle, Activity,
   TrendingUp, Package, MapPin, Filter, Search, ArrowUpRight
 } from 'lucide-react';
+import { clearDashboardQueryCache, getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 /* ── Status config ── */
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -61,17 +62,16 @@ export default function QualityCommandCenter() {
   const [activeFilter, setActiveFilter] = useState<string>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const loadData = async () => {
+  const loadData = async (force = false) => {
     setLoading(true);
     try {
-      const [ovRes, conRes, ncRes] = await Promise.all([
-        fetch('/akasha/api/quality/overview'),
-        fetch('/akasha/api/quality/contractors'),
-        fetch('/akasha/api/quality/ncs?page_size=100'),
+      const [overviewData, contractorData, ncData] = await Promise.all([
+        getCachedDashboardJson<any>('/akasha/api/quality/overview', { force }),
+        getCachedDashboardJson<any[]>('/akasha/api/quality/contractors', { force }),
+        getCachedDashboardJson<any>('/akasha/api/quality/ncs?page_size=100', { force }),
       ]);
-      setOverview(await ovRes.json());
-      setContractors(await conRes.json());
-      const ncData = await ncRes.json();
+      setOverview(overviewData);
+      setContractors(contractorData);
       setNcList(ncData.items || []);
     } catch (e) {
       console.error('Failed to load quality data:', e);
@@ -84,7 +84,8 @@ export default function QualityCommandCenter() {
     setSyncing(true);
     try {
       await fetch('/akasha/api/pulse/sync', { method: 'POST' });
-      await loadData();
+      clearDashboardQueryCache('/akasha/api/quality/');
+      await loadData(true);
     } catch (e) {
       console.error('Pulse sync failed:', e);
     } finally {

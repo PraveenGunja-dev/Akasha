@@ -226,6 +226,7 @@ Still from `backend`, run these in order:
 psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase1_chat_ownership.sql
 psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase2_langgraph_context.sql
 psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase5_mvp_reports.sql
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase9_source_sync_state.sql
 ```
 
 The migrations are designed to be rerunnable using `IF NOT EXISTS` and reviewed constraint
@@ -234,6 +235,7 @@ replacement where appropriate. They provide:
 - Phase 1: session ownership and canonical chat metadata.
 - Phase 2: engine/run/message lifecycle and cancellation state.
 - Report MVP: temporary report-artifact records.
+- Phase 9: durable source synchronization versions used for cache coherency.
 
 ### 9.1 Apply the Application Migrations with DBeaver
 
@@ -268,7 +270,8 @@ Use this procedure instead of the three `psql` commands when DBeaver is preferre
 
    ```text
    phase2_langgraph_context.sql
-   phase5_mvp_reports.sql
+    phase5_mvp_reports.sql
+    phase9_source_sync_state.sql
    ```
 
 10. In Database Navigator, right-click `Schemas > public > Tables` and select
@@ -281,6 +284,7 @@ The expected application changes are:
   columns.
 - `chat_run`: durable pending/running/completed/failed/cancelled/interrupted turn state.
 - `report_artifact`: owner-scoped temporary PDF/DOCX metadata and expiry.
+- `source_sync_state`: per-source successful-sync version, business cutoff, and ingestion time.
 
 ### 9.2 Verify the Application Migrations in DBeaver
 
@@ -290,7 +294,7 @@ Open **SQL Editor > New SQL Script** on the `akasha_local` connection and execut
 SELECT table_name
 FROM information_schema.tables
 WHERE table_schema = 'public'
-  AND table_name IN ('chat_session', 'chat_message', 'chat_run', 'report_artifact')
+  AND table_name IN ('chat_session', 'chat_message', 'chat_run', 'report_artifact', 'source_sync_state')
 ORDER BY table_name;
 
 SELECT table_name, column_name
@@ -301,6 +305,7 @@ WHERE table_schema = 'public'
     OR (table_name = 'chat_message' AND column_name IN ('status', 'run_id', 'engine', 'model'))
     OR (table_name = 'chat_run' AND column_name IN ('status', 'graph_checkpoint_id'))
     OR (table_name = 'report_artifact' AND column_name IN ('artifact_id', 'expires_at'))
+    OR (table_name = 'source_sync_state' AND column_name IN ('source_system', 'sync_version', 'data_as_of', 'last_synced_at'))
   )
 ORDER BY table_name, column_name;
 ```
@@ -676,6 +681,7 @@ python -m pip install -r requirements.txt
 psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase1_chat_ownership.sql
 psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase2_langgraph_context.sql
 psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase5_mvp_reports.sql
+psql -h localhost -U postgres -d akasha_local -v ON_ERROR_STOP=1 -f migrations/phase9_source_sync_state.sql
 python scripts/setup_langgraph_checkpoint.py
 
 Set-Location ..\frontend
@@ -730,6 +736,12 @@ Run `npm ci` again and let it finish before starting Vite.
 
 Schema setup does not load P6/SAP/TC/Pulse facts. Check Section 12 counts and obtain an
 approved snapshot or source credentials.
+
+### Dashboard requests fail because `source_sync_state` does not exist
+
+Apply `migrations/phase9_source_sync_state.sql` to the same database configured by
+`DATABASE_URL`, then restart the backend. This table stores cache-version metadata; it does
+not replace or modify P6, SAP, TC, Pulse, or project business data.
 
 ### Report preview works but generation fails
 

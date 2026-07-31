@@ -2,10 +2,10 @@
 Akasha Tools Layer — Visualization / Chart Engine
 
 Builds ECharts `option` specifications (the exact shape the frontend's
-`echarts-for-react` consumes) from REAL database queries.
+`echarts-for-react` consumes) from authoritative service datasets.
 
 Core principle — same as every other tool in this layer: chart DATA is always
-computed here from the live DB, never supplied by the LLM. The model's only role is
+computed by shared services from the live DB, never supplied by the LLM. The model's only role is
 choosing WHICH chart to draw (via the `render_chart` tool, or asking for "auto" to
 let `recommend_chart_type` pick the best fit for the data). A chart therefore can
 never display a hallucinated number — every value traces to a query.
@@ -21,17 +21,15 @@ carry). Colors are assigned in fixed order and never cycled.
 import logging
 from sqlalchemy.orm import Session
 
-import models
-from engine.tools.p6_tools import (
-    p6_get_project_summary,
-    p6_get_activity_status_breakdown,
-    p6_get_delayed_activities,
-)
-from engine.tools.sap_tools import sap_get_material_gaps, sap_get_vendor_performance
-from engine.tools.tc_tools import tc_get_project_lines, tc_get_network_summary
-from engine.tools.portfolio_tools import (
-    portfolio_get_riskiest_projects,
-    get_project_display_name,
+from services.chart_spec_service import ChartSpecService
+from services.project_catalog_service import ProjectCatalogService
+from services.visualization_spec import (
+    activity_composition_spec,
+    baseline_slip_spec,
+    block_progress_spec,
+    daily_completion_spec,
+    duration_comparison_spec,
+    project_progress_spec,
 )
 
 logger = logging.getLogger(__name__)
@@ -59,6 +57,8 @@ CHART_TYPES = {
     "sap_po_fulfillment": "Grouped bar of SAP PO ordered vs delivered vs pending per material for a project.",
     "transmission_status": "Donut of a project's (or the portfolio's) transmission lines by status.",
     "portfolio_risk": "Horizontal bar of the riskiest projects across the portfolio by risk score.",
+    "daily_completion_trend": "Daily activity actual-finish events with cumulative completion-event context.",
+    "block_progress": "Horizontal bar of the current average activity completion by project block.",
 }
 
 
@@ -92,6 +92,19 @@ def _value_axis(formatter: str = "{value}") -> dict:
     }
 
 
+def _base_option(accessibility_description: str) -> dict:
+    return {
+        "animationDuration": 550,
+        "animationEasing": "cubicOut",
+        "aria": {
+            "enabled": True,
+            "decal": {"show": True},
+            "description": accessibility_description,
+        },
+        "textStyle": {"fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif"},
+    }
+
+
 def _donut_option(title: str, subtitle: str, data: list) -> dict:
     """data: list of {name, value, color}.
     Labels are disabled on the slices — crowded for thin segments.
@@ -107,6 +120,7 @@ def _donut_option(title: str, subtitle: str, data: list) -> dict:
         for d in data
     ]
     return {
+        **_base_option(f"{title}. {subtitle}."),
         "title": {
             "text": title,
             "subtext": subtitle,
@@ -152,6 +166,7 @@ def _hbar_option(title: str, subtitle: str, categories: list, series: list, valu
     """Horizontal bar. series: list of {name, data, color}. Categories on Y (reversed so
     the largest sits on top when the caller sorts descending)."""
     return {
+        **_base_option(f"{title}. {subtitle}."),
         "title": {
             "text": title,
             "subtext": subtitle,
@@ -178,26 +193,76 @@ def _no_data(chart_type: str, message: str) -> dict:
     return {"chart_type": chart_type, "no_data": True, "message": message}
 
 
-def _norm_pct(value) -> float:
-    """Normalize a completion value to a real 0-100 percent.
+def _finalize_chart(chart: dict) -> dict:
+    """Apply the stable transport contract to every grounded chart builder."""
+    if chart.get("no_data"):
+        return chart
+    title = chart.get("title") or "Akasha visualization"
+    option = chart.get("option") or {}
+    option.setdefault("aria", {
+        "enabled": True,
+        "decal": {"show": True},
+        "description": chart.get("accessibility_description") or title,
+    })
+    subtitle = chart.get("subtitle")
+    if not subtitle and isinstance(option.get("title"), dict):
+        subtitle = option["title"].get("subtext")
+    return {
+        "schema_version": "visualization.v1",
+        "summary": chart.get("summary") or f"Grounded {chart.get('chart_type', 'data')} visualization.",
+        "subtitle": subtitle,
+        "accessibility_description": (
+            chart.get("accessibility_description")
+            or option.get("aria", {}).get("description")
+            or title
+        ),
+        "data_as_of": chart.get("data_as_of"),
+        "data_table": chart.get("data_table") or [],
+        **chart,
+        "option": option,
+    }
 
-    `duration_percent_complete` is stored as a 0-1 fraction in this DB (0.87 = 87%)
-    despite its name, so a raw value <= 1.5 is scaled up. Values already on a 0-100
-    scale pass through. Guards against charts showing '0.9%' for an 87%-done project.
-    """
-    if value is None:
-        return 0.0
-    v = float(value)
-    if v <= 1.5:
-        v *= 100
-    return round(v, 1)
+
+def _display_name(db: Session, project_id: str) -> str:
+    project = ProjectCatalogService.get_by_project_id(db, project_id)
+    return project.display_name if project else project_id
 
 
-def _raw_completion_pct(db: Session, project_id: str) -> float:
-    """Read raw duration_percent_complete straight from the project row (not the
-    pre-rounded summary) and normalize to 0-100, preserving precision for comparisons."""
-    p6 = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
-    return _norm_pct(p6.duration_percent_complete) if p6 else 0.0
+def _semantic_transport(spec) -> dict | None:
+    return spec.transport() if spec is not None else None
+
+
+def _chart_from_semantic(spec) -> dict:
+    payload = spec.transport()
+    return {
+        "schema_version": payload["schema_version"],
+        "chart_type": payload["chart_type"],
+        "title": payload["title"],
+        "subtitle": payload.get("subtitle"),
+        "summary": payload["summary"],
+        "accessibility_description": payload["accessibility_description"],
+        "data_points": len(payload["categories"]),
+        "data_as_of": payload.get("data_as_of"),
+        "data_table": payload.get("data_table") or [],
+        "visualization_spec": payload,
+        "option": {},
+        "_source_tables": payload.get("source_tables") or [],
+    }
+
+
+def build_project_comparison_dashboard(db: Session, project_ids: list[str]) -> list[dict]:
+    """Return one coordinated, unit-safe chart bundle for a project comparison."""
+    data = ChartSpecService.project_comparison(db, project_ids)
+    rows = data.get("projects") or []
+    if len(rows) < 2:
+        return []
+    specs = [
+        project_progress_spec(rows, title="Project Comparison — % Complete"),
+        activity_composition_spec(rows),
+        duration_comparison_spec(rows),
+        baseline_slip_spec(rows),
+    ]
+    return [_chart_from_semantic(spec) for spec in specs if spec is not None][:4]
 
 
 # ============================================
@@ -205,10 +270,10 @@ def _raw_completion_pct(db: Session, project_id: str) -> float:
 # ============================================
 
 def _chart_activity_status(db: Session, project_id: str) -> dict:
-    b = p6_get_activity_status_breakdown(db, project_id)
+    b = ChartSpecService.activity_status(db, project_id)
     breakdown = b.get("breakdown", {})
     if not breakdown:
-        return _no_data("activity_status", f"No activity data found for {get_project_display_name(db, project_id)}.")
+        return _no_data("activity_status", f"No activity data found for {_display_name(db, project_id)}.")
 
     name = b.get("project_name", project_id)
     data = []
@@ -227,22 +292,20 @@ def _chart_activity_status(db: Session, project_id: str) -> dict:
         "title": f"{name} — Activity Status",
         "data_points": b.get("total", 0),
         "option": _donut_option(f"{name} — Activity Status", f"{b.get('total', 0)} activities", data),
-        "_source_tables": ["p6_activity"],
+        "_source_tables": b["sources"],
     }
 
 
 def _chart_project_comparison(db: Session, project_ids: list) -> dict:
-    rows = []
-    for pid in project_ids:
-        s = p6_get_project_summary(db, pid)
-        if s:
-            rows.append((s.get("project_name", pid), _raw_completion_pct(db, pid)))
+    data = ChartSpecService.project_comparison(db, project_ids)
+    rows = [(row["project_name"], row["progress_pct"]) for row in data["projects"]]
     if not rows:
         return _no_data("project_comparison", "None of the requested projects were found.")
 
     rows.sort(key=lambda r: r[1], reverse=True)
     categories = [r[0] for r in rows]
     values = [r[1] for r in rows]
+    semantic = project_progress_spec(data["projects"], title="Project Comparison — % Complete")
     return {
         "chart_type": "project_comparison",
         "title": "Project Comparison — % Complete",
@@ -253,16 +316,21 @@ def _chart_project_comparison(db: Session, project_ids: list) -> dict:
             categories, [{"name": "% Complete", "data": values, "color": PALETTE[0]}],
             value_formatter="{value}%",
         ),
-        "_source_tables": ["p6_project"],
+        "visualization_spec": _semantic_transport(semantic),
+        "summary": semantic.summary if semantic else None,
+        "accessibility_description": semantic.accessibility_description if semantic else None,
+        "data_table": semantic.data_table if semantic else [],
+        "_source_tables": data["sources"],
     }
 
 
 def _chart_delayed_activities(db: Session, project_id: str, limit: int = 12) -> dict:
-    acts = p6_get_delayed_activities(db, project_id, min_drift_days=1, limit=limit)
+    data = ChartSpecService.delayed_activities(db, project_id, limit)
+    acts = data["activities"]
     if not acts:
-        return _no_data("delayed_activities", f"No delayed activities found for {get_project_display_name(db, project_id)}.")
+        return _no_data("delayed_activities", f"No delayed activities found for {_display_name(db, project_id)}.")
 
-    name = acts[0].get("project_name", project_id)
+    name = data["project_name"]
     categories = [a["name"][:40] for a in acts]
     values = [a["drift_days"] for a in acts]
     # Color by severity: critical-path (float<=0) red, otherwise amber warning.
@@ -280,19 +348,20 @@ def _chart_delayed_activities(db: Session, project_id: str, limit: int = 12) -> 
               "color": STATUS_COLORS["delayed"]}],
             value_formatter="{value}d",
         ),
-        "_source_tables": ["p6_activity"],
+        "_source_tables": data["sources"],
     }
 
 
 def _chart_material_gaps(db: Session, project_id: str, limit: int = 12) -> dict:
-    gaps = sap_get_material_gaps(db, project_id, limit=limit)
+    data = ChartSpecService.material_gaps(db, project_id, limit)
+    gaps = data["rows"]
     if not gaps:
-        return _no_data("material_gaps", f"No pending material gaps found for {get_project_display_name(db, project_id)}.")
+        return _no_data("material_gaps", f"No pending material gaps found for {_display_name(db, project_id)}.")
 
-    name = gaps[0].get("project_name", project_id)
+    name = data["project_name"]
     # Sort by pending descending so most critical gap is at the top
     gaps_sorted = sorted(gaps, key=lambda g: g.get("pending", 0), reverse=True)[:limit]
-    categories = [g["material"][:40] for g in gaps_sorted]
+    categories = [g["name"][:40] for g in gaps_sorted]
     ordered  = [g.get("ordered", 0) for g in gaps_sorted]
     delivered = [g.get("delivered", 0) for g in gaps_sorted]
     pending  = [g.get("pending", 0) for g in gaps_sorted]
@@ -310,21 +379,21 @@ def _chart_material_gaps(db: Session, project_id: str, limit: int = 12) -> dict:
                 {"name": "Pending",   "data": pending,   "color": STATUS_COLORS["at_risk"]},
             ],
         ),
-        "_source_tables": ["mt_poamount"],
+        "_source_tables": data["sources"],
     }
 
 
 def _chart_vendor_performance(db: Session, project_id: str, limit: int = 8) -> dict:
-    vendors = sap_get_vendor_performance(db, project_id)
+    data = ChartSpecService.vendor_performance(db, project_id, limit)
+    vendors = data["rows"]
     if not vendors:
-        return _no_data("vendor_performance", f"No vendor/PO data found for {get_project_display_name(db, project_id)}.")
+        return _no_data("vendor_performance", f"No vendor/PO data found for {_display_name(db, project_id)}.")
 
-    vendors = vendors[:limit]
-    name = vendors[0].get("project_name", project_id)
-    categories = [v["vendor"][:32] for v in vendors]
-    delivered = [v["total_delivered"] for v in vendors]
-    pending = [v["total_pending"] for v in vendors]
-    ordered  = [v.get("total_ordered", d + p) for v, d, p in zip(vendors, delivered, pending)]
+    name = data["project_name"]
+    categories = [v["name"][:32] for v in vendors]
+    delivered = [v["delivered"] for v in vendors]
+    pending = [v["pending"] for v in vendors]
+    ordered = [v["ordered"] for v in vendors]
     return {
         "chart_type": "vendor_performance",
         "title": f"{name} — Vendor Delivery",
@@ -338,23 +407,22 @@ def _chart_vendor_performance(db: Session, project_id: str, limit: int = 8) -> d
                 {"name": "Pending",   "data": pending,   "color": STATUS_COLORS["at_risk"]},
             ],
         ),
-        "_source_tables": ["mt_poamount"],
+        "_source_tables": data["sources"],
     }
 
 
 def _chart_sap_po_fulfillment(db: Session, project_id: str, limit: int = 12) -> dict:
     """SAP PO Fulfillment: ordered vs delivered vs pending grouped by material."""
-    from engine.tools.sap_tools import sap_get_po_summary
-    po = sap_get_po_summary(db, project_id)
-    if not po or not po.get("materials"):
-        return _no_data("sap_po_fulfillment", f"No SAP PO data found for {get_project_display_name(db, project_id)}.")
+    po = ChartSpecService.sap_po_fulfillment(db, project_id, limit)
+    if not po["has_data"]:
+        return _no_data("sap_po_fulfillment", f"No SAP PO data found for {_display_name(db, project_id)}.")
 
     name = po.get("project_name", project_id)
-    mats = sorted(po["materials"], key=lambda m: m.get("pending_qty", 0), reverse=True)[:limit]
-    categories = [m.get("material_description", m.get("material", ""))[:40] for m in mats]
-    ordered   = [int(m.get("ordered_qty",   0) or 0) for m in mats]
-    delivered = [int(m.get("delivered_qty", 0) or 0) for m in mats]
-    pending   = [int(m.get("pending_qty",   0) or 0) for m in mats]
+    mats = po["rows"]
+    categories = [m["name"][:40] for m in mats]
+    ordered = [m["ordered"] for m in mats]
+    delivered = [m["delivered"] for m in mats]
+    pending = [m["pending"] for m in mats]
     fulfill_pct = round(po.get("fulfillment_pct", 0), 1)
     return {
         "chart_type": "sap_po_fulfillment",
@@ -370,15 +438,15 @@ def _chart_sap_po_fulfillment(db: Session, project_id: str, limit: int = 12) -> 
                 {"name": "Pending",   "data": pending,   "color": STATUS_COLORS["at_risk"]},
             ],
         ),
-        "_source_tables": ["mt_poamount"],
+        "_source_tables": po["sources"],
     }
 
 
 def _chart_transmission_status(db: Session, project_id: str = None) -> dict:
+    t = ChartSpecService.transmission_status(db, project_id)
     if project_id:
-        t = tc_get_project_lines(db, project_id)
         if not t.get("has_data"):
-            return _no_data("transmission_status", f"No transmission lines mapped to {get_project_display_name(db, project_id)}.")
+            return _no_data("transmission_status", f"No transmission lines mapped to {_display_name(db, project_id)}.")
         name = t.get("project_name", project_id)
         title = f"{name} — Transmission Line Status"
         total = t.get("total_lines", 0)
@@ -388,9 +456,8 @@ def _chart_transmission_status(db: Session, project_id: str = None) -> dict:
             ("Not Started", t.get("not_started", 0), STATUS_COLORS["not_started"]),
         ]
     else:
-        n = tc_get_network_summary(db)
-        total = n.get("total_lines", 0)
-        delayed = n.get("delayed_lines", 0)
+        total = t.get("total_lines", 0)
+        delayed = t.get("delayed_lines", 0)
         title = "Portfolio Transmission Status"
         buckets = [
             ("On Track", max(total - delayed, 0), STATUS_COLORS["completed"]),
@@ -405,29 +472,18 @@ def _chart_transmission_status(db: Session, project_id: str = None) -> dict:
         "title": title,
         "data_points": total,
         "option": _donut_option(title, f"{total} lines", data),
-        "_source_tables": ["tc_network_edge"],
+        "_source_tables": t["sources"],
     }
 
 
 def _chart_portfolio_risk(db: Session, limit: int = 8) -> dict:
-    r = portfolio_get_riskiest_projects(db, top_n=limit)
-    projects = r.get("riskiest_projects", [])
+    data = ChartSpecService.portfolio_risk(db, limit)
+    projects = data["projects"]
     if not projects:
         return _no_data("portfolio_risk", "No portfolio project data available.")
 
-    # risk_score depends on SPI, which is currently null for every project — if every score
-    # is zero the ranking is not meaningful, so fall back to ranking by % incomplete and say so.
-    if all((p.get("risk_score") or 0) == 0 for p in projects):
-        rows = [(p.get("project_name", p.get("project_id")),
-                 round(100 - _raw_completion_pct(db, p.get("project_id")), 1)) for p in projects]
-        rows.sort(key=lambda x: x[1], reverse=True)
-        subtitle = "ranked by % work remaining (SPI unavailable in current data)"
-        value_fmt = "{value}%"
-    else:
-        rows = [(p.get("project_name", p.get("project_id")), p.get("risk_score", 0)) for p in projects]
-        rows.sort(key=lambda x: x[1], reverse=True)
-        subtitle = "ranked by composite risk score"
-        value_fmt = "{value}"
+    rows = [(project["project_name"], project["risk_level"]) for project in projects]
+    subtitle = "named Project360 tier: Healthy 0, Watchlist 1, High Risk 2, Critical 3"
 
     categories = [x[0] for x in rows]
     values = [x[1] for x in rows]
@@ -438,9 +494,188 @@ def _chart_portfolio_risk(db: Session, limit: int = 8) -> dict:
         "option": _hbar_option(
             "Portfolio — Riskiest Projects", subtitle,
             categories, [{"name": "Risk", "data": values, "color": STATUS_COLORS["delayed"]}],
-            value_formatter=value_fmt,
+            value_formatter="{value}",
         ),
-        "_source_tables": ["p6_project"],
+        "_source_tables": data["sources"],
+    }
+
+
+def _chart_daily_completion_trend(db: Session, project_id: str, days: int = 30) -> dict:
+    data = ChartSpecService.daily_completion_trend(db, project_id, days)
+    rows = data.get("daily") or []
+    if not rows:
+        return _no_data(
+            "daily_completion_trend",
+            f"No daily activity completion data found for {_display_name(db, project_id)}.",
+        )
+
+    semantic = daily_completion_spec(data, data.get("project_name"))
+
+    name = data["project_name"]
+    dates = [row["date"][5:] for row in rows]
+    completed = [row["activities_completed"] for row in rows]
+    cumulative = [row["cumulative_activity_finish_pct"] for row in rows]
+    total_events = data.get("completion_events_in_period", 0)
+    title = f"{name} — Daily Completion Trend"
+    subtitle = (
+        f"{total_events} activity actual-finish events • "
+        f"{data.get('period_start')} to {data.get('period_end_inclusive')}"
+    )
+    option = {
+        **_base_option(
+            f"{title}. Bars show daily completed activities and the line shows cumulative "
+            "activity finish percentage. This is event-based and is not historical duration progress."
+        ),
+        "title": {
+            "text": title,
+            "subtext": subtitle,
+            "left": 18,
+            "top": 10,
+            "textStyle": {"color": "var(--foreground)", "fontSize": 15, "fontWeight": 700},
+            "subtextStyle": {"color": "var(--muted-foreground)", "fontSize": 11},
+        },
+        "tooltip": {**_tooltip("axis"), "axisPointer": {"type": "cross"}},
+        "legend": {
+            "top": 58,
+            "right": 18,
+            "textStyle": {"color": "var(--foreground)", "fontSize": 11},
+        },
+        "grid": {"left": 46, "right": 54, "top": 94, "bottom": 52, "containLabel": True},
+        "xAxis": {
+            **_cat_axis(dates),
+            "boundaryGap": True,
+            "axisLabel": {
+                "color": "var(--muted-foreground)",
+                "hideOverlap": True,
+            },
+        },
+        "yAxis": [
+            {**_value_axis("{value}"), "name": "Activities", "minInterval": 1},
+            {**_value_axis("{value}%"), "name": "Cumulative", "min": 0, "max": 100},
+        ],
+        "series": [
+            {
+                "name": "Completed activities",
+                "type": "bar",
+                "data": completed,
+                "barMaxWidth": 18,
+                "itemStyle": {"color": PALETTE[4], "borderRadius": [5, 5, 0, 0]},
+            },
+            {
+                "name": "Cumulative activity finish",
+                "type": "line",
+                "yAxisIndex": 1,
+                "data": cumulative,
+                "smooth": 0.24,
+                "symbol": "circle",
+                "symbolSize": 6,
+                "lineStyle": {"color": PALETTE[0], "width": 3},
+                "itemStyle": {"color": PALETTE[0], "borderColor": "var(--card)", "borderWidth": 2},
+                "areaStyle": {"color": PALETTE[0], "opacity": 0.08},
+            },
+        ],
+    }
+    latest_pct = next((value for value in reversed(cumulative) if value is not None), None)
+    summary = (
+        f"{total_events} activities recorded an actual finish during the period. "
+        f"Cumulative activity finishes reached {latest_pct}% of project activities."
+        if latest_pct is not None else
+        f"{total_events} activities recorded an actual finish during the period."
+    )
+    return {
+        "schema_version": "visualization.v1",
+        "chart_type": "daily_completion_trend",
+        "title": title,
+        "subtitle": subtitle,
+        "summary": summary,
+        "accessibility_description": option["aria"]["description"],
+        "data_points": len(rows),
+        "data_as_of": data.get("data_as_of"),
+        "data_table": [
+            {
+                "date": row["date"],
+                "completed_activities": row["activities_completed"],
+                "cumulative_activity_finish_pct": row["cumulative_activity_finish_pct"],
+            }
+            for row in rows
+        ],
+        "visualization_spec": _semantic_transport(semantic),
+        "option": option,
+        "_source_tables": data["sources"],
+    }
+
+
+def _chart_block_progress(db: Session, project_id: str, limit: int = 16) -> dict:
+    data = ChartSpecService.block_progress(db, project_id)
+    blocks = [
+        row for row in (data.get("blocks") or [])
+        if row.get("current_activity_completion_pct") is not None
+    ]
+    if not blocks:
+        return _no_data("block_progress", f"No block progress data found for {_display_name(db, project_id)}.")
+
+    semantic = block_progress_spec(data, data.get("project_name"), limit=limit)
+
+    blocks.sort(key=lambda row: (-row["current_activity_completion_pct"], row["block"]))
+    blocks = blocks[:limit]
+    title = f"{data['project_name']} — Block Progress Snapshot"
+    subtitle = f"Current average activity completion • data as of {data.get('data_as_of') or 'latest sync'}"
+    categories = [row["block"] for row in blocks]
+    values = [row["current_activity_completion_pct"] for row in blocks]
+    bar_values = [
+        {
+            "value": value,
+            "itemStyle": {
+                "color": (
+                    STATUS_COLORS["completed"] if value >= 75
+                    else PALETTE[0] if value >= 40
+                    else STATUS_COLORS["at_risk"]
+                ),
+                "borderRadius": [0, 6, 6, 0],
+            },
+        }
+        for value in values
+    ]
+    option = _hbar_option(
+        title,
+        subtitle,
+        categories,
+        [{"name": "Average activity completion", "data": bar_values, "color": PALETTE[0]}],
+        value_formatter="{value}%",
+    )
+    option["series"][0]["label"] = {
+        "show": True,
+        "position": "right",
+        "formatter": "{c}%",
+        "color": "var(--foreground)",
+        "fontWeight": 600,
+    }
+    low = min(blocks, key=lambda row: row["current_activity_completion_pct"])
+    high = max(blocks, key=lambda row: row["current_activity_completion_pct"])
+    return {
+        "schema_version": "visualization.v1",
+        "chart_type": "block_progress",
+        "title": title,
+        "subtitle": subtitle,
+        "summary": (
+            f"{high['block']} is highest at {high['current_activity_completion_pct']}%; "
+            f"{low['block']} is lowest at {low['current_activity_completion_pct']}%."
+        ),
+        "accessibility_description": option["aria"]["description"],
+        "data_points": len(blocks),
+        "data_as_of": data.get("data_as_of"),
+        "data_table": [
+            {
+                "block": row["block"],
+                "current_activity_completion_pct": row["current_activity_completion_pct"],
+                "activities": row["activity_count"],
+                "completed_this_month": row["completed_in_period"],
+            }
+            for row in blocks
+        ],
+        "visualization_spec": _semantic_transport(semantic),
+        "option": option,
+        "_source_tables": data["sources"],
     }
 
 
@@ -461,6 +696,10 @@ def recommend_chart_type(project_id: str = None, project_ids: list = None, domai
         return "portfolio_risk"
 
     hint = (domain_hint or "").lower()
+    if any(k in hint for k in ("daily", "day-by-day", "trend", "over time")):
+        return "daily_completion_trend"
+    if any(k in hint for k in ("block", "wbs", "phase-wise")):
+        return "block_progress"
     if any(k in hint for k in ("delay", "critical", "slip", "behind", "schedule")):
         return "delayed_activities"
     if any(k in hint for k in ("material", "delivery", "supply", "gap")):
@@ -473,7 +712,8 @@ def recommend_chart_type(project_id: str = None, project_ids: list = None, domai
 
 
 def build_chart(db: Session, chart_type: str, project_id: str = None,
-                project_ids: list = None, domain_hint: str = None, limit: int = 12) -> dict:
+                project_ids: list = None, domain_hint: str = None, limit: int = 12,
+                days: int = 30) -> dict:
     """Main entry point. Returns an ECharts spec dict grounded in real DB data, or a
     {no_data: True, message} dict the agent can relay honestly instead of an empty chart."""
     if chart_type == "auto":
@@ -483,32 +723,40 @@ def build_chart(db: Session, chart_type: str, project_id: str = None,
         if chart_type == "activity_status":
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")
-            return _chart_activity_status(db, project_id)
+            return _finalize_chart(_chart_activity_status(db, project_id))
         if chart_type == "project_comparison":
             ids = project_ids or ([project_id] if project_id else [])
             if len(ids) < 2:
                 return _no_data(chart_type, "Project comparison needs at least two projects.")
-            return _chart_project_comparison(db, ids)
+            return _finalize_chart(_chart_project_comparison(db, ids))
         if chart_type == "delayed_activities":
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")
-            return _chart_delayed_activities(db, project_id, limit)
+            return _finalize_chart(_chart_delayed_activities(db, project_id, limit))
         if chart_type == "material_gaps":
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")
-            return _chart_material_gaps(db, project_id, limit)
+            return _finalize_chart(_chart_material_gaps(db, project_id, limit))
         if chart_type == "vendor_performance":
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")
-            return _chart_vendor_performance(db, project_id, limit)
+            return _finalize_chart(_chart_vendor_performance(db, project_id, limit))
         if chart_type == "sap_po_fulfillment":
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")
-            return _chart_sap_po_fulfillment(db, project_id, limit)
+            return _finalize_chart(_chart_sap_po_fulfillment(db, project_id, limit))
         if chart_type == "transmission_status":
-            return _chart_transmission_status(db, project_id)
+            return _finalize_chart(_chart_transmission_status(db, project_id))
         if chart_type == "portfolio_risk":
-            return _chart_portfolio_risk(db, limit)
+            return _finalize_chart(_chart_portfolio_risk(db, limit))
+        if chart_type == "daily_completion_trend":
+            if not project_id:
+                return _no_data(chart_type, "This chart needs a specific project.")
+            return _finalize_chart(_chart_daily_completion_trend(db, project_id, days))
+        if chart_type == "block_progress":
+            if not project_id:
+                return _no_data(chart_type, "This chart needs a specific project.")
+            return _finalize_chart(_chart_block_progress(db, project_id, limit))
         return _no_data(chart_type, f"Unknown chart type '{chart_type}'. Available: {', '.join(CHART_TYPES)}.")
     except Exception as e:
         logger.error(f"build_chart({chart_type}) failed: {e}")

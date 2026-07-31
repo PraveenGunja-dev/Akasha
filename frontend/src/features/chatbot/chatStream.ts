@@ -22,7 +22,18 @@ export type ChatStreamEvent =
   | (ChatStreamEventBase & { type: 'start'; session_id: string; user_message_id: number; assistant_message_id?: number; engine?: string })
   | (ChatStreamEventBase & { type: 'status'; status: string })
   | (ChatStreamEventBase & { type: 'token'; content: string })
-  | (ChatStreamEventBase & { type: 'visualization'; chart_type?: string; title?: string; spec?: unknown })
+  | (ChatStreamEventBase & {
+      type: 'visualization';
+      schema_version?: string;
+      chart_type?: string;
+      title?: string;
+      subtitle?: string;
+      summary?: string;
+      accessibility_description?: string;
+      data_as_of?: string;
+      data_table?: Array<Record<string, unknown>>;
+      spec?: unknown;
+    })
   | (ChatStreamEventBase & { type: 'metadata'; metadata: ChatStreamMetadata; suggestions: string[] })
   | (ChatStreamEventBase & { type: 'error'; code?: string; error?: string; detail?: string; message?: string })
   | (ChatStreamEventBase & { type: 'cancelled'; message_id: number; status: 'cancelled' })
@@ -105,8 +116,16 @@ function parseEvent(frame: string): ChatStreamEvent | null {
     case 'visualization':
       return {
         type: 'visualization',
+        schema_version: optionalString(payload.schema_version),
         chart_type: optionalString(payload.chart_type),
         title: optionalString(payload.title),
+        subtitle: optionalString(payload.subtitle),
+        summary: optionalString(payload.summary),
+        accessibility_description: optionalString(payload.accessibility_description),
+        data_as_of: optionalString(payload.data_as_of),
+        data_table: Array.isArray(payload.data_table)
+          ? payload.data_table.filter(isRecord)
+          : undefined,
         spec: payload.spec,
         ...base,
       };

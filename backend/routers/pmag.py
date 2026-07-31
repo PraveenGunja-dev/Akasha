@@ -1,23 +1,25 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from models import P6Project, P6BaselineProject, ProjectMapping, TcProjectEntry, TcNetworkEdge, MTTrialRun
+from models import P6Project
 from datetime import datetime, timedelta
+import time
+from services.project_catalog_service import list_project_mappings
 from services.project_service import calculate_dynamic_evm
+from services.schedule_metrics_service import calculate_schedule_metrics
+from services.risk_analytics_service import RiskAnalyticsService
+from services.freshness_service import cache_version_token
+from services import transmission_service
 
 router = APIRouter(prefix="/api/pmag", tags=["PMAG Dashboard"])
 
+_DASHBOARD_CACHE = {}
+_CACHE_TTL = 300
 
-def _classify_rag(sv_days: float) -> str:
-    """Classify RAG status from schedule variance in days."""
-    if sv_days is None:
-        return "grey"
-    if sv_days >= 0:
-        return "green"
-    elif sv_days >= -7:
-        return "amber"
-    else:
-        return "red"
+
+def clear_pmag_caches():
+    """Clear PMAG responses derived from synchronized source data."""
+    _DASHBOARD_CACHE.clear()
 
 
 def _safe_float(v, default=0.0):
@@ -40,16 +42,21 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
     - Alerts feed
     """
 
+    cache_key = str(portfolio).lower() if portfolio else "all"
+    cache_version = cache_version_token(db, ("P6", "TC", "Mapping"))
+    cached = _DASHBOARD_CACHE.get(cache_key)
+    if (
+        cached
+        and time.time() - cached["timestamp"] < _CACHE_TTL
+        and cached["version"] == cache_version
+    ):
+        return cached["data"]
+
     raw_projects = db.query(P6Project).all()
     p6_map = {p.project_id: p for p in raw_projects if p.project_id}
 
-    query = db.query(ProjectMapping)
-    if portfolio and portfolio != "All Portfolios":
-        query = query.filter(
-            (ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
-    mappings = query.all()
+    mappings = list_project_mappings(db, portfolio)
+    tc_snapshot = transmission_service.build_transmission_snapshot(db)
 
     now = datetime.utcnow()
     week_start = now - timedelta(days=now.weekday())
@@ -71,19 +78,22 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
         if not p:
             continue  # Only include mapped projects that actually exist in P6
 
-        pct = _safe_float(p.duration_percent_complete, 0)
-        if pct <= 1.0 and pct > 0:
-            pct = pct * 100
+        schedule = calculate_schedule_metrics(p)
+        # PMAG retains duration progress; Overview progress is additive below.
+        pct = schedule.duration_percent_complete or 0
         total_completion += pct
 
         sv_days = _safe_float(p.finish_date_variance, None)
-        rag = _classify_rag(sv_days)
+        rag = RiskAnalyticsService.pmag_schedule_rag(
+            sv_days,
+            scope=m.project_id or "project",
+        ).classification
 
         if rag == "green":
             on_track += 1
         elif rag == "amber":
             at_risk += 1
-        else:
+        elif rag == "red":
             delayed += 1
 
         p_type = "Solar"
@@ -137,6 +147,8 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
             "eps": p.parent_eps_name,
             "type": p_type,
             "pct_complete": round(pct, 1),
+            "overview_progress_pct": schedule.progress_pct,
+            "overview_progress_formula": schedule.progress_formula,
             "planned_pct": round(planned_pct, 1),
             "baseline_finish": baseline_finish,
             "actual_finish": actual_finish,
@@ -147,6 +159,13 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
             "in_progress": p.in_progress_activity_count or 0,
             "not_started": p.not_started_activity_count or 0,
             "spi": round(dynamic_spi, 2),
+            "native_spi": round(schedule.spi, 4) if schedule.spi is not None else None,
+            "p6_available": schedule.p6_available,
+            "progress_formula_version": schedule.progress_formula_version,
+            "progress_unit": schedule.progress_units,
+            "variance_unit": schedule.finish_date_variance_units,
+            "data_as_of": schedule.freshness["data_as_of"],
+            "last_synced_at": schedule.freshness["last_synced_at"],
         })
 
     total_projects = len(project_rows)
@@ -204,30 +223,21 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
 
     # ─── Connectivity Readiness ───
     connectivity = []
-    tc_entries = db.query(TcProjectEntry).limit(20).all()
-    edges = db.query(TcNetworkEdge).all()
-    edge_map = {}
-    for e in edges:
-        if e.from_label:
-            edge_map[e.from_label] = e
-
-    for entry in tc_entries:
-        edge = edge_map.get(entry.pss) or edge_map.get(entry.project)
-        conn_status = "Unknown"
-        expected = "-"
-        delay_risk = False
-        if edge:
-            conn_status = edge.normalized_status or edge.status or "Unknown"
-            expected = edge.expected_date or "-"
-            delay_risk = conn_status.lower() not in ["completed", "commissioned", "energized"]
-
+    seen_connectivity = set()
+    for mapping in mappings:
+        if not mapping.project_id or mapping.project_id in seen_connectivity:
+            continue
+        seen_connectivity.add(mapping.project_id)
+        _, entries, tc_edges = transmission_service.project_edges(db, mapping.project_id, tc_snapshot)
+        edge = tc_edges[0] if tc_edges else None
+        status = transmission_service.canonical_status(edge) if edge else "unknown"
         connectivity.append({
-            "project": entry.project or "-",
-            "block": entry.block or "-",
-            "mw": entry.mw or 0,
-            "scd_status": conn_status,
-            "ecod_projection": expected,
-            "delay_risk": delay_risk,
+            "project": mapping.project or mapping.project_name_from_p6 or mapping.project_id,
+            "block": ", ".join(dict.fromkeys(entry.block for entry in entries if entry.block)) or "-",
+            "mw": sum(_safe_float(entry.mw) for entry in entries),
+            "scd_status": status,
+            "ecod_projection": edge.expected_date if edge and edge.expected_date else "-",
+            "delay_risk": status not in {"completed", "unknown"},
         })
 
     # ─── Alerts Feed ───
@@ -272,7 +282,7 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
 
     alerts = alerts[:20]
 
-    return {
+    result = {
         "summary": {
             "total_projects": total_projects,
             "on_track": on_track,
@@ -289,6 +299,12 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
         "connectivity": connectivity,
         "alerts": alerts,
     }
+    _DASHBOARD_CACHE[cache_key] = {
+        "data": result,
+        "timestamp": time.time(),
+        "version": cache_version,
+    }
+    return result
 
 
 @router.get("/reports")

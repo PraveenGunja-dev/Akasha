@@ -7,8 +7,9 @@ import {
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import ReactECharts from 'echarts-for-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import ChatVisualizationGrid from './ChatVisualizationGrid';
+import type { ChartVisualization } from './visualizationTypes';
 import {
   ChatStreamError,
   formatChatError,
@@ -33,12 +34,6 @@ import {
 } from './chatApi';
 import { mergeChatMetadata, type ChatMessageMetadata } from './chatContract';
 import { useAuth } from '../../context/AuthContext';
-
-interface ChartViz {
-  chart_type?: string;
-  title?: string;
-  spec: unknown; // ECharts `option` object, built server-side from real DB data
-}
 
 interface SpeechRecognitionResultLike {
   [index: number]: { transcript: string };
@@ -65,7 +60,7 @@ interface Message {
   content: string;
   timestamp: Date;
   imageData?: string; // Optional base64 image data attached to the message
-  visualizations?: ChartViz[]; // Inline charts streamed from the agent's render_chart tool
+  visualizations?: ChartVisualization[]; // Inline charts streamed from grounded backend tools
   metadata?: ChatMessageMetadata;
   suggestions?: string[];
   feedbackStatus?: 'none' | 'liked' | 'disliked';
@@ -108,7 +103,7 @@ function mapStoredMessages(messages: StoredChatMessage[]): Message[] {
       type: message.role === 'assistant' ? 'bot' : 'user',
       content: message.content,
       timestamp: new Date(message.created_at),
-      visualizations: message.visualizations as ChartViz[],
+      visualizations: message.visualizations as ChartVisualization[],
       metadata,
       suggestions: metadata.suggestions,
       feedbackStatus: message.feedback_status,
@@ -420,7 +415,17 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           // Inline chart from the agent — append to this message's chart list.
           setMessages(prev => prev.map(m => m.id === botMsgId ? {
             ...m,
-            visualizations: [...(m.visualizations || []), { chart_type: data.chart_type, title: data.title, spec: data.spec }]
+            visualizations: [...(m.visualizations || []), {
+              schema_version: data.schema_version,
+              chart_type: data.chart_type,
+              title: data.title,
+              subtitle: data.subtitle,
+              summary: data.summary,
+              accessibility_description: data.accessibility_description,
+              data_as_of: data.data_as_of,
+              data_table: data.data_table,
+              spec: data.spec,
+            }]
           } : m));
         } else if (data.type === 'metadata') {
           setIsTyping(false);
@@ -914,39 +919,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
                           {/* ── Enhanced Chart Cards ── */}
                           {msg.visualizations && msg.visualizations.length > 0 && (
-                            <div className="flex flex-col gap-5 mt-5 max-w-[85%]">
-                              {msg.visualizations.map((viz, i) => (
-                                <motion.div
-                                  key={i}
-                                  initial={{ opacity: 0, y: 16 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ duration: 0.45, delay: i * 0.1 }}
-                                  className="copilot-chart-card"
-                                >
-                                  {/* Chart Header with title + type badge */}
-                                  <div className="chart-header">
-                                    <BarChart3 className="w-4 h-4 text-primary/60" />
-                                    <span className="chart-title">
-                                      {viz.title || 'Visualization'}
-                                    </span>
-                                    {viz.chart_type && (
-                                      <span className="chart-type-badge ml-auto">
-                                        {viz.chart_type}
-                                      </span>
-                                    )}
-                                  </div>
-                                  {/* Chart Body */}
-                                  <div className="chart-body">
-                                    <ReactECharts
-                                      option={viz.spec}
-                                      style={{ height: 340, width: '100%' }}
-                                      notMerge={true}
-                                      opts={{ renderer: 'svg' }}
-                                    />
-                                  </div>
-                                </motion.div>
-                              ))}
-                            </div>
+                            <ChatVisualizationGrid visualizations={msg.visualizations} />
                           )}
 
                           {msg.metadata?.message_id && (

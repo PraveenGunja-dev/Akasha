@@ -1,0 +1,181 @@
+{
+  "schema_version": "2.0",
+  "dataset_version": "phase10-golden-v1",
+  "description": "Synthetic sample responses used to exercise every Phase 10 golden case. These are not chatbot measurements.",
+  "responses": [
+    {
+      "case_id": "total-project-count-001", "validation_status": "sample_generated",
+      "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+      "source_ids": ["synthetic:catalog:SNAP-20260701"], "warning_codes": [],
+      "facts": [{"id": "active_project_count", "value_type": "integer", "value": 12, "unit": "projects", "source_ids": ["synthetic:catalog:SNAP-20260701"]}]
+    },
+    {
+      "case_id": "total-portfolio-progress-001", "validation_status": "sample_generated",
+      "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:PORTFOLIO-20260701"], "warning_codes": [],
+      "facts": [{"id": "weighted_progress", "value_type": "number", "value": 58.45, "unit": "percent", "source_ids": ["synthetic:p6:PORTFOLIO-20260701"]}]
+    },
+    {
+      "case_id": "project-current-progress-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:ATLAS-20260701"], "warning_codes": [],
+      "facts": [
+        {"id": "progress", "value_type": "number", "value": 42.3, "unit": "percent", "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+        {"id": "data_as_of", "value_type": "date", "value": "2026-07-01", "unit": null, "source_ids": ["synthetic:p6:ATLAS-20260701"]}
+      ]
+    },
+    {
+      "case_id": "project-plan-variance-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:ATLAS-20260701"], "warning_codes": [],
+      "facts": [
+        {"id": "actual_progress", "value_type": "number", "value": 42.3, "unit": "percent", "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+        {"id": "planned_progress", "value_type": "number", "value": 50.0, "unit": "percent", "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+        {"id": "variance", "value_type": "number", "value": -7.7, "unit": "percentage_points", "source_ids": ["synthetic:p6:ATLAS-20260701"]}
+      ]
+    },
+    {
+      "case_id": "delay-completion-baseline-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"], "warning_codes": [],
+      "facts": [
+        {"id": "forecast_finish", "value_type": "date", "value": "2026-09-15", "unit": null, "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"]},
+        {"id": "baseline_finish", "value_type": "date", "value": "2026-09-01", "unit": null, "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"]},
+        {"id": "finish_variance", "value_type": "integer", "value": 14, "unit": "calendar_days_late", "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"]}
+      ]
+    },
+    {
+      "case_id": "delay-portfolio-projects-001", "validation_status": "sample_generated",
+      "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:PORTFOLIO-20260701"], "warning_codes": [],
+      "facts": [
+        {"id": "behind_schedule_count", "value_type": "integer", "value": 3, "unit": "projects", "source_ids": ["synthetic:p6:PORTFOLIO-20260701"]},
+        {"id": "ahead_schedule_count", "value_type": "integer", "value": 2, "unit": "projects", "source_ids": ["synthetic:p6:PORTFOLIO-20260701"]}
+      ]
+    },
+    {
+      "case_id": "sap-capex-utilization-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:sap:ATLAS-FI-01"], "warning_codes": [],
+      "facts": [
+        {"id": "capex_utilization", "value_type": "number", "value": 63.25, "unit": "percent", "source_ids": ["synthetic:sap:ATLAS-FI-01"]},
+        {"id": "actual_cost", "value_type": "number", "value": 632.2, "unit": "INR_million", "source_ids": ["synthetic:sap:ATLAS-FI-01"]}
+      ]
+    },
+    {
+      "case_id": "sap-delayed-pos-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:sap:ATLAS-PO-01"], "warning_codes": [],
+      "facts": [{"id": "delayed_po_count", "value_type": "integer", "value": 4, "unit": "purchase_orders", "source_ids": ["synthetic:sap:ATLAS-PO-01"]}]
+    },
+    {
+      "case_id": "sap-material-availability-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:sap:ATLAS-MB52-01"], "warning_codes": [],
+      "facts": [{"id": "available_modules", "value_type": "integer", "value": 12500, "unit": "modules", "source_ids": ["synthetic:sap:ATLAS-MB52-01"]}]
+    },
+    {
+      "case_id": "tc-readiness-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:tc:ATLAS-01"], "warning_codes": [],
+      "facts": [
+        {"id": "readiness_status", "value_type": "string", "value": "partially_ready", "unit": null, "source_ids": ["synthetic:tc:ATLAS-01"]},
+        {"id": "ready_milestones", "value_type": "integer", "value": 7, "unit": "milestones", "source_ids": ["synthetic:tc:ATLAS-01"]}
+      ]
+    },
+    {
+      "case_id": "tc-connectivity-alignment-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:tc:ATLAS-01"], "warning_codes": [],
+      "facts": [
+        {"id": "is_aligned", "value_type": "boolean", "value": false, "unit": null, "source_ids": ["synthetic:tc:ATLAS-01", "synthetic:p6:ATLAS-20260701"]},
+        {"id": "readiness_gap", "value_type": "number", "value": 12.0, "unit": "percentage_points", "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:tc:ATLAS-01"]}
+      ]
+    },
+    {
+      "case_id": "capacity-portfolio-001", "validation_status": "sample_generated",
+      "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+      "source_ids": ["synthetic:capacity:PORTFOLIO-01"], "warning_codes": [],
+      "facts": [
+        {"id": "total_capacity", "value_type": "number", "value": 1840.0, "unit": "MWac", "source_ids": ["synthetic:capacity:PORTFOLIO-01"]},
+        {"id": "commissioned_capacity", "value_type": "number", "value": 720.0, "unit": "MWac", "source_ids": ["synthetic:capacity:PORTFOLIO-01"]}
+      ]
+    },
+    {
+      "case_id": "capacity-project-remaining-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:capacity:ATLAS-01"], "warning_codes": [],
+      "facts": [{"id": "remaining_capacity", "value_type": "number", "value": 57.5, "unit": "MWac", "source_ids": ["synthetic:capacity:ATLAS-01"]}]
+    },
+    {
+      "case_id": "quality-open-ncr-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:quality:ATLAS-01"], "warning_codes": [],
+      "facts": [{"id": "open_ncr_count", "value_type": "integer", "value": 6, "unit": "NCRs", "source_ids": ["synthetic:quality:ATLAS-01"]}]
+    },
+    {
+      "case_id": "quality-contractor-rate-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:quality:ATLAS-ORION-01"], "warning_codes": [],
+      "facts": [{"id": "first_pass_rate", "value_type": "number", "value": 91.7, "unit": "percent", "source_ids": ["synthetic:quality:ATLAS-ORION-01"]}]
+    },
+    {
+      "case_id": "risk-named-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:risk:ATLAS-RISK-07"], "warning_codes": [],
+      "facts": [
+        {"id": "risk_name", "value_type": "string", "value": "Module delivery slippage", "unit": null, "source_ids": ["synthetic:risk:ATLAS-RISK-07"]},
+        {"id": "risk_rating", "value_type": "string", "value": "high", "unit": null, "source_ids": ["synthetic:risk:ATLAS-RISK-07"]},
+        {"id": "days_at_risk", "value_type": "integer", "value": 18, "unit": "calendar_days", "source_ids": ["synthetic:risk:ATLAS-RISK-07"]}
+      ]
+    },
+    {
+      "case_id": "risk-project-current-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:risk:ATLAS-REGISTER-01"], "warning_codes": [],
+      "facts": [{"id": "open_high_risks", "value_type": "integer", "value": 2, "unit": "risks", "source_ids": ["synthetic:risk:ATLAS-REGISTER-01"]}]
+    },
+    {
+      "case_id": "freshness-stale-progress-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": ["synthetic:p6:ATLAS-20260720"], "warning_codes": ["stale_data"],
+      "facts": [
+        {"id": "progress", "value_type": "number", "value": 44.0, "unit": "percent", "source_ids": ["synthetic:p6:ATLAS-20260720"]},
+        {"id": "data_as_of", "value_type": "date", "value": "2026-07-20", "unit": null, "source_ids": ["synthetic:p6:ATLAS-20260720"]}
+      ]
+    },
+    {
+      "case_id": "missing-capex-data-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-CEDAR", "candidate_project_ids": []},
+      "source_ids": [], "warning_codes": ["missing_data"],
+      "facts": [{"id": "capex_utilization", "value_type": "null", "value": null, "unit": "percent", "source_ids": []}]
+    },
+    {
+      "case_id": "missing-forecast-date-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-CEDAR", "candidate_project_ids": []},
+      "source_ids": [], "warning_codes": ["missing_data"],
+      "facts": [{"id": "forecast_finish", "value_type": "null", "value": null, "unit": null, "source_ids": []}]
+    },
+    {
+      "case_id": "ambiguous-project-name-001", "validation_status": "sample_generated",
+      "resolution": {"status": "ambiguous", "project_id": null, "candidate_project_ids": ["SYN-SUNRISE-EAST", "SYN-SUNRISE-WEST"]},
+      "source_ids": ["synthetic:catalog:SNAP-20260701"], "warning_codes": ["ambiguous_project"],
+      "facts": [{"id": "progress", "value_type": "null", "value": null, "unit": "percent", "source_ids": []}]
+    },
+    {
+      "case_id": "unsupported-machinery-source-001", "validation_status": "sample_generated",
+      "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+      "source_ids": [], "warning_codes": ["unsupported_source"],
+      "facts": [{"id": "deployed_machinery", "value_type": "null", "value": null, "unit": "machines", "source_ids": []}]
+    },
+    {
+      "case_id": "project-comparison-scope-001", "validation_status": "sample_generated",
+      "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": ["SYN-ATLAS", "SYN-BEACON"]},
+      "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:p6:BEACON-20260701"], "warning_codes": [],
+      "facts": [
+        {"id": "atlas_progress", "value_type": "number", "value": 42.3, "unit": "percent", "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+        {"id": "beacon_progress", "value_type": "number", "value": 61.8, "unit": "percent", "source_ids": ["synthetic:p6:BEACON-20260701"]}
+      ]
+    }
+  ]
+}

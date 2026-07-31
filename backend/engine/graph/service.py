@@ -129,6 +129,7 @@ def resolve_model_context_window(model, provider: str | None = None) -> int:
 class GraphResult:
     content: str
     tool_names: list[str]
+    evidence: list[dict]
     visualizations: list[dict]
     checkpoint_id: str | None
     model_name: str | None
@@ -313,6 +314,7 @@ class ChatGraphService:
             "transcript_cursor": assistant_message_id,
             "active_project_ids": active_project_ids,
             "tool_names": [],
+            "evidence": [],
             "visualizations": [],
             "turn_status": "running",
             "agent_iterations": 0,
@@ -337,6 +339,7 @@ class ChatGraphService:
         return GraphResult(
             content=content,
             tool_names=list(result.get("tool_names") or []),
+            evidence=list(result.get("evidence") or []),
             visualizations=list(result.get("visualizations") or []),
             checkpoint_id=checkpoint_id,
             model_name=result.get("model_name"),

@@ -3,7 +3,11 @@ from sqlalchemy.orm import Session
 from typing import Optional
 from database import get_db
 import models
+from services.project_catalog_service import ProjectCatalogService, list_project_mappings
 from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm
+from services.schedule_metrics_service import calculate_schedule_metrics
+from services import transmission_service
+from services.freshness_service import cache_version_token
 import time
 
 _SUMMARY_CACHE = {}
@@ -19,43 +23,50 @@ router = APIRouter(prefix="/api")
 
 @router.get("/master-projects")
 def get_master_projects(db: Session = Depends(get_db)):
-    projects = db.query(models.ProjectMapping.project_name_from_p6).distinct().all()
-    # Filter out None values and flatten list
-    return {"projects": [p[0] for p in projects if p[0]]}
+    names = {
+        mapping.project_name_from_p6 or mapping.project
+        for mapping in list_project_mappings(db)
+        if mapping.project_name_from_p6 or mapping.project
+    }
+    return {"projects": sorted(names)}
 
 @router.get("/summary")
 def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     cache_key = f"{project_name or 'All'}_{portfolio or 'All'}"
+    cache_version = cache_version_token(db, ("P6", "SAP", "TC", "Pulse", "Mapping", "Capacity"))
     if not nocache and cache_key in _SUMMARY_CACHE:
         entry = _SUMMARY_CACHE[cache_key]
-        if time.time() - entry["timestamp"] < _SUMMARY_TTL:
+        if time.time() - entry["timestamp"] < _SUMMARY_TTL and entry.get("version") == cache_version:
             return entry["data"]
             
-    query = db.query(models.P6Project)
-    
-    # 1. Filter by Portfolio (Global)
-    if portfolio and portfolio.lower() != "all portfolios":
-        map_query = db.query(models.ProjectMapping.project_id).filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
-        
-        valid_ids = [m[0] for m in map_query.all() if m[0]]
-        query = query.filter(models.P6Project.project_id.in_(valid_ids))
+    valid_ids = [
+        mapping.project_id
+        for mapping in list_project_mappings(db, portfolio)
+        if mapping.project_id
+    ]
+    query = db.query(models.P6Project).filter(models.P6Project.project_id.in_(valid_ids))
         
     # 2. Filter by specific project_name (Local)
     if project_name and project_name != "All":
-        mappings = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_name_from_p6 == project_name).all()
-        p6_ids = [m.project_id for m in mappings]
+        resolution = ProjectCatalogService.resolve(db, project_name, portfolio=portfolio)
+        p6_ids = []
+        if resolution.status == "resolved" and resolution.project and resolution.project.project_id:
+            p6_ids = [resolution.project.project_id]
+        elif resolution.status == "ambiguous":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Multiple projects match '{project_name}'.",
+            )
         if p6_ids:
             query = query.filter(models.P6Project.project_id.in_(p6_ids))
         else:
-            query = query.filter(models.P6Project.name.ilike(f"%{project_name}%"))
+            query = query.filter(models.P6Project.id == -1)
             
     stored_projects = query.all()
     
     result = []
     for p in stored_projects:
+        schedule = calculate_schedule_metrics(p)
         item = {column.name: getattr(p, column.name) for column in p.__table__.columns}
         # Fallback for variance if None
         variance = p.finish_date_variance
@@ -84,9 +95,16 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
         item["plannedCost"] = p.planned_cost
         item["currentBudget"] = p.current_budget
         item["costVariance"] = p.total_cost_variance
+        item["progressPercentComplete"] = schedule.progress_pct
+        item["p6Available"] = schedule.p6_available
+        item["isDelayed"] = schedule.is_delayed
+        item["progressFormulaVersion"] = schedule.progress_formula_version
+        item["finishDateVarianceUnit"] = schedule.finish_date_variance_units
+        item["nativeSpi"] = schedule.spi
+        item["nativeCpi"] = schedule.cpi
         result.append(item)
         
-    _SUMMARY_CACHE[cache_key] = {"data": result, "timestamp": time.time()}
+    _SUMMARY_CACHE[cache_key] = {"data": result, "timestamp": time.time(), "version": cache_version}
     return result
 
 _P360_CACHE = {}
@@ -96,14 +114,15 @@ _CACHE_TTL = 300  # 5 minutes
 def get_project_360(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     global _P360_CACHE
     cache_key = str(portfolio).lower() if portfolio else "all"
+    cache_version = cache_version_token(db, ("P6", "SAP", "TC", "Pulse", "Mapping", "Capacity"))
     
     if not nocache and cache_key in _P360_CACHE:
         entry = _P360_CACHE[cache_key]
-        if time.time() - entry["timestamp"] < _CACHE_TTL:
+        if time.time() - entry["timestamp"] < _CACHE_TTL and entry.get("version") == cache_version:
             return entry["data"]
             
     data = calculate_project_360_metrics(db, portfolio)
-    _P360_CACHE[cache_key] = {"data": data, "timestamp": time.time()}
+    _P360_CACHE[cache_key] = {"data": data, "timestamp": time.time(), "version": cache_version}
     return data
 
 @router.get("/project-360/{project_id}/detail")
@@ -151,6 +170,7 @@ def get_project_detail(project_id: str, db: Session = Depends(get_db)):
     project = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
     if not project:
         raise HTTPException(status_code=404, detail=f"Project '{project_id}' not found")
+    schedule = calculate_schedule_metrics(project)
 
     baselines = db.query(models.P6BaselineProject).filter(
         models.P6BaselineProject.original_project_object_id == project.p6_object_id
@@ -169,6 +189,11 @@ def get_project_detail(project_id: str, db: Session = Depends(get_db)):
             "dataDate": project.data_date.isoformat() if project.data_date else None,
             "mustFinishByDate": project.must_finish_by_date.isoformat() if project.must_finish_by_date else None,
             "durationPercentComplete": project.duration_percent_complete,
+            "progressPercentComplete": schedule.progress_pct,
+            "progressFormulaVersion": schedule.progress_formula_version,
+            "progressUnit": schedule.progress_units,
+            "p6Available": schedule.p6_available,
+            "isDelayed": schedule.is_delayed,
             "plannedDuration": project.planned_duration,
             "actualDuration": project.actual_duration,
             "remainingDuration": project.remaining_duration,
@@ -178,6 +203,7 @@ def get_project_detail(project_id: str, db: Session = Depends(get_db)):
             "notStartedActivities": project.not_started_activity_count,
             "totalFloat": project.total_float,
             "finishDateVariance": project.finish_date_variance,
+            "finishDateVarianceUnit": schedule.finish_date_variance_units,
             "startDateVariance": project.start_date_variance,
             "durationVariance": project.duration_variance,
             "actualTotalCost": project.actual_total_cost,
@@ -275,30 +301,31 @@ def update_activity(p6_object_id: int, update_data: ActivityUpdate, db: Session 
 
 @router.get("/tc-network/project/{project_id}")
 def get_project_tc_network(project_id: str, db: Session = Depends(get_db)):
-    m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
+    m, entries, edges = transmission_service.project_edges(db, project_id)
     if not m:
         return {"edges": [], "progress": None, "metadata": None}
 
-    edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
-    
     return {
         "edges": [
             {
-                "id": e.edge_id,
+                "id": dto["edge_id"],
                 "name": f"{getattr(e, 'from_label', '')} \u2192 {getattr(e, 'to_label', '')}",
-                "status": e.status,
-                "normalized_status": getattr(e, "normalized_status", ""),
-                "expected_date": e.expected_date,
-                "contractor": e.contractor,
-                "from_label": getattr(e, "from_label", ""),
-                "to_label": getattr(e, "to_label", ""),
-                "voltage": getattr(e, "voltage", ""),
-                "length": getattr(e, "length", ""),
-                "foundation": getattr(e, "foundation", ""),
-                "erection": getattr(e, "erection", ""),
-                "stringing": getattr(e, "stringing", "")
-            } for e in edges
+                "status": dto["status"],
+                "normalized_status": dto["normalized_status"],
+                "canonical_status": dto["canonical_status"],
+                "expected_date": dto["expected_date"],
+                "contractor": dto["contractor"],
+                "from_label": dto["from_label"],
+                "to_label": dto["to_label"],
+                "voltage": dto["voltage"],
+                "length": dto["length"],
+                "foundation": dto["foundation"],
+                "erection": dto["erection"],
+                "stringing": dto["stringing"]
+            }
+            for e in edges
+            for dto in (transmission_service.edge_dict(e),)
         ],
         "progress": m.tc_progress or None,
-        "metadata": None
+        "metadata": {"entry_count": len(entries), "freshness": transmission_service.freshness(db)}
     }

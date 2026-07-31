@@ -12,6 +12,9 @@ PROJECT_HEALTH_TOOL = "get_project_kpis"
 
 P6_TOOLS = {
     "p6_get_project_summary",
+    "p6_get_block_period_progress",
+    "p6_get_daily_completion_trend",
+    "p6_get_portfolio_milestone_risks",
     "p6_list_all_projects",
     "p6_get_critical_activities",
     "p6_get_delayed_activities",
@@ -48,7 +51,18 @@ SIMULATION_TOOLS = {
 REPORT_TOOLS = {
     "report_preview_project_progress",
     "report_generate_project_progress",
+    "report_preview_portfolio_progress",
+    "report_generate_portfolio_progress",
+    "report_preview_project_comparison",
+    "report_generate_project_comparison",
 }
+CAPACITY_TOOLS = {"capacity_get_portfolio_overview", "capacity_get_project_status"}
+QUALITY_TOOLS = {
+    "quality_get_portfolio_overview",
+    "quality_get_project_status",
+    "quality_get_contractor_scorecard",
+}
+RISK_TOOLS = {"risk_get_metric"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -62,7 +76,7 @@ class ToolRoute:
 
 _P6_SPECIFIC = re.compile(
     r"\b(?:p6|primavera|schedule|scheduled|baseline|milestone|activity|activities|"
-    r"critical path|total float|float|spi|cpi|planned duration|actual duration)\b",
+    r"block|blocks|wbs|critical path|total float|float|spi|cpi|planned duration|actual duration)\b",
     re.IGNORECASE,
 )
 _SAP_SPECIFIC = re.compile(
@@ -73,11 +87,26 @@ _SAP_SPECIFIC = re.compile(
 )
 _TC_SPECIFIC = re.compile(
     r"\b(?:transmission|grid|substation|connectivity|voltage|stringing|charged line|"
-    r"network|network edge|network edges|tower erection|tc)\b",
+    r"network|network edge|network edges|tower erection|evacuation|readiness|tc)\b",
     re.IGNORECASE,
 )
 _PORTFOLIO_SPECIFIC = re.compile(
-    r"\b(?:portfolio|all projects|riskiest projects|notification|notifications|alert|alerts)\b",
+    r"\b(?:portfolio|all projects|riskiest projects|which projects|projects are|"
+    r"notification|notifications|alert|alerts)\b",
+    re.IGNORECASE,
+)
+_CAPACITY_SPECIFIC = re.compile(
+    r"\b(?:capacity|mwac|megawatt|trial run|commercial operation|cod milestone)\b",
+    re.IGNORECASE,
+)
+_QUALITY_SPECIFIC = re.compile(
+    r"\b(?:quality|non[ -]?conformance|nc|ncs|rfi|rfis|contractor scorecard|closure rate|aging)\b",
+    re.IGNORECASE,
+)
+_RISK_SPECIFIC = re.compile(
+    r"\b(?:risk|risks|exposure|schedule rag|financial risk|risk score|risk heatmap|"
+    r"cod risk|risk flags|status tier|slippage|healthy|watchlist|high[ -]?risk|"
+    r"critical projects?|project 360)\b",
     re.IGNORECASE,
 )
 _GENERIC_STATUS = re.compile(
@@ -99,7 +128,7 @@ _CURRENT_DATA = re.compile(
 _PROJECT_CODE = re.compile(r"\b[A-Z0-9]{4,}[_-][A-Z0-9_-]{3,}\b")
 _FOLLOW_UP = re.compile(
     r"^\s*(?:and\b|also\b|what about\b|how about\b|same\b|now\b|yes\b|confirm\b)|"
-    r"\b(?:it|that|those|them|same project|above)\b",
+    r"\b(?:it|its|that|those|them|this project|that project|same project|above)\b",
     re.IGNORECASE,
 )
 
@@ -114,6 +143,12 @@ def _detected_domains(text: str) -> set[str]:
         domains.add("transmission")
     if _PORTFOLIO_SPECIFIC.search(text):
         domains.add("portfolio")
+    if _CAPACITY_SPECIFIC.search(text):
+        domains.add("capacity")
+    if _QUALITY_SPECIFIC.search(text):
+        domains.add("quality")
+    if _RISK_SPECIFIC.search(text):
+        domains.add("risk")
     if re.search(r"\b(?:report|pdf|docx|download)\b", text, re.IGNORECASE):
         domains.add("report")
     if re.search(
@@ -124,8 +159,26 @@ def _detected_domains(text: str) -> set[str]:
         re.IGNORECASE,
     ):
         domains.add("simulation")
-    if re.search(r"\b(?:chart|graph|plot|visual|visualization|donut|bar chart)\b", text, re.IGNORECASE):
+    if re.search(r"\b(?:charts?|graphs?|plots?|visuals?|visualizations?|donuts?|bar charts?)\b", text, re.IGNORECASE):
         domains.add("visualization")
+    if re.search(
+        r"\b(?:daily|day[ -]by[ -]day)\b.{0,35}\b(?:progress|completion|performance)\s+trend\b|"
+        r"\b(?:compare|comparison|versus|vs\.?|distribution|breakdown|trend over time)\b|"
+        r"\b(?:block|blocks|phase-wise)\b.{0,35}\b(?:progress|snapshot|ranking|comparison)\b|"
+        r"\b(?:progress|snapshot|ranking|comparison)\b.{0,35}\b(?:block|blocks|phase-wise)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        domains.add("visualization")
+    if re.search(
+        r"\b(?:daily|day[ -]by[ -]day)\b.{0,35}\b(?:progress|completion|performance)\s+trend\b|"
+        r"\b(?:block|blocks|phase-wise)\b.{0,35}\b(?:progress|snapshot|ranking|comparison)\b|"
+        r"\b(?:progress|snapshot|ranking|comparison)\b.{0,35}\b(?:block|blocks|phase-wise)\b|"
+        r"\b(?:compare|comparison)\b.{0,40}\b(?:project|progress|schedule|completion)\b",
+        text,
+        re.IGNORECASE,
+    ):
+        domains.add("p6")
     return domains
 
 
@@ -169,6 +222,7 @@ def select_tool_route(
     if (
         _DEFINITIONAL.search(current)
         and not has_live_scope
+        and not has_generic_status
         and not _FOLLOW_UP.search(current)
     ):
         return ToolRoute((), (), "definition", False, False)
@@ -215,6 +269,21 @@ def select_tool_route(
     if "p6" in current_domains:
         intent_parts.append("schedule")
         selected.add("p6_get_project_summary")
+        if re.search(r"\bblock(?:s)?\b", current, re.IGNORECASE) and re.search(
+            r"\b(?:last|current|this|previous)\s+month\b|\bmonthly\b|"
+            r"\b(?:last|past|previous)\s+\d+\s+days?\b|\b(?:last|past|previous)\s+week\b|"
+            r"\b(?:snapshot|all blocks|block progress|phase-wise)\b",
+            current,
+            re.IGNORECASE,
+        ):
+            selected.add("p6_get_block_period_progress")
+        if re.search(
+            r"\b(?:daily|day[ -]by[ -]day)\b.{0,30}\b(?:progress|completion|trend)\b|"
+            r"\b(?:progress|completion)\s+trend\b",
+            current,
+            re.IGNORECASE,
+        ):
+            selected.add("p6_get_daily_completion_trend")
         if re.search(r"\b(?:activity|activities)\b", current, re.IGNORECASE):
             selected.update({"p6_get_activities", "p6_get_activity_status_breakdown"})
         if re.search(r"\b(?:critical|critical path|float)\b", current, re.IGNORECASE):
@@ -257,12 +326,52 @@ def select_tool_route(
 
     if "portfolio" in current_domains:
         intent_parts.append("portfolio")
+        if re.search(r"\b(?:portfolio|all projects|which projects|projects are)\b", current, re.IGNORECASE):
+            selected.discard(RESOLVER)
         if re.search(r"\b(?:notification|notifications|alert|alerts)\b", current, re.IGNORECASE):
             selected.add("portfolio_get_notifications")
-        if re.search(r"\b(?:risk|riskiest|rank|ranking)\b", current, re.IGNORECASE):
+        if re.search(r"\b(?:riskiest|rank|ranking)\b", current, re.IGNORECASE) or (
+            "risk" not in current_domains
+            and re.search(r"\brisk\b", current, re.IGNORECASE)
+        ):
             selected.add("portfolio_get_riskiest_projects")
-        if re.search(r"\b(?:all projects|how many projects|status|progress|overview)\b", current, re.IGNORECASE):
+        if not current_domains.intersection({"capacity", "quality", "risk"}) and re.search(
+            r"\b(?:all projects|how many projects|status|progress|overview)\b",
+            current,
+            re.IGNORECASE,
+        ):
             selected.add("p6_list_all_projects")
+        if re.search(
+            r"\b(?:milestone|milestones)\b.{0,30}\b(?:risk|miss|missing|slip|late|delay)\b|"
+            r"\b(?:risk|miss|missing|slip|late|delay)\w*\b.{0,30}\b(?:milestone|milestones)\b",
+            current,
+            re.IGNORECASE,
+        ):
+            selected.add("p6_get_portfolio_milestone_risks")
+
+    if "capacity" in current_domains:
+        intent_parts.append("capacity")
+        if "portfolio" in current_domains or re.search(
+            r"\b(?:portfolio|all projects|overview|total)\b", current, re.IGNORECASE
+        ):
+            selected.add("capacity_get_portfolio_overview")
+        else:
+            selected.add("capacity_get_project_status")
+
+    if "quality" in current_domains:
+        intent_parts.append("quality")
+        if re.search(r"\b(?:contractor|scorecard)\b", current, re.IGNORECASE):
+            selected.add("quality_get_contractor_scorecard")
+        elif "portfolio" in current_domains or re.search(
+            r"\b(?:all projects|portfolio|overview|total|trend)\b", current, re.IGNORECASE
+        ):
+            selected.add("quality_get_portfolio_overview")
+        else:
+            selected.add("quality_get_project_status")
+
+    if "risk" in current_domains:
+        intent_parts.append("risk")
+        selected.add("risk_get_metric")
 
     if "simulation" in current_domains:
         intent_parts.append("simulation")
@@ -291,11 +400,41 @@ def select_tool_route(
 
     if "report" in current_domains:
         intent_parts.append("report")
-        selected.update(REPORT_TOOLS)
+        comparison_report = bool(re.search(
+            r"\b(?:compare|comparison|versus|vs\.?)\b", current, re.IGNORECASE
+        )) or bool(is_contextual_follow_up and re.search(
+            r"\b(?:project comparison|compare|comparison|versus|vs\.?)\b", prior, re.IGNORECASE
+        ))
+        if comparison_report:
+            selected.discard("report_preview_project_progress")
+            selected.discard("report_generate_project_progress")
+            selected.update({
+                "report_preview_project_comparison",
+                "report_generate_project_comparison",
+            })
+        elif "portfolio" in current_domains:
+            selected.discard(RESOLVER)
+            selected.update({
+                "report_preview_portfolio_progress",
+                "report_generate_portfolio_progress",
+            })
+        else:
+            selected.update({
+                "report_preview_project_progress",
+                "report_generate_project_progress",
+            })
 
     if "visualization" in current_domains:
         intent_parts.append("visualization")
         selected.add("render_chart")
+        if re.search(
+            r"\bplanned\b.{0,20}\b(?:vs\.?|versus|against)\b.{0,20}\bactual\b|"
+            r"\bactual\b.{0,20}\b(?:vs\.?|versus|against)\b.{0,20}\bplanned\b",
+            current,
+            re.IGNORECASE,
+        ) and re.search(r"\bprogress\b", current, re.IGNORECASE):
+            selected.discard("render_chart")
+            selected.add("p6_get_project_summary")
 
     selected &= available_set
     ordered = _ordered_names(selected, available)

@@ -1,0 +1,396 @@
+{
+  "schema_version": "2.0",
+  "dataset_version": "phase10-golden-v1",
+  "truth_status": "pending_business_validation",
+  "description": "Business-reviewable questions with synthetic expected facts. No expected value is imported from the workbook or production systems.",
+  "quality_gates": {
+    "minimum_overall_score": 1.0,
+    "minimum_case_pass_rate": 1.0,
+    "maximum_unsupported_claims": 0,
+    "require_response_for_every_case": true
+  },
+  "cases": [
+    {
+      "id": "total-project-count-001",
+      "category": "total_scope",
+      "validation_status": "pending_business_validation",
+      "question": "How many active projects are in the portfolio today?",
+      "context": {"user_role": "executive", "selected_scope": "portfolio"},
+      "question_source": {"type": "operational_question", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+        "source_ids": ["synthetic:catalog:SNAP-20260701"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "active_project_count", "value_type": "integer", "value": 12, "unit": "projects", "tolerance": 0, "source_ids": ["synthetic:catalog:SNAP-20260701"]}
+        ]
+      }
+    },
+    {
+      "id": "total-portfolio-progress-001",
+      "category": "total_scope",
+      "validation_status": "pending_business_validation",
+      "question": "What is the overall progress across all solar projects?",
+      "context": {"user_role": "executive", "selected_scope": "solar_portfolio"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "Show me phase-wise progress for all solar projects", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:PORTFOLIO-20260701"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "weighted_progress", "value_type": "number", "value": 58.4, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:PORTFOLIO-20260701"]}
+        ]
+      }
+    },
+    {
+      "id": "project-current-progress-001",
+      "category": "project_progress",
+      "validation_status": "pending_business_validation",
+      "question": "What is the current progress of Atlas solar project at North Site as of today?",
+      "context": {"user_role": "project_manager", "selected_scope": "Atlas"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the current progress of X solar project at Y location as of today", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:ATLAS-20260701"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "progress", "value_type": "number", "value": 42.3, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+          {"id": "data_as_of", "value_type": "date", "value": "2026-07-01", "unit": null, "tolerance": 0, "source_ids": ["synthetic:p6:ATLAS-20260701"]}
+        ]
+      }
+    },
+    {
+      "id": "project-plan-variance-001",
+      "category": "project_progress",
+      "validation_status": "pending_business_validation",
+      "question": "How does Atlas current progress compare with planned progress for July?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "How does the current progress compare with the planned progress for TIME_PERIOD?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:ATLAS-20260701"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "actual_progress", "value_type": "number", "value": 42.3, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+          {"id": "planned_progress", "value_type": "number", "value": 50.0, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+          {"id": "variance", "value_type": "number", "value": -7.7, "unit": "percentage_points", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260701"]}
+        ]
+      }
+    },
+    {
+      "id": "delay-completion-baseline-001",
+      "category": "delay",
+      "validation_status": "pending_business_validation",
+      "question": "What is the expected completion date versus baseline for Atlas?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the expected completion date vs baseline?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "forecast_finish", "value_type": "date", "value": "2026-09-15", "unit": null, "tolerance": 0, "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"]},
+          {"id": "baseline_finish", "value_type": "date", "value": "2026-09-01", "unit": null, "tolerance": 0, "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"]},
+          {"id": "finish_variance", "value_type": "integer", "value": 14, "unit": "calendar_days_late", "tolerance": 0, "source_ids": ["synthetic:p6:ATLAS-SCHEDULE-01"]}
+        ]
+      }
+    },
+    {
+      "id": "delay-portfolio-projects-001",
+      "category": "delay",
+      "validation_status": "pending_business_validation",
+      "question": "Which projects are ahead or behind schedule in the portfolio today?",
+      "context": {"user_role": "executive", "selected_scope": "portfolio"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "Which projects are ahead or behind schedule in the portfolio today?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:PORTFOLIO-20260701"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "behind_schedule_count", "value_type": "integer", "value": 3, "unit": "projects", "tolerance": 0, "source_ids": ["synthetic:p6:PORTFOLIO-20260701"]},
+          {"id": "ahead_schedule_count", "value_type": "integer", "value": 2, "unit": "projects", "tolerance": 0, "source_ids": ["synthetic:p6:PORTFOLIO-20260701"]}
+        ]
+      }
+    },
+    {
+      "id": "sap-capex-utilization-001",
+      "category": "sap",
+      "validation_status": "pending_business_validation",
+      "question": "What is the current CAPEX utilization for Atlas?",
+      "context": {"user_role": "finance", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the current CAPEX utilization for X project?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:sap:ATLAS-FI-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "capex_utilization", "value_type": "number", "value": 63.2, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:sap:ATLAS-FI-01"]},
+          {"id": "actual_cost", "value_type": "number", "value": 632.0, "unit": "INR_million", "tolerance": 0.5, "source_ids": ["synthetic:sap:ATLAS-FI-01"]}
+        ]
+      }
+    },
+    {
+      "id": "sap-delayed-pos-001",
+      "category": "sap",
+      "validation_status": "pending_business_validation",
+      "question": "Which purchase orders are delayed for Atlas?",
+      "context": {"user_role": "procurement", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "Which POs are delayed or amended recently?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:sap:ATLAS-PO-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "delayed_po_count", "value_type": "integer", "value": 4, "unit": "purchase_orders", "tolerance": 0, "source_ids": ["synthetic:sap:ATLAS-PO-01"]}
+        ]
+      }
+    },
+    {
+      "id": "sap-material-availability-001",
+      "category": "sap",
+      "validation_status": "pending_business_validation",
+      "question": "What is the current module availability for Atlas?",
+      "context": {"user_role": "site_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the current material availability for X project?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:sap:ATLAS-MB52-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "available_modules", "value_type": "integer", "value": 12500, "unit": "modules", "tolerance": 0, "source_ids": ["synthetic:sap:ATLAS-MB52-01"]}
+        ]
+      }
+    },
+    {
+      "id": "tc-readiness-001",
+      "category": "tc",
+      "validation_status": "pending_business_validation",
+      "question": "What is the transmission readiness status for Atlas?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the transmission readiness status?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:tc:ATLAS-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "readiness_status", "value_type": "string", "value": "partially_ready", "unit": null, "tolerance": 0, "source_ids": ["synthetic:tc:ATLAS-01"]},
+          {"id": "ready_milestones", "value_type": "integer", "value": 7, "unit": "milestones", "tolerance": 0, "source_ids": ["synthetic:tc:ATLAS-01"]}
+        ]
+      }
+    },
+    {
+      "id": "tc-connectivity-alignment-001",
+      "category": "tc",
+      "validation_status": "pending_business_validation",
+      "question": "Are connectivity milestones aligned with execution progress for Atlas?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "Are connectivity milestones aligned with execution progress?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:tc:ATLAS-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "is_aligned", "value_type": "boolean", "value": false, "unit": null, "tolerance": 0, "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:tc:ATLAS-01"]},
+          {"id": "readiness_gap", "value_type": "number", "value": 12.0, "unit": "percentage_points", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:tc:ATLAS-01"]}
+        ]
+      }
+    },
+    {
+      "id": "capacity-portfolio-001",
+      "category": "capacity",
+      "validation_status": "pending_business_validation",
+      "question": "What total and commissioned capacity is in the solar portfolio?",
+      "context": {"user_role": "executive", "selected_scope": "solar_portfolio"},
+      "question_source": {"type": "operational_question", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": []},
+        "source_ids": ["synthetic:capacity:PORTFOLIO-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "total_capacity", "value_type": "number", "value": 1840.0, "unit": "MWac", "tolerance": 0.1, "source_ids": ["synthetic:capacity:PORTFOLIO-01"]},
+          {"id": "commissioned_capacity", "value_type": "number", "value": 720.0, "unit": "MWac", "tolerance": 0.1, "source_ids": ["synthetic:capacity:PORTFOLIO-01"]}
+        ]
+      }
+    },
+    {
+      "id": "capacity-project-remaining-001",
+      "category": "capacity",
+      "validation_status": "pending_business_validation",
+      "question": "What is the remaining execution scope in MW for Atlas?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the remaining execution scope in MW and quantities?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:capacity:ATLAS-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "remaining_capacity", "value_type": "number", "value": 57.5, "unit": "MWac", "tolerance": 0.1, "source_ids": ["synthetic:capacity:ATLAS-01"]}
+        ]
+      }
+    },
+    {
+      "id": "quality-open-ncr-001",
+      "category": "quality",
+      "validation_status": "pending_business_validation",
+      "question": "How many open quality NCRs does Atlas have?",
+      "context": {"user_role": "quality_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "operational_question", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:quality:ATLAS-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "open_ncr_count", "value_type": "integer", "value": 6, "unit": "NCRs", "tolerance": 0, "source_ids": ["synthetic:quality:ATLAS-01"]}
+        ]
+      }
+    },
+    {
+      "id": "quality-contractor-rate-001",
+      "category": "quality",
+      "validation_status": "pending_business_validation",
+      "question": "What is Orion EPC's first-pass quality rate on Atlas?",
+      "context": {"user_role": "quality_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "operational_question", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:quality:ATLAS-ORION-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "first_pass_rate", "value_type": "number", "value": 91.7, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:quality:ATLAS-ORION-01"]}
+        ]
+      }
+    },
+    {
+      "id": "risk-named-001",
+      "category": "named_risk",
+      "validation_status": "pending_business_validation",
+      "question": "What is the status of the module delivery risk for Atlas?",
+      "context": {"user_role": "risk_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What is the impact of delayed module delivery?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:risk:ATLAS-RISK-07"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "risk_name", "value_type": "string", "value": "Module delivery slippage", "unit": null, "tolerance": 0, "source_ids": ["synthetic:risk:ATLAS-RISK-07"]},
+          {"id": "risk_rating", "value_type": "string", "value": "high", "unit": null, "tolerance": 0, "source_ids": ["synthetic:risk:ATLAS-RISK-07"]},
+          {"id": "days_at_risk", "value_type": "integer", "value": 18, "unit": "calendar_days", "tolerance": 0, "source_ids": ["synthetic:risk:ATLAS-RISK-07"]}
+        ]
+      }
+    },
+    {
+      "id": "risk-project-current-001",
+      "category": "named_risk",
+      "validation_status": "pending_business_validation",
+      "question": "What are the current execution risks for Atlas?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What are the current execution risks for X project?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:risk:ATLAS-REGISTER-01"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "open_high_risks", "value_type": "integer", "value": 2, "unit": "risks", "tolerance": 0, "source_ids": ["synthetic:risk:ATLAS-REGISTER-01"]}
+        ]
+      }
+    },
+    {
+      "id": "freshness-stale-progress-001",
+      "category": "stale_data",
+      "validation_status": "pending_business_validation",
+      "question": "What is Atlas progress right now?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-ATLAS", "evaluation_time": "2026-07-31T10:00:00Z"},
+      "question_source": {"type": "operational_edge_case", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": ["synthetic:p6:ATLAS-20260720"],
+        "warning_codes": ["stale_data"],
+        "facts": [
+          {"id": "progress", "value_type": "number", "value": 44.0, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260720"]},
+          {"id": "data_as_of", "value_type": "date", "value": "2026-07-20", "unit": null, "tolerance": 0, "source_ids": ["synthetic:p6:ATLAS-20260720"]}
+        ]
+      }
+    },
+    {
+      "id": "missing-capex-data-001",
+      "category": "missing_data",
+      "validation_status": "blocked_missing_source",
+      "question": "What is the CAPEX utilization for Cedar project?",
+      "context": {"user_role": "finance", "selected_scope": "SYN-CEDAR"},
+      "question_source": {"type": "operational_edge_case", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-CEDAR", "candidate_project_ids": []},
+        "source_ids": [],
+        "warning_codes": ["missing_data"],
+        "facts": [
+          {"id": "capex_utilization", "value_type": "null", "value": null, "unit": "percent", "tolerance": 0, "source_ids": []}
+        ]
+      }
+    },
+    {
+      "id": "missing-forecast-date-001",
+      "category": "missing_data",
+      "validation_status": "blocked_missing_source",
+      "question": "What is Cedar's expected completion date?",
+      "context": {"user_role": "project_manager", "selected_scope": "SYN-CEDAR"},
+      "question_source": {"type": "operational_edge_case", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-CEDAR", "candidate_project_ids": []},
+        "source_ids": [],
+        "warning_codes": ["missing_data"],
+        "facts": [
+          {"id": "forecast_finish", "value_type": "null", "value": null, "unit": null, "tolerance": 0, "source_ids": []}
+        ]
+      }
+    },
+    {
+      "id": "ambiguous-project-name-001",
+      "category": "ambiguity",
+      "validation_status": "pending_business_validation",
+      "question": "What is the progress of Sunrise?",
+      "context": {"user_role": "executive", "selected_scope": null},
+      "question_source": {"type": "operational_edge_case", "path": null, "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "ambiguous", "project_id": null, "candidate_project_ids": ["SYN-SUNRISE-EAST", "SYN-SUNRISE-WEST"]},
+        "source_ids": ["synthetic:catalog:SNAP-20260701"],
+        "warning_codes": ["ambiguous_project"],
+        "facts": [
+          {"id": "progress", "value_type": "null", "value": null, "unit": "percent", "tolerance": 0, "source_ids": []}
+        ]
+      }
+    },
+    {
+      "id": "unsupported-machinery-source-001",
+      "category": "unsupported_source",
+      "validation_status": "blocked_missing_source",
+      "question": "What machinery is currently deployed at Atlas?",
+      "context": {"user_role": "site_manager", "selected_scope": "SYN-ATLAS"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "What machinery is currently deployed at X project?", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "resolved", "project_id": "SYN-ATLAS", "candidate_project_ids": []},
+        "source_ids": [],
+        "warning_codes": ["unsupported_source"],
+        "facts": [
+          {"id": "deployed_machinery", "value_type": "null", "value": null, "unit": "machines", "tolerance": 0, "source_ids": []}
+        ]
+      }
+    },
+    {
+      "id": "project-comparison-scope-001",
+      "category": "project_scope",
+      "validation_status": "pending_business_validation",
+      "question": "Compare progress of Atlas versus Beacon.",
+      "context": {"user_role": "executive", "selected_scope": "explicit_comparison"},
+      "question_source": {"type": "workbook_question", "path": "Qns_AKASHA.xlsx", "workbook_wording": "Compare progress of Project X vs Project Y.", "business_answer_imported": false},
+      "expected": {
+        "resolution": {"status": "not_applicable", "project_id": null, "candidate_project_ids": ["SYN-ATLAS", "SYN-BEACON"]},
+        "source_ids": ["synthetic:p6:ATLAS-20260701", "synthetic:p6:BEACON-20260701"],
+        "warning_codes": [],
+        "facts": [
+          {"id": "atlas_progress", "value_type": "number", "value": 42.3, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:ATLAS-20260701"]},
+          {"id": "beacon_progress", "value_type": "number", "value": 61.8, "unit": "percent", "tolerance": 0.1, "source_ids": ["synthetic:p6:BEACON-20260701"]}
+        ]
+      }
+    }
+  ]
+}

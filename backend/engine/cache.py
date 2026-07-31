@@ -29,6 +29,12 @@ _SYNC_KEYS = (
     "sap_synced_at",
     "tc_synced_at",
     "pulse_synced_at",
+    "p6_sync_version",
+    "sap_sync_version",
+    "tc_sync_version",
+    "pulse_sync_version",
+    "mapping_sync_version",
+    "capacity_sync_version",
 )
 _CACHE_ENVELOPE_KEY = "__akasha_metrics_cache_v1__"
 
@@ -56,11 +62,20 @@ def get_current_sync_times(db: Session, project_id: str) -> dict:
         default=None,
     )
     
+    from services.freshness_service import get_sync_versions
+
+    versions = get_sync_versions(db)
     return {
         "p6_synced_at": p6_fresh.get("synced_at"),
         "sap_synced_at": sap_fresh.get("synced_at"),
         "tc_synced_at": tc_fresh.get("synced_at"),
         "pulse_synced_at": pulse_latest.isoformat() if pulse_latest else None,
+        "p6_sync_version": versions.get("P6"),
+        "sap_sync_version": versions.get("SAP"),
+        "tc_sync_version": versions.get("TC"),
+        "pulse_sync_version": versions.get("Pulse"),
+        "mapping_sync_version": versions.get("Mapping"),
+        "capacity_sync_version": versions.get("Capacity"),
     }
 
 
@@ -116,6 +131,7 @@ def check_freshness(db: Session, project_id: str, cache_key: str = "project_360"
         "sap_synced_at": cache_entry.sap_synced_at.isoformat() if cache_entry.sap_synced_at else None,
         "tc_synced_at": cache_entry.tc_synced_at.isoformat() if cache_entry.tc_synced_at else None,
         "pulse_synced_at": cached_extra_sync.get("pulse_synced_at"),
+        **{key: cached_extra_sync.get(key) for key in _SYNC_KEYS if key.endswith("_version")},
     }
     
     is_stale = _compare_sync_times(current_sync, cached_sync)
@@ -140,6 +156,8 @@ def check_freshness(db: Session, project_id: str, cache_key: str = "project_360"
 
 def get_cached_data(db: Session, project_id: str, cache_key: str = "project_360") -> dict | None:
     """Retrieve cached data for a project. Returns None if not cached."""
+    if check_freshness(db, project_id, cache_key)["is_stale"]:
+        return None
     hot_key = f"{project_id}:{cache_key}"
     
     # Hot cache first
@@ -164,6 +182,7 @@ def get_cached_data(db: Session, project_id: str, cache_key: str = "project_360"
                 "sap_synced_at": cache_entry.sap_synced_at.isoformat() if cache_entry.sap_synced_at else None,
                 "tc_synced_at": cache_entry.tc_synced_at.isoformat() if cache_entry.tc_synced_at else None,
                 "pulse_synced_at": cached_extra_sync.get("pulse_synced_at"),
+                **{key: cached_extra_sync.get(key) for key in _SYNC_KEYS if key.endswith("_version")},
             },
             "computed_at": cache_entry.computed_at.isoformat() if cache_entry.computed_at else None,
         }
@@ -301,7 +320,11 @@ def _pack_cache_data(data: dict, sync_times: dict) -> dict:
     return {
         _CACHE_ENVELOPE_KEY: True,
         "data": data,
-        "sync_times": {"pulse_synced_at": sync_times.get("pulse_synced_at")},
+        "sync_times": {
+            key: sync_times.get(key)
+            for key in _SYNC_KEYS
+            if key == "pulse_synced_at" or key.endswith("_version")
+        },
     }
 
 

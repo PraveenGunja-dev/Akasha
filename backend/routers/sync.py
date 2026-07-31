@@ -1,16 +1,65 @@
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 import os
 import logging
 from database import get_db
+import models
 from services.p6_service import P6Service
 from services.sharepoint_service import SharePointService
+from services.freshness_service import mark_source_sync_succeeded
 
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
+
+def _latest_p6_data_as_of(db: Session):
+    return db.query(func.max(models.P6Project.data_date)).scalar()
+
+
+def _latest_pulse_data_as_of(db: Session):
+    cutoffs = (
+        db.query(func.max(models.PulseNC.updated_at)).scalar(),
+        db.query(func.max(models.PulseRFI.updated_at)).scalar(),
+    )
+    return max((value for value in cutoffs if value is not None), default=None)
+
+
+def _latest_sap_data_as_of(db: Session):
+    cutoffs = (
+        db.query(func.max(models.MTPOAmount.document_date)).scalar(),
+        db.query(func.max(models.MTInventory.posting_date)).scalar(),
+        db.query(func.max(models.MTMaterialDocument.posting_date)).scalar(),
+    )
+    return max((value for value in cutoffs if value is not None), default=None)
+
+
+def _clear_p6_caches():
+    from routers.dashboard import clear_dashboard_caches
+    from routers.pmag import clear_pmag_caches
+    from routers.projects import clear_project_caches
+    clear_dashboard_caches()
+    clear_pmag_caches()
+    clear_project_caches()
+
+
+def _clear_all_operational_caches(db: Session):
+    from engine.cache import invalidate_cache
+    from routers.dashboard import clear_dashboard_caches
+    from routers.financials import clear_financial_cache
+    from routers.logistics import clear_logistics_cache
+    from routers.pmag import clear_pmag_caches
+    from routers.projects import clear_project_caches
+
+    invalidate_cache(db)
+    clear_dashboard_caches()
+    clear_pmag_caches()
+    clear_project_caches()
+    clear_financial_cache()
+    clear_logistics_cache()
+
 @router.post("/sharepoint/sync")
-def sync_sharepoint_data():
+def sync_sharepoint_data(db: Session = Depends(get_db)):
     sp_service = SharePointService()
     try:
         files = sp_service.list_files_in_target_folder()
@@ -33,6 +82,8 @@ def sync_sharepoint_data():
         ingestion = ingest_data()
         if not ingestion.get("success"):
             raise RuntimeError("SAP ingestion incomplete: " + "; ".join(ingestion.get("errors", [])))
+        mark_source_sync_succeeded(db, "SAP", data_as_of=_latest_sap_data_as_of(db))
+        _clear_all_operational_caches(db)
                 
         return {
             "status": "success",
@@ -49,6 +100,8 @@ def sync_p6_data(db: Session = Depends(get_db)):
     p6 = P6Service()
     try:
         result = p6.full_sync(db)
+        mark_source_sync_succeeded(db, "P6", data_as_of=_latest_p6_data_as_of(db))
+        _clear_p6_caches()
         return {
             "status": "success",
             "message": f"Synced {result['projects_synced']} projects and {result['baselines_synced']} baselines",
@@ -63,6 +116,8 @@ def sync_individual_p6_data(project_object_id: int, db: Session = Depends(get_db
     p6 = P6Service()
     try:
         result = p6.individual_sync(db, project_object_id)
+        mark_source_sync_succeeded(db, "P6", data_as_of=_latest_p6_data_as_of(db))
+        _clear_p6_caches()
         return {
             "status": "success",
             "message": f"Synced project {project_object_id}",
@@ -80,20 +135,24 @@ def sync_tc_data():
     return {"status": "success", "message": "Transmission Data Sync started in background."}
 
 @router.post("/mapping/sync")
-def sync_mapping_data():
+def sync_mapping_data(db: Session = Depends(get_db)):
     from scripts.ingest_mapping import ingest_mapping
     try:
         ingest_mapping()
+        mark_source_sync_succeeded(db, "Mapping")
+        _clear_all_operational_caches(db)
         return {"status": "success", "message": "Synced Mappings"}
     except Exception as e:
         logger.error(f"Mapping sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Mapping sync failed: {str(e)}")
 
 @router.post("/capacity/sync")
-def sync_capacity_data():
+def sync_capacity_data(db: Session = Depends(get_db)):
     from scripts.sync_capacity_milestones import fetch_capacity_milestones
     try:
         fetch_capacity_milestones()
+        mark_source_sync_succeeded(db, "Capacity", data_as_of=_latest_p6_data_as_of(db))
+        _clear_all_operational_caches(db)
         return {"status": "success", "message": "Synced Capacity Milestones"}
     except Exception as e:
         logger.error(f"Capacity sync failed: {e}")
@@ -106,6 +165,8 @@ def sync_pulse_data(db: Session = Depends(get_db)):
     try:
         service = PulseService()
         result = service.full_sync(db)
+        mark_source_sync_succeeded(db, "Pulse", data_as_of=_latest_pulse_data_as_of(db))
+        _clear_all_operational_caches(db)
         return {
             "status": "success",
             "message": f"Synced {result['ncs']} NCs and {result['rfis']} RFIs from Pulse",

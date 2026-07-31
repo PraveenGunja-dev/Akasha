@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
 import QualityProjectTab from '../quality/QualityProjectTab';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -262,8 +263,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   useEffect(() => {
     const fetchProject = async () => {
       try {
-        const res = await fetch("/akasha/api/project-360");
-        const json = await res.json();
+        const json = await getCachedDashboardJson<any[]>("/akasha/api/project-360");
         const found = json.find((p: any) => p.projectId === projectId);
         if (found) {
           setProject(found);
@@ -288,11 +288,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
     const fetchDetail = async () => {
       try {
-        const res = await fetch(`/akasha/api/project-360/${encodeURIComponent(projectId || '')}/detail`);
-        if (res.ok) {
-          const json = await res.json();
-          setDetail(json);
-        }
+        const json = await getCachedDashboardJson<any>(`/akasha/api/project-360/${encodeURIComponent(projectId || '')}/detail`);
+        setDetail(json);
       } catch (err) {
         console.error('Detail fetch error:', err);
       } finally {
@@ -545,7 +542,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   // SAP vendor chart (reactive to toggle filter)
   const vendorChartOption = sap?.vendorBreakdown?.length > 0 ? {
     tooltip: { trigger: 'axis', backgroundColor: '#fff', borderColor: '#e2e8f0', textStyle: { color: '#0f172a' } },
-    legend: { data: ['Ordered Qty', 'Net Value (INR)'], bottom: 0, textStyle: { fontSize: 10, color: '#64748b' } },
+    legend: { data: ['PO Count', 'Net Value (INR)'], bottom: 0, textStyle: { fontSize: 10, color: '#64748b' } },
     grid: { left: '3%', right: '8%', bottom: '15%', top: '8%', containLabel: true },
     xAxis: {
       type: 'category',
@@ -559,9 +556,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     ],
     series: [
       {
-        name: 'Ordered Qty',
+        name: 'PO Count',
         type: 'bar',
-        data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.totalOrderedQty),
+        data: (sap.vendorBreakdown.slice(0, 8)).map((v: any) => v.poCount),
         itemStyle: { color: '#3B82F6', borderRadius: [6, 6, 0, 0] },
         barWidth: '40%'
       },

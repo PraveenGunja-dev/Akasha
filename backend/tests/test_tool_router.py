@@ -10,7 +10,9 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from engine.agent import TOOLS, _tools_for_request
+from engine.graph.tools import RiskMetricArguments, model_tool_schemas
 from engine.graph.tool_router import select_tool_route
+from pydantic import ValidationError
 
 
 AVAILABLE = tuple(tool["function"]["name"] for tool in TOOLS)
@@ -47,6 +49,58 @@ class ToolRouterTests(unittest.TestCase):
             "get_project_kpis",
         )
         self.assertFalse(result.uses_all_tools)
+
+    def test_monthly_block_progress_gets_block_period_tool(self):
+        result = route(
+            "Which block in AGE26AL_A16_FT_50MW_PPA_Commissioned had the highest progress last month?"
+        )
+
+        self.assertIncludes(
+            result,
+            "portfolio_resolve_project_id",
+            "p6_get_block_period_progress",
+        )
+
+    def test_rolling_block_and_daily_trend_queries_get_event_tools(self):
+        block = route(
+            "Which block in AGE26AL_A16_FT_50MW_PPA_Commissioned had the highest progress in the last 30 days?"
+        )
+        trend = route(
+            "Show daily progress trend for AGE26AL_A16_FT_50MW_PPA_Commissioned over the last 30 days"
+        )
+
+        self.assertIncludes(block, "p6_get_block_period_progress")
+        self.assertIncludes(trend, "p6_get_daily_completion_trend")
+
+    def test_transmission_readiness_and_evacuation_queries_route_to_tc(self):
+        for question in (
+            "What is the transmission readiness status for Project X?",
+            "Is evacuation readiness aligned for Project X?",
+        ):
+            self.assertIncludes(route(question), "tc_get_project_lines")
+
+    def test_project_status_with_short_alias_is_operational(self):
+        result = route("what is the status of BAIYA")
+
+        self.assertIncludes(
+            result,
+            "portfolio_resolve_project_id",
+            "p6_get_project_summary",
+        )
+        self.assertEqual(result.intent, "schedule")
+
+    def test_transmission_pronoun_follow_up_is_operational(self):
+        result = route(
+            "What is its transmission readiness status?",
+            context="The selected project is AGE27AL_PSS09.",
+        )
+
+        self.assertIncludes(
+            result,
+            "portfolio_resolve_project_id",
+            "tc_get_project_lines",
+        )
+        self.assertEqual(result.intent, "transmission")
 
     def test_region_transmission_query_gets_search_and_risk_tools(self):
         result = route("Which transmission lines in Rajasthan are delayed?")
@@ -121,6 +175,13 @@ class ToolRouterTests(unittest.TestCase):
             "report_preview_project_progress",
             "report_generate_project_progress",
         )
+
+        comparison = route(
+            "Yes, generate the PDF and DOCX.",
+            context="Project Comparison Report preview for Project X versus Project Y.",
+        )
+        self.assertIncludes(comparison, "report_generate_project_comparison")
+        self.assertExcludes(comparison, "report_generate_project_progress")
 
     def test_generic_follow_up_inherits_one_clear_domain(self):
         result = route(
@@ -199,11 +260,85 @@ class ToolRouterTests(unittest.TestCase):
     def test_conversation_and_short_definition_do_not_expose_tools(self):
         self.assertEqual(route("Hello").tool_names, ())
         self.assertEqual(route("What is SPI?").tool_names, ())
+        self.assertEqual(route("What is transmission readiness?").tool_names, ())
 
     def test_project_resolution_request_uses_only_resolver(self):
         result = route("Find the project ID for BAIYA solar project")
 
         self.assertEqual(result.tool_names, ("portfolio_resolve_project_id",))
+
+    def test_capacity_and_quality_queries_get_named_domain_tools(self):
+        self.assertIncludes(
+            route("Show the capacity milestone status for Project X"),
+            "capacity_get_project_status",
+        )
+        quality = route("Show the portfolio quality overview")
+        self.assertIncludes(quality, "quality_get_portfolio_overview")
+        self.assertExcludes(quality, "p6_list_all_projects")
+        self.assertIncludes(
+            route("Show the contractor quality scorecard"),
+            "quality_get_contractor_scorecard",
+        )
+
+    def test_reporting_section_routes_match_implemented_contracts(self):
+        project_report = route(
+            "Generate progress report for Project X for the current period for Management Review"
+        )
+        block_snapshot = route("Provide a progress snapshot of all blocks in Project X")
+        portfolio_report = route("Generate a portfolio-level progress report for the current period")
+        comparison_report = route("Compare Project X versus Project Y and give me a proper report")
+        unsupported_curve = route("Show planned vs actual progress chart for Project X")
+        milestone_risk = route("Which projects are at risk of missing planned milestones this month?")
+
+        self.assertIncludes(project_report, "report_preview_project_progress")
+        self.assertIncludes(block_snapshot, "p6_get_block_period_progress", "render_chart")
+        self.assertIncludes(portfolio_report, "report_preview_portfolio_progress")
+        self.assertExcludes(portfolio_report, "report_preview_project_progress")
+        self.assertIncludes(
+            comparison_report,
+            "render_chart",
+            "report_preview_project_comparison",
+            "report_generate_project_comparison",
+        )
+        self.assertExcludes(comparison_report, "report_preview_project_progress")
+        self.assertExcludes(unsupported_curve, "render_chart")
+        self.assertIncludes(milestone_risk, "p6_get_portfolio_milestone_risks")
+
+    def test_inherently_visual_queries_auto_route_to_chart(self):
+        self.assertIncludes(
+            route("Show daily progress trend for Project X over the last 30 days"),
+            "p6_get_daily_completion_trend",
+            "render_chart",
+        )
+        self.assertIncludes(
+            route("Compare progress of Project X vs Project Y"),
+            "render_chart",
+        )
+
+    def test_risk_queries_expose_only_the_named_risk_metric_api(self):
+        result = route("Show the COD risk for Project X")
+
+        self.assertIncludes(result, "risk_get_metric")
+        self.assertExcludes(result, "risk_get_command_center", "risk_get_project360")
+
+    def test_risk_metric_schema_is_enum_and_requires_project_when_scoped(self):
+        schema = next(
+            item["function"]["parameters"]
+            for item in model_tool_schemas()
+            if item["function"]["name"] == "risk_get_metric"
+        )
+
+        self.assertIn("project360.cod_risk", schema["properties"]["metric_id"]["enum"])
+        self.assertEqual(
+            RiskMetricArguments.model_validate(
+                {"metric_id": "command_center.overall_risk_score"}
+            ).metric_id,
+            "command_center.overall_risk_score",
+        )
+        with self.assertRaises(ValidationError):
+            RiskMetricArguments.model_validate({"metric_id": "project360.cod_risk"})
+        with self.assertRaises(ValidationError):
+            RiskMetricArguments.model_validate({"metric_id": "unsupported.composite"})
 
 
 if __name__ == "__main__":

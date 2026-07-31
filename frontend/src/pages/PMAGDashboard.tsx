@@ -29,6 +29,7 @@ import ReportsAnalytics from './pmag/ReportsAnalytics';
 import TeamManagement from './pmag/TeamManagement';
 import SiteMonitoring from './pmag/SiteMonitoring';
 import ProjectWorkspace from '../features/projects/ProjectWorkspace';
+import { clearDashboardQueryCache, getCachedDashboardJson } from '../services/dashboardQueryCache';
 
 interface DashboardData {
   summary: {
@@ -77,36 +78,35 @@ export default function PMAGDashboard() {
     document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
-  const loadAllData = () => {
+  const loadAllData = (force = false) => {
     setLoading(true);
     const portfolioQuery = portfolio ? `?portfolio=${encodeURIComponent(portfolio)}` : '';
     
-    fetch(`/akasha/api/pmag/dashboard${portfolioQuery}`)
-      .then(r => r.json())
+    getCachedDashboardJson<DashboardData>(`/akasha/api/pmag/dashboard${portfolioQuery}`, { force })
       .then(d => { setData(d); setLoading(false); })
       .catch(() => setLoading(false));
 
     // Fetch data for the integrated deep-dive modules
     Promise.all([
-      fetch(`/akasha/api/dashboard/summary${portfolioQuery}`),
-      fetch(`/akasha/api/summary${portfolioQuery}`),
-      fetch(`/akasha/api/financials${portfolioQuery}`),
-      fetch(`/akasha/api/financials/details${portfolioQuery}`)
-    ]).then(async ([dashRes, p6Res, sapRes, finDetRes]) => {
-      setDashboardData(await dashRes.json());
-      setP6Data(await p6Res.json());
-      setSapData(await sapRes.json());
-      setFinDetails(await finDetRes.json());
+      getCachedDashboardJson<any>(`/akasha/api/dashboard/summary${portfolioQuery}`, { force }),
+      getCachedDashboardJson<any[]>(`/akasha/api/summary${portfolioQuery}`, { force }),
+      getCachedDashboardJson<any[]>(`/akasha/api/financials${portfolioQuery}`, { force }),
+      getCachedDashboardJson<any[]>(`/akasha/api/financials/details${portfolioQuery}`, { force })
+    ]).then(([dashboard, p6, sap, financialDetails]) => {
+      setDashboardData(dashboard);
+      setP6Data(p6);
+      setSapData(sap);
+      setFinDetails(financialDetails);
     }).catch(console.error);
 
     Promise.all([
-      fetch(`/akasha/api/pmag/reports${portfolioQuery}`),
-      fetch(`/akasha/api/pmag/team${portfolioQuery}`),
-      fetch(`/akasha/api/pmag/site-monitoring${portfolioQuery}`)
-    ]).then(async ([repRes, teamRes, siteRes]) => {
-      setReportsData(await repRes.json());
-      setTeamData(await teamRes.json());
-      setSiteMonitoringData(await siteRes.json());
+      getCachedDashboardJson<any>(`/akasha/api/pmag/reports${portfolioQuery}`, { force }),
+      getCachedDashboardJson<any>(`/akasha/api/pmag/team${portfolioQuery}`, { force }),
+      getCachedDashboardJson<any>(`/akasha/api/pmag/site-monitoring${portfolioQuery}`, { force })
+    ]).then(([reports, team, siteMonitoring]) => {
+      setReportsData(reports);
+      setTeamData(team);
+      setSiteMonitoringData(siteMonitoring);
     }).catch(console.error);
   };
 
@@ -127,7 +127,8 @@ export default function PMAGDashboard() {
     } catch (error) {
       console.error("Sync failed:", error);
     }
-    loadAllData();
+    clearDashboardQueryCache();
+    loadAllData(true);
     setIsSyncing(false);
   };
 

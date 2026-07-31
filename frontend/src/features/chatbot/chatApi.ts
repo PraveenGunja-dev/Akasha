@@ -25,7 +25,17 @@ export interface StoredChatMessage {
   error_code?: string | null;
   created_at: string;
   sources: ChatSources;
-  visualizations: Array<{ chart_type?: string; title?: string; spec: unknown }>;
+  visualizations: Array<{
+    schema_version?: string;
+    chart_type?: string;
+    title?: string;
+    subtitle?: string;
+    summary?: string;
+    accessibility_description?: string;
+    data_as_of?: string;
+    data_table?: Array<Record<string, unknown>>;
+    spec: unknown;
+  }>;
   feedback_status: 'none' | 'liked' | 'disliked';
   metadata?: ChatMessageMetadata;
 }

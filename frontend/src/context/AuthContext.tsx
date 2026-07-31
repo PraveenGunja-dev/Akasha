@@ -8,6 +8,7 @@ import {
   startDevelopmentSession,
 } from '../auth/developmentIdentity';
 import { authMode, entraApiScopes, getMsalInstance, type AuthMode } from '../auth/msal';
+import { clearDashboardQueryCache } from '../services/dashboardQueryCache';
 
 
 export interface User {
@@ -89,6 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (role: 'executive' | 'pmag' = 'executive'): Promise<{ success: boolean; message: string }> => {
     setIsLoading(true);
+    clearDashboardQueryCache();
     try {
       if (authMode === 'development') {
         startDevelopmentSession(role);
@@ -119,6 +121,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const logout = async () => {
+    clearDashboardQueryCache();
     if (authMode === 'development') {
       clearDevelopmentSession();
       setUser(null);

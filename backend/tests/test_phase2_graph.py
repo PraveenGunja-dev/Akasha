@@ -62,6 +62,9 @@ class GraphStructureTests(unittest.TestCase):
         self.assertIn("Expand when the user asks", SYSTEM_PROMPT)
         self.assertIn("Never discuss tools", SYSTEM_PROMPT)
         self.assertIn("Do not append unsolicited recommendations", SYSTEM_PROMPT)
+        self.assertIn("forecast_vs_reference_days", SYSTEM_PROMPT)
+        self.assertIn("Never call `actual_duration` earned hours", SYSTEM_PROMPT)
+        self.assertIn("When project resolution is ambiguous", SYSTEM_PROMPT)
 
     def test_tool_loop_forces_final_answer_at_configured_model_call_limit(self):
         model = ToolCapableFakeModel(messages=iter([
@@ -239,6 +242,39 @@ The requested detailed schedule analysis is included here."""
             "The project is 61.2% complete as of 11 July 2026.",
         )
 
+    def test_comparison_chart_bundle_adds_multiple_visualizations(self):
+        model = ToolCapableFakeModel(messages=iter([
+            AIMessage(content="", tool_calls=[{
+                "name": "render_chart",
+                "args": {
+                    "chart_type": "project_comparison",
+                    "project_ids": ["P-1", "P-2"],
+                },
+                "id": "chart-1",
+            }]),
+            AIMessage(content="The comparison dashboard highlights progress, activity mix, duration, and baseline slip."),
+        ]))
+        graph = build_chat_graph(model, context_window=32_768)
+        state = graph_input("user-a", 1, 2, "Compare P-1 and P-2 and give me a proper report")
+        state["run_id"] = "a" * 32
+        charts = tuple({
+            "schema_version": "visualization.v1",
+            "chart_type": f"comparison-{index}",
+            "title": f"Chart {index}",
+            "spec": {"schema_version": "visualization.v1", "chart_id": f"chart-{index}"},
+        } for index in range(4))
+        with patch("engine.graph.builder._ensure_run_active", return_value=None), patch(
+            "engine.graph.builder.execute_authenticated_tool",
+            return_value=ToolExecution(
+                '{"status":"ok","data":{"chart_count":4}}',
+                "ok",
+                visualizations=charts,
+            ),
+        ):
+            result = graph.invoke(state)
+        self.assertEqual(len(result["visualizations"]), 4)
+        self.assertEqual(result["visualizations"][3]["title"], "Chart 3")
+
     def test_repeated_empty_final_answer_fails_instead_of_completing_blank(self):
         model = ToolCapableFakeModel(messages=iter([
             AIMessage(content=""),
@@ -345,11 +381,23 @@ The requested detailed schedule analysis is included here."""
         state["run_id"] = "a" * 32
         with patch("engine.graph.builder._ensure_run_active", return_value=None), patch(
             "engine.graph.builder.execute_authenticated_tool",
-            return_value=ToolExecution('{"status":"ok","data":{}}', "ok"),
+            return_value=ToolExecution(
+                '{"status":"ok","data":{}}',
+                "ok",
+                evidence=({
+                    "evidence_id": "tc-1",
+                    "tool_name": "tc_get_network_summary",
+                    "status": "ok",
+                    "source_system": "TC",
+                    "source_entity": "tc_network_edge",
+                },),
+            ),
         ):
             result = graph.invoke(state)
 
         self.assertEqual(result["tool_names"], ["tc_get_network_summary"])
+        self.assertEqual(result["evidence"][0]["tool_call_id"], "call-1")
+        self.assertEqual(result["evidence"][0]["source_entity"], "tc_network_edge")
         self.assertEqual(result["messages"][-2].tool_call_id, "call-1")
         self.assertEqual(result["messages"][-1].content, "final answer")
 

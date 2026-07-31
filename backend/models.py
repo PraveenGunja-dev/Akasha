@@ -534,6 +534,16 @@ class MetricsCache(Base):
     tc_synced_at = Column(DateTime, nullable=True)
 
 
+class SourceSyncState(Base):
+    """Durable successful-sync version for one upstream source system."""
+    __tablename__ = "source_sync_state"
+
+    source_system = Column(String, primary_key=True)
+    sync_version = Column(Integer, nullable=False, default=1)
+    data_as_of = Column(DateTime, nullable=True)
+    last_synced_at = Column(DateTime, nullable=False)
+
+
 class ChatSession(Base):
     """Server-side conversation sessions — replaces browser localStorage."""
     __tablename__ = "chat_session"

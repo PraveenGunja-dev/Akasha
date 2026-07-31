@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Network, X, RotateCcw, ChevronDown, ChevronRight, Calendar, Package, Zap, Building2, Truck, Search, Filter } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 interface GNode {
   id: string; project_id?: string; name: string; category: number; value?: string;
@@ -215,8 +216,7 @@ export default function KnowledgeGraph() {
       setLoading(true);
       try {
         const url = portfolio ? `/akasha/api/dashboard/knowledge-graph?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/dashboard/knowledge-graph';
-        const res = await fetch(url);
-        const data = await res.json();
+        const data = await getCachedDashboardJson<any>(url);
         rootDataRef.current = data;
         const c = containerRef.current;
         if (c) { 

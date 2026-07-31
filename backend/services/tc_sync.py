@@ -84,6 +84,7 @@ def get_global_topology(token: str, region: str):
 
 def sync_region_data(db: Session, token: str, region: str):
     logger.info(f"Syncing {region} data...")
+    sync_timestamp = datetime.utcnow()
     
     # 1. Fetch Global Topology (Provides nodes, and from/to for edges)
     topology = get_global_topology(token, region.lower())
@@ -102,6 +103,7 @@ def sync_region_data(db: Session, token: str, region: str):
             node.status = n.get("status")
             node.x = n.get("x")
             node.y = n.get("y")
+            node.upload_time = sync_timestamp
         else:
             node = TcNetworkNode(
                 region=region,
@@ -110,7 +112,8 @@ def sync_region_data(db: Session, token: str, region: str):
                 type=n.get("type"),
                 status=n.get("status"),
                 x=n.get("x"),
-                y=n.get("y")
+                y=n.get("y"),
+                upload_time=sync_timestamp,
             )
             db.add(node)
             
@@ -174,6 +177,7 @@ def sync_region_data(db: Session, token: str, region: str):
                 pe.pss = entry.get("pss")
                 pe.breakup = str(entry.get("breakup"))
                 pe.mw = str(entry.get("mw"))
+                pe.upload_time = sync_timestamp
             else:
                 pe = TcProjectEntry(
                     region=region,
@@ -184,7 +188,8 @@ def sync_region_data(db: Session, token: str, region: str):
                     block=block,
                     breakup=str(entry.get("breakup")),
                     mw=str(entry.get("mw")),
-                    mapping_id=pm.id
+                    mapping_id=pm.id,
+                    upload_time=sync_timestamp,
                 )
                 db.add(pe)
             
@@ -261,6 +266,7 @@ def sync_region_data(db: Session, token: str, region: str):
                 edge.scd = e.get("scd")
                 edge.charged_date = e.get("charged_date")
                 edge.is_delayed = e.get("is_delayed", False)
+                edge.upload_time = sync_timestamp
             else:
                 edge = TcNetworkEdge(
                     region=region,
@@ -282,7 +288,8 @@ def sync_region_data(db: Session, token: str, region: str):
                     scd=e.get("scd"),
                     charged_date=e.get("charged_date"),
                     is_delayed=e.get("is_delayed", False),
-                    mapping_id=pm.id
+                    mapping_id=pm.id,
+                    upload_time=sync_timestamp,
                 )
                 db.add(edge)
                 
@@ -323,6 +330,11 @@ def run_sync():
         rajasthan_complete = sync_region_data(db, token, "Rajasthan")
         if not khavda_complete or not rajasthan_complete:
             raise TcSyncError("One or more TC regions did not complete")
+
+        from services.freshness_service import mark_source_sync_succeeded
+        mark_source_sync_succeeded(db, "TC")
+        from routers.sync import _clear_all_operational_caches
+        _clear_all_operational_caches(db)
 
         logger.info("Transmission Data Sync Complete!")
         return True

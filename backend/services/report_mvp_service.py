@@ -10,18 +10,49 @@ from pathlib import Path
 import secrets
 from uuid import uuid4
 
-from sqlalchemy import func, or_
-
 import models
-from engine.kpi_engine import compute_project_kpis
 from engine.model_provider import get_model_provider
-from engine.tools.p6_tools import p6_get_activities, p6_get_project_summary
-from engine.tools.sap_tools import sap_get_po_summary
-from engine.tools.tc_tools import tc_get_project_lines
+from services.capacity_milestone_service import CapacityMilestoneService
+from services.chart_spec_service import ChartSpecService
+from services.project_catalog_service import ProjectCatalogService
+from services.quality_analytics_service import QualityAnalyticsService
+from services.risk_analytics_service import RiskAnalyticsService
+from services.sap_project_data_service import SapProjectDataService
+from services.schedule_metrics_service import ScheduleMetricsService
+from services.visualization_spec import (
+    activity_composition_spec,
+    baseline_slip_spec,
+    block_progress_spec,
+    daily_completion_spec,
+    duration_comparison_spec,
+    portfolio_status_spec,
+    project_progress_spec,
+)
+from services import transmission_service
 
 
 _PREVIEW_SECRET = secrets.token_bytes(32)
 REPORT_TYPE = "project_progress"
+PORTFOLIO_REPORT_TYPE = "portfolio_progress"
+PORTFOLIO_SCOPE_ID = "__portfolio__"
+COMPARISON_REPORT_TYPE = "project_comparison"
+COMPARISON_SCOPE_ID = "__comparison__"
+
+
+def _transport_spec(spec) -> dict | None:
+    return spec.transport() if spec is not None else None
+
+
+def _portfolio_token_scope(portfolio: str | None) -> str:
+    normalized = " ".join(str(portfolio or "All portfolios").strip().casefold().split())
+    digest = hashlib.sha256(normalized.encode()).hexdigest()[:20]
+    return f"{PORTFOLIO_SCOPE_ID}:{digest}"
+
+
+def _comparison_token_scope(project_ids: list[str]) -> str:
+    normalized = "|".join(sorted({str(project_id).strip() for project_id in project_ids if project_id}))
+    digest = hashlib.sha256(normalized.encode()).hexdigest()[:20]
+    return f"{COMPARISON_SCOPE_ID}:{digest}"
 
 
 def _artifact_root() -> Path:
@@ -33,66 +64,304 @@ def _artifact_root() -> Path:
     return root
 
 
-def _quality_summary(db, project) -> dict:
-    names = [value for value in {project.project_id, project.name} if value]
-    nc_filter = or_(*[models.PulseNC.project_name.ilike(f"%{name}%") for name in names])
-    rfi_filter = or_(*[models.PulseRFI.project_name.ilike(f"%{name}%") for name in names])
-    ncs = db.query(models.PulseNC).filter(nc_filter).all()
-    rfis = db.query(models.PulseRFI).filter(rfi_filter).all()
+def _quality_summary(db, project_id: str) -> dict:
+    snapshot = QualityAnalyticsService.project_status(db, project_id).to_dict()
+    provenance = snapshot.get("provenance", {})
+    sync_values = [
+        value for value in (
+            provenance.get("nc_last_synced_at"),
+            provenance.get("rfi_last_synced_at"),
+        ) if value
+    ]
     return {
-        "has_data": bool(ncs or rfis),
-        "non_conformances": len(ncs),
-        "open_non_conformances": sum(1 for row in ncs if (row.status or "").lower() != "completed"),
-        "rfis": len(rfis),
-        "open_rfis": sum(1 for row in rfis if (row.status or "").lower() != "completed"),
-        "last_synced_at": max(
-            [row.last_synced_at for row in [*ncs, *rfis] if row.last_synced_at],
-            default=None,
-        ),
+        **snapshot,
+        "has_data": snapshot["available"],
+        "non_conformances": snapshot["total_ncs"],
+        "open_non_conformances": snapshot["open_ncs"],
+        "rfis": snapshot["total_rfis"],
+        "last_synced_at": max(sync_values, default=None),
+    }
+
+
+def _iso(value) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _project_summary(project, schedule) -> dict:
+    return {
+        "project_id": project.project_id,
+        "project_name": project.display_name,
+        "name": project.p6_mapping_name or project.project_name,
+        "status": schedule.status or "P6 data unavailable",
+        "start_date": _iso(schedule.start_date),
+        "finish_date": _iso(schedule.finish_date),
+        "planned_start": _iso(schedule.planned_start),
+        "scheduled_finish": _iso(schedule.scheduled_finish),
+        "must_finish_by": _iso(schedule.must_finish_by),
+        "data_date": _iso(schedule.data_date),
+        "duration_percent_complete": schedule.duration_percent_complete,
+        "planned_duration": schedule.planned_duration,
+        "actual_duration": schedule.actual_duration,
+        "remaining_duration": schedule.remaining_duration,
+        "spi": schedule.spi,
+        "cpi": schedule.cpi,
+        "total_float_hours": schedule.total_float,
+        "finish_date_variance_days": schedule.finish_date_variance,
+        "activity_count": schedule.activity_count,
+        "completed_activities": schedule.completed_activities,
+        "in_progress_activities": schedule.in_progress_activities,
+        "not_started_activities": schedule.not_started_activities,
+        "baseline_start": _iso(schedule.baseline_start),
+        "baseline_finish": _iso(schedule.baseline_finish),
+        "baseline_duration": schedule.baseline_duration,
+        "last_synced_at": _iso(schedule.last_synced_at),
+        "p6_available": schedule.p6_available,
+        "progress_pct": schedule.progress_pct,
+        "progress_formula": schedule.progress_formula,
+        "progress_formula_version": schedule.progress_formula_version,
+        "progress_units": schedule.progress_units,
+        "is_delayed": schedule.is_delayed,
+        "delay_formula": schedule.delay_formula,
+    }
+
+
+def _schedule_summary(schedule) -> dict:
+    return {
+        "progress_pct": schedule.progress_pct,
+        "completed_activities": schedule.completed_activities,
+        "in_progress_activities": schedule.in_progress_activities,
+        "not_started_activities": schedule.not_started_activities,
+        "spi": schedule.spi,
+        "cpi": schedule.cpi,
+        "is_delayed": schedule.is_delayed,
+        "finish_date_variance": schedule.finish_date_variance,
+        "finish_date_variance_units": schedule.finish_date_variance_units,
+        "progress_formula": schedule.progress_formula,
+        "progress_formula_version": schedule.progress_formula_version,
+    }
+
+
+def _procurement_summary(sap: dict) -> dict:
+    totals = sap["totals"]["purchase_orders"]
+    ordered = totals["ordered_quantity"]
+    return {
+        "project_id": sap["project_id"],
+        "project_name": sap["project_name"],
+        "has_data": bool(sap["purchase_orders"]),
+        "total_po_count": sap["counts"]["po_row_count"],
+        "distinct_po_count": sap["counts"]["distinct_po_count"],
+        "total_ordered_qty": totals["ordered_quantity"],
+        "total_delivered_qty": totals["delivered_quantity"],
+        "total_pending_qty": totals["pending_quantity"],
+        "fulfillment_pct": round(totals["delivered_quantity"] / ordered * 100, 1) if ordered else 0,
+        "total_value_inr": totals["order_value"],
+        "scope": sap["scope"],
+        "units": sap["units"],
+        "warnings": sap["warnings"],
+        "last_synced_at": sap["freshness"]["mt_poamount"],
     }
 
 
 def build_project_progress_dataset(db, project_id: str) -> dict:
-    project = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
+    project = ProjectCatalogService.get_by_project_id(db, project_id)
     if project is None:
         raise ValueError("Unknown project.")
-    summary = p6_get_project_summary(db, project_id)
-    kpis = compute_project_kpis(db, project_id, calculate_health=False)
-    procurement = sap_get_po_summary(db, project_id)
-    transmission = tc_get_project_lines(db, project_id)
-    quality = _quality_summary(db, project)
-    in_progress = p6_get_activities(db, project_id, "in_progress", 20, 0)
-    delayed = kpis.get("schedule", {})
+    schedule_metrics = ScheduleMetricsService.get_by_project_id(db, project_id)
+    summary = _project_summary(project, schedule_metrics)
+    schedule = _schedule_summary(schedule_metrics)
+    sap = SapProjectDataService.get_by_project_id(db, project_id)
+    procurement = _procurement_summary(sap)
+    transmission = transmission_service.project_status(db, project_id)
+    quality = _quality_summary(db, project_id)
+    capacity = CapacityMilestoneService.get_project_status(db, project_id)
+    risk_metrics = {
+        metric.metric_id: metric.to_dict()
+        for metric in RiskAnalyticsService.project360(db, project_id)
+    }
+    activities = ScheduleMetricsService.get_activities(
+        db, project_id, status="In Progress", limit=20
+    )
+    in_progress = {
+        "project_id": project_id,
+        "project_name": project.display_name,
+        "has_data": bool(activities),
+        "status_filter": "in_progress",
+        "total_matching": schedule_metrics.in_progress_activities,
+        "returned": len(activities),
+        "offset": 0,
+        "activities": activities,
+        "data_date": _iso(schedule_metrics.data_date),
+        "last_synced_at": _iso(schedule_metrics.last_synced_at),
+    }
     source_freshness = {
         "P6": summary.get("last_synced_at"),
-        "SAP": procurement.get("last_synced_at") or procurement.get("_synced_at"),
-        "TC": transmission.get("last_synced_at") or transmission.get("_synced_at"),
+        "SAP": procurement.get("last_synced_at"),
+        "TC": transmission.get("last_synced_at"),
         "Pulse": quality.get("last_synced_at"),
+        "Capacity": capacity.get("metadata", {}).get("freshness", {}).get("last_synced_at"),
     }
     missing_sources = [
         name for name, available in {
-            "P6": summary is not None,
-            "SAP": bool(procurement and procurement.get("has_data", True)),
+            "P6": schedule_metrics.p6_available,
+            "SAP": procurement["has_data"],
             "TC": bool(transmission and transmission.get("has_data")),
             "Pulse": quality["has_data"],
+            "Capacity": bool(capacity.get("projects")),
         }.items() if not available
     ]
     return {
         "metadata": {
             "report_type": REPORT_TYPE,
             "project_id": project_id,
-            "project_name": summary["project_name"],
+            "project_name": project.display_name,
             "generated_at": datetime.utcnow().isoformat(),
             "reporting_cutoff": summary.get("data_date"),
             "source_freshness": source_freshness,
             "missing_sources": missing_sources,
+            "period": "current_month",
+            "period_start": (
+                f"{str(schedule_metrics.data_date)[:7]}-01"
+                if schedule_metrics.data_date else None
+            ),
+            "period_definition": "Current calendar month through the latest P6 data cutoff",
+            "limitations": [
+                "Historical planned-versus-actual progress curves are unavailable because snapshots are not persisted."
+            ],
         },
         "project_summary": summary,
-        "schedule": delayed,
+        "schedule": schedule,
         "in_progress_activities": in_progress,
         "procurement": procurement,
         "transmission": transmission,
         "quality": quality,
+        "capacity": capacity,
+        "risk": risk_metrics,
+        "report_visualizations": {
+            "daily_completion_trend": _transport_spec(daily_completion_spec(
+                ScheduleMetricsService.get_daily_activity_completion_trend(db, project_id, days=30),
+                project.display_name,
+            )),
+            "block_progress": _transport_spec(block_progress_spec(
+                ScheduleMetricsService.get_block_period_progress(db, project_id, period="current_month"),
+                project.display_name,
+            )),
+        },
+    }
+
+
+def build_portfolio_progress_dataset(db, portfolio: str | None = None) -> dict:
+    projects = [project for project in ProjectCatalogService.list_projects(db, portfolio) if project.project_id]
+    metrics_by_id = ScheduleMetricsService.list_by_project_ids(
+        db, [project.project_id for project in projects]
+    )
+    rows = []
+    for project in projects:
+        schedule = metrics_by_id.get(project.project_id, ScheduleMetricsService.calculate(None))
+        rows.append({
+            "project_id": project.project_id,
+            "project_name": project.display_name,
+            "capacity_mwac": project.capacity_mwac,
+            "progress_pct": schedule.progress_pct,
+            "status": (
+                "P6 unavailable" if not schedule.p6_available
+                else "Completed" if schedule.progress_pct is not None and schedule.progress_pct >= 100
+                else "Delayed" if schedule.is_delayed
+                else "On track"
+            ),
+            "is_delayed": schedule.is_delayed,
+            "forecast_finish": _iso(schedule.finish_date),
+            "baseline_finish": _iso(schedule.baseline_finish),
+            "finish_date_variance_days": schedule.finish_date_variance,
+            "data_date": _iso(schedule.data_date),
+            "last_synced_at": _iso(schedule.last_synced_at),
+        })
+
+    rows.sort(key=lambda row: (
+        0 if row["status"] == "Delayed" else 1 if row["status"] == "On track" else 2,
+        -(row["progress_pct"] or 0),
+        row["project_name"],
+    ))
+    cutoffs = [row["data_date"] for row in rows if row["data_date"]]
+    cutoff = max(cutoffs, default=None)
+    period_start = f"{cutoff[:7]}-01" if cutoff else None
+    counts = {
+        "total_projects": len(rows),
+        "projects_with_p6": sum(row["status"] != "P6 unavailable" for row in rows),
+        "delayed": sum(row["status"] == "Delayed" for row in rows),
+        "on_track": sum(row["status"] == "On track" for row in rows),
+        "completed": sum(row["status"] == "Completed" for row in rows),
+        "p6_unavailable": sum(row["status"] == "P6 unavailable" for row in rows),
+    }
+    return {
+        "metadata": {
+            "report_type": PORTFOLIO_REPORT_TYPE,
+            "portfolio": portfolio or "All portfolios",
+            "generated_at": datetime.utcnow().isoformat(),
+            "reporting_cutoff": cutoff,
+            "period": "current_month",
+            "period_start": period_start,
+            "period_definition": "Current calendar month through the latest synchronized P6 cutoff",
+            "source_freshness": {
+                "P6": max((row["last_synced_at"] for row in rows if row["last_synced_at"]), default=None),
+            },
+            "missing_sources": [],
+            "limitations": [
+                "This is a latest-snapshot portfolio report; historical planned-versus-actual curves are unavailable."
+            ],
+        },
+        "summary": counts,
+        "projects": rows,
+        "report_visualizations": {
+            "project_progress": _transport_spec(project_progress_spec(rows)),
+            "schedule_status": _transport_spec(portfolio_status_spec(counts, cutoff)),
+        },
+    }
+
+
+def build_project_comparison_dataset(db, project_ids: list[str]) -> dict:
+    if len(set(project_ids)) < 2:
+        raise ValueError("A comparison report requires at least two distinct projects.")
+    comparison = ChartSpecService.project_comparison(db, project_ids)
+    by_id = {row["project_id"]: row for row in comparison.get("projects") or []}
+    rows = []
+    for project_id in project_ids:
+        row = by_id.get(project_id)
+        if row is None:
+            continue
+        catalog = ProjectCatalogService.get_by_project_id(db, project_id)
+        rows.append({
+            **row,
+            "capacity_mwac": catalog.capacity_mwac if catalog else None,
+            "spv_name": catalog.spv_name if catalog else None,
+            "status": "Delayed" if (row.get("baseline_slip_days") or 0) > 0 else "On track",
+        })
+    if len(rows) < 2:
+        raise ValueError("Schedule data is unavailable for enough projects to create a comparison report.")
+    cutoffs = [row["data_as_of"] for row in rows if row.get("data_as_of")]
+    cutoff = max(cutoffs, default=None)
+    visualizations = [
+        project_progress_spec(rows, title="Project Comparison — % Complete"),
+        activity_composition_spec(rows),
+        duration_comparison_spec(rows),
+        baseline_slip_spec(rows),
+    ]
+    return {
+        "metadata": {
+            "report_type": COMPARISON_REPORT_TYPE,
+            "project_ids": [row["project_id"] for row in rows],
+            "project_names": [row["project_name"] for row in rows],
+            "generated_at": datetime.utcnow().isoformat(),
+            "reporting_cutoff": cutoff,
+            "source_freshness": {"P6": cutoff},
+            "limitations": [
+                "SPI/CPI are reported only when present in the synchronized extract.",
+                "Forecast-versus-baseline slippage is a direct calendar-date comparison, not a historical progress curve.",
+            ],
+        },
+        "projects": rows,
+        "report_visualizations": {
+            spec.chart_id: spec.transport() for spec in visualizations if spec is not None
+        },
     }
 
 
@@ -100,12 +369,15 @@ def _fallback_narrative(dataset: dict) -> str:
     summary = dataset["project_summary"]
     schedule = dataset["schedule"]
     project_name = summary.get("project_name") or dataset.get("metadata", {}).get("project_name") or "The project"
-    text = (
-        f"{project_name} is active and {schedule.get('progress_pct')}% complete by P6 duration progress, "
-        f"with {schedule.get('completed_activities')} completed, "
-        f"{schedule.get('in_progress_activities')} in-progress, and "
-        f"{schedule.get('not_started_activities')} not-started activities."
-    )
+    if not summary.get("p6_available", True):
+        text = f"{project_name} is present in the project catalog, but P6 schedule facts are unavailable."
+    else:
+        text = (
+            f"{project_name} is {schedule.get('progress_pct')}% complete using the authoritative P6 progress formula, "
+            f"with {schedule.get('completed_activities')} completed, "
+            f"{schedule.get('in_progress_activities')} in-progress, and "
+            f"{schedule.get('not_started_activities')} not-started activities."
+        )
     if schedule.get("spi") is None:
         text += " SPI is unavailable, so the report does not classify the project as ahead or behind."
     missing = dataset.get("metadata", {}).get("missing_sources") or []
@@ -185,12 +457,68 @@ def create_project_progress_preview(db, runtime, project_id: str) -> dict:
         "project_name": metadata["project_name"],
         "reporting_cutoff": metadata["reporting_cutoff"],
         "formats": ["PDF", "DOCX"],
-        "sections": ["Executive Summary", "P6 Schedule", "SAP Procurement", "TC Transmission", "Pulse Quality", "Source Freshness"],
+        "sections": [
+            "Executive Summary",
+            "P6 Schedule",
+            "SAP Procurement",
+            "TC Transmission",
+            "Pulse Quality",
+            "Capacity Milestones",
+            "Named Risk Metrics",
+            "Source Freshness",
+        ],
         "source_freshness": metadata["source_freshness"],
         "missing_sources": metadata["missing_sources"],
         "progress_pct": summary.get("duration_percent_complete"),
         "preview_token": create_preview_token(runtime.session_id, project_id),
         "instruction": "Show this preview and ask the user to confirm. Do not generate the report in the same turn.",
+    }
+
+
+def create_portfolio_progress_preview(db, runtime, portfolio: str | None = None) -> dict:
+    dataset = build_portfolio_progress_dataset(db, portfolio)
+    metadata = dataset["metadata"]
+    return {
+        "status": "awaiting_confirmation",
+        "report_type": "Portfolio Progress Report",
+        "scope": metadata["portfolio"],
+        "reporting_cutoff": metadata["reporting_cutoff"],
+        "period": metadata["period"],
+        "period_definition": metadata["period_definition"],
+        "formats": ["PDF", "DOCX"],
+        "sections": [
+            "Executive Summary", "Portfolio KPI Summary", "Project Progress",
+            "Schedule Exposure", "Source Freshness", "Limitations",
+        ],
+        "summary": dataset["summary"],
+        "source_freshness": metadata["source_freshness"],
+        "preview_token": create_preview_token(runtime.session_id, _portfolio_token_scope(portfolio)),
+        "instruction": "Show this preview and ask the user to confirm. Do not generate the report in the same turn.",
+    }
+
+
+def create_project_comparison_preview(db, runtime, project_ids: list[str]) -> dict:
+    dataset = build_project_comparison_dataset(db, project_ids)
+    metadata = dataset["metadata"]
+    return {
+        "status": "awaiting_confirmation",
+        "report_type": "Project Comparison Report",
+        "project_ids": metadata["project_ids"],
+        "project_names": metadata["project_names"],
+        "reporting_cutoff": metadata["reporting_cutoff"],
+        "formats": ["PDF", "DOCX"],
+        "sections": [
+            "Executive Summary", "Key Metrics Comparison", "Progress Visual",
+            "Activity Composition", "Duration Profile", "Baseline Slip", "Limitations",
+        ],
+        "source_freshness": metadata["source_freshness"],
+        "preview_token": create_preview_token(
+            runtime.session_id, _comparison_token_scope(metadata["project_ids"])
+        ),
+        "instruction": (
+            "Show this preview after the in-chat comparison and ask whether the user wants the "
+            "PDF and DOCX generated. Do not generate files in the same turn."
+        ),
     }
 
 
@@ -224,7 +552,9 @@ def cleanup_expired_artifacts(db) -> None:
         db.flush()
 
 
-def _record_artifact(db, runtime, project_id: str, path: Path, fmt: str) -> models.ReportArtifact:
+def _record_artifact(
+    db, runtime, project_id: str, path: Path, fmt: str, report_type: str = REPORT_TYPE
+) -> models.ReportArtifact:
     content = path.read_bytes()
     artifact = models.ReportArtifact(
         artifact_id=uuid4().hex,
@@ -232,7 +562,7 @@ def _record_artifact(db, runtime, project_id: str, path: Path, fmt: str) -> mode
         owner_subject=runtime.user_id,
         tenant_id=runtime.tenant_id,
         project_id=project_id,
-        report_type=REPORT_TYPE,
+        report_type=report_type,
         format=fmt,
         file_path=str(path.resolve()),
         filename=path.name,
@@ -271,6 +601,95 @@ def generate_project_progress_report(db, runtime, project_id: str, preview_token
         "status": "generated",
         "project_id": project_id,
         "project_name": dataset["metadata"]["project_name"],
+        "expires_at": min(row.expires_at for row in artifacts).isoformat(),
+        "downloads": [{
+            "format": row.format.upper(),
+            "filename": row.filename,
+            "url": f"/akasha/api/reports/artifacts/{row.artifact_id}/download",
+        } for row in artifacts],
+        "instruction": "Return both download links exactly as Markdown links in the final answer.",
+    }
+
+
+def generate_portfolio_progress_report(
+    db, runtime, preview_token: str, portfolio: str | None = None
+) -> dict:
+    validate_preview_token(preview_token, runtime.session_id, _portfolio_token_scope(portfolio))
+    cleanup_expired_artifacts(db)
+    dataset = build_portfolio_progress_dataset(db, portfolio)
+    summary = dataset["summary"]
+    dataset["executive_summary"] = (
+        f"The {dataset['metadata']['portfolio']} portfolio contains {summary['total_projects']} projects. "
+        f"P6 schedule data is available for {summary['projects_with_p6']}; {summary['delayed']} are delayed, "
+        f"{summary['on_track']} are on track, and {summary['completed']} are completed as of the latest "
+        f"synchronized cutoff. This report is a current-month snapshot and does not represent a historical "
+        f"planned-versus-actual progress curve."
+    )
+    from services.report_renderers import render_portfolio_progress_docx, render_portfolio_progress_pdf
+
+    root = _artifact_root()
+    stem = f"portfolio_progress_{datetime.utcnow():%Y%m%d_%H%M%S}_{uuid4().hex[:8]}"
+    pdf_path = root / f"{stem}.pdf"
+    docx_path = root / f"{stem}.docx"
+    render_portfolio_progress_pdf(dataset, pdf_path)
+    render_portfolio_progress_docx(dataset, docx_path)
+    artifacts = [
+        _record_artifact(db, runtime, PORTFOLIO_SCOPE_ID, pdf_path, "pdf", PORTFOLIO_REPORT_TYPE),
+        _record_artifact(db, runtime, PORTFOLIO_SCOPE_ID, docx_path, "docx", PORTFOLIO_REPORT_TYPE),
+    ]
+    db.commit()
+    return {
+        "status": "generated",
+        "report_type": "Portfolio Progress Report",
+        "scope": dataset["metadata"]["portfolio"],
+        "expires_at": min(row.expires_at for row in artifacts).isoformat(),
+        "downloads": [{
+            "format": row.format.upper(),
+            "filename": row.filename,
+            "url": f"/akasha/api/reports/artifacts/{row.artifact_id}/download",
+        } for row in artifacts],
+        "instruction": "Return both download links exactly as Markdown links in the final answer.",
+    }
+
+
+def generate_project_comparison_report(
+    db, runtime, project_ids: list[str], preview_token: str
+) -> dict:
+    scope = _comparison_token_scope(project_ids)
+    validate_preview_token(preview_token, runtime.session_id, scope)
+    cleanup_expired_artifacts(db)
+    dataset = build_project_comparison_dataset(db, project_ids)
+    rows = dataset["projects"]
+    highest_progress = max(rows, key=lambda row: float(row.get("progress_pct") or 0))
+    highest_slip = max(rows, key=lambda row: int(row.get("baseline_slip_days") or 0))
+    dataset["executive_summary"] = (
+        f"{highest_progress['project_name']} has the highest current progress at "
+        f"{highest_progress.get('progress_pct')}%. {highest_slip['project_name']} has the largest "
+        f"direct forecast-versus-baseline finish slippage at "
+        f"{highest_slip.get('baseline_slip_days')} calendar days. The comparison uses the latest "
+        "available synchronized P6 snapshot for each project; source cutoff dates are shown in the detail table."
+    )
+    from services.report_renderers import (
+        render_project_comparison_docx,
+        render_project_comparison_pdf,
+    )
+
+    root = _artifact_root()
+    stem = f"project_comparison_{datetime.utcnow():%Y%m%d_%H%M%S}_{uuid4().hex[:8]}"
+    pdf_path = root / f"{stem}.pdf"
+    docx_path = root / f"{stem}.docx"
+    render_project_comparison_pdf(dataset, pdf_path)
+    render_project_comparison_docx(dataset, docx_path)
+    artifacts = [
+        _record_artifact(db, runtime, COMPARISON_SCOPE_ID, pdf_path, "pdf", COMPARISON_REPORT_TYPE),
+        _record_artifact(db, runtime, COMPARISON_SCOPE_ID, docx_path, "docx", COMPARISON_REPORT_TYPE),
+    ]
+    db.commit()
+    return {
+        "status": "generated",
+        "report_type": "Project Comparison Report",
+        "project_ids": dataset["metadata"]["project_ids"],
+        "project_names": dataset["metadata"]["project_names"],
         "expires_at": min(row.expires_at for row in artifacts).isoformat(),
         "downloads": [{
             "format": row.format.upper(),

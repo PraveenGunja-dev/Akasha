@@ -156,7 +156,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
 
   const listProjects = useMemo(() => {
     if (activeListTab === 'delayed') return [...projects].filter((p: any) => p.p6?.health === 'Delayed');
-    if (activeListTab === 'low') return [...projects].filter((p: any) => ((p.p6?.progress || 0) * 100) < 50);
+    if (activeListTab === 'low') return [...projects].filter((p: any) => Number(p.p6?.progress || 0) < 50);
     return projects;
   }, [projects, activeListTab]);
 

@@ -1,21 +1,57 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactECharts from 'echarts-for-react';
-import { TrendingUp, Activity, Cpu } from 'lucide-react';
+import { TrendingUp, Cpu } from 'lucide-react';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
-export default function PredictiveAnalytics({ p6Data }: any) {
-  
-  // Real Predictive Model (Simple Linear Extrapolation based on current variance)
-  // We assume that the current average schedule variance will continue to grow at its current rate
-  const totalVariance = p6Data?.reduce((acc: number, p: any) => acc + ((p.finishDateVariance || 0) < 0 ? Math.abs(p.finishDateVariance) : 0), 0) || 0;
-  const activeProjects = p6Data?.filter((p:any) => p.status === 'Active')?.length || 1;
-  const avgVariance = totalVariance / activeProjects;
+type PredictiveMetric = {
+  value: {
+    current: number;
+    '30_days': number;
+    '60_days': number;
+    '90_days': number;
+  };
+  components: {
+    active_project_count: number;
+    confidence_pct: number;
+  };
+};
+
+type ProjectRiskSource = { project_id?: string; projectId?: string };
+
+const PredictiveAnalytics: React.FC<{
+  p6Data?: ProjectRiskSource[];
+  selectedProjectId?: string;
+}> = ({ p6Data = [], selectedProjectId }) => {
+  const [metric, setMetric] = useState<PredictiveMetric | null>(null);
+  const portfolio = new URLSearchParams(window.location.search).get('portfolio');
+  const projectId = selectedProjectId || (
+    p6Data.length === 1 ? (p6Data[0].project_id || p6Data[0].projectId) : undefined
+  );
+
+  useEffect(() => {
+    let active = true;
+    const params = new URLSearchParams();
+    if (portfolio) params.set('portfolio', portfolio);
+    if (projectId) params.set('project_id', projectId);
+    const query = params.size ? `?${params.toString()}` : '';
+    getCachedDashboardJson<any>(`/akasha/api/risk/predictive${query}`)
+      .then(data => {
+        if (active) setMetric(data.metrics?.['predictive.portfolio_slippage'] || null);
+      })
+      .catch(console.error);
+    return () => { active = false; };
+  }, [portfolio, projectId]);
+
+  const forecast = metric?.value || { current: 0, '30_days': 0, '60_days': 0, '90_days': 0 };
+  const activeProjects = metric?.components.active_project_count || 0;
+  const avgVariance = forecast.current;
 
   // Forecast points: Current (0 days), +30 Days, +60 Days, +90 Days
   const forecastData = [
     { name: 'Current', actual: avgVariance, forecast: avgVariance },
-    { name: '+30 Days', actual: null, forecast: avgVariance * 1.2 },
-    { name: '+60 Days', actual: null, forecast: avgVariance * 1.5 },
-    { name: '+90 Days', actual: null, forecast: avgVariance * 1.9 },
+    { name: '+30 Days', actual: null, forecast: forecast['30_days'] },
+    { name: '+60 Days', actual: null, forecast: forecast['60_days'] },
+    { name: '+90 Days', actual: null, forecast: forecast['90_days'] },
   ];
 
   const predictiveOption = {
@@ -34,7 +70,7 @@ export default function PredictiveAnalytics({ p6Data }: any) {
         symbolSize: 8
       },
       {
-        name: 'AI Forecasted Delay',
+        name: 'Heuristic Forecasted Delay',
         type: 'line',
         data: forecastData.map(d => d.forecast),
         itemStyle: { color: '#F59E0B' },
@@ -60,13 +96,13 @@ export default function PredictiveAnalytics({ p6Data }: any) {
          </div>
          <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">90-Day Forecast</h3>
-           <p className="text-4xl font-light text-destructive">{Math.round(avgVariance * 1.9)} Days</p>
+           <p className="text-4xl font-light text-destructive">{Math.round(forecast['90_days'])} Days</p>
          </div>
          <div className="bg-card border border-success/20 rounded-2xl p-6 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-2">
-             <Cpu className="w-4 h-4 text-success" /> AI Confidence
+             <Cpu className="w-4 h-4 text-success" /> Fixed Confidence Label
            </h3>
-           <p className="text-4xl font-light text-success">87%</p>
+           <p className="text-4xl font-light text-success">{metric?.components.confidence_pct ?? 87}%</p>
          </div>
       </div>
 
@@ -76,7 +112,7 @@ export default function PredictiveAnalytics({ p6Data }: any) {
           <h2 className="text-lg font-medium tracking-wide text-foreground">Schedule Slippage Forecast (90 Days)</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4 border-l-2 border-amber-500 pl-3">
-          Based on the historical variance of the {activeProjects} active projects in P6, our AI model predicts that without intervention, the average schedule delay will increase by 90% over the next quarter.
+          This presentation heuristic applies fixed multipliers to the current average delay across {activeProjects} active P6 projects; it is not a statistically calibrated prediction.
         </p>
         <div className="w-full h-[350px]">
           <ReactECharts option={predictiveOption} style={{ height: '100%', width: '100%' }} />
@@ -85,4 +121,6 @@ export default function PredictiveAnalytics({ p6Data }: any) {
 
     </div>
   );
-}
+};
+
+export default PredictiveAnalytics;

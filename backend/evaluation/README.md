@@ -1,82 +1,68 @@
-# Phase 0 Tests and Provisional Evaluation
+# Phase 10 Golden Evaluation
 
-This scaffold is isolated from the application entry point. It does not import
-`backend/main.py`, connect to a database, or call an LLM/provider. It uses only
-the Python standard library.
+This directory contains an isolated, deterministic alignment evaluation. It does
+not import the application, query a database, or call a model provider.
 
-## Automated tests
+## Truth Status
+
+`golden_cases.v1.json` is **pending business validation**. Its question wording
+is drawn where suitable from `Qns_AKASHA.xlsx` and operational edge cases. All
+expected facts, project IDs, dates, amounts, and source IDs are synthetic. No
+workbook answer or production value was imported. Results are regression and
+contract evidence, not a production accuracy claim.
+
+The historical `cases.v1.json` and `responses.v1.json` files retain the Phase 0
+schema for traceability. The Phase 10 CLI intentionally rejects that schema.
+
+## Contents
+
+- `golden_cases.v1.json`: 23 versioned questions and structured expectations.
+- `sample_responses.v1.json`: a complete synthetic response set exercising all cases.
+- `evaluate.py`: typed, standard-library-only validator, evaluator, and reporter.
+- `config.py`: schema and default path configuration.
+- `reports/sample-report.v1.json`: machine-readable sample run.
+- `reports/sample-report.v1.md`: business-reviewable sample run.
+- `ROLLOUT.md`: release, monitoring, approval, and rollback controls.
+
+The corpus covers portfolio totals, project scope and progress, schedule delay,
+SAP, TC, capacity, quality, named risk, stale data, missing data, ambiguous
+project resolution, and unsupported sources.
+
+## Run
 
 From the repository root:
 
 ```powershell
-python -m unittest discover -s backend/tests -v
-```
-
-The tests cover conservative request-ID acceptance and UUID fallback, correlated
-single-frame SSE JSON, Phase 0 event shapes, payload-free operational logs,
-import safety, versioned evaluation input validation, deterministic fact and
-evidence scoring, status cohorts, and failing quality gates.
-
-## Provisional baseline
-
-Run the versioned baseline from the repository root:
-
-```powershell
 python backend/evaluation/evaluate.py
+python -m unittest backend.tests.test_evaluation -v
 ```
 
-Human-readable output is written to stderr. Machine-readable JSON is written to
-stdout. A passing run exits `0`, failed quality gates exit `1`, and invalid input
-exits `2`. Custom versioned inputs can be selected with:
+The evaluator writes the default JSON and Markdown reports under `reports/`,
+prints JSON to stdout and Markdown to stderr, and returns:
+
+- `0`: all configured gates pass.
+- `1`: valid inputs with at least one failed gate.
+- `2`: invalid input.
+
+Custom files and output locations:
 
 ```powershell
-python backend/evaluation/evaluate.py --cases path/to/cases.json --responses path/to/responses.json
+python backend/evaluation/evaluate.py `
+  --cases path/to/cases.json `
+  --responses path/to/responses.json `
+  --json-report path/to/report.json `
+  --markdown-report path/to/report.md
 ```
 
-Scoring is deliberately deterministic. An expected fact passes when its
-normalized phrase occurs in the response. A grounded claim passes only when its
-phrase occurs and all `required_evidence_ids` are attached to the response.
-Configured gates are stored in `cases.v1.json`. Gate configuration is fail-closed:
-it must be non-empty, use only documented names, include at least one minimum
-score from greater than `0` through `1`, and use literal `true` for
-`require_response_for_every_case` when that gate is present. Invalid
-configuration exits `2` without producing a PASS summary.
+## Comparison Rules
 
-To demonstrate the nonzero gate behavior without leaving a repository file,
-run this PowerShell block from the repository root. Exit `1` is the expected
-evaluator result; the block removes its temporary response document.
+Each expected fact is compared by value type, value, unit, and exact source-ID
+set. Numeric and integer values use the case tolerance. Null is a typed value,
+not zero or an omitted fact. Each case also compares exact project resolution,
+top-level source IDs, and warning-code sets. Additional response facts are
+reported as unsupported claims and fail the configured zero-unsupported gate.
 
-```powershell
-$temp = Join-Path ([System.IO.Path]::GetTempPath()) "akasha-p0f-intentional-fail.json"
-try {
-    $json = '{"schema_version":"1.0","dataset_version":"phase0-provisional-v1","responses":[]}'
-    [System.IO.File]::WriteAllText($temp, $json, [System.Text.UTF8Encoding]::new($false))
-    python backend/evaluation/evaluate.py --responses $temp
-    if ($LASTEXITCODE -ne 1) { throw "Expected evaluator exit 1, got $LASTEXITCODE" }
-} finally {
-    Remove-Item -LiteralPath $temp -ErrorAction SilentlyContinue
-}
-```
-
-Check changed-file whitespace with:
-
-```powershell
-git diff --check -- backend/tests backend/evaluation CHATBOT_IMPLEMENTATION_PLAN.md
-```
-
-## Interpretation limits
-
-This is executable evaluation scaffolding, not a chatbot accuracy measurement.
-The three questions were read from the `Execution` sheet of `Qns_AKASHA.xlsx`.
-Only question text was used. Expected values, evidence IDs, and example responses
-are explicitly synthetic; no workbook answer or production record was imported.
-
-Cases and responses carry `validated`, `provisional`, `generated`, or
-`pending_validation` status as applicable. Reports show validated results
-separately from provisional/non-validated results. The seed has no validated
-cases, so its validated score is reported as `no cases`, never inferred from the
-provisional score.
-
-Importing workbook/database answers, establishing business-owned ground truth,
-and measuring the real chatbot against a representative benchmark are deferred
-to Phase 4.
+Before replacing synthetic facts, a business reviewer must verify the source
+snapshot, project scope, unit, null policy, tolerance, warning policy, and
+expected value. Only then should a new dataset version use
+`business_validated` at the case level and update the dataset truth policy.

@@ -1,0 +1,61 @@
+{
+  "baseline_id": "alignment-project-catalog-v1",
+  "fixture_kind": "synthetic",
+  "clock_utc": "2026-07-15T12:00:00Z",
+  "mappings": [
+    {
+      "mapping_id": 1,
+      "project_id": "SOLAR-A",
+      "name": "Alpha Solar 100MW",
+      "cluster": "North Solar",
+      "category": "Solar",
+      "capacity": 100.0
+    },
+    {
+      "mapping_id": 2,
+      "project_id": "WIND-B",
+      "name": "Beta Wind 50MW",
+      "cluster": "West Wind",
+      "category": "Wind",
+      "capacity": 50.0
+    },
+    {
+      "mapping_id": 3,
+      "project_id": "DEMO-C",
+      "name": "Demo Training Project",
+      "cluster": "North Solar",
+      "category": "Solar",
+      "capacity": 100.0
+    }
+  ],
+  "p6_projects": [
+    {
+      "object_id": 101,
+      "project_id": "SOLAR-A",
+      "name": "Alpha Solar 100MW",
+      "progress": 0.25
+    },
+    {
+      "object_id": 103,
+      "project_id": "DEMO-C",
+      "name": "Demo Training Project",
+      "progress": 0.25
+    },
+    {
+      "object_id": 104,
+      "project_id": "ORPHAN-P6",
+      "name": "Unmapped P6 Project",
+      "progress": 0.25
+    }
+  ],
+  "expected": {
+    "all_project_ids": ["SOLAR-A", "WIND-B"],
+    "all_project_names": ["Alpha Solar 100MW", "Beta Wind 50MW"],
+    "total_projects": 2,
+    "projects_with_p6_data": 1,
+    "mapping_only_project_ids": ["WIND-B"],
+    "excluded_demo_project_ids": ["DEMO-C"],
+    "excluded_unmapped_p6_project_ids": ["ORPHAN-P6"],
+    "north_solar_project_ids": ["SOLAR-A"]
+  }
+}

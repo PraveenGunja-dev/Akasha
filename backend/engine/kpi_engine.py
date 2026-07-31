@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
+from services.project_catalog_service import list_project_mappings
 
 logger = logging.getLogger(__name__)
 
@@ -328,41 +329,29 @@ def compute_portfolio_kpis(db: Session) -> list[dict]:
     for a in db.query(models.P6Activity).all():
         acts_by_proj[a.project_object_id].append(a)
 
-    # Prefetch PO lines grouped by wbs_element
-    pos_by_wbs = defaultdict(list)
-    for po in db.query(models.MTPOAmount).all():
-        if po.wbs_element:
-            pos_by_wbs[str(po.wbs_element).strip().lower()].append(po)
+    from services.sap_project_data_service import get_sap_projects_data
+    from services import transmission_service
 
-    # Prefetch TC delayed/total per mapping_id
-    tc_by_mapping = defaultdict(lambda: {"total": 0, "delayed": 0})
-    for e in db.query(models.TcNetworkEdge).all():
-        if e.mapping_id:
-            tc_by_mapping[e.mapping_id]["total"] += 1
-            if e.is_delayed:
-                tc_by_mapping[e.mapping_id]["delayed"] += 1
-
-    mappings = db.query(models.ProjectMapping).all()
+    mappings = list_project_mappings(db)
     p6_by_pid = {p.project_id: p for p in db.query(models.P6Project).all()}
+    project_ids = list(dict.fromkeys(m.project_id for m in mappings if m.project_id))
+    sap_by_project = get_sap_projects_data(db, project_ids, mappings=mappings)
+    tc_snapshot = transmission_service.build_transmission_snapshot(db)
 
     results = []
-    for m in mappings:
-        name_check = m.project_name_from_p6 or m.project or ""
-        if "demo" in name_check.lower():
-            continue
+    for project_id in project_ids:
+        m = next(mapping for mapping in mappings if mapping.project_id == project_id)
         p6 = p6_by_pid.get(m.project_id)
         if not p6:
             continue
 
         activities = acts_by_proj.get(p6.p6_object_id, [])
-        # Match PO lines by module_wbs prefix
-        wbs = (m.module_wbs or "").strip().lower()
-        pos = []
-        if wbs and wbs not in ("nan", "none", "null"):
-            for k, lst in pos_by_wbs.items():
-                if k.startswith(wbs):
-                    pos.extend(lst)
-        tc = tc_by_mapping.get(m.id, {"total": 0, "delayed": 0})
+        pos = sap_by_project[m.project_id]["purchase_orders"]
+        _, _, tc_edges = transmission_service.project_edges(db, m.project_id, tc_snapshot)
+        tc = {
+            "total": len(tc_edges),
+            "delayed": sum(1 for edge in tc_edges if edge.is_delayed),
+        }
 
         kpi = compute_project_kpis(
             db,

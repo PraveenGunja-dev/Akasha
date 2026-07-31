@@ -6,7 +6,6 @@ Higher-level tools that combine data from multiple domains (P6 + SAP + TC)
 and provide portfolio-wide analytics.
 """
 
-import difflib
 import logging
 from sqlalchemy.orm import Session
 
@@ -14,6 +13,11 @@ import models
 from engine.tools.p6_tools import p6_get_project_summary, p6_list_all_projects
 from engine.tools.sap_tools import sap_get_po_summary
 from engine.tools.tc_tools import tc_get_project_lines
+from services.project_catalog_service import CatalogProject, ProjectCatalogService
+from services.risk_analytics_service import (
+    KPI_PORTFOLIO_PROJECT_EXPOSURE,
+    RiskAnalyticsService,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,23 +27,17 @@ def portfolio_get_project_list(db: Session) -> list[dict]:
     
     Use when: need to resolve a project name to an ID, or list available projects.
     """
-    mappings = db.query(models.ProjectMapping).all()
-    filtered_mappings = []
-    for m in mappings:
-        name_check = m.project_name_from_p6 or m.project or ""
-        if "demo" not in name_check.lower():
-            filtered_mappings.append(m)
-            
+    projects = ProjectCatalogService.list_projects(db)
     return [{
-        "project_id": m.project_id,
-        "project_name": m.project,
-        "p6_name": m.project_name_from_p6,
-        "spv_name": m.spv_name,
-        "category": m.category,
-        "capacity_mwac": m.capacity_mwac,
-        "cluster": m.cluster,
-        "subcluster": m.subcluster,
-    } for m in filtered_mappings]
+        "project_id": project.project_id,
+        "project_name": project.project_name,
+        "p6_name": project.p6_mapping_name,
+        "spv_name": project.spv_name,
+        "category": project.category,
+        "capacity_mwac": project.capacity_mwac,
+        "cluster": project.cluster,
+        "subcluster": project.subcluster,
+    } for project in projects]
 
 
 def portfolio_get_project_360(db: Session, project_id: str) -> dict:
@@ -135,9 +133,16 @@ def portfolio_get_riskiest_projects(db: Session, top_n: int = 5) -> dict:
     (schedule risk = activities behind / total, procurement risk = pending POs / total, execution
     risk = delayed lines / total). This portfolio risk path does not calculate project health.
     """
-    from engine.kpi_engine import compute_portfolio_kpis
-
-    kpis = compute_portfolio_kpis(db)  # already sorted riskiest-first
+    metrics = [
+        metric.to_dict()
+        for metric in RiskAnalyticsService.portfolio_project_exposures(db)
+    ]
+    kpis = [
+        metric["value"]
+        for metric in metrics
+        if metric["metric_id"] == KPI_PORTFOLIO_PROJECT_EXPOSURE
+        and metric["availability"]
+    ]
     riskiest = []
     for r in kpis[:top_n]:
         s = r.get("schedule", {})
@@ -172,18 +177,7 @@ def get_project_display_name(db: Session, project_id: str) -> str:
     """
     if not project_id:
         return "Unknown"
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == project_id
-    ).first()
-    if mapping:
-        return mapping.project_name_from_p6 or mapping.project or project_id
-    # Fallback: check P6 project table
-    p6 = db.query(models.P6Project).filter(
-        models.P6Project.project_id == project_id
-    ).first()
-    if p6 and p6.name:
-        return p6.name
-    return project_id
+    return ProjectCatalogService.get_display_name(db, project_id)
 
 
 def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
@@ -193,83 +187,32 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
     Returns: dict with project_id, project_name, p6_name — or None if not found.
     Tries: project_id → project → project_name_from_p6 → P6 name → fuzzy match.
     """
-    if not name_or_id:
-        return None
-    
-    name_or_id = name_or_id.strip()
-    
-    def _build_result(mapping):
+    def _build_result(project: CatalogProject):
         return {
-            "project_id": mapping.project_id,
-            "project_name": mapping.project_name_from_p6 or mapping.project or mapping.project_id,
-            "p6_name": mapping.project_name_from_p6 or "",
-            "spv_name": mapping.spv_name or "",
-            "category": mapping.category or "",
-            "capacity_mwac": mapping.capacity_mwac,
+            "mapping_id": project.mapping_id,
+            "project_id": project.project_id,
+            "project_name": project.display_name,
+            "p6_name": project.p6_mapping_name or "",
+            "spv_name": project.spv_name or "",
+            "category": project.category or "",
+            "cluster": project.cluster or "",
+            "subcluster": project.subcluster or "",
+            "capacity_mwac": project.capacity_mwac,
+            "plot_no": project.plot_no or "",
+            "_source_table": "project_mapping",
         }
-    
-    # Direct project_id match
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == name_or_id
-    ).first()
-    if m:
-        return _build_result(m)
-    
-    # Match against project_mapping.project
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project == name_or_id
-    ).first()
-    if m and m.project_id:
-        return _build_result(m)
-    
-    # Match against P6 project name
-    p6 = db.query(models.P6Project).filter(
-        models.P6Project.name == name_or_id
-    ).first()
-    if p6:
-        m = db.query(models.ProjectMapping).filter(
-            models.ProjectMapping.project_id == p6.project_id
-        ).first()
-        if m:
-            return _build_result(m)
-    
-    # Match project_name_from_p6
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_name_from_p6 == name_or_id
-    ).first()
-    if m and m.project_id:
-        return _build_result(m)
-    
-    # Case-insensitive fuzzy search — score every containment match and keep the best one.
-    # A short code (e.g. spv_name="ARE3L") is a substring of almost every one of its own
-    # projects' full names, so returning the FIRST containment hit would let an unrelated
-    # project sharing that short code beat the actual near-exact name match. Score by
-    # similarity ratio instead so the most specific match wins.
-    name_lower = name_or_id.lower()
-    all_mappings = db.query(models.ProjectMapping).all()
-    MIN_SCORE = 0.4
 
-    best_mapping = None
-    best_score = 0.0
-    for mapping in all_mappings:
-        candidates = [
-            mapping.project or "",
-            mapping.project_name_from_p6 or "",
-            mapping.spv_name or "",
-        ]
-        for candidate in candidates:
-            if not candidate:
-                continue
-            candidate_lower = candidate.lower()
-            if name_lower not in candidate_lower and candidate_lower not in name_lower:
-                continue
-            score = difflib.SequenceMatcher(None, name_lower, candidate_lower).ratio()
-            if score > best_score:
-                best_score = score
-                best_mapping = mapping
-
-    if best_mapping and best_score >= MIN_SCORE:
-        return _build_result(best_mapping)
+    resolution = ProjectCatalogService.resolve(db, name_or_id)
+    if resolution.status == "resolved" and resolution.project:
+        return _build_result(resolution.project)
+    if resolution.status == "ambiguous":
+        return {
+            "status": "ambiguous",
+            "query": resolution.query,
+            "message": "Multiple projects match. Ask the user to choose one project.",
+            "candidates": [_build_result(candidate) for candidate in resolution.candidates],
+            "_source_table": "project_mapping",
+        }
     return None
 
 def portfolio_get_notifications(db: Session, limit: int = 10, category: str = "All") -> list[dict]:

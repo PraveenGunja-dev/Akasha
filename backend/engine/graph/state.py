@@ -23,6 +23,7 @@ class AkashaState(TypedDict):
     intent: NotRequired[str | None]
     requested_domains: NotRequired[list[str]]
     tool_names: NotRequired[list[str]]
+    evidence: NotRequired[list[dict]]
     visualizations: NotRequired[list[dict]]
     turn_status: NotRequired[str]
     model_name: NotRequired[str | None]

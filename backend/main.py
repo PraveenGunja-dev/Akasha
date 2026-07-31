@@ -8,7 +8,7 @@ import os
 from security import get_auth_mode, require_ceo_or_pmag
 
 # Import Routers
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, chat_feedback, chat_sessions, pmag, notifications, quality, reports_mvp
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, chat_feedback, chat_sessions, pmag, notifications, quality, reports_mvp, risk
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -91,6 +91,7 @@ app.include_router(pmag.router, dependencies=protected_api)
 app.include_router(notifications.router, dependencies=protected_api)
 app.include_router(quality.router, dependencies=protected_api)
 app.include_router(reports_mvp.router, dependencies=protected_api)
+app.include_router(risk.router, dependencies=protected_api)
 
 # Mount Frontend static files
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")

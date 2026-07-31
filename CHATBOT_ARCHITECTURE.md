@@ -6,7 +6,8 @@ This document describes the chatbot architecture implemented on the
 `feature/langgraph-refactor` branch. It explains the runtime request path, why the
 application moved from a manual ReAct loop to LangGraph, how conversation persistence and
 authorization work, how operational facts are retrieved, what was changed to improve
-accuracy, and how the synchronous report-generation MVP works.
+accuracy, how chart specifications are transported and rendered, and how the synchronous
+project and portfolio report-generation MVP works.
 
 `CHATBOT_IMPLEMENTATION_PLAN.md` remains the program roadmap and phase ledger. This
 document is the code-as-built architecture for the features currently implemented.
@@ -22,14 +23,17 @@ The branch contains:
   authenticated tools, cancellation, durable run states, and rollout controls.
 - Post-Phase-2 accuracy corrections for P6 progress, unavailable SPI/CPI handling,
   activity listing, and malformed provider tool-call recovery.
-- A chatbot-first Project Progress Report MVP producing PDF and DOCX files synchronously.
+- Chat-native ECharts visualizations with automatic intent routing, multi-chart display,
+  accessibility summaries, tabular fallbacks, and full-screen inspection.
+- Chatbot-first Project and Portfolio Progress Reports producing chart-rich PDF and DOCX
+  files synchronously.
 
 The following roadmap items are not yet implemented:
 
 - A Phase 3 claim/evidence verifier covering every material answer claim.
 - A business-validated Phase 4 evaluation dataset and measured accuracy claim.
-- Durable report jobs, a report worker, retries, scheduling, XLSX reports, Portfolio
-  Executive reports, and Weekly PMAG reports.
+- Durable report jobs, a report worker, retries, scheduling, XLSX reports, and Weekly PMAG
+  reports.
 - A permanent report repository or cross-chat long-term memory.
 
 ## 3. Why Akasha Migrated to LangGraph
@@ -182,7 +186,34 @@ typed SSE events -> frontend parser -> Markdown/charts/download buttons
 `ScenarioSimulationPanel.tsx` is a compact surface over the same backend sessions and
 transport. It intentionally does not implement the full visualization/report experience.
 
-### 5.2 Authenticated Transport
+### 5.2 Chat Visualizations
+
+The backend emits a versioned, renderer-neutral `VisualizationSpecV1` containing validated
+categories, series, semantic colors, plain-language summary, accessibility description,
+source cutoff, table fallback, and a deterministic specification hash. It contains no
+JavaScript callbacks, HTML, URLs, or raw user/model-supplied ECharts configuration.
+`visualizationAdapter.ts` maps that contract to ECharts for interactive chat rendering, while
+the report renderer consumes the same specification for static PDF/DOCX images. Legacy stored
+messages containing ECharts options remain readable during migration. `ChatVisualizationGrid.tsx`
+displays up to four charts in a responsive grid and provides table and full-screen views.
+Supported first-phase chart families are project comparison, schedule status, risk
+distribution, procurement, transmission readiness, daily completion trend, and current-month
+block progress.
+
+Visualizations are selected when the user asks for a chart or when the intent is inherently
+visual, such as a trend, distribution, ranking, block snapshot, or multi-project comparison.
+Ordinary factual questions remain text-first. Historical planned-versus-actual progress is
+explicitly excluded until authoritative dated snapshots exist; the router returns the source
+limitation instead of substituting an unrelated chart.
+
+A two-or-more-project comparison expands deterministically from one `render_chart` call into
+an up-to-four-card dashboard using distinct visual grammars: radial progress gauges, stacked
+activity composition, grouped vertical duration columns, and a lollipop chart for direct
+forecast-finish-versus-baseline slippage when the required source fields are available. Each
+panel keeps compatible units; unavailable panels are omitted rather than filled with inferred
+values.
+
+### 5.3 Authenticated Transport
 
 `frontend/src/auth/authenticatedFetch.ts` wraps same-origin Akasha API requests:
 
@@ -191,7 +222,7 @@ transport. It intentionally does not implement the full visualization/report exp
 - Credentials are never attached to third-party origins.
 - HTTP 401 invokes the configured logout/identity reset behavior.
 
-### 5.3 Typed SSE
+### 5.4 Typed SSE
 
 `frontend/src/features/chatbot/chatStream.ts` parses versioned events and verifies Phase 2
 correlation and sequence ordering. The active stream includes:
@@ -211,7 +242,7 @@ A clean network EOF without `done` is treated as interrupted, not successful.
 The current backend generates the final model answer before splitting it into textual SSE
 chunks. The protocol is streaming-safe, but this is not provider-token streaming.
 
-### 5.4 End-to-End Chat Request Sequence
+### 5.5 End-to-End Chat Request Sequence
 
 ```mermaid
 sequenceDiagram
@@ -603,7 +634,7 @@ Its fixtures are synthetic and explicitly not a production accuracy measurement.
 validated benchmark and claim-level evidence verifier remain future work; no production
 accuracy percentage should be claimed yet.
 
-## 12. Project Progress Report MVP
+## 12. Project and Portfolio Progress Report MVP
 
 ### 12.1 Chat Flow
 
@@ -648,18 +679,24 @@ sequenceDiagram
 ```
 
 ```text
-User asks for a Project Progress Report
-  -> resolve canonical project
-  -> report_preview_project_progress
+User asks for a Project or Portfolio Progress Report
+  -> resolve canonical project when project-scoped
+  -> report_preview_project_progress or report_preview_portfolio_progress
   -> display scope, latest cutoff, sections, freshness, missing sources, PDF/DOCX
   -> wait for explicit confirmation
-  -> report_generate_project_progress with session/project-bound preview token
+  -> matching generate tool with a session/scope-bound preview token
   -> build one deterministic dataset
   -> generate constrained executive narrative (or deterministic fallback)
   -> render PDF and DOCX from the same dataset
   -> persist owner-scoped artifacts
   -> return authenticated download buttons in chat
 ```
+
+Project comparison report requests follow the same two-turn safety contract. The first turn
+returns the in-chat comparison dashboard and calls `report_preview_project_comparison`, which
+lists PDF/DOCX scope and issues a session/project-set-bound preview token. Only a later explicit
+confirmation may call `report_generate_project_comparison`; both download links are owner- and
+tenant-authorized and use the normal 24-hour artifact expiry.
 
 ### 12.2 Canonical Dataset
 
@@ -672,6 +709,12 @@ User asks for a Project Progress Report
 - TC transmission summary.
 - Pulse NC/RFI summary.
 - Missing-source disclosure.
+- Daily completion and current-month block-progress visualization data.
+
+For portfolio scope it builds one corresponding dataset containing the latest synchronized
+project schedule snapshots, summary counts, project progress/status rows, and portfolio
+comparison/status visualization data. “Current period” means the current calendar month
+through the latest synchronized cutoff available to the report.
 
 All numbers come from deterministic services. The optional model writes only the executive
 paragraph from supplied facts. If structured output is invalid, contains planning text, or the
@@ -681,7 +724,10 @@ provider fails, deterministic prose is used.
 
 - PDF: ReportLab.
 - DOCX: `python-docx`.
-- Both use the same dataset and simple Akasha branding.
+- Both use the same canonical dataset and `VisualizationSpecV1` chart definitions, plus Akasha
+  branding, KPI summaries, and detail tables. The static Python adapter currently renders the
+  approved semantic chart shapes for PDF/DOCX; it does not recalculate chart values. Project
+  and portfolio reports are available in both formats.
 - Files are stored below `AKASHA_REPORT_ARTIFACT_DIR` or `backend/report_artifacts`.
 - Database records contain opaque ID, owner, tenant, path, MIME type, checksum, size, and
   expiry.
@@ -695,6 +741,9 @@ Generation is synchronous and can increase chat request latency. Files are local
 Preview signing keys are process-local, so an unconfirmed preview must be recreated after an
 API restart. There is no durable report queue, worker, retry workflow, XLSX renderer, report
 page, scheduling, or horizontal-storage design yet.
+Historical planned-versus-actual curves remain unavailable because dated DPR/P6 planned and
+actual snapshots are not persisted; reports disclose this limitation and do not fabricate a
+curve.
 
 ## 13. Rollout and Recovery
 

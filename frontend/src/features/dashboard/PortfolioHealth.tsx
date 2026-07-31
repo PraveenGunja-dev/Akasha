@@ -11,7 +11,12 @@ export default function PortfolioHealth({ p6Data, logisticsData }: any) {
     xAxis: { type: 'value', max: 100, axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)', formatter: '{value}%' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
     yAxis: { type: 'category', data: p6Data.map((p:any) => p.name).slice(0, 5), axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)', width: 120, overflow: 'truncate' } },
     series: [
-      { name: 'Progress', type: 'bar', data: p6Data.map((p:any) => p.durationPercentComplete || 0).slice(0, 5), itemStyle: { color: '#3B82F6', borderRadius: [0, 4, 4, 0] } }
+      {
+        name: 'Progress',
+        type: 'bar',
+        data: p6Data.map((p:any) => p.progressPercentComplete ?? p.duration_percent_complete ?? 0).slice(0, 5),
+        itemStyle: { color: '#3B82F6', borderRadius: [0, 4, 4, 0] },
+      }
     ]
   };
 

@@ -4,6 +4,7 @@ import ReactECharts from "echarts-for-react";
 import { useSearchParams } from "react-router-dom";
 import { Activity, Zap, Sun, Wind, Calendar, ServerCrash, RefreshCw, TrendingUp, TrendingDown, Info, Layers } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 const containerVariants: any = {
   hidden: { opacity: 0 },
@@ -280,8 +281,7 @@ export default function CapacityOverview() {
   useEffect(() => {
     setLoading(true);
     const url = portfolio ? `/akasha/api/dashboard/capacity-overview?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/dashboard/capacity-overview';
-    fetch(url)
-      .then(res => res.json())
+    getCachedDashboardJson<CapacityData>(url)
       .then(d => {
         setData(d);
         setLoading(false);

@@ -12,7 +12,7 @@ The central brain of the chatbot. Ties together:
 import time
 import json
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from sqlalchemy.orm import Session
 
@@ -33,6 +33,7 @@ class ChatResponse:
     data_as_of: str | None
     sources_used: list[str]
     latency_ms: int
+    evidence: list[dict] = field(default_factory=list)
 
 
 class ChatOrchestrator:
@@ -55,7 +56,9 @@ class ChatOrchestrator:
         if is_deep_analysis:
             from engine.agent import run_deep_analysis_agent
             logger.info("Routing to Deep Analysis Agent (ReAct Loop)")
-            content, tools_used = run_deep_analysis_agent(db, message, history)
+            content, tools_used = run_deep_analysis_agent(
+                db, message, history, allowed_projects=project_names
+            )
             latency = int((time.time() - t0) * 1000)
             
             return ChatResponse(
@@ -122,6 +125,7 @@ class ChatOrchestrator:
         image_data: str = None,
         request_id: str = None,
         tool_names_out: list[str] = None,
+        evidence_out: list[dict] = None,
     ):
         """Streaming version of process_message."""
         t0 = time.time()
@@ -152,6 +156,8 @@ class ChatOrchestrator:
                 request_id=request_id,
                 session_id=session_id,
                 tool_names_out=tools_used,
+                evidence_out=evidence_out,
+                allowed_projects=project_names,
             ):
                 if isinstance(chunk, dict):
                     if chunk.get("type") == "tools_used":
@@ -229,22 +235,22 @@ class ChatOrchestrator:
         cluster/region project counts, and status breakdown. Capacity numbers come from
         the same source the dashboard uses (get_capacity_overview) so the chatbot agrees
         with the UI's COD figure."""
-        from sqlalchemy import func
-        import models
+        from collections import Counter
+        from services.project_catalog_service import ProjectCatalogService
 
         # Cluster breakdown (e.g. 'Solar Khavda' -> 46, 'Wind' -> 9, ...)
-        clusters = {}
-        for cluster, cnt in db.query(
-            models.ProjectMapping.cluster, func.count()
-        ).group_by(models.ProjectMapping.cluster).all():
-            if cluster and str(cluster).strip():
-                clusters[str(cluster).strip()] = cnt
+        projects = ProjectCatalogService.list_projects(db)
+        clusters = dict(Counter(
+            str(project.cluster).strip()
+            for project in projects
+            if project.cluster and str(project.cluster).strip()
+        ))
 
-        # Capacity / COD — reuse the dashboard's authoritative computation.
+        # Capacity / COD - reuse the canonical service through its tool adapter.
         capacity = {}
         try:
-            from routers.dashboard import get_capacity_overview
-            cap = get_capacity_overview(None, db)
+            from engine.tools.capacity_tools import capacity_get_portfolio_overview
+            cap = capacity_get_portfolio_overview(db)
             totals = cap.get("totals", {}) or {}
             total_cod = (totals.get("solar_cod", 0) or 0) + (totals.get("wind_cod", 0) or 0)
             total_tr = (totals.get("solar_tr", 0) or 0) + (totals.get("wind_tr", 0) or 0)
@@ -258,16 +264,8 @@ class ChatOrchestrator:
         except Exception as e:
             logger.warning(f"portfolio capacity facts unavailable: {e}")
 
-        mapped_projects = db.query(models.ProjectMapping).filter(
-            ~func.lower(func.coalesce(
-                models.ProjectMapping.project_name_from_p6,
-                models.ProjectMapping.project,
-                "",
-            )).contains("demo")
-        )
-
         return {
-            "total_projects": mapped_projects.count(),
+            "total_projects": len(projects),
             "capacity_mw": capacity,
             "projects_by_cluster": clusters,
         }
@@ -283,13 +281,23 @@ class ChatOrchestrator:
         
         # Resolve project names to IDs
         resolved_pids = []
+        ambiguous_resolutions = []
         for p in intent.projects:
             result = portfolio_resolve_project_id(db, p)
-            if result:
-                pid = result["project_id"] if isinstance(result, dict) else result
-                resolved_pids.append(pid)
+            if isinstance(result, dict) and result.get("project_id"):
+                resolved_pids.append(result["project_id"])
+            elif isinstance(result, dict) and result.get("status") == "ambiguous":
+                ambiguous_resolutions.append(result)
         
         if not resolved_pids:
+            if ambiguous_resolutions:
+                context_data["project_resolution"] = {
+                    "status": "ambiguous",
+                    "matches": ambiguous_resolutions,
+                    "instruction": "Ask the user to choose one project before answering.",
+                }
+                sources.add("project_mapping")
+                return context_data, freshness_info, list(sources)
             # Portfolio-level question (no specific project). Always attach portfolio facts —
             # capacity/COD MW and cluster/region counts — so questions like "what is the COD
             # generated" or "how many Khavda projects" can be answered instead of getting

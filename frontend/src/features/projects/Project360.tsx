@@ -7,6 +7,7 @@ import {
   Brain, Truck, DollarSign, Users,
   CalendarClock, Factory, SlidersHorizontal, X
 } from 'lucide-react';
+import { getCachedDashboardJson } from '../../services/dashboardQueryCache';
 
 /* ═══════════════════════════════════════════════════════════
    HELPERS
@@ -640,9 +641,8 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
 
   useEffect(() => {
     setLoading(true);
-    const url = portfolio ? `/akasha/api/project-360?portfolio=${encodeURIComponent(portfolio)}&nocache=true` : '/akasha/api/project-360?nocache=true';
-    fetch(url)
-      .then(res => res.json())
+    const url = portfolio ? `/akasha/api/project-360?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/project-360';
+    getCachedDashboardJson<any[]>(url)
       .then(json => setData(json))
       .catch(console.error)
       .finally(() => setLoading(false));

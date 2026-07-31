@@ -48,13 +48,30 @@ re-query tools whenever the user asks for current operational information.
 For project progress, use P6 duration_percent_complete as overall progress. Keep activity-count
 completion separate, and never reconstruct unavailable SPI/CPI or classify schedule/health from
 an indicator that the tool reports as unavailable.
+For block progress over last month or this month, call p6_get_block_period_progress. Rank only by
+the returned completion-event basis, preserve ties, and state when historical percentage delta is unavailable.
 For monthly or yearly activity finish questions, call sim_forecast_activity_finishes. Lead with the
 exact current P6 count scheduled to finish in the target period, then concisely report the tool's
 likely range, risk, confidence, and data date. Do not substitute total project activity counts.
+Use render_chart when the user explicitly asks for a chart, graph, plot, or visualization. Also use
+it automatically for daily trends, project comparisons, block comparisons, distributions, and
+rankings when an approved chart type matches. Prefer daily_completion_trend for dated progress
+trends, project_comparison for two or more projects, and block_progress for block snapshots. A chart
+must accompany, not replace, a concise textual finding. Generate no more than four charts per turn.
+Historical planned-versus-actual progress curves are unavailable. If asked for that curve, say that
+the required historical snapshots are unavailable and do not substitute an unrelated chart.
 For a Project Progress Report request, resolve the project and call report_preview_project_progress.
 Present the preview and stop. Only after the user explicitly confirms may you call
 report_generate_project_progress with the exact preview token. Return both generated download URLs
 exactly as Markdown links and state their expiry.
+For a Portfolio Progress Report request, call report_preview_portfolio_progress without resolving a
+single project. Present the current-month scope and stop. After explicit confirmation, call
+report_generate_portfolio_progress with the exact preview token and return both download URLs.
+For a request to compare two or more projects and provide a report, render the in-chat comparison
+dashboard and call report_preview_project_comparison with the canonical project IDs in the same
+order. End the answer by asking whether the user wants the PDF and DOCX generated. Do not call
+report_generate_project_comparison until a later turn explicitly confirms the preview. On
+confirmation, pass the exact project IDs and preview token and return both download URLs.
 
 """ + EXECUTIVE_RESPONSE_GUIDANCE
 
@@ -386,6 +403,7 @@ def build_chat_graph(
         results = []
         visualizations = list(state.get("visualizations") or [])
         tool_names = list(state.get("tool_names") or [])
+        evidence = list(state.get("evidence") or [])
         runtime = _runtime(state)
         for call in last_message.tool_calls:
             name = str(call.get("name") or "")
@@ -401,11 +419,21 @@ def build_chat_graph(
             ))
             if name and name not in tool_names:
                 tool_names.append(name)
-            if execution.visualization is not None:
-                visualizations.append(execution.visualization)
+            emitted = execution.visualizations or (
+                (execution.visualization,) if execution.visualization is not None else ()
+            )
+            for visualization in emitted:
+                if len(visualizations) >= 4:
+                    break
+                visualizations.append(visualization)
+            for item in execution.evidence:
+                evidence_item = {**item, "tool_call_id": str(call.get("id"))}
+                if evidence_item not in evidence:
+                    evidence.append(evidence_item)
         return {
             "messages": results,
             "tool_names": tool_names,
+            "evidence": evidence,
             "visualizations": visualizations,
         }
 

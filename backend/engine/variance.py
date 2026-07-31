@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
+from services.project_catalog_service import ProjectCatalogService
 
 logger = logging.getLogger(__name__)
 
@@ -475,11 +476,9 @@ def compute_tc_variance(db: Session, project_id: str) -> dict:
     NOTE: Currently returns empty — TC edges are 0 for mapped projects.
     The module is built so it activates when Transmission API data arrives.
     """
-    from services.project_service import filter_tc_edges_by_kps
+    from services import transmission_service
 
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == project_id
-    ).first()
+    mapping, project_entries, tc_edges = transmission_service.project_edges(db, project_id)
 
     empty_result = {
         "summary": {
@@ -497,38 +496,6 @@ def compute_tc_variance(db: Session, project_id: str) -> dict:
     if not mapping:
         return empty_result
 
-    # Get TC project entries linked to this mapping
-    project_entries = db.query(models.TcProjectEntry).filter(
-        models.TcProjectEntry.mapping_id == mapping.id
-    ).all()
-
-    # Get TC edges via phase matching + KPS filtering (reuse existing logic)
-    phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
-
-    tc_edges = []
-    if phases:
-        all_edges = db.query(models.TcNetworkEdge).all()
-        filtered = []
-        for edge in all_edges:
-            edge_phases = set()
-            if edge.projects:
-                try:
-                    parsed = json.loads(edge.projects)
-                    if isinstance(parsed, dict):
-                        edge_phases = set(str(p).strip().upper() for p in parsed.get("phases", []))
-                except Exception:
-                    pass
-            if phases.intersection(edge_phases):
-                filtered.append(edge)
-        tc_edges = filter_tc_edges_by_kps(filtered, project_entries)
-
-    # Also include direct mappings
-    direct_edges = db.query(models.TcNetworkEdge).filter(
-        models.TcNetworkEdge.mapping_id == mapping.id
-    ).all()
-    tc_edges.extend(direct_edges)
-    tc_edges = list({e.id: e for e in tc_edges}.values())
-
     if not tc_edges:
         return empty_result
 
@@ -542,26 +509,26 @@ def compute_tc_variance(db: Session, project_id: str) -> dict:
     at_risk_lines = []
 
     for edge in tc_edges:
-        f_pct = _parse_pct(edge.foundation)
-        e_pct = _parse_pct(edge.erection)
-        s_pct = _parse_pct(edge.stringing)
-        avg_progress = (f_pct + e_pct + s_pct) / 3
+        f_pct = transmission_service.parse_progress(edge.foundation) or 0
+        e_pct = transmission_service.parse_progress(edge.erection) or 0
+        s_pct = transmission_service.parse_progress(edge.stringing) or 0
+        avg_progress = transmission_service.average_progress(edge) or 0
 
         total_foundation.append(f_pct)
         total_erection.append(e_pct)
         total_stringing.append(s_pct)
 
         # Status classification
-        status_lower = (edge.normalized_status or edge.status or "").lower()
-        if "completed" in status_lower or "commissioned" in status_lower:
+        status = transmission_service.canonical_status(edge)
+        if status == "completed":
             completed += 1
-        elif avg_progress > 0:
+        elif status == "in_progress":
             in_progress += 1
         else:
             not_started += 1
 
         # At-risk detection
-        exp_date = _parse_date_str(edge.expected_date)
+        exp_date = transmission_service.parse_date(edge.expected_date)
         days_remaining = (exp_date - today).days if exp_date else None
 
         if days_remaining is not None and days_remaining < 60 and avg_progress < 50:
@@ -683,39 +650,9 @@ def _resolve_project_id(db: Session, name_or_id: str) -> str | None:
     """Resolve a project name or ID to a valid project_id from project_mapping."""
     if not name_or_id or name_or_id == "Entire Portfolio":
         return None
-
-    # Try direct project_id match first
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == name_or_id
-    ).first()
-    if mapping:
-        return mapping.project_id
-
-    # Try matching against P6 project name
-    p6 = db.query(models.P6Project).filter(
-        models.P6Project.name == name_or_id
-    ).first()
-    if p6:
-        mapping = db.query(models.ProjectMapping).filter(
-            models.ProjectMapping.project_id == p6.project_id
-        ).first()
-        if mapping:
-            return mapping.project_id
-
-    # Try matching against project_mapping.project field
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project == name_or_id
-    ).first()
-    if mapping and mapping.project_id:
-        return mapping.project_id
-
-    # Try matching against project_mapping.project_name_from_p6
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_name_from_p6 == name_or_id
-    ).first()
-    if mapping and mapping.project_id:
-        return mapping.project_id
-
+    resolution = ProjectCatalogService.resolve(db, name_or_id)
+    if resolution.status == "resolved" and resolution.project:
+        return resolution.project.project_id
     return None
 
 

@@ -159,6 +159,19 @@ Feature State:
 * Memoize expensive calculations.
 * Avoid unnecessary re-renders.
 
+## Chat Visualization Contract
+
+Chat visualizations are isolated in `features/chatbot/ChatVisualizationGrid.tsx` with their
+transport types in `features/chatbot/visualizationTypes.ts`. New messages carry a validated,
+renderer-neutral `VisualizationSpecV1`; `visualizationAdapter.ts` converts it to ECharts locally.
+Legacy stored ECharts options remain supported. The responsive grid is capped at four cards,
+and every card includes a plain-language takeaway, data freshness, an accessible description,
+a table fallback, and a full-screen view. The chat message component owns neither chart
+construction nor business metric calculations.
+Comparison dashboards deliberately mix appropriate chart grammars—radial progress, stacked
+horizontal composition, grouped vertical duration, and lollipop variance—rather than repeating
+one bar-chart layout for every metric.
+
 ## UI Quality Standards
 
 Design should feel similar to:

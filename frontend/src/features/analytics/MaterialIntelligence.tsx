@@ -80,7 +80,7 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
             <tbody>
               {(logDetails || []).map((item: any, idx: number) => (
                 <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
-                  <td className="px-4 py-3 font-mono text-xs text-primary">{item.po_number || 'N/A'}</td>
+                  <td className="px-4 py-3 font-mono text-xs text-primary">{item.purchasing_document || item.po_number || 'N/A'}</td>
                   <td className="px-4 py-3 text-muted-foreground font-medium">Plant {item.plant_code}</td>
                   <td className="px-4 py-3 font-mono text-xs text-muted-foreground">{item.material_code}</td>
                   <td className="px-4 py-3 text-right font-medium text-warning">{item.still_to_deliver_qty?.toFixed(2)}</td>

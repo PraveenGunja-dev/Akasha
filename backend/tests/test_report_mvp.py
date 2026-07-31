@@ -6,14 +6,35 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import patch
 
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-from services.report_mvp_service import create_preview_token, generate_narrative, validate_preview_token
-from services.report_renderers import render_project_progress_docx, render_project_progress_pdf
+from database import Base
+import models
+from services.report_mvp_service import (
+    build_project_comparison_dataset,
+    build_project_progress_dataset,
+    build_portfolio_progress_dataset,
+    create_preview_token,
+    create_project_comparison_preview,
+    generate_narrative,
+    generate_project_comparison_report,
+    validate_preview_token,
+)
+from services.report_renderers import (
+    _capacity_rows,
+    _risk_rows,
+    render_project_progress_docx,
+    render_project_progress_pdf,
+    render_portfolio_progress_docx,
+    render_portfolio_progress_pdf,
+)
 
 
 def report_dataset():
@@ -41,6 +62,36 @@ def report_dataset():
         "procurement": {"has_data": False, "reason": "No mapped data"},
         "transmission": {"has_data": False, "reason": "No mapped data"},
         "quality": {"has_data": False, "non_conformances": 0, "rfis": 0},
+        "capacity": {
+            "projects": [{
+                "total_capacity": 100,
+                "cod_mw": 25,
+                "tr_mw": 12.5,
+                "remaining_capacity": 62.5,
+            }],
+            "metadata": {"formula": {"version": "dashboard-capacity-overview-v1"}},
+        },
+        "risk": {
+            "project360.status_tier": {
+                "metric_id": "project360.status_tier",
+                "name": "Project360 status tier",
+                "value": "Watchlist",
+            },
+        },
+        "report_visualizations": {
+            "daily_completion_trend": {
+                "daily": [
+                    {"date": "2026-07-30", "activities_completed": 1, "cumulative_activity_finish_pct": 20},
+                    {"date": "2026-07-31", "activities_completed": 2, "cumulative_activity_finish_pct": 30},
+                ],
+            },
+            "block_progress": {
+                "blocks": [
+                    {"block": "BLOCK-01", "current_activity_completion_pct": 75},
+                    {"block": "BLOCK-02", "current_activity_completion_pct": 42},
+                ],
+            },
+        },
         "in_progress_activities": {
             "activities": [{"activity_id": "A-1", "name": "Foundation", "percent_complete": 75.0}],
         },
@@ -48,6 +99,30 @@ def report_dataset():
 
 
 class ReportMvpTests(unittest.TestCase):
+    def test_dataset_supports_catalog_project_without_p6(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        db.add(models.ProjectMapping(
+            project_id="MAP-1",
+            project="Mapping Only",
+            project_name_from_p6="Mapping Only Project",
+            capacity_mwac=100,
+        ))
+        db.commit()
+
+        dataset = build_project_progress_dataset(db, "MAP-1")
+
+        self.assertEqual(dataset["metadata"]["project_name"], "Mapping Only Project")
+        self.assertFalse(dataset["project_summary"]["p6_available"])
+        self.assertIsNone(dataset["schedule"]["progress_pct"])
+        self.assertIn("P6", dataset["metadata"]["missing_sources"])
+        self.assertEqual(dataset["in_progress_activities"]["activities"], [])
+        with patch.dict(os.environ, {"AKASHA_REPORT_AI_NARRATIVE": "false"}):
+            self.assertIn("P6 schedule facts are unavailable", generate_narrative(dataset))
+        db.close()
+        engine.dispose()
+
     def test_preview_token_is_bound_to_session_and_project(self):
         token = create_preview_token("session-a", "FY26-P18")
         validate_preview_token(token, "session-a", "FY26-P18")
@@ -67,6 +142,98 @@ class ReportMvpTests(unittest.TestCase):
             self.assertGreater(docx.stat().st_size, 10_000)
             self.assertEqual(pdf.read_bytes()[:4], b"%PDF")
             self.assertEqual(docx.read_bytes()[:2], b"PK")
+
+    def test_capacity_and_named_risk_sections_use_authoritative_facts(self):
+        dataset = report_dataset()
+        self.assertIn(("COD", "25 MW"), _capacity_rows(dataset["capacity"]))
+        self.assertIn(
+            ("Project360 status tier", "Watchlist"),
+            _risk_rows(dataset["risk"]),
+        )
+
+    def test_portfolio_report_dataset_and_renderers(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        db.add(models.ProjectMapping(
+            project_id="PORT-1",
+            project="Portfolio Project",
+            project_name_from_p6="Portfolio Project P6",
+        ))
+        db.add(models.P6Project(
+            p6_object_id=901,
+            project_id="PORT-1",
+            duration_percent_complete=0.6,
+        ))
+        db.commit()
+
+        dataset = build_portfolio_progress_dataset(db)
+        dataset["executive_summary"] = "A grounded portfolio summary suitable for rendering."
+        self.assertEqual(dataset["summary"]["total_projects"], 1)
+        self.assertEqual(dataset["metadata"]["period"], "current_month")
+        self.assertEqual(dataset["report_visualizations"]["project_progress"]["schema_version"], "visualization.v1")
+        self.assertEqual(dataset["report_visualizations"]["schedule_status"]["shape"], "donut")
+        with TemporaryDirectory() as directory:
+            pdf = Path(directory) / "portfolio.pdf"
+            docx = Path(directory) / "portfolio.docx"
+            render_portfolio_progress_pdf(dataset, pdf)
+            render_portfolio_progress_docx(dataset, docx)
+            self.assertEqual(pdf.read_bytes()[:4], b"%PDF")
+            self.assertEqual(docx.read_bytes()[:2], b"PK")
+        db.close()
+        engine.dispose()
+
+    def test_comparison_report_preview_requires_confirmation_and_generates_both_formats(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        db.add_all([
+            models.ProjectMapping(
+                project_id="CMP-1", project="Comparison One",
+                project_name_from_p6="Comparison One", capacity_mwac=125, spv_name="SPV One",
+            ),
+            models.ProjectMapping(
+                project_id="CMP-2", project="Comparison Two",
+                project_name_from_p6="Comparison Two", capacity_mwac=150, spv_name="SPV Two",
+            ),
+            models.P6Project(
+                p6_object_id=1001, project_id="CMP-1", duration_percent_complete=0.91,
+                planned_duration=4000, actual_duration=3500, remaining_duration=500,
+                baseline_finish_date=__import__("datetime").datetime(2026, 6, 1),
+                finish_date=__import__("datetime").datetime(2026, 8, 1),
+                data_date=__import__("datetime").datetime(2026, 7, 1),
+            ),
+            models.P6Project(
+                p6_object_id=1002, project_id="CMP-2", duration_percent_complete=0.94,
+                planned_duration=4800, actual_duration=3900, remaining_duration=900,
+                baseline_finish_date=__import__("datetime").datetime(2026, 7, 1),
+                finish_date=__import__("datetime").datetime(2026, 9, 15),
+                data_date=__import__("datetime").datetime(2026, 7, 8),
+            ),
+        ])
+        db.commit()
+        runtime = SimpleNamespace(
+            session_id="comparison-session", user_id="user-1", tenant_id="tenant-1"
+        )
+        preview = create_project_comparison_preview(db, runtime, ["CMP-1", "CMP-2"])
+        self.assertEqual(preview["status"], "awaiting_confirmation")
+        self.assertEqual(preview["formats"], ["PDF", "DOCX"])
+        dataset = build_project_comparison_dataset(db, ["CMP-1", "CMP-2"])
+        self.assertEqual(
+            [spec["shape"] for spec in dataset["report_visualizations"].values()],
+            ["radial_progress", "horizontal_bar", "vertical_bar", "lollipop"],
+        )
+        with TemporaryDirectory() as directory, patch.dict(
+            os.environ, {"AKASHA_REPORT_ARTIFACT_DIR": directory}
+        ):
+            generated = generate_project_comparison_report(
+                db, runtime, ["CMP-1", "CMP-2"], preview["preview_token"]
+            )
+            self.assertEqual(generated["status"], "generated")
+            self.assertEqual([row["format"] for row in generated["downloads"]], ["PDF", "DOCX"])
+            self.assertTrue(all((Path(directory) / row["filename"]).exists() for row in generated["downloads"]))
+        db.close()
+        engine.dispose()
 
     def test_valid_structured_narrative_is_used(self):
         expected = (
