@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from collections import defaultdict
+from bisect import bisect_right
+from math import ceil
 import re
 from typing import Any, Literal
 
@@ -520,6 +522,119 @@ class ScheduleMetricsService:
             "total_activities": total_activities,
             "completion_events_in_period": completion_events,
             "daily": daily,
+            "data_as_of": project.data_date.isoformat() if project.data_date else None,
+            "last_synced_at": project.last_synced_at.isoformat() if project.last_synced_at else None,
+            "warnings": warnings,
+        }
+
+    @classmethod
+    def get_planned_vs_actual_activity_progress(
+        cls,
+        db: Session,
+        project_id: str,
+        *,
+        max_points: int = 60,
+    ) -> dict[str, Any]:
+        """Compare cumulative planned and actual activity finishes through the P6 cutoff.
+
+        This is a dated activity-finish S-curve built from the current P6 schedule. It is
+        intentionally distinct from historical duration-percent snapshots, which are not
+        persisted by the current schema.
+        """
+        if not 12 <= max_points <= 120:
+            raise ValueError("max_points must be between 12 and 120")
+
+        project = db.query(models.P6Project).filter(
+            models.P6Project.project_id == project_id
+        ).first()
+        if project is None:
+            return {
+                "p6_available": False,
+                "project_id": project_id,
+                "timeline": [],
+            }
+
+        anchor = _date_value(project.data_date) or datetime.utcnow().date()
+        activities = db.query(models.P6Activity).filter(
+            models.P6Activity.project_object_id == project.p6_object_id
+        ).all()
+        total_activities = len(activities)
+        planned_dates = sorted(
+            value for value in (_date_value(row.planned_finish_date) for row in activities)
+            if value is not None
+        )
+        actual_dates = sorted(
+            value for value in (_date_value(row.actual_finish_date) for row in activities)
+            if value is not None and value <= anchor
+        )
+        dated_through_cutoff = [value for value in planned_dates if value <= anchor] + actual_dates
+        if total_activities == 0 or not planned_dates or not dated_through_cutoff:
+            return {
+                "p6_available": True,
+                "has_data": False,
+                "project_id": project_id,
+                "project_name": project.name,
+                "timeline": [],
+                "data_as_of": project.data_date.isoformat() if project.data_date else None,
+                "last_synced_at": project.last_synced_at.isoformat() if project.last_synced_at else None,
+                "warnings": ["Planned activity finish dates are unavailable through the current P6 cutoff."],
+            }
+
+        start = min(dated_through_cutoff)
+        span_days = max(0, (anchor - start).days)
+        bucket_days = max(1, ceil(max(1, span_days) / (max_points - 1)))
+        checkpoints = []
+        cursor = start
+        while cursor < anchor:
+            checkpoints.append(cursor)
+            cursor += timedelta(days=bucket_days)
+        if not checkpoints or checkpoints[-1] != anchor:
+            checkpoints.append(anchor)
+
+        timeline = []
+        for checkpoint in checkpoints:
+            planned_count = bisect_right(planned_dates, checkpoint)
+            actual_count = bisect_right(actual_dates, checkpoint)
+            planned_pct = round(planned_count / total_activities * 100, 2)
+            actual_pct = round(actual_count / total_activities * 100, 2)
+            timeline.append({
+                "date": checkpoint.isoformat(),
+                "planned_completed_activities": planned_count,
+                "actual_completed_activities": actual_count,
+                "planned_activity_finish_pct": planned_pct,
+                "actual_activity_finish_pct": actual_pct,
+                "variance_pct_points": round(actual_pct - planned_pct, 2),
+            })
+
+        warnings = [
+            "This S-curve compares cumulative planned versus actual activity finishes from the current P6 schedule; it is not historical duration-percent progress."
+        ]
+        if len(planned_dates) < total_activities:
+            warnings.append(
+                f"{total_activities - len(planned_dates)} activities without a planned finish date remain in the project denominator."
+            )
+        if project.data_date is None:
+            warnings.append("P6 data_date is unavailable; the comparison is anchored to the server date.")
+
+        latest = timeline[-1]
+        return {
+            "p6_available": True,
+            "has_data": True,
+            "project_id": project_id,
+            "project_name": project.name,
+            "comparison_basis": "cumulative planned and actual activity finish events",
+            "period_start": start.isoformat(),
+            "period_end_inclusive": anchor.isoformat(),
+            "period_anchor": "p6_data_date" if project.data_date else "server_date_fallback",
+            "bucket_days": bucket_days,
+            "total_activities": total_activities,
+            "activities_with_planned_finish": len(planned_dates),
+            "activities_with_actual_finish_through_cutoff": len(actual_dates),
+            "current_planned_activity_finish_pct": latest["planned_activity_finish_pct"],
+            "current_actual_activity_finish_pct": latest["actual_activity_finish_pct"],
+            "current_variance_pct_points": latest["variance_pct_points"],
+            "historical_duration_progress_available": False,
+            "timeline": timeline,
             "data_as_of": project.data_date.isoformat() if project.data_date else None,
             "last_synced_at": project.last_synced_at.isoformat() if project.last_synced_at else None,
             "warnings": warnings,

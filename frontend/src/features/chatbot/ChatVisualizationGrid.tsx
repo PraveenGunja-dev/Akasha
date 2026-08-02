@@ -5,7 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import { BarChart3, CalendarDays, Maximize2, Minimize2, Table2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-import { visualizationSpecToECharts } from './visualizationAdapter';
+import { ensureReadableTooltip, visualizationSpecToECharts } from './visualizationAdapter';
 import { isVisualizationSpecV1, type ChartVisualization } from './visualizationTypes';
 
 interface ChatVisualizationGridProps {
@@ -47,7 +47,7 @@ function VisualizationCard({ visualization, index }: { visualization: ChartVisua
   const option = useMemo(
     () => semanticSpec
       ? visualizationSpecToECharts(semanticSpec)
-      : visualization.spec as EChartsOption,
+      : ensureReadableTooltip(visualization.spec as EChartsOption),
     [semanticSpec, visualization.spec],
   );
 

@@ -182,14 +182,14 @@ class ComparisonReportGenerateArguments(ComparisonReportArguments):
 
 class ChartArguments(ToolArguments):
     chart_type: Literal[
-        "auto", "activity_status", "project_comparison", "delayed_activities",
+        "auto", "auto_dashboard", "activity_status", "project_comparison", "delayed_activities",
         "material_gaps", "vendor_performance", "sap_po_fulfillment",
         "transmission_status", "portfolio_risk", "daily_completion_trend",
-        "block_progress",
+        "planned_vs_actual_progress", "block_progress",
     ]
     project_id: str | None = Field(default=None, max_length=200)
     project_ids: list[str] | None = Field(default=None, max_length=20)
-    domain_hint: str | None = Field(default=None, max_length=100)
+    domain_hint: str | None = Field(default=None, max_length=500)
     days: int = Field(default=30, ge=1, le=365)
     limit: int = Field(default=12, ge=1, le=20)
 
@@ -373,6 +373,17 @@ def execute_authenticated_tool(
     db = SessionLocal()
     try:
         _check_cancelled(db, runtime.run_id)
+        if (
+            name == "render_chart"
+            and validated.get("chart_type") == "auto_dashboard"
+            and not validated.get("project_id")
+            and not validated.get("project_ids")
+            and runtime.active_project_ids
+        ):
+            if len(runtime.active_project_ids) == 1:
+                validated["project_id"] = runtime.active_project_ids[0]
+            else:
+                validated["project_ids"] = list(runtime.active_project_ids[:4])
         if runtime.active_project_ids and _is_portfolio_tool(name, validated):
             raise PermissionError("Portfolio-wide access is outside the selected project scope.")
         project_ids = []

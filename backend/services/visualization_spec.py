@@ -131,6 +131,67 @@ def daily_completion_spec(data: dict, project_name: str | None = None) -> Visual
     )
 
 
+def planned_vs_actual_progress_spec(
+    data: dict,
+    project_name: str | None = None,
+) -> VisualizationSpecV1 | None:
+    rows = data.get("timeline") or []
+    if not rows:
+        return None
+    name = project_name or data.get("project_name") or "Project"
+    planned = data.get("current_planned_activity_finish_pct")
+    actual = data.get("current_actual_activity_finish_pct")
+    variance = data.get("current_variance_pct_points")
+    title = f"{name} - Planned vs Actual Activity Completion"
+    subtitle = (
+        "Cumulative activity finish S-curve through "
+        f"{data.get('period_end_inclusive') or data.get('data_as_of') or 'latest P6 cutoff'}"
+    )
+    summary = f"Planned completion is {planned}% and actual completion is {actual}% as of the cutoff."
+    if variance is not None:
+        direction = "ahead of" if variance > 0 else "behind" if variance < 0 else "equal to"
+        summary += f" Actual is {abs(variance)} percentage points {direction} plan."
+    return VisualizationSpecV1(
+        chart_id="project.planned-vs-actual-activity-progress",
+        chart_type="planned_vs_actual_progress",
+        shape="combo",
+        title=title,
+        subtitle=subtitle,
+        summary=summary,
+        accessibility_description=(
+            f"{title}. Two lines compare cumulative activities planned to finish with activities "
+            "that actually finished. This is not historical duration-percent progress."
+        ),
+        categories=[str(row["date"]) for row in rows],
+        series=[
+            VisualizationSeriesV1(
+                name="Planned activity finishes",
+                shape="line",
+                values=[row.get("planned_activity_finish_pct") for row in rows],
+                semantic_color="primary",
+                value_format="percent",
+            ),
+            VisualizationSeriesV1(
+                name="Actual activity finishes",
+                shape="line",
+                values=[row.get("actual_activity_finish_pct") for row in rows],
+                semantic_color="progress",
+                value_format="percent",
+            ),
+        ],
+        x_axis_title="Date",
+        y_axis_title="Cumulative activities completed (%)",
+        data_as_of=str(data.get("data_as_of")) if data.get("data_as_of") else None,
+        source_tables=list(data.get("sources") or ["p6_project", "p6_activity"]),
+        data_table=[{
+            "date": row["date"],
+            "planned_activity_finish_pct": row.get("planned_activity_finish_pct"),
+            "actual_activity_finish_pct": row.get("actual_activity_finish_pct"),
+            "variance_pct_points": row.get("variance_pct_points"),
+        } for row in rows],
+    )
+
+
 def block_progress_spec(data: dict, project_name: str | None = None, limit: int = 16) -> VisualizationSpecV1 | None:
     blocks = [
         row for row in (data.get("blocks") or [])

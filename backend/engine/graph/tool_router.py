@@ -131,6 +131,7 @@ _FOLLOW_UP = re.compile(
     r"\b(?:it|its|that|those|them|this project|that project|same project|above)\b",
     re.IGNORECASE,
 )
+_SHOW_ME = re.compile(r"^\s*(?:please\s+)?show\s+me\b", re.IGNORECASE)
 
 
 def _detected_domains(text: str) -> set[str]:
@@ -237,9 +238,17 @@ def select_tool_route(
         current_domains.add("p6")
     elif has_generic_status and "p6" not in current_domains and (
         len(current_domains & {"p6", "sap", "transmission", "portfolio"}) >= 2
+        or (
+            "visualization" in current_domains
+            and not current_domains.intersection({"sap", "transmission", "capacity", "quality", "risk"})
+            and re.search(r"\b(?:progress|schedule|activity|completion)\b", current, re.IGNORECASE)
+        )
         or re.search(r"\b(?:project|overall)\s+(?:progress|status|completion)\b", current, re.IGNORECASE)
     ):
         current_domains.add("p6")
+
+    if _SHOW_ME.search(current):
+        current_domains.add("visualization")
 
     operational = bool(
         current_domains
@@ -427,14 +436,6 @@ def select_tool_route(
     if "visualization" in current_domains:
         intent_parts.append("visualization")
         selected.add("render_chart")
-        if re.search(
-            r"\bplanned\b.{0,20}\b(?:vs\.?|versus|against)\b.{0,20}\bactual\b|"
-            r"\bactual\b.{0,20}\b(?:vs\.?|versus|against)\b.{0,20}\bplanned\b",
-            current,
-            re.IGNORECASE,
-        ) and re.search(r"\bprogress\b", current, re.IGNORECASE):
-            selected.discard("render_chart")
-            selected.add("p6_get_project_summary")
 
     selected &= available_set
     ordered = _ordered_names(selected, available)

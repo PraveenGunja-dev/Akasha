@@ -30,6 +30,12 @@ _UNSOLICITED_CLOSE = re.compile(
 )
 _EMOJI = re.compile(r"[\u2600-\u27bf\U0001f300-\U0001faff]")
 _HEADING = re.compile(r"(?m)^\s{0,3}#{1,6}\s+")
+_REPORT_PREVIEW_TOKEN = re.compile(
+    r"(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{20,}\.[0-9a-fA-F]{64}(?![A-Za-z0-9_-])"
+)
+_PREVIEW_TOKEN_LINE = re.compile(
+    r"(?im)^.*\bpreview[ _-]?token\b.*(?:\r?\n|$)"
+)
 
 
 def requests_expanded_answer(question: str) -> bool:
@@ -55,3 +61,18 @@ def needs_executive_rewrite(question: str, answer: str) -> bool:
 
 def rewrite_request(question: str, answer: str) -> str:
     return f"User question:\n{question.strip()}\n\nDraft answer:\n{answer.strip()}"
+
+
+def redact_sensitive_answer(answer: str) -> str:
+    """Remove report-confirmation secrets before an answer is persisted or streamed."""
+    if not answer:
+        return answer
+    contained_preview_secret = bool(
+        _REPORT_PREVIEW_TOKEN.search(answer) or _PREVIEW_TOKEN_LINE.search(answer)
+    )
+    redacted = _PREVIEW_TOKEN_LINE.sub("", answer)
+    redacted = _REPORT_PREVIEW_TOKEN.sub("[secure report confirmation]", redacted)
+    redacted = re.sub(r"\n{3,}", "\n\n", redacted).strip()
+    if not redacted and contained_preview_secret:
+        return "The report preview is ready. Please confirm when you want the report generated."
+    return redacted

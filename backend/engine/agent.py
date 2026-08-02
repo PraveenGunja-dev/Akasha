@@ -50,11 +50,17 @@ from engine.tools.simulation_tools import (
     sim_monsoon_impact, sim_material_bottlenecks, sim_forecast_completion,
     sim_forecast_activity_finishes,
 )
-from engine.tools.viz_tools import build_chart, build_project_comparison_dashboard, CHART_TYPES
+from engine.tools.viz_tools import (
+    CHART_TYPES,
+    build_chart,
+    build_project_comparison_dashboard,
+    build_show_me_dashboard,
+)
 from engine.kpi_engine import compute_project_kpis
 from engine.response_quality import (
     EXECUTIVE_REWRITE_INSTRUCTION,
     needs_executive_rewrite,
+    redact_sensitive_answer,
     rewrite_request,
 )
 
@@ -774,12 +780,13 @@ TOOLS = [
                 "properties": {
                     "chart_type": {
                         "type": "string",
-                        "enum": ["auto", "activity_status", "project_comparison", "delayed_activities",
+                        "enum": ["auto", "auto_dashboard", "activity_status", "project_comparison", "delayed_activities",
                                  "material_gaps", "vendor_performance", "sap_po_fulfillment",
                                  "transmission_status", "portfolio_risk", "daily_completion_trend",
-                                 "block_progress"],
+                                 "planned_vs_actual_progress", "block_progress"],
                         "description": (
                             "Which chart to draw. "
+                            "auto_dashboard=3-4 relevant charts for any request beginning with 'show me'; "
                             "activity_status=donut of one project's activities by status; "
                             "project_comparison=bar comparing % complete across 2+ projects; "
                             "delayed_activities=bar of one project's most-delayed activities; "
@@ -789,6 +796,7 @@ TOOLS = [
                             "transmission_status=donut of transmission line status (project or portfolio); "
                             "portfolio_risk=bar of the riskiest projects; "
                             "daily_completion_trend=line/bar chart of dated activity actual-finish events; "
+                            "planned_vs_actual_progress=two-line cumulative planned vs actual activity-finish S-curve; "
                             "block_progress=bar chart of current average activity completion by block; "
                             "auto=let the system choose based on subject and domain_hint."
                         )
@@ -1004,6 +1012,33 @@ def build_chart_result(db: Session, kwargs: dict):
     """
     requested_type = kwargs.get("chart_type", "auto")
     project_ids = kwargs.get("project_ids") or []
+    if requested_type == "auto_dashboard":
+        charts = build_show_me_dashboard(
+            db,
+            project_id=kwargs.get("project_id"),
+            project_ids=project_ids,
+            domain_hint=kwargs.get("domain_hint"),
+            days=kwargs.get("days", 30),
+            limit=kwargs.get("limit", 12),
+        )
+        if charts:
+            confirmation = json.dumps({
+                "status": "chart_dashboard_rendered",
+                "chart_type": "show_me_dashboard",
+                "chart_count": len(charts),
+                "titles": [chart.get("title") for chart in charts],
+            })
+            return {
+                "schema_version": "visualization.bundle.v1",
+                "chart_type": "show_me_dashboard",
+                "title": "Visual Overview",
+                "data_points": sum(int(chart.get("data_points") or 0) for chart in charts),
+                "charts": charts,
+            }, confirmation
+        return None, json.dumps({
+            "status": "no_data",
+            "message": "No authoritative visualization data is available for this request.",
+        })
     if requested_type in {"project_comparison", "auto"} and len(project_ids) >= 2:
         charts = build_project_comparison_dashboard(db, project_ids)
         if charts:
@@ -1259,7 +1294,7 @@ def _get_llm_client(vision: bool = False):
 
 def _apply_executive_quality_guard(provider, question: str, answer: str) -> str:
     if not needs_executive_rewrite(question, answer):
-        return answer
+        return redact_sensitive_answer(answer)
     try:
         rewritten = provider.invoke(
             [
@@ -1271,11 +1306,11 @@ def _apply_executive_quality_guard(provider, question: str, answer: str) -> str:
         )
         candidate = (rewritten.content or "").strip()
         if candidate and not needs_executive_rewrite(question, candidate):
-            return candidate
+            return redact_sensitive_answer(candidate)
         logger.warning("Legacy executive answer rewrite did not satisfy quality guard")
     except Exception as exc:
         logger.warning("Legacy executive answer rewrite failed (%s)", type(exc).__name__)
-    return answer
+    return redact_sensitive_answer(answer)
 
 
 def analyze_image_context(
@@ -1526,6 +1561,7 @@ def run_deep_analysis_agent_stream(
                 "- ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
                 "- All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours.\n"
                 "VISUALIZATIONS:\n"
+                "- If the latest request begins with 'show me', you MUST call `render_chart` exactly once with chart_type='auto_dashboard' and copy the complete request into domain_hint. This generates up to four relevant charts; do not substitute a single chart. Resolve a named project first and pass project_id.\n"
                 "- You can draw charts with the `render_chart` tool; they appear inline in the chat. Use it when the user asks for a chart/graph/visual/plot, or when a chart communicates the answer better than text (comparisons, rankings, status distributions, delays).\n"
                 "- YOU pick the chart_type that best fits the data. If the user explicitly asked for a specific format, use that. Use chart_type='auto' to let the system choose.\n"
                 "- The chart's data is pulled from the database automatically — never invent chart values. Resolve the project name to its project_id first, then call render_chart.\n"
@@ -1540,7 +1576,8 @@ def run_deep_analysis_agent_stream(
                 "- For block progress over a month or rolling day window, call `p6_get_block_period_progress`; preserve highest/lowest ties and disclose when true historical percentage delta is unavailable.\n"
                 "- For daily progress trends, call `p6_get_daily_completion_trend`. Describe it as an activity-completion event trend, never as historical duration-percent progress.\n"
                 "- For daily trends, project comparisons, block comparisons, distributions, and rankings, also call `render_chart` with the matching approved chart type even when the user does not explicitly say chart. Cap a response at four charts and accompany every chart with a concise textual finding.\n"
-                "- Historical planned-versus-actual progress curves are unavailable. Never substitute an activity-status or other unrelated chart for that request.\n"
+                "- Treat every supported request beginning with 'show me' as a multi-visualization dashboard request, including schedule, procurement, transmission, capacity, quality, risk, forecast, and portfolio topics.\n"
+                "- For planned-versus-actual progress, call `render_chart` with chart_type='planned_vs_actual_progress'. Describe it accurately as a cumulative planned-versus-actual activity-finish S-curve from the current P6 schedule, not as historical duration-percent snapshots.\n"
                 "- Completed activities / total activities is an activity-count ratio, not overall P6 progress. Label it separately if useful.\n"
                 "- Call `get_project_kpis` only when the user explicitly asks for the health or health score of one named project. Never use it for general summaries, progress, risk, procurement, transmission, portfolio, report, or forecast questions. Use its returned EV/PV/SPI/CPI/SV/CV and health values without calculating alternatives.\n\n"
                 + EXECUTIVE_RESPONSE_GUIDANCE

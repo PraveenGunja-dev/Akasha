@@ -22,13 +22,20 @@ import logging
 from sqlalchemy.orm import Session
 
 from services.chart_spec_service import ChartSpecService
+from services.capacity_milestone_service import CapacityMilestoneService
 from services.project_catalog_service import ProjectCatalogService
+from services.quality_analytics_service import QualityAnalyticsService
+from services.schedule_metrics_service import ScheduleMetricsService
 from services.visualization_spec import (
+    VisualizationSeriesV1,
+    VisualizationSpecV1,
     activity_composition_spec,
     baseline_slip_spec,
     block_progress_spec,
     daily_completion_spec,
     duration_comparison_spec,
+    planned_vs_actual_progress_spec,
+    portfolio_status_spec,
     project_progress_spec,
 )
 
@@ -49,6 +56,7 @@ STATUS_COLORS = {
 
 # Chart types this engine can render, with the data shape each one fits.
 CHART_TYPES = {
+    "auto_dashboard": "Three or four domain-aware charts for broad 'show me' requests.",
     "activity_status": "Rose chart of a project's activities by status (Completed / In Progress / Not Started).",
     "project_comparison": "Horizontal bar comparing % complete across multiple projects.",
     "delayed_activities": "Horizontal bar of a project's most-delayed activities by days of drift.",
@@ -58,6 +66,7 @@ CHART_TYPES = {
     "transmission_status": "Rose chart of a project's (or the portfolio's) transmission lines by status.",
     "portfolio_risk": "Lollipop ranking of the riskiest projects across the portfolio by risk score.",
     "daily_completion_trend": "Daily activity actual-finish events with cumulative completion-event context.",
+    "planned_vs_actual_progress": "Cumulative planned versus actual activity-finish S-curve through the P6 data cutoff.",
     "block_progress": "Horizontal bar of the current average activity completion by project block.",
 }
 
@@ -468,7 +477,10 @@ def _chart_delayed_activities(db: Session, project_id: str, limit: int = 12) -> 
         return _no_data("delayed_activities", f"No delayed activities found for {_display_name(db, project_id)}.")
 
     name = data["project_name"]
-    categories = [a["name"][:40] for a in acts]
+    categories = [
+        str(a.get("name") or a.get("activity_id") or "Unnamed activity")[:40]
+        for a in acts
+    ]
     values = [a["drift_days"] for a in acts]
     # Color by severity: critical-path (float<=0) red, otherwise amber warning.
     colors_per_bar = [STATUS_COLORS["delayed"] if a.get("is_critical") else STATUS_COLORS["at_risk"] for a in acts]
@@ -738,6 +750,101 @@ def _chart_daily_completion_trend(db: Session, project_id: str, days: int = 30) 
     }
 
 
+def _chart_planned_vs_actual_progress(db: Session, project_id: str) -> dict:
+    data = ChartSpecService.planned_vs_actual_progress(db, project_id)
+    rows = data.get("timeline") or []
+    if not rows:
+        return _no_data(
+            "planned_vs_actual_progress",
+            f"No planned-versus-actual activity finish data found for {_display_name(db, project_id)}.",
+        )
+
+    semantic = planned_vs_actual_progress_spec(data, data.get("project_name"))
+    title = f"{data['project_name']} - Planned vs Actual Activity Completion"
+    subtitle = (
+        "Cumulative activity finish S-curve through "
+        f"{data.get('period_end_inclusive') or data.get('data_as_of') or 'latest P6 cutoff'}"
+    )
+    dates = [row["date"] for row in rows]
+    planned = [row["planned_activity_finish_pct"] for row in rows]
+    actual = [row["actual_activity_finish_pct"] for row in rows]
+    option = {
+        **_base_option(
+            f"{title}. Lines compare cumulative planned activity finishes with recorded actual "
+            "activity finishes. This is not historical duration-percent progress."
+        ),
+        "title": {
+            "text": title,
+            "subtext": subtitle,
+            "left": 18,
+            "top": 10,
+            "textStyle": {"color": "var(--foreground)", "fontSize": 15, "fontWeight": 700},
+            "subtextStyle": {"color": "var(--muted-foreground)", "fontSize": 11},
+        },
+        "tooltip": {**_tooltip("axis"), "axisPointer": {"type": "cross"}},
+        "legend": {
+            "top": 58,
+            "right": 18,
+            "textStyle": {"color": "var(--foreground)", "fontSize": 11},
+        },
+        "grid": {"left": 52, "right": 28, "top": 94, "bottom": 52, "containLabel": True},
+        "xAxis": {
+            **_cat_axis(dates),
+            "boundaryGap": False,
+            "axisLabel": {"color": "var(--muted-foreground)", "hideOverlap": True},
+        },
+        "yAxis": {
+            **_value_axis("{value}%"),
+            "name": "Cumulative activities",
+            "min": 0,
+            "max": 100,
+        },
+        "series": [
+            {
+                "name": "Planned activity finishes",
+                "type": "line",
+                "data": planned,
+                "smooth": 0.2,
+                "showSymbol": False,
+                "lineStyle": {"color": PALETTE[0], "width": 3},
+                "itemStyle": {"color": PALETTE[0]},
+            },
+            {
+                "name": "Actual activity finishes",
+                "type": "line",
+                "data": actual,
+                "smooth": 0.2,
+                "showSymbol": False,
+                "lineStyle": {"color": STATUS_COLORS["completed"], "width": 3},
+                "itemStyle": {"color": STATUS_COLORS["completed"]},
+                "areaStyle": {"color": STATUS_COLORS["completed"], "opacity": 0.06},
+            },
+        ],
+    }
+    planned_now = data["current_planned_activity_finish_pct"]
+    actual_now = data["current_actual_activity_finish_pct"]
+    variance = data["current_variance_pct_points"]
+    direction = "ahead of" if variance > 0 else "behind" if variance < 0 else "equal to"
+    summary = (
+        f"Planned completion is {planned_now}% and actual completion is {actual_now}% as of the cutoff. "
+        f"Actual is {abs(variance)} percentage points {direction} plan."
+    )
+    return {
+        "schema_version": "visualization.v1",
+        "chart_type": "planned_vs_actual_progress",
+        "title": title,
+        "subtitle": subtitle,
+        "summary": summary,
+        "accessibility_description": option["aria"]["description"],
+        "data_points": len(rows),
+        "data_as_of": data.get("data_as_of"),
+        "data_table": semantic.data_table if semantic is not None else rows,
+        "visualization_spec": _semantic_transport(semantic),
+        "option": option,
+        "_source_tables": data["sources"],
+    }
+
+
 def _chart_block_progress(db: Session, project_id: str, limit: int = 16) -> dict:
     data = ChartSpecService.block_progress(db, project_id)
     blocks = [
@@ -812,6 +919,455 @@ def _chart_block_progress(db: Session, project_id: str, limit: int = 16) -> dict
     }
 
 
+def _capacity_dashboard_charts(db: Session, project_id: str | None = None) -> list[dict]:
+    data = (
+        CapacityMilestoneService.get_project_status(db, project_id)
+        if project_id else CapacityMilestoneService.get_portfolio_overview(db)
+    )
+    rows = data.get("projects") or []
+    if not rows:
+        return []
+    scope_name = rows[0]["project_name"] if project_id and len(rows) == 1 else "Portfolio"
+    freshness = (data.get("metadata") or {}).get("freshness") or {}
+    data_as_of = freshness.get("data_as_of")
+    sources = ["project_mapping", "p6_project", "p6_activity"]
+    specs = []
+
+    cod = round(sum(float(row.get("cod_mw") or 0) for row in rows), 2)
+    trial = round(sum(float(row.get("tr_mw") or 0) for row in rows), 2)
+    remaining = round(sum(float(row.get("remaining_capacity") or 0) for row in rows), 2)
+    status_buckets = [
+        ("COD", cod, "progress"),
+        ("Trial Run", trial, "primary"),
+        ("Remaining", remaining, "warning"),
+    ]
+    status_buckets = [item for item in status_buckets if item[1] > 0]
+    if status_buckets:
+        specs.append(VisualizationSpecV1(
+            chart_id="capacity.status-mw",
+            chart_type="capacity_status_mw",
+            shape="donut",
+            title=f"{scope_name} - Capacity Status",
+            subtitle="COD precedence applied; capacity in MW",
+            summary=f"{cod} MW is at COD, {trial} MW is at Trial Run, and {remaining} MW remains.",
+            accessibility_description="Donut chart showing COD, Trial Run, and remaining capacity in MW.",
+            categories=[item[0] for item in status_buckets],
+            series=[VisualizationSeriesV1(
+                name="Capacity",
+                shape="donut",
+                values=[item[1] for item in status_buckets],
+                semantic_color="primary",
+                value_format="decimal",
+                item_semantic_colors=[item[2] for item in status_buckets],
+            )],
+            data_as_of=data_as_of,
+            source_tables=sources,
+            data_table=[{"status": item[0], "capacity_mw": item[1]} for item in status_buckets],
+        ))
+
+    if project_id and len(rows) == 1:
+        blocks = rows[0].get("blocks") or []
+        if blocks:
+            specs.append(VisualizationSpecV1(
+                chart_id="capacity.blocks",
+                chart_type="capacity_blocks",
+                shape="horizontal_bar",
+                title=f"{scope_name} - Block Capacity",
+                subtitle="Capacity and milestone state by block or WTG",
+                summary=f"{len(blocks)} capacity blocks or WTGs are represented.",
+                accessibility_description="Horizontal bars show capacity by block or WTG and milestone state.",
+                categories=[str(row.get("block") or "Unknown") for row in blocks[:16]],
+                series=[VisualizationSeriesV1(
+                    name="Capacity",
+                    shape="bar",
+                    values=[row.get("capacity") for row in blocks[:16]],
+                    semantic_color="primary",
+                    value_format="decimal",
+                    item_semantic_colors=[
+                        "progress" if row.get("cod_status") == "Completed"
+                        else "primary" if row.get("trial_run_status") == "Completed"
+                        else "warning"
+                        for row in blocks[:16]
+                    ],
+                )],
+                x_axis_title="Capacity (MW)",
+                data_as_of=data_as_of,
+                source_tables=sources,
+                data_table=blocks[:16],
+            ))
+    else:
+        project_rows = [row for row in rows if float(row.get("total_capacity") or 0) > 0][:12]
+        if project_rows:
+            specs.append(VisualizationSpecV1(
+                chart_id="capacity.projects",
+                chart_type="capacity_by_project",
+                shape="horizontal_bar",
+                title="Portfolio - Capacity by Project",
+                summary="Projects are ranked by mapped or calculated capacity.",
+                accessibility_description="Horizontal bars compare project capacity in MW.",
+                categories=[str(row["project_name"]) for row in project_rows],
+                series=[VisualizationSeriesV1(
+                    name="Capacity",
+                    shape="bar",
+                    values=[row.get("total_capacity") for row in project_rows],
+                    semantic_color="primary",
+                    value_format="decimal",
+                )],
+                x_axis_title="Capacity (MW)",
+                data_as_of=data_as_of,
+                source_tables=sources,
+                data_table=project_rows,
+            ))
+
+    monthly = data.get("monthly_trends") or []
+    if monthly:
+        names = ["Solar COD", "Solar Trial Run", "Wind COD", "Wind Trial Run"]
+        colors = ["progress", "primary", "teal", "warning"]
+        specs.append(VisualizationSpecV1(
+            chart_id="capacity.monthly-trend",
+            chart_type="capacity_monthly_trend",
+            shape="combo",
+            title=f"{scope_name} - Cumulative Capacity Milestones",
+            summary="Lines show independently accumulated COD and Trial Run capacity by month.",
+            accessibility_description="Four lines show cumulative Solar and Wind COD and Trial Run capacity by month.",
+            categories=[str(row["name"]) for row in monthly],
+            series=[VisualizationSeriesV1(
+                name=name,
+                shape="line",
+                values=[row.get(name) for row in monthly],
+                semantic_color=color_name,
+                value_format="decimal",
+            ) for name, color_name in zip(names, colors)],
+            y_axis_title="Cumulative capacity (MW)",
+            data_as_of=data_as_of,
+            source_tables=sources,
+            data_table=monthly,
+        ))
+
+    financial_years = data.get("financial_years") or []
+    if financial_years:
+        specs.append(VisualizationSpecV1(
+            chart_id="capacity.financial-year",
+            chart_type="capacity_by_financial_year",
+            shape="vertical_bar",
+            title=f"{scope_name} - Capacity by Financial Year",
+            summary="Grouped bars show milestone capacity allocated to each financial year.",
+            accessibility_description="Grouped bars compare Solar and Wind COD and Trial Run capacity by financial year.",
+            categories=[str(row["name"]) for row in financial_years],
+            series=[
+                VisualizationSeriesV1(name="Solar COD", shape="bar", values=[row["solar_cod"] for row in financial_years], semantic_color="progress"),
+                VisualizationSeriesV1(name="Solar Trial Run", shape="bar", values=[row["solar_tr"] for row in financial_years], semantic_color="primary"),
+                VisualizationSeriesV1(name="Wind COD", shape="bar", values=[row["wind_cod"] for row in financial_years], semantic_color="teal"),
+                VisualizationSeriesV1(name="Wind Trial Run", shape="bar", values=[row["wind_tr"] for row in financial_years], semantic_color="warning"),
+            ],
+            y_axis_title="Capacity (MW)",
+            data_as_of=data_as_of,
+            source_tables=sources,
+            data_table=financial_years,
+        ))
+    return [_chart_from_semantic(spec) for spec in specs[:4]]
+
+
+def _quality_dashboard_charts(db: Session, project_id: str | None = None) -> list[dict]:
+    if project_id:
+        data = QualityAnalyticsService.project_status(db, project_id).to_dict()
+        scope_name = data.get("project_name") or project_id
+    else:
+        data = QualityAnalyticsService.portfolio_overview(db).to_dict()
+        scope_name = "Portfolio"
+    if not data.get("available"):
+        return []
+    provenance = data.get("provenance") or {}
+    data_as_of = provenance.get("data_as_of")
+    sources = list(data.get("_sources_used") or ["pulse_nc", "pulse_rfi"])
+    specs = []
+
+    for kind, completed_key, open_key, total_key in (
+        ("NC", "completed_ncs", "open_ncs", "total_ncs"),
+        ("RFI", "rfis_completed", "open_rfis", "total_rfis"),
+    ):
+        completed = int(data.get(completed_key) or 0)
+        opened = int(data.get(open_key) or 0)
+        if completed + opened == 0:
+            continue
+        specs.append(VisualizationSpecV1(
+            chart_id=f"quality.{kind.casefold()}-status",
+            chart_type=f"quality_{kind.casefold()}_status",
+            shape="donut",
+            title=f"{scope_name} - {kind} Status",
+            summary=f"{completed} of {int(data.get(total_key) or 0)} {kind}s are completed; {opened} remain open.",
+            accessibility_description=f"Donut chart comparing completed and open {kind} records.",
+            categories=["Completed", "Open"],
+            series=[VisualizationSeriesV1(
+                name=kind,
+                shape="donut",
+                values=[completed, opened],
+                semantic_color="primary",
+                value_format="integer",
+                item_semantic_colors=["progress", "warning"],
+            )],
+            data_as_of=data_as_of,
+            source_tables=sources,
+            data_table=[{"status": "Completed", "count": completed}, {"status": "Open", "count": opened}],
+        ))
+
+    if project_id:
+        blocks = data.get("blocks") or []
+        usable = [row for row in blocks if int(row.get("open") or 0) > 0][:12]
+        if usable:
+            specs.append(VisualizationSpecV1(
+                chart_id="quality.open-by-block",
+                chart_type="quality_open_by_block",
+                shape="horizontal_bar",
+                title=f"{scope_name} - Open NCs by Work Area",
+                summary="Work areas are ranked by open non-conformances.",
+                accessibility_description="Horizontal bars compare open NC counts by work area.",
+                categories=[str(row["name"]) for row in usable],
+                series=[VisualizationSeriesV1(name="Open NCs", shape="bar", values=[row["open"] for row in usable], semantic_color="warning", value_format="integer")],
+                x_axis_title="Open NCs",
+                data_as_of=data_as_of,
+                source_tables=sources,
+                data_table=usable,
+            ))
+        score = data.get("quality_score")
+        if score is not None:
+            specs.append(VisualizationSpecV1(
+                chart_id="quality.project-score",
+                chart_type="quality_project_score",
+                shape="radial_progress",
+                title=f"{scope_name} - Quality Score",
+                summary=f"The authoritative project quality score is {score} out of 100.",
+                accessibility_description="Radial gauge showing the project quality score out of 100.",
+                categories=[scope_name],
+                series=[VisualizationSeriesV1(name="Quality score", shape="bar", values=[score], semantic_color="progress", value_format="percent")],
+                data_as_of=data_as_of,
+                source_tables=sources,
+                data_table=[{"project": scope_name, "quality_score": score}],
+            ))
+    else:
+        aging = data.get("aging") or {}
+        if any(int(value or 0) > 0 for value in aging.values()):
+            specs.append(VisualizationSpecV1(
+                chart_id="quality.nc-aging",
+                chart_type="quality_nc_aging",
+                shape="vertical_bar",
+                title="Portfolio - Open NC Aging",
+                summary="Bars group open NCs into authoritative aging buckets.",
+                accessibility_description="Vertical bars compare open NC counts by age bucket.",
+                categories=list(aging.keys()),
+                series=[VisualizationSeriesV1(name="Open NCs", shape="bar", values=list(aging.values()), semantic_color="warning", value_format="integer")],
+                y_axis_title="Open NCs",
+                data_as_of=data_as_of,
+                source_tables=sources,
+                data_table=[{"age_bucket": key, "count": value} for key, value in aging.items()],
+            ))
+        trends = data.get("trends") or []
+        if trends:
+            specs.append(VisualizationSpecV1(
+                chart_id="quality.nc-trend",
+                chart_type="quality_nc_trend",
+                shape="combo",
+                title="Portfolio - NC Creation and Closure Trend",
+                summary="Lines compare NCs created and closed by month.",
+                accessibility_description="Two lines compare monthly created and closed NC counts.",
+                categories=[str(row["month"]) for row in trends],
+                series=[
+                    VisualizationSeriesV1(name="Created", shape="line", values=[row["created"] for row in trends], semantic_color="warning", value_format="integer"),
+                    VisualizationSeriesV1(name="Closed", shape="line", values=[row["closed"] for row in trends], semantic_color="progress", value_format="integer"),
+                ],
+                y_axis_title="NC count",
+                data_as_of=data_as_of,
+                source_tables=sources,
+                data_table=trends,
+            ))
+    return [_chart_from_semantic(spec) for spec in specs[:4]]
+
+
+def _transmission_dashboard_charts(db: Session, project_id: str | None = None) -> list[dict]:
+    data = ChartSpecService.transmission_status(db, project_id)
+    lines = data.get("lines") or []
+    scope_name = data.get("project_name") or "Portfolio"
+    sources = list(data.get("sources") or ["tc_network_edge"])
+    charts = []
+    status = _chart_transmission_status(db, project_id)
+    if not status.get("no_data"):
+        charts.append(_finalize_chart(status))
+
+    progress_rows = [row for row in lines if row.get("avg_progress") is not None]
+    progress_rows.sort(key=lambda row: (-float(row["avg_progress"]), str(row.get("edge_id") or "")))
+    progress_rows = progress_rows[:12]
+    if progress_rows:
+        charts.append(_chart_from_semantic(VisualizationSpecV1(
+            chart_id="transmission.line-progress",
+            chart_type="transmission_line_progress",
+            shape="horizontal_bar",
+            title=f"{scope_name} - Transmission Line Progress",
+            summary="Lines are ranked by average foundation, erection, and stringing progress.",
+            accessibility_description="Horizontal bars compare average physical progress by transmission line.",
+            categories=[str(row.get("edge_id") or "Unknown") for row in progress_rows],
+            series=[VisualizationSeriesV1(name="Average progress", shape="bar", values=[row["avg_progress"] for row in progress_rows], semantic_color="primary", value_format="percent")],
+            x_axis_title="Average progress",
+            source_tables=sources,
+            data_table=progress_rows,
+        )))
+        charts.append(_chart_from_semantic(VisualizationSpecV1(
+            chart_id="transmission.workstreams",
+            chart_type="transmission_workstream_progress",
+            shape="horizontal_bar",
+            title=f"{scope_name} - Transmission Workstream Progress",
+            summary="Grouped bars compare foundation, erection, and stringing completion by line.",
+            accessibility_description="Grouped horizontal bars compare foundation, erection, and stringing progress for transmission lines.",
+            categories=[str(row.get("edge_id") or "Unknown") for row in progress_rows],
+            series=[
+                VisualizationSeriesV1(name="Foundation", shape="bar", values=[row.get("foundation_pct") for row in progress_rows], semantic_color="neutral", value_format="percent"),
+                VisualizationSeriesV1(name="Erection", shape="bar", values=[row.get("erection_pct") for row in progress_rows], semantic_color="primary", value_format="percent"),
+                VisualizationSeriesV1(name="Stringing", shape="bar", values=[row.get("stringing_pct") for row in progress_rows], semantic_color="progress", value_format="percent"),
+            ],
+            x_axis_title="Progress",
+            source_tables=sources,
+            data_table=progress_rows,
+        )))
+
+    delayed = [row for row in lines if row.get("days_delayed") is not None and row["days_delayed"] > 0]
+    delayed.sort(key=lambda row: (-row["days_delayed"], str(row.get("edge_id") or "")))
+    delayed = delayed[:12]
+    if delayed:
+        charts.append(_chart_from_semantic(VisualizationSpecV1(
+            chart_id="transmission.delays",
+            chart_type="transmission_delay_ranking",
+            shape="lollipop",
+            title=f"{scope_name} - Delayed Transmission Lines",
+            summary="Lines are ranked by the authoritative expected-versus-scheduled delay in days.",
+            accessibility_description="Lollipop chart ranking transmission lines by delay days.",
+            categories=[str(row.get("edge_id") or "Unknown") for row in delayed],
+            series=[VisualizationSeriesV1(name="Delay", shape="bar", values=[row["days_delayed"] for row in delayed], semantic_color="critical", value_format="days")],
+            x_axis_title="Delay (days)",
+            source_tables=sources,
+            data_table=delayed,
+        )))
+    return charts[:4]
+
+
+def _portfolio_dashboard_charts(db: Session) -> list[dict]:
+    ids = []
+    seen = set()
+    for project in ProjectCatalogService.list_projects(db):
+        if project.project_id and project.project_id not in seen:
+            seen.add(project.project_id)
+            ids.append(project.project_id)
+    data = ChartSpecService.project_comparison(db, ids)
+    rows = data.get("projects") or []
+    specs = []
+    progress = project_progress_spec(rows, title="Portfolio - Project Progress")
+    if progress is not None:
+        specs.append(progress)
+    counts = {"delayed": 0, "on_track": 0, "completed": 0, "p6_unavailable": max(0, len(ids) - len(rows))}
+    for row in rows:
+        schedule = ScheduleMetricsService.get_by_project_id(db, row["project_id"])
+        if schedule.progress_pct is not None and schedule.progress_pct >= 100:
+            counts["completed"] += 1
+        elif schedule.is_delayed:
+            counts["delayed"] += 1
+        else:
+            counts["on_track"] += 1
+    status = portfolio_status_spec(counts)
+    if status is not None:
+        specs.append(status)
+    charts = [_chart_from_semantic(spec) for spec in specs]
+    risk = _chart_portfolio_risk(db, 10)
+    if not risk.get("no_data"):
+        charts.append(_finalize_chart(risk))
+    charts.extend(_capacity_dashboard_charts(db)[:1])
+    return charts[:4]
+
+
+def build_show_me_dashboard(
+    db: Session,
+    *,
+    project_id: str | None = None,
+    project_ids: list[str] | None = None,
+    domain_hint: str | None = None,
+    days: int = 30,
+    limit: int = 12,
+) -> list[dict]:
+    """Build a deterministic 3-4 panel dashboard for broad ``show me`` requests."""
+    project_ids = list(project_ids or [])
+    if len(project_ids) >= 2:
+        return build_project_comparison_dashboard(db, project_ids)[:4]
+
+    hint = (domain_hint or "").casefold()
+    if not project_id and len(project_ids) == 1:
+        project_id = project_ids[0]
+    charts: list[dict] = []
+    seen_types = set()
+
+    def add(items):
+        for chart in items:
+            if len(charts) >= 4:
+                return
+            if not chart or chart.get("no_data"):
+                continue
+            finalized = _finalize_chart(chart)
+            chart_type = finalized.get("chart_type")
+            if chart_type in seen_types:
+                continue
+            seen_types.add(chart_type)
+            charts.append(finalized)
+
+    if project_id:
+        if any(word in hint for word in ("procurement", "purchase", "material", "vendor", "inventory", "sap")):
+            add([
+                _chart_sap_po_fulfillment(db, project_id, limit),
+                _chart_material_gaps(db, project_id, limit),
+                _chart_vendor_performance(db, project_id, min(limit, 8)),
+            ])
+        elif any(word in hint for word in ("transmission", "grid", "line", "evacuation", "readiness", "tc")):
+            add(_transmission_dashboard_charts(db, project_id))
+        elif any(word in hint for word in ("capacity", "cod", "trial run", "mwac", "wtg")):
+            add(_capacity_dashboard_charts(db, project_id))
+        elif any(word in hint for word in ("quality", "non-conformance", "nonconformance", " rfi", " nc", "contractor")):
+            add(_quality_dashboard_charts(db, project_id))
+        elif any(word in hint for word in ("risk", "health", "exposure")):
+            add([
+                _chart_planned_vs_actual_progress(db, project_id),
+                _chart_delayed_activities(db, project_id, limit),
+            ])
+            add(_transmission_dashboard_charts(db, project_id))
+        else:
+            add([
+                _chart_planned_vs_actual_progress(db, project_id),
+                _chart_activity_status(db, project_id),
+                _chart_delayed_activities(db, project_id, limit),
+                _chart_block_progress(db, project_id, limit),
+            ])
+
+        # Fill sparse domain dashboards with useful project context, never fabricated panels.
+        add([
+            _chart_planned_vs_actual_progress(db, project_id),
+            _chart_activity_status(db, project_id),
+            _chart_delayed_activities(db, project_id, limit),
+            _chart_block_progress(db, project_id, limit),
+            _chart_transmission_status(db, project_id),
+        ])
+        if len(charts) < 4:
+            add(_capacity_dashboard_charts(db, project_id))
+        if len(charts) < 4:
+            add(_quality_dashboard_charts(db, project_id))
+    else:
+        if any(word in hint for word in ("transmission", "grid", "line", "evacuation", "readiness", "tc")):
+            add(_transmission_dashboard_charts(db))
+        elif any(word in hint for word in ("capacity", "cod", "trial run", "mwac", "wtg")):
+            add(_capacity_dashboard_charts(db))
+        elif any(word in hint for word in ("quality", "non-conformance", "nonconformance", " rfi", " nc", "contractor")):
+            add(_quality_dashboard_charts(db))
+        add(_portfolio_dashboard_charts(db))
+        if len(charts) < 4:
+            add(_capacity_dashboard_charts(db))
+        if len(charts) < 4:
+            add(_quality_dashboard_charts(db))
+    return charts[:4]
+
+
 # ============================================
 # Intelligent selector + dispatcher
 # ============================================
@@ -829,6 +1385,8 @@ def recommend_chart_type(project_id: str = None, project_ids: list = None, domai
         return "portfolio_risk"
 
     hint = (domain_hint or "").lower()
+    if "planned" in hint and "actual" in hint and "progress" in hint:
+        return "planned_vs_actual_progress"
     if any(k in hint for k in ("daily", "day-by-day", "trend", "over time")):
         return "daily_completion_trend"
     if any(k in hint for k in ("block", "wbs", "phase-wise")):
@@ -886,6 +1444,10 @@ def build_chart(db: Session, chart_type: str, project_id: str = None,
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")
             return _finalize_chart(_chart_daily_completion_trend(db, project_id, days))
+        if chart_type == "planned_vs_actual_progress":
+            if not project_id:
+                return _no_data(chart_type, "This chart needs a specific project.")
+            return _finalize_chart(_chart_planned_vs_actual_progress(db, project_id))
         if chart_type == "block_progress":
             if not project_id:
                 return _no_data(chart_type, "This chart needs a specific project.")

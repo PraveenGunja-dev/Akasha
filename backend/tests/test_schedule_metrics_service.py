@@ -387,6 +387,59 @@ class ScheduleMetricsLookupTests(unittest.TestCase):
         self.assertFalse(trend["historical_duration_progress_available"])
         self.assertIn("p6_activity", trend["_source_tables"])
 
+    def test_planned_vs_actual_activity_progress_uses_dated_p6_finishes(self):
+        db = self.Session()
+        db.add(models.P6Project(
+            p6_object_id=60,
+            project_id="P-60",
+            name="S Curve Project",
+            data_date=datetime(2026, 3, 31),
+            last_synced_at=datetime(2026, 4, 1),
+        ))
+        db.add_all([
+            models.P6Activity(
+                p6_object_id=601,
+                project_object_id=60,
+                activity_id="A-1",
+                planned_finish_date=datetime(2026, 1, 31),
+                actual_finish_date=datetime(2026, 2, 10),
+            ),
+            models.P6Activity(
+                p6_object_id=602,
+                project_object_id=60,
+                activity_id="A-2",
+                planned_finish_date=datetime(2026, 2, 28),
+                actual_finish_date=datetime(2026, 3, 15),
+            ),
+            models.P6Activity(
+                p6_object_id=603,
+                project_object_id=60,
+                activity_id="A-3",
+                planned_finish_date=datetime(2026, 3, 31),
+            ),
+            models.P6Activity(
+                p6_object_id=604,
+                project_object_id=60,
+                activity_id="A-4",
+                planned_finish_date=datetime(2026, 5, 31),
+            ),
+        ])
+        db.commit()
+
+        result = ScheduleMetricsService.get_planned_vs_actual_activity_progress(
+            db, "P-60"
+        )
+        db.close()
+
+        self.assertTrue(result["has_data"])
+        self.assertEqual(result["period_end_inclusive"], "2026-03-31")
+        self.assertEqual(result["current_planned_activity_finish_pct"], 75.0)
+        self.assertEqual(result["current_actual_activity_finish_pct"], 50.0)
+        self.assertEqual(result["current_variance_pct_points"], -25.0)
+        self.assertLessEqual(len(result["timeline"]), 60)
+        self.assertFalse(result["historical_duration_progress_available"])
+        self.assertIn("planned versus actual activity finishes", result["warnings"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

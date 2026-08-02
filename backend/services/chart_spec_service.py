@@ -91,6 +91,18 @@ class ChartSpecService:
         }
 
     @staticmethod
+    def planned_vs_actual_progress(db: Session, project_id: str) -> dict:
+        project = ProjectCatalogService.get_by_project_id(db, project_id)
+        comparison = ScheduleMetricsService.get_planned_vs_actual_activity_progress(
+            db, project_id
+        )
+        return {
+            **comparison,
+            "project_name": project.display_name if project else comparison.get("project_name", project_id),
+            "sources": ["p6_project", "p6_activity"],
+        }
+
+    @staticmethod
     def block_progress(db: Session, project_id: str) -> dict:
         project = ProjectCatalogService.get_by_project_id(db, project_id)
         snapshot = ScheduleMetricsService.get_block_period_progress(
@@ -167,7 +179,21 @@ class ChartSpecService:
     def transmission_status(db: Session, project_id: str | None = None) -> dict:
         if project_id:
             return {**transmission_service.project_status(db, project_id), "sources": ["tc_network_edge"]}
-        return {**transmission_service.network_status(db), "sources": ["tc_network_edge"]}
+        lines = [
+            transmission_service.edge_dict(edge)
+            for edge in transmission_service.latest_physical_edges(db)
+        ]
+        counts = {status: 0 for status in ("completed", "in_progress", "not_started", "unknown")}
+        for line in lines:
+            status = line["canonical_status"]
+            counts[status if status in counts else "unknown"] += 1
+        return {
+            **transmission_service.network_status(db),
+            **counts,
+            "has_data": bool(lines),
+            "lines": lines,
+            "sources": ["tc_network_edge"],
+        }
 
     @staticmethod
     def portfolio_risk(db: Session, limit: int = 8) -> dict:

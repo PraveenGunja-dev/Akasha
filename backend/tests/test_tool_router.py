@@ -287,7 +287,7 @@ class ToolRouterTests(unittest.TestCase):
         block_snapshot = route("Provide a progress snapshot of all blocks in Project X")
         portfolio_report = route("Generate a portfolio-level progress report for the current period")
         comparison_report = route("Compare Project X versus Project Y and give me a proper report")
-        unsupported_curve = route("Show planned vs actual progress chart for Project X")
+        planned_actual_curve = route("Show planned vs actual progress chart for Project X")
         milestone_risk = route("Which projects are at risk of missing planned milestones this month?")
 
         self.assertIncludes(project_report, "report_preview_project_progress")
@@ -301,7 +301,7 @@ class ToolRouterTests(unittest.TestCase):
             "report_generate_project_comparison",
         )
         self.assertExcludes(comparison_report, "report_preview_project_progress")
-        self.assertExcludes(unsupported_curve, "render_chart")
+        self.assertIncludes(planned_actual_curve, "p6_get_project_summary", "render_chart")
         self.assertIncludes(milestone_risk, "p6_get_portfolio_milestone_risks")
 
     def test_inherently_visual_queries_auto_route_to_chart(self):
@@ -312,6 +312,30 @@ class ToolRouterTests(unittest.TestCase):
         )
         self.assertIncludes(
             route("Compare progress of Project X vs Project Y"),
+            "render_chart",
+        )
+        self.assertIncludes(
+            route("Show me the progress for Project X"),
+            "p6_get_project_summary",
+            "render_chart",
+        )
+        self.assertIncludes(
+            route("Show me material gaps for Project X"),
+            "sap_get_material_gaps",
+            "render_chart",
+        )
+        self.assertIncludes(
+            route("Show me the capacity milestone status for Project X"),
+            "capacity_get_project_status",
+            "render_chart",
+        )
+        self.assertIncludes(
+            route("Show me the quality status for Project X"),
+            "quality_get_project_status",
+            "render_chart",
+        )
+        self.assertIncludes(
+            route("Show me what you can do"),
             "render_chart",
         )
 

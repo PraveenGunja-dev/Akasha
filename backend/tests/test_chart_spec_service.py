@@ -16,7 +16,7 @@ if str(BACKEND_DIR) not in sys.path:
 from database import Base
 import models
 from engine.tools.p6_tools import p6_get_portfolio_milestone_risks
-from engine.tools.viz_tools import build_chart
+from engine.tools.viz_tools import build_chart, build_show_me_dashboard
 from engine.agent import build_chart_result
 from services.chart_spec_service import ChartSpecService
 
@@ -172,6 +172,110 @@ class ChartSpecServiceTests(unittest.TestCase):
         self.assertEqual(blocks["visualization_spec"]["shape"], "horizontal_bar")
         self.assertEqual(blocks["data_table"][0]["current_activity_completion_pct"], 75.0)
         self.assertTrue(trend["option"]["aria"]["enabled"])
+
+    def test_planned_vs_actual_progress_chart_uses_activity_finish_s_curve(self):
+        self.db.add(models.P6Project(
+            p6_object_id=12,
+            project_id="P-1",
+            name="Project One",
+            data_date=datetime(2026, 3, 31),
+        ))
+        self.db.add_all([
+            models.P6Activity(
+                p6_object_id=1201,
+                project_object_id=12,
+                planned_finish_date=datetime(2026, 1, 31),
+                actual_finish_date=datetime(2026, 2, 15),
+            ),
+            models.P6Activity(
+                p6_object_id=1202,
+                project_object_id=12,
+                planned_finish_date=datetime(2026, 3, 1),
+            ),
+        ])
+        self.db.commit()
+
+        chart = build_chart(
+            self.db,
+            "planned_vs_actual_progress",
+            project_id="P-1",
+        )
+
+        self.assertFalse(chart.get("no_data", False))
+        self.assertEqual(chart["chart_type"], "planned_vs_actual_progress")
+        self.assertEqual(chart["visualization_spec"]["shape"], "combo")
+        self.assertEqual(
+            [series["name"] for series in chart["visualization_spec"]["series"]],
+            ["Planned activity finishes", "Actual activity finishes"],
+        )
+        self.assertIn("50.0 percentage points behind plan", chart["summary"])
+
+    def test_show_me_schedule_dashboard_builds_four_distinct_grounded_panels(self):
+        self.db.add(models.P6Project(
+            p6_object_id=13,
+            project_id="P-1",
+            name="Project One",
+            data_date=datetime(2026, 3, 31),
+        ))
+        self.db.add(models.P6WBSNode(
+            p6_object_id=130,
+            project_object_id=13,
+            wbs_name="BLOCK-01",
+        ))
+        self.db.add_all([
+            models.P6Activity(
+                p6_object_id=1301,
+                project_object_id=13,
+                wbs_object_id=130,
+                activity_id="A-1",
+                status="Completed",
+                percent_complete=1,
+                planned_finish_date=datetime(2026, 1, 31),
+                actual_finish_date=datetime(2026, 2, 10),
+                baseline_finish_date=datetime(2026, 1, 31),
+                finish_date=datetime(2026, 2, 10),
+            ),
+            models.P6Activity(
+                p6_object_id=1302,
+                project_object_id=13,
+                wbs_object_id=130,
+                activity_id="A-2",
+                status="In Progress",
+                percent_complete=.5,
+                planned_finish_date=datetime(2026, 2, 28),
+                baseline_finish_date=datetime(2026, 2, 28),
+                finish_date=datetime(2026, 3, 20),
+            ),
+        ])
+        self.db.commit()
+
+        charts = build_show_me_dashboard(
+            self.db,
+            project_id="P-1",
+            domain_hint="Show me the project schedule and progress",
+        )
+
+        self.assertEqual(len(charts), 4)
+        self.assertEqual(len({chart["chart_type"] for chart in charts}), 4)
+        self.assertEqual(
+            [chart["chart_type"] for chart in charts],
+            [
+                "planned_vs_actual_progress",
+                "activity_status",
+                "delayed_activities",
+                "block_progress",
+            ],
+        )
+        self.assertTrue(all(chart["schema_version"] == "visualization.v1" for chart in charts))
+
+        bundle, confirmation = build_chart_result(self.db, {
+            "chart_type": "auto_dashboard",
+            "project_id": "P-1",
+            "domain_hint": "Show me the project schedule and progress",
+        })
+        self.assertEqual(bundle["chart_type"], "show_me_dashboard")
+        self.assertEqual(len(bundle["charts"]), 4)
+        self.assertIn('"chart_count": 4', confirmation)
 
     def test_portfolio_milestone_risk_is_current_month_and_rule_based(self):
         self.db.add(models.P6Project(

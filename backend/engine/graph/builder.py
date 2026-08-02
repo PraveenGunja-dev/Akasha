@@ -30,6 +30,7 @@ import models
 from engine.response_quality import (
     EXECUTIVE_REWRITE_INSTRUCTION,
     needs_executive_rewrite,
+    redact_sensitive_answer,
     rewrite_request,
 )
 
@@ -53,19 +54,27 @@ the returned completion-event basis, preserve ties, and state when historical pe
 For monthly or yearly activity finish questions, call sim_forecast_activity_finishes. Lead with the
 exact current P6 count scheduled to finish in the target period, then concisely report the tool's
 likely range, risk, confidence, and data date. Do not substitute total project activity counts.
-Use render_chart when the user explicitly asks for a chart, graph, plot, or visualization. Also use
+When the latest user request, after trimming leading whitespace, begins with "show me", MUST call
+render_chart exactly once with chart_type="auto_dashboard" and copy the complete latest request into
+domain_hint. This produces up to four relevant authoritative panels; do not replace it with a single
+chart call. Resolve a named project first and pass its project_id. For all other requests, use
+render_chart when the user explicitly asks for a chart, graph, plot, or visualization. Also use
 it automatically for daily trends, project comparisons, block comparisons, distributions, and
-rankings when an approved chart type matches. Prefer daily_completion_trend for dated progress
-trends, project_comparison for two or more projects, and block_progress for block snapshots. A chart
+rankings when an approved chart type matches. Treat "show me" requests for chartable schedule,
+procurement, transmission, or risk metrics as visualization requests. Prefer daily_completion_trend
+for dated completion-event trends, planned_vs_actual_progress for planned-versus-actual progress,
+project_comparison for two or more projects, and block_progress for block snapshots. A chart
 must accompany, not replace, a concise textual finding. Generate no more than four charts per turn.
-Historical planned-versus-actual progress curves are unavailable. If asked for that curve, say that
-the required historical snapshots are unavailable and do not substitute an unrelated chart.
+The planned_vs_actual_progress chart is a cumulative activity-finish S-curve built from planned and
+actual activity finish dates in the current P6 schedule. Label it that way; do not misrepresent it as
+historical duration-percent snapshots.
 For a Project Progress Report request, resolve the project and call report_preview_project_progress.
-Present the preview and stop. Only after the user explicitly confirms may you call
+Present the preview without displaying or quoting the preview_token, then stop. The token is an
+internal confirmation secret. Only after the user explicitly confirms may you call
 report_generate_project_progress with the exact preview token. Return both generated download URLs
 exactly as Markdown links and state their expiry.
 For a Portfolio Progress Report request, call report_preview_portfolio_progress without resolving a
-single project. Present the current-month scope and stop. After explicit confirmation, call
+single project. Present the current-month scope without displaying the preview_token and stop. After explicit confirmation, call
 report_generate_portfolio_progress with the exact preview token and return both download URLs.
 For a request to compare two or more projects and provide a report, render the in-chat comparison
 dashboard and call report_preview_project_comparison with the canonical project IDs in the same
@@ -506,6 +515,9 @@ def build_chat_graph(
                     state.get("request_id"),
                     type(exc).__name__,
                 )
+        content = redact_sensitive_answer(content)
+        if not content:
+            raise InvalidModelResponse("The final answer contained only protected internal data.")
         final_message = AIMessage(
             content=content,
             id=f"chat-message:{state['current_assistant_message_id']}",

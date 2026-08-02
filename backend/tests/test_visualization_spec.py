@@ -16,6 +16,7 @@ from services.visualization_spec import (
     VisualizationSpecV1,
     block_progress_spec,
     daily_completion_spec,
+    planned_vs_actual_progress_spec,
     portfolio_status_spec,
     project_progress_spec,
 )
@@ -70,6 +71,30 @@ class VisualizationSpecTests(unittest.TestCase):
         payload["javascript_formatter"] = "alert(1)"
         with self.assertRaises(ValidationError):
             VisualizationSpecV1.model_validate(payload)
+
+    def test_planned_vs_actual_spec_is_renderer_neutral_and_traceable(self):
+        spec = planned_vs_actual_progress_spec({
+            "timeline": [
+                {
+                    "date": "2026-01-31",
+                    "planned_activity_finish_pct": 50,
+                    "actual_activity_finish_pct": 25,
+                    "variance_pct_points": -25,
+                },
+            ],
+            "current_planned_activity_finish_pct": 50,
+            "current_actual_activity_finish_pct": 25,
+            "current_variance_pct_points": -25,
+            "period_end_inclusive": "2026-01-31",
+            "data_as_of": "2026-01-31",
+        }, "Project One")
+
+        payload = spec.transport()
+
+        self.assertEqual(payload["chart_type"], "planned_vs_actual_progress")
+        self.assertEqual(payload["series"][0]["values"], [50.0])
+        self.assertEqual(payload["series"][1]["values"], [25.0])
+        self.assertNotIn("formatter", payload)
 
 
 if __name__ == "__main__":
