@@ -34,6 +34,7 @@ export interface StoredChatMessage {
     accessibility_description?: string;
     data_as_of?: string;
     data_table?: Array<Record<string, unknown>>;
+    report_inclusion?: 'auto' | 'include' | 'exclude';
     spec: unknown;
   }>;
   feedback_status: 'none' | 'liked' | 'disliked';
@@ -121,6 +122,22 @@ export function renameChatSession(sessionId: string, title: string): Promise<Cha
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ title }),
   });
+}
+
+export function setChartReportInclusion(
+  sessionId: string,
+  messageId: number,
+  visualizationIndex: number,
+  reportInclusion: 'auto' | 'include' | 'exclude',
+): Promise<{ report_inclusion: 'auto' | 'include' | 'exclude' }> {
+  return apiJson(
+    `/akasha/api/chat/sessions/${encodeURIComponent(sessionId)}/messages/${messageId}/visualizations/${visualizationIndex}`,
+    {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ report_inclusion: reportInclusion }),
+    },
+  );
 }
 
 export async function deleteChatSession(sessionId: string): Promise<void> {

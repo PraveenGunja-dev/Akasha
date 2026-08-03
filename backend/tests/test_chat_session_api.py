@@ -17,6 +17,7 @@ from sqlalchemy.pool import StaticPool
 
 from auth_claims import AuthenticatedIdentity
 from database import Base, get_db
+import models
 from routers import chat_sessions
 from security import get_current_user
 
@@ -144,6 +145,36 @@ class ChatSessionApiTests(unittest.TestCase):
         type(self).user = USER_B
         self.assertEqual(
             self.client.get(f"/api/chat/sessions/{detail['session_id']}").status_code,
+            404,
+        )
+
+    def test_chart_report_inclusion_is_owner_scoped_and_persisted(self):
+        session_id = self.client.post("/api/chat/sessions", json={"title": "Charts"}).json()["session_id"]
+        db = self.Session()
+        message = models.ChatMessage(
+            session_id=session_id,
+            role="assistant",
+            content="Chart",
+            visualizations=[{"title": "Progress", "spec": {"shape": "line"}}],
+        )
+        db.add(message)
+        db.commit()
+        message_id = message.id
+        db.close()
+
+        response = self.client.patch(
+            f"/api/chat/sessions/{session_id}/messages/{message_id}/visualizations/0",
+            json={"report_inclusion": "include"},
+        )
+        self.assertEqual(response.status_code, 200)
+        detail = self.client.get(f"/api/chat/sessions/{session_id}").json()
+        self.assertEqual(detail["messages"][0]["visualizations"][0]["report_inclusion"], "include")
+        type(self).user = USER_B
+        self.assertEqual(
+            self.client.patch(
+                f"/api/chat/sessions/{session_id}/messages/{message_id}/visualizations/0",
+                json={"report_inclusion": "exclude"},
+            ).status_code,
             404,
         )
 

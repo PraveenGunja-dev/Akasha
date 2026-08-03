@@ -314,30 +314,6 @@ class ToolRouterTests(unittest.TestCase):
             route("Compare progress of Project X vs Project Y"),
             "render_chart",
         )
-        self.assertIncludes(
-            route("Show me the progress for Project X"),
-            "p6_get_project_summary",
-            "render_chart",
-        )
-        self.assertIncludes(
-            route("Show me material gaps for Project X"),
-            "sap_get_material_gaps",
-            "render_chart",
-        )
-        self.assertIncludes(
-            route("Show me the capacity milestone status for Project X"),
-            "capacity_get_project_status",
-            "render_chart",
-        )
-        self.assertIncludes(
-            route("Show me the quality status for Project X"),
-            "quality_get_project_status",
-            "render_chart",
-        )
-        self.assertIncludes(
-            route("Show me what you can do"),
-            "render_chart",
-        )
 
     def test_risk_queries_expose_only_the_named_risk_metric_api(self):
         result = route("Show the COD risk for Project X")

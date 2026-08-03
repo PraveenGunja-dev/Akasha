@@ -27,6 +27,7 @@ import {
   listChatSessions,
   migrateLegacyBrowserChats,
   renameChatSession,
+  setChartReportInclusion,
   sendChatMessage,
   submitChatFeedback,
   type StoredChatMessage,
@@ -126,6 +127,25 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [searchQuery, setSearchQuery] = useState('');
   const [isHistoryLoading, setIsHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState('');
+
+  const updateChartReportInclusion = async (
+    messageId: number,
+    visualizationIndex: number,
+    value: 'auto' | 'include' | 'exclude',
+  ) => {
+    if (!activeThreadId || messageId <= 0) return;
+    try {
+      await setChartReportInclusion(activeThreadId, messageId, visualizationIndex, value);
+      setMessages(current => current.map(message => message.id === messageId ? {
+        ...message,
+        visualizations: message.visualizations?.map((visualization, index) => index === visualizationIndex
+          ? { ...visualization, report_inclusion: value }
+          : visualization),
+      } : message));
+    } catch {
+      setHistoryError('Unable to update this chart\'s report selection. Please try again.');
+    }
+  };
   
   // Voice and Image states
   const [isListening, setIsListening] = useState(false);
@@ -919,7 +939,12 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
                           {/* ── Enhanced Chart Cards ── */}
                           {msg.visualizations && msg.visualizations.length > 0 && (
-                            <ChatVisualizationGrid visualizations={msg.visualizations} />
+                            <ChatVisualizationGrid
+                              visualizations={msg.visualizations}
+                              onReportInclusionChange={msg.status === 'completed'
+                                ? (index, value) => updateChartReportInclusion(msg.id, index, value)
+                                : undefined}
+                            />
                           )}
 
                           {msg.metadata?.message_id && (

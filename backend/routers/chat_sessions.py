@@ -24,6 +24,10 @@ class RenameSessionRequest(BaseModel):
     title: str = Field(min_length=1, max_length=100)
 
 
+class ReportInclusionRequest(BaseModel):
+    report_inclusion: str = Field(pattern="^(auto|include|exclude)$")
+
+
 class LegacyMessageRequest(BaseModel):
     type: str
     content: str = Field(min_length=1, max_length=50_000)
@@ -203,6 +207,40 @@ def rename_session(
     db.commit()
     db.refresh(session)
     return _session_payload(session)
+
+
+@router.patch("/{session_id}/messages/{message_id}/visualizations/{visualization_index}")
+def set_visualization_report_inclusion(
+    session_id: str,
+    message_id: int,
+    visualization_index: int,
+    req: ReportInclusionRequest,
+    db: Session = Depends(get_db),
+    user: AuthenticatedIdentity = Depends(get_current_user),
+):
+    session = get_owned_session(db, user, session_id)
+    message = db.query(models.ChatMessage).filter(
+        models.ChatMessage.id == message_id,
+        models.ChatMessage.session_id == session.session_id,
+        models.ChatMessage.role == "assistant",
+    ).first()
+    if message is None:
+        raise HTTPException(status_code=404, detail="Chat message not found.")
+    visualizations = list(message.visualizations or [])
+    if visualization_index < 0 or visualization_index >= len(visualizations):
+        raise HTTPException(status_code=404, detail="Visualization not found.")
+    visualization = visualizations[visualization_index]
+    if not isinstance(visualization, dict):
+        raise HTTPException(status_code=422, detail="Visualization cannot be selected for a report.")
+    visualizations[visualization_index] = {**visualization, "report_inclusion": req.report_inclusion}
+    message.visualizations = visualizations
+    session.updated_at = datetime.utcnow()
+    db.commit()
+    return {
+        "message_id": message.id,
+        "visualization_index": visualization_index,
+        "report_inclusion": req.report_inclusion,
+    }
 
 
 @router.delete("/{session_id}", status_code=status.HTTP_204_NO_CONTENT)

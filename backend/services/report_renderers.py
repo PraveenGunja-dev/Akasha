@@ -56,9 +56,11 @@ def _series_color(series: dict, index: int | None = None) -> str:
 
 
 def render_visualization_spec(spec: dict | None) -> BytesIO | None:
-    """Render a validated VisualizationSpecV1 without reinterpreting domain data."""
+    """Render a validated declarative visualization without executing chart code."""
     if not spec:
         return None
+    if spec.get("schema_version") == "visualization.v2":
+        return _render_visualization_spec_v2(spec)
     shape = spec.get("shape")
     categories = list(spec.get("categories") or [])
     series = list(spec.get("series") or [])
@@ -201,6 +203,99 @@ def render_visualization_spec(spec: dict | None) -> BytesIO | None:
             draw.line((zero_x, y, x, y), fill=item_color, width=6)
             draw.ellipse((x - 12, y - 12, x + 12, y + 12), fill=item_color)
             draw.text((x + 22, y - 12), f"{value:.0f}d", fill="#172033", font=_font(18, bold=True))
+        return _png_bytes(image)
+    return None
+
+
+def _render_visualization_spec_v2(spec: dict) -> BytesIO | None:
+    rows = list(spec.get("data") or [])[:100]
+    encoding = spec.get("encoding") or {}
+    x_channel = encoding.get("x") or encoding.get("label") or {}
+    y_channels = list(encoding.get("y") or [])
+    if not rows or not y_channels:
+        return None
+    x_field = x_channel.get("field")
+    if not x_field:
+        return None
+    title = str(spec.get("title") or "Conversation visualization")
+    subtitle = str(spec.get("subtitle") or spec.get("summary") or "")[:150]
+    shape = spec.get("shape")
+    palette = [REPORT_BLUE, REPORT_TEAL, REPORT_GREEN, REPORT_AMBER, REPORT_RED, "#7C3AED"]
+
+    def numeric(value):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return 0.0
+
+    if shape in {"bar", "horizontal_bar", "stacked_bar", "waterfall", "donut"}:
+        categories = [str(row.get(x_field, "")) for row in rows][:20]
+        series = [{
+            "name": str(channel.get("label") or channel.get("field")),
+            "shape": "donut" if shape == "donut" else "bar",
+            "values": [numeric(row.get(channel.get("field"))) for row in rows[:20]],
+            "semantic_color": "primary" if index == 0 else "success" if index == 1 else "warning",
+            "value_format": channel.get("value_format") or "decimal",
+            "axis_index": int(channel.get("axis_index") or 0),
+        } for index, channel in enumerate(y_channels[:4])]
+        compatible = {
+            **spec,
+            "schema_version": "visualization.v1",
+            "shape": "donut" if shape == "donut" else "horizontal_bar" if shape == "horizontal_bar" else "vertical_bar",
+            "categories": categories,
+            "series": series,
+        }
+        return render_visualization_spec(compatible)
+
+    if shape in {"line", "scatter"}:
+        image, draw = _chart_canvas(title, subtitle)
+        left, right, top, bottom = 110, 1410, 160, 640
+        draw.line((left, bottom, right, bottom), fill="#98A2B3", width=2)
+        values = [numeric(row.get(channel.get("field"))) for channel in y_channels[:4] for row in rows]
+        minimum, maximum = min([0.0, *values]), max([1.0, *values])
+        span = maximum - minimum or 1
+        step = (right - left) / max(1, len(rows) - 1)
+        for series_index, channel in enumerate(y_channels[:4]):
+            points = [
+                (left + row_index * step, bottom - (numeric(row.get(channel.get("field"))) - minimum) / span * (bottom - top))
+                for row_index, row in enumerate(rows)
+            ]
+            color = palette[series_index]
+            if shape == "line" and len(points) > 1:
+                draw.line(points, fill=color, width=5, joint="curve")
+            for x, y in points:
+                draw.ellipse((x - 6, y - 6, x + 6, y + 6), fill=color)
+            legend_x = left + series_index * 260
+            draw.rectangle((legend_x, 690, legend_x + 20, 710), fill=color)
+            draw.text((legend_x + 28, 688), str(channel.get("label") or channel.get("field"))[:24], fill="#344054", font=_font(15))
+        draw.text((left, 654), str(rows[0].get(x_field, ""))[:24], fill="#667085", font=_font(14))
+        draw.text((right, 654), str(rows[-1].get(x_field, ""))[:24], fill="#667085", font=_font(14), anchor="ra")
+        return _png_bytes(image)
+
+    if shape == "heatmap":
+        color_channel = encoding.get("color") or {}
+        color_field = color_channel.get("field") or y_channels[0].get("field")
+        y_field = y_channels[0].get("field")
+        x_values = list(dict.fromkeys(str(row.get(x_field, "")) for row in rows))[:12]
+        y_values = list(dict.fromkeys(str(row.get(y_field, "")) for row in rows))[:10]
+        if not x_values or not y_values:
+            return None
+        heat_values = [numeric(row.get(color_field)) for row in rows]
+        maximum = max(heat_values, default=1) or 1
+        image, draw = _chart_canvas(title, subtitle, height=max(620, 230 + len(y_values) * 48))
+        left, top, cell_w, cell_h = 300, 170, min(85, 1050 / len(x_values)), 45
+        lookup = {(str(row.get(x_field, "")), str(row.get(y_field, ""))): numeric(row.get(color_field)) for row in rows}
+        for yi, y_label in enumerate(y_values):
+            draw.text((64, top + yi * cell_h + 12), y_label[:28], fill="#344054", font=_font(15))
+            for xi, x_label in enumerate(x_values):
+                value = lookup.get((x_label, y_label), 0)
+                intensity = int(235 - 165 * max(0, value) / maximum)
+                color = (intensity, min(220, intensity + 35), 245)
+                bounds = (left + xi * cell_w, top + yi * cell_h, left + (xi + 1) * cell_w - 3, top + (yi + 1) * cell_h - 3)
+                draw.rectangle(bounds, fill=color)
+                draw.text(((bounds[0] + bounds[2]) / 2, bounds[1] + 10), f"{value:g}", fill="#172033", font=_font(13), anchor="ma")
+        for xi, label in enumerate(x_values):
+            draw.text((left + xi * cell_w + cell_w / 2, top + len(y_values) * cell_h + 8), label[:10], fill="#667085", font=_font(12), anchor="ma")
         return _png_bytes(image)
     return None
 
@@ -465,6 +560,101 @@ def _risk_rows(value: dict) -> list[tuple[str, str]]:
     return rows or [("Status", "No mapped data")]
 
 
+def _conversation_visualizations(dataset: dict) -> list[dict]:
+    return [
+        item for item in (dataset.get("conversation_visualizations") or [])
+        if isinstance(item, dict) and isinstance(item.get("spec"), dict)
+    ]
+
+
+def _conversation_pdf_flowables(dataset: dict, styles, *, landscape_layout: bool = False) -> list:
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+    from reportlab.platypus import Image, PageBreak, Paragraph, Spacer, Table, TableStyle
+
+    visualizations = _conversation_visualizations(dataset)
+    if not visualizations:
+        return []
+    width = 245 * mm if landscape_layout else 170 * mm
+    height = 128 * mm if landscape_layout else 86 * mm
+    flowables = [PageBreak(), Paragraph("Charts selected from this conversation", styles["Heading1"])]
+    current_section = None
+    for visualization in visualizations:
+        section = str(visualization.get("report_section") or "appendix").title()
+        if section != current_section:
+            flowables.extend([Spacer(1, 3 * mm), Paragraph(f"{section} charts", styles["Heading2"])])
+            current_section = section
+        title = str(visualization.get("title") or "Conversation visualization")
+        summary = str(visualization.get("summary") or "")
+        freshness = visualization.get("data_as_of")
+        flowables.append(Paragraph(title, styles["Heading3"]))
+        if summary:
+            flowables.append(Paragraph(summary, styles["BodyText"]))
+        if freshness:
+            flowables.append(Paragraph(f"Data as of {freshness}", styles["BodyText"]))
+        chart = render_visualization_spec(visualization.get("spec"))
+        if chart is not None:
+            flowables.extend([Spacer(1, 2 * mm), Image(chart, width=width, height=height), Spacer(1, 4 * mm)])
+            continue
+        rows = list(visualization.get("data_table") or [])[:20]
+        columns = list(dict.fromkeys(key for row in rows for key in row))[:6]
+        flowables.append(Paragraph(
+            "Warning: this chart shape could not be rendered in the report; its saved data snapshot is shown instead.",
+            styles["BodyText"],
+        ))
+        if rows and columns:
+            data = [[str(column).replace("_", " ").title() for column in columns]] + [
+                [str(row.get(column, ""))[:80] for column in columns] for row in rows
+            ]
+            flowables.append(Table(data, repeatRows=1, style=TableStyle([
+                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#E2E8F0")),
+                ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
+                ("FONTSIZE", (0, 0), (-1, -1), 7),
+                ("VALIGN", (0, 0), (-1, -1), "TOP"),
+                ("PADDING", (0, 0), (-1, -1), 3),
+            ])))
+    return flowables
+
+
+def _append_conversation_docx(document, dataset: dict, *, landscape_layout: bool = False) -> None:
+    from docx.shared import Inches
+
+    visualizations = _conversation_visualizations(dataset)
+    if not visualizations:
+        return
+    document.add_page_break()
+    document.add_heading("Charts selected from this conversation", level=1)
+    current_section = None
+    for visualization in visualizations:
+        section = str(visualization.get("report_section") or "appendix").title()
+        if section != current_section:
+            document.add_heading(f"{section} charts", level=2)
+            current_section = section
+        document.add_heading(str(visualization.get("title") or "Conversation visualization"), level=3)
+        if visualization.get("summary"):
+            document.add_paragraph(str(visualization["summary"]))
+        if visualization.get("data_as_of"):
+            document.add_paragraph(f"Data as of {visualization['data_as_of']}")
+        chart = render_visualization_spec(visualization.get("spec"))
+        if chart is not None:
+            document.add_picture(chart, width=Inches(8.7 if landscape_layout else 6.55))
+            continue
+        document.add_paragraph(
+            "Warning: this chart shape could not be rendered in the report; its saved data snapshot is shown instead."
+        )
+        rows = list(visualization.get("data_table") or [])[:20]
+        columns = list(dict.fromkeys(key for row in rows for key in row))[:6]
+        if rows and columns:
+            table = document.add_table(rows=1, cols=len(columns))
+            table.style = "Table Grid"
+            for cell, column in zip(table.rows[0].cells, columns):
+                cell.text = str(column).replace("_", " ").title()
+            for row in rows:
+                cells = table.add_row().cells
+                for cell, column in zip(cells, columns):
+                    cell.text = str(row.get(column, ""))[:500]
+
+
 def render_project_progress_pdf(dataset: dict, path: Path) -> None:
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4
@@ -536,6 +726,7 @@ def render_project_progress_pdf(dataset: dict, path: Path) -> None:
         ("FONTSIZE", (0, 0), (-1, -1), 8),
         ("PADDING", (0, 0), (-1, -1), 4),
     ])))
+    story.extend(_conversation_pdf_flowables(dataset, styles))
     SimpleDocTemplate(str(path), pagesize=A4, rightMargin=18*mm, leftMargin=18*mm).build(story)
 
 
@@ -599,6 +790,7 @@ def render_project_progress_docx(dataset: dict, path: Path) -> None:
         cells[1].text = str(row.get("name") or "")
         cells[2].text = f"{row.get('percent_complete')}%"
     _style_docx_table(activity_table, [1.2, 4.1, 1.2])
+    _append_conversation_docx(document, dataset)
     document.add_paragraph("Confidential - generated by Akasha from synchronized source data.")
     document.save(str(path))
 
@@ -715,6 +907,7 @@ def render_portfolio_progress_pdf(dataset: dict, path: Path) -> None:
     story.append(detail)
     for limitation in metadata.get("limitations") or []:
         story.extend([Spacer(1, 3 * mm), Paragraph(f"Limitation: {limitation}", styles["BodyText"])])
+    story.extend(_conversation_pdf_flowables(dataset, styles, landscape_layout=True))
     SimpleDocTemplate(
         str(path), pagesize=landscape(A4), rightMargin=14 * mm, leftMargin=14 * mm,
         topMargin=12 * mm, bottomMargin=12 * mm,
@@ -764,6 +957,7 @@ def render_portfolio_progress_docx(dataset: dict, path: Path) -> None:
     document.add_heading("Limitations", level=2)
     for limitation in dataset["metadata"].get("limitations") or []:
         document.add_paragraph(limitation, style="List Bullet")
+    _append_conversation_docx(document, dataset, landscape_layout=True)
     document.add_paragraph("Confidential - generated by Akasha from synchronized source data.")
     document.save(str(path))
 
@@ -845,6 +1039,7 @@ def render_project_comparison_pdf(dataset: dict, path: Path) -> None:
     story.extend([Spacer(1, 4 * mm), Paragraph("Limitations", styles["Heading2"])])
     for limitation in metadata.get("limitations") or []:
         story.append(Paragraph(f"• {limitation}", styles["BodyText"]))
+    story.extend(_conversation_pdf_flowables(dataset, styles, landscape_layout=True))
     SimpleDocTemplate(
         str(path), pagesize=landscape(A4), rightMargin=14 * mm, leftMargin=14 * mm,
         topMargin=12 * mm, bottomMargin=12 * mm,
@@ -883,5 +1078,6 @@ def render_project_comparison_docx(dataset: dict, path: Path) -> None:
     document.add_heading("Limitations", level=2)
     for limitation in dataset["metadata"].get("limitations") or []:
         document.add_paragraph(limitation, style="List Bullet")
+    _append_conversation_docx(document, dataset, landscape_layout=True)
     document.add_paragraph("Confidential - generated by Akasha from synchronized source data.")
     document.save(str(path))

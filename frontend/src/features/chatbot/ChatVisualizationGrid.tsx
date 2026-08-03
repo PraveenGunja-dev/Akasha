@@ -2,14 +2,23 @@ import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { EChartsOption } from 'echarts';
 import ReactECharts from 'echarts-for-react';
-import { BarChart3, CalendarDays, Maximize2, Minimize2, Table2 } from 'lucide-react';
+import { BarChart3, CalendarDays, FileCheck2, FileMinus2, FileQuestion, Maximize2, Minimize2, Table2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
-import { ensureReadableTooltip, visualizationSpecToECharts } from './visualizationAdapter';
-import { isVisualizationSpecV1, type ChartVisualization } from './visualizationTypes';
+import {
+  ensureReadableTooltip,
+  visualizationSpecToECharts,
+  visualizationSpecV2ToECharts,
+} from './visualizationAdapter';
+import {
+  isVisualizationSpecV1,
+  isVisualizationSpecV2,
+  type ChartVisualization,
+} from './visualizationTypes';
 
 interface ChatVisualizationGridProps {
   visualizations: ChartVisualization[];
+  onReportInclusionChange?: (index: number, value: 'auto' | 'include' | 'exclude') => Promise<void>;
 }
 
 function friendlyLabel(value: string): string {
@@ -39,17 +48,38 @@ function ChartDataTable({ rows }: { rows: Array<Record<string, unknown>> }) {
   );
 }
 
-function VisualizationCard({ visualization, index }: { visualization: ChartVisualization; index: number }) {
+function VisualizationCard({
+  visualization,
+  index,
+  onReportInclusionChange,
+}: {
+  visualization: ChartVisualization;
+  index: number;
+  onReportInclusionChange?: ChatVisualizationGridProps['onReportInclusionChange'];
+}) {
   const [showTable, setShowTable] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const semanticSpec = isVisualizationSpecV1(visualization.spec) ? visualization.spec : null;
-  const rows = visualization.data_table ?? semanticSpec?.data_table ?? [];
+  const [savingInclusion, setSavingInclusion] = useState(false);
+  const v1Spec = isVisualizationSpecV1(visualization.spec) ? visualization.spec : null;
+  const v2Spec = isVisualizationSpecV2(visualization.spec) ? visualization.spec : null;
+  const legacyOption = !v1Spec && !v2Spec && visualization.schema_version !== 'visualization.v2'
+    && visualization.spec && typeof visualization.spec === 'object'
+    ? visualization.spec as EChartsOption
+    : null;
+  const rows = visualization.data_table ?? v1Spec?.data_table ?? v2Spec?.data ?? [];
   const option = useMemo(
-    () => semanticSpec
-      ? visualizationSpecToECharts(semanticSpec)
-      : ensureReadableTooltip(visualization.spec as EChartsOption),
-    [semanticSpec, visualization.spec],
+    () => v2Spec
+      ? visualizationSpecV2ToECharts(v2Spec)
+      : v1Spec
+        ? visualizationSpecToECharts(v1Spec)
+        : legacyOption
+          ? ensureReadableTooltip(legacyOption)
+          : null,
+    [legacyOption, v1Spec, v2Spec],
   );
+  const reportInclusion = visualization.report_inclusion ?? 'auto';
+  const nextReportInclusion = reportInclusion === 'auto' ? 'include' : reportInclusion === 'include' ? 'exclude' : 'auto';
+  const ReportIcon = reportInclusion === 'include' ? FileCheck2 : reportInclusion === 'exclude' ? FileMinus2 : FileQuestion;
 
   useEffect(() => {
     if (!expanded) return undefined;
@@ -65,17 +95,21 @@ function VisualizationCard({ visualization, index }: { visualization: ChartVisua
     };
   }, [expanded]);
 
-  const renderChart = (isExpanded = false) => (
-    <ReactECharts
-      option={option}
-      style={{ height: isExpanded ? '100%' : 390, width: '100%' }}
-      className={isExpanded ? 'chat-chart-expanded-canvas' : undefined}
-      notMerge
-      lazyUpdate
-      opts={{ renderer: 'svg' }}
-      aria-label={visualization.accessibility_description || visualization.title || 'Data visualization'}
-    />
-  );
+  const renderChart = (isExpanded = false) => option ? (
+      <ReactECharts
+        option={option}
+        style={{ height: isExpanded ? '100%' : 390, width: '100%' }}
+        className={isExpanded ? 'chat-chart-expanded-canvas' : undefined}
+        notMerge
+        lazyUpdate
+        opts={{ renderer: 'svg' }}
+        aria-label={visualization.accessibility_description || visualization.title || 'Data visualization'}
+      />
+    ) : (
+      <div role="status" className="flex h-full min-h-48 items-center justify-center px-6 text-center text-sm text-muted-foreground">
+        This saved visualization uses an unsupported or invalid specification. Its validated data table remains available.
+      </div>
+    );
 
   return (
     <motion.article
@@ -91,6 +125,24 @@ function VisualizationCard({ visualization, index }: { visualization: ChartVisua
           {visualization.subtitle && <p className="chart-subtitle">{visualization.subtitle}</p>}
         </div>
         <div className="chart-actions">
+          {onReportInclusionChange && (
+            <button
+              type="button"
+              disabled={savingInclusion}
+              onClick={async () => {
+                setSavingInclusion(true);
+                try {
+                  await onReportInclusionChange(index, nextReportInclusion);
+                } finally {
+                  setSavingInclusion(false);
+                }
+              }}
+              title={`Report selection: ${friendlyLabel(reportInclusion)}. Click for ${friendlyLabel(nextReportInclusion)}.`}
+              aria-label={`Report selection is ${reportInclusion}`}
+            >
+              <ReportIcon className="h-3.5 w-3.5" />
+            </button>
+          )}
           {rows.length > 0 && (
             <button type="button" onClick={() => setShowTable(value => !value)} title="Toggle data table">
               <Table2 className="h-3.5 w-3.5" />
@@ -143,12 +195,17 @@ function VisualizationCard({ visualization, index }: { visualization: ChartVisua
   );
 }
 
-export default function ChatVisualizationGrid({ visualizations }: ChatVisualizationGridProps) {
+export default function ChatVisualizationGrid({ visualizations, onReportInclusionChange }: ChatVisualizationGridProps) {
   if (!visualizations.length) return null;
   return (
     <section className={`chat-visualization-grid ${visualizations.length > 1 ? 'is-multi' : ''}`}>
       {visualizations.slice(0, 4).map((visualization, index) => (
-        <VisualizationCard key={`${visualization.chart_type || 'chart'}-${index}`} visualization={visualization} index={index} />
+        <VisualizationCard
+          key={`${visualization.chart_type || 'chart'}-${index}`}
+          visualization={visualization}
+          index={index}
+          onReportInclusionChange={onReportInclusionChange}
+        />
       ))}
     </section>
   );

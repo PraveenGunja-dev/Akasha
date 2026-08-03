@@ -131,7 +131,6 @@ _FOLLOW_UP = re.compile(
     r"\b(?:it|its|that|those|them|this project|that project|same project|above)\b",
     re.IGNORECASE,
 )
-_SHOW_ME = re.compile(r"^\s*(?:please\s+)?show\s+me\b", re.IGNORECASE)
 
 
 def _detected_domains(text: str) -> set[str]:
@@ -246,9 +245,6 @@ def select_tool_route(
         or re.search(r"\b(?:project|overall)\s+(?:progress|status|completion)\b", current, re.IGNORECASE)
     ):
         current_domains.add("p6")
-
-    if _SHOW_ME.search(current):
-        current_domains.add("visualization")
 
     operational = bool(
         current_domains

@@ -435,21 +435,69 @@ def generate_narrative(dataset: dict) -> str:
         return fallback
 
 
-def _preview_payload(session_id: str, project_id: str, expires: int) -> str:
-    return json.dumps({"s": session_id, "p": project_id, "e": expires}, separators=(",", ":"))
+def _preview_payload(
+    session_id: str, project_id: str, expires: int, visualization_refs: list[dict] | None = None
+) -> str:
+    payload = {"s": session_id, "p": project_id, "e": expires}
+    if visualization_refs is not None:
+        payload["v"] = visualization_refs
+    return json.dumps(payload, separators=(",", ":"))
 
 
-def create_preview_token(session_id: str, project_id: str) -> str:
-    payload = _preview_payload(session_id, project_id, int((datetime.utcnow() + timedelta(hours=1)).timestamp()))
+def create_preview_token(
+    session_id: str, project_id: str, visualization_refs: list[dict] | None = None
+) -> str:
+    payload = _preview_payload(
+        session_id,
+        project_id,
+        int((datetime.utcnow() + timedelta(hours=1)).timestamp()),
+        visualization_refs,
+    )
     encoded = base64.urlsafe_b64encode(payload.encode()).decode().rstrip("=")
     signature = hmac.new(_PREVIEW_SECRET, encoded.encode(), hashlib.sha256).hexdigest()
     return f"{encoded}.{signature}"
 
 
-def create_project_progress_preview(db, runtime, project_id: str) -> dict:
+def _latest_report_request(db, session_id: str) -> str | None:
+    message = db.query(models.ChatMessage).filter(
+        models.ChatMessage.session_id == session_id,
+        models.ChatMessage.role == "user",
+    ).order_by(models.ChatMessage.created_at.desc(), models.ChatMessage.id.desc()).first()
+    return message.content if message is not None else None
+
+
+def _preview_visualizations(
+    db, runtime, *, scope_kind: str, project_ids: list[str] | None, chart_selection: str | None
+) -> tuple[list[dict], list[dict], list[dict]]:
+    from services.report_visualization_service import select_conversation_visualizations
+
+    selected, excluded = select_conversation_visualizations(
+        db,
+        session_id=runtime.session_id,
+        scope_kind=scope_kind,
+        scope_project_ids=project_ids,
+        selection_text=chart_selection or _latest_report_request(db, runtime.session_id),
+    )
+    return (
+        [item.reference() for item in selected],
+        [{
+            "title": item.report_payload()["title"],
+            "section": item.domain,
+            "reason": item.reason,
+        } for item in selected],
+        excluded,
+    )
+
+
+def create_project_progress_preview(
+    db, runtime, project_id: str, chart_selection: str | None = None
+) -> dict:
     dataset = build_project_progress_dataset(db, project_id)
     metadata = dataset["metadata"]
     summary = dataset["project_summary"]
+    refs, selected, excluded = _preview_visualizations(
+        db, runtime, scope_kind="project", project_ids=[project_id], chart_selection=chart_selection
+    )
     return {
         "status": "awaiting_confirmation",
         "report_type": "Project Progress Report",
@@ -465,19 +513,27 @@ def create_project_progress_preview(db, runtime, project_id: str) -> dict:
             "Pulse Quality",
             "Capacity Milestones",
             "Named Risk Metrics",
+            "Selected Conversation Charts",
             "Source Freshness",
         ],
         "source_freshness": metadata["source_freshness"],
         "missing_sources": metadata["missing_sources"],
         "progress_pct": summary.get("duration_percent_complete"),
-        "preview_token": create_preview_token(runtime.session_id, project_id),
+        "conversation_charts": selected,
+        "excluded_conversation_charts": excluded,
+        "preview_token": create_preview_token(runtime.session_id, project_id, refs),
         "instruction": "Show this preview and ask the user to confirm. Do not generate the report in the same turn.",
     }
 
 
-def create_portfolio_progress_preview(db, runtime, portfolio: str | None = None) -> dict:
+def create_portfolio_progress_preview(
+    db, runtime, portfolio: str | None = None, chart_selection: str | None = None
+) -> dict:
     dataset = build_portfolio_progress_dataset(db, portfolio)
     metadata = dataset["metadata"]
+    refs, selected, excluded = _preview_visualizations(
+        db, runtime, scope_kind="portfolio", project_ids=None, chart_selection=chart_selection
+    )
     return {
         "status": "awaiting_confirmation",
         "report_type": "Portfolio Progress Report",
@@ -488,18 +544,29 @@ def create_portfolio_progress_preview(db, runtime, portfolio: str | None = None)
         "formats": ["PDF", "DOCX"],
         "sections": [
             "Executive Summary", "Portfolio KPI Summary", "Project Progress",
-            "Schedule Exposure", "Source Freshness", "Limitations",
+            "Schedule Exposure", "Selected Conversation Charts", "Source Freshness", "Limitations",
         ],
         "summary": dataset["summary"],
         "source_freshness": metadata["source_freshness"],
-        "preview_token": create_preview_token(runtime.session_id, _portfolio_token_scope(portfolio)),
+        "conversation_charts": selected,
+        "excluded_conversation_charts": excluded,
+        "preview_token": create_preview_token(runtime.session_id, _portfolio_token_scope(portfolio), refs),
         "instruction": "Show this preview and ask the user to confirm. Do not generate the report in the same turn.",
     }
 
 
-def create_project_comparison_preview(db, runtime, project_ids: list[str]) -> dict:
+def create_project_comparison_preview(
+    db, runtime, project_ids: list[str], chart_selection: str | None = None
+) -> dict:
     dataset = build_project_comparison_dataset(db, project_ids)
     metadata = dataset["metadata"]
+    refs, selected, excluded = _preview_visualizations(
+        db,
+        runtime,
+        scope_kind="comparison",
+        project_ids=metadata["project_ids"],
+        chart_selection=chart_selection,
+    )
     return {
         "status": "awaiting_confirmation",
         "report_type": "Project Comparison Report",
@@ -509,11 +576,14 @@ def create_project_comparison_preview(db, runtime, project_ids: list[str]) -> di
         "formats": ["PDF", "DOCX"],
         "sections": [
             "Executive Summary", "Key Metrics Comparison", "Progress Visual",
-            "Activity Composition", "Duration Profile", "Baseline Slip", "Limitations",
+            "Activity Composition", "Duration Profile", "Baseline Slip",
+            "Selected Conversation Charts", "Limitations",
         ],
         "source_freshness": metadata["source_freshness"],
+        "conversation_charts": selected,
+        "excluded_conversation_charts": excluded,
         "preview_token": create_preview_token(
-            runtime.session_id, _comparison_token_scope(metadata["project_ids"])
+            runtime.session_id, _comparison_token_scope(metadata["project_ids"]), refs
         ),
         "instruction": (
             "Show this preview after the in-chat comparison and ask whether the user wants the "
@@ -522,7 +592,7 @@ def create_project_comparison_preview(db, runtime, project_ids: list[str]) -> di
     }
 
 
-def validate_preview_token(token: str, session_id: str, project_id: str) -> None:
+def validate_preview_token(token: str, session_id: str, project_id: str) -> dict:
     try:
         encoded, signature = token.split(".", 1)
         expected = hmac.new(_PREVIEW_SECRET, encoded.encode(), hashlib.sha256).hexdigest()
@@ -530,10 +600,15 @@ def validate_preview_token(token: str, session_id: str, project_id: str) -> None
             raise ValueError
         padded = encoded + "=" * (-len(encoded) % 4)
         payload = json.loads(base64.urlsafe_b64decode(padded).decode())
-        if payload != json.loads(_preview_payload(session_id, project_id, payload["e"])):
+        if payload.get("s") != session_id or payload.get("p") != project_id:
+            raise ValueError
+        if set(payload) - {"s", "p", "e", "v"}:
+            raise ValueError
+        if not isinstance(payload.get("v", []), list):
             raise ValueError
         if int(payload["e"]) < int(datetime.utcnow().timestamp()):
             raise ValueError
+        return payload
     except Exception as exc:
         raise ValueError("Report preview is invalid or expired. Create a new preview.") from exc
 
@@ -580,9 +655,13 @@ def _record_artifact(
 
 
 def generate_project_progress_report(db, runtime, project_id: str, preview_token: str) -> dict:
-    validate_preview_token(preview_token, runtime.session_id, project_id)
+    preview = validate_preview_token(preview_token, runtime.session_id, project_id)
     cleanup_expired_artifacts(db)
     dataset = build_project_progress_dataset(db, project_id)
+    from services.report_visualization_service import resolve_visualization_references
+    dataset["conversation_visualizations"] = resolve_visualization_references(
+        db, session_id=runtime.session_id, references=preview.get("v") or []
+    )
     dataset["executive_summary"] = generate_narrative(dataset)
     from services.report_renderers import render_project_progress_docx, render_project_progress_pdf
 
@@ -614,9 +693,13 @@ def generate_project_progress_report(db, runtime, project_id: str, preview_token
 def generate_portfolio_progress_report(
     db, runtime, preview_token: str, portfolio: str | None = None
 ) -> dict:
-    validate_preview_token(preview_token, runtime.session_id, _portfolio_token_scope(portfolio))
+    preview = validate_preview_token(preview_token, runtime.session_id, _portfolio_token_scope(portfolio))
     cleanup_expired_artifacts(db)
     dataset = build_portfolio_progress_dataset(db, portfolio)
+    from services.report_visualization_service import resolve_visualization_references
+    dataset["conversation_visualizations"] = resolve_visualization_references(
+        db, session_id=runtime.session_id, references=preview.get("v") or []
+    )
     summary = dataset["summary"]
     dataset["executive_summary"] = (
         f"The {dataset['metadata']['portfolio']} portfolio contains {summary['total_projects']} projects. "
@@ -656,9 +739,13 @@ def generate_project_comparison_report(
     db, runtime, project_ids: list[str], preview_token: str
 ) -> dict:
     scope = _comparison_token_scope(project_ids)
-    validate_preview_token(preview_token, runtime.session_id, scope)
+    preview = validate_preview_token(preview_token, runtime.session_id, scope)
     cleanup_expired_artifacts(db)
     dataset = build_project_comparison_dataset(db, project_ids)
+    from services.report_visualization_service import resolve_visualization_references
+    dataset["conversation_visualizations"] = resolve_visualization_references(
+        db, session_id=runtime.session_id, references=preview.get("v") or []
+    )
     rows = dataset["projects"]
     highest_progress = max(rows, key=lambda row: float(row.get("progress_pct") or 0))
     highest_slip = max(rows, key=lambda row: int(row.get("baseline_slip_days") or 0))

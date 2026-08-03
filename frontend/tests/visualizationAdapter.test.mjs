@@ -4,7 +4,9 @@ import test from 'node:test';
 import {
   ensureReadableTooltip,
   visualizationSpecToECharts,
+  visualizationSpecV2ToECharts,
 } from '../src/features/chatbot/visualizationAdapter.ts';
+import { isVisualizationSpecV2 } from '../src/features/chatbot/visualizationTypes.ts';
 
 
 function spec(shape = 'combo') {
@@ -70,4 +72,71 @@ test('legacy ECharts options receive a readable confined tooltip', () => {
   assert.equal(option.tooltip.renderMode, 'html');
   assert.equal(option.tooltip.confine, true);
   assert.equal(option.tooltip.textStyle.color, '#111827');
+});
+
+function specV2(shape = 'bar') {
+  return {
+    schema_version: 'visualization.v2',
+    chart_id: 'dynamic.test',
+    chart_type: 'portfolio.procurement_schedule',
+    shape,
+    title: 'Procurement and Schedule',
+    summary: 'Validated comparison.',
+    accessibility_description: 'Procurement and schedule comparison.',
+    encoding: {
+      x: { field: 'project', label: 'Project', field_type: 'categorical', axis_index: 0 },
+      y: [
+        { field: 'fulfillment', label: 'Fulfilment', field_type: 'quantitative', value_format: 'percent', unit: 'percent', axis_index: 0 },
+        { field: 'delay', label: 'Delay', field_type: 'quantitative', value_format: 'days', unit: 'days', axis_index: 1 },
+      ],
+    },
+    data: [{ project: 'Project One', fulfillment: 60, delay: 30 }],
+    source_tables: ['p6_project', 'mt_poamount'],
+    spec_hash: 'sha256:test',
+  };
+}
+
+test('V2 grouped bars render compatible dual unit axes', () => {
+  const dynamic = specV2();
+  assert.equal(isVisualizationSpecV2(dynamic), true);
+  const option = visualizationSpecV2ToECharts(dynamic);
+
+  assert.equal(Array.isArray(option.yAxis), true);
+  assert.equal(option.yAxis[0].axisLabel.formatter, '{value}%');
+  assert.equal(option.yAxis[1].axisLabel.formatter, '{value}d');
+  assert.equal(option.series[1].yAxisIndex, 1);
+  assert.deepEqual(option.dataset.source, dynamic.data);
+});
+
+test('V2 heatmaps use only declared data fields', () => {
+  const dynamic = specV2('heatmap');
+  dynamic.encoding = {
+    x: { field: 'month', label: 'Month', field_type: 'temporal', axis_index: 0 },
+    y: [{ field: 'block', label: 'Block', field_type: 'categorical', axis_index: 0 }],
+    color: { field: 'delayed', label: 'Delayed activities', field_type: 'quantitative', value_format: 'integer', axis_index: 0 },
+  };
+  dynamic.data = [{ month: '2026-08', block: 'BLOCK-01', delayed: 2 }];
+
+  const option = visualizationSpecV2ToECharts(dynamic);
+
+  assert.deepEqual(option.series[0].data, [{
+    value: [0, 0, 2],
+    raw: { month: '2026-08', block: 'BLOCK-01', delayed: 2 },
+  }]);
+  assert.deepEqual(option.xAxis.data, ['2026-08']);
+  assert.deepEqual(option.yAxis.data, ['BLOCK-01']);
+});
+
+test('V2 runtime guard rejects missing fields and oversized data', () => {
+  const missing = specV2();
+  missing.data = [{ project: 'Project One', fulfillment: 60 }];
+  assert.equal(isVisualizationSpecV2(missing), false);
+
+  const oversized = specV2();
+  oversized.data = Array.from({ length: 501 }, (_, index) => ({
+    project: `Project ${index}`,
+    fulfillment: 50,
+    delay: 1,
+  }));
+  assert.equal(isVisualizationSpecV2(oversized), false);
 });

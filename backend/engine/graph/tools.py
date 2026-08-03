@@ -14,6 +14,7 @@ from engine.agent import TOOLS, build_chart_result, execute_tool
 import models
 from services.project_catalog_service import ProjectCatalogService
 from services.freshness_service import extract_tool_evidence
+from services.dynamic_visualization import DATASET_CATALOG, VisualizationQueryV2
 
 
 logger = logging.getLogger(__name__)
@@ -159,11 +160,19 @@ class ActivityFinishForecastArguments(ProjectArguments):
 
 
 class ReportGenerateArguments(ProjectArguments):
-    preview_token: str = Field(min_length=40, max_length=1_000)
+    preview_token: str = Field(min_length=40, max_length=5_000)
+
+
+class ReportPreviewArguments(ProjectArguments):
+    chart_selection: str | None = Field(default=None, max_length=1_000)
+
+
+class PortfolioReportPreviewArguments(PortfolioArguments):
+    chart_selection: str | None = Field(default=None, max_length=1_000)
 
 
 class PortfolioReportGenerateArguments(PortfolioArguments):
-    preview_token: str = Field(min_length=40, max_length=1_000)
+    preview_token: str = Field(min_length=40, max_length=5_000)
 
 
 class ComparisonReportArguments(ToolArguments):
@@ -176,22 +185,33 @@ class ComparisonReportArguments(ToolArguments):
         return self
 
 
+class ComparisonReportPreviewArguments(ComparisonReportArguments):
+    chart_selection: str | None = Field(default=None, max_length=1_000)
+
+
 class ComparisonReportGenerateArguments(ComparisonReportArguments):
-    preview_token: str = Field(min_length=40, max_length=1_000)
+    preview_token: str = Field(min_length=40, max_length=5_000)
 
 
 class ChartArguments(ToolArguments):
     chart_type: Literal[
-        "auto", "auto_dashboard", "activity_status", "project_comparison", "delayed_activities",
+        "auto", "activity_status", "project_comparison", "delayed_activities",
         "material_gaps", "vendor_performance", "sap_po_fulfillment",
         "transmission_status", "portfolio_risk", "daily_completion_trend",
         "planned_vs_actual_progress", "block_progress",
-    ]
+    ] | None = None
+    visualization_query: VisualizationQueryV2 | None = None
     project_id: str | None = Field(default=None, max_length=200)
     project_ids: list[str] | None = Field(default=None, max_length=20)
-    domain_hint: str | None = Field(default=None, max_length=500)
+    domain_hint: str | None = Field(default=None, max_length=100)
     days: int = Field(default=30, ge=1, le=365)
     limit: int = Field(default=12, ge=1, le=20)
+
+    @model_validator(mode="after")
+    def validate_chart_mode(self):
+        if (self.chart_type is None) == (self.visualization_query is None):
+            raise ValueError("Provide exactly one of chart_type or visualization_query")
+        return self
 
 
 ARGUMENT_MODELS: dict[str, type[ToolArguments]] = {
@@ -230,11 +250,11 @@ ARGUMENT_MODELS: dict[str, type[ToolArguments]] = {
     "sim_forecast_completion": ProjectArguments,
     "sim_forecast_activity_finishes": ActivityFinishForecastArguments,
     "render_chart": ChartArguments,
-    "report_preview_project_progress": ProjectArguments,
+    "report_preview_project_progress": ReportPreviewArguments,
     "report_generate_project_progress": ReportGenerateArguments,
-    "report_preview_portfolio_progress": PortfolioArguments,
+    "report_preview_portfolio_progress": PortfolioReportPreviewArguments,
     "report_generate_portfolio_progress": PortfolioReportGenerateArguments,
-    "report_preview_project_comparison": ComparisonReportArguments,
+    "report_preview_project_comparison": ComparisonReportPreviewArguments,
     "report_generate_project_comparison": ComparisonReportGenerateArguments,
 }
 
@@ -375,15 +395,21 @@ def execute_authenticated_tool(
         _check_cancelled(db, runtime.run_id)
         if (
             name == "render_chart"
-            and validated.get("chart_type") == "auto_dashboard"
+            and runtime.active_project_ids
             and not validated.get("project_id")
             and not validated.get("project_ids")
-            and runtime.active_project_ids
         ):
-            if len(runtime.active_project_ids) == 1:
-                validated["project_id"] = runtime.active_project_ids[0]
+            query = validated.get("visualization_query")
+            if query:
+                dataset = DATASET_CATALOG[query["dataset_id"]]
+                if dataset.requires_project:
+                    if len(runtime.active_project_ids) != 1:
+                        raise PermissionError("This visualization requires one selected project.")
+                    validated["project_id"] = runtime.active_project_ids[0]
+                else:
+                    validated["project_ids"] = list(runtime.active_project_ids[:20])
             else:
-                validated["project_ids"] = list(runtime.active_project_ids[:4])
+                raise PermissionError("Portfolio-wide visualization is outside the selected project scope.")
         if runtime.active_project_ids and _is_portfolio_tool(name, validated):
             raise PermissionError("Portfolio-wide access is outside the selected project scope.")
         project_ids = []
@@ -405,7 +431,9 @@ def execute_authenticated_tool(
                 visualization = visualizations[0] if len(visualizations) == 1 else None
         elif name == "report_preview_project_progress":
             from services.report_mvp_service import create_project_progress_preview
-            raw = create_project_progress_preview(db, runtime, validated["project_id"])
+            raw = create_project_progress_preview(
+                db, runtime, validated["project_id"], validated.get("chart_selection")
+            )
         elif name == "report_generate_project_progress":
             from services.report_mvp_service import generate_project_progress_report
             raw = generate_project_progress_report(
@@ -416,7 +444,9 @@ def execute_authenticated_tool(
             )
         elif name == "report_preview_portfolio_progress":
             from services.report_mvp_service import create_portfolio_progress_preview
-            raw = create_portfolio_progress_preview(db, runtime, validated.get("portfolio"))
+            raw = create_portfolio_progress_preview(
+                db, runtime, validated.get("portfolio"), validated.get("chart_selection")
+            )
         elif name == "report_generate_portfolio_progress":
             from services.report_mvp_service import generate_portfolio_progress_report
             raw = generate_portfolio_progress_report(
@@ -427,7 +457,9 @@ def execute_authenticated_tool(
             )
         elif name == "report_preview_project_comparison":
             from services.report_mvp_service import create_project_comparison_preview
-            raw = create_project_comparison_preview(db, runtime, validated["project_ids"])
+            raw = create_project_comparison_preview(
+                db, runtime, validated["project_ids"], validated.get("chart_selection")
+            )
         elif name == "report_generate_project_comparison":
             from services.report_mvp_service import generate_project_comparison_report
             raw = generate_project_comparison_report(

@@ -1,6 +1,11 @@
 import type { EChartsOption } from 'echarts';
 
-import type { VisualizationSeriesV1, VisualizationSpecV1 } from './visualizationTypes';
+import type {
+  VisualizationChannelV2,
+  VisualizationSeriesV1,
+  VisualizationSpecV1,
+  VisualizationSpecV2,
+} from './visualizationTypes';
 
 const SEMANTIC_COLORS: Record<string, string> = {
   primary: '#2563EB',
@@ -27,6 +32,7 @@ interface TooltipParam {
   name?: string;
   seriesName?: string;
   value?: unknown;
+  data?: unknown;
 }
 
 function escapeHtml(value: unknown): string {
@@ -366,6 +372,250 @@ export function visualizationSpecToECharts(spec: VisualizationSpecV1): EChartsOp
   if (spec.shape === 'radial_progress') return radialProgress(spec);
   if (spec.shape === 'lollipop') return lollipop(spec);
   return combo(spec);
+}
+
+function channelAxisFormatter(channel: VisualizationChannelV2 | undefined): string | undefined {
+  if (channel?.value_format === 'percent') return '{value}%';
+  if (channel?.value_format === 'days') return '{value}d';
+  if (channel?.value_format === 'mw') return '{value} MW';
+  return undefined;
+}
+
+function v2TooltipFormatter(spec: VisualizationSpecV2, input: unknown): string {
+  const params = (Array.isArray(input) ? input : [input]).filter(
+    (item): item is TooltipParam => Boolean(item && typeof item === 'object'),
+  );
+  if (!params.length) return '';
+  const firstRecord = params[0].value && typeof params[0].value === 'object' && !Array.isArray(params[0].value)
+    ? params[0].value as Record<string, unknown>
+    : params[0].data && typeof params[0].data === 'object' && 'raw' in params[0].data
+      ? (params[0].data as { raw: Record<string, unknown> }).raw
+      : undefined;
+  const heading = params[0].axisValueLabel
+    || (spec.encoding.label && firstRecord ? firstRecord[spec.encoding.label.field] : undefined)
+    || params[0].name;
+  const rows = params.map(param => {
+    const channel = spec.encoding.y.find(item => item.label === param.seriesName)
+      || (spec.encoding.color?.label === param.seriesName ? spec.encoding.color : undefined)
+      || spec.encoding.y[0]
+      || spec.encoding.color;
+    const record = param.value && typeof param.value === 'object' && !Array.isArray(param.value)
+      ? param.value as Record<string, unknown>
+      : param.data && typeof param.data === 'object' && 'raw' in param.data
+        ? (param.data as { raw: Record<string, unknown> }).raw
+        : undefined;
+    const rawValue = channel && record
+      ? record[channel.field]
+      : Array.isArray(param.value)
+        ? param.value[param.value.length - 1]
+        : param.value;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:16px;margin-top:5px;">`
+      + `<span>${escapeHtml(channel?.label || param.seriesName || 'Value')}</span>`
+      + `<strong style="font-weight:600;white-space:nowrap;">${escapeHtml(tooltipValue(rawValue, channel?.value_format === 'mw' ? 'decimal' : channel?.value_format ?? undefined))}${channel?.value_format === 'mw' ? ' MW' : ''}</strong>`
+      + `</div>`;
+  }).join('');
+  return `${heading ? `<div style="font-weight:600;margin-bottom:2px;">${escapeHtml(heading)}</div>` : ''}${rows}`;
+}
+
+function v2BaseOption(spec: VisualizationSpecV2): EChartsOption {
+  const tooltipColors = tooltipTheme();
+  return {
+    animationDuration: 550,
+    animationEasing: 'cubicOut',
+    aria: { enabled: true, decal: { show: true }, description: spec.accessibility_description },
+    textStyle: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' },
+    tooltip: {
+      trigger: spec.shape === 'scatter' || spec.shape === 'donut' || spec.shape === 'heatmap' ? 'item' : 'axis',
+      renderMode: 'html',
+      confine: true,
+      backgroundColor: tooltipColors.background,
+      borderColor: tooltipColors.border,
+      borderWidth: 1,
+      textStyle: { color: tooltipColors.foreground, fontSize: 12 },
+      extraCssText: 'max-width:320px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.18);line-height:1.35;',
+      formatter: input => v2TooltipFormatter(spec, input),
+    },
+  };
+}
+
+function cartesianV2(spec: VisualizationSpecV2): EChartsOption {
+  const dimension = spec.encoding.x!;
+  const horizontal = spec.shape === 'horizontal_bar';
+  const categoryAxis = {
+    type: 'category' as const,
+    name: dimension.label,
+    axisLabel: { ...mutedTextStyle, hideOverlap: true, width: 150, overflow: 'truncate' as const },
+    axisLine: { lineStyle: { color: 'var(--border)' } },
+  };
+  const primaryMetric = spec.encoding.y.find(metric => (metric.axis_index ?? 0) === 0) ?? spec.encoding.y[0];
+  const secondaryMetric = spec.encoding.y.find(metric => metric.axis_index === 1);
+  const valueAxisFor = (metric: VisualizationChannelV2 | undefined, position: 'left' | 'right' = 'left') => ({
+    type: 'value' as const,
+    name: metric?.label,
+    position,
+    axisLabel: { ...mutedTextStyle, formatter: channelAxisFormatter(metric) },
+    splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.25 } },
+  });
+  const valueAxis = valueAxisFor(primaryMetric);
+  return {
+    ...v2BaseOption(spec),
+    dataset: { source: spec.data },
+    legend: spec.encoding.y.length > 1 ? { top: 0, right: 8, textStyle } : { show: false },
+    grid: { left: 42, right: 36, top: spec.encoding.y.length > 1 ? 48 : 24, bottom: 44, containLabel: true },
+    xAxis: horizontal ? valueAxis : categoryAxis,
+    yAxis: horizontal
+      ? { ...categoryAxis, inverse: true }
+      : secondaryMetric
+        ? [valueAxis, { ...valueAxisFor(secondaryMetric, 'right'), splitLine: { show: false } }]
+        : valueAxis,
+    series: spec.encoding.y.map((metric, index) => ({
+      name: metric.label,
+      type: spec.shape === 'line' ? 'line' : 'bar',
+      yAxisIndex: horizontal ? undefined : metric.axis_index ?? 0,
+      encode: horizontal
+        ? { x: metric.field, y: dimension.field }
+        : { x: dimension.field, y: metric.field },
+      stack: spec.shape === 'stacked_bar' ? 'total' : undefined,
+      smooth: spec.shape === 'line' ? 0.2 : undefined,
+      showSymbol: spec.shape === 'line' ? spec.data.length <= 30 : undefined,
+      barMaxWidth: spec.shape === 'line' ? undefined : 24,
+      lineStyle: spec.shape === 'line' ? { color: color(['primary', 'progress', 'warning', 'teal'][index] ?? 'primary'), width: 3 } : undefined,
+      itemStyle: {
+        color: color(['primary', 'progress', 'warning', 'teal'][index] ?? 'primary'),
+        borderRadius: horizontal ? [0, 5, 5, 0] : [5, 5, 0, 0],
+      },
+    })),
+  } as EChartsOption;
+}
+
+function scatterV2(spec: VisualizationSpecV2): EChartsOption {
+  const x = spec.encoding.x!;
+  const y = spec.encoding.y[0];
+  return {
+    ...v2BaseOption(spec),
+    dataset: { source: spec.data },
+    grid: { left: 48, right: 30, top: 24, bottom: 48, containLabel: true },
+    xAxis: {
+      type: 'value', name: x.label,
+      axisLabel: { ...mutedTextStyle, formatter: channelAxisFormatter(x) },
+      splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.25 } },
+    },
+    yAxis: {
+      type: 'value', name: y.label,
+      axisLabel: { ...mutedTextStyle, formatter: channelAxisFormatter(y) },
+      splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.25 } },
+    },
+    series: [{
+      name: `${x.label} vs ${y.label}`,
+      type: 'scatter',
+      symbolSize: 15,
+      encode: {
+        x: x.field,
+        y: y.field,
+        tooltip: [spec.encoding.label?.field, x.field, y.field].filter(Boolean),
+        itemName: spec.encoding.label?.field,
+      },
+      itemStyle: { color: color('primary'), opacity: 0.82 },
+    }],
+  } as EChartsOption;
+}
+
+function heatmapV2(spec: VisualizationSpecV2): EChartsOption {
+  const x = spec.encoding.x!;
+  const y = spec.encoding.y[0];
+  const metric = spec.encoding.color!;
+  const xValues = [...new Set(spec.data.map(row => String(row[x.field] ?? 'Unknown')))];
+  const yValues = [...new Set(spec.data.map(row => String(row[y.field] ?? 'Unknown')))];
+  const values = spec.data.map(row => Number(row[metric.field] ?? 0));
+  const maximum = Math.max(...values, 0);
+  return {
+    ...v2BaseOption(spec),
+    grid: { left: 40, right: 72, top: 20, bottom: 52, containLabel: true },
+    xAxis: { type: 'category', name: x.label, data: xValues, axisLabel: { ...mutedTextStyle, hideOverlap: true } },
+    yAxis: { type: 'category', name: y.label, data: yValues, axisLabel: { ...mutedTextStyle, width: 140, overflow: 'truncate' } },
+    visualMap: {
+      min: 0, max: maximum || 1, calculable: true, orient: 'vertical', right: 0, top: 'middle',
+      inRange: { color: ['#EFF6FF', '#60A5FA', '#1D4ED8'] },
+      textStyle,
+    },
+    series: [{
+      name: metric.label,
+      type: 'heatmap',
+      data: spec.data.map(row => ({
+        value: [
+          xValues.indexOf(String(row[x.field] ?? 'Unknown')),
+          yValues.indexOf(String(row[y.field] ?? 'Unknown')),
+          Number(row[metric.field] ?? 0),
+        ],
+        raw: row,
+      })),
+      label: { show: xValues.length * yValues.length <= 60, color: 'var(--foreground)' },
+      emphasis: { itemStyle: { shadowBlur: 8, shadowColor: 'rgba(0,0,0,0.25)' } },
+    }],
+  } as EChartsOption;
+}
+
+function donutV2(spec: VisualizationSpecV2): EChartsOption {
+  const dimension = spec.encoding.x!;
+  const metric = spec.encoding.y[0];
+  return {
+    ...v2BaseOption(spec),
+    legend: { bottom: 0, type: 'scroll', textStyle },
+    series: [{
+      name: metric.label,
+      type: 'pie',
+      radius: ['42%', '70%'],
+      center: ['50%', '45%'],
+      label: { show: false },
+      emphasis: { label: { show: true, fontWeight: 'bold' } },
+      data: spec.data.map((row, index) => ({
+        name: String(row[dimension.field] ?? 'Unknown'),
+        value: Number(row[metric.field] ?? 0),
+        itemStyle: { color: color(['primary', 'progress', 'warning', 'teal', 'critical', 'neutral'][index] ?? 'primary') },
+      })),
+    }],
+  } as EChartsOption;
+}
+
+function waterfallV2(spec: VisualizationSpecV2): EChartsOption {
+  const dimension = spec.encoding.x!;
+  const metric = spec.encoding.y[0];
+  let running = 0;
+  const helper: number[] = [];
+  const positive: Array<number | string> = [];
+  const negative: Array<number | string> = [];
+  spec.data.forEach(row => {
+    const value = Number(row[metric.field] ?? 0);
+    if (value >= 0) {
+      helper.push(running);
+      positive.push(value);
+      negative.push('-');
+    } else {
+      helper.push(running + value);
+      positive.push('-');
+      negative.push(Math.abs(value));
+    }
+    running += value;
+  });
+  return {
+    ...v2BaseOption(spec),
+    grid: { left: 42, right: 28, top: 24, bottom: 48, containLabel: true },
+    xAxis: { type: 'category', name: dimension.label, data: spec.data.map(row => String(row[dimension.field] ?? 'Unknown')), axisLabel: { ...mutedTextStyle, hideOverlap: true } },
+    yAxis: { type: 'value', name: metric.label, axisLabel: { ...mutedTextStyle, formatter: channelAxisFormatter(metric) }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.25 } } },
+    series: [
+      { type: 'bar', stack: 'waterfall', silent: true, itemStyle: { color: 'transparent' }, data: helper },
+      { name: 'Increase', type: 'bar', stack: 'waterfall', itemStyle: { color: color('progress') }, data: positive },
+      { name: 'Decrease', type: 'bar', stack: 'waterfall', itemStyle: { color: color('critical') }, data: negative },
+    ],
+  } as EChartsOption;
+}
+
+export function visualizationSpecV2ToECharts(spec: VisualizationSpecV2): EChartsOption {
+  if (spec.shape === 'scatter') return scatterV2(spec);
+  if (spec.shape === 'heatmap') return heatmapV2(spec);
+  if (spec.shape === 'waterfall') return waterfallV2(spec);
+  if (spec.shape === 'donut') return donutV2(spec);
+  return cartesianV2(spec);
 }
 
 export function ensureReadableTooltip(option: EChartsOption): EChartsOption {

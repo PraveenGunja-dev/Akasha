@@ -179,21 +179,7 @@ class ChartSpecService:
     def transmission_status(db: Session, project_id: str | None = None) -> dict:
         if project_id:
             return {**transmission_service.project_status(db, project_id), "sources": ["tc_network_edge"]}
-        lines = [
-            transmission_service.edge_dict(edge)
-            for edge in transmission_service.latest_physical_edges(db)
-        ]
-        counts = {status: 0 for status in ("completed", "in_progress", "not_started", "unknown")}
-        for line in lines:
-            status = line["canonical_status"]
-            counts[status if status in counts else "unknown"] += 1
-        return {
-            **transmission_service.network_status(db),
-            **counts,
-            "has_data": bool(lines),
-            "lines": lines,
-            "sources": ["tc_network_edge"],
-        }
+        return {**transmission_service.network_status(db), "sources": ["tc_network_edge"]}
 
     @staticmethod
     def portfolio_risk(db: Session, limit: int = 8) -> dict:

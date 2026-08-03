@@ -11,6 +11,7 @@ import json
 import logging
 import os
 import time
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from engine.observability import log_observability_event
@@ -54,7 +55,11 @@ from engine.tools.viz_tools import (
     CHART_TYPES,
     build_chart,
     build_project_comparison_dashboard,
-    build_show_me_dashboard,
+)
+from services.dynamic_visualization import (
+    VisualizationQueryError,
+    build_dynamic_visualization,
+    visualization_catalog_summary,
 )
 from engine.kpi_engine import compute_project_kpis
 from engine.response_quality import (
@@ -768,9 +773,9 @@ TOOLS = [
                 "Render a data visualization (chart) for the user, shown inline in the chat. "
                 "Call this when the user asks for a chart/graph/visual/plot, OR when a chart would communicate "
                 "the answer better than text (comparisons, rankings, status distributions, delays). "
-                "The chart's DATA is pulled from the database automatically — you only choose the chart_type and subject, "
-                "you never supply the numbers. YOU decide which chart_type best fits the data; if the user explicitly "
-                "asked for a specific chart, honor that. Use 'auto' to let the system pick the best fit. "
+                "The chart's DATA is pulled from authorized backend services automatically. Use chart_type for an "
+                "existing fixed chart or visualization_query for governed metric/dimension/filter composition; "
+                "never supply chart values or renderer code. Honor a requested shape only when catalog fields are compatible. "
                 "Resolve any project name to its canonical project_id (via portfolio_resolve_project_id) BEFORE calling this. "
                 "After it succeeds, briefly describe in words what the chart shows. If it returns status 'no_data', "
                 "tell the user plainly — do not describe a chart that wasn't drawn."
@@ -780,13 +785,12 @@ TOOLS = [
                 "properties": {
                     "chart_type": {
                         "type": "string",
-                        "enum": ["auto", "auto_dashboard", "activity_status", "project_comparison", "delayed_activities",
+                        "enum": ["auto", "activity_status", "project_comparison", "delayed_activities",
                                  "material_gaps", "vendor_performance", "sap_po_fulfillment",
                                  "transmission_status", "portfolio_risk", "daily_completion_trend",
                                  "planned_vs_actual_progress", "block_progress"],
                         "description": (
                             "Which chart to draw. "
-                            "auto_dashboard=3-4 relevant charts for any request beginning with 'show me'; "
                             "activity_status=donut of one project's activities by status; "
                             "project_comparison=bar comparing % complete across 2+ projects; "
                             "delayed_activities=bar of one project's most-delayed activities; "
@@ -814,6 +818,66 @@ TOOLS = [
                         "type": "string",
                         "description": "Optional topic hint (e.g. 'delay', 'material', 'vendor', 'transmission') to help chart_type='auto' choose."
                     },
+                    "visualization_query": {
+                        "type": "object",
+                        "description": (
+                            "Optional governed dynamic visualization request. Use this instead of chart_type "
+                            "when the fixed chart menu cannot express the requested metric, dimensions, "
+                            "filters, grouping, or chart shape. Available catalog: "
+                            + visualization_catalog_summary()
+                        ),
+                        "properties": {
+                            "dataset_id": {"type": "string"},
+                            "metrics": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "field": {"type": "string"},
+                                        "aggregation": {
+                                            "type": "string",
+                                            "enum": ["sum", "avg", "min", "max", "count"],
+                                        },
+                                    },
+                                    "required": ["field"],
+                                },
+                            },
+                            "dimensions": {"type": "array", "items": {"type": "string"}},
+                            "filters": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "field": {"type": "string"},
+                                        "operator": {
+                                            "type": "string",
+                                            "enum": ["eq", "neq", "in", "gte", "lte", "contains"],
+                                        },
+                                        "value": {},
+                                    },
+                                    "required": ["field", "operator", "value"],
+                                },
+                            },
+                            "sort": {
+                                "type": "array",
+                                "items": {
+                                    "type": "object",
+                                    "properties": {
+                                        "field": {"type": "string"},
+                                        "direction": {"type": "string", "enum": ["asc", "desc"]},
+                                    },
+                                    "required": ["field"],
+                                },
+                            },
+                            "preferred_shape": {
+                                "type": "string",
+                                "enum": ["auto", "line", "bar", "horizontal_bar", "stacked_bar", "scatter", "heatmap", "waterfall", "donut"],
+                            },
+                            "title": {"type": "string"},
+                            "limit": {"type": "integer", "minimum": 1, "maximum": 500},
+                        },
+                        "required": ["dataset_id", "metrics"],
+                    },
                     "days": {
                         "type": "integer",
                         "minimum": 1,
@@ -827,7 +891,7 @@ TOOLS = [
                         "description": "Maximum ranked items for bar charts. Defaults to 12."
                     }
                 },
-                "required": ["chart_type"]
+                "required": []
             }
         }
     },
@@ -1010,35 +1074,33 @@ def build_chart_result(db: Session, kwargs: dict):
     the model only learns that the chart was drawn, keeping it from trying to echo or
     fabricate chart values. The spec (when present) is what the streaming loop emits to the UI.
     """
+    if kwargs.get("visualization_query") is not None:
+        try:
+            spec = build_dynamic_visualization(
+                db,
+                kwargs["visualization_query"],
+                project_id=kwargs.get("project_id"),
+                project_ids=kwargs.get("project_ids"),
+                days=kwargs.get("days", 30),
+            )
+        except (ValidationError, VisualizationQueryError) as exc:
+            return None, json.dumps({
+                "status": "invalid_visualization_request",
+                "message": str(exc),
+                "repair": "Use only catalog fields and a shape compatible with their data types.",
+            })
+        if spec.get("no_data"):
+            return None, json.dumps({"status": "no_data", "message": spec.get("message")})
+        return spec, json.dumps({
+            "status": "chart_rendered",
+            "schema_version": "visualization.v2",
+            "chart_type": spec.get("chart_type"),
+            "title": spec.get("title"),
+            "data_points": spec.get("data_points"),
+        })
+
     requested_type = kwargs.get("chart_type", "auto")
     project_ids = kwargs.get("project_ids") or []
-    if requested_type == "auto_dashboard":
-        charts = build_show_me_dashboard(
-            db,
-            project_id=kwargs.get("project_id"),
-            project_ids=project_ids,
-            domain_hint=kwargs.get("domain_hint"),
-            days=kwargs.get("days", 30),
-            limit=kwargs.get("limit", 12),
-        )
-        if charts:
-            confirmation = json.dumps({
-                "status": "chart_dashboard_rendered",
-                "chart_type": "show_me_dashboard",
-                "chart_count": len(charts),
-                "titles": [chart.get("title") for chart in charts],
-            })
-            return {
-                "schema_version": "visualization.bundle.v1",
-                "chart_type": "show_me_dashboard",
-                "title": "Visual Overview",
-                "data_points": sum(int(chart.get("data_points") or 0) for chart in charts),
-                "charts": charts,
-            }, confirmation
-        return None, json.dumps({
-            "status": "no_data",
-            "message": "No authoritative visualization data is available for this request.",
-        })
     if requested_type in {"project_comparison", "auto"} and len(project_ids) >= 2:
         charts = build_project_comparison_dashboard(db, project_ids)
         if charts:
@@ -1561,9 +1623,9 @@ def run_deep_analysis_agent_stream(
                 "- ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
                 "- All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours.\n"
                 "VISUALIZATIONS:\n"
-                "- If the latest request begins with 'show me', you MUST call `render_chart` exactly once with chart_type='auto_dashboard' and copy the complete request into domain_hint. This generates up to four relevant charts; do not substitute a single chart. Resolve a named project first and pass project_id.\n"
                 "- You can draw charts with the `render_chart` tool; they appear inline in the chat. Use it when the user asks for a chart/graph/visual/plot, or when a chart communicates the answer better than text (comparisons, rankings, status distributions, delays).\n"
                 "- YOU pick the chart_type that best fits the data. If the user explicitly asked for a specific format, use that. Use chart_type='auto' to let the system choose.\n"
+                "- For flexible metric/dimension/filter requests, use visualization_query with only documented catalog identifiers. Never supply data values, SQL, JavaScript, or ECharts options.\n"
                 "- The chart's data is pulled from the database automatically — never invent chart values. Resolve the project name to its project_id first, then call render_chart.\n"
                 "- After a chart renders, briefly say in words what it shows. If render_chart returns status 'no_data', tell the user plainly instead of describing a chart that wasn't drawn.\n"
                 "FORECASTS / FUTURE QUESTIONS:\n"
@@ -1576,7 +1638,6 @@ def run_deep_analysis_agent_stream(
                 "- For block progress over a month or rolling day window, call `p6_get_block_period_progress`; preserve highest/lowest ties and disclose when true historical percentage delta is unavailable.\n"
                 "- For daily progress trends, call `p6_get_daily_completion_trend`. Describe it as an activity-completion event trend, never as historical duration-percent progress.\n"
                 "- For daily trends, project comparisons, block comparisons, distributions, and rankings, also call `render_chart` with the matching approved chart type even when the user does not explicitly say chart. Cap a response at four charts and accompany every chart with a concise textual finding.\n"
-                "- Treat every supported request beginning with 'show me' as a multi-visualization dashboard request, including schedule, procurement, transmission, capacity, quality, risk, forecast, and portfolio topics.\n"
                 "- For planned-versus-actual progress, call `render_chart` with chart_type='planned_vs_actual_progress'. Describe it accurately as a cumulative planned-versus-actual activity-finish S-curve from the current P6 schedule, not as historical duration-percent snapshots.\n"
                 "- Completed activities / total activities is an activity-count ratio, not overall P6 progress. Label it separately if useful.\n"
                 "- Call `get_project_kpis` only when the user explicitly asks for the health or health score of one named project. Never use it for general summaries, progress, risk, procurement, transmission, portfolio, report, or forecast questions. Use its returned EV/PV/SPI/CPI/SV/CV and health values without calculating alternatives.\n\n"

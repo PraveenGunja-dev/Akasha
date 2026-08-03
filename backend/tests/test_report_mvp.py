@@ -34,6 +34,11 @@ from services.report_renderers import (
     render_project_progress_pdf,
     render_portfolio_progress_docx,
     render_portfolio_progress_pdf,
+    render_visualization_spec,
+)
+from services.report_visualization_service import (
+    resolve_visualization_references,
+    select_conversation_visualizations,
 )
 
 
@@ -99,6 +104,92 @@ def report_dataset():
 
 
 class ReportMvpTests(unittest.TestCase):
+    def test_conversation_chart_selection_respects_scope_topic_and_explicit_choice(self):
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(engine)
+        db = sessionmaker(bind=engine)()
+        db.add(models.ChatSession(session_id="chart-session", owner_subject="user", tenant_id="tenant"))
+        db.add_all([
+            models.ChatMessage(
+                session_id="chart-session", role="assistant", content="schedule", status="completed",
+                project_ids="P-1", visualizations=[{
+                    "title": "Schedule delay by block", "report_inclusion": "auto",
+                    "spec": {"schema_version": "visualization.v2", "shape": "bar", "title": "Schedule delay by block"},
+                }],
+            ),
+            models.ChatMessage(
+                session_id="chart-session", role="assistant", content="quality", status="completed",
+                project_ids="P-1", visualizations=[{
+                    "title": "Quality issues", "report_inclusion": "auto",
+                    "spec": {"schema_version": "visualization.v2", "shape": "bar", "title": "Quality issues"},
+                }],
+            ),
+            models.ChatMessage(
+                session_id="chart-session", role="assistant", content="other", status="completed",
+                project_ids="P-2", visualizations=[{
+                    "title": "Other project capacity", "report_inclusion": "include",
+                    "spec": {"schema_version": "visualization.v2", "shape": "bar", "title": "Other project capacity"},
+                }],
+            ),
+        ])
+        db.commit()
+
+        selected, excluded = select_conversation_visualizations(
+            db, session_id="chart-session", scope_kind="project", scope_project_ids=["P-1"],
+            selection_text="Include only schedule charts in the report",
+        )
+        self.assertEqual(
+            [item.report_payload()["title"] for item in selected],
+            ["Schedule delay by block", "Other project capacity"],
+        )
+        self.assertTrue(any(item["title"] == "Quality issues" for item in excluded))
+        without_quality, _ = select_conversation_visualizations(
+            db, session_id="chart-session", scope_kind="project", scope_project_ids=["P-1"],
+            selection_text="Create the report without quality charts",
+        )
+        self.assertEqual(
+            [item.report_payload()["title"] for item in without_quality],
+            ["Schedule delay by block", "Other project capacity"],
+        )
+        refs = [item.reference() for item in selected]
+        resolved = resolve_visualization_references(db, session_id="chart-session", references=refs)
+        self.assertEqual([item["snapshot_hash"] for item in resolved], [item["h"] for item in refs])
+        db.close()
+        engine.dispose()
+
+    def test_v2_chart_renders_and_invalid_chart_falls_back_in_both_reports(self):
+        dataset = report_dataset()
+        v2 = {
+            "schema_version": "visualization.v2", "chart_id": "chat-progress", "chart_type": "bar",
+            "shape": "bar", "title": "Saved Progress", "subtitle": "Exact chat snapshot",
+            "summary": "Progress saved in chat.", "accessibility_description": "Progress bars.",
+            "encoding": {
+                "x": {"field": "block", "label": "Block", "field_type": "categorical"},
+                "y": [{"field": "progress", "label": "Progress", "field_type": "quantitative", "value_format": "percent"}],
+            },
+            "data": [{"block": "A", "progress": 55}, {"block": "B", "progress": 72}],
+            "source_tables": ["p6_activity"], "spec_hash": "sha256:" + "1" * 64,
+        }
+        self.assertGreater(len(render_visualization_spec(v2).getvalue()), 1_000)
+        dataset["conversation_visualizations"] = [
+            {"title": "Saved Progress", "summary": "Progress saved in chat.", "report_section": "schedule", "spec": v2},
+            {
+                "title": "Unsupported saved chart", "report_section": "appendix",
+                "spec": {"schema_version": "visualization.v2", "shape": "future_shape"},
+                "data_table": [{"item": "A", "value": 10}],
+            },
+        ]
+        with TemporaryDirectory() as directory:
+            pdf = Path(directory) / "conversation.pdf"
+            docx = Path(directory) / "conversation.docx"
+            render_project_progress_pdf(dataset, pdf)
+            render_project_progress_docx(dataset, docx)
+            self.assertGreater(pdf.stat().st_size, 2_000)
+            from docx import Document
+            text = "\n".join(paragraph.text for paragraph in Document(docx).paragraphs)
+            self.assertIn("Saved Progress", text)
+            self.assertIn("saved data snapshot is shown instead", text)
+
     def test_dataset_supports_catalog_project_without_p6(self):
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(engine)

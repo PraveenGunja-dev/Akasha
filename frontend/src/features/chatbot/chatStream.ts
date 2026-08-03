@@ -4,6 +4,7 @@ import {
   type ChatMessageMetadata,
   type ChatSources,
 } from './chatContract.ts';
+import { isVisualizationSpecV2 } from './visualizationTypes.ts';
 
 export type { ChatSources } from './chatContract.ts';
 export type ChatStreamMetadata = ChatMessageMetadata;
@@ -114,6 +115,9 @@ function parseEvent(frame: string): ChatStreamEvent | null {
       }
       return { ...base, type: 'token', content: payload.content };
     case 'visualization':
+      if (payload.schema_version === 'visualization.v2' && !isVisualizationSpecV2(payload.spec)) {
+        throw new ChatStreamError('The chat server returned an invalid V2 visualization.', request_id);
+      }
       return {
         type: 'visualization',
         schema_version: optionalString(payload.schema_version),
