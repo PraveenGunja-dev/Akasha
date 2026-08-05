@@ -707,3 +707,26 @@ class PulseRFI(Base):
     # Sync metadata
     last_synced_at = Column(DateTime, default=datetime.utcnow)
 
+# ==========================================
+# E-Invoice Model
+# ==========================================
+class EInvoiceRecord(Base):
+    __tablename__ = "einvoice_records"
+
+    id = Column(Integer, primary_key=True, index=True)
+    invoiceNo = Column(String, index=True)
+    invoiceCode = Column(String)
+    invoiceRequestID = Column(Integer)
+    vendorName = Column(String, index=True)
+    sapVendorCode = Column(String)
+    projectType = Column(String, index=True)
+    packageName = Column(String, index=True)
+    workLocation = Column(String, index=True)
+    site = Column(String)
+    invoiceAmount = Column(Float)
+    soAmount = Column(Float)
+    statusDesc = Column(String, index=True)
+    invoiceDate = Column(DateTime)
+    createdAt = Column(DateTime)
+    completionDate = Column(DateTime)
+    workDescription = Column(String)

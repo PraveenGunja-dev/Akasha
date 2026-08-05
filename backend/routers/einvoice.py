@@ -1,30 +1,21 @@
-from fastapi import APIRouter, HTTPException
-import json
-import os
+from fastapi import APIRouter, HTTPException, Depends
+from sqlalchemy.orm import Session
 from typing import Dict, Any
+import datetime
+
+import models
+from database import get_db
 
 router = APIRouter(prefix="/api/einvoice", tags=["E-Invoice"])
 
-# Path to the static JSON file
-E_INVOICE_FILE_PATH = r"d:\Akasha_Platform\Data\NEW31\Get All Invoices Production(E-invoice) json response.txt"
-
 @router.get("/global")
-def get_global_einvoices() -> Dict[str, Any]:
-    if not os.path.exists(E_INVOICE_FILE_PATH):
-        raise HTTPException(status_code=404, detail="E-Invoice data file not found.")
-
+def get_global_einvoices(db: Session = Depends(get_db)) -> Dict[str, Any]:
     try:
-        with open(E_INVOICE_FILE_PATH, 'r', encoding='utf-8') as f:
-            data = json.load(f)
+        records = db.query(models.EInvoiceRecord).all()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to read E-Invoice data: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to read E-Invoice data from DB: {str(e)}")
 
-    all_invoices = data.get('d', {}).get('results', [])
-
-    # We will compute some high-level metrics right here to save frontend processing, 
-    # but also return the raw list so the frontend master table can use it.
-    
-    total_invoices = len(all_invoices)
+    total_invoices = len(records)
     total_amount = 0.0
     completed_amount = 0.0
     pending_amount = 0.0
@@ -37,56 +28,64 @@ def get_global_einvoices() -> Dict[str, Any]:
     month_dist = {}
     package_dist = {}
 
-    for inv in all_invoices:
-        # Amount parsing
-        inv_amt_str = inv.get('invoiceAmount')
-        try:
-            amt = float(inv_amt_str) if inv_amt_str else 0.0
-        except ValueError:
-            amt = 0.0
+    all_invoices = []
+
+    for inv in records:
+        amt = inv.invoiceAmount or 0.0
         
+        # Format for frontend matching the old JSON
+        inv_dict = {
+            "invoiceNo": inv.invoiceNo,
+            "invoiceCode": inv.invoiceCode,
+            "invoiceRequestID": inv.invoiceRequestID,
+            "vendorName": inv.vendorName,
+            "sapVendorCode": inv.sapVendorCode,
+            "projectType": inv.projectType,
+            "packageName": inv.packageName,
+            "workLocation": inv.workLocation,
+            "site": inv.site,
+            "invoiceAmount": str(amt),
+            "SOAmount": str(inv.soAmount or 0.0),
+            "statusDesc": inv.statusDesc,
+            "invoiceDate": inv.invoiceDate.isoformat() + "Z" if inv.invoiceDate else None,
+            "createdAt": inv.createdAt.isoformat() + "Z" if inv.createdAt else None,
+            "completionDate": inv.completionDate.isoformat() + "Z" if inv.completionDate else None,
+            "workDescription": inv.workDescription
+        }
+        all_invoices.append(inv_dict)
+
         # Totals
         total_amount += amt
-        status = (inv.get('statusDesc') or 'Pending').strip()
+        status = (inv.statusDesc or 'Pending').strip()
         if status.lower() == 'completed':
             completed_amount += amt
         else:
             pending_amount += amt
             
         # Distribution by Project Type
-        ptype = (inv.get('projectType') or 'Unknown').strip()
+        ptype = (inv.projectType or 'Unknown').strip()
         if ptype:
             project_type_dist[ptype] = project_type_dist.get(ptype, 0) + amt
         
         # Distribution by Location
-        loc = (inv.get('workLocation') or 'Unknown').strip()
+        loc = (inv.workLocation or 'Unknown').strip()
         if loc:
             location_dist[loc] = location_dist.get(loc, 0) + amt
             
         # Distribution by Package
-        pkg = (inv.get('packageName') or 'Unknown').strip()
+        pkg = (inv.packageName or 'Unknown').strip()
         if pkg:
             package_dist[pkg] = package_dist.get(pkg, 0) + amt
             
         # Distribution by Vendor
-        vendor = (inv.get('vendorName') or 'Unknown').strip()
+        vendor = (inv.vendorName or 'Unknown').strip()
         if vendor:
             vendor_dist[vendor] = vendor_dist.get(vendor, 0) + amt
             
         # Distribution by Month
-        inv_date_str = inv.get('invoiceDate')
-        if inv_date_str and '/Date(' in inv_date_str:
-            try:
-                import datetime
-                import re
-                match = re.search(r'/Date\((\d+)', inv_date_str)
-                if match:
-                    ms = int(match.group(1))
-                    dt = datetime.datetime.fromtimestamp(ms / 1000.0)
-                    month_key = dt.strftime('%Y-%m') # e.g., 2024-05
-                    month_dist[month_key] = month_dist.get(month_key, 0) + amt
-            except:
-                pass
+        if inv.invoiceDate:
+            month_key = inv.invoiceDate.strftime('%Y-%m') # e.g., 2024-05
+            month_dist[month_key] = month_dist.get(month_key, 0) + amt
         
         # Distribution by Status (count and value)
         status_dist[status] = status_dist.get(status, 0) + 1
