@@ -45,6 +45,16 @@ def _safe_parse_phase(projects_json):
                     return m.group(1)
     return "Unknown Phase"
 
+import re
+def _extract_wbs_prefixes(m: models.ProjectMapping) -> list[str]:
+    codes = []
+    for val in [m.spv_plant_code, m.agel, m.age6l]:
+        if val:
+            # Extract anything looking like H-XXXX... and take first 6 chars
+            matches = [c.strip()[:6] for c in re.findall(r'H-\S+', str(val).strip()) if len(c.strip()) >= 6]
+            codes.extend(matches)
+    return list(set(codes))
+
 router = APIRouter(prefix="/api/dashboard", tags=["Dashboard"])
 
 # Simple in-memory cache to prevent 6-8s load times from N+1 queries
@@ -135,6 +145,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
     all_po_qty_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.wbs_element).all()
     all_po_val_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.wbs_element).all()
     all_po_delivered_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.wbs_element).all()
+    all_consumed_wbs = db.query(models.MTMaterialDocument.wbs_element, func.sum(models.MTMaterialDocument.quantity)).group_by(models.MTMaterialDocument.wbs_element).all()
 
     all_tc_entries = db.query(models.TcProjectEntry).all()
     all_tc_edges = db.query(models.TcNetworkEdge).all()
@@ -217,40 +228,28 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
             portfolio_summary["on_track_projects"] += 1
                 
         # SAP Data Mapping
-        plant_code_str = str(m.spv_plant_code).strip() if m.spv_plant_code else ""
-        agel_code_str = str(m.agel).strip() if m.agel else ""
-        age6l_code_str = str(m.age6l).strip() if m.age6l else ""
+        # SAP Data Mapping
+        wbs_prefixes = _extract_wbs_prefixes(m)
         
-        # Calculate allocation ratio using primary spv_plant_code
-        total_capacity = capacity_by_plant.get(plant_code_str, 1.0)
-        project_capacity = m.capacity_mwac or 0
-        allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
-
-        # We will use whichever code has the data (often AGEL code for PO/Inventory)
-        req_mw = req_by_plant.get(plant_code_str, 0) or req_by_plant.get(agel_code_str, 0) or req_by_plant.get(age6l_code_str, 0)
+        req_qty = 0
+        inv_qty = 0
+        it_qty = 0
+        po_qty = 0
+        po_value = 0
+        po_delivered_cr = 0
+        consumed_qty = 0
         
-        if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-            clean_wbs = str(m.module_wbs).strip().lower()
-            inv_qty = sum(qty for wbs, qty in all_inv_wbs if wbs and qty and clean_wbs in str(wbs).lower())
-            it_qty = sum(qty for wbs, qty in all_it_wbs if wbs and qty and clean_wbs in str(wbs).lower())
-            # PO qty/value/delivered join on WBS too (see aggregate note above). WBS is
-            # project-specific, so no plant-sharing allocation ratio is applied here.
-            po_qty = sum(v for wbs, v in all_po_qty_wbs if wbs and v and clean_wbs in str(wbs).lower())
-            po_value = sum(v for wbs, v in all_po_val_wbs if wbs and v and clean_wbs in str(wbs).lower())
-            po_delivered_cr = sum(v for wbs, v in all_po_delivered_wbs if wbs and v and clean_wbs in str(wbs).lower())
-            allocation_ratio_inv = 1.0
-        else:
-            inv_qty = (inv_by_plant.get(plant_code_str, 0) or inv_by_plant.get(agel_code_str, 0) or inv_by_plant.get(age6l_code_str, 0)) or 0
-            it_qty = (it_by_plant.get(plant_code_str, 0) or it_by_plant.get(agel_code_str, 0) or it_by_plant.get(age6l_code_str, 0)) or 0
-            # Fallback to plant lookup only when the project has no WBS (legacy behavior).
-            po_qty = ((po_qty_by_plant.get(plant_code_str, 0) or po_qty_by_plant.get(agel_code_str, 0) or po_qty_by_plant.get(age6l_code_str, 0)) or 0) * allocation_ratio
-            po_value = ((po_val_by_plant.get(plant_code_str, 0) or po_val_by_plant.get(agel_code_str, 0) or po_val_by_plant.get(age6l_code_str, 0)) or 0) * allocation_ratio
-            po_delivered_cr = ((po_delivered_val_by_plant.get(plant_code_str, 0) or po_delivered_val_by_plant.get(agel_code_str, 0) or po_delivered_val_by_plant.get(age6l_code_str, 0)) or 0) * allocation_ratio
-            allocation_ratio_inv = allocation_ratio
-
-        inv_qty *= allocation_ratio_inv
-        it_qty *= allocation_ratio_inv
-        req_qty = (req_mw or 0) * allocation_ratio
+        if wbs_prefixes:
+            for p in wbs_prefixes:
+                p_clean = p.lower().replace('-', '')
+                if not p_clean: continue
+                
+                inv_qty += sum(qty for wbs, qty in all_inv_wbs if wbs and qty and str(wbs).lower().replace('-', '').startswith(p_clean))
+                it_qty += sum(qty for wbs, qty in all_it_wbs if wbs and qty and str(wbs).lower().replace('-', '').startswith(p_clean))
+                po_qty += sum(v for wbs, v in all_po_qty_wbs if wbs and v and str(wbs).lower().replace('-', '').startswith(p_clean))
+                po_value += sum(v for wbs, v in all_po_val_wbs if wbs and v and str(wbs).lower().replace('-', '').startswith(p_clean))
+                po_delivered_cr += sum(v for wbs, v in all_po_delivered_wbs if wbs and v and str(wbs).lower().replace('-', '').startswith(p_clean))
+                consumed_qty -= sum(qty for wbs, qty in all_consumed_wbs if wbs and qty and str(wbs).lower().replace('-', '').startswith(p_clean))
 
         portfolio_summary["total_inventory_qty"] += inv_qty
         portfolio_summary["total_po_qty"] += po_qty
@@ -324,11 +323,12 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
             },
             "sap": {
                 "req_qty": round(req_qty, 2),
+                "inv_qty": round(inv_qty, 2),
+                "it_qty": round(it_qty, 2),
                 "po_qty": round(po_qty, 2),
-                "in_transit_qty": round(it_qty, 2),
-                "inventory_qty": round(inv_qty, 2),
                 "po_value": round(po_value, 2),
-                "po_delivered_cr": round(po_delivered_cr, 2)
+                "po_delivered_cr": round(po_delivered_cr, 2),
+                "consumed_qty": round(consumed_qty, 2),
             },
             "tc": {
                 "status": tc_summary,
@@ -441,7 +441,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
     return result
 
 @router.get("/projects/{mapping_id}")
-def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
+def get_project_details(mapping_id: str, db: Session = Depends(get_db)):
     """Get full 360 view for a single project"""
     m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == mapping_id).first()
     if not m:
@@ -450,11 +450,15 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
     p6_data = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
     
     # SAP Items
+    # Extract WBS prefixes
+    wbs_prefixes = _extract_wbs_prefixes(m)
+
     # 1. Inventory Mapping (MB52)
     inv_query = db.query(models.MTInventory)
-    if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        clean_wbs = str(m.module_wbs).strip()
-        inv_query = inv_query.filter(models.MTInventory.wbs_element.ilike(f"%{clean_wbs}%"))
+    if wbs_prefixes:
+        query_conditions = [models.MTInventory.wbs_element.startswith(p) for p in wbs_prefixes]
+        from sqlalchemy import or_
+        inv_query = inv_query.filter(or_(*query_conditions))
     else:
         inv_query = inv_query.filter(
             (models.MTInventory.plant_code == str(m.spv_plant_code).strip()) |
@@ -462,11 +466,18 @@ def get_project_details(mapping_id: int, db: Session = Depends(get_db)):
         )
     inventory = inv_query.all()
     
-    # 2. PO Items (ME2M) - only has Plant Code
-    po_items = db.query(models.MTPOAmount).filter(
-        (models.MTPOAmount.plant_code == str(m.spv_plant_code).strip()) |
-        (models.MTPOAmount.plant_code == str(m.agel).strip()) | (models.MTPOAmount.plant_code == str(m.age6l).strip())
-    ).all()
+    # 2. PO Items (ME2M) - using wbs_prefixes if available
+    po_query = db.query(models.MTPOAmount)
+    if wbs_prefixes:
+        query_conditions = [models.MTPOAmount.wbs_element.startswith(p) for p in wbs_prefixes]
+        from sqlalchemy import or_
+        po_query = po_query.filter(or_(*query_conditions))
+    else:
+        po_query = po_query.filter(
+            (models.MTPOAmount.plant_code == str(m.spv_plant_code).strip()) |
+            (models.MTPOAmount.plant_code == str(m.agel).strip()) | (models.MTPOAmount.plant_code == str(m.age6l).strip())
+        )
+    po_items = po_query.all()
     
     # 3. In-Transit Mapping (ME2K Still to Deliver)
     in_transit = [po for po in po_items if (po.still_to_deliver_qty or 0) > 0]
@@ -719,114 +730,33 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             }
         
         # ── SAP Data ──
-        wbs_str = str(m.module_wbs or "").strip()
+        wbs_prefixes = _extract_wbs_prefixes(m)
         sap_data = None
-        plant_code = str(m.spv_plant_code or "").strip()
-        agel_code = str(m.agel or "").strip()
-        age6l_code = str(m.age6l or "").strip()
-        if plant_code or agel_code or age6l_code:
-            # Calculate allocation ratio
-            total_capacity = db.query(func.sum(models.ProjectMapping.capacity_mwac)).filter(
-                models.ProjectMapping.spv_plant_code == plant_code
-            ).scalar() or 1.0
-            project_capacity = m.capacity_mwac or 0
+        
+        if wbs_prefixes:
+            from sqlalchemy import or_
+            wbs_filters_po = [models.MTPOAmount.wbs_element.startswith(p) for p in wbs_prefixes]
+            wbs_filters_inv = [models.MTInventory.wbs_element.startswith(p) for p in wbs_prefixes]
             
-            if project_capacity == 0:
-                mapping_count = db.query(models.ProjectMapping).filter(models.ProjectMapping.spv_plant_code == plant_code).count()
-                allocation_ratio = (1.0 / mapping_count) if mapping_count > 0 else 1.0
-            else:
-                allocation_ratio = project_capacity / total_capacity if total_capacity > 0 else 1.0
+            po_count = db.query(models.MTPOAmount.purchasing_document).filter(or_(*wbs_filters_po)).distinct().count()
+            po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(or_(*wbs_filters_po)).scalar() or 0
+            po_mw = db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(or_(*wbs_filters_po)).scalar() or 0
             
-            if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
-                wbs_prefix = wbs_str[:6]
-                po_count = db.query(models.MTPOAmount.purchasing_document).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).distinct().count()
-                
-                po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-                
-                po_mw = db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-            else:
-                po_count = db.query(models.MTPOAmount.purchasing_document).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code)
-                ).distinct().count() * allocation_ratio
-                
-                po_total = (db.query(func.sum(models.MTPOAmount.net_order_value)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code)
-                ).scalar() or 0) * allocation_ratio
-                
-                po_mw = (db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code)
-                ).scalar() or 0) * allocation_ratio
+            inv_count = db.query(models.MTInventory).filter(or_(*wbs_filters_inv)).count()
+            inv_mw = db.query(func.sum(models.MTInventory.quantity_mw)).filter(or_(*wbs_filters_inv)).scalar() or 0
             
-            req_count = db.query(models.MTRequirement).filter(
-                (models.MTRequirement.spv_plant_code == plant_code) | (models.MTRequirement.spv_plant_code == agel_code) | (models.MTRequirement.spv_plant_code == age6l_code)
-                # Requirement doesn't have wbs_element mapped usually, but we can set to 0 or leave as is. We'll set to 0 since it's not WBS specific yet.
-            ).count() * 0 # Hardcoded to 0 since we can't reliably filter by WBS without a WBS column in MTRequirement.
+            transit_count = db.query(models.MTPOAmount).filter(
+                or_(*wbs_filters_po),
+                models.MTPOAmount.still_to_deliver_qty > 0
+            ).count()
             
-            req_total_mw = 0
+            transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
+                or_(*wbs_filters_po)
+            ).scalar() or 0
             
-            if wbs_str and wbs_str.lower() not in ('nan', 'none', 'null', ''):
-                inv_count = db.query(models.MTInventory).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code) | (models.MTInventory.plant_code == age6l_code),
-                    models.MTInventory.wbs_element.startswith(wbs_prefix)
-                ).count()
-                
-                inv_mw = db.query(func.sum(models.MTInventory.quantity_mw)).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code) | (models.MTInventory.plant_code == age6l_code),
-                    models.MTInventory.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-
-                
-                transit_count = db.query(models.MTPOAmount).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix),
-                    models.MTPOAmount.still_to_deliver_qty > 0
-                ).count()
-                
-                transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).scalar() or 0
-                
-                top_vendors = db.query(
-                    models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
-                ).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.wbs_element.startswith(wbs_prefix)
-                ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
-                inv_alloc = 1.0
-            else:
-                inv_count = db.query(models.MTInventory).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code) | (models.MTInventory.plant_code == age6l_code)
-                ).count() * allocation_ratio
-                
-                inv_mw = (db.query(func.sum(models.MTInventory.quantity_mw)).filter(
-                    (models.MTInventory.plant_code == plant_code) | (models.MTInventory.plant_code == agel_code) | (models.MTInventory.plant_code == age6l_code)
-                ).scalar() or 0) * allocation_ratio
-                
-                transit_count = db.query(models.MTPOAmount).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code),
-                    models.MTPOAmount.still_to_deliver_qty > 0
-                ).count() * allocation_ratio
-                
-                transit_mw = (db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code)
-                ).scalar() or 0) * allocation_ratio
-                
-                top_vendors = db.query(
-                    models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
-                ).filter(
-                    (models.MTPOAmount.plant_code == plant_code) | (models.MTPOAmount.plant_code == agel_code) | (models.MTPOAmount.plant_code == age6l_code)
-                ).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
-                inv_alloc = allocation_ratio
+            top_vendors = db.query(
+                models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
+            ).filter(or_(*wbs_filters_po)).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
             
             top_vendors_list = []
             for v in top_vendors:
@@ -836,11 +766,11 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
                     vname = parts[1].strip()
                 top_vendors_list.append({
                     "name": vname[:25], 
-                    "value_cr": round((v[1] * inv_alloc) / 10000000, 2) if v[1] else 0
+                    "value_cr": round(v[1] / 10000000, 2) if v[1] else 0
                 })
             
             sap_data = {
-                "plant_code": plant_code,
+                "plant_code": ",".join(wbs_prefixes),
                 "po_count": round(po_count),
                 "po_total_cr": round(po_total / 10000000, 2) if po_total else 0,
                 "po_mw": round(po_mw, 1) if po_mw else 0,
@@ -1327,6 +1257,7 @@ def get_project_slr_data(
     """
     Fetches SLR data (from ZPSPS007) for a specific project based on its mappings.
     filter_code can be "ALL", "SPV", "AGEL", or "AGE6L".
+    Groups by unique PO (C.Document) and determines open/closed status.
     """
     m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == mapping_id).first()
     if not m:
@@ -1336,19 +1267,27 @@ def get_project_slr_data(
     agel_code = str(m.agel).strip() if m.agel else ""
     age6l_code = str(m.age6l).strip() if m.age6l else ""
     
+    import re
+    def get_prefixes(val):
+        if not val: return []
+        # Extract the alphanumeric parts after 'H-' or 'H', e.g., 'H-603M H-603B' -> ['603M', '603B']
+        # The database (MTSLRData) stores plant_code without the H- prefix.
+        return [c.upper() for c in re.findall(r'H-?\s*([A-Za-z0-9]+)', str(val).strip())]
+        
     # Determine which plant codes to query
     codes_to_query = []
     if filter_code == "ALL":
-        if spv_code: codes_to_query.append(spv_code)
-        if agel_code: codes_to_query.append(agel_code)
-        if age6l_code: codes_to_query.append(age6l_code)
-    elif filter_code == "SPV" and spv_code:
-        codes_to_query.append(spv_code)
-    elif filter_code == "AGEL" and agel_code:
-        codes_to_query.append(agel_code)
-    elif filter_code == "AGE6L" and age6l_code:
-        codes_to_query.append(age6l_code)
+        codes_to_query.extend(get_prefixes(spv_code))
+        codes_to_query.extend(get_prefixes(agel_code))
+        codes_to_query.extend(get_prefixes(age6l_code))
+    elif filter_code == "SPV":
+        codes_to_query.extend(get_prefixes(spv_code))
+    elif filter_code == "AGEL":
+        codes_to_query.extend(get_prefixes(agel_code))
+    elif filter_code == "AGE6L":
+        codes_to_query.extend(get_prefixes(age6l_code))
         
+    codes_to_query = list(set(codes_to_query))
     if not codes_to_query:
         return {
             "total_pos": 0, "open_pos": 0, "closed_pos": 0, 
@@ -1360,47 +1299,91 @@ def get_project_slr_data(
     slr_query = db.query(models.MTSLRData).filter(models.MTSLRData.plant_code.in_(codes_to_query))
     records = slr_query.all()
     
+    # Group by unique PO document (C.Document)
+    po_groups = {}
+    for r in records:
+        act = r.actual_amount or 0.0
+        comm = r.commitment_amount or 0.0
+        
+        # Skip rows where both are zero
+        if abs(act) < 0.01 and abs(comm) < 0.01:
+            continue
+
+        # Skip rows with no type - not a real POrd/PReq record
+        if not r.type or not str(r.type).strip():
+            continue
+
+        # Records with no PO document number must not be merged together -
+        # they're unrelated line items (often different WBS/plant codes) that
+        # happen to share an empty key, not the same purchase order.
+        po_key = r.po_document or f"__unassigned_{r.id}"
+        if po_key not in po_groups:
+            po_groups[po_key] = {
+                "po_document": po_key,
+                "description": r.description,
+                "type": r.type,
+                "wbs_element": r.wbs_element,
+                "total_actual": 0.0,
+                "total_commitment": 0.0,
+                "plant_code": r.plant_code,
+                "line_items": []
+            }
+        
+        po_groups[po_key]["total_actual"] += act
+        po_groups[po_key]["total_commitment"] += comm
+        po_groups[po_key]["line_items"].append({
+            "description": r.description,
+            "type": r.type,
+            "wbs_element": r.wbs_element,
+            "actual": act,
+            "commitment": comm,
+            "total": act + comm,
+            "plant_code": r.plant_code
+        })
+    
+    # Build result with open/closed status per unique PO
     result_data = []
     open_pos = 0
     closed_pos = 0
     total_actual = 0.0
     total_comm = 0.0
     
-    for r in records:
-        act = r.actual_amount or 0.0
-        comm = r.commitment_amount or 0.0
-        tot = act + comm
+    for po_key, group in po_groups.items():
+        act_sum = group["total_actual"]
+        comm_sum = group["total_commitment"]
+        total = act_sum + comm_sum
         
-        if abs(act) < 0.01 and abs(comm) < 0.01:
-            continue
-            
-        if abs(comm) > 0.01:
+        # Open: has commitment > 0 (regardless of actual)
+        # Closed: commitment == 0 and actual > 0
+        if abs(comm_sum) > 0.01:
             status = "Open"
-        else:
-            status = "Closed"
-            
-        if status == "Open":
             open_pos += 1
         else:
+            status = "Closed"
             closed_pos += 1
             
-        total_actual += act
-        total_comm += comm
+        total_actual += act_sum
+        total_comm += comm_sum
             
         result_data.append({
-            "po_document": r.po_document,
-            "description": r.description,
-            "type": r.type,
-            "wbs_element": r.wbs_element,
-            "total": tot,
-            "actual": act,
-            "commitment": comm,
+            "po_document": None if po_key.startswith("__unassigned_") else po_key,
+            "description": group["description"],
+            "type": group["type"],
+            "wbs_element": group["wbs_element"],
+            "total": total,
+            "actual": act_sum,
+            "commitment": comm_sum,
             "status": status,
-            "plant_code": r.plant_code
+            "plant_code": group["plant_code"],
+            "line_count": len(group["line_items"]),
+            "line_items": group["line_items"]
         })
+    
+    # Sort by total amount descending
+    result_data.sort(key=lambda x: abs(x["total"]), reverse=True)
         
     return {
-        "total_pos": len(records),
+        "total_pos": len(po_groups),
         "open_pos": open_pos,
         "closed_pos": closed_pos,
         "total_amount": total_actual + total_comm,
@@ -1408,3 +1391,4 @@ def get_project_slr_data(
         "commitment_amount": total_comm,
         "data": result_data
     }
+

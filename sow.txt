@@ -1,0 +1,208 @@
+﻿
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0B91716A" w14:textId="77777777" w14:noSpellErr="1">                                                  Statement of Work (SOW)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00C610C2" w:rsidRDefault="00C610C2" w14:paraId="65B8B44A" w14:textId="77777777" w14:noSpellErr="1">      Project – Akasha A Cross-Platform Intelligence System 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="79E97157" w14:textId="77777777">1. Executive Summary
+w:rsidRPr="00B33CCF" w:rsidR="00C610C2" w:rsidP="00C610C2" w:rsidRDefault="00C610C2" w14:paraId="0BAE1D7B" w14:textId="77777777">Akasha, is a cross-platform intelligence system that brings together planning, execution, connectivity, logistics, and procurement data into a single dashboard with AI-driven decision support. Unlike traditional dashboards, Akasha includes an AI-powered chatbot that not only provides visibility but also simulates scenarios, recommends actions, and shows potential outcomes before decisions are made. This enables faster decision-making, better coordination, reduced risk, and more efficient project execution.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="31ADA95D" w14:textId="77777777">2. Background &amp; Strategic Mandate
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6E4718AB" w14:textId="77777777">Project data is currently spread across multiple enterprise platforms, causing delays and inconsistent reporting. This initiative aims to create a connected ecosystem where essential project data moves seamlessly, giving stakeholders timely and clear visibility across all project stages.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="388A47B1" w14:textId="77777777">3. Objective of the Engagement
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2BED169C" w14:textId="77777777">The main objective is to eliminate disconnected project execution by integrating planning, site progress, connectivity readiness, DPR reporting, logistics, CAPEX, and SAP financial systems into a centralized, real-time monitoring framework. This will provide leaders with a single view of project health and enable timely operational and financial decisions.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="4189392F" w14:textId="77777777">4. Scope of Work
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="4863AA19" w14:textId="77777777">4.1 User &amp; Access Model
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="32815BBF" w14:textId="77777777">User Personas
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="27A97FFC" w14:textId="77777777">Executive Leadership
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2C9FB8F8" w14:textId="77777777">PMAG Team
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0687D472" w14:textId="77777777">Project Heads / Site Leads
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="23EDBE6E" w14:textId="77777777">Planning &amp; Scheduling Teams
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="72AF5175" w14:textId="77777777">Techno-Commercial Teams
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="4AD4EAFE" w14:textId="77777777">Business Development (BD)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6547E4EB" w14:textId="77777777">System Administrators
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1225F2A0" w14:textId="77777777">Access Model
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="54D9A324" w14:textId="77777777">Role-Based Access Control (RBAC)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3C546CB4" w14:textId="77777777">Persona-based dashboards
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0DDAF9F4" w14:textId="77777777">Controlled approvals (human-in-the-loop)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="24B3C0D6" w14:textId="77777777">Alerts and notifications
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1EF99841" w14:textId="77777777">Authentication
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6852A62A" w14:textId="77777777">Enterprise Single Sign-On (SSO)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="45BD8E12" w14:textId="77777777">4.2 Functional Scope 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="14002933" w14:textId="77777777">The platform will enable:
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="65394924" w14:textId="77777777">Centralized project monitoring across renewable portfolios 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="61B7CC15" w14:textId="77777777">Single consolidated, cross-platform view of project data (P6, SAP, DPR, Transmission) 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="631D31F2" w14:textId="77777777">AI-powered chatbot for decision support and scenario simulation 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="7211F577" w14:textId="77777777">Scenario-based intelligence to simulate delays, risks, and operational situations 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3602CD4B" w14:textId="77777777">Action-oriented recommendations with expected outcomes and impact analysis 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="248A81DA" w14:textId="77777777">Automated alerts, triggers, and notifications for delays, risks, and dependencies 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="70A4463C" w14:textId="77777777">Derived logistics intelligence using SAP and P6 data 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="692754EB" w14:textId="77777777">Material readiness tracking aligned with project schedules 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="24F1B595" w14:textId="77777777">Financial and procurement visibility through SAP integration 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="67CFD26B" w14:textId="77777777">Cross-functional decision support for PMAG, Projects, Techno-commercial, BD, and Site teams 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2AC8430A" w14:textId="77777777">Reduction in manual coordination, follow-ups, and spread communication 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5FC0AD40" w14:textId="77777777">Executive dashboards for leadership visibility and strategic insights 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="7DC34930" w14:textId="77777777">4.3 Data &amp; Integration Systems
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="47DBA794" w14:textId="77777777" w14:noSpellErr="1">Primavera P6
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="50B8BD65" w14:textId="7BD94345" w14:noSpellErr="1">Act as the core planning and scheduling engine, supporting work breakdown, activities, baselines, and tracking planned vs actual progress with deviation alerts.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5A46A35B" w14:textId="77777777" w14:noSpellErr="1">Manage activity sequencing, milestones, and dependencies, while identifying delays and monitoring the critical path with automated alerts
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="62F5C7D4" w14:textId="5DD15AC0" w14:noSpellErr="1">Enable resource allocation and utilization tracking, highlighting over/under utilization for better planning.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="09FFEDD4" w14:textId="38F530F9" w14:noSpellErr="1">Integrate with Digital DPR for real-time updates and ensure continuous alignment between plan and execution.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3A53A160" w14:textId="31649C9F" w14:noSpellErr="1">Improve overall schedule control, risk visibility, and decision-making.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3562C507" w14:textId="77777777" w14:noSpellErr="1">Transmission Connectivity Dashboard
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="292D7FA0" w14:textId="58F6A128">Track grid connectivity, evacuation capacity, and interconnection milestones for overall transmission visibility.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5185EE0C" w14:textId="08915560">Use the historical data and analyse past timelines (SCD) to identify delay patterns and improve timeline accuracy.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1A0A22CB" w14:textId="4A84EF2F">Generate realistic, data-driven projections and adjust timelines (e.g., 4 → 9 months) considering approvals, dependencies, and execution challenges.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="42913E57" w:rsidRDefault="00B65498" w14:paraId="11E596D2" w14:textId="68D8B776" w14:noSpellErr="1">Enable execution-based planning (ECOD) by aligning planning and financial decisions with actual timelines.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2FD7BE4C" w14:textId="5D031E74">Improve forecasting, risk identification, capital alignment, and overall decision-making predictability.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="02AC3272" w14:textId="77777777" w14:noSpellErr="1">Digital DPR (Daily Progress Report)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2317E1CF" w14:textId="77777777" w14:noSpellErr="1">Centralized Digital DPR system to capture and monitor daily project progress (replacing Excel)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="663E83FD" w14:textId="77777777" w14:noSpellErr="1">Data access restricted to only the last 7 days to maintain data integrity; any modification within these last 7 days data requires a mandatory reason
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="075A5DD3" w14:textId="77777777" w14:noSpellErr="1">Seamless integration with Primavera P6 to enable real-time synchronization of approved progress data and ensure alignment between planned schedules and actual execution
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="30CE241F" w14:textId="77777777" w14:noSpellErr="1">Support role-based access control (Supervisor, Site PM, PMAG Admin) with capabilities for project assignment and controlled cross-project visibility
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6F4C8323" w14:textId="77777777" w14:noSpellErr="1">Defined approval workflow where Supervisor submits DPR, Site PM approves, and only approved data is pushed to P6
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="654FD9A9" w14:textId="77777777" w14:noSpellErr="1">Provide real-time dashboards and project summaries, along with tracking of delays, issues, and dependencies, supported by automated alerts and notifications
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="435E23A7" w14:textId="77777777" w14:noSpellErr="1">Improve data accuracy, reduce manual effort, enhance coordination, and enable better decision-making
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0D8A8FCB" w14:textId="77777777" w14:noSpellErr="1">Module Tracker
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="17BB1539" w14:textId="77777777" w14:noSpellErr="1">Provide end-to-end material tracking from manufacturing to site, including production status, shipment visibility, and monitoring of ETA and transit delays
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="7F29E134" w14:textId="77777777" w14:noSpellErr="1">Ensure alignment with Primavera P6 schedules, highlighting any mismatch between material availability and planned activities
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="04B17C42" w14:textId="77777777" w14:noSpellErr="1">Integrate with SAP for CAPEX tracking to align material movement with financial planning
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="27F8A6E7" w14:textId="77777777">SAP 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0927A4DE" w14:textId="77777777">Manage end-to-end procurement lifecycle with real-time updates
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="50EC8DEC" w14:textId="77777777">Track PO/SO amendments with full visibility and impact on project timelines and costs
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1E0D7632" w14:textId="77777777">Enable CAPEX monitoring and approval workflows aligned with project execution
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="057C1F61" w14:textId="77777777">Provide inventory visibility and material tracking to support planning and reduce shortages
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="05CC7D18" w14:textId="77777777">Support financial decision workflows integrated with project data for better control and decision-making
+w:rsidRPr="00B33CCF" w:rsidR="00027A34" w:rsidP="00B65498" w:rsidRDefault="00027A34" w14:paraId="5AC04861" w14:textId="63C0E778">Cost breakdown structure for projects.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="10E7C5AF" w14:textId="77777777">CMP (Cash Management Product) (to be excluded)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="26977463" w14:textId="77777777">Enable quarter-wise cash planning and tracking with actual vs predictive analysis
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1B58BB15" w14:textId="77777777">Identify and explain cash flow variances, including issues causing deviation from planned targets (e.g., delays, approvals, execution gaps)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="360DC230" w14:textId="77777777">Integrate with SAP and project data (P6/DPR) to align cash flow with project execution
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="48DF6FB2" w14:textId="77777777" w14:noSpellErr="1">            Provide predictive forecasting to support financial control, risk                       
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3ECCEBB6" w14:textId="77777777">            identification, and decision-making
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="567B7C1C" w14:textId="77777777">Human-in-the-Loop Controls
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5A551397" w14:textId="77777777">Ordering and dispatch approvals
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0CDD6465" w14:textId="77777777">Site readiness validation by Project Heads
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="246136AF" w14:textId="77777777">PO Amendments- Scheduling changes
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="407B8FB2" w14:textId="77777777">Financial approvals (LC/BG/WC decisions)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5F447B60" w14:textId="77777777">4.4 Analytics Scope
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="613DF84D" w14:textId="77777777">Real-time project progress analytics
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="216B876E" w14:textId="77777777">Schedule variance and delay detection
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="35373831" w14:textId="77777777">Critical path impact analysis
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2273703E" w14:textId="77777777">Connectivity readiness risk indicators
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="41A5B617" w14:textId="77777777">Logistics flow intelligence
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0D4779B5" w14:textId="77777777">Performance dashboards
+w:rsidRPr="00B33CCF" w:rsidR="00507BAF" w:rsidP="00B65498" w:rsidRDefault="00507BAF" w14:paraId="0A14D712" w14:textId="77777777">AI driven recommendation based on the analysis of scenarios 
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="5C8B777F" w14:textId="77777777">Executive insights
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6D74388C" w14:textId="77777777">5. Technical Architecture &amp; Security
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1EAA44E7" w14:textId="77777777">Architecture Overview
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="05221715" w14:textId="77777777">Web-based centralized dashboard platform
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="07DC26D9" w14:textId="77777777">API-led integration architecture
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="23CAF860" w14:textId="77777777">Modular microservices-based integration layer
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3CA72E6D" w14:textId="77777777">Central data aggregation and transformation layer
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="74ACE43C" w14:textId="77777777">Near real-time data pipelines
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="27BCCD6E" w14:textId="77777777">Integration Approach
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1121C3B7" w14:textId="77777777">Push APIs for execution and logistics systems
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="575DF349" w14:textId="77777777">Pull APIs for planning and reporting systems
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="4A4B0D03" w14:textId="77777777">Event-driven update mechanisms
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3C3F0F98" w14:textId="77777777">Infrastructure
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5A461C73" w14:textId="77777777">Cloud-hosted or enterprise data center deployment
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="4EBE46A3" w14:textId="77777777">Scalable compute and storage architecture
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="74A8B367" w14:textId="77777777">High-availability environment
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="06F76E9B" w14:textId="77777777">Security Framework
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5D5AF145" w14:textId="77777777">Encrypted data in transit and at rest
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="04E6D06B" w14:textId="77777777">Role-based and policy-based access controls
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="25D63F03" w14:textId="77777777">Secure API gateways
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="273C1B07" w14:textId="77777777">Audit logs and activity monitoring
+w:rsidRPr="00B33CCF" w:rsidR="001F4718" w:rsidP="001F4718" w:rsidRDefault="00B65498" w14:paraId="4FF489EB" w14:textId="206D4676">Compliance with enterprise IT security policies
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="55330B7E" w14:textId="77777777">6. Delivery Phases &amp; Milestones    
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="224CBD03" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="74FBE691" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B453CF" w14:paraId="7EC937A4" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00362C8C" w14:paraId="08688F3C" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00B65498" w14:paraId="2E4B9FA1" w14:textId="77777777">7. Deliverables
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="2637AB1F" w14:textId="77777777">Design and deployment of a unified leadership workspace that brings together data from all portfolio systems into a single, easy-to-use environment.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="40AC909D" w14:textId="77777777">API-led integration of key systems including Oracle Primavera P6, Transmission Connectivity Dashboard, Digital DPR, and SAP.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="3734B466" w14:textId="77777777">Development of a logistics intelligence layer within Akasha, using SAP and P6 data to track material readiness and movement (in place of Module Tracker).
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="7BF96CF7" w14:textId="77777777">Creation of a consolidated data layer that acts as a single source of truth across planning, execution, connectivity, logistics, procurement, and financials.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="2AD63D9D" w14:textId="77777777">Development of a portfolio-level dashboard to support leadership with real-time visibility, performance tracking, and better decision-making.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="78066981" w14:textId="77777777">Deployment of an AI-powered layer (LLM-based) to enable:o Natural language interaction with project datao Decision support through conversational insightso Context-aware recommendations and next-best actionso Scenario simulation to understand the impact of decisions before execution
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="290A5FEB" w14:textId="77777777">Enablement of role-based AI assistants for different functions such as projects, procurement, logistics, and finance.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="0E0E7D23" w14:textId="77777777">Configuration of alerts, notifications, and risk triggers across systems to keep teams proactively informed.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="5CE3551F" w14:textId="77777777">Implementation of human-in-the-loop controls for key decisions such as approvals, dispatch, and financial actions.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="184562F3" w14:textId="77777777">Support for cross-system actions through recommendations, reducing manual follow-ups and improving coordination (with execution remaining manual in Drop 1).
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="38F1D234" w14:textId="77777777">8. Out of Scope &amp; Assumptions
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3019EB22" w14:textId="77777777">Out of Scope
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6D5E53D0" w14:textId="77777777">Development of new enterprise source systems
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="56C231F2" w14:textId="77777777">Hardware procurement and on-site infrastructure setup
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="7302F398" w14:textId="77777777">Assumptions
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5347F086" w14:textId="77777777">Existing systems support API integrations
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="09E32A83" w14:textId="77777777">Source system data accuracy and ownership remain with system owners
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6AE2914B" w14:textId="77777777">Required stakeholder availability for approvals and testing
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="10ECE2CF" w14:textId="77777777">9. Acceptance Criteria, KPIs &amp; SLAs
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="6AC5DCB7" w14:textId="77777777">Functional Accuracy &amp; Utility
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="43B13731" w14:textId="77777777">Dashboard Data Accuracy: Consistent alignment between Primavera P6, Digital DPR, Transmission Connectivity, Module Tracker, and SAP data.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="009F1D0F" w14:textId="77777777">DPR Submission Completeness: Site progress reports submitted through the digital DPR system and tracked via system submission logs.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="732A7C26" w14:textId="77777777">Alert Trigger Accuracy: Reliable automated alerts for delays, connectivity status, logistics movement, and financial updates, monitored through audit logs.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3FE9A462" w14:textId="77777777">Critical Path Update Latency: Timely reflection of schedule and milestone updates in Primavera P6 following DPR and connectivity data synchronization, tracked via API timestamps.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="01541C3F" w14:textId="77777777">Financial Data Reconciliation: Alignment between SAP CAPEX and procurement data with project execution records, validated through finance reconciliation reports.
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="12CC4BCB" w14:textId="77777777">Scenario Simulation Accuracy: System accurately simulates impact of delays and operational changes across schedule, resources, and procurement 
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="42847959" w14:textId="77777777">Recommendation Effectiveness: AI-generated recommendations are relevant, actionable, and aligned with business decisions 
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="6F301F10" w14:textId="77777777">Chatbot Interaction Quality: Users are able to query project data and receive clear, context-aware insights
+w:rsidRPr="00B33CCF" w:rsidR="00624478" w:rsidP="00624478" w:rsidRDefault="00624478" w14:paraId="27793C08" w14:textId="0CD85F7E">Finance related query- User would be able to get the revenue related answers.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="24249529" w14:textId="77777777">Performance
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2A7B128C" w14:textId="77777777">Dashboard Performance: Fast and responsive dashboard experience for project views.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="4E8357BB" w14:textId="77777777">API Performance: Efficient and stable API communication across integrated systems.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="1FC976BB" w14:textId="77777777">Data Pipeline Timeliness: Near real-time data synchronization across Primavera P6, Digital DPR, Transmission Connectivity, Module Tracker, and SAP
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00F9411E" w:rsidRDefault="00B65498" w14:paraId="0EDC9697" w14:textId="77777777">Batch Processing Efficiency: Timely completion of scheduled data processing and system jobs 
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="3F89CA3D" w14:textId="77777777">Chatbot Response Time: Responses generated within acceptable time for real-time interaction 
+w:rsidRPr="00B33CCF" w:rsidR="00F9411E" w:rsidP="00F9411E" w:rsidRDefault="00F9411E" w14:paraId="24206685" w14:textId="77777777">Scenario Processing Time: Simulation outputs generated within defined time limits
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0A09C66D" w14:textId="77777777">Security &amp; Compliance
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="340DE95D" w14:textId="77777777">Access Control Enforcement: Role-based access applied across all user personas with periodic access reviews and audit validation.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="14BE5D3E" w14:textId="77777777">Security Testing &amp; Hardening: Platform undergoes security assessments before go-live to identify and remediate vulnerabilities.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="660BDFCC" w14:textId="77777777">Audit &amp; Activity Logging: End-to-end logging of user actions, data changes, approvals, and cross-platform transactions for traceability.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="709591DD" w14:textId="77777777">API Security Management: Secure API usage across integrated systems with hidden credentials, controlled access tokens, and periodic key rotation.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3509B5AF" w14:textId="77777777">Integration Security Controls: Protected data exchange between Primavera P6, DPR, Transmission Connectivity, Logistics, and SAP through encrypted channels and secure gateways.
+w:rsidRPr="00B33CCF" w:rsidR="00F73D02" w:rsidP="00F73D02" w:rsidRDefault="00F73D02" w14:paraId="508BD1B7" w14:textId="77777777">Secure AI Interaction: Chatbot access and responses restricted based on user roles and permissions 
+w:rsidRPr="00B33CCF" w:rsidR="00F73D02" w:rsidP="00F73D02" w:rsidRDefault="00F73D02" w14:paraId="1EF93CD6" w14:textId="77777777">Data Privacy in AI Processing: Sensitive project and financial data handled securely within AI workflows 
+w:rsidRPr="00B33CCF" w:rsidR="00F73D02" w:rsidP="00F73D02" w:rsidRDefault="00F73D02" w14:paraId="5A9FB209" w14:textId="77777777">Auditability of AI Actions: All chatbot queries, recommendations, and scenario outputs logged for traceability
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3B7DEA5F" w14:textId="77777777"> Reliability
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="689515F3" w14:textId="77777777">Platform Stability – The integration platform should always be available and working without interruptions.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3A780A82" w14:textId="77777777">Integration Reliability – The platform keeps data in sync across all connected systems. APIs work reliably and keep data accurate. If a data transfer fails, the system automatically retries to keep information flowing smoothly.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2A37E10A" w14:textId="77777777">Data Reliability – The platform prevents duplicate, incomplete, or conflicting data updates. It also makes sure updates across systems are completed correctly.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3CC0FEDF" w14:textId="77777777">Fault Handling &amp; Recovery – The system can detect errors, send alerts, and follow clear steps to fix issues quickly.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="52FE7A5E" w14:textId="77777777">Monitoring– The platform continuously monitors system health and data integrations. System logs help teams quickly find and fix problems.
+w:rsidRPr="00B33CCF" w:rsidR="00F73D02" w:rsidP="00B65498" w:rsidRDefault="00F73D02" w14:paraId="07A93B53" w14:textId="77777777">AI System Stability: Chatbot and scenario engine remain consistently available without failures
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="02558419" w14:textId="77777777">Adoption
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="25B95540" w14:textId="77777777">Reporting Reduction: Reduced manual reporting and follow-ups through automated dashboards and integrated data flows.
+w:rsidRPr="00B33CCF" w:rsidR="00F73D02" w:rsidP="00B65498" w:rsidRDefault="00F73D02" w14:paraId="52084B7F" w14:textId="77777777">Decision Support Adoption: Teams refer to AI recommendations during planning and execution decisions
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2345306A" w14:textId="77777777">User Satisfaction: Positive user experience and acceptance across leadership and project teams, assessed through periodic feedback and usage reviews.
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="305F0DDA" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="49A338A4" w14:textId="77777777">10. RACI (Condensed)
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="15C0BA41" w14:textId="77777777">Workstream
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="1DB61ED1" w14:textId="77777777">Company
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="6EC8EB2D" w14:textId="77777777">Vendor
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="01662E27" w14:textId="77777777">Data access approvals &amp; governance policies
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="48053BE0" w14:textId="77777777">R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="0BD6D293" w14:textId="77777777">C
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="3453186D" w14:textId="77777777">Data pipeline architecture &amp; data quality
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="72DCCB43" w14:textId="77777777">A
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="1B6EB5FD" w14:textId="77777777">R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="528D344A" w14:textId="77777777">LLM deployment approach &amp; model selection
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="0E1BD22E" w14:textId="77777777">A/R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="5C5ADEBD" w14:textId="77777777">C
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="53568D97" w14:textId="77777777">Technology stack selection
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="3A82BD36" w14:textId="77777777">A/R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="44A194E9" w14:textId="77777777">C
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="2DAF97D4" w14:textId="77777777">Reasoning model design &amp; configuration
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="446078E1" w14:textId="77777777">C
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="440A39E9" w14:textId="77777777">A/R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="13E3A23F" w14:textId="77777777">Unified platform architecture &amp; setup
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="1ED3F7B2" w14:textId="77777777">C
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="44D232F8" w14:textId="77777777">A/R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="6C28F95E" w14:textId="77777777">System integration &amp; API enablement
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="7AF383C8" w14:textId="77777777">C
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00A0532E" w:rsidRDefault="00B65498" w14:paraId="6B137A94" w14:textId="77777777">A/R
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="246F539C" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="5DE73B12" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="0AD2129C" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="3820A1D2" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="56ECC323" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="54070B5A" w14:textId="77777777">
+w:rsidRPr="00B33CCF" w:rsidR="00B65498" w:rsidP="00B65498" w:rsidRDefault="00B65498" w14:paraId="2D4B5C48" w14:textId="77777777">

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import {
@@ -239,12 +239,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'sap' | 'p6' | 'transmission' | 'quality'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality'>('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
   const [showCodModal, setShowCodModal] = useState<'done' | 'pending' | null>(null);
-  const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel'>('all');
+  const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel' | 'age6l'>('all');
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
   const [expandedMaterial, setExpandedMaterial] = useState<string | null>(null);
   const [expandedMetric, setExpandedMetric] = useState<string | null>(null);
@@ -254,22 +254,42 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [expandedCat, setExpandedCat] = useState<string | null>(null);
   const [showWorkflowModal, setShowWorkflowModal] = useState(false);
   const [syncingP6, setSyncingP6] = useState(false);
+  const [expandedPOs, setExpandedPOs] = useState<Record<string, boolean>>({});
+  const [expandedEInvoices, setExpandedEInvoices] = useState<Record<string, boolean>>({});
 
+  const groupedEInvoices = useMemo(() => {
+    if (!detail?.einvoice?.invoices) return {};
+    const map: Record<string, any[]> = {};
+    detail.einvoice.invoices.forEach((inv: any) => {
+      const wo = inv.workOrderNo || 'Unknown';
+      if (!map[wo]) map[wo] = [];
+      map[wo].push(inv);
+    });
+    return map;
+  }, [detail?.einvoice?.invoices]);
   const [slrData, setSlrData] = useState<any>(null);
   const [slrLoading, setSlrLoading] = useState(false);
-  const [slrFilter, setSlrFilter] = useState<'ALL' | 'SPV' | 'AGEL' | 'AGE6L'>('ALL');
   const [slrTypeFilter, setSlrTypeFilter] = useState<string>('ALL');
-  const [sapSubTab, setSapSubTab] = useState<'old' | 'slr'>('old');
+  const [slrStatusFilter, setSlrStatusFilter] = useState<'ALL' | 'Open' | 'Closed'>('ALL');
+  const handleSlrTileClick = (status: 'ALL' | 'Open' | 'Closed') => {
+    if (expandedMetric === 'slr' && slrStatusFilter === status) {
+      setExpandedMetric(null);
+    } else {
+      setExpandedMetric('slr');
+      setSlrStatusFilter(status);
+    }
+  };
+  const [showSlrAnalytics, setShowSlrAnalytics] = useState(false);
 
   useEffect(() => {
     if (!projectId) return;
     setSlrLoading(true);
-    fetch(`/akasha/api/dashboard/api/projects/${projectId}/slr?filter_code=${slrFilter}`)
+    fetch(`/akasha/api/dashboard/api/projects/${projectId}/slr?filter_code=${sapFilter.toUpperCase()}`)
       .then(res => res.json())
       .then(data => setSlrData(data))
       .catch(err => console.error(err))
       .finally(() => setSlrLoading(false));
-  }, [projectId, slrFilter]);
+  }, [projectId, sapFilter]);
 
   useEffect(() => {
     setActiveTab('overview');
@@ -321,18 +341,38 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   }, [projectId]);
 
   // ── SAP filtering (must be before early returns — Rules of Hooks) ──
+  const isMatch = useCallback((item: any, targets: string[]) => {
+    if (!targets.length) return false;
+    for (const target of targets) {
+      const stripped = target.replace(/^H-/, '');
+      const noHyphen = target.replace(/-/g, '');
+      if (
+        item.plantCode === target ||
+        item.plantCode === stripped ||
+        item.plantCode === noHyphen ||
+        item.wbsElement?.startsWith(target) ||
+        item.wbsElement?.startsWith(stripped) ||
+        item.wbsElement?.startsWith(noHyphen)
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }, []);
+
   const sapRaw = detail?.sap;
   const filteredSap = useMemo(() => {
     if (!sapRaw) return null;
     if (sapFilter === 'all') return sapRaw;
 
-    const targetCode = sapFilter === 'spv' ? project?.sapPlantCode : project?.agelCode;
-    if (!targetCode) return sapRaw;
+    const targetCode = sapFilter === 'spv' ? project?.sapPlantCode : sapFilter === 'agel' ? project?.agelCode : project?.age6lCode;
+    const targetCodes = (targetCode || '').split(/[\s,]+/).filter(Boolean);
+    if (targetCodes.length === 0) return sapRaw;
 
-    const filteredPOs = (sapRaw.purchaseOrders || []).filter((po: any) => po.plantCode === targetCode);
-    const filteredInTransit = (sapRaw.inTransit || []).filter((t: any) => t.plantCode === targetCode);
-    const filteredInventory = (sapRaw.inventory || []).filter((inv: any) => inv.plantCode === targetCode);
-    const filteredConsumption = (sapRaw.consumption || []).filter((c: any) => c.plantCode === targetCode);
+    const filteredPOs = (sapRaw.purchaseOrders || []).filter((po: any) => isMatch(po, targetCodes));
+    const filteredInTransit = (sapRaw.inTransit || []).filter((t: any) => isMatch(t, targetCodes));
+    const filteredInventory = (sapRaw.inventory || []).filter((inv: any) => isMatch(inv, targetCodes));
+    const filteredConsumption = (sapRaw.consumption || []).filter((c: any) => isMatch(c, targetCodes));
 
     const vendorMap: Record<string, any> = {};
     for (const po of filteredPOs) {
@@ -359,7 +399,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     const filteredMaterialBreakdown = Object.values(matMap).sort((a: any, b: any) => b.totalQty - a.totalQty);
 
     const filteredSummary = {
-      totalPOs: filteredPOs.length,
+      totalPOs: new Set(filteredPOs.map((po: any) => po.poNumber)).size,
       totalVendors: filteredVendorBreakdown.length,
       totalOrderedQty: filteredPOs.reduce((sum: number, po: any) => sum + (po.orderedQty || 0), 0),
       totalInTransitQty: filteredInTransit.reduce((sum: number, t: any) => sum + (t.inTransitQty || 0), 0),
@@ -381,7 +421,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       materialBreakdown: filteredMaterialBreakdown,
       summary: filteredSummary,
     };
-  }, [sapRaw, sapFilter, project?.sapPlantCode, project?.agelCode]);
+  }, [sapRaw, sapFilter, project?.sapPlantCode, project?.agelCode, project?.age6lCode]);
 
   const unifiedMaterials = useMemo(() => {
     if (!filteredSap) return [];
@@ -427,6 +467,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       m.budgetINR += Number(po.budgetINR || 0);
       m.deliveredINR += Number(po.deliveredINR || 0);
       m.pos.push(po);
+      if (po.wbsElement) m.wbsElements.add(po.wbsElement);
     });
 
     // 2. Consumption
@@ -712,7 +753,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   setSyncingP6(true);
                   try {
                     const p6Promise = fetch(`/akasha/api/p6/sync/${detail.p6.p6ObjectId}`, { method: 'POST' });
-                    const tcPromise = fetch(`/akasha/api/tc/sync`, { method: 'POST' });
+                    const tcPromise = fetch(`/akasha/api/tc/sync/${encodeURIComponent(p.projectId)}`, { method: 'POST' });
                     
                     const [p6Res, tcRes] = await Promise.all([p6Promise, tcPromise]);
                     
@@ -885,6 +926,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <TabBtn active={activeTab === 'overview'} label="Overview" icon={BarChart3} onClick={() => setActiveTab('overview')} />
           <TabBtn active={activeTab === 'schedule'} label="Schedule" icon={Calendar} onClick={() => setActiveTab('schedule')} />
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
+          <TabBtn active={activeTab === 'einvoice'} label="E-Invoice" icon={Receipt} onClick={() => setActiveTab('einvoice')} />
           <TabBtn active={activeTab === 'p6'} label="P6 Deep Dive" icon={Layers} onClick={() => setActiveTab('p6')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
           <TabBtn active={activeTab === 'quality'} label="Quality" icon={Shield} onClick={() => setActiveTab('quality')} />
@@ -913,21 +955,21 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   <div className="flex-1 w-full max-w-[240px] space-y-4">
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-success/100 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                        <div className="w-3 h-3 rounded-sm bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">Completed</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.completedActivities}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-primary/100 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
+                        <div className="w-3 h-3 rounded-sm bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">In Progress</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.inProgressActivities}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-slate-200"></div>
+                        <div className="w-3 h-3 rounded-sm bg-slate-300"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">Not Started</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.notStartedActivities}</span>
@@ -1057,34 +1099,24 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                       <Database className="w-5 h-5 text-primary/70" /> SAP Intelligence
                     </h2>
-                    <div className="flex bg-muted/50 p-1 rounded-lg">
-                      <button 
-                        onClick={() => setSapSubTab('old')}
-                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${sapSubTab === 'old' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      >
-                        PO (Old)
-                      </button>
-                      <button 
-                        onClick={() => setSapSubTab('slr')}
-                        className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-colors ${sapSubTab === 'slr' ? 'bg-background shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`}
-                      >
-                        SLR Data (New)
-                      </button>
-                    </div>
                     <div className="flex items-center gap-3">
                       <div className="flex items-center bg-muted border border-border rounded-lg p-0.5">
-                        {sapSubTab === 'old' ? (
-                        [
+                        {[
                           { key: 'all' as const, label: 'All', disabled: false },
                           {
                             key: 'spv' as const,
                             label: `SPV (${project?.sapPlantCode || '—'})`,
-                            disabled: project?.sapPlantCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => x.plantCode === project.sapPlantCode)) : true
+                            disabled: project?.sapPlantCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => isMatch(x, (project.sapPlantCode || '').split(/[\s,]+/).filter(Boolean)))) : true
                           },
                           {
                             key: 'agel' as const,
                             label: `AGEL (${project?.agelCode || '—'})`,
-                            disabled: project?.agelCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => x.plantCode === project.agelCode)) : true
+                            disabled: project?.agelCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => isMatch(x, (project.agelCode || '').split(/[\s,]+/).filter(Boolean)))) : true
+                          },
+                          {
+                            key: 'age6l' as const,
+                            label: `AGE6L (${project?.age6lCode || '—'})`,
+                            disabled: project?.age6lCode ? ![(sapRaw?.purchaseOrders || []), (sapRaw?.inventory || []), (sapRaw?.consumption || [])].some(arr => arr.some((x: any) => isMatch(x, (project.age6lCode || '').split(/[\s,]+/).filter(Boolean)))) : true
                           },
                         ].map(opt => (
                           <button
@@ -1101,29 +1133,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           >
                             {opt.label}
                           </button>
-                        ))
-                      ) : (
-                        [
-                          { key: 'ALL' as const, label: 'All', disabled: false },
-                          { key: 'SPV' as const, label: `SPV (${project?.sapPlantCode || '—'})`, disabled: !project?.sapPlantCode },
-                          { key: 'AGEL' as const, label: `AGEL (${project?.agelCode || '—'})`, disabled: !project?.agelCode },
-                          { key: 'AGE6L' as const, label: `AGE6L (${project?.age6lCode || '—'})`, disabled: false },
-                        ].map(opt => (
-                          <button
-                            key={opt.key}
-                            onClick={() => !opt.disabled && setSlrFilter(opt.key)}
-                            disabled={opt.disabled}
-                            className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${opt.disabled
-                              ? 'opacity-40 cursor-not-allowed border border-dashed border-muted-foreground/30 text-muted-foreground'
-                              : slrFilter === opt.key
-                                ? 'bg-primary text-primary-foreground shadow-sm'
-                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-                              }`}
-                          >
-                            {opt.label}
-                          </button>
-                        ))
-                      )}
+                        ))}
                       </div>
                       <button
                         onClick={downloadSAPReport}
@@ -1135,13 +1145,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
                   </div>
 
-                  {sapSubTab === 'old' && (
+                  <>
                     <>
-                      {!sap || sap.summary.totalPOs === 0 ? (
+                      {!sap || (sap.summary.totalPOs === 0 && sap.summary.totalConsumedQty === 0 && sap.summary.totalInventoryQty === 0) ? (
                     <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
                       <Database className="w-10 h-10 text-muted-foreground/20 mb-3" />
                       <p className="text-muted-foreground/60 text-sm">No SAP procurement data found for this plant code.</p>
-                      <p className="text-muted-foreground/40 text-xs mt-1">Plant code: {sapFilter === 'spv' ? project?.sapPlantCode : sapFilter === 'agel' ? project?.agelCode : '—'}</p>
+                      <p className="text-muted-foreground/40 text-xs mt-1">Plant code: {sapFilter === 'spv' ? project?.sapPlantCode : sapFilter === 'agel' ? project?.agelCode : sapFilter === 'age6l' ? project?.age6lCode : '—'}</p>
                     </div>
                   ) : (
                     <>
@@ -1159,6 +1169,44 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="No" icon={Truck} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
                       </div>
 
+                      {/* SLR KPIs */}
+                      {slrLoading ? (
+                        <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-border">
+                          <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                          <span className="text-sm text-muted-foreground/60">Loading SLR data...</span>
+                        </div>
+                      ) : slrData && slrData.data?.length > 0 && (() => {
+                        const slrTypes = Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))) as string[];
+                        const slrFiltered = slrTypeFilter === 'ALL' ? slrData.data : slrData.data.filter((r: any) => r.type === slrTypeFilter);
+                        const filteredOpen = slrFiltered.filter((r: any) => r.status === 'Open').length;
+                        const filteredClosed = slrFiltered.length - filteredOpen;
+                        const filteredAmount = slrFiltered.reduce((s: number, r: any) => s + (r.total || 0), 0);
+                        return (
+                          <div className="mt-4 pt-4 border-t border-border">
+                            {slrTypes.length > 1 && (
+                              <div className="flex items-center gap-2 mb-3">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Type:</span>
+                                {['ALL', ...slrTypes].map((t: string) => (
+                                  <button
+                                    key={t}
+                                    onClick={() => setSlrTypeFilter(t)}
+                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${slrTypeFilter === t ? 'bg-primary/15 border-primary/30 text-primary font-semibold' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                                  >
+                                    {t === 'ALL' ? 'All' : t}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                              <HeroMetric label="Total SLR POs" value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
+                              <HeroMetric label="Open POs" value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                              <HeroMetric label="Closed POs" value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
+                              <HeroMetric label="Total Amount" value={`₹${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
+                            </div>
+                          </div>
+                        );
+                      })()}
+
                       {/* ── Interactive Breakdown Panel ── */}
                       {expandedMetric && (
                         <div className="intelligence-card p-5 animate-in slide-in-from-top-2 duration-300 border-primary/20">
@@ -1174,9 +1222,21 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               {expandedMetric === 'utilized' && 'Utilization by Material'}
                               {expandedMetric === 'remaining' && 'Remaining Balance by Material'}
                               {expandedMetric === 'transit' && 'In-Transit Breakdown'}
+                              {expandedMetric === 'slr' && 'SLR Purchase Orders Breakdown'}
                             </h4>
-                            <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors">✕ Close</button>
+                            <div className="flex items-center gap-2">
+                              {expandedMetric === 'slr' && (
+                                <button
+                                  onClick={() => setShowSlrAnalytics(v => !v)}
+                                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${showSlrAnalytics ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
+                                >
+                                  <BarChart3 className="w-3 h-3" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+                                </button>
+                              )}
+                              <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors">✕ Close</button>
+                            </div>
                           </div>
+                          {expandedMetric !== 'slr' && (
                           <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin">
                             <table className="intel-table w-full text-xs">
                               <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
@@ -1184,6 +1244,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 {expandedMetric === 'pos' && (
                                   <tr>
                                     <th className="text-left">PO Number</th>
+                                    <th className="text-left">PO Date</th>
                                     <th className="text-left">Material Description</th>
                                     <th className="text-left">Vendor</th>
                                     <th className="text-right">Ordered Qty</th>
@@ -1256,17 +1317,52 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               </thead>
                               <tbody className="divide-y divide-border/30">
                                 {/* ── PO Rows ── */}
-                                {expandedMetric === 'pos' && (sap.purchaseOrders || []).slice(0, 50).map((po: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted transition-colors">
-                                    <td className="text-left font-mono font-medium text-primary/80">{po.poNumber}</td>
-                                    <td className="text-left text-foreground/70 max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
-                                    <td className="text-left text-foreground/70 max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
-                                    <td className="text-right font-mono font-semibold text-primary">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
-                                    <td className="text-right font-mono text-foreground/70">{fmtCost(po.budgetINR)}</td>
-                                    <td className="text-right font-mono text-success">{fmtCost(po.deliveredINR)}</td>
-                                    <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
-                                  </tr>
-                                ))}
+                                {expandedMetric === 'pos' && Array.from(new Set((sap.purchaseOrders || []).map((p: any) => p.poNumber))).slice(0, 100).map((poNum: any) => {
+                                  const items = (sap.purchaseOrders || []).filter((p: any) => p.poNumber === poNum);
+                                  const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+                                  const sumBudget = items.reduce((sum: number, p: any) => sum + (p.budgetINR || 0), 0);
+                                  const sumDelivered = items.reduce((sum: number, p: any) => sum + (p.deliveredINR || 0), 0);
+                                  const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+                                  const isExpanded = expandedPOs[`sap-pos-${poNum}`];
+                                  return (
+                                    <React.Fragment key={`sap-pos-${poNum}`}>
+                                      <tr 
+                                        className="hover:bg-muted transition-colors cursor-pointer"
+                                        onClick={() => setExpandedPOs(prev => ({ ...prev, [`sap-pos-${poNum}`]: !prev[`sap-pos-${poNum}`] }))}
+                                      >
+                                        <td className="text-left font-mono font-medium text-primary/80 flex items-center gap-2">
+                                          {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                                          {poNum}
+                                        </td>
+                                        <td className="text-left text-foreground/70">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB') : '—'}</td>
+                                        <td className="text-left text-foreground/70 max-w-[150px] truncate" title="Multiple Materials">
+                                          {items.length === 1 ? (items[0].materialName || items[0].materialCode) : `${items.length} items`}
+                                        </td>
+                                        <td className="text-left text-foreground/70 max-w-[150px] truncate" title={items[0]?.vendorName}>{items[0]?.vendorName || '—'}</td>
+                                        <td className="text-right font-mono font-semibold text-primary">{Number(sumQty || 0).toLocaleString('en-IN')} Unit</td>
+                                        <td className="text-right font-mono text-foreground/70">{fmtCost(sumBudget)}</td>
+                                        <td className="text-right font-mono text-success">{fmtCost(sumDelivered)}</td>
+                                        <td className="text-center">
+                                          {storages.length > 0 ? storages.map((s: any, idx) => (
+                                            <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{s}</span>
+                                          )) : '—'}
+                                        </td>
+                                      </tr>
+                                      {isExpanded && items.map((po: any, j: number) => (
+                                        <tr key={`sap-pos-${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
+                                          <td className="text-left font-mono font-medium text-muted-foreground pl-10 text-[10px]">Line Item {j + 1}</td>
+                                          <td className="text-left text-muted-foreground">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB') : '—'}</td>
+                                          <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
+                                          <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
+                                          <td className="text-right font-mono text-muted-foreground">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
+                                          <td className="text-right font-mono text-muted-foreground">{fmtCost(po.budgetINR)}</td>
+                                          <td className="text-right font-mono text-muted-foreground">{fmtCost(po.deliveredINR)}</td>
+                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
+                                        </tr>
+                                      ))}
+                                    </React.Fragment>
+                                  );
+                                })}
                                 {/* ── Vendor Rows ── */}
                                 {expandedMetric === 'vendors' && (sap.vendorBreakdown || []).map((v: any, i: number) => (
                                   <tr key={i} className="hover:bg-muted transition-colors">
@@ -1346,6 +1442,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               </tbody>
                             </table>
                           </div>
+                          )}
                           {/* Summary footer */}
                           {expandedMetric === 'inventory' && (
                             <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
@@ -1363,278 +1460,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <span className="font-mono font-bold text-warning">{new Set((sap.inTransit || []).map((t: any) => t.materialCode)).size}</span>
                             </div>
                           )}
-                        </div>
-                      )}
 
-                      {/* Allocation Context */}
-                      {sap.allocation && (
-                        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/[0.04] border border-primary/[0.08] text-[11px] text-muted-foreground/60">
-                          <Database className="w-3.5 h-3.5 text-primary/50 shrink-0" />
-                          <span>
-                            Data allocated to this project: <span className="font-semibold text-foreground/70">{sap.allocation.projectCapacityMW} MW</span> of{' '}
-                            <span className="font-medium text-foreground/60">{sap.allocation.totalPlantCapacityMW} MW</span> total plant capacity
-                            <span className="text-muted-foreground/40"> · </span>
-                            Ratio: <span className="font-mono font-semibold text-primary/70">{(sap.allocation.allocationRatio * 100).toFixed(1)}%</span>
-                            {sap.allocation.wbsFilter && (
-                              <>
-                                <span className="text-muted-foreground/40"> · </span>
-                                WBS: <span className="font-mono text-foreground/60">{sap.allocation.wbsFilter}</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      )}
-
-                      {/* Unified Material Tracking & Chart */}
-                      <div className="space-y-6">
-
-                        {/* Analytics Line Chart */}
-                        <div className="intelligence-card p-6 flex flex-col h-[400px]">
-                          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                            <BarChart3 className="w-4 h-4 text-primary/70" /> Consumption Trends
-                          </h3>
-                          <div className="flex-1">
-                            {!sap.consumption || sap.consumption.length === 0 ? (
-                              <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted">
-                                <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-3" />
-                                <p className="text-sm font-medium text-muted-foreground/70">No Consumption Data</p>
-                                <p className="text-xs text-muted-foreground/40 mt-1 max-w-[250px] text-center">There are no MB51 material consumption records for this selection.</p>
-                              </div>
-                            ) : (
-                              <ReactECharts
-                                option={{
-                                  tooltip: { trigger: 'axis', backgroundColor: 'rgba(9,9,11,0.9)', borderColor: '#27272a', textStyle: { color: '#e4e4e7' } },
-                                  legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
-                                  grid: { top: 30, right: 10, bottom: 40, left: 40 },
-                                  xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
-                                  yAxis: [
-                                    { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: '#27272a' } } },
-                                    { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
-                                  ],
-                                  series: [
-                                    { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => String(c.movementType) === '221' ? -c.quantity : 0).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
-                                    { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => String(c.movementType) === '222' ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
-                                    { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => -c.amountINR).slice(0, 40), itemStyle: { color: '#3b82f6' } }
-                                  ]
-                                }}
-                                style={{ height: '100%', width: '100%' }}
-                              />
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Unified Table */}
-                        <div className="intelligence-card p-6">
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                              <Box className="w-4 h-4 text-primary/70" /> Material Lifecycle & Tracking
-                            </h3>
-                            <div className="flex bg-muted p-1 rounded-md border border-border">
-                              <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>
-                              <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>
-                              <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>
-                            </div>
-                          </div>
-
-                          <div className="overflow-x-auto max-h-[600px] overflow-y-auto scrollbar-thin">
-                            <table className="intel-table relative w-full text-xs">
-                              <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 shadow-sm text-[10px] uppercase tracking-wider whitespace-nowrap">
-                                <tr>
-                                  <th className="w-8"></th>
-                                  <th className="text-center">Material Code</th>
-                                  <th className="text-left">Material Description</th>
-                                  <th className="text-center">Base Unit</th>
-                                  <th className="text-left">WBS Tracking</th>
-                                  <th className="text-center">Ordered</th>
-                                  <th className="text-center">Consumed</th>
-                                  <th className="text-center">Remaining Qty</th>
-                                  <th className="text-center">Inventory Qty</th>
-                                  <th className="text-center">Inventory Value</th>
-                                  <th className="text-center">In Transit</th>
-                                  <th className="text-center">Supply PO Amount</th>
-                                  <th className="text-center">Utilized Supply PO Amount</th>
-                                  <th className="text-center">Remaining Supply PO Amount</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {unifiedMaterials.map((mat: any, i: number) => {
-                                  const isExpanded = expandedMaterial === mat.materialCode;
-                                  return (
-                                    <React.Fragment key={i}>
-                                      {/* Master Row */}
-                                      <tr className={`cursor-pointer transition-colors ${isExpanded ? 'bg-primary/5' : 'hover:bg-primary/5'}`} onClick={() => setExpandedMaterial(isExpanded ? null : mat.materialCode)}>
-                                        <td className="text-center text-muted-foreground">
-                                          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                                        </td>
-                                        <td className="text-center font-mono font-medium text-primary/90">{mat.materialCode}</td>
-                                        <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                        <td className="text-center font-mono text-muted-foreground/80">{mat.baseUnit}</td>
-                                        <td className="text-left">
-                                          {mat.wbsList && mat.wbsList.length > 0 ? (
-                                            <div className="flex items-center gap-1 flex-wrap max-w-[150px]">
-                                              <span className="px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] font-mono whitespace-nowrap truncate max-w-[100px]" title={mat.wbsList[0]}>{mat.wbsList[0]}</span>
-                                              {mat.wbsList.length > 1 && (
-                                                <span className="text-[9px] text-muted-foreground font-medium" title={mat.wbsList.slice(1).join(', ')}>+{mat.wbsList.length - 1}</span>
-                                              )}
-                                            </div>
-                                          ) : <span className="text-muted-foreground/40">—</span>}
-                                        </td>
-                                        <td className="text-center font-mono font-semibold text-primary">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono font-semibold text-success">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono font-semibold text-warning">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono text-purple-400">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono text-purple-400/80">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                        <td className="text-center font-mono text-warning">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono text-foreground/70">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                        <td className="text-center font-mono text-success/80">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
-                                        <td className="text-center font-mono text-warning/80">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
-                                      </tr>
-
-                                      {/* Drill-down Detail Row */}
-                                      {isExpanded && (
-                                        <tr className="bg-muted border-b border-border">
-                                          <td colSpan={12} className="p-0">
-                                            <div className="p-6 space-y-6">
-
-                                              {/* PO Details */}
-                                              {mat.pos.length > 0 && (
-                                                <div>
-                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> Purchase Orders</h4>
-                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
-                                                    <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
-                                                        <tr>
-                                                          <th className="text-left font-semibold py-2 px-4">PO Number</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Ordered Qty</th>
-                                                          <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-border/30">
-                                                        {mat.pos.map((po: any, j: number) => (
-                                                          <tr key={j} className="hover:bg-muted transition-colors">
-                                                            <td className="text-left font-mono font-medium text-foreground py-2 px-4">{po.poNumber}</td>
-                                                            <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{po.orderedQty} Unit</td>
-                                                            <td className="text-center py-2 px-4">
-                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
-                                                            </td>
-                                                          </tr>
-                                                        ))}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                              {/* Consumption Details */}
-                                              {mat.consumptions.length > 0 && (
-                                                <div>
-                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Consumptions</h4>
-                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
-                                                    <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
-                                                        <tr>
-                                                          <th className="text-center font-semibold py-2 px-4 w-24">Movement</th>
-                                                          <th className="text-left font-semibold py-2 px-4">WBS Element / Date</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Quantity</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-border/30">
-                                                        {mat.consumptions.slice(0, 50).map((c: any, j: number) => (
-                                                          <tr key={j} className="hover:bg-muted transition-colors">
-                                                            <td className="text-center py-2 px-4">
-                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/100/10 text-success dark:text-success' : 'bg-destructive/100/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
-                                                            </td>
-                                                            <td className="text-left text-foreground/80 font-medium py-2 px-4">{c.wbsElement || c.postingDate}</td>
-                                                            <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
-                                                          </tr>
-                                                        ))}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                              {/* Inventory Details */}
-                                              {mat.inventories.length > 0 && (
-                                                <div>
-                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Inventory Storage</h4>
-                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
-                                                    <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
-                                                        <tr>
-                                                          <th className="text-left font-semibold py-2 px-4">WBS Element</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Inventory Qty</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Value (INR)</th>
-                                                          <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-border/30">
-                                                        {mat.inventories.map((inv: any, j: number) => (
-                                                          <tr key={j} className="hover:bg-muted transition-colors">
-                                                            <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
-                                                            <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
-                                                            <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
-                                                            <td className="text-center py-2 px-4">
-                                                              <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
-                                                            </td>
-                                                          </tr>
-                                                        ))}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </>
-              )}
-
-
-                  {sapSubTab === 'slr' && (
-                    <div className="space-y-6">
-                      {slrLoading ? (
-                        <div className="flex items-center justify-center h-[300px]">
-                          <div className="flex items-center gap-3">
-                            <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                            <span className="text-sm text-muted-foreground/60">Loading SLR data...</span>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="space-y-6">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div className="intelligence-card p-4">
-                              <div className="text-sm text-muted-foreground font-semibold mb-1">TOTAL POs</div>
-                              <div className="text-2xl font-bold text-foreground">{slrData?.total_pos || 0}</div>
-                            </div>
-                            <div className="intelligence-card p-4">
-                              <div className="text-sm text-muted-foreground font-semibold mb-1">OPEN POs</div>
-                              <div className="text-2xl font-bold text-primary">{slrData?.open_pos || 0}</div>
-                            </div>
-                            <div className="intelligence-card p-4">
-                              <div className="text-sm text-muted-foreground font-semibold mb-1">CLOSED POs</div>
-                              <div className="text-2xl font-bold text-muted-foreground">{slrData?.closed_pos || 0}</div>
-                            </div>
-                            <div className="intelligence-card p-4">
-                              <div className="text-sm text-muted-foreground font-semibold mb-1">TOTAL AMOUNT</div>
-                              <div className="text-2xl font-bold text-foreground">₹{slrData?.total_amount ? (slrData.total_amount / 10000000).toFixed(2) : 0} Cr</div>
-                            </div>
-                          </div>
-
-                          {slrData?.data && slrData.data.length > 0 && (
+                          {expandedMetric === 'slr' && slrData?.data && slrData.data.length > 0 && (
                             <>
+                              {showSlrAnalytics && (
                               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                                 <div className="intelligence-card p-4 h-[300px] flex flex-col">
                                   <h3 className="text-sm font-semibold mb-2 text-muted-foreground">PO Status Distribution</h3>
@@ -1725,20 +1554,32 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   </div>
                                 </div>
                               </div>
+                              )}
 
-                              <div className="intelligence-card overflow-hidden flex flex-col">
+                              <div className="overflow-hidden flex flex-col rounded-xl border border-border/50 mt-4">
                                 <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
-                                  <h3 className="text-sm font-semibold text-foreground">SLR Line Items ({slrData.data.filter((r: any) => slrTypeFilter === 'ALL' || r.type === slrTypeFilter).length})</h3>
-                                  <select 
-                                    value={slrTypeFilter}
-                                    onChange={(e) => setSlrTypeFilter(e.target.value)}
-                                    className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
-                                  >
-                                    <option value="ALL">All Types</option>
-                                    {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (
-                                      <option key={type} value={type}>{type}</option>
-                                    ))}
-                                  </select>
+                                  <h3 className="text-sm font-semibold text-foreground">SLR Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>
+                                  <div className="flex items-center gap-2">
+                                    <select
+                                      value={slrStatusFilter}
+                                      onChange={(e) => setSlrStatusFilter(e.target.value as 'ALL' | 'Open' | 'Closed')}
+                                      className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
+                                    >
+                                      <option value="ALL">All Statuses</option>
+                                      <option value="Open">Open</option>
+                                      <option value="Closed">Closed</option>
+                                    </select>
+                                    <select
+                                      value={slrTypeFilter}
+                                      onChange={(e) => setSlrTypeFilter(e.target.value)}
+                                      className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
+                                    >
+                                      <option value="ALL">All Types</option>
+                                      {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (
+                                        <option key={type} value={type}>{type}</option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 </div>
                                 <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
                                   <table className="w-full text-sm text-left relative">
@@ -1747,6 +1588,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         <th className="px-4 py-3 font-semibold text-muted-foreground">PO Number</th>
                                         <th className="px-4 py-3 font-semibold text-muted-foreground">Type</th>
                                         <th className="px-4 py-3 font-semibold text-muted-foreground">Description</th>
+                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Lines</th>
                                         <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Total Amount</th>
                                         <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Actual</th>
                                         <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Commitment</th>
@@ -1754,23 +1596,47 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                       </tr>
                                     </thead>
                                     <tbody className="divide-y divide-border">
-                                      {slrData.data.filter((r: any) => slrTypeFilter === 'ALL' || r.type === slrTypeFilter).map((row: any, i: number) => (
-                                        <tr key={i} className="hover:bg-muted/30 transition-colors">
-                                          <td className="px-4 py-3 font-medium text-foreground">{row.po_document || '—'}</td>
-                                          <td className="px-4 py-3 text-muted-foreground">{row.type || '—'}</td>
-                                          <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
-                                          <td className="px-4 py-3 text-right">₹{row.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                          <td className="px-4 py-3 text-right text-emerald-500/80">₹{row.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                          <td className="px-4 py-3 text-right text-amber-500/80">₹{row.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                          <td className="px-4 py-3 text-center">
-                                            <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                                              row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
-                                            }`}>
-                                              {row.status}
-                                            </span>
-                                          </td>
-                                        </tr>
-                                      ))}
+                                      {slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).map((row: any, i: number) => {
+                                        const isExpanded = expandedPOs[`slr-${row.po_document}-${i}`];
+                                        return (
+                                          <React.Fragment key={i}>
+                                            <tr 
+                                              className="hover:bg-muted/30 transition-colors cursor-pointer"
+                                              onClick={() => setExpandedPOs(prev => ({ ...prev, [`slr-${row.po_document}-${i}`]: !prev[`slr-${row.po_document}-${i}`] }))}
+                                            >
+                                              <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
+                                                {row.line_count > 1 ? (isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />) : <span className="w-3" />}
+                                                {row.po_document || <span className="italic text-muted-foreground/60 font-sans">Unassigned</span>}
+                                              </td>
+                                              <td className="px-4 py-3 text-muted-foreground">{row.type || '—'}</td>
+                                              <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
+                                              <td className="px-4 py-3 text-center"><span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">{row.line_count || 1}</span></td>
+                                              <td className="px-4 py-3 text-right font-mono">₹{row.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                              <td className="px-4 py-3 text-right text-emerald-500/80 font-mono">₹{row.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                              <td className="px-4 py-3 text-right text-amber-500/80 font-mono">₹{row.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                              <td className="px-4 py-3 text-center">
+                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
+                                                  row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                                                }`}>
+                                                  {row.status}
+                                                </span>
+                                              </td>
+                                            </tr>
+                                            {isExpanded && row.line_items && row.line_items.map((item: any, j: number) => (
+                                              <tr key={`${i}-item-${j}`} className="bg-background/40 hover:bg-muted/20 transition-colors">
+                                                <td className="px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono">Line {j + 1}</td>
+                                                <td className="px-4 py-2 text-[11px] text-muted-foreground">{item.type || '—'}</td>
+                                                <td className="px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]" title={item.description}>{item.description || '—'}</td>
+                                                <td className="px-4 py-2 text-center text-[11px] text-muted-foreground">{item.wbs_element}</td>
+                                                <td className="px-4 py-2 text-right text-[11px] text-muted-foreground font-mono">₹{item.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                                <td className="px-4 py-2 text-right text-[11px] text-emerald-500/50 font-mono">₹{item.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                                <td className="px-4 py-2 text-right text-[11px] text-amber-500/50 font-mono">₹{item.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
+                                                <td className="px-4 py-2"></td>
+                                              </tr>
+                                            ))}
+                                          </React.Fragment>
+                                        );
+                                      })}
                                     </tbody>
                                   </table>
                                 </div>
@@ -1779,9 +1645,443 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           )}
                         </div>
                       )}
-                    </div>
+
+                          
+                      {/* Allocation Context */}
+                      {sap.allocation && (
+                        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/[0.04] border border-primary/[0.08] text-[11px] text-muted-foreground/60">
+                          <Database className="w-3.5 h-3.5 text-primary/50 shrink-0" />
+                          <span>
+                            Data allocated to this project: <span className="font-semibold text-foreground/70">{sap.allocation.projectCapacityMW} MW</span> of{' '}
+                            <span className="font-medium text-foreground/60">{sap.allocation.totalPlantCapacityMW} MW</span> total plant capacity
+                            <span className="text-muted-foreground/40"> · </span>
+                            Ratio: <span className="font-mono font-semibold text-primary/70">{(sap.allocation.allocationRatio * 100).toFixed(1)}%</span>
+                            {sap.allocation.wbsFilter && (
+                              <>
+                                <span className="text-muted-foreground/40"> · </span>
+                                WBS: <span className="font-mono text-foreground/60">{sap.allocation.wbsFilter}</span>
+                              </>
+                            )}
+                          </span>
+                        </div>
+                      )}
+
+                      {/* Unified Material Tracking & Chart */}
+                      <div className="space-y-6">
+
+                        {/* Analytics Line Chart */}
+                        <div className="intelligence-card p-6 flex flex-col h-[400px]">
+                          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                            <BarChart3 className="w-4 h-4 text-primary/70" /> Consumption Trends
+                          </h3>
+                          <div className="flex-1">
+                            {!sap.consumption || sap.consumption.length === 0 ? (
+                              <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted">
+                                <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-3" />
+                                <p className="text-sm font-medium text-muted-foreground/70">No Consumption Data</p>
+                                <p className="text-xs text-muted-foreground/40 mt-1 max-w-[250px] text-center">There are no MB51 material consumption records for this selection.</p>
+                              </div>
+                            ) : (
+                              <ReactECharts
+                                option={{
+                                  tooltip: { trigger: 'axis', backgroundColor: 'rgba(9,9,11,0.9)', borderColor: '#27272a', textStyle: { color: '#e4e4e7' } },
+                                  legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
+                                  grid: { top: 30, right: 10, bottom: 40, left: 40 },
+                                  xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
+                                  yAxis: [
+                                    { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: '#27272a' } } },
+                                    { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
+                                  ],
+                                  series: [
+                                    { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
+                                    { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity > 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
+                                    { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.amountINR : (c.quantity > 0 ? c.amountINR : 0)).slice(0, 40), itemStyle: { color: '#3b82f6' } }
+                                  ]
+                                }}
+                                style={{ height: '100%', width: '100%' }}
+                              />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Unified Table */}
+                        <div className="intelligence-card p-6">
+                          <div className="flex items-center justify-between mb-4">
+                            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                              <Box className="w-4 h-4 text-primary/70" /> Material Lifecycle & Tracking
+                            </h3>
+                            <div className="flex bg-muted p-1 rounded-md border border-border">
+                              <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>
+                              <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>
+                              <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>
+                            </div>
+                          </div>
+
+                          <div className="overflow-x-auto h-[calc(100vh-320px)] min-h-[400px] overflow-y-auto scrollbar-thin rounded-lg border border-border">
+                            <table className="intel-table relative w-full text-xs">
+                              <thead className="sticky top-0 z-20">
+                                {/* Top Grouped Header */}
+                                <tr className="bg-slate-200/90 dark:bg-slate-800/90 backdrop-blur-md shadow-sm text-[10px] uppercase tracking-wider text-center font-bold">
+                                  <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-foreground">Material Intelligence</th>
+                                  <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">Volumetric Data (Qty)</th>
+                                  <th colSpan={4} className="py-2.5 border-b border-border/50 text-blue-700 dark:text-blue-400 bg-blue-500/5">Financial Impact (INR)</th>
+                                </tr>
+                                {/* Sub Header */}
+                                <tr className="bg-slate-100/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md text-[10px] uppercase tracking-wider whitespace-nowrap">
+                                  <th className="w-8 py-2 border-b border-border"></th>
+                                  <th className="text-center py-2 border-b border-border">Code</th>
+                                  <th className="text-left py-2 border-b border-border">Description</th>
+                                  <th className="text-center py-2 border-b border-border">Unit</th>
+                                  <th className="text-left py-2 border-b border-border border-r border-border/30">WBS Tracking</th>
+
+                                  {/* Qty */}
+                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Ordered</th>
+                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Consumed</th>
+                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Inventory</th>
+                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">In Transit</th>
+                                  <th className="text-center py-2 border-b border-border border-r border-border/30 bg-emerald-50/50 dark:bg-emerald-900/10">Remaining</th>
+
+                                  {/* Financials */}
+                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">PO Budget</th>
+                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Utilized</th>
+                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Inventory Val</th>
+                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Remaining Bal</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {unifiedMaterials.map((mat: any, i: number) => {
+                                  const isExpanded = expandedMaterial === mat.materialCode;
+                                  return (
+                                    <React.Fragment key={i}>
+                                      {/* Master Row */}
+                                      <tr className={`cursor-pointer transition-colors border-b border-border/40 ${isExpanded ? 'bg-primary/5' : 'hover:bg-primary/5'}`} onClick={() => setExpandedMaterial(isExpanded ? null : mat.materialCode)}>
+                                        <td className="text-center text-muted-foreground py-2.5">
+                                          {isExpanded ? <ChevronUp className="w-4 h-4 mx-auto" /> : <ChevronDown className="w-4 h-4 mx-auto" />}
+                                        </td>
+                                        <td className="text-center font-mono font-medium text-primary/90">{mat.materialCode}</td>
+                                        <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                        <td className="text-center font-mono text-muted-foreground/80">{mat.baseUnit}</td>
+                                        <td className="text-left border-r border-border/30">
+                                          {mat.wbsList && mat.wbsList.length > 0 ? (
+                                            <div className="flex items-center gap-1 flex-wrap max-w-[150px]">
+                                              <span className="px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] font-mono whitespace-nowrap truncate max-w-[100px]" title={mat.wbsList[0]}>{mat.wbsList[0]}</span>
+                                              {mat.wbsList.length > 1 && (
+                                                <span className="text-[9px] text-muted-foreground font-medium" title={mat.wbsList.slice(1).join(', ')}>+{mat.wbsList.length - 1}</span>
+                                              )}
+                                            </div>
+                                          ) : <span className="text-muted-foreground/40">—</span>}
+                                        </td>
+                                        
+                                        {/* Quantities */}
+                                        <td className="text-center font-mono font-semibold text-primary bg-emerald-50/20 dark:bg-emerald-900/5">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono font-semibold text-success bg-emerald-50/20 dark:bg-emerald-900/5">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono text-purple-500 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono text-warning bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
+                                        <td className="text-center font-mono font-semibold text-orange-500 border-r border-border/30 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
+                                        
+                                        {/* Financials */}
+                                        <td className="text-center font-mono text-foreground/70 bg-blue-50/20 dark:bg-blue-900/5">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                        <td className="text-center font-mono text-success/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
+                                        <td className="text-center font-mono text-purple-500/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                        <td className="text-center font-mono text-warning/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
+                                      </tr>
+
+                                      {/* Drill-down Detail Row */}
+                                      {isExpanded && (
+                                        <tr className="bg-muted border-b border-border">
+                                          <td colSpan={12} className="p-0">
+                                            <div className="p-6 space-y-6">
+
+                                              {/* PO Details */}
+                                              {mat.pos.length > 0 && (
+                                                <div>
+                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> Purchase Orders</h4>
+                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
+                                                    <table className="intel-table w-full text-xs">
+                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                        <tr>
+                                                          <th className="text-left font-semibold py-2 px-4">PO Number</th>
+                                                          <th className="text-left font-semibold py-2 px-4">PO Date</th>
+                                                          <th className="text-right font-semibold py-2 px-4">Ordered Qty</th>
+                                                          <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-border/30">
+                                                        {Array.from(new Set(mat.pos.map((p: any) => p.poNumber))).map((poNum: any) => {
+                                                          const items = mat.pos.filter((p: any) => p.poNumber === poNum);
+                                                          const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+                                                          const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+                                                          const isExpanded = expandedPOs[`${mat.materialCode}-${poNum}`];
+                                                          return (
+                                                            <React.Fragment key={poNum}>
+                                                              <tr 
+                                                                className="hover:bg-muted transition-colors cursor-pointer"
+                                                                onClick={() => setExpandedPOs(prev => ({ ...prev, [`${mat.materialCode}-${poNum}`]: !prev[`${mat.materialCode}-${poNum}`] }))}
+                                                              >
+                                                                <td className="text-left font-mono font-medium text-foreground py-2 px-4 flex items-center gap-2">
+                                                                  {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                                                                  {poNum}
+                                                                </td>
+                                                                <td className="text-left font-mono text-muted-foreground py-2 px-4">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                                                <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{sumQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Unit</td>
+                                                                <td className="text-center py-2 px-4">
+                                                                  {storages.length > 0 ? storages.map((s: any, idx) => (
+                                                                    <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{s}</span>
+                                                                  )) : '—'}
+                                                                </td>
+                                                              </tr>
+                                                              {isExpanded && items.map((po: any, j: number) => (
+                                                                <tr key={`${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
+                                                                  <td className="text-left font-mono font-medium text-muted-foreground py-2 px-4 pl-10 text-[10px]">Line Item {j + 1}</td>
+                                                                  <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                                                  <td className="text-right font-mono text-muted-foreground py-2 px-4">{po.orderedQty} Unit</td>
+                                                                  <td className="text-center py-2 px-4">
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                                  </td>
+                                                                </tr>
+                                                              ))}
+                                                            </React.Fragment>
+                                                          );
+                                                        })}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Consumption Details */}
+                                              {mat.consumptions.length > 0 && (
+                                                <div>
+                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Consumptions</h4>
+                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
+                                                    <table className="intel-table w-full text-xs">
+                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                        <tr>
+                                                          <th className="text-center font-semibold py-2 px-4 w-24">Movement</th>
+                                                          <th className="text-left font-semibold py-2 px-4">WBS Element</th>
+                                                          <th className="text-left font-semibold py-2 px-4">Date</th>
+                                                          <th className="text-left font-semibold py-2 px-4">Vendor</th>
+                                                          <th className="text-right font-semibold py-2 px-4">Quantity</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-border/30">
+                                                        {mat.consumptions.slice(0, 50).map((c: any, j: number) => {
+                                                          const matchingPo = mat.pos.find((p: any) => p.wbsElement === c.wbsElement) || mat.pos[0];
+                                                          const vendor = matchingPo?.vendorName || '—';
+                                                          return (
+                                                            <tr key={j} className="hover:bg-muted transition-colors">
+                                                              <td className="text-center py-2 px-4">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/100/10 text-success dark:text-success' : 'bg-destructive/100/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
+                                                              </td>
+                                                              <td className="text-left font-mono text-foreground/80 font-medium py-2 px-4">{c.wbsElement || '—'}</td>
+                                                              <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{c.postingDate ? new Date(c.postingDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                              <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
+                                                              <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
+                                                            </tr>
+                                                          );
+                                                        })}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                              {/* Inventory Details */}
+                                              {mat.inventories.length > 0 && (
+                                                <div>
+                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Inventory Storage</h4>
+                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
+                                                    <table className="intel-table w-full text-xs">
+                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                        <tr>
+                                                          <th className="text-left font-semibold py-2 px-4">WBS Element</th>
+                                                          <th className="text-left font-semibold py-2 px-4">Date</th>
+                                                          <th className="text-left font-semibold py-2 px-4">Vendor</th>
+                                                          <th className="text-right font-semibold py-2 px-4">Inventory Qty</th>
+                                                          <th className="text-right font-semibold py-2 px-4">Value (INR)</th>
+                                                          <th className="text-center font-semibold py-2 px-4 w-32">Location</th>
+                                                        </tr>
+                                                      </thead>
+                                                      <tbody className="divide-y divide-border/30">
+                                                        {mat.inventories.map((inv: any, j: number) => {
+                                                          const matchingPo = mat.pos.find((p: any) => p.wbsElement === inv.wbsElement || p.poNumber === inv.purchaseOrder) || mat.pos[0];
+                                                          const vendor = matchingPo?.vendorName || '—';
+                                                          const dateStr = matchingPo?.documentDate ? new Date(matchingPo.documentDate).toLocaleDateString('en-GB') : '—';
+                                                          return (
+                                                            <tr key={j} className="hover:bg-muted transition-colors">
+                                                              <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
+                                                              <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{dateStr}</td>
+                                                              <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
+                                                              <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
+                                                              <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
+                                                              <td className="text-center py-2 px-4">
+                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
+                                                              </td>
+                                                            </tr>
+                                                          );
+                                                        })}
+                                                      </tbody>
+                                                    </table>
+                                                  </div>
+                                                </div>
+                                              )}
+
+                                            </div>
+                                          </td>
+                                        </tr>
+                                      )}
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      </div>
+                    </>
                   )}
+                </>
+              </>
+
+
                   </div>
+              )}
+            </div>
+          )}
+
+          {/* ════════ E-INVOICE TAB (NEW) ════════ */}
+          {activeTab === 'einvoice' && (
+            <div className="space-y-6">
+              {detailLoading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <div className="flex items-center gap-3">
+                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <span className="text-sm text-muted-foreground/60">Loading E-Invoice data...</span>
+                  </div>
+                </div>
+              ) : !detail?.einvoice?.invoices || detail.einvoice.invoices.length === 0 ? (
+                <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
+                  <Receipt className="w-10 h-10 text-muted-foreground/20 mb-3" />
+                  <p className="text-muted-foreground/60 text-sm">No E-Invoice data found for this project's POs.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <HeroMetric label="Total Invoices" value={detail.einvoice.summary.totalInvoices} icon={FileText} color="text-primary dark:text-primary" />
+                    <HeroMetric label="Invoice Amount" value={detail.einvoice.summary.totalInvoiceAmountINR ? `₹${(detail.einvoice.summary.totalInvoiceAmountINR / 100000).toFixed(2)}` : '₹0'} unit="Lacs" icon={DollarSign} color="text-primary" />
+                    <HeroMetric label="Completed Amount" value={detail.einvoice.summary.completedAmountINR ? `₹${(detail.einvoice.summary.completedAmountINR / 100000).toFixed(2)}` : '₹0'} unit="Lacs" icon={CheckCircle2} color="text-success" />
+                    <HeroMetric label="Pending Amount" value={detail.einvoice.summary.pendingAmountINR ? `₹${(detail.einvoice.summary.pendingAmountINR / 100000).toFixed(2)}` : '₹0'} unit="Lacs" icon={AlertTriangle} color="text-warning" />
+                  </div>
+                  
+                  <div className="intelligence-card p-0 overflow-hidden">
+                    <div className="p-4 border-b border-border bg-muted/30">
+                      <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        <Receipt className="w-4 h-4 text-primary" /> E-Invoice Details
+                      </h3>
+                    </div>
+                    <div className="overflow-x-auto custom-scrollbar max-h-[600px] overflow-y-auto">
+                      <table className="intel-table w-full text-xs">
+                        <thead className="sticky top-0 z-20 bg-muted/80 backdrop-blur text-[10px] text-muted-foreground uppercase tracking-wider">
+                          <tr>
+                            <th className="text-left font-semibold py-3 px-4">Invoice No</th>
+                            <th className="text-left font-semibold py-3 px-4">Work Order</th>
+                            <th className="text-left font-semibold py-3 px-4">Location</th>
+                            <th className="text-left font-semibold py-3 px-4">Package</th>
+                            <th className="text-left font-semibold py-3 px-4">Date</th>
+                            <th className="text-left font-semibold py-3 px-4">Status</th>
+                            <th className="text-left font-semibold py-3 px-4">Vendor</th>
+                            <th className="text-right font-semibold py-3 px-4">SO Amount</th>
+                            <th className="text-right font-semibold py-3 px-4">Invoice Amount</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-border/30">
+                          {Object.entries(groupedEInvoices).map(([wo, invoices]: [string, any], idx: number) => {
+                            if (invoices.length === 1) {
+                              const inv = invoices[0];
+                              return (
+                                <tr key={idx} className="hover:bg-muted/50 transition-colors">
+                                  <td className="text-left font-mono font-medium text-primary py-3 px-4 flex flex-col">
+                                    <span>{inv.invoiceNo}</span>
+                                    <span className="text-[10px] text-muted-foreground">{inv.invoiceType || 'Invoice'}</span>
+                                  </td>
+                                  <td className="text-left font-mono text-muted-foreground py-3 px-4">{wo}</td>
+                                  <td className="text-left text-foreground/80 py-3 px-4 max-w-[120px] truncate" title={inv.workLocation}>{inv.workLocation || '—'}</td>
+                                  <td className="text-left text-foreground/80 py-3 px-4 max-w-[120px] truncate" title={inv.packageName}>{inv.packageName || '—'}</td>
+                                  <td className="text-left text-foreground/80 py-3 px-4">{inv.invoiceDate ? new Date(parseInt(inv.invoiceDate.replace('/Date(', '').replace(')/', ''), 10)).toLocaleDateString('en-GB') : '—'}</td>
+                                  <td className="text-left py-3 px-4">
+                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${(inv.statusDesc || '').toLowerCase() === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                                      {inv.statusDesc || 'Pending'}
+                                    </span>
+                                  </td>
+                                  <td className="text-left text-foreground/80 py-3 px-4 max-w-[200px] truncate" title={inv.vendorName}>{inv.vendorName || '—'}</td>
+                                  <td className="text-right font-mono text-muted-foreground py-3 px-4">{inv.SOAmount ? `₹${Number(inv.SOAmount).toLocaleString('en-IN')}` : '—'}</td>
+                                  <td className="text-right font-mono font-semibold text-foreground py-3 px-4">{inv.invoiceAmount ? `₹${Number(inv.invoiceAmount).toLocaleString('en-IN')}` : '—'}</td>
+                                </tr>
+                              );
+                            }
+
+                            const isExpanded = expandedEInvoices[wo];
+                            const sumInv = invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.invoiceAmount) || 0), 0);
+                            const sumSO = invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.SOAmount) || 0), 0);
+                            const vendorName = invoices[0]?.vendorName || '—';
+                            
+                            return (
+                              <React.Fragment key={idx}>
+                                <tr 
+                                  className={`cursor-pointer transition-colors hover:bg-muted/50 ${isExpanded ? 'bg-primary/5' : ''}`}
+                                  onClick={() => setExpandedEInvoices(prev => ({ ...prev, [wo]: !prev[wo] }))}
+                                >
+                                  <td className="text-left font-mono font-medium text-foreground py-3 px-4 flex items-center gap-2">
+                                    {isExpanded ? <ChevronUp className="w-3.5 h-3.5 text-muted-foreground" /> : <ChevronDown className="w-3.5 h-3.5 text-muted-foreground" />}
+                                    <div className="flex items-center gap-2">
+                                      {invoices.length} Invoices
+                                    </div>
+                                  </td>
+                                  <td className="text-left font-mono font-bold text-primary py-3 px-4">{wo}</td>
+                                  <td className="text-left text-muted-foreground py-3 px-4 max-w-[120px] truncate" title={invoices[0]?.workLocation}>{invoices[0]?.workLocation || '—'}</td>
+                                  <td className="text-left text-muted-foreground py-3 px-4 max-w-[120px] truncate" title={invoices[0]?.packageName}>{invoices[0]?.packageName || '—'}</td>
+                                  <td className="text-left text-muted-foreground py-3 px-4">—</td>
+                                  <td className="text-left py-3 px-4">
+                                    <span className="px-2 py-0.5 rounded text-[10px] font-medium bg-muted text-muted-foreground">
+                                      Multiple
+                                    </span>
+                                  </td>
+                                  <td className="text-left text-foreground/80 py-3 px-4 max-w-[200px] truncate" title={vendorName}>{vendorName}</td>
+                                  <td className="text-right font-mono text-muted-foreground font-semibold py-3 px-4">₹{sumSO.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                                  <td className="text-right font-mono font-bold text-foreground py-3 px-4">₹{sumInv.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                                </tr>
+                                
+                                {isExpanded && invoices.map((inv: any, j: number) => (
+                                  <tr key={`${idx}-${j}`} className="bg-background/40 hover:bg-muted/30 transition-colors">
+                                    <td className="text-left font-mono text-muted-foreground py-2.5 px-4 pl-10 text-[11px] flex items-center gap-2">
+                                      <div className="w-1.5 h-1.5 rounded-full bg-border"></div>
+                                      <div className="flex flex-col">
+                                        <span>{inv.invoiceNo}</span>
+                                        <span className="text-[9px] text-muted-foreground/70">{inv.invoiceType || 'Invoice'}</span>
+                                      </div>
+                                    </td>
+                                    <td className="text-left font-mono text-muted-foreground/60 py-2.5 px-4 text-[11px]">—</td>
+                                    <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px] max-w-[120px] truncate" title={inv.workLocation}>{inv.workLocation || '—'}</td>
+                                    <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px] max-w-[120px] truncate" title={inv.packageName}>{inv.packageName || '—'}</td>
+                                    <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px]">{inv.invoiceDate ? new Date(parseInt(inv.invoiceDate.replace('/Date(', '').replace(')/', ''), 10)).toLocaleDateString('en-GB') : '—'}</td>
+                                    <td className="text-left py-2.5 px-4">
+                                      <span className={`px-2 py-0.5 rounded text-[9px] font-medium ${(inv.statusDesc || '').toLowerCase() === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                                        {inv.statusDesc || 'Pending'}
+                                      </span>
+                                    </td>
+                                    <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px] max-w-[200px] truncate" title={inv.vendorName}>{inv.vendorName || '—'}</td>
+                                    <td className="text-right font-mono text-muted-foreground/80 py-2.5 px-4 text-[11px]">{inv.SOAmount ? `₹${Number(inv.SOAmount).toLocaleString('en-IN')}` : '—'}</td>
+                                    <td className="text-right font-mono font-semibold text-muted-foreground py-2.5 px-4 text-[11px]">{inv.invoiceAmount ? `₹${Number(inv.invoiceAmount).toLocaleString('en-IN')}` : '—'}</td>
+                                  </tr>
+                                ))}
+                              </React.Fragment>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           )}

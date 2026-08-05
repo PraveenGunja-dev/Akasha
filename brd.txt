@@ -1,0 +1,342 @@
+
+w14:paraId="5E8C7DAF" w14:textId="385260DE" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="4EBE99EF" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="01244D3B" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="68B37705" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="47E9E990" w14:textId="5904D1B9" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">PROJECT Akasha
+w14:paraId="73B20A15" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="1039C07E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Detailed BRD
+w14:paraId="45B40AB3" w14:textId="41867E47" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">for Cross Platform Intelligence System for AGEL
+w14:paraId="270B40C8" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="75C104A1" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="08DB9BBD" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2697CDEC" w14:textId="54020E74" w:rsidR="005321F7" w:rsidRPr="005321F7" w:rsidRDefault="005321F7" w:rsidP="004477BC">AKASHA/OneView builds a unified cross-platform intelligence and dashboard ecosystem to centrally monitor renewable project portfolios
+w14:paraId="28C3A077" w14:textId="77777777" w:rsidR="005321F7" w:rsidRPr="005321F7" w:rsidRDefault="005321F7" w:rsidP="004477BC">Connects planning, execution tracking, DPR reporting, logistics, connectivity readiness, CAPEX, and SAP financial systems into one integrated framework
+w14:paraId="73EFC4E0" w14:textId="77777777" w:rsidR="005321F7" w:rsidRPr="005321F7" w:rsidRDefault="005321F7" w:rsidP="004477BC">Eliminates fragmented data and manual reporting through seamless data flow across enterprise platforms
+w14:paraId="5060C8CC" w14:textId="77777777" w:rsidR="005321F7" w:rsidRPr="005321F7" w:rsidRDefault="005321F7" w:rsidP="004477BC">Establishes a single source of truth with real-time visibility, enabling faster coordination and informed operational and financial decisions
+w14:paraId="380E2EF5" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="132C3DDB" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="088B8B7E" w14:textId="77777777" w:rsidR="004477BC" w:rsidRDefault="004477BC">
+w14:paraId="7CEAC956" w14:textId="227BF5A5" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Document Control
+w14:paraId="563ADEC7" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2B816B4F" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">S.No.
+w14:paraId="1EFE8892" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Name
+w14:paraId="25CA1ED5" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Role
+w14:paraId="560DAA65" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Signature
+w14:paraId="17B9C70C" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="4D15E177" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Adithya Kumar
+w14:paraId="5B775E5B" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Author
+w14:paraId="0D6BB7E2" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">DGM
+w14:paraId="7879FF03" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="5794D2F1" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="036D45BD" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="12192381" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="6973B60C" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="20C6B8BE" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="02AA1729" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="524733F8" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="10A19428" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="7AD56E5F" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="68F82FA4" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="14488D9C" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="3E6D43C8" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="00937962" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="34A44400" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="1CD17719" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2AD2C307" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="31DFE6D4" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="75A71985" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="268B0099" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="3DA2BC08" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="53A2FD4A" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2EDBE1E4" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="4475B1C8" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="72322A35" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="14863108" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="7B13BDF2" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="3F6AD60A" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="00A2117B" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="6AB338A0" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="78903434" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="4F2FA62D" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="7206ECC7" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="0B351F18" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="0FF68C20" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="006A6824" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="0D29EF9E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="7BB9E1E3" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="251BC348" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="351F5C20" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Revision History
+w14:paraId="0F1E0F98" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="0F48F724" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Revision
+w14:paraId="7D3DC70A" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Date of Change
+w14:paraId="4609B5DB" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Revision Description
+w14:paraId="74EDDB61" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">23-03-2026
+w14:paraId="6406130B" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">1.01
+w14:paraId="5815821C" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Initial Draft
+w14:paraId="7F56D918" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="41D37796" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="689F97B9" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="20272B5E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="19B786F9" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="30C1BF6C" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="141A28D9" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="4A9DD1C4" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="23852A3D" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Referenced Documents
+w14:paraId="46B23E6D" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="3F11B463" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Ref No.
+w14:paraId="25421D2C" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Document ID
+w14:paraId="7465E757" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Document Title
+w14:paraId="46FDB81E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="0E8D44BF" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">NA
+w14:paraId="5C9311CD" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="65617D6E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="6815C385" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Confidentiality 
+w14:paraId="25FAA800" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">This document contains restricted information pertaining to Adani. The access level for the document is specified above. The addressee should honour this access rights by preventing intentional or accidental access outside the access scope. 
+w14:paraId="1C0BC3F2" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="0A68DA62" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="738E8F4E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Disclaimer
+w14:paraId="3F1C9BE5" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">This document is solely for the information of Adani and should not be used, circulated, quoted or otherwise referred to for any other purpose, nor included or referred to in whole or in part in any document without our prior written consent.
+w14:paraId="218D0466" w14:textId="47958412" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="39EE8AE8" w14:textId="38A6C8B2" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">Table of Contents
+w14:paraId="7A1C2A78" w14:textId="2F731323" w:rsidR="00944A20" w:rsidRDefault="0021137D"> TOC \o "1-3" \h \z \u 1. Executive Summary PAGEREF _Toc225181205 \h 3
+w14:paraId="25963242" w14:textId="0121D93B" w:rsidR="00944A20" w:rsidRDefault="00944A20">2. Background &amp; Strategic Mandate PAGEREF _Toc225181206 \h 4
+w14:paraId="0E12E0C7" w14:textId="6C97BBB2" w:rsidR="00944A20" w:rsidRDefault="00944A20">3. Objective of the Engagement PAGEREF _Toc225181207 \h 4
+w14:paraId="0545DAC2" w14:textId="252D2517" w:rsidR="00944A20" w:rsidRDefault="00944A20">4. Scope of Work PAGEREF _Toc225181208 \h 4
+w14:paraId="63E5FB3F" w14:textId="7A27E30D" w:rsidR="00944A20" w:rsidRDefault="00944A20">4.1 User &amp; Access Model PAGEREF _Toc225181209 \h 4
+w14:paraId="08E497A0" w14:textId="5D6D3DB5" w:rsidR="00944A20" w:rsidRDefault="00944A20">4.2 Functional Scope PAGEREF _Toc225181210 \h 5
+w14:paraId="449992A4" w14:textId="6CDA0277" w:rsidR="00944A20" w:rsidRDefault="00944A20">4.3 Data &amp; Integration Systems PAGEREF _Toc225181211 \h 5
+w14:paraId="529B7C49" w14:textId="6DD17251" w:rsidR="00944A20" w:rsidRDefault="00944A20">4.4 Analytics Scope PAGEREF _Toc225181212 \h 7
+w14:paraId="31FBED23" w14:textId="16EFE3EC" w:rsidR="00944A20" w:rsidRDefault="00944A20">5. Technical Architecture &amp; Security PAGEREF _Toc225181213 \h 7
+w14:paraId="28C531C8" w14:textId="19E71B70" w:rsidR="00944A20" w:rsidRDefault="00944A20">6. Delivery Phases &amp; Milestones PAGEREF _Toc225181214 \h 8
+w14:paraId="301385DF" w14:textId="6EA006EB" w:rsidR="00944A20" w:rsidRDefault="00944A20">7. Deliverables PAGEREF _Toc225181215 \h 10
+w14:paraId="78038909" w14:textId="1E92E230" w:rsidR="00944A20" w:rsidRDefault="00944A20">8. Out of Scope &amp; Assumptions PAGEREF _Toc225181216 \h 11
+w14:paraId="3AAD13FC" w14:textId="77F02BD6" w:rsidR="00944A20" w:rsidRDefault="00944A20">9. Acceptance Criteria, KPIs &amp; SLAs PAGEREF _Toc225181217 \h 11
+w14:paraId="1CE46BD0" w14:textId="3B97E363" w:rsidR="00944A20" w:rsidRDefault="00944A20">10. RACI (Condensed) PAGEREF _Toc225181218 \h 12
+w14:paraId="0F53B58F" w14:textId="0208C60F" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="76778D3A" w14:textId="44B9A4F5" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">
+w14:paraId="324B6A73" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2D1E34C5" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="481AEEF7" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="5BD4FD9E" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="40B801D9" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2DB3942A" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="385E48FC" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="4F585D5F" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="58E847D6" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="001D18C8" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="40DA2B22" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="2B86A6BC" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="3FAD1317" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="15457300" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="06C5A870" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="11DECFC4" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="23692D5D" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="3A27438A" w14:textId="77777777" w:rsidR="0021137D" w:rsidRPr="00F5170E" w:rsidRDefault="0021137D" w:rsidP="004477BC">
+w14:paraId="6371EE51" w14:textId="53ECAFF6" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">1. Executive Summary
+w14:paraId="24D08A32" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">This project establishes a cross-platform integrated intelligence framework that unifies project planning, execution tracking, logistics visibility, and connectivity readiness into a single dashboard ecosystem. By aligning data across these systems, it provides a reliable, consolidated project view that enables timely insights, stronger coordination, proactive decision making, tighter timeline control, reduced risk, and greater operational efficiency.
+w14:paraId="32E9170D" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="6F5261CC" w14:textId="45ACFCAF" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">2. Background &amp; Strategic Mandate
+w14:paraId="467ED3CF" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Project data is currently spread across multiple enterprise platforms, causing delays and inconsistent reporting. This initiative aims to create a connected ecosystem where essential project data moves seamlessly, giving stakeholders timely and clear visibility across all project stages.
+w14:paraId="7E66DDE6" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="0A907A0E" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">3. Objective of the Engagement
+w14:paraId="63A713FF" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">The main objective is to eliminate disconnected project execution by integrating planning, site progress, connectivity readiness, DPR reporting, logistics, CAPEX, and SAP financial systems into a centralized, real-time monitoring framework. This will provide leaders with a single view of project health and enable timely operational and financial decisions.
+w14:paraId="5436EC69" w14:textId="75D0F6E4" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="5DDDFAE3" w14:textId="04320B3E" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">4. Scope of Work
+w14:paraId="5643895A" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">4.1 User &amp; Access Model
+w14:paraId="77F927D2" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">User Personas
+w14:paraId="2C79933C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Executive Leadership
+w14:paraId="4F1226A9" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Project Management Office (PMO)
+w14:paraId="0661EE46" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Project Heads / Site Leads
+w14:paraId="75FEB4D7" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Planning &amp; Scheduling Teams
+w14:paraId="476C8BE6" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Logistics &amp; Supply Chain Teams
+w14:paraId="2A3FD0B2" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Procurement and Techno commercial teams
+w14:paraId="6D3603D8" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">System Administrators
+w14:paraId="4C3E64BD" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Access Model
+w14:paraId="10AB7676" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Role-Based Access Control (RBAC)
+w14:paraId="1CEC5181" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Persona-based dashboard views
+w14:paraId="30FF8407" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Controlled workflow approvals for critical updates
+w14:paraId="5578C2EE" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Alerts and notification 
+w14:paraId="14DAFBC1" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Authentication
+w14:paraId="2FF8E60B" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Enterprise Single Sign-On (SSO)
+w14:paraId="7A9E000C" w14:textId="3D69D08F" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">
+w14:paraId="1A74B436" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">4.2 Functional Scope 
+w14:paraId="0A324C2B" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">The platform will enable:
+w14:paraId="46A0CB36" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Centralized project monitoring across renewable portfolios
+w14:paraId="21A0BC4C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Single consolidated view of project data
+w14:paraId="2E6475BE" w14:textId="77777777" w:rsidR="00494EA1" w:rsidRPr="00F5170E" w:rsidRDefault="00494EA1" w:rsidP="004477BC">Process automation among Primavera P6, Transmission Connectivity Dashboard, Digital DPR, Module Tracker, and SAP.
+w14:paraId="5F05D476" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Automated alerts, triggers, and notifications
+w14:paraId="7DB495EB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Logistics intelligence and movement tracking
+w14:paraId="13E85D86" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Financial and procurement visibility
+w14:paraId="5458889D" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Reduced manual tracking and follow-ups
+w14:paraId="637DCBF2" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Executive dashboards for leadership reporting
+w14:paraId="6C05E5BE" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">4.3 Data &amp; Integration Systems
+w14:paraId="394B9A44" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Primavera P6
+w14:paraId="246A0071" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Act as the core planning and scheduling engine, supporting work breakdown, activities, baselines, and tracking planned vs actual progress with deviation alerts
+w14:paraId="119FAB72" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Manage activity sequencing, milestones, and dependencies, while identifying delays and monitoring the critical path with automated alerts
+w14:paraId="3580F753" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Enable resource allocation and utilization tracking, highlighting over/under utilization for better planning
+w14:paraId="2F9D0CDC" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Integrate with Digital DPR for real-time updates and ensure continuous alignment between plan and execution
+w14:paraId="5C43701D" w14:textId="1F645673" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Improve overall schedule control, risk visibility, and decision-making
+w14:paraId="499EE952" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="0F306CD4" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Transmission Connectivity Dashboard
+w14:paraId="4FCBA9DA" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Track grid connectivity, evacuation capacity, and interconnection milestones for overall transmission visibility
+w14:paraId="533FE9CF" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="00061CB7" w:rsidP="004477BC">Use the historical data and analyse past timelines (SCD) to identify delay patterns and improve timeline accuracy
+w14:paraId="55F98D54" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Generate realistic, data-driven projections and adjust timelines (e.g., 4 → 9 months) considering approvals, dependencies, and execution challenges
+w14:paraId="61AFB544" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Enable execution-based planning (ECOD) by aligning planning and financial decisions with actual timelines
+w14:paraId="2CC9E52B" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Improve forecasting, risk identification, capital alignment, and overall decision-making predictability
+w14:paraId="24626440" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="586978F0" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Digital DPR (Daily Progress Report)
+w14:paraId="6151729E" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Centralized Digital DPR system to capture and monitor daily project progress (replacing Excel)
+w14:paraId="0CA6F2AA" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Data access restricted to only the last 7 days to maintain data integrity; any modification within these last 7 days data requires a mandatory reason
+w14:paraId="7BB8205F" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Seamless integration with Primavera P6 to enable real-time synchronization of approved progress data and ensure alignment between planned schedules and actual execution
+w14:paraId="61BEDAB0" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Support role-based access control (Supervisor, Site PM, PMAG Admin) with capabilities for project assignment and controlled cross-project visibility
+w14:paraId="71D88DA4" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Defined approval workflow where Supervisor submits DPR, Site PM approves, and only approved data is pushed to P6
+w14:paraId="1BBEC883" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Provide real-time dashboards and project summaries, along with tracking of delays, issues, and dependencies, supported by automated alerts and notifications
+w14:paraId="011F0DDB" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Improve data accuracy, reduce manual effort, enhance coordination, and enable better decision-making
+w14:paraId="146E7EEF" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="1F6329E2" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Module Tracker
+w14:paraId="3A4A73BB" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Provide end-to-end material tracking from manufacturing to site, including production status, shipment visibility, and monitoring of ETA and transit delays
+w14:paraId="5546ADDA" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Ensure alignment with Primavera P6 schedules, highlighting any mismatch between material availability and planned activities
+w14:paraId="13886F59" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Integrate with SAP for CAPEX tracking to align material movement with financial planning
+w14:paraId="4DEC4B18" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="74245310" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">SAP 
+w14:paraId="309393AF" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Manage end-to-end procurement lifecycle with real-time updates
+w14:paraId="2895789E" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Track PO/SO amendments with full visibility and impact on project timelines and costs
+w14:paraId="0941094A" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Enable CAPEX monitoring and approval workflows aligned with project execution
+w14:paraId="1F0DFEBA" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Provide inventory visibility and material tracking to support planning and reduce shortages
+w14:paraId="76F1EACD" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Support financial decision workflows integrated with project data for better control and decision-making
+w14:paraId="78DF01C1" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="39C9B462" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">CMP (Cash Management Product)
+w14:paraId="0A19DB76" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Enable quarter-wise cash planning and tracking with actual vs predictive analysis
+w14:paraId="1D04F8C3" w14:textId="77777777" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Identify and explain cash flow variances, including issues causing deviation from planned targets (e.g., delays, approvals, execution gaps)
+w14:paraId="7C163317" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Integrate with SAP and project data (P6/DPR) to align cash flow with project execution
+w14:paraId="15DDB665" w14:textId="280A5EB0" w:rsidR="008F4A55" w:rsidRPr="00F5170E" w:rsidRDefault="008F4A55" w:rsidP="004477BC">Provide predictive forecasting to support financial control, risk identification, and decision-making
+w14:paraId="00B2B1C7" w14:textId="77777777" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00874644" w:rsidP="004477BC">
+w14:paraId="75AB0912" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Human-in-the-Loop Controls
+w14:paraId="3D87E336" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Ordering and dispatch approvals
+w14:paraId="21246935" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Site readiness validation by Project Heads
+w14:paraId="0CE4E0E3" w14:textId="77777777" w:rsidR="001F007C" w:rsidRPr="00F5170E" w:rsidRDefault="001F007C" w:rsidP="004477BC">PO Amendments- Scheduling changes
+w14:paraId="3548CB5E" w14:textId="565FC8A7" w:rsidR="00874644" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Financial approvals (LC/BG/WC decisions)
+w14:paraId="22E8CFEA" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">4.4 Analytics Scope
+w14:paraId="587D12E8" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Real-time project progress analytics
+w14:paraId="514B3262" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Schedule variance and delay detection
+w14:paraId="4CD8CD37" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Critical path impact analysis
+w14:paraId="34459B3C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Connectivity readiness risk indicators
+w14:paraId="6D6127FB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Logistics flow intelligence
+w14:paraId="4347CA8F" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00CA08C0" w:rsidP="004477BC">Performance dashboards
+w14:paraId="3432ABE3" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Executive insights
+w14:paraId="16F8F870" w14:textId="33A19924" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">
+w14:paraId="685F9369" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">5. Technical Architecture &amp; Security
+w14:paraId="35A72239" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Architecture Overview
+w14:paraId="67D8C0F1" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Web-based centralized dashboard platform
+w14:paraId="016ECE66" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">API-led integration architecture
+w14:paraId="12F0C14D" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Modular microservices-based integration layer
+w14:paraId="39345AD3" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Central data aggregation and transformation layer
+w14:paraId="288D2A4E" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Near real-time data pipelines
+w14:paraId="4A9CC5CE" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Integration Approach
+w14:paraId="7B5D5702" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Push APIs for execution and logistics systems
+w14:paraId="46DFEC80" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Pull APIs for planning and reporting systems
+w14:paraId="1780BF3F" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Event-driven update mechanisms
+w14:paraId="41359812" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Infrastructure
+w14:paraId="4017CF9E" w14:textId="35DAA44C" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Cloud-hosted or enterprise data centre deployment
+w14:paraId="6C84BB82" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Scalable compute and storage architecture
+w14:paraId="3B1A65A2" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">High-availability environment
+w14:paraId="7EB9D7FB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Security Framework
+w14:paraId="3A9FBA1C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Encrypted data in transit and at rest
+w14:paraId="1CB39CD1" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Role-based and policy-based access controls
+w14:paraId="3193ACD5" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Secure API gateways
+w14:paraId="095A35FB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Audit logs and activity monitoring
+w14:paraId="64D5A66A" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Compliance with enterprise IT security policies
+w14:paraId="735E0E3E" w14:textId="1FDDBBF2" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">
+w14:paraId="7A554347" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">6. Delivery Phases &amp; Milestones    
+w14:paraId="59239B6D" w14:textId="77777777" w:rsidR="00944A20" w:rsidRDefault="00061CB7" w:rsidP="00944A20">
+w14:paraId="3402E438" w14:textId="5826A904" w:rsidR="00061CB7" w:rsidRPr="00944A20" w:rsidRDefault="00944A20" w:rsidP="00944A20">Figure  SEQ Figure \* ARABIC 1: First 4 Weeks Plan
+w14:paraId="6E0DB2BA" w14:textId="77777777" w:rsidR="00944A20" w:rsidRDefault="0086090C" w:rsidP="00944A20">
+w14:paraId="6DFA01B2" w14:textId="5D29EA35" w:rsidR="0086090C" w:rsidRPr="00944A20" w:rsidRDefault="00944A20" w:rsidP="00944A20">Figure  SEQ Figure \* ARABIC 2: Last 4 Weeks Plan
+w14:paraId="2B200333" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="0086090C" w:rsidP="004477BC">
+w14:paraId="062786FC" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="0086090C" w:rsidP="004477BC">
+w14:paraId="357221A7" w14:textId="77777777" w:rsidR="0018019A" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">7. Deliverables
+w14:paraId="7681CEAB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Design and deployment of a unified leadership workspace consolidating all portfolio systems into a single operational environment.
+w14:paraId="6CE26F81" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">API-led integration of existing systems including Oracle Primavera P6, Transmission Connectivity Dashboard, Digital DPR, Module Tracker, and SAP.
+w14:paraId="45DC8B98" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Establishment of a consolidated portfolio data layer serving as a single source of truth across planning, execution, grid readiness, logistics, procurement, and financials.
+w14:paraId="38E41711" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Development of a consolidated portfolio command dashboard for leadership oversight, performance monitoring, and decision support.
+w14:paraId="2155C0A4" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Deployment of an agentic AI layer powered by Large Language Models (LLMs) to enable:
+w14:paraId="71CC28C5" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Natural-language interaction with enterprise project data
+w14:paraId="4044FB90" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Conversational decision support for leadership and functional teams
+w14:paraId="31738FAA" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Context-aware recommendations and next-best actions
+w14:paraId="395B4A1F" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Automated cross-system task orchestration via APIs
+w14:paraId="7E37472C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Enablement of role-based AI assistants for portfolio, project, logistics, procurement, and finance functions.
+w14:paraId="29B260DE" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Configuration of AI-driven alerts, proactive notifications, and risk triggers across integrated systems.
+w14:paraId="3B3ADE1E" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Implementation of human-in-the-loop governance for approvals, financial controls, dispatch authorization, and critical operational decisions.
+w14:paraId="5C680AF3" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Automation of cross-system workflows to eliminate manual trackers, fragmented follow-ups, and data silos.
+w14:paraId="1E78F541" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">8. Out of Scope &amp; Assumptions
+w14:paraId="21658473" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Out of Scope
+w14:paraId="4E96EE58" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Development of new enterprise source systems
+w14:paraId="0F427326" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Hardware procurement and on-site infrastructure setup
+w14:paraId="03482FBB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Assumptions
+w14:paraId="035BD1E2" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Existing systems support API integrations
+w14:paraId="748F8060" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Source system data accuracy and ownership remain with system owners
+w14:paraId="403CD954" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Required stakeholder availability for approvals and testing
+w14:paraId="796A3CCF" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">9. Acceptance Criteria, KPIs &amp; SLAs
+w14:paraId="7BABD478" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Functional Accuracy &amp; Utility
+w14:paraId="0A0308CB" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="002A6348" w:rsidP="004477BC">Dashboard Data Accuracy: Consistent alignment between Primavera P6, Digital DPR, Transmission Connectivity, Module Tracker, and SAP data.
+w14:paraId="3174F757" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="002A6348" w:rsidP="004477BC">DPR Submission Completeness: Site progress reports submitted through the digital DPR system and tracked via system submission logs.
+w14:paraId="6F4182CB" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="002A6348" w:rsidP="004477BC">Alert Trigger Accuracy: Reliable automated alerts for delays, connectivity status, logistics movement, and financial updates, monitored through audit logs.
+w14:paraId="3F439CCF" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="002A6348" w:rsidP="004477BC">Critical Path Update Latency: Timely reflection of schedule and milestone updates in Primavera P6 following DPR and connectivity data synchronization, tracked via API timestamps.
+w14:paraId="1FE37CCE" w14:textId="77777777" w:rsidR="002A6348" w:rsidRPr="00F5170E" w:rsidRDefault="002A6348" w:rsidP="004477BC">Financial Data Reconciliation: Alignment between SAP CAPEX and procurement data with project execution records, validated through finance reconciliation reports.
+w14:paraId="789A1AC3" w14:textId="77777777" w:rsidR="00E675BC" w:rsidRPr="00F5170E" w:rsidRDefault="00E675BC" w:rsidP="004477BC">
+w14:paraId="7537A8E0" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Performance
+w14:paraId="7356827F" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="0018019A" w:rsidP="004477BC">Dashboard Performance: Fast and responsive dashboard experience for project views.
+w14:paraId="58D93C58" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="0018019A" w:rsidP="004477BC">API Performance: Efficient and stable API communication across integrated systems.
+w14:paraId="20ECDFB3" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="0018019A" w:rsidP="004477BC">Data Pipeline Timeliness: Near real-time data synchronization across Primavera P6, Digital DPR, Transmission Connectivity, Module Tracker, and SAP
+w14:paraId="3A4EA6CD" w14:textId="3299B713" w:rsidR="0018019A" w:rsidRPr="00F5170E" w:rsidRDefault="0018019A" w:rsidP="004477BC">Batch Processing Efficiency: Timely completion of scheduled data processing and system jobs 
+w14:paraId="003AB00F" w14:textId="77777777" w:rsidR="00E675BC" w:rsidRPr="00F5170E" w:rsidRDefault="00E675BC" w:rsidP="004477BC">
+w14:paraId="7661D8F7" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Security &amp; Compliance
+w14:paraId="22CD7B69" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="009A7886" w:rsidP="004477BC">Access Control Enforcement: Role-based access applied across all user personas with periodic access reviews and audit validation.
+w14:paraId="40043267" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="009A7886" w:rsidP="004477BC">Security Testing &amp; Hardening: Platform undergoes security assessments before go-live to identify and remediate vulnerabilities.
+w14:paraId="7C0E694A" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="009A7886" w:rsidP="004477BC">Audit &amp; Activity Logging: End-to-end logging of user actions, data changes, approvals, and cross-platform transactions for traceability.
+w14:paraId="4FEA2DD9" w14:textId="77777777" w:rsidR="0086090C" w:rsidRPr="00F5170E" w:rsidRDefault="009A7886" w:rsidP="004477BC">API Security Management: Secure API usage across integrated systems with hidden credentials, controlled access tokens, and periodic key rotation.
+w14:paraId="65EDC24F" w14:textId="77777777" w:rsidR="009A7886" w:rsidRPr="00F5170E" w:rsidRDefault="009A7886" w:rsidP="004477BC">Integration Security Controls: Protected data exchange between Primavera P6, DPR, Connectivity, Logistics, and SAP through encrypted channels and secure gateways.
+w14:paraId="1723182B" w14:textId="77777777" w:rsidR="00E675BC" w:rsidRPr="00F5170E" w:rsidRDefault="00E675BC" w:rsidP="004477BC">
+w14:paraId="6D4440CA" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00CA08C0" w:rsidP="004477BC"> Reliability
+w14:paraId="6E767B64" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">Platform Stability – The integration platform should always be available and working without interruptions.
+w14:paraId="5268AED4" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">Integration Reliability – The platform keeps data in sync across all connected systems. APIs work reliably and keep data accurate. If a data transfer fails, the system automatically retries to keep information flowing smoothly.
+w14:paraId="1507CC77" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">Data Reliability – The platform prevents duplicate, incomplete, or conflicting data updates. It also makes sure updates across systems are completed correctly.
+w14:paraId="673BB5B6" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">Fault Handling &amp; Recovery – The system can detect errors, send alerts, and follow clear steps to fix issues quickly.
+w14:paraId="78B70811" w14:textId="77777777" w:rsidR="009F7E21" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">Monitoring– The platform continuously monitors system health and data integrations. System logs help teams quickly find and fix problems.
+w14:paraId="42B2064C" w14:textId="77777777" w:rsidR="00E675BC" w:rsidRPr="00F5170E" w:rsidRDefault="00E675BC" w:rsidP="004477BC">
+w14:paraId="20BD652B" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Adoption
+w14:paraId="1CDEF92A" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="00FF511E" w:rsidP="004477BC">Reporting Reduction: Reduced manual reporting and follow-ups through automated dashboards and integrated data flows.
+w14:paraId="573BB055" w14:textId="6397E40A" w:rsidR="00944A20" w:rsidRDefault="00FF511E" w:rsidP="004477BC">User Satisfaction: Positive user experience and acceptance across leadership and project teams, assessed through periodic feedback and usage reviews.
+w14:paraId="78655C6E" w14:textId="4F771056" w:rsidR="0023331F" w:rsidRPr="00944A20" w:rsidRDefault="00944A20" w:rsidP="00944A20">
+w14:paraId="27E890FC" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">10. RACI (Condensed)
+w14:paraId="200EE0CD" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Workstream
+w14:paraId="75D2D65C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Company
+w14:paraId="347688F9" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Vendor
+w14:paraId="1A5C7B67" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Data access approvals &amp; governance policies
+w14:paraId="68F6EF43" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">R
+w14:paraId="6445DD2A" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">C
+w14:paraId="7F940C8E" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Data pipeline architecture &amp; data quality
+w14:paraId="6DB2964C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00FF511E" w:rsidP="004477BC">A
+w14:paraId="773CE568" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">R
+w14:paraId="1EBF23E3" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">LLM deployment approach &amp; model selection
+w14:paraId="25D0783C" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="008A0623" w:rsidP="004477BC">A/R
+w14:paraId="49A15530" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="008A0623" w:rsidP="004477BC">C
+w14:paraId="3F858773" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Technology stack selection
+w14:paraId="00AA2A36" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">A/R
+w14:paraId="1B220E85" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">C
+w14:paraId="335D7425" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Reasoning model design &amp; configuration
+w14:paraId="233D6D12" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00FF511E" w:rsidP="004477BC">C
+w14:paraId="068E2186" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00FF511E" w:rsidP="004477BC">A/R
+w14:paraId="063D35AB" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">Unified platform architecture &amp; setup
+w14:paraId="75409C0D" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00FF511E" w:rsidP="004477BC">C
+w14:paraId="4AAF8663" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">A/R
+w14:paraId="42CD46B3" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">System integration &amp; API enablement
+w14:paraId="581E18C4" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">C
+w14:paraId="15A90BF2" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">A/R
+w14:paraId="44626C42" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">
+w14:paraId="0EE0019D" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">
+w14:paraId="42AA8B26" w14:textId="77777777" w:rsidR="0023331F" w:rsidRPr="00F5170E" w:rsidRDefault="0023331F" w:rsidP="004477BC">
+w14:paraId="23A9039A" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">
+w14:paraId="25FBF9C6" w14:textId="77777777" w:rsidR="00E4349B" w:rsidRPr="00F5170E" w:rsidRDefault="00E4349B" w:rsidP="004477BC">
+w14:paraId="4EA9D7B4" w14:textId="77777777" w:rsidR="00744C5E" w:rsidRPr="00F5170E" w:rsidRDefault="00744C5E" w:rsidP="004477BC">

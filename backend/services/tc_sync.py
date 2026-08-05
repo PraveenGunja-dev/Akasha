@@ -92,7 +92,22 @@ def get_global_topology(token: str, region: str):
         
     current_proj = next((p for p in proj_data["projects"] if p.get("is_current")), None)
     if not current_proj:
-        logger.error(f"No current {region} global project found")
+        # The portal doesn't always keep an `is_current` snapshot flagged (seen
+        # empty for Khavda in practice) - fall back to the most recently
+        # modified snapshot instead of refusing to sync.
+        candidates = [p for p in proj_data["projects"] if p.get("last_modified") or p.get("upload_date")]
+        if candidates:
+            current_proj = max(candidates, key=lambda p: p.get("last_modified") or p.get("upload_date"))
+            logger.warning(
+                f"No snapshot flagged is_current for {region}; falling back to most recently "
+                f"modified snapshot '{current_proj.get('name')}' ({current_proj.get('id')})"
+            )
+        elif proj_data["projects"]:
+            current_proj = proj_data["projects"][0]
+            logger.warning(f"No snapshot flagged is_current for {region}; falling back to first available snapshot")
+
+    if not current_proj:
+        logger.error(f"No {region} global project found to sync")
         return None
         
     data = fetch_data(f"/api/{region}/projects/{current_proj['id']}", token)
@@ -112,14 +127,17 @@ def get_global_topology(token: str, region: str):
         "edges": global_edges
     }
 
-def sync_region_data(db: Session, token: str, region: str):
-    logger.info(f"Syncing {region} data...")
-    
+def sync_region_data(db: Session, token: str, region: str, project_ids=None):
+    """Sync one region's transmission data. If project_ids is given, only those
+    projects' entries/edges are fetched and reconciled - everything else in the
+    region is left untouched (used for the fast per-project sync)."""
+    logger.info(f"Syncing {region} data..." + (f" (scoped to {len(project_ids)} project(s))" if project_ids else ""))
+
     # 1. Fetch Global Topology (Provides nodes, and from/to for edges)
     topology = get_global_topology(token, region.lower())
     if not topology:
         return
-        
+
     existing_nodes = {n.node_id: n for n in db.query(TcNetworkNode).filter(TcNetworkNode.region == region).all()}
     
     # Upsert unique global nodes
@@ -144,15 +162,28 @@ def sync_region_data(db: Session, token: str, region: str):
             )
             db.add(node)
             
-    existing_entries = {(pe.mapping_id, pe.block): pe for pe in db.query(TcProjectEntry).filter(TcProjectEntry.region == region).all()}
-    existing_edges = {(e.mapping_id, e.edge_id): e for e in db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()}
-    
+    # 2. Resolve which mapped projects to sync (all of them, or just the requested ones)
+    mappings_query = db.query(ProjectMapping).filter(ProjectMapping.project_id.isnot(None))
+    if project_ids:
+        mappings_query = mappings_query.filter(ProjectMapping.project_id.in_(project_ids))
+    mappings = mappings_query.all()
+    scoped_pm_ids = [m.id for m in mappings]
+
+    entries_query = db.query(TcProjectEntry).filter(TcProjectEntry.region == region)
+    edges_query = db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region)
+    if project_ids:
+        # Only reconcile rows belonging to the project(s) we're actually syncing -
+        # otherwise the stale-cleanup pass below would wipe out every other
+        # project's data since it would never see them as "seen" this run.
+        entries_query = entries_query.filter(TcProjectEntry.mapping_id.in_(scoped_pm_ids))
+        edges_query = edges_query.filter(TcNetworkEdge.mapping_id.in_(scoped_pm_ids))
+
+    existing_entries = {(pe.mapping_id, pe.block): pe for pe in entries_query.all()}
+    existing_edges = {(e.mapping_id, e.edge_id): e for e in edges_query.all()}
+
     seen_entry_keys = set()
     seen_edge_keys = set()
-        
-    # 2. Iterate over all mapped projects for precise Edge and Block mapping
-    mappings = db.query(ProjectMapping).filter(ProjectMapping.project_id.isnot(None)).all()
-    
+
     from models import Notification
 
     for pm in mappings:
@@ -354,6 +385,37 @@ def run_sync():
     except Exception as e:
         logger.error(f"Error during sync: {e}")
         db.rollback()
+    finally:
+        db.close()
+
+
+def sync_single_project(project_id: str) -> dict:
+    """Synchronously sync transmission data for one project (both regions).
+
+    Runs fast (2 topology calls + 2 per-project API calls) since it's scoped to
+    a single project_id, so callers - e.g. the per-project "Sync" button - can
+    await it and know the DB actually reflects fresh data before reloading,
+    unlike the portfolio-wide run_sync() which fires in a background thread.
+    """
+    token = get_auth_token()
+    if not token:
+        raise RuntimeError("Transmission portal auth failed - no token.")
+
+    db = SessionLocal()
+    try:
+        sync_region_data(db, token, "Khavda", project_ids=[project_id])
+        sync_region_data(db, token, "Rajasthan", project_ids=[project_id])
+
+        edges = db.query(TcNetworkEdge).join(
+            ProjectMapping, TcNetworkEdge.mapping_id == ProjectMapping.id
+        ).filter(ProjectMapping.project_id == project_id).count()
+        entries = db.query(TcProjectEntry).join(
+            ProjectMapping, TcProjectEntry.mapping_id == ProjectMapping.id
+        ).filter(ProjectMapping.project_id == project_id).count()
+        return {"edges": edges, "entries": entries}
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 

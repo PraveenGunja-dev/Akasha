@@ -30,6 +30,7 @@ import ScenarioSimulationPanel from '../components/layout/ScenarioSimulationPane
 import SimulationLab from '../features/analytics/SimulationLab';
 import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 import QualityCommandCenter from '../features/quality/QualityCommandCenter';
+import EInvoiceIntelligence from '../features/analytics/EInvoiceIntelligence';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -206,7 +207,7 @@ export default function CEODashboard() {
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
     'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
-    'quality'
+    'quality', 'einvoice_intelligence'
   ];
 
   const handleTabChange = (tab: string) => {
@@ -305,6 +306,7 @@ export default function CEODashboard() {
                     {activeTab === 'project_map' && <ProjectMap projects={dashboardData?.projects || []} onOpenProject={handleOpenProject} />}
                     {activeTab === 'knowledge_graph' && <KnowledgeGraph />}
                     {activeTab === 'quality' && <QualityCommandCenter />}
+                    {activeTab === 'einvoice_intelligence' && <EInvoiceIntelligence />}
                     
                     {/* Placeholders for unbuilt sections */}
                     {!implementedModules.includes(activeTab) && (

@@ -76,6 +76,18 @@ def sync_tc_data():
     threading.Thread(target=run_sync).start()
     return {"status": "success", "message": "Transmission Data Sync started in background."}
 
+@router.post("/tc/sync/{project_id}")
+def sync_tc_project(project_id: str):
+    """Synchronous, single-project transmission sync - used by the per-project
+    Sync button so the page reload it triggers actually reflects fresh data."""
+    from services.tc_sync import sync_single_project
+    try:
+        result = sync_single_project(project_id)
+        return {"status": "success", "message": f"Synced transmission data for {project_id}", **result}
+    except Exception as e:
+        logger.error(f"TC project sync failed for {project_id}: {e}")
+        raise HTTPException(status_code=500, detail=f"Transmission sync failed: {str(e)}")
+
 @router.post("/mapping/sync")
 def sync_mapping_data():
     from scripts.ingest_mapping import ingest_mapping

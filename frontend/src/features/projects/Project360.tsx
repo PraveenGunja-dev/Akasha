@@ -533,8 +533,10 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
           <div className={`w-2 h-2 rounded-full shrink-0 ${statusCfg.bgColor}`} style={{ backgroundColor: accentColor, boxShadow: `0 0 6px ${accentColor}80` }}></div>
         </div>
         <div className="flex items-center gap-2 text-[10px] font-mono text-muted-foreground mt-1">
-           <span className="bg-muted px-1.5 py-0.5 rounded text-foreground/80 font-semibold">{project.capacityMW} MW</span>
-           <span className="opacity-80 border-l border-border pl-2 flex items-center gap-1">
+           {project.capacityMW > 0 && (
+             <span className="bg-muted px-1.5 py-0.5 rounded text-foreground/80 font-semibold">{project.capacityMW} MW</span>
+           )}
+           <span className={`opacity-80 flex items-center gap-1 ${project.capacityMW > 0 ? 'border-l border-border pl-2' : ''}`}>
              P6: {project.projectId}
            </span>
         </div>
