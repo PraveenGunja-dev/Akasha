@@ -64,7 +64,22 @@ def get_global_topology(token: str, region: str):
         
     current_proj = next((p for p in proj_data["projects"] if p.get("is_current")), None)
     if not current_proj:
-        raise TcSyncError(f"No current {region} global project found")
+        # The portal doesn't always keep an `is_current` snapshot flagged (seen
+        # empty for Khavda in practice) - fall back to the most recently
+        # modified snapshot instead of refusing to sync.
+        candidates = [p for p in proj_data["projects"] if p.get("last_modified") or p.get("upload_date")]
+        if candidates:
+            current_proj = max(candidates, key=lambda p: p.get("last_modified") or p.get("upload_date"))
+            logger.warning(
+                f"No snapshot flagged is_current for {region}; falling back to most recently "
+                f"modified snapshot '{current_proj.get('name')}' ({current_proj.get('id')})"
+            )
+        elif proj_data["projects"]:
+            current_proj = proj_data["projects"][0]
+            logger.warning(f"No snapshot flagged is_current for {region}; falling back to first available snapshot")
+
+    if not current_proj:
+        raise TcSyncError(f"No {region} global project found to sync")
         
     data = fetch_data(f"/api/{region}/projects/{current_proj['id']}", token)
     if not data or "data" not in data or "network" not in data["data"]:

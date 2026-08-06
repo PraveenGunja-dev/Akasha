@@ -496,7 +496,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   }
 
   const p = project;
-  const progressPct = p.progress < 1 ? p.progress * 100 : p.progress;
+  const progressPct = p.progress <= 1 ? p.progress * 100 : p.progress;
   const tier = p.statusTier || p.health;
   const healthColor = tier === 'Critical' ? 'text-destructive' : (tier === 'High Risk' || tier === 'Watchlist') ? 'text-warning' : 'text-success';
   const dotClass = tier === 'Critical' ? 'status-dot-critical' : (tier === 'High Risk' || tier === 'Watchlist') ? 'status-dot-warning' : 'status-dot-healthy';
