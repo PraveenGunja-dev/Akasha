@@ -481,7 +481,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         
         # Read exact edges from local DB
         tc_edges = db.query(models.TcNetworkEdge).filter(models.TcNetworkEdge.mapping_id == m.id).all()
-        tc_edges_count = lines_charged.get("total", len(tc_edges))
+        tc_edges_count = len(tc_edges)
         
         m.tc_data = {
             "progress": tc_progress,
