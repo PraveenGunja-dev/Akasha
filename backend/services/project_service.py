@@ -1274,10 +1274,11 @@ def get_project_360_detail(db: Session, project_id: str):
             "isDelayed": getattr(edge, "is_delayed", False),
             "region": edge.region,
         }
-        if edge.region == "Khavda":
-            tc_khavda.append(edge_data)
-        elif edge.region == "Rajasthan":
+        region_clean = (edge.region or "").strip().lower()
+        if region_clean == "rajasthan":
             tc_rajasthan.append(edge_data)
+        else:
+            tc_khavda.append(edge_data)
 
     # ── Collect Connected Nodes ──
     connected_node_ids = set()
