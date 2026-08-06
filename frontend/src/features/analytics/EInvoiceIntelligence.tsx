@@ -182,11 +182,18 @@ export default function EInvoiceIntelligence() {
 
   const scatterDataRaw = (data.invoices || []).map((inv: any) => {
     const invDateStr = inv.invoiceDate;
-    if (invDateStr && invDateStr.includes('/Date(')) {
-      const match = /\/Date\((\d+)/.exec(invDateStr);
-      if (match) {
-        const ms = parseInt(match[1], 10);
-        const date = new Date(ms);
+    if (invDateStr) {
+      let date: Date | null = null;
+      if (invDateStr.includes('/Date(')) {
+        const match = /\/Date\((\d+)/.exec(invDateStr);
+        if (match) {
+          date = new Date(parseInt(match[1], 10));
+        }
+      } else {
+        date = new Date(invDateStr);
+      }
+      
+      if (date && !isNaN(date.getTime())) {
         const dateStr = date.toISOString().split('T')[0];
         const amt = parseFloat(inv.invoiceAmount) || 0;
         const status = (inv.statusDesc || 'Pending').trim();
