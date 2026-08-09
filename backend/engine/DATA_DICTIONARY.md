@@ -22,8 +22,9 @@ resolve through it before touching P6/SAP/TC tables directly.
 | Column | Resolves to | Notes |
 |---|---|---|
 | `project_mapping.project_id` | P6 join key | Matches `p6_project.project_id`. |
-| `project_mapping.spv_plant_code` | SAP join key #1 | Matches `plant_code` on `mt_inventory`, `mt_poamount`, `mt_materialdocument`. |
-| `project_mapping.module_wbs` | SAP join key #2 | Prefix-matches `wbs_element` on the same three SAP tables. |
+| `sap_project_scope` | Authoritative project-to-SAP rules | Stores one normalized `wbs_prefix` or `plant_code` rule per SPV/AGEL/AGE6L value, including allocation weights for shared scopes. |
+| `project_mapping.spv_plant_code` | Legacy/display plant code | Retained for compatibility; it is not authoritative when `sap_project_scope` contains imported master rules. |
+| `project_mapping.module_wbs` | Legacy WBS mapping | Used only when the database has no normalized SAP master scopes. |
 | `project_mapping.id` | TC join key | Matches `tc_project_entry.mapping_id` and `tc_network_edge.mapping_id` (FK). |
 | `project_mapping.tc_progress` (JSON) | Pre-joined TC snapshot | Already cached onto the mapping row — cheap to read, may go stale; check against `tc_network_edge` directly for anything time-sensitive. |
 | `project_mapping.capacity_mwac` / `capacity_mwdc` | Nameplate capacity | Denominator for any MW-based (rather than duration-based) percent-complete metric. |
@@ -31,7 +32,7 @@ resolve through it before touching P6/SAP/TC tables directly.
 
 **Retrieval rule:** never query `mt_inventory`/`mt_poamount`/`mt_materialdocument`/`tc_*`
 by project name directly. Resolve the project through `project_mapping` first, then
-query by `plant_code` + `wbs_element` (SAP) or `mapping_id` (TC). Fuzzy-matching
+query through `sap_project_scope` (SAP) or by `mapping_id` (TC). Fuzzy-matching
 project names against SAP/TC tables directly is exactly the kind of ungrounded
 guess that produces wrong answers with false confidence.
 

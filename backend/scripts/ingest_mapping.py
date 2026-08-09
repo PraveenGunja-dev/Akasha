@@ -1,101 +1,37 @@
-import sys
 import os
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+import sys
+from pathlib import Path
 
-import pandas as pd
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+REPO_DIR = BACKEND_DIR.parent
+if str(BACKEND_DIR) not in sys.path:
+    sys.path.append(str(BACKEND_DIR))
+
 from database import SessionLocal
-import models
-from sqlalchemy import text
+from services.sap_master_mapping_service import sync_sap_master
 
-def ingest_mapping():
-    db = SessionLocal()
-    mapping_file_old = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")
-    mapping_file_new = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "SAP Master sheet AKASHA (1).xlsx")
-    
+
+def ingest_mapping(db=None, *, dry_run: bool = False) -> dict:
+    owns_session = db is None
+    db = db or SessionLocal()
     try:
-        # Create table if not exists
-        models.Base.metadata.create_all(bind=db.get_bind())
-        
-        print("Clearing old mapping data and unlinking foreign keys...")
-        db.execute(text("UPDATE tc_project_entry SET mapping_id = NULL"))
-        db.execute(text("UPDATE tc_network_edge SET mapping_id = NULL"))
-        db.query(models.ProjectMapping).delete()
-        db.commit()
-
-        print(f"Reading new mapping {mapping_file_new}...")
-        df_new = pd.read_excel(mapping_file_new)
-        
-        print(f"Reading old mapping {mapping_file_old}...")
-        df_old = pd.read_excel(mapping_file_old)
-        
-        print("Merging mapping data...")
-        df = pd.merge(df_new, df_old, left_on='P6 ID', right_on='Project ID', how='left').fillna("")
-        
-        mappings = []
-        for _, row in df.iterrows():
-            project = str(row.get('Project', '')).strip()
-            plot_no = str(row.get('Plot No', '')).strip()
-            category = str(row.get('Category', '')).strip()
-            mms_type = str(row.get('MMS Type', '')).strip()
-            ol = str(row.get('OL', '')).strip()
-            wbs = str(row.get('Module WBS', '')).strip()
-            not_allocated = str(row.get('Not Allocated', '')).strip()
-            priority = str(row.get('Priority', '')).strip()
-            source_of_origin = str(row.get('SourceOfOrigin', '')).strip()
-            
-            project_id = str(row.get('P6 ID', '')).strip()
-            project_name_from_p6 = str(row.get('Project Name', '')).strip()
-            if not project:
-                project = project_name_from_p6
-                
-            spv_name = str(row.get('SPV', '')).strip()
-            plant_code = str(row.get('SPV.1', '')).strip()
-            agel = str(row.get('AGEL', '')).strip()
-            age6l = str(row.get('AGE6L', '')).strip()
-            cluster = str(row.get('Type (Cluster)', '')).strip()
-            
-            # Safely parse capacity
-            def parse_float(val):
-                try:
-                    return float(str(val).strip())
-                except ValueError:
-                    return 0.0
-                    
-            cap_ac = parse_float(row.get('Capacity\n(MWac)', ''))
-            cap_dc = parse_float(row.get('Capacity (MWdc)', ''))
-            
-            if project_id:  # Removed plant_code check since some projects don't have it
-                mapping = models.ProjectMapping(
-                    project=project,
-                    spv_name=spv_name,
-                    project_id=project_id,
-                    project_name_from_p6=project_name_from_p6,
-                    plot_no=plot_no,
-                    category=category,
-                    mms_type=mms_type,
-                    capacity_mwac=cap_ac,
-                    ol=ol,
-                    capacity_mwdc=cap_dc,
-                    spv_plant_code=plant_code,
-                    agel=agel,
-                    module_wbs=wbs,
-                    age6l=age6l,
-                    cluster=cluster,
-                    not_allocated=not_allocated,
-                    priority=priority,
-                    source_of_origin=source_of_origin
-                )
-                mappings.append(mapping)
-                
-        db.add_all(mappings)
-        db.commit()
-        print(f"Successfully ingested {len(mappings)} project mappings!")
-        
-    except Exception as e:
+        report = sync_sap_master(
+            db,
+            REPO_DIR / "Data" / "AKASHA SAP MASTER FILE.xlsx",
+            REPO_DIR / "Data" / "Project_Name_Master.xlsx",
+            dry_run=dry_run,
+        )
+        if owns_session and not dry_run:
+            db.commit()
+        return report.to_dict()
+    except Exception:
         db.rollback()
-        print(f"Error ingesting mapping: {e}")
+        raise
     finally:
-        db.close()
+        if owns_session:
+            db.close()
+
 
 if __name__ == "__main__":
-    ingest_mapping()
+    print(ingest_mapping(dry_run="--dry-run" in sys.argv))

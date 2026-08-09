@@ -100,9 +100,10 @@ def sap_get_po_summary(db: Session, project_id: str) -> dict:
 
 def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list[dict]:
     data = get_sap_project_data(db, project_id)
-    ratio = data["scope"]["allocation_ratio"]
+    allocations = data["record_allocations"]["mt_poamount"]
     aggregates = defaultdict(lambda: {"ordered": 0.0, "delivered": 0.0, "pending": 0.0})
     for po in data["purchase_orders"]:
+        ratio = allocations.get(po.id, 1.0)
         material = po.material_name or po.material_code or "Unknown"
         aggregates[material]["ordered"] += float(po.order_quantity or 0) * ratio
         aggregates[material]["delivered"] += float(po.delivered_qty or 0) * ratio
@@ -129,12 +130,13 @@ def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list
 
 def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
     data = get_sap_project_data(db, project_id)
-    ratio = data["scope"]["allocation_ratio"]
+    allocations = data["record_allocations"]["mt_poamount"]
     aggregates = defaultdict(lambda: {
         "ordered": 0.0, "delivered": 0.0, "pending": 0.0,
         "rows": 0, "po_numbers": set(),
     })
     for po in data["purchase_orders"]:
+        ratio = allocations.get(po.id, 1.0)
         aggregate = aggregates[po.vendor_name or "Unknown"]
         aggregate["ordered"] += float(po.order_quantity or 0) * ratio
         aggregate["delivered"] += float(po.delivered_qty or 0) * ratio

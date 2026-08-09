@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 import models
 from database import get_db
 
@@ -34,8 +34,22 @@ class ProjectMappingCreate(ProjectMappingBase):
 class ProjectMappingUpdate(ProjectMappingBase):
     pass
 
+
+class SapProjectScopeResponse(BaseModel):
+    id: int
+    owner: str
+    match_kind: str
+    match_value: str
+    allocation_group: str
+    allocation_weight: float
+    active: bool
+
+    class Config:
+        from_attributes = True
+
 class ProjectMappingResponse(ProjectMappingBase):
     id: int
+    sap_scopes: List[SapProjectScopeResponse] = Field(default_factory=list)
 
     class Config:
         from_attributes = True

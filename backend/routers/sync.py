@@ -138,10 +138,14 @@ def sync_tc_data():
 def sync_mapping_data(db: Session = Depends(get_db)):
     from scripts.ingest_mapping import ingest_mapping
     try:
-        ingest_mapping()
+        ingestion = ingest_mapping(db=db)
         mark_source_sync_succeeded(db, "Mapping")
         _clear_all_operational_caches(db)
-        return {"status": "success", "message": "Synced Mappings"}
+        return {
+            "status": "success",
+            "message": "Synced Mappings",
+            "ingestion": ingestion,
+        }
     except Exception as e:
         logger.error(f"Mapping sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Mapping sync failed: {str(e)}")

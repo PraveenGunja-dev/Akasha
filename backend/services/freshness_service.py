@@ -17,7 +17,7 @@ SOURCE_TABLES = {
     "SAP": ("mt_poamount", "mt_inventory", "mt_materialdocument"),
     "TC": ("tc_network_edge", "tc_network_node", "tc_project_entry"),
     "Pulse": ("pulse_nc", "pulse_rfi"),
-    "Mapping": ("project_mapping",),
+    "Mapping": ("project_mapping", "sap_project_scope"),
     "Capacity": ("project_mapping", "p6_project", "p6_activity"),
 }
 
@@ -34,6 +34,7 @@ TABLE_SOURCE_SYSTEM = {
     "pulse_nc": "Pulse",
     "pulse_rfi": "Pulse",
     "project_mapping": "Mapping",
+    "sap_project_scope": "Mapping",
     "notifications": "Application",
 }
 

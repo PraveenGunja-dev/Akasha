@@ -16,29 +16,9 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
     if not p6_proj:
         return 1.0, 1.0
         
-    if not mapping:
-        mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == p6_proj.project_id).first()
-        
-    budget_inr = 0.0
-    expenditure_inr = 0.0
-    
-    if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        wbs_exact = str(mapping.module_wbs).strip()
-        pos = db.query(models.MTPOAmount).filter(models.MTPOAmount.wbs_element.ilike(f"%{wbs_exact}%")).all()
-        po_materials = set()
-        for po in pos:
-            budget_inr += (po.net_order_value_inr or 0.0)
-            if po.material_code:
-                mat_str = str(po.material_code).strip().lstrip('0')
-                if mat_str:
-                    po_materials.add(mat_str)
-                    
-        mb51 = db.query(models.MTMaterialDocument).filter(models.MTMaterialDocument.wbs_element.ilike(f"%{wbs_exact}%")).all()
-        for rec in mb51:
-            mat_str = str(rec.material_code).strip().lstrip('0') if rec.material_code else ''
-            if not mapping.module_wbs and mat_str not in po_materials:
-                continue
-            expenditure_inr -= (rec.amount_in_lc or 0.0)
+    sap = get_sap_project_data(db, p6_proj.project_id)
+    budget_inr = sap["totals"]["purchase_orders"]["order_value"]
+    expenditure_inr = sap["totals"]["consumption"]["net_value"]
             
     total_budget_evm = budget_inr if budget_inr > 0 else (getattr(p6_proj, 'planned_cost', 0) or 0)
     actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (getattr(p6_proj, 'actual_total_cost', 0) or 0)

@@ -17,6 +17,7 @@ from sqlalchemy import func
 
 import models
 from services.project_catalog_service import ProjectCatalogService
+from services.sap_project_data_service import get_sap_project_data
 
 logger = logging.getLogger(__name__)
 
@@ -261,10 +262,6 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
     Supply gap = ordered - consumed - inventory (deterministic formula)
     """
     # Resolve project mapping to get WBS element
-    mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == project_id
-    ).first()
-
     empty_result = {
         "summary": {
             "total_po_count": 0,
@@ -282,20 +279,13 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
         "vendor_risk": [],
     }
 
-    if not mapping:
-        return empty_result
-
-    wbs_exact = None
-    if mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
-        wbs_exact = str(mapping.module_wbs).strip()
-
-    if not wbs_exact:
+    sap = get_sap_project_data(db, project_id)
+    if not sap["has_data"]:
         return empty_result
 
     # ── ME2J: Purchase Orders ──
-    po_records = db.query(models.MTPOAmount).filter(
-        models.MTPOAmount.wbs_element == wbs_exact
-    ).all()
+    po_records = sap["purchase_orders"]
+    po_allocations = sap["record_allocations"]["mt_poamount"]
 
     po_materials = set()
     for po in po_records:
@@ -319,9 +309,10 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
     })
 
     for po in po_records:
-        ordered = po.order_quantity or 0
-        delivered = po.delivered_qty or 0
-        pending = po.still_to_deliver_qty or 0
+        weight = po_allocations.get(po.id, 1.0)
+        ordered = (po.order_quantity or 0) * weight
+        delivered = (po.delivered_qty or 0) * weight
+        pending = (po.still_to_deliver_qty or 0) * weight
         # If still_to_deliver is 0 but ordered > delivered, compute it
         if pending == 0 and ordered > delivered:
             pending = ordered - delivered
@@ -329,7 +320,7 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
         total_ordered += ordered
         total_delivered += delivered
         total_pending += pending
-        total_po_value += (po.net_order_value_inr or 0)
+        total_po_value += (po.net_order_value_inr or 0) * weight
 
         mat_key = po.material_name or po.material_code or "Unknown"
         material_agg[mat_key]["ordered"] += ordered
@@ -343,9 +334,8 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
         vendor_agg[vendor_key]["po_count"] += 1
 
     # ── MB51: Material Consumption ──
-    mb51_records = db.query(models.MTMaterialDocument).filter(
-        models.MTMaterialDocument.wbs_element == wbs_exact
-    ).all()
+    mb51_records = sap["material_documents"]
+    mb51_allocations = sap["record_allocations"]["mt_materialdocument"]
 
     consumed_qty = 0.0
     consumed_value_inr = 0.0
@@ -354,10 +344,11 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
         # Only count consumption for materials that have POs
         if mat_str not in po_materials and po_materials:
             continue
-        qty = abs(rec.quantity or 0)
-        val = abs(rec.amount_in_lc or 0)
+        weight = mb51_allocations.get(rec.id, 1.0)
+        qty = abs(rec.quantity or 0) * weight
+        val = abs(rec.amount_in_lc or 0) * weight
         mvt = str(rec.movement_type).strip()
-        if mvt == "222":
+        if mvt in {"222", "262"}:
             # Return movement — subtract from consumption
             consumed_qty -= qty
             consumed_value_inr -= val
@@ -367,18 +358,17 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
             consumed_value_inr += val
 
     # ── MB52: Inventory ──
-    mb52_records = db.query(models.MTInventory).filter(
-        models.MTInventory.wbs_element == wbs_exact,
-        models.MTInventory.quantity_inv > 0
-    ).all()
+    mb52_records = [row for row in sap["inventory"] if (row.quantity_inv or 0) > 0]
+    mb52_allocations = sap["record_allocations"]["mt_inventory"]
 
     inventory_qty = 0.0
     inventory_value_inr = 0.0
     for inv in mb52_records:
         mat_str = str(inv.material_code).strip().lstrip('0') if inv.material_code else ''
         if mat_str in po_materials or not po_materials:
-            inventory_qty += (inv.quantity_inv or 0)
-            inventory_value_inr += (inv.value_unrestricted or 0)
+            weight = mb52_allocations.get(inv.id, 1.0)
+            inventory_qty += (inv.quantity_inv or 0) * weight
+            inventory_value_inr += (inv.value_unrestricted or 0) * weight
 
     # ── Supply Gap (deterministic formula) ──
     supply_gap = max(0, total_ordered - consumed_qty - inventory_qty)

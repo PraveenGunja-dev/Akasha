@@ -15,6 +15,7 @@ from routers import dashboard
 
 DASHBOARD_TABLES = [
     models.ProjectMapping.__table__,
+    models.SapProjectScope.__table__,
     models.P6Project.__table__,
     models.P6Activity.__table__,
     models.MTInventory.__table__,

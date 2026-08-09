@@ -1,4 +1,17 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger, JSON, Index
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    JSON,
+    String,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -322,6 +335,62 @@ class ProjectMapping(Base):
     source_of_origin = Column(String, nullable=True)
     priority = Column(String, nullable=True)
     tc_progress = Column(JSON, nullable=True)  # Added for rich transmission data# ------------------------------------------
+
+    sap_scopes = relationship(
+        "SapProjectScope",
+        back_populates="project_mapping",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
+    )
+
+
+class SapProjectScope(Base):
+    """Normalized project-to-SAP selection rule imported from the SAP master."""
+
+    __tablename__ = "sap_project_scope"
+    __table_args__ = (
+        CheckConstraint(
+            "owner IN ('SPV', 'AGEL', 'AGE6L')",
+            name="ck_sap_project_scope_owner",
+        ),
+        CheckConstraint(
+            "match_kind IN ('wbs_prefix', 'plant_code')",
+            name="ck_sap_project_scope_match_kind",
+        ),
+        CheckConstraint(
+            "allocation_weight > 0 AND allocation_weight <= 1",
+            name="ck_sap_project_scope_allocation_weight",
+        ),
+        UniqueConstraint(
+            "project_mapping_id",
+            "owner",
+            "match_kind",
+            "match_value",
+            name="uq_sap_project_scope_rule",
+        ),
+        Index("ix_sap_project_scope_match", "match_kind", "match_value"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_mapping_id = Column(
+        Integer,
+        ForeignKey("project_mapping.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    owner = Column(String, nullable=False)
+    match_kind = Column(String, nullable=False)
+    match_value = Column(String, nullable=False)
+    allocation_group = Column(String, nullable=False)
+    allocation_weight = Column(Float, nullable=False, default=1.0)
+    source_file = Column(String, nullable=False)
+    source_sheet = Column(String, nullable=False)
+    source_row = Column(Integer, nullable=False)
+    active = Column(Boolean, nullable=False, default=True)
+    upload_time = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    project_mapping = relationship("ProjectMapping", back_populates="sap_scopes")
+
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------
 

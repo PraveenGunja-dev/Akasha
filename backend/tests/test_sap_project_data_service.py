@@ -21,6 +21,7 @@ from services.sap_project_data_service import get_sap_project_data, get_sap_proj
 
 TABLES = [
     models.ProjectMapping.__table__,
+    models.SapProjectScope.__table__,
     models.MTPOAmount.__table__,
     models.MTInventory.__table__,
     models.MTMaterialDocument.__table__,
@@ -75,6 +76,21 @@ class SapProjectDataServiceTests(unittest.TestCase):
             net_order_value_inr=quantity * 10,
             currency="INR",
             upload_time=datetime(2026, 7, 1, upload_hour),
+        )
+        self.db.add(row)
+        return row
+
+    def scope(self, mapping, owner, kind, value, weight=1.0):
+        row = models.SapProjectScope(
+            project_mapping=mapping,
+            owner=owner,
+            match_kind=kind,
+            match_value=value,
+            allocation_group=f"{owner}:{kind}:{value}",
+            allocation_weight=weight,
+            source_file="test.xlsx",
+            source_sheet="Sheet1",
+            source_row=2,
         )
         self.db.add(row)
         return row
@@ -177,7 +193,39 @@ class SapProjectDataServiceTests(unittest.TestCase):
             event.remove(self.engine, "before_cursor_execute", count_query)
 
         self.assertEqual(set(result), {"P1", "P2"})
-        self.assertEqual(len(statements), 4)  # catalog plus the three SAP source tables
+        self.assertEqual(len(statements), 5)  # catalog, scopes, and the three SAP tables
+
+    def test_master_scopes_union_owners_and_allocate_shared_records(self):
+        first = self.mapping("P1", capacity=25)
+        second = self.mapping("P2", capacity=75)
+        blank = self.mapping("BLANK", capacity=100)
+        self.scope(first, "SPV", "wbs_prefix", "ROOT-A", 0.25)
+        self.scope(first, "AGEL", "wbs_prefix", "ROOT-B")
+        self.scope(second, "SPV", "wbs_prefix", "ROOT-A", 0.75)
+        self.po("ROOT-A/CHILD", "PLANT", "PO-1", 40)
+        self.po("ROOT-B-CHILD", "PLANT", "PO-2", 10)
+        self.db.commit()
+
+        p1 = get_sap_project_data(self.db, "P1")
+        p2 = get_sap_project_data(self.db, "P2")
+        unmapped = get_sap_project_data(self.db, blank.project_id)
+
+        self.assertEqual(p1["totals"]["purchase_orders"]["ordered_quantity"], 20)
+        self.assertEqual(p2["totals"]["purchase_orders"]["ordered_quantity"], 30)
+        self.assertFalse(unmapped["has_data"])
+        self.assertEqual(set(p1["scope"]["wbs_roots"]), {"ROOT-A", "ROOT-B"})
+
+    def test_master_wbs_rules_never_fall_back_to_plant(self):
+        mapping = self.mapping("P1", capacity=100)
+        self.scope(mapping, "SPV", "wbs_prefix", "NO-MATCH")
+        self.scope(mapping, "SPV", "plant_code", "PLANT")
+        self.po("UNRELATED", "PLANT", "PO-1", 100)
+        self.db.commit()
+
+        data = get_sap_project_data(self.db, "P1")
+
+        self.assertFalse(data["has_data"])
+        self.assertEqual(data["purchase_orders"], [])
 
     def test_counts_are_explicit_and_tool_rounds_only_final_total(self):
         self.mapping("P1", wbs="WBS")

@@ -54,14 +54,24 @@ class SapProjectSnapshot:
     """One bulk read reused for all project calculations in a request."""
 
     mappings: tuple
+    scopes: tuple
     records: dict[str, tuple]
+    scope_matches: dict[str, dict[int, dict[int, float]]]
 
     @classmethod
     def load(cls, db: Session, mappings: Iterable | None = None) -> "SapProjectSnapshot":
         catalog = tuple(mappings) if mappings is not None else tuple(list_project_mappings(db))
+        scopes = tuple(
+            db.query(models.SapProjectScope).filter(
+                models.SapProjectScope.active.is_(True)
+            ).all()
+        )
+        records = {name: tuple(db.query(model).all()) for name, model in _SOURCES.items()}
         return cls(
             mappings=catalog,
-            records={name: tuple(db.query(model).all()) for name, model in _SOURCES.items()},
+            scopes=scopes,
+            records=records,
+            scope_matches=_index_scope_matches(scopes, records),
         )
 
     def project_mappings(self, project_id: str) -> list:
@@ -138,6 +148,9 @@ def _unit_metadata(pos: list, inventory: list, documents: list) -> tuple[dict, l
 
 
 def _select_source(snapshot: SapProjectSnapshot, mappings: list, source: str) -> tuple[list, dict[int, float], dict]:
+    if snapshot.scopes:
+        return _select_master_scopes(snapshot, mappings, source)
+
     rows = snapshot.records[source]
     wbs_roots = list(dict.fromkeys(_clean(item.module_wbs) for item in mappings if _clean(item.module_wbs)))
     if wbs_roots:
@@ -174,6 +187,96 @@ def _select_source(snapshot: SapProjectSnapshot, mappings: list, source: str) ->
         "plant_source": first[1], "allocation_ratio": first[2],
         "shared_plant_capacity_mwac": first[3],
     }
+
+
+def _select_master_scopes(
+    snapshot: SapProjectSnapshot,
+    mappings: list,
+    source: str,
+) -> tuple[list, dict[int, float], dict]:
+    mapping_ids = {mapping.id for mapping in mappings}
+    rules = [scope for scope in snapshot.scopes if scope.project_mapping_id in mapping_ids]
+    wbs_rules = [scope for scope in rules if scope.match_kind == "wbs_prefix"]
+    plant_rules = [scope for scope in rules if scope.match_kind == "plant_code"]
+    rows_by_id = {row.id: row for row in snapshot.records[source]}
+    weights: dict[int, float] = {}
+    for mapping_id in mapping_ids:
+        for row_id, weight in snapshot.scope_matches[source].get(mapping_id, {}).items():
+            weights[row_id] = max(weights.get(row_id, 0.0), weight)
+
+    matched_kinds = set()
+    if weights:
+        matched_kinds.add("wbs_prefix" if wbs_rules else "plant_code")
+    scope_type = (
+        "mixed" if len(matched_kinds) > 1
+        else "wbs" if "wbs_prefix" in matched_kinds
+        else "plant" if "plant_code" in matched_kinds
+        else "unmapped"
+    )
+    roots = list(dict.fromkeys(rule.match_value for rule in wbs_rules))
+    plants = list(dict.fromkeys(rule.match_value for rule in plant_rules))
+    return [rows_by_id[row_id] for row_id in weights], weights, {
+        "type": scope_type,
+        "wbs": roots[0] if len(roots) == 1 else None,
+        "wbs_roots": roots,
+        "selected_plant": plants[0] if len(plants) == 1 else None,
+        "selected_plants": plants,
+        "plant_source": "sap_project_scope" if plants else None,
+        "allocation_ratio": min(weights.values(), default=1.0),
+        "shared_plant_capacity_mwac": None,
+        "rules": [
+            {
+                "owner": rule.owner,
+                "match_kind": rule.match_kind,
+                "match_value": rule.match_value,
+                "allocation_group": rule.allocation_group,
+                "allocation_weight": float(rule.allocation_weight or 1.0),
+            }
+            for rule in rules
+        ],
+    }
+
+
+def _index_scope_matches(scopes: tuple, records: dict[str, tuple]) -> dict[str, dict[int, dict[int, float]]]:
+    indexed: dict[str, dict[int, dict[int, float]]] = {}
+    wbs_mapping_ids = {
+        scope.project_mapping_id for scope in scopes if scope.match_kind == "wbs_prefix"
+    }
+    wbs_rules_by_root: dict[str, list] = {}
+    for scope in scopes:
+        if scope.match_kind == "wbs_prefix":
+            wbs_rules_by_root.setdefault(_clean(scope.match_value), []).append(scope)
+    plant_rules_by_code: dict[str, list] = {}
+    for scope in scopes:
+        if scope.match_kind != "plant_code" or scope.project_mapping_id in wbs_mapping_ids:
+            continue
+        plant_rules_by_code.setdefault(_clean(scope.match_value), []).append(scope)
+
+    for source, rows in records.items():
+        source_matches: dict[int, dict[int, float]] = {}
+        for row in rows:
+            wbs_value = _clean(row.wbs_element)
+            prefixes = {wbs_value} if wbs_value else set()
+            if wbs_value:
+                prefixes.update(
+                    wbs_value[:index]
+                    for index, character in enumerate(wbs_value)
+                    if character in ".-/" and index > 0
+                )
+            matches = [
+                scope
+                for prefix in prefixes
+                for scope in wbs_rules_by_root.get(prefix, ())
+            ]
+            matches.extend(plant_rules_by_code.get(_clean(row.plant_code), ()))
+            for scope in matches:
+                project_matches = source_matches.setdefault(scope.project_mapping_id, {})
+                project_matches[row.id] = max(
+                    project_matches.get(row.id, 0.0),
+                    float(scope.allocation_weight or 1.0),
+                )
+        indexed[source] = source_matches
+    return indexed
 
 
 def get_sap_project_data(
