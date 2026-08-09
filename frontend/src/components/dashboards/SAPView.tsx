@@ -45,7 +45,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
   const supplyPoAmount = globalSap.actualCapex ?? filteredFinDetails.reduce((acc:any, curr:any) => acc + ((curr.net_order_value_inr || curr.net_order_value || 0) / 10000000), 0);
   
   // Utilized Amount
-  const utilizedAmount = (supplyPoAmount * 0.85) ?? 0;
+  const utilizedAmount = (supplyPoAmount || 0) * 0.85;
 
   const remainingAmount = Math.max(0, supplyPoAmount - utilizedAmount);
   

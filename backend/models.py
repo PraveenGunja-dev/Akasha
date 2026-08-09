@@ -169,22 +169,6 @@ class P6BaselineProject(Base):
     def __repr__(self):
         return f"<P6BaselineProject {self.p6_object_id} for project {self.original_project_object_id}>"
 
-class MTRequirement(Base):
-    __tablename__ = "mt_requirement"
-
-    id = Column(Integer, primary_key=True, index=True)
-    activity_name = Column(String, index=True)
-    project_name = Column(String, index=True)
-    block = Column(String)
-    start_date = Column(DateTime)
-    activity_id = Column(String, unique=True, index=True)
-    budgeted_units_mw = Column(Float)  # Req_Quantity_MW
-    unit_of_measure = Column(String)
-    project_name_p6 = Column(String)
-    spv_plant_code = Column(String, index=True)
-    source_of_origin = Column(String)
-    upload_time = Column(DateTime, default=datetime.utcnow)
-
 class MTTrialRun(Base):
     __tablename__ = "mt_trialrun"
 

@@ -581,13 +581,13 @@ export default function KnowledgeGraph() {
                   <DetailRow label="Plant Code" value={selectedNode.sap.plant_code} />
                   <div className="grid grid-cols-2 gap-2 my-3">
                     <MiniCard label="POs" value={selectedNode.sap.po_count} sub={`₹${selectedNode.sap.po_total_cr} Cr`} />
-                    <MiniCard label="PO MW" value={`${selectedNode.sap.po_mw}`} sub="ordered" />
-                    <MiniCard label="Requirements" value={selectedNode.sap.requirement_count} sub={`${selectedNode.sap.requirement_mw} MW`} />
-                    <MiniCard label="Inventory" value={selectedNode.sap.inventory_items} sub="items" />
+                    <MiniCard label="Delivered" value={`₹${selectedNode.sap.po_delivered_cr}`} sub="Cr received" />
+                    <MiniCard label="Requisitions" value={selectedNode.sap.requirement_count} sub={`₹${selectedNode.sap.requirement_value_cr} Cr`} />
+                    <MiniCard label="Inventory" value={selectedNode.sap.inventory_items} sub={`₹${selectedNode.sap.inventory_value_cr} Cr`} />
                   </div>
                   <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/100/10 border border-warning/20 mb-3">
                     <Truck className="w-4 h-4 text-warning dark:text-warning" />
-                    <span className="text-xs text-warning dark:text-warning font-semibold">{selectedNode.sap.in_transit_count} in transit · {selectedNode.sap.in_transit_mw} MW</span>
+                    <span className="text-xs text-warning dark:text-warning font-semibold">{selectedNode.sap.in_transit_count} in transit · ₹{selectedNode.sap.in_transit_cr} Cr</span>
                   </div>
                   {selectedNode.sap.top_vendors?.length > 0 && (
                     <div className="mt-2">

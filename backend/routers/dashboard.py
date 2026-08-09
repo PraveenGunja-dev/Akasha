@@ -127,8 +127,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
     capacity_by_plant = {str(row[0]).strip(): (row[1] or 1.0) for row in cap_data if row[0]}
     
     inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.plant_code).all() if r[0]}
-    req_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTRequirement.spv_plant_code, func.sum(models.MTRequirement.budgeted_units_mw)).group_by(models.MTRequirement.spv_plant_code).all() if r[0]}
-    
+
     # We will compute in-transit QTY inline
     it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     
@@ -508,8 +507,8 @@ def get_project_details(mapping_id: str, db: Session = Depends(get_db)):
         },
         "p6": p6_data,
         "sap": {
-            "inventory_summary": sum((i.quantity_mw or 0) for i in inventory),
-            "po_summary": sum((p.po_quantities_mw or 0) for p in po_items),
+            "inventory_summary": round(sum((i.value_unrestricted or 0) for i in inventory) / 10000000, 2),
+            "po_summary": round(sum((p.net_order_value or 0) for p in po_items) / 10000000, 2),
             "inventory": inventory,
             "po": po_items,
             "in_transit": in_transit
@@ -740,20 +739,31 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             
             po_count = db.query(models.MTPOAmount.purchasing_document).filter(or_(*wbs_filters_po)).distinct().count()
             po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(or_(*wbs_filters_po)).scalar() or 0
-            po_mw = db.query(func.sum(models.MTPOAmount.po_quantities_mw)).filter(or_(*wbs_filters_po)).scalar() or 0
-            
+            # Delivered value is already stored in crores by the ME2J ingest.
+            po_delivered_cr = db.query(func.sum(models.MTPOAmount.delivered_value_inr_cr)).filter(or_(*wbs_filters_po)).scalar() or 0
+
             inv_count = db.query(models.MTInventory).filter(or_(*wbs_filters_inv)).count()
-            inv_mw = db.query(func.sum(models.MTInventory.quantity_mw)).filter(or_(*wbs_filters_inv)).scalar() or 0
-            
+            inv_value = db.query(func.sum(models.MTInventory.value_unrestricted)).filter(or_(*wbs_filters_inv)).scalar() or 0
+
             transit_count = db.query(models.MTPOAmount).filter(
                 or_(*wbs_filters_po),
                 models.MTPOAmount.still_to_deliver_qty > 0
             ).count()
             
-            transit_mw = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty * models.MTPOAmount.mw_multiplication_factor)).filter(
-                or_(*wbs_filters_po)
+            transit_value = db.query(func.sum(models.MTPOAmount.still_to_deliver_inr)).filter(
+                or_(*wbs_filters_po),
+                models.MTPOAmount.still_to_deliver_qty > 0
             ).scalar() or 0
-            
+
+            # Approved demand not yet converted into a purchase order — SLR requisition
+            # lines (Type = PReq) carry commitment but no actual. Distinct from po_* (already
+            # ordered) and from in_transit (ordered but undelivered).
+            wbs_filters_slr = [models.MTSLRData.wbs_element.startswith(p) for p in wbs_prefixes]
+            preq_count, preq_value = db.query(
+                func.count(models.MTSLRData.id),
+                func.sum(models.MTSLRData.commitment_amount)
+            ).filter(or_(*wbs_filters_slr), models.MTSLRData.type == "PReq").first()
+
             top_vendors = db.query(
                 models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
             ).filter(or_(*wbs_filters_po)).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
@@ -773,13 +783,13 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
                 "plant_code": ",".join(wbs_prefixes),
                 "po_count": round(po_count),
                 "po_total_cr": round(po_total / 10000000, 2) if po_total else 0,
-                "po_mw": round(po_mw, 1) if po_mw else 0,
-                "requirement_count": 0,
-                "requirement_mw": 0,
+                "po_delivered_cr": round(po_delivered_cr, 2) if po_delivered_cr else 0,
+                "requirement_count": round(preq_count or 0),
+                "requirement_value_cr": round((preq_value or 0) / 10000000, 2),
                 "inventory_items": round(inv_count),
-                "inventory_mw": round(inv_mw, 1) if inv_mw else 0,
+                "inventory_value_cr": round(inv_value / 10000000, 2) if inv_value else 0,
                 "in_transit_count": round(transit_count),
-                "in_transit_mw": round(transit_mw, 1) if transit_mw else 0,
+                "in_transit_cr": round(transit_value / 10000000, 2) if transit_value else 0,
                 "top_vendors": top_vendors_list
             }
         
@@ -829,7 +839,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             "id": m.id, "project_id": m.project_id, "name": (m.project_name_from_p6 or m.project or "?")[:28],
             "capacity": computed_capacity, "health": health,
             "progress": progress, "spv": m.spv_name or "?",
-            "plant_code": plant_code,
+            "plant_code": m.spv_plant_code or "?",
             "cod_mw": cod_mw, "tr_mw": tr_mw,
             "p6": p6_data, "sap": sap_data, "tc": tc_data
         })
