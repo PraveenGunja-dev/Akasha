@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  expandedChartTooltip,
   ensureReadableTooltip,
   visualizationSpecToECharts,
   visualizationSpecV2ToECharts,
@@ -51,6 +52,7 @@ test('tooltip formatter renders the hovered label, series, and formatted value',
   assert.match(html, /42%/);
   assert.equal(option.tooltip.renderMode, 'html');
   assert.equal(option.tooltip.confine, true);
+  assert.equal(option.aria.decal.show, false);
 });
 
 test('radial progress charts keep hover tooltips enabled', () => {
@@ -62,16 +64,35 @@ test('radial progress charts keep hover tooltips enabled', () => {
   assert.notEqual(option.tooltip.show, false);
 });
 
+test('expanded charts show only the directly hovered item in a bounded tooltip', () => {
+  const option = expandedChartTooltip(visualizationSpecToECharts(spec()));
+
+  assert.equal(option.tooltip.trigger, 'item');
+  assert.equal(option.tooltip.confine, true);
+  assert.equal(option.tooltip.enterable, false);
+  assert.match(option.tooltip.extraCssText, /max-height:190px/);
+  assert.match(option.tooltip.extraCssText, /overflow:hidden/);
+});
+
 test('legacy ECharts options receive a readable confined tooltip', () => {
   const option = ensureReadableTooltip({
+    title: { text: 'Duplicated chart title' },
+    toolbox: { show: true },
+    dataZoom: [{ type: 'slider' }, { type: 'inside' }],
     tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.85)' },
-    series: [{ type: 'bar', data: [12] }],
+    series: [{ type: 'bar', data: [12], itemStyle: { color: '#059669' } }],
   });
 
   assert.equal(option.tooltip.show, true);
   assert.equal(option.tooltip.renderMode, 'html');
   assert.equal(option.tooltip.confine, true);
   assert.equal(option.tooltip.textStyle.color, '#111827');
+  assert.equal(option.title.show, false);
+  assert.equal(option.toolbox.show, false);
+  assert.equal(option.dataZoom.length, 1);
+  assert.equal(option.dataZoom[0].type, 'inside');
+  assert.equal(option.series[0].itemStyle.color, '#0B74B0');
+  assert.equal(option.aria.decal.show, false);
 });
 
 function specV2(shape = 'bar') {

@@ -72,6 +72,7 @@ class ToolRoute:
     intent: str
     operational: bool
     uses_all_tools: bool
+    required_evidence_tools: tuple[str, ...] = ()
 
 
 _P6_SPECIFIC = re.compile(
@@ -405,6 +406,11 @@ def select_tool_route(
 
     if "report" in current_domains:
         intent_parts.append("report")
+        explicit_preview = bool(re.search(
+            r"\b(?:preview|review (?:the )?(?:scope|outline|sections)|show (?:me )?(?:the )?(?:scope|outline))\b",
+            current,
+            re.IGNORECASE,
+        ))
         comparison_report = bool(re.search(
             r"\b(?:compare|comparison|versus|vs\.?)\b", current, re.IGNORECASE
         )) or bool(is_contextual_follow_up and re.search(
@@ -413,21 +419,21 @@ def select_tool_route(
         if comparison_report:
             selected.discard("report_preview_project_progress")
             selected.discard("report_generate_project_progress")
-            selected.update({
-                "report_preview_project_comparison",
-                "report_generate_project_comparison",
-            })
+            selected.add(
+                "report_preview_project_comparison"
+                if explicit_preview else "report_generate_project_comparison"
+            )
         elif "portfolio" in current_domains:
             selected.discard(RESOLVER)
-            selected.update({
-                "report_preview_portfolio_progress",
-                "report_generate_portfolio_progress",
-            })
+            selected.add(
+                "report_preview_portfolio_progress"
+                if explicit_preview else "report_generate_portfolio_progress"
+            )
         else:
-            selected.update({
-                "report_preview_project_progress",
-                "report_generate_project_progress",
-            })
+            selected.add(
+                "report_preview_project_progress"
+                if explicit_preview else "report_generate_project_progress"
+            )
 
     if "visualization" in current_domains:
         intent_parts.append("visualization")
@@ -437,10 +443,16 @@ def select_tool_route(
     ordered = _ordered_names(selected, available)
     if not ordered:
         return ToolRoute(non_health_tools, ("all",), "routing_fallback", True, False)
+    required_evidence = tuple(
+        name
+        for name in ("p6_get_block_period_progress",)
+        if name in selected
+    )
     return ToolRoute(
         ordered,
         tuple(sorted(current_domains)),
         "+".join(intent_parts) or "operational",
         True,
         len(ordered) == len(available),
+        required_evidence,
     )

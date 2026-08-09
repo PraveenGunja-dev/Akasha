@@ -42,8 +42,35 @@ def classify_provider_error(exc: BaseException) -> PublicProviderError:
                 "provider_unavailable",
                 "The configured AI provider is temporarily unavailable.",
             )
+        if isinstance(current, openai.APIStatusError) and current.status_code >= 500:
+            return PublicProviderError(
+                "provider_unavailable",
+                "The configured AI provider is temporarily unavailable.",
+            )
         current = current.__cause__ or current.__context__
     return PublicProviderError(
         "chat_stream_failed",
         "The chat response could not be completed.",
     )
+
+
+def is_transient_provider_error(exc: BaseException) -> bool:
+    """Return whether a provider failure is safe to retry on another provider."""
+    current: BaseException | None = exc
+    seen: set[int] = set()
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        if getattr(current, "code", None) in {
+            "provider_rate_limited",
+            "provider_unavailable",
+        }:
+            return True
+        if isinstance(
+            current,
+            (openai.RateLimitError, openai.APITimeoutError, openai.APIConnectionError),
+        ):
+            return True
+        if isinstance(current, openai.APIStatusError) and current.status_code >= 500:
+            return True
+        current = current.__cause__ or current.__context__
+    return False

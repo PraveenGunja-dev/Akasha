@@ -19,6 +19,8 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     from engine.graph import chat_graph_service
+    from engine.model_provider import validate_model_configuration
+    validate_model_configuration()
     chat_graph_service.startup()
     try:
         yield

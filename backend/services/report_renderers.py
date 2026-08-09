@@ -4,11 +4,76 @@ from io import BytesIO
 from pathlib import Path
 
 
-REPORT_BLUE = "#1769AA"
-REPORT_TEAL = "#0891B2"
-REPORT_GREEN = "#059669"
-REPORT_AMBER = "#D97706"
-REPORT_RED = "#DC2626"
+REPORT_BLUE = "#0B74B0"
+REPORT_PURPLE = "#75479C"
+REPORT_MAGENTA = "#BD3861"
+REPORT_TEAL = REPORT_MAGENTA
+REPORT_GREEN = REPORT_PURPLE
+REPORT_AMBER = REPORT_MAGENTA
+REPORT_RED = "#B42318"
+REPORT_INK = "#172033"
+REPORT_MUTED = "#667085"
+REPORT_RULE = "#D8E1E8"
+
+
+def _pdf_styles():
+    from reportlab.lib import colors
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+
+    styles = getSampleStyleSheet()
+    styles["Title"].fontName = "Helvetica-Bold"
+    styles["Title"].fontSize = 11
+    styles["Title"].leading = 14
+    styles["Title"].textColor = colors.HexColor(REPORT_MAGENTA)
+    styles["Title"].spaceAfter = 4
+    styles["Title"].alignment = TA_LEFT
+    for name, size, leading, before, after in (
+        ("Heading1", 22, 26, 12, 10),
+        ("Heading2", 14, 18, 12, 7),
+        ("Heading3", 11, 14, 8, 5),
+    ):
+        style = styles[name]
+        style.fontName = "Helvetica-Bold"
+        style.fontSize = size
+        style.leading = leading
+        style.textColor = colors.HexColor(REPORT_BLUE if name != "Heading3" else REPORT_PURPLE)
+        style.spaceBefore = before
+        style.spaceAfter = after
+    body = styles["BodyText"]
+    body.fontName = "Helvetica"
+    body.fontSize = 9.5
+    body.leading = 14
+    body.textColor = colors.HexColor(REPORT_INK)
+    body.spaceAfter = 6
+    styles.add(ParagraphStyle(
+        name="ReportMeta", parent=body, fontSize=8.5, leading=11,
+        textColor=colors.HexColor(REPORT_MUTED), spaceAfter=4,
+    ))
+    return styles
+
+
+def _pdf_page_decorator(label: str):
+    from reportlab.lib import colors
+    from reportlab.lib.units import mm
+
+    def decorate(canvas, document):
+        canvas.saveState()
+        width, height = document.pagesize
+        for start, span, color in (
+            (0, 0.34, REPORT_BLUE),
+            (0.34, 0.33, REPORT_PURPLE),
+            (0.67, 0.33, REPORT_MAGENTA),
+        ):
+            canvas.setFillColor(colors.HexColor(color))
+            canvas.rect(width * start, height - 4 * mm, width * span, 4 * mm, stroke=0, fill=1)
+        canvas.setFont("Helvetica", 7.5)
+        canvas.setFillColor(colors.HexColor(REPORT_MUTED))
+        canvas.drawString(document.leftMargin, 7 * mm, f"{label} | Confidential")
+        canvas.drawRightString(width - document.rightMargin, 7 * mm, f"Page {document.page}")
+        canvas.restoreState()
+
+    return decorate
 
 
 def _font(size: int, *, bold: bool = False):
@@ -32,9 +97,10 @@ def _chart_canvas(title: str, subtitle: str, width: int = 1500, height: int = 76
 
     image = Image.new("RGB", (width, height), "#FFFFFF")
     draw = ImageDraw.Draw(image)
-    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=24, fill="#FFFFFF", outline="#D7E1EA", width=2)
-    draw.text((64, 48), title, fill="#172033", font=_font(30, bold=True))
-    draw.text((64, 90), subtitle, fill="#667085", font=_font(18))
+    draw.rounded_rectangle((20, 20, width - 20, height - 20), radius=20, fill="#FFFFFF", outline=REPORT_RULE, width=2)
+    draw.rounded_rectangle((42, 50, 50, 116), radius=4, fill=REPORT_MAGENTA)
+    draw.text((68, 48), title, fill=REPORT_INK, font=_font(30, bold=True))
+    draw.text((68, 90), subtitle, fill=REPORT_MUTED, font=_font(18))
     return image, draw
 
 
@@ -70,26 +136,43 @@ def render_visualization_spec(spec: dict | None) -> BytesIO | None:
     subtitle = str(spec.get("subtitle") or "")
 
     if shape == "horizontal_bar":
-        values = list(series[0].get("values") or [])
-        rows = [(label, float(value or 0)) for label, value in zip(categories, values)][:12]
-        image, draw = _chart_canvas(title, subtitle, height=max(560, 180 + len(rows) * 46))
+        categories = categories[:12]
+        image, draw = _chart_canvas(title, subtitle, height=max(560, 220 + len(categories) * 52))
         left, right, top = 420, 1400, 150
         chart_width = right - left
-        maximum = max((value for _, value in rows), default=1) or 1
-        value_format = series[0].get("value_format")
-        for index, (label, value) in enumerate(rows):
-            y = top + index * 46
+        stacked = len(series) > 1 and any(item.get("stack_group") for item in series)
+        totals = [
+            sum(float((item.get("values") or [])[index] or 0) for item in series if index < len(item.get("values") or []))
+            for index in range(len(categories))
+        ]
+        all_values = [float(value or 0) for item in series for value in (item.get("values") or [])]
+        maximum = max(totals if stacked else all_values, default=1) or 1
+        for index, label in enumerate(categories):
+            y = top + index * 52
             draw.text((64, y + 4), label[:38], fill="#344054", font=_font(17))
             draw.rounded_rectangle((left, y, right, y + 26), radius=8, fill="#EDF2F7")
-            filled = max(4, int(chart_width * max(0, value) / maximum))
-            draw.rounded_rectangle(
-                (left, y, left + filled, y + 26), radius=8,
-                fill=_series_color(series[0], index),
-            )
+            cursor = left
+            for item in series:
+                values = item.get("values") or []
+                value = float(values[index] or 0) if index < len(values) else 0
+                filled = max(0, int(chart_width * max(0, value) / maximum))
+                if filled:
+                    draw.rectangle((cursor, y, cursor + filled, y + 26), fill=_series_color(item, index))
+                    cursor += filled
+                if not stacked:
+                    break
+            value = totals[index] if stacked else float((series[0].get("values") or [0])[index] or 0)
+            value_format = series[0].get("value_format")
             suffix = "%" if value_format == "percent" else "d" if value_format == "days" else ""
             decimals = 1 if value_format in {"percent", "decimal"} else 0
-            label_value = f"{value:.{decimals}f}{suffix}"
-            draw.text((min(left + filled + 12, right - 76), y + 2), label_value, fill="#172033", font=_font(17, bold=True))
+            draw.text((min(cursor + 12, right - 76), y + 2), f"{value:.{decimals}f}{suffix}", fill=REPORT_INK, font=_font(17, bold=True))
+        if len(series) > 1:
+            legend_x = left
+            legend_y = top + len(categories) * 52 + 12
+            for item in series:
+                draw.rounded_rectangle((legend_x, legend_y, legend_x + 18, legend_y + 18), radius=4, fill=_series_color(item))
+                draw.text((legend_x + 26, legend_y - 1), str(item.get("name"))[:22], fill="#344054", font=_font(14))
+                legend_x += 220
         return _png_bytes(image)
 
     if shape == "donut":
@@ -115,29 +198,37 @@ def render_visualization_spec(spec: dict | None) -> BytesIO | None:
             y += 62
         return _png_bytes(image)
 
-    if shape == "combo" and len(series) >= 2:
-        bars = list(series[0].get("values") or [])
-        line = list(series[1].get("values") or [])
+    if shape == "combo" and series:
         image, draw = _chart_canvas(title, subtitle)
         left, right, top, bottom = 90, 1410, 150, 650
         draw.line((left, bottom, right, bottom), fill="#98A2B3", width=2)
-        maximum = max((float(value or 0) for value in bars), default=1) or 1
-        points = []
         step = (right - left) / max(1, len(categories))
-        for index, value in enumerate(bars):
-            x = left + index * step + step * 0.18
-            bar_height = (bottom - top) * float(value or 0) / maximum
-            draw.rounded_rectangle(
-                (x, bottom - bar_height, x + step * 0.55, bottom), radius=4,
-                fill=_series_color(series[0]),
-            )
-            if index < len(line) and line[index] is not None:
-                points.append((x + step * 0.28, bottom - (bottom - top) * float(line[index]) / 100))
-        if len(points) > 1:
-            line_color = _series_color(series[1])
-            draw.line(points, fill=line_color, width=5, joint="curve")
-            for x, y in points[::max(1, len(points) // 10)]:
-                draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=line_color)
+        primary_values = [float(value or 0) for item in series if int(item.get("axis_index") or 0) == 0 for value in (item.get("values") or [])]
+        primary_max = max(primary_values, default=1) or 1
+        for series_index, item in enumerate(series):
+            values = item.get("values") or []
+            item_color = _series_color(item)
+            percent_axis = item.get("value_format") == "percent" or int(item.get("axis_index") or 0) == 1
+            scale_max = 100 if percent_axis else primary_max
+            points = []
+            for index, value in enumerate(values[:len(categories)]):
+                if value is None:
+                    continue
+                x = left + index * step + step / 2
+                y = bottom - (bottom - top) * float(value) / scale_max
+                if item.get("shape") == "bar":
+                    width = max(4, step * 0.48 / max(1, sum(s.get("shape") == "bar" for s in series)))
+                    offset = (series_index - (len(series) - 1) / 2) * width
+                    draw.rounded_rectangle((x + offset - width / 2, y, x + offset + width / 2, bottom), radius=4, fill=item_color)
+                else:
+                    points.append((x, y))
+            if len(points) > 1:
+                draw.line(points, fill=item_color, width=5, joint="curve")
+            for x, y in points[::max(1, len(points) // 12)]:
+                draw.ellipse((x - 5, y - 5, x + 5, y + 5), fill=item_color)
+            legend_x = left + series_index * 300
+            draw.rounded_rectangle((legend_x, 700, legend_x + 20, 720), radius=4, fill=item_color)
+            draw.text((legend_x + 28, 698), str(item.get("name"))[:28], fill="#344054", font=_font(14))
         draw.text((left, 684), categories[0], fill="#667085", font=_font(16))
         draw.text((right - 120, 684), categories[-1], fill="#667085", font=_font(16))
         return _png_bytes(image)
@@ -220,7 +311,7 @@ def _render_visualization_spec_v2(spec: dict) -> BytesIO | None:
     title = str(spec.get("title") or "Conversation visualization")
     subtitle = str(spec.get("subtitle") or spec.get("summary") or "")[:150]
     shape = spec.get("shape")
-    palette = [REPORT_BLUE, REPORT_TEAL, REPORT_GREEN, REPORT_AMBER, REPORT_RED, "#7C3AED"]
+    palette = [REPORT_BLUE, REPORT_PURPLE, REPORT_MAGENTA, "#4B91BC", "#966EB5", "#CC6787"]
 
     def numeric(value):
         try:
@@ -228,15 +319,44 @@ def _render_visualization_spec_v2(spec: dict) -> BytesIO | None:
         except (TypeError, ValueError):
             return 0.0
 
-    if shape in {"bar", "horizontal_bar", "stacked_bar", "waterfall", "donut"}:
+    if shape == "waterfall":
+        channel = y_channels[0]
+        running = 0.0
+        image, draw = _chart_canvas(title, subtitle)
+        left, right, top, bottom = 110, 1410, 160, 640
+        values = [numeric(row.get(channel.get("field"))) for row in rows[:20]]
+        cumulative = []
+        for value in values:
+            start = running
+            running += value
+            cumulative.append((start, running, value))
+        low = min([0.0, *[min(start, end) for start, end, _ in cumulative]])
+        high = max([1.0, *[max(start, end) for start, end, _ in cumulative]])
+        span = high - low or 1
+        step = (right - left) / max(1, len(cumulative))
+        zero_y = bottom - (0 - low) / span * (bottom - top)
+        draw.line((left, zero_y, right, zero_y), fill="#98A2B3", width=2)
+        for index, (start, end, value) in enumerate(cumulative):
+            x0 = left + index * step + step * 0.18
+            x1 = x0 + step * 0.64
+            y0 = bottom - (start - low) / span * (bottom - top)
+            y1 = bottom - (end - low) / span * (bottom - top)
+            item_color = REPORT_PURPLE if value >= 0 else REPORT_MAGENTA
+            draw.rounded_rectangle((x0, min(y0, y1), x1, max(y0, y1)), radius=4, fill=item_color)
+            draw.text(((x0 + x1) / 2, min(y0, y1) - 24), f"{value:g}", fill=REPORT_INK, font=_font(13, bold=True), anchor="ma")
+            draw.text(((x0 + x1) / 2, bottom + 18), str(rows[index].get(x_field, ""))[:14], fill=REPORT_MUTED, font=_font(12), anchor="ma")
+        return _png_bytes(image)
+
+    if shape in {"bar", "horizontal_bar", "stacked_bar", "donut"}:
         categories = [str(row.get(x_field, "")) for row in rows][:20]
         series = [{
             "name": str(channel.get("label") or channel.get("field")),
             "shape": "donut" if shape == "donut" else "bar",
             "values": [numeric(row.get(channel.get("field"))) for row in rows[:20]],
-            "semantic_color": "primary" if index == 0 else "success" if index == 1 else "warning",
+            "semantic_color": "primary" if index == 0 else "progress" if index == 1 else "warning",
             "value_format": channel.get("value_format") or "decimal",
             "axis_index": int(channel.get("axis_index") or 0),
+            "stack_group": "total" if shape == "stacked_bar" else None,
         } for index, channel in enumerate(y_channels[:4])]
         compatible = {
             **spec,
@@ -289,8 +409,9 @@ def _render_visualization_spec_v2(spec: dict) -> BytesIO | None:
             draw.text((64, top + yi * cell_h + 12), y_label[:28], fill="#344054", font=_font(15))
             for xi, x_label in enumerate(x_values):
                 value = lookup.get((x_label, y_label), 0)
-                intensity = int(235 - 165 * max(0, value) / maximum)
-                color = (intensity, min(220, intensity + 35), 245)
+                ratio = max(0, value) / maximum
+                start_rgb, end_rgb = (244, 248, 251), (11, 116, 176)
+                color = tuple(int(a + (b - a) * ratio) for a, b in zip(start_rgb, end_rgb))
                 bounds = (left + xi * cell_w, top + yi * cell_h, left + (xi + 1) * cell_w - 3, top + (yi + 1) * cell_h - 3)
                 draw.rectangle(bounds, fill=color)
                 draw.text(((bounds[0] + bounds[2]) / 2, bounds[1] + 10), f"{value:g}", fill="#172033", font=_font(13), anchor="ma")
@@ -382,32 +503,76 @@ def _daily_trend_chart(data: dict) -> BytesIO | None:
 def _project_report_charts(dataset: dict) -> list[BytesIO]:
     visualizations = dataset.get("report_visualizations") or {}
     images = []
-    trend_spec = visualizations.get("daily_completion_trend") or {}
-    trend = (
-        render_visualization_spec(trend_spec)
-        if trend_spec.get("schema_version") == "visualization.v1"
-        else _daily_trend_chart(trend_spec)
-    )
-    if trend:
-        images.append(trend)
-    block_spec = visualizations.get("block_progress") or {}
-    if block_spec.get("schema_version") == "visualization.v1":
-        block = render_visualization_spec(block_spec)
-    else:
-        block_rows = [
-            (row["block"], float(row["current_activity_completion_pct"]))
-            for row in (block_spec.get("blocks") or [])
-            if row.get("current_activity_completion_pct") is not None
-        ]
-        block_rows.sort(key=lambda row: row[1], reverse=True)
-        block = _horizontal_bar_chart(
-            block_rows,
-            "Block Progress Snapshot",
-            "Current average activity completion by BLOCK-* WBS branch",
-        )
-    if block:
-        images.append(block)
-    return images
+    for key, spec in visualizations.items():
+        if not isinstance(spec, dict):
+            continue
+        image = None
+        if spec.get("schema_version") in {"visualization.v1", "visualization.v2"}:
+            image = render_visualization_spec(spec)
+        elif key == "daily_completion_trend":
+            image = _daily_trend_chart(spec)
+        elif key == "block_progress":
+            rows = [
+                (row["block"], float(row["current_activity_completion_pct"]))
+                for row in (spec.get("blocks") or [])
+                if row.get("current_activity_completion_pct") is not None
+            ]
+            rows.sort(key=lambda row: row[1], reverse=True)
+            image = _horizontal_bar_chart(
+                rows,
+                "Block Progress Snapshot",
+                "Current average activity completion by BLOCK-* WBS branch",
+            )
+        if image is not None:
+            images.append(image)
+        if len(images) == 4:
+            break
+    return images[:4]
+
+
+def _visual_takeaways(dataset: dict, *, limit: int = 4) -> list[str]:
+    """Return brief, grounded executive commentary in visualization order."""
+    takeaways = []
+    for key, spec in (dataset.get("report_visualizations") or {}).items():
+        if not isinstance(spec, dict):
+            continue
+        summary = " ".join(str(spec.get("summary") or "").split())
+        if not summary and key == "daily_completion_trend":
+            rows = spec.get("daily") or []
+            events = sum(int(row.get("activities_completed") or 0) for row in rows)
+            latest = next((
+                row.get("cumulative_activity_finish_pct")
+                for row in reversed(rows)
+                if row.get("cumulative_activity_finish_pct") is not None
+            ), None)
+            summary = f"{events} activities recorded an actual finish in the displayed period."
+            if latest is not None:
+                summary += f" Cumulative activity finishes reached {latest}% of project activities."
+        elif not summary and key == "block_progress":
+            rows = [
+                row for row in (spec.get("blocks") or [])
+                if row.get("current_activity_completion_pct") is not None
+            ]
+            if rows:
+                high = max(rows, key=lambda row: float(row["current_activity_completion_pct"]))
+                low = min(rows, key=lambda row: float(row["current_activity_completion_pct"]))
+                summary = (
+                    f"{high['block']} has the highest displayed completion at "
+                    f"{high['current_activity_completion_pct']}%; {low['block']} is lowest at "
+                    f"{low['current_activity_completion_pct']}%."
+                )
+        if summary:
+            takeaways.append(summary[:420])
+        if len(takeaways) == limit:
+            break
+    return takeaways
+
+
+def _add_docx_visual_takeaway(document, text: str) -> None:
+    paragraph = document.add_paragraph()
+    label = paragraph.add_run("Executive takeaway: ")
+    label.bold = True
+    paragraph.add_run(text)
 
 
 def _configure_docx(document, *, landscape: bool = False, running_label: str = "Project Progress Report") -> None:
@@ -431,17 +596,17 @@ def _configure_docx(document, *, landscape: bool = False, running_label: str = "
     section.footer_distance = Inches(0.492)
 
     normal = document.styles["Normal"]
-    normal.font.name = "Calibri"
+    normal.font.name = "Aptos"
     normal.font.size = Pt(11)
     normal.paragraph_format.space_after = Pt(6)
     normal.paragraph_format.line_spacing = 1.1
     for style_name, size, color, before, after in [
-        ("Heading 1", 16, "2E74B5", 16, 8),
-        ("Heading 2", 13, "2E74B5", 12, 6),
-        ("Heading 3", 12, "1F4D78", 8, 4),
+        ("Heading 1", 16, "0B74B0", 16, 8),
+        ("Heading 2", 13, "75479C", 12, 6),
+        ("Heading 3", 12, "BD3861", 8, 4),
     ]:
         style = document.styles[style_name]
-        style.font.name = "Calibri"
+        style.font.name = "Aptos"
         style.font.size = Pt(size)
         style.font.color.rgb = RGBColor.from_string(color)
         style.paragraph_format.space_before = Pt(before)
@@ -451,13 +616,13 @@ def _configure_docx(document, *, landscape: bool = False, running_label: str = "
     header.text = running_label
     header.alignment = WD_ALIGN_PARAGRAPH.LEFT
     header_run = header.runs[0]
-    header_run.font.name = "Calibri"
+    header_run.font.name = "Aptos"
     header_run.font.size = Pt(8.5)
     header_run.font.color.rgb = RGBColor(102, 112, 133)
     footer = section.footer.paragraphs[0]
     footer.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     footer_run = footer.add_run("Confidential | Akasha")
-    footer_run.font.name = "Calibri"
+    footer_run.font.name = "Aptos"
     footer_run.font.size = Pt(8.5)
     footer_run.font.color.rgb = RGBColor(102, 112, 133)
 
@@ -471,17 +636,57 @@ def _configure_docx(document, *, landscape: bool = False, running_label: str = "
     p_pr.append(p_bdr)
 
 
+def _set_docx_table_geometry(table, widths: list[float], *, indent_dxa: int = 120) -> None:
+    """Set deterministic fixed-width Word geometry (table, grid, and every cell)."""
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+
+    widths_dxa = [round(width * 1440) for width in widths]
+    total = sum(widths_dxa)
+    table.autofit = False
+    tbl_pr = table._tbl.tblPr
+    tbl_w = tbl_pr.find(qn("w:tblW"))
+    if tbl_w is None:
+        tbl_w = OxmlElement("w:tblW")
+        tbl_pr.insert(0, tbl_w)
+    tbl_w.set(qn("w:type"), "dxa")
+    tbl_w.set(qn("w:w"), str(total))
+    tbl_ind = tbl_pr.find(qn("w:tblInd"))
+    if tbl_ind is None:
+        tbl_ind = OxmlElement("w:tblInd")
+        tbl_pr.append(tbl_ind)
+    tbl_ind.set(qn("w:type"), "dxa")
+    tbl_ind.set(qn("w:w"), str(indent_dxa))
+    layout = tbl_pr.find(qn("w:tblLayout"))
+    if layout is None:
+        layout = OxmlElement("w:tblLayout")
+        tbl_pr.append(layout)
+    layout.set(qn("w:type"), "fixed")
+    grid = table._tbl.tblGrid
+    for child in list(grid):
+        grid.remove(child)
+    for width in widths_dxa:
+        column = OxmlElement("w:gridCol")
+        column.set(qn("w:w"), str(width))
+        grid.append(column)
+    for row in table.rows:
+        for cell, width in zip(row.cells, widths_dxa):
+            tc_w = cell._tc.get_or_add_tcPr().find(qn("w:tcW"))
+            if tc_w is None:
+                tc_w = OxmlElement("w:tcW")
+                cell._tc.get_or_add_tcPr().append(tc_w)
+            tc_w.set(qn("w:type"), "dxa")
+            tc_w.set(qn("w:w"), str(width))
+
+
 def _style_docx_table(table, widths: list[float] | None = None) -> None:
     from docx.oxml import OxmlElement
     from docx.oxml.ns import qn
     from docx.shared import Inches, Pt, RGBColor
 
-    table.autofit = False
     table.style = "Table Grid"
     if widths:
-        for row in table.rows:
-            for cell, width in zip(row.cells, widths):
-                cell.width = Inches(width)
+        _set_docx_table_geometry(table, widths)
     for row_index, row in enumerate(table.rows):
         for cell in row.cells:
             tc_pr = cell._tc.get_or_add_tcPr()
@@ -505,7 +710,7 @@ def _style_docx_table(table, widths: list[float] | None = None) -> None:
                 for paragraph in cell.paragraphs:
                     for run in paragraph.runs:
                         run.bold = True
-                        run.font.color.rgb = RGBColor(31, 77, 120)
+                        run.font.color.rgb = RGBColor(11, 116, 176)
             for paragraph in cell.paragraphs:
                 paragraph.paragraph_format.space_after = Pt(0)
                 paragraph.paragraph_format.line_spacing = 1.0
@@ -662,7 +867,7 @@ def render_project_progress_pdf(dataset: dict, path: Path) -> None:
     from reportlab.lib.units import mm
     from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    styles = getSampleStyleSheet()
+    styles = _pdf_styles()
     story = [
         Paragraph("AKASHA", styles["Title"]),
         Paragraph("Project Progress Report", styles["Heading1"]),
@@ -674,13 +879,28 @@ def render_project_progress_pdf(dataset: dict, path: Path) -> None:
     ]
     chart_images = _project_report_charts(dataset)
     if chart_images:
-        story.extend([Paragraph("Visual Summary", styles["Heading2"]), Spacer(1, 2 * mm)])
-        for chart_image in chart_images:
-            story.extend([Image(chart_image, width=170 * mm, height=86 * mm), Spacer(1, 4 * mm)])
+        story.extend([
+            Paragraph("Visual Summary", styles["Heading2"]),
+            Paragraph(
+                "The following visuals provide an executive reading layer over the detailed tables. "
+                "Each takeaway describes only what the synchronized chart data shows.",
+                styles["BodyText"],
+            ),
+            Spacer(1, 2 * mm),
+        ])
+        takeaways = _visual_takeaways(dataset)
+        for index, chart_image in enumerate(chart_images):
+            story.append(Image(chart_image, width=170 * mm, height=86 * mm))
+            if index < len(takeaways):
+                story.append(Paragraph(
+                    f"<b>Executive takeaway:</b> {takeaways[index]}",
+                    styles["BodyText"],
+                ))
+            story.append(Spacer(1, 4 * mm))
     story.append(Paragraph("Project and Schedule", styles["Heading2"]))
     table = Table([["Metric", "Value"], *_rows(dataset)], colWidths=[70 * mm, 100 * mm])
     table.setStyle(TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1f3a5f")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BLUE)),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#cbd5e1")),
         ("VALIGN", (0, 0), (-1, -1), "TOP"),
@@ -713,7 +933,7 @@ def render_project_progress_pdf(dataset: dict, path: Path) -> None:
         ])))
     # Give the activity register a clean page boundary instead of leaving a
     # handful of orphaned rows after the domain metric sections.
-    story.extend([PageBreak(), Paragraph("In-Progress Activities", styles["Heading2"])])
+    story.extend([Spacer(1, 5 * mm), Paragraph("In-Progress Activities", styles["Heading2"])])
     activities = dataset["in_progress_activities"].get("activities") or []
     activity_rows = [[row.get("activity_id"), row.get("name"), f"{row.get('percent_complete')}%"] for row in activities]
     story.append(Table(
@@ -727,7 +947,12 @@ def render_project_progress_pdf(dataset: dict, path: Path) -> None:
         ("PADDING", (0, 0), (-1, -1), 4),
     ])))
     story.extend(_conversation_pdf_flowables(dataset, styles))
-    SimpleDocTemplate(str(path), pagesize=A4, rightMargin=18*mm, leftMargin=18*mm).build(story)
+    document = SimpleDocTemplate(
+        str(path), pagesize=A4, rightMargin=18*mm, leftMargin=18*mm,
+        topMargin=16*mm, bottomMargin=16*mm,
+    )
+    page = _pdf_page_decorator("Project Progress Report")
+    document.build(story, onFirstPage=page, onLaterPages=page)
 
 
 def render_project_progress_docx(dataset: dict, path: Path) -> None:
@@ -737,7 +962,7 @@ def render_project_progress_docx(dataset: dict, path: Path) -> None:
     document = Document()
     _configure_docx(document, running_label="Akasha | Project Progress Report")
     title = document.add_heading("AKASHA", 0)
-    title.runs[0].font.color.rgb = RGBColor(31, 58, 95)
+    title.runs[0].font.color.rgb = RGBColor(189, 56, 97)
     document.add_heading("Project Progress Report", level=1)
     document.add_heading(dataset["metadata"]["project_name"], level=2)
     document.add_heading("Executive Summary", level=2)
@@ -745,8 +970,15 @@ def render_project_progress_docx(dataset: dict, path: Path) -> None:
     chart_images = _project_report_charts(dataset)
     if chart_images:
         document.add_heading("Visual Summary", level=2)
-        for chart_image in chart_images:
+        document.add_paragraph(
+            "The following visuals provide an executive reading layer over the detailed tables. "
+            "Each takeaway describes only what the synchronized chart data shows."
+        )
+        takeaways = _visual_takeaways(dataset)
+        for index, chart_image in enumerate(chart_images):
             document.add_picture(chart_image, width=Inches(6.55))
+            if index < len(takeaways):
+                _add_docx_visual_takeaway(document, takeaways[index])
     document.add_heading("Project and Schedule", level=2)
     table = document.add_table(rows=1, cols=2)
     table.style = "Table Grid"
@@ -847,7 +1079,7 @@ def render_portfolio_progress_pdf(dataset: dict, path: Path) -> None:
     from reportlab.lib.units import mm
     from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    styles = getSampleStyleSheet()
+    styles = _pdf_styles()
     metadata = dataset["metadata"]
     summary = dataset["summary"]
     story = [
@@ -869,7 +1101,7 @@ def render_portfolio_progress_pdf(dataset: dict, path: Path) -> None:
         [summary["total_projects"], summary["projects_with_p6"], summary["delayed"], summary["on_track"], summary["completed"], summary["p6_unavailable"]],
     ]
     story.append(Table(kpis, repeatRows=1, style=TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1769AA")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BLUE)),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("ALIGN", (0, 0), (-1, -1), "CENTER"),
         ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#CBD5E1")),
@@ -877,10 +1109,7 @@ def render_portfolio_progress_pdf(dataset: dict, path: Path) -> None:
     ])))
     chart_images = _portfolio_report_charts(dataset)
     if chart_images:
-        chart_cells = [
-            Image(chart_image, width=120 * mm, height=64 * mm)
-            for chart_image in chart_images[:2]
-        ]
+        chart_cells = [Image(chart_image, width=120 * mm, height=64 * mm) for chart_image in chart_images[:2]]
         story.extend([
             Spacer(1, 5 * mm),
             Table([chart_cells], colWidths=[123 * mm] * len(chart_cells), style=TableStyle([
@@ -889,13 +1118,17 @@ def render_portfolio_progress_pdf(dataset: dict, path: Path) -> None:
                 ("RIGHTPADDING", (0, 0), (-1, -1), 1),
             ])),
         ])
+        story.append(Paragraph(
+            "<b>Executive takeaways:</b> " + " ".join(_visual_takeaways(dataset, limit=2)),
+            styles["BodyText"],
+        ))
     story.extend([PageBreak(), Paragraph("Project Detail", styles["Heading2"])])
     detail = Table(
         [["Project", "Progress", "Schedule", "Forecast finish", "Variance (days)"], *_portfolio_project_rows(dataset)],
         repeatRows=1,
         colWidths=[88 * mm, 28 * mm, 32 * mm, 38 * mm, 34 * mm],
         style=TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1769AA")),
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BLUE)),
             ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
             ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
             ("FONTSIZE", (0, 0), (-1, -1), 7),
@@ -908,10 +1141,12 @@ def render_portfolio_progress_pdf(dataset: dict, path: Path) -> None:
     for limitation in metadata.get("limitations") or []:
         story.extend([Spacer(1, 3 * mm), Paragraph(f"Limitation: {limitation}", styles["BodyText"])])
     story.extend(_conversation_pdf_flowables(dataset, styles, landscape_layout=True))
-    SimpleDocTemplate(
+    document = SimpleDocTemplate(
         str(path), pagesize=landscape(A4), rightMargin=14 * mm, leftMargin=14 * mm,
-        topMargin=12 * mm, bottomMargin=12 * mm,
-    ).build(story)
+        topMargin=14 * mm, bottomMargin=14 * mm,
+    )
+    page = _pdf_page_decorator("Portfolio Progress Report")
+    document.build(story, onFirstPage=page, onLaterPages=page)
 
 
 def render_portfolio_progress_docx(dataset: dict, path: Path) -> None:
@@ -925,17 +1160,23 @@ def render_portfolio_progress_docx(dataset: dict, path: Path) -> None:
         running_label="Akasha | Portfolio Progress Report",
     )
     title = document.add_heading("AKASHA", 0)
-    title.runs[0].font.color.rgb = RGBColor(23, 105, 170)
+    title.runs[0].font.color.rgb = RGBColor(189, 56, 97)
     document.add_heading("Portfolio Progress Report", level=1)
     document.add_heading(dataset["metadata"]["portfolio"], level=2)
     document.add_paragraph(dataset["executive_summary"])
     document.add_heading("Visual Summary", level=2)
     chart_images = _portfolio_report_charts(dataset)
     if chart_images:
+        document.add_paragraph(
+            "These visuals summarize portfolio delivery position and schedule exposure at the latest synchronized cutoff."
+        )
         visual_table = document.add_table(rows=1, cols=min(2, len(chart_images)))
         for cell, chart_image in zip(visual_table.rows[0].cells, chart_images[:2]):
-            cell.width = Inches(4.45)
-            cell.paragraphs[0].add_run().add_picture(chart_image, width=Inches(4.25))
+            cell.width = Inches(4.55)
+            cell.paragraphs[0].add_run().add_picture(chart_image, width=Inches(4.4))
+        _set_docx_table_geometry(visual_table, [4.85] * min(2, len(chart_images)))
+        for takeaway in _visual_takeaways(dataset, limit=2):
+            _add_docx_visual_takeaway(document, takeaway)
     document.add_heading("Portfolio KPI Summary", level=2)
     summary = dataset["summary"]
     for label, key in [
@@ -999,7 +1240,7 @@ def render_project_comparison_pdf(dataset: dict, path: Path) -> None:
     from reportlab.lib.units import mm
     from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-    styles = getSampleStyleSheet()
+    styles = _pdf_styles()
     metadata = dataset["metadata"]
     projects = dataset["projects"]
     story = [
@@ -1012,6 +1253,11 @@ def render_project_comparison_pdf(dataset: dict, path: Path) -> None:
         Paragraph(dataset["executive_summary"], styles["BodyText"]),
         Spacer(1, 4 * mm),
         Paragraph("Visual Comparison", styles["Heading2"]),
+        Paragraph(
+            "The visual comparison highlights relative delivery position, activity mix, duration profile, "
+            "and schedule exposure across the selected projects.",
+            styles["BodyText"],
+        ),
     ]
     images = _comparison_report_charts(dataset)
     for offset in range(0, len(images), 2):
@@ -1022,13 +1268,15 @@ def render_project_comparison_pdf(dataset: dict, path: Path) -> None:
             ("RIGHTPADDING", (0, 0), (-1, -1), 1),
         ])))
         story.append(Spacer(1, 3 * mm))
+    for takeaway in _visual_takeaways(dataset):
+        story.append(Paragraph(f"<b>Executive takeaway:</b> {takeaway}", styles["BodyText"]))
     story.extend([PageBreak(), Paragraph("Key Metrics Comparison", styles["Heading2"])])
     table_data = [["Metric", *[project["project_name"] for project in projects]], *_comparison_metric_rows(dataset)]
     available_width = 255 * mm
     metric_width = 42 * mm
     project_width = (available_width - metric_width) / len(projects)
     story.append(Table(table_data, repeatRows=1, colWidths=[metric_width, *([project_width] * len(projects))], style=TableStyle([
-        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#1769AA")),
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor(REPORT_BLUE)),
         ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
         ("GRID", (0, 0), (-1, -1), 0.4, colors.HexColor("#CBD5E1")),
         ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
@@ -1040,10 +1288,12 @@ def render_project_comparison_pdf(dataset: dict, path: Path) -> None:
     for limitation in metadata.get("limitations") or []:
         story.append(Paragraph(f"• {limitation}", styles["BodyText"]))
     story.extend(_conversation_pdf_flowables(dataset, styles, landscape_layout=True))
-    SimpleDocTemplate(
+    document = SimpleDocTemplate(
         str(path), pagesize=landscape(A4), rightMargin=14 * mm, leftMargin=14 * mm,
-        topMargin=12 * mm, bottomMargin=12 * mm,
-    ).build(story)
+        topMargin=14 * mm, bottomMargin=14 * mm,
+    )
+    page = _pdf_page_decorator("Project Comparison Report")
+    document.build(story, onFirstPage=page, onLaterPages=page)
 
 
 def render_project_comparison_docx(dataset: dict, path: Path) -> None:
@@ -1053,17 +1303,24 @@ def render_project_comparison_docx(dataset: dict, path: Path) -> None:
     document = Document()
     _configure_docx(document, landscape=True, running_label="Akasha | Project Comparison Report")
     title = document.add_heading("AKASHA", 0)
-    title.runs[0].font.color.rgb = RGBColor(23, 105, 170)
+    title.runs[0].font.color.rgb = RGBColor(189, 56, 97)
     document.add_heading("Project Comparison Report", level=1)
     document.add_heading(" vs ".join(dataset["metadata"]["project_names"]), level=2)
     document.add_paragraph(dataset["executive_summary"])
     document.add_heading("Visual Comparison", level=2)
+    document.add_paragraph(
+        "The visual comparison highlights relative delivery position, activity mix, duration profile, "
+        "and schedule exposure across the selected projects."
+    )
     images = _comparison_report_charts(dataset)
     for offset in range(0, len(images), 2):
         row_table = document.add_table(rows=1, cols=min(2, len(images) - offset))
         for cell, chart_image in zip(row_table.rows[0].cells, images[offset:offset + 2]):
-            cell.width = Inches(4.45)
-            cell.paragraphs[0].add_run().add_picture(chart_image, width=Inches(4.25))
+            cell.width = Inches(4.55)
+            cell.paragraphs[0].add_run().add_picture(chart_image, width=Inches(4.4))
+        _set_docx_table_geometry(row_table, [4.85] * min(2, len(images) - offset))
+    for takeaway in _visual_takeaways(dataset):
+        _add_docx_visual_takeaway(document, takeaway)
     document.add_heading("Key Metrics Comparison", level=2)
     projects = dataset["projects"]
     table = document.add_table(rows=1, cols=1 + len(projects))

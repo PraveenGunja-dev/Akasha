@@ -18,6 +18,17 @@ export interface ProjectMapping {
   not_allocated?: string;
   source_of_origin?: string;
   priority?: string;
+  sap_scopes?: SapProjectScope[];
+}
+
+export interface SapProjectScope {
+  id: number;
+  owner: 'SPV' | 'AGEL' | 'AGE6L';
+  match_kind: 'wbs_prefix' | 'plant_code';
+  match_value: string;
+  allocation_group: string;
+  allocation_weight: number;
+  active: boolean;
 }
 
 export type ProjectMappingCreate = Omit<ProjectMapping, 'id'>;

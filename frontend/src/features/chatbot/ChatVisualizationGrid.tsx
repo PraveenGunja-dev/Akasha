@@ -6,6 +6,7 @@ import { BarChart3, CalendarDays, FileCheck2, FileMinus2, FileQuestion, Maximize
 import { motion } from 'framer-motion';
 
 import {
+  expandedChartTooltip,
   ensureReadableTooltip,
   visualizationSpecToECharts,
   visualizationSpecV2ToECharts,
@@ -51,10 +52,12 @@ function ChartDataTable({ rows }: { rows: Array<Record<string, unknown>> }) {
 function VisualizationCard({
   visualization,
   index,
+  compact,
   onReportInclusionChange,
 }: {
   visualization: ChartVisualization;
   index: number;
+  compact: boolean;
   onReportInclusionChange?: ChatVisualizationGridProps['onReportInclusionChange'];
 }) {
   const [showTable, setShowTable] = useState(false);
@@ -97,8 +100,8 @@ function VisualizationCard({
 
   const renderChart = (isExpanded = false) => option ? (
       <ReactECharts
-        option={option}
-        style={{ height: isExpanded ? '100%' : 390, width: '100%' }}
+        option={isExpanded ? expandedChartTooltip(option) : option}
+        style={{ height: isExpanded ? '100%' : compact ? 315 : 400, width: '100%' }}
         className={isExpanded ? 'chat-chart-expanded-canvas' : undefined}
         notMerge
         lazyUpdate
@@ -151,7 +154,6 @@ function VisualizationCard({
           <button type="button" onClick={() => setExpanded(true)} title="Expand visualization">
             <Maximize2 className="h-3.5 w-3.5" />
           </button>
-          {visualization.chart_type && <span className="chart-type-badge">{friendlyLabel(visualization.chart_type)}</span>}
         </div>
       </header>
       {visualization.summary && <p className="chart-insight">{visualization.summary}</p>}
@@ -204,6 +206,7 @@ export default function ChatVisualizationGrid({ visualizations, onReportInclusio
           key={`${visualization.chart_type || 'chart'}-${index}`}
           visualization={visualization}
           index={index}
+          compact={visualizations.length > 1}
           onReportInclusionChange={onReportInclusionChange}
         />
       ))}

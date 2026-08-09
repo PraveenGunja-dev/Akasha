@@ -60,6 +60,8 @@ rankings when an approved chart type matches. Prefer daily_completion_trend
 for dated completion-event trends, planned_vs_actual_progress for planned-versus-actual progress,
 project_comparison for two or more projects, and block_progress for block snapshots. A chart
 must accompany, not replace, a concise textual finding. Generate no more than four charts per turn.
+For a broad request for visualizations, charts, a dashboard, or an overview of one project, call
+render_chart once with chart_type='project_overview' to return the coordinated four-chart executive set.
 For requests needing flexible metrics, dimensions, filters, grouping, scatter, heatmap, or
 waterfall layouts, call render_chart with visualization_query using only identifiers documented in
 the tool schema. Never provide chart data, SQL, JavaScript, callbacks, or ECharts options. If the
@@ -67,19 +69,14 @@ tool reports an incompatible field combination, repair the identifiers once or e
 The planned_vs_actual_progress chart is a cumulative activity-finish S-curve built from planned and
 actual activity finish dates in the current P6 schedule. Label it that way; do not misrepresent it as
 historical duration-percent snapshots.
-For a Project Progress Report request, resolve the project and call report_preview_project_progress.
-Present the preview without displaying or quoting the preview_token, then stop. The token is an
-internal confirmation secret. Only after the user explicitly confirms may you call
-report_generate_project_progress with the exact preview token. Return both generated download URLs
-exactly as Markdown links and state their expiry.
-For a Portfolio Progress Report request, call report_preview_portfolio_progress without resolving a
-single project. Present the current-month scope without displaying the preview_token and stop. After explicit confirmation, call
-report_generate_portfolio_progress with the exact preview token and return both download URLs.
-For a request to compare two or more projects and provide a report, render the in-chat comparison
-dashboard and call report_preview_project_comparison with the canonical project IDs in the same
-order. End the answer by asking whether the user wants the PDF and DOCX generated. Do not call
-report_generate_project_comparison until a later turn explicitly confirms the preview. On
-confirmation, pass the exact project IDs and preview token and return both download URLs.
+When the user asks to create, generate, download, or export a report, do it immediately without
+asking for yes/no confirmation. For a Project Progress Report, resolve the project and call
+report_generate_project_progress. For a Portfolio Progress Report, call
+report_generate_portfolio_progress without resolving a single project. For a report comparing two
+or more projects, render the in-chat comparison dashboard and call
+report_generate_project_comparison with canonical project IDs in the same order. Return both PDF
+and DOCX download URLs exactly as Markdown links and state their expiry. Use a report_preview tool
+only when the user explicitly asks to preview or review the report scope before files are created.
 
 """ + EXECUTIVE_RESPONSE_GUIDANCE
 
@@ -153,9 +150,8 @@ def build_chat_graph(
     context_window: int | None = None,
 ):
     if context_window is None:
-        configured_window = os.getenv("AKASHA_MODEL_CONTEXT_WINDOW")
         profile = getattr(model, "profile", None) or {}
-        context_window = int(configured_window or profile.get("max_input_tokens") or 0)
+        context_window = int(profile.get("max_input_tokens") or 0)
     if context_window < 8_192:
         raise ValueError(
             "The selected model context window could not be resolved or is below 8192 tokens."
@@ -287,9 +283,13 @@ def build_chat_graph(
         raw_markup = _contains_raw_tool_markup(response_text)
 
         executed_tools = set(state.get("tool_names") or [])
+        required_evidence_tools = set(route.required_evidence_tools)
+        missing_evidence_tools = required_evidence_tools - executed_tools
         route_requires_domain_evidence = any(name != RESOLVER for name in route.tool_names)
         has_relevant_evidence = (
-            any(name != RESOLVER for name in executed_tools)
+            not missing_evidence_tools
+            if required_evidence_tools
+            else any(name != RESOLVER for name in executed_tools)
             if route_requires_domain_evidence
             else bool(executed_tools)
         )
@@ -303,23 +303,52 @@ def build_chat_graph(
             and not raw_markup
         ):
             logger.warning(
-                "Retrying operational answer with full tool catalog after no evidence call "
+                "Retrying operational answer with required evidence tools after no evidence call "
                 "(request_id=%s iteration=%s intent=%s)",
                 state.get("request_id"),
                 iteration,
                 route.intent,
             )
-            response = recovery_model.invoke([
+            evidence_recovery_model = recovery_model
+            next_evidence_tools = set(missing_evidence_tools)
+            if (
+                missing_evidence_tools
+                and RESOLVER in route.tool_names
+                and RESOLVER not in executed_tools
+            ):
+                next_evidence_tools = {RESOLVER}
+            if next_evidence_tools:
+                evidence_recovery_model = model.bind_tools(
+                    [schemas_by_name[name] for name in sorted(next_evidence_tools)],
+                    tool_choice="required",
+                )
+            response = evidence_recovery_model.invoke([
                 SystemMessage(content=(
                     "The latest request is operational and requires current evidence, but the prior "
-                    "attempt did not call a data tool. Re-answer now using the full supplied tool "
-                    "catalog. Resolve project names first when needed. Do not answer from memory or "
-                    "describe tool availability."
+                    "attempt did not call a data tool. Re-answer now using the supplied tool "
+                    "catalog. Resolve project names first when needed. "
+                    + (
+                        "You must call the following next evidence tool before answering: "
+                        f"{', '.join(sorted(next_evidence_tools))}. A generic project summary "
+                        "does not contain the requested period ranking. "
+                        if next_evidence_tools else ""
+                    )
+                    + "Do not answer from memory or describe tool availability."
                 )),
                 *model_messages,
             ])
             response_text = _response_text(response.content)
             raw_markup = _contains_raw_tool_markup(response_text)
+            if (
+                missing_evidence_tools
+                and not response.tool_calls
+                and not response.invalid_tool_calls
+                and response_text
+                and not raw_markup
+            ):
+                raise InvalidModelResponse(
+                    "The model answered without calling the required evidence tool."
+                )
         parsed_raw_call = parse_raw_tool_call(response_text) if raw_markup else None
         if parsed_raw_call is not None and parsed_raw_call[0] not in route.tool_names:
             parsed_raw_call = None

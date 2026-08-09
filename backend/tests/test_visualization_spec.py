@@ -14,6 +14,7 @@ if str(BACKEND_DIR) not in sys.path:
 from services.report_renderers import render_visualization_spec
 from services.visualization_spec import (
     VisualizationSpecV1,
+    activity_status_spec,
     block_progress_spec,
     daily_completion_spec,
     planned_vs_actual_progress_spec,
@@ -23,6 +24,25 @@ from services.visualization_spec import (
 
 
 class VisualizationSpecTests(unittest.TestCase):
+    def test_activity_status_uses_clean_adani_semantics_and_renders(self):
+        spec = activity_status_spec({
+            "total": 100,
+            "breakdown": {"Not Started": 10, "Completed": 70, "In Progress": 20},
+            "data_as_of": "2026-08-10",
+        }, "Project One")
+
+        payload = spec.transport()
+
+        self.assertEqual(payload["shape"], "donut")
+        self.assertEqual(payload["categories"], ["Completed", "In Progress", "Not Started"])
+        self.assertEqual(
+            payload["series"][0]["item_semantic_colors"],
+            ["progress", "primary", "neutral"],
+        )
+        image = render_visualization_spec(payload)
+        self.assertIsNotNone(image)
+        self.assertGreater(len(image.getvalue()), 1_000)
+
     def test_daily_spec_is_stable_validated_and_renderer_neutral(self):
         data = {
             "daily": [
@@ -65,6 +85,20 @@ class VisualizationSpecTests(unittest.TestCase):
             image = render_visualization_spec(spec.transport())
             self.assertIsNotNone(image)
             self.assertGreater(len(image.getvalue()), 1_000)
+
+    def test_block_progress_keeps_high_and_low_extremes_when_compacting(self):
+        spec = block_progress_spec({
+            "blocks": [
+                {"block": f"BLOCK-{index:02d}", "current_activity_completion_pct": value}
+                for index, value in enumerate([99, 95, 90, 85, 80, 60, 40, 20, 10, 1], start=1)
+            ],
+        }, "Project One", limit=6)
+
+        self.assertEqual(
+            spec.transport()["categories"],
+            ["BLOCK-01", "BLOCK-02", "BLOCK-03", "BLOCK-08", "BLOCK-09", "BLOCK-10"],
+        )
+        self.assertIn("BLOCK-10 is lowest at 1%", spec.summary)
 
     def test_contract_rejects_renderer_specific_or_unknown_fields(self):
         payload = project_progress_spec([{"project_name": "A", "progress_pct": 75}]).transport()

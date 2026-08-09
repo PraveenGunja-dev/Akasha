@@ -25,21 +25,17 @@ class SessionStub:
 class RolloutTests(unittest.TestCase):
     def test_context_window_uses_selected_model_profile(self):
         model = type("Model", (), {"profile": {"max_input_tokens": 128_000}})()
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("AKASHA_MODEL_CONTEXT_WINDOW", None)
-            self.assertEqual(resolve_model_context_window(model, "azure"), 128_000)
+        self.assertEqual(resolve_model_context_window(model, "azure"), 128_000)
 
-    def test_context_window_override_is_optional_and_authoritative(self):
+    def test_context_window_environment_value_cannot_override_model_metadata(self):
         model = type("Model", (), {"profile": {"max_input_tokens": 128_000}})()
         with patch.dict(os.environ, {"AKASHA_MODEL_CONTEXT_WINDOW": "65536"}):
-            self.assertEqual(resolve_model_context_window(model, "azure"), 65_536)
+            self.assertEqual(resolve_model_context_window(model, "azure"), 128_000)
 
     def test_unknown_model_context_fails_instead_of_assuming_a_default(self):
         model = type("Model", (), {"profile": None})()
-        with patch.dict(os.environ, {}, clear=False):
-            os.environ.pop("AKASHA_MODEL_CONTEXT_WINDOW", None)
-            with self.assertRaises(RuntimeError):
-                resolve_model_context_window(model, "azure")
+        with self.assertRaises(RuntimeError):
+            resolve_model_context_window(model, "azure")
 
     def test_legacy_is_an_immediate_kill_switch(self):
         session = SessionStub()

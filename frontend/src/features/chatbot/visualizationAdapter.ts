@@ -8,13 +8,16 @@ import type {
 } from './visualizationTypes';
 
 const SEMANTIC_COLORS: Record<string, string> = {
-  primary: '#2563EB',
-  progress: '#059669',
-  warning: '#D97706',
-  critical: '#DC2626',
+  primary: '#0B74B0',
+  progress: '#75479C',
+  warning: '#BD3861',
+  critical: '#B42318',
   neutral: '#98A2B3',
-  teal: '#0891B2',
+  teal: '#BD3861',
 };
+
+const ADANI_PALETTE = ['#0B74B0', '#75479C', '#BD3861', '#4B91BC', '#966EB5', '#CC6787'];
+const TOOLTIP_CSS = 'max-width:300px;max-height:190px;overflow:hidden;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.18);line-height:1.35;';
 
 function color(name: string): string {
   return SEMANTIC_COLORS[name] ?? SEMANTIC_COLORS.primary;
@@ -64,7 +67,7 @@ function tooltipValue(value: unknown, format?: VisualizationSeriesV1['value_form
 function tooltipFormatter(spec: VisualizationSpecV1, input: unknown): string {
   const params = (Array.isArray(input) ? input : [input]).filter(
     (item): item is TooltipParam => Boolean(item && typeof item === 'object'),
-  );
+  ).slice(0, 6);
   if (!params.length) return '';
   const heading = params[0].axisValueLabel || params[0].name;
   const rows = params.map(param => {
@@ -97,10 +100,10 @@ function baseOption(spec: VisualizationSpecV1): EChartsOption {
     animationEasing: 'cubicOut',
     aria: {
       enabled: true,
-      decal: { show: true },
+      decal: { show: false },
       description: spec.accessibility_description,
     },
-    textStyle: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' },
+    textStyle: { fontFamily: 'Aptos, Avenir Next, Segoe UI, sans-serif' },
     tooltip: {
       trigger: spec.shape === 'donut' ? 'item' : 'axis',
       renderMode: 'html',
@@ -110,7 +113,7 @@ function baseOption(spec: VisualizationSpecV1): EChartsOption {
       borderWidth: 1,
       padding: [10, 12],
       textStyle: { color: tooltipColors.foreground, fontSize: 12 },
-      extraCssText: 'max-width:320px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.18);line-height:1.35;',
+      extraCssText: TOOLTIP_CSS,
       formatter: input => tooltipFormatter(spec, input),
     },
   };
@@ -124,7 +127,7 @@ function horizontalBar(spec: VisualizationSpecV1): EChartsOption {
     grid: { left: '3%', right: '8%', top: 20, bottom: multiple ? 42 : 20, containLabel: true },
     xAxis: {
       type: 'value',
-      name: spec.x_axis_title ?? undefined,
+      name: undefined,
       axisLabel: { ...mutedTextStyle, formatter: valueFormatter(spec.series[0]) },
       splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.25 } },
     },
@@ -202,6 +205,13 @@ function verticalBar(spec: VisualizationSpecV1): EChartsOption {
       data: series.values,
       barMaxWidth: 34,
       itemStyle: { color: color(series.semantic_color), borderRadius: [6, 6, 0, 0] },
+      label: spec.categories.length <= 8 ? {
+        show: true,
+        position: 'top',
+        color: 'var(--foreground)',
+        fontSize: 11,
+        fontWeight: 600,
+      } : undefined,
     })),
   };
 }
@@ -384,7 +394,7 @@ function channelAxisFormatter(channel: VisualizationChannelV2 | undefined): stri
 function v2TooltipFormatter(spec: VisualizationSpecV2, input: unknown): string {
   const params = (Array.isArray(input) ? input : [input]).filter(
     (item): item is TooltipParam => Boolean(item && typeof item === 'object'),
-  );
+  ).slice(0, 6);
   if (!params.length) return '';
   const firstRecord = params[0].value && typeof params[0].value === 'object' && !Array.isArray(params[0].value)
     ? params[0].value as Record<string, unknown>
@@ -422,8 +432,8 @@ function v2BaseOption(spec: VisualizationSpecV2): EChartsOption {
   return {
     animationDuration: 550,
     animationEasing: 'cubicOut',
-    aria: { enabled: true, decal: { show: true }, description: spec.accessibility_description },
-    textStyle: { fontFamily: 'Inter, ui-sans-serif, system-ui, sans-serif' },
+    aria: { enabled: true, decal: { show: false }, description: spec.accessibility_description },
+    textStyle: { fontFamily: 'Aptos, Avenir Next, Segoe UI, sans-serif' },
     tooltip: {
       trigger: spec.shape === 'scatter' || spec.shape === 'donut' || spec.shape === 'heatmap' ? 'item' : 'axis',
       renderMode: 'html',
@@ -432,7 +442,7 @@ function v2BaseOption(spec: VisualizationSpecV2): EChartsOption {
       borderColor: tooltipColors.border,
       borderWidth: 1,
       textStyle: { color: tooltipColors.foreground, fontSize: 12 },
-      extraCssText: 'max-width:320px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.18);line-height:1.35;',
+      extraCssText: TOOLTIP_CSS,
       formatter: input => v2TooltipFormatter(spec, input),
     },
   };
@@ -484,6 +494,13 @@ function cartesianV2(spec: VisualizationSpecV2): EChartsOption {
         color: color(['primary', 'progress', 'warning', 'teal'][index] ?? 'primary'),
         borderRadius: horizontal ? [0, 5, 5, 0] : [5, 5, 0, 0],
       },
+      label: spec.shape !== 'line' && spec.data.length <= 8 ? {
+        show: true,
+        position: horizontal ? 'right' : 'top',
+        color: 'var(--foreground)',
+        fontSize: 11,
+        fontWeight: 600,
+      } : undefined,
     })),
   } as EChartsOption;
 }
@@ -535,7 +552,7 @@ function heatmapV2(spec: VisualizationSpecV2): EChartsOption {
     yAxis: { type: 'category', name: y.label, data: yValues, axisLabel: { ...mutedTextStyle, width: 140, overflow: 'truncate' } },
     visualMap: {
       min: 0, max: maximum || 1, calculable: true, orient: 'vertical', right: 0, top: 'middle',
-      inRange: { color: ['#EFF6FF', '#60A5FA', '#1D4ED8'] },
+      inRange: { color: ['#F4F8FB', '#9CC7DF', '#0B74B0', '#75479C', '#BD3861'] },
       textStyle,
     },
     series: [{
@@ -621,8 +638,101 @@ export function visualizationSpecV2ToECharts(spec: VisualizationSpecV2): ECharts
 export function ensureReadableTooltip(option: EChartsOption): EChartsOption {
   const tooltipColors = tooltipTheme();
   const existing = option.tooltip && !Array.isArray(option.tooltip) ? option.tooltip : {};
+  const quietAxis = (axis: unknown): unknown => {
+    if (Array.isArray(axis)) return axis.map(quietAxis);
+    if (!axis || typeof axis !== 'object') return axis;
+    const value = axis as Record<string, unknown>;
+    return {
+      ...value,
+      axisLine: { ...((value.axisLine as object) ?? {}), lineStyle: { color: 'var(--border)', opacity: 0.65 } },
+      axisTick: { ...((value.axisTick as object) ?? {}), show: false },
+      axisLabel: { ...((value.axisLabel as object) ?? {}), color: 'var(--muted-foreground)', hideOverlap: true },
+      splitLine: { ...((value.splitLine as object) ?? {}), lineStyle: { color: 'var(--border)', opacity: 0.22 } },
+      nameTextStyle: { ...((value.nameTextStyle as object) ?? {}), color: 'var(--muted-foreground)', fontSize: 11 },
+    };
+  };
+  const rawSeries = Array.isArray(option.series) ? option.series : option.series ? [option.series] : [];
+  const styledSeries = rawSeries.map((raw, index) => {
+    if (!raw || typeof raw !== 'object') return raw;
+    const series = raw as Record<string, unknown>;
+    const type = String(series.type ?? 'bar');
+    const seriesColor = ADANI_PALETTE[index % ADANI_PALETTE.length];
+    const itemStyle = { ...((series.itemStyle as object) ?? {}), color: seriesColor };
+    if (type === 'pie') {
+      const data = Array.isArray(series.data) ? series.data.map((item, itemIndex) => {
+        const itemColor = ADANI_PALETTE[itemIndex % ADANI_PALETTE.length];
+        return item && typeof item === 'object'
+          ? { ...(item as object), itemStyle: { ...(((item as Record<string, unknown>).itemStyle as object) ?? {}), color: itemColor } }
+          : { value: item, itemStyle: { color: itemColor } };
+      }) : series.data;
+      return {
+        ...series,
+        radius: ['44%', '69%'],
+        center: ['50%', '45%'],
+        roseType: undefined,
+        label: { show: false },
+        labelLine: { show: false },
+        itemStyle: { ...itemStyle, borderRadius: 6, borderColor: 'var(--card)', borderWidth: 3 },
+        data,
+      };
+    }
+    if (type === 'line') {
+      return {
+        ...series,
+        smooth: 0.22,
+        showSymbol: true,
+        symbol: 'circle',
+        symbolSize: 6,
+        lineStyle: { ...((series.lineStyle as object) ?? {}), color: seriesColor, width: 3 },
+        itemStyle: { ...itemStyle, borderColor: 'var(--card)', borderWidth: 2 },
+        areaStyle: series.areaStyle ? { color: seriesColor, opacity: 0.06 } : undefined,
+      };
+    }
+    if (type === 'bar') {
+      return {
+        ...series,
+        barMaxWidth: 26,
+        itemStyle: { ...itemStyle, borderRadius: [5, 5, 0, 0] },
+      };
+    }
+    if (type === 'scatter') {
+      return { ...series, symbolSize: series.symbolSize ?? 14, itemStyle: { ...itemStyle, opacity: 0.84 } };
+    }
+    return { ...series, itemStyle };
+  });
+  const visibleZoom = Array.isArray(option.dataZoom)
+    ? option.dataZoom.filter(item => item && typeof item === 'object' && (item as { type?: string }).type === 'inside')
+    : option.dataZoom && typeof option.dataZoom === 'object' && (option.dataZoom as { type?: string }).type === 'inside'
+      ? option.dataZoom
+      : undefined;
   return {
     ...option,
+    color: ADANI_PALETTE,
+    backgroundColor: 'transparent',
+    animationDuration: 520,
+    animationEasing: 'cubicOut',
+    textStyle: { fontFamily: 'Aptos, Avenir Next, Segoe UI, sans-serif' },
+    aria: {
+      ...((option.aria as object) ?? {}),
+      enabled: true,
+      decal: { show: false },
+    },
+    title: Array.isArray(option.title)
+      ? option.title.map(item => ({ ...item, show: false }))
+      : option.title && typeof option.title === 'object'
+        ? { ...option.title, show: false }
+        : option.title,
+    toolbox: { show: false },
+    dataZoom: visibleZoom,
+    legend: option.legend
+      ? { ...(Array.isArray(option.legend) ? option.legend[0] : option.legend), bottom: 0, top: undefined, type: 'plain', icon: 'circle', textStyle }
+      : option.legend,
+    grid: option.grid
+      ? { ...(Array.isArray(option.grid) ? option.grid[0] : option.grid), top: 24, bottom: 48, containLabel: true }
+      : option.grid,
+    xAxis: quietAxis(option.xAxis) as EChartsOption['xAxis'],
+    yAxis: quietAxis(option.yAxis) as EChartsOption['yAxis'],
+    series: styledSeries as EChartsOption['series'],
     tooltip: {
       ...existing,
       show: true,
@@ -636,7 +746,23 @@ export function ensureReadableTooltip(option: EChartsOption): EChartsOption {
         color: tooltipColors.foreground,
         fontSize: 12,
       },
-      extraCssText: 'max-width:320px;border-radius:10px;box-shadow:0 10px 30px rgba(0,0,0,0.18);line-height:1.35;',
+      extraCssText: TOOLTIP_CSS,
+    },
+  };
+}
+
+export function expandedChartTooltip(option: EChartsOption): EChartsOption {
+  const existing = option.tooltip && !Array.isArray(option.tooltip) ? option.tooltip : {};
+  return {
+    ...option,
+    tooltip: {
+      ...existing,
+      trigger: 'item',
+      triggerOn: 'mousemove',
+      confine: true,
+      enterable: false,
+      axisPointer: { show: false },
+      extraCssText: TOOLTIP_CSS,
     },
   };
 }

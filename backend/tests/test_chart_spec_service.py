@@ -173,6 +173,60 @@ class ChartSpecServiceTests(unittest.TestCase):
         self.assertEqual(blocks["data_table"][0]["current_activity_completion_pct"], 75.0)
         self.assertTrue(trend["option"]["aria"]["enabled"])
 
+    def test_project_overview_returns_coordinated_executive_bundle(self):
+        self.db.add(models.P6Project(
+            p6_object_id=31,
+            project_id="P-1",
+            name="Project One",
+            duration_percent_complete=0.72,
+            data_date=datetime(2026, 8, 1),
+        ))
+        self.db.add(models.P6WBSNode(
+            p6_object_id=301,
+            project_object_id=31,
+            wbs_name="BLOCK-01",
+        ))
+        self.db.add_all([
+            models.P6Activity(
+                p6_object_id=3101,
+                project_object_id=31,
+                wbs_object_id=301,
+                activity_id="A-1",
+                status="Completed",
+                percent_complete=1,
+                planned_finish_date=datetime(2026, 7, 20),
+                actual_finish_date=datetime(2026, 7, 22),
+            ),
+            models.P6Activity(
+                p6_object_id=3102,
+                project_object_id=31,
+                wbs_object_id=301,
+                activity_id="A-2",
+                status="In Progress",
+                percent_complete=0.5,
+                planned_finish_date=datetime(2026, 8, 15),
+            ),
+        ])
+        self.db.commit()
+
+        dashboard, confirmation = build_chart_result(self.db, {
+            "chart_type": "project_overview",
+            "project_id": "P-1",
+        })
+
+        self.assertEqual(dashboard["schema_version"], "visualization.bundle.v1")
+        self.assertEqual(dashboard["chart_type"], "project_overview")
+        self.assertEqual(len(dashboard["charts"]), 4)
+        self.assertEqual(
+            [chart["visualization_spec"]["shape"] for chart in dashboard["charts"]],
+            ["radial_progress", "combo", "donut", "horizontal_bar"],
+        )
+        self.assertTrue(all(
+            chart["visualization_spec"]["schema_version"] == "visualization.v1"
+            for chart in dashboard["charts"]
+        ))
+        self.assertIn('"chart_count": 4', confirmation)
+
     def test_planned_vs_actual_progress_chart_uses_activity_finish_s_curve(self):
         self.db.add(models.P6Project(
             p6_object_id=12,

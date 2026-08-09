@@ -20,12 +20,14 @@ from services.risk_analytics_service import RiskAnalyticsService
 from services.sap_project_data_service import SapProjectDataService
 from services.schedule_metrics_service import ScheduleMetricsService
 from services.visualization_spec import (
+    activity_status_spec,
     activity_composition_spec,
     baseline_slip_spec,
     block_progress_spec,
     daily_completion_spec,
     duration_comparison_spec,
     portfolio_status_spec,
+    planned_vs_actual_progress_spec,
     project_progress_spec,
 )
 from services import transmission_service
@@ -237,12 +239,25 @@ def build_project_progress_dataset(db, project_id: str) -> dict:
         "capacity": capacity,
         "risk": risk_metrics,
         "report_visualizations": {
-            "daily_completion_trend": _transport_spec(daily_completion_spec(
-                ScheduleMetricsService.get_daily_activity_completion_trend(db, project_id, days=30),
+            "overall_progress": _transport_spec(project_progress_spec([{
+                "project_id": project_id,
+                "project_name": project.display_name,
+                "progress_pct": schedule.get("progress_pct"),
+            }], title=f"{project.display_name} - Overall Progress")),
+            "planned_vs_actual": _transport_spec(planned_vs_actual_progress_spec(
+                ChartSpecService.planned_vs_actual_progress(db, project_id),
+                project.display_name,
+            )),
+            "activity_status": _transport_spec(activity_status_spec(
+                ChartSpecService.activity_status(db, project_id),
                 project.display_name,
             )),
             "block_progress": _transport_spec(block_progress_spec(
                 ScheduleMetricsService.get_block_period_progress(db, project_id, period="current_month"),
+                project.display_name,
+            )),
+            "daily_completion_trend": _transport_spec(daily_completion_spec(
+                ScheduleMetricsService.get_daily_activity_completion_trend(db, project_id, days=30),
                 project.display_name,
             )),
         },
@@ -654,13 +669,49 @@ def _record_artifact(
     return artifact
 
 
-def generate_project_progress_report(db, runtime, project_id: str, preview_token: str) -> dict:
-    preview = validate_preview_token(preview_token, runtime.session_id, project_id)
+def _report_visualizations(
+    db,
+    runtime,
+    *,
+    preview_token: str | None,
+    token_scope: str,
+    scope_kind: str,
+    project_ids: list[str] | None,
+    chart_selection: str | None,
+) -> list[dict]:
+    """Resolve a frozen preview selection or select current conversation charts directly."""
+    from services.report_visualization_service import (
+        resolve_visualization_references,
+        select_conversation_visualizations,
+    )
+
+    if preview_token:
+        preview = validate_preview_token(preview_token, runtime.session_id, token_scope)
+        return resolve_visualization_references(
+            db, session_id=runtime.session_id, references=preview.get("v") or []
+        )
+    selected, _excluded = select_conversation_visualizations(
+        db,
+        session_id=runtime.session_id,
+        scope_kind=scope_kind,
+        scope_project_ids=project_ids,
+        selection_text=chart_selection or _latest_report_request(db, runtime.session_id),
+    )
+    return [item.report_payload() for item in selected]
+
+
+def generate_project_progress_report(
+    db,
+    runtime,
+    project_id: str,
+    preview_token: str | None = None,
+    chart_selection: str | None = None,
+) -> dict:
     cleanup_expired_artifacts(db)
     dataset = build_project_progress_dataset(db, project_id)
-    from services.report_visualization_service import resolve_visualization_references
-    dataset["conversation_visualizations"] = resolve_visualization_references(
-        db, session_id=runtime.session_id, references=preview.get("v") or []
+    dataset["conversation_visualizations"] = _report_visualizations(
+        db, runtime, preview_token=preview_token, token_scope=project_id,
+        scope_kind="project", project_ids=[project_id], chart_selection=chart_selection,
     )
     dataset["executive_summary"] = generate_narrative(dataset)
     from services.report_renderers import render_project_progress_docx, render_project_progress_pdf
@@ -691,14 +742,17 @@ def generate_project_progress_report(db, runtime, project_id: str, preview_token
 
 
 def generate_portfolio_progress_report(
-    db, runtime, preview_token: str, portfolio: str | None = None
+    db,
+    runtime,
+    preview_token: str | None = None,
+    portfolio: str | None = None,
+    chart_selection: str | None = None,
 ) -> dict:
-    preview = validate_preview_token(preview_token, runtime.session_id, _portfolio_token_scope(portfolio))
     cleanup_expired_artifacts(db)
     dataset = build_portfolio_progress_dataset(db, portfolio)
-    from services.report_visualization_service import resolve_visualization_references
-    dataset["conversation_visualizations"] = resolve_visualization_references(
-        db, session_id=runtime.session_id, references=preview.get("v") or []
+    dataset["conversation_visualizations"] = _report_visualizations(
+        db, runtime, preview_token=preview_token, token_scope=_portfolio_token_scope(portfolio),
+        scope_kind="portfolio", project_ids=None, chart_selection=chart_selection,
     )
     summary = dataset["summary"]
     dataset["executive_summary"] = (
@@ -736,15 +790,19 @@ def generate_portfolio_progress_report(
 
 
 def generate_project_comparison_report(
-    db, runtime, project_ids: list[str], preview_token: str
+    db,
+    runtime,
+    project_ids: list[str],
+    preview_token: str | None = None,
+    chart_selection: str | None = None,
 ) -> dict:
     scope = _comparison_token_scope(project_ids)
-    preview = validate_preview_token(preview_token, runtime.session_id, scope)
     cleanup_expired_artifacts(db)
     dataset = build_project_comparison_dataset(db, project_ids)
-    from services.report_visualization_service import resolve_visualization_references
-    dataset["conversation_visualizations"] = resolve_visualization_references(
-        db, session_id=runtime.session_id, references=preview.get("v") or []
+    dataset["conversation_visualizations"] = _report_visualizations(
+        db, runtime, preview_token=preview_token, token_scope=scope,
+        scope_kind="comparison", project_ids=dataset["metadata"]["project_ids"],
+        chart_selection=chart_selection,
     )
     rows = dataset["projects"]
     highest_progress = max(rows, key=lambda row: float(row.get("progress_pct") or 0))

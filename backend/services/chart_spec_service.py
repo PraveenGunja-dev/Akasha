@@ -43,6 +43,7 @@ class ChartSpecService:
             "project_name": project.display_name if project else project_id,
             "total": schedule.activity_count or 0,
             "breakdown": breakdown,
+            "data_as_of": schedule.freshness.get("data_as_of"),
             "sources": ["p6_activity"],
         }
 

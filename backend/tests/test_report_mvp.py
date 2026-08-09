@@ -233,6 +233,11 @@ class ReportMvpTests(unittest.TestCase):
             self.assertGreater(docx.stat().st_size, 10_000)
             self.assertEqual(pdf.read_bytes()[:4], b"%PDF")
             self.assertEqual(docx.read_bytes()[:2], b"PK")
+            from docx import Document
+            text = "\n".join(paragraph.text for paragraph in Document(docx).paragraphs)
+            self.assertIn("executive reading layer", text)
+            self.assertIn("Executive takeaway:", text)
+            self.assertIn("BLOCK-01 has the highest displayed completion", text)
 
     def test_capacity_and_named_risk_sections_use_authoritative_facts(self):
         dataset = report_dataset()
@@ -274,7 +279,7 @@ class ReportMvpTests(unittest.TestCase):
         db.close()
         engine.dispose()
 
-    def test_comparison_report_preview_requires_confirmation_and_generates_both_formats(self):
+    def test_comparison_report_supports_preview_and_direct_generation(self):
         engine = create_engine("sqlite:///:memory:")
         Base.metadata.create_all(engine)
         db = sessionmaker(bind=engine)()
@@ -323,6 +328,9 @@ class ReportMvpTests(unittest.TestCase):
             self.assertEqual(generated["status"], "generated")
             self.assertEqual([row["format"] for row in generated["downloads"]], ["PDF", "DOCX"])
             self.assertTrue(all((Path(directory) / row["filename"]).exists() for row in generated["downloads"]))
+            direct = generate_project_comparison_report(db, runtime, ["CMP-1", "CMP-2"])
+            self.assertEqual(direct["status"], "generated")
+            self.assertEqual([row["format"] for row in direct["downloads"]], ["PDF", "DOCX"])
         db.close()
         engine.dispose()
 

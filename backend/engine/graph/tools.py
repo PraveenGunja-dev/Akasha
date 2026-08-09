@@ -160,7 +160,8 @@ class ActivityFinishForecastArguments(ProjectArguments):
 
 
 class ReportGenerateArguments(ProjectArguments):
-    preview_token: str = Field(min_length=40, max_length=5_000)
+    preview_token: str | None = Field(default=None, min_length=40, max_length=5_000)
+    chart_selection: str | None = Field(default=None, max_length=1_000)
 
 
 class ReportPreviewArguments(ProjectArguments):
@@ -172,7 +173,8 @@ class PortfolioReportPreviewArguments(PortfolioArguments):
 
 
 class PortfolioReportGenerateArguments(PortfolioArguments):
-    preview_token: str = Field(min_length=40, max_length=5_000)
+    preview_token: str | None = Field(default=None, min_length=40, max_length=5_000)
+    chart_selection: str | None = Field(default=None, max_length=1_000)
 
 
 class ComparisonReportArguments(ToolArguments):
@@ -190,7 +192,8 @@ class ComparisonReportPreviewArguments(ComparisonReportArguments):
 
 
 class ComparisonReportGenerateArguments(ComparisonReportArguments):
-    preview_token: str = Field(min_length=40, max_length=5_000)
+    preview_token: str | None = Field(default=None, min_length=40, max_length=5_000)
+    chart_selection: str | None = Field(default=None, max_length=1_000)
 
 
 class ChartArguments(ToolArguments):
@@ -199,6 +202,7 @@ class ChartArguments(ToolArguments):
         "material_gaps", "vendor_performance", "sap_po_fulfillment",
         "transmission_status", "portfolio_risk", "daily_completion_trend",
         "planned_vs_actual_progress", "block_progress",
+        "project_overview",
     ] | None = None
     visualization_query: VisualizationQueryV2 | None = None
     project_id: str | None = Field(default=None, max_length=200)
@@ -440,7 +444,8 @@ def execute_authenticated_tool(
                 db,
                 runtime,
                 validated["project_id"],
-                validated["preview_token"],
+                validated.get("preview_token"),
+                validated.get("chart_selection"),
             )
         elif name == "report_preview_portfolio_progress":
             from services.report_mvp_service import create_portfolio_progress_preview
@@ -452,8 +457,9 @@ def execute_authenticated_tool(
             raw = generate_portfolio_progress_report(
                 db,
                 runtime,
-                validated["preview_token"],
+                validated.get("preview_token"),
                 validated.get("portfolio"),
+                validated.get("chart_selection"),
             )
         elif name == "report_preview_project_comparison":
             from services.report_mvp_service import create_project_comparison_preview
@@ -463,7 +469,8 @@ def execute_authenticated_tool(
         elif name == "report_generate_project_comparison":
             from services.report_mvp_service import generate_project_comparison_report
             raw = generate_project_comparison_report(
-                db, runtime, validated["project_ids"], validated["preview_token"]
+                db, runtime, validated["project_ids"], validated.get("preview_token"),
+                validated.get("chart_selection")
             )
         else:
             raw = execute_tool(db, name, validated)

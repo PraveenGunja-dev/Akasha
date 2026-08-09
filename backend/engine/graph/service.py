@@ -85,10 +85,20 @@ def _groq_context_window() -> int | None:
 
 
 def resolve_model_context_window(model, provider: str | None = None) -> int:
-    """Resolve the active model's input limit; an environment value is only an override."""
-    provider = configured_provider_name(provider)
-    override = os.getenv("AKASHA_MODEL_CONTEXT_WINDOW")
-    if provider == "openrouter":
+    """Resolve the active model's input limit from provider/model metadata."""
+    provider_name = configured_provider_name(provider)
+    if provider is None and "MODEL_PROVIDER" in os.environ:
+        try:
+            discovered = _validate_context_window(
+                get_model_provider().discover_context_window(("tool_calling",)),
+                "routed model providers",
+            )
+        except Exception as exc:
+            raise RuntimeError(
+                "Unable to validate the routed models and their context windows."
+            ) from exc
+        return discovered
+    if provider_name == "openrouter":
         try:
             discovered = _validate_context_window(_openrouter_context_window(), "OpenRouter")
         except Exception as exc:
@@ -97,12 +107,7 @@ def resolve_model_context_window(model, provider: str | None = None) -> int:
             ) from exc
         if not discovered:
             raise RuntimeError("Configured OpenRouter models did not report context windows.")
-        return min(
-            discovered,
-            _validate_context_window(override, "AKASHA_MODEL_CONTEXT_WINDOW")
-        ) if override else discovered
-    if override:
-        return _validate_context_window(override, "AKASHA_MODEL_CONTEXT_WINDOW")
+        return discovered
 
     profile = getattr(model, "profile", None) or {}
     if profile.get("max_input_tokens"):
@@ -112,16 +117,16 @@ def resolve_model_context_window(model, provider: str | None = None) -> int:
         discovered = {
             "ollama": _ollama_context_window,
             "groq": _groq_context_window,
-        }.get(provider, lambda: None)()
+        }.get(provider_name, lambda: None)()
     except Exception as exc:
         raise RuntimeError(
-            f"Unable to discover the context window for the configured {provider} model."
+            f"Unable to discover the context window for the configured {provider_name} model."
         ) from exc
     if discovered:
-        return _validate_context_window(discovered, provider.title())
+        return _validate_context_window(discovered, provider_name.title())
     raise RuntimeError(
-        "The selected model does not report a context window. Configure the model identity "
-        "correctly or use AKASHA_MODEL_CONTEXT_WINDOW as an explicit override."
+        "The selected model does not report a context window. Select a model whose provider "
+        "metadata is known."
     )
 
 

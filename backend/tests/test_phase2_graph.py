@@ -27,11 +27,13 @@ class ToolCapableFakeModel(GenericFakeChatModel):
 
 class ToolBindingCaptureFakeModel(ToolCapableFakeModel):
     bound_tool_sets: ClassVar[list[tuple[str, ...]]] = []
+    bound_tool_choices: ClassVar[list[str | None]] = []
 
-    def bind_tools(self, tools, **_kwargs):
+    def bind_tools(self, tools, **kwargs):
         self.bound_tool_sets.append(tuple(
             tool["function"]["name"] for tool in tools
         ))
+        self.bound_tool_choices.append(kwargs.get("tool_choice"))
         return self
 
 
@@ -132,6 +134,71 @@ class GraphStructureTests(unittest.TestCase):
             result["tool_names"],
             ["portfolio_resolve_project_id", "p6_get_project_summary"],
         )
+
+    def test_monthly_block_answer_requires_period_evidence_after_resolution(self):
+        ToolBindingCaptureFakeModel.bound_tool_sets = []
+        ToolBindingCaptureFakeModel.bound_tool_choices = []
+        model = ToolBindingCaptureFakeModel(messages=iter([
+            AIMessage(content="", tool_calls=[{
+                "name": "portfolio_resolve_project_id",
+                "args": {"name": "AGE26AL_A16_FT_333MW_PPA_Commissioned"},
+                "id": "resolver-call",
+            }]),
+            AIMessage(content=(
+                "I’m unable to retrieve the last-month block ranking from the available project data."
+            )),
+            AIMessage(content="", tool_calls=[{
+                "name": "p6_get_block_period_progress",
+                "args": {"project_id": "FY25-P13", "period": "last_month"},
+                "id": "block-call",
+            }]),
+            AIMessage(content=(
+                "BLOCK-07 had the highest progress last month, with 7 of 72 activities "
+                "completed (9.72%)."
+            )),
+        ]))
+        graph = build_chat_graph(model, context_window=32_768)
+        state = graph_input(
+            "user-a",
+            1,
+            2,
+            "Which block in AGE26AL_A16_FT_333MW_PPA_Commissioned — 333 MW, "
+            "project ID FY25-P13 has the highest progress in the last month?",
+        )
+        state["run_id"] = "a" * 32
+
+        def execute(name, _arguments, _runtime):
+            if name == "p6_get_block_period_progress":
+                return ToolExecution(
+                    '{"status":"ok","data":{"highest_blocks":["BLOCK-07"],'
+                    '"highest_progress_pct":9.72}}',
+                    "ok",
+                )
+            return ToolExecution(
+                '{"status":"ok","data":{"project_id":"FY25-P13"}}',
+                "ok",
+            )
+
+        with patch("engine.graph.builder._ensure_run_active", return_value=None), patch(
+            "engine.graph.builder.execute_authenticated_tool",
+            side_effect=execute,
+        ) as execute_tool:
+            result = graph.invoke(state)
+
+        self.assertEqual(
+            [call.args[0] for call in execute_tool.call_args_list],
+            ["portfolio_resolve_project_id", "p6_get_block_period_progress"],
+        )
+        self.assertIn("BLOCK-07", result["messages"][-1].content)
+        self.assertEqual(
+            result["tool_names"],
+            ["portfolio_resolve_project_id", "p6_get_block_period_progress"],
+        )
+        self.assertIn(
+            ("p6_get_block_period_progress",),
+            ToolBindingCaptureFakeModel.bound_tool_sets,
+        )
+        self.assertIn("required", ToolBindingCaptureFakeModel.bound_tool_choices)
 
     def test_empty_final_answer_is_repaired_once(self):
         model = ToolCapableFakeModel(messages=iter([

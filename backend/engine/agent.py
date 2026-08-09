@@ -15,7 +15,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from engine.observability import log_observability_event
-from engine.model_provider import get_model_provider
+from engine.model_provider import configured_provider_name, get_model_provider
 from engine.openrouter_config import openrouter_extra_body
 
 from engine.tools.p6_tools import (
@@ -55,6 +55,7 @@ from engine.tools.viz_tools import (
     CHART_TYPES,
     build_chart,
     build_project_comparison_dashboard,
+    build_project_overview_dashboard,
 )
 from services.dynamic_visualization import (
     VisualizationQueryError,
@@ -87,7 +88,7 @@ EXECUTIVE_RESPONSE_GUIDANCE = """Default response style for operational question
 def _openrouter_request_options() -> dict:
     return (
         {"extra_body": openrouter_extra_body()}
-        if os.environ.get("AI_PROVIDER", "ollama").lower() == "openrouter"
+        if configured_provider_name() == "openrouter"
         else {}
     )
 
@@ -788,7 +789,7 @@ TOOLS = [
                         "enum": ["auto", "activity_status", "project_comparison", "delayed_activities",
                                  "material_gaps", "vendor_performance", "sap_po_fulfillment",
                                  "transmission_status", "portfolio_risk", "daily_completion_trend",
-                                 "planned_vs_actual_progress", "block_progress"],
+                                 "planned_vs_actual_progress", "block_progress", "project_overview"],
                         "description": (
                             "Which chart to draw. "
                             "activity_status=donut of one project's activities by status; "
@@ -802,6 +803,7 @@ TOOLS = [
                             "daily_completion_trend=line/bar chart of dated activity actual-finish events; "
                             "planned_vs_actual_progress=two-line cumulative planned vs actual activity-finish S-curve; "
                             "block_progress=bar chart of current average activity completion by block; "
+                            "project_overview=coordinated executive dashboard for one project; "
                             "auto=let the system choose based on subject and domain_hint."
                         )
                     },
@@ -943,9 +945,8 @@ TOOLS = [
         "function": {
             "name": "report_preview_project_comparison",
             "description": (
-                "Prepare a PDF/DOCX Project Comparison Report preview for two to four canonical "
-                "project IDs. Use after presenting an in-chat comparison when the user asked for "
-                "a report. Show the preview and wait for explicit confirmation."
+                "Preview the scope of a PDF/DOCX Project Comparison Report for two to four "
+                "canonical project IDs. Use only when the user explicitly asks for a preview."
             ),
             "parameters": {
                 "type": "object",
@@ -964,8 +965,8 @@ TOOLS = [
         "function": {
             "name": "report_generate_project_comparison",
             "description": (
-                "Generate PDF and DOCX files after the user confirms a Project Comparison Report "
-                "preview. Pass the exact project IDs and preview token."
+                "Immediately generate PDF and DOCX Project Comparison Report files. No confirmation "
+                "or preview is required. Pass preview_token only when continuing an explicit preview."
             ),
             "parameters": {
                 "type": "object",
@@ -975,8 +976,9 @@ TOOLS = [
                         "minItems": 2, "maxItems": 4,
                     },
                     "preview_token": {"type": "string"},
+                    "chart_selection": {"type": "string", "description": "Optional chart inclusion request from the user."},
                 },
-                "required": ["project_ids", "preview_token"]
+                "required": ["project_ids"]
             }
         }
     },
@@ -985,9 +987,8 @@ TOOLS = [
         "function": {
             "name": "report_preview_portfolio_progress",
             "description": (
-                "Prepare a current-month Portfolio Progress Report preview across all authorized "
-                "portfolio projects. Use this for portfolio-level management progress reports. "
-                "Show scope, cutoff, sections, and PDF/DOCX formats, then wait for confirmation."
+                "Preview a current-month Portfolio Progress Report scope. Use only when the user "
+                "explicitly asks to preview or review scope before generation."
             ),
             "parameters": {
                 "type": "object",
@@ -1002,16 +1003,16 @@ TOOLS = [
         "function": {
             "name": "report_generate_portfolio_progress",
             "description": (
-                "Generate PDF and DOCX files from a confirmed Portfolio Progress Report preview. "
-                "Pass the exact preview_token and the same optional portfolio filter."
+                "Immediately generate current-month Portfolio Progress Report PDF and DOCX files. "
+                "No confirmation or preview is required."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "portfolio": {"type": "string", "description": "Optional portfolio filter used in the preview."},
-                    "preview_token": {"type": "string", "description": "Opaque token returned by the preview tool."}
-                },
-                "required": ["preview_token"]
+                    "preview_token": {"type": "string", "description": "Optional token from an explicit preview."},
+                    "chart_selection": {"type": "string", "description": "Optional chart inclusion request from the user."}
+                }
             }
         }
     },
@@ -1020,9 +1021,8 @@ TOOLS = [
         "function": {
             "name": "report_preview_project_progress",
             "description": (
-                "Prepare a Project Progress Report preview for one project. Call this when the user "
-                "asks to create or generate a project report. Show its scope, sources, missing data, "
-                "and PDF/DOCX formats, then wait for explicit user confirmation."
+                "Preview a Project Progress Report scope for one project. Use only when the user "
+                "explicitly asks for a preview before generation."
             ),
             "parameters": {
                 "type": "object",
@@ -1038,17 +1038,17 @@ TOOLS = [
         "function": {
             "name": "report_generate_project_progress",
             "description": (
-                "Synchronously generate PDF and DOCX files from a previously previewed Project "
-                "Progress Report. Call only after the user explicitly confirms the preview, and pass "
-                "the exact preview_token returned by the preview tool. Preserve returned download URLs."
+                "Immediately generate Project Progress Report PDF and DOCX files. No confirmation "
+                "or preview is required. Preserve the returned download URLs."
             ),
             "parameters": {
                 "type": "object",
                 "properties": {
                     "project_id": {"type": "string", "description": "The canonical project_id."},
-                    "preview_token": {"type": "string", "description": "Opaque token returned by the preview tool."}
+                    "preview_token": {"type": "string", "description": "Optional token from an explicit preview."},
+                    "chart_selection": {"type": "string", "description": "Optional chart inclusion request from the user."}
                 },
-                "required": ["project_id", "preview_token"]
+                "required": ["project_id"]
             }
         }
     }
@@ -1101,6 +1101,32 @@ def build_chart_result(db: Session, kwargs: dict):
 
     requested_type = kwargs.get("chart_type", "auto")
     project_ids = kwargs.get("project_ids") or []
+    if requested_type == "project_overview":
+        project_id = kwargs.get("project_id")
+        if not project_id:
+            return None, json.dumps({
+                "status": "no_data",
+                "message": "Project overview needs a specific project.",
+            })
+        charts = build_project_overview_dashboard(db, project_id)
+        if charts:
+            confirmation = json.dumps({
+                "status": "chart_dashboard_rendered",
+                "chart_type": "project_overview",
+                "chart_count": len(charts),
+                "titles": [chart.get("title") for chart in charts],
+            })
+            return {
+                "schema_version": "visualization.bundle.v1",
+                "chart_type": "project_overview",
+                "title": "Project Executive Overview",
+                "data_points": len(charts),
+                "charts": charts,
+            }, confirmation
+        return None, json.dumps({
+            "status": "no_data",
+            "message": "No synchronized project data is available for the overview.",
+        })
     if requested_type in {"project_comparison", "auto"} and len(project_ids) >= 2:
         charts = build_project_comparison_dashboard(db, project_ids)
         if charts:
@@ -1638,6 +1664,7 @@ def run_deep_analysis_agent_stream(
                 "- For block progress over a month or rolling day window, call `p6_get_block_period_progress`; preserve highest/lowest ties and disclose when true historical percentage delta is unavailable.\n"
                 "- For daily progress trends, call `p6_get_daily_completion_trend`. Describe it as an activity-completion event trend, never as historical duration-percent progress.\n"
                 "- For daily trends, project comparisons, block comparisons, distributions, and rankings, also call `render_chart` with the matching approved chart type even when the user does not explicitly say chart. Cap a response at four charts and accompany every chart with a concise textual finding.\n"
+                "- For a broad request to show project visualizations, charts, a dashboard, or an overview, call `render_chart` once with chart_type='project_overview'. This returns the coordinated overall-progress, planned-vs-actual, activity-status, and block-progress executive set.\n"
                 "- For planned-versus-actual progress, call `render_chart` with chart_type='planned_vs_actual_progress'. Describe it accurately as a cumulative planned-versus-actual activity-finish S-curve from the current P6 schedule, not as historical duration-percent snapshots.\n"
                 "- Completed activities / total activities is an activity-count ratio, not overall P6 progress. Label it separately if useful.\n"
                 "- Call `get_project_kpis` only when the user explicitly asks for the health or health score of one named project. Never use it for general summaries, progress, risk, procurement, transmission, portfolio, report, or forecast questions. Use its returned EV/PV/SPI/CPI/SV/CV and health values without calculating alternatives.\n\n"

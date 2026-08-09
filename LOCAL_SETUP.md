@@ -132,8 +132,11 @@ AKASHA_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:3510
 AKASHA_CHAT_ENGINE=langgraph
 AKASHA_LANGGRAPH_ROLLOUT_PERCENT=100
 
-# Model provider. The selected model and every fallback must support tools/tool_choice.
-AI_PROVIDER=openrouter
+# Chat model router. Change only this value to openai to reverse the provider order.
+# Both configured models must support tools, structured JSON, and streaming.
+MODEL_PROVIDER=openrouter
+MODEL_FALLBACK_PROVIDER=auto
+
 OPENROUTER_API_KEY=<YOUR_OPENROUTER_KEY>
 OPENROUTER_MODEL=<TOOL_CAPABLE_OPENROUTER_MODEL_ID>
 
@@ -142,6 +145,14 @@ OPENROUTER_FALLBACK_MODELS=
 OPENROUTER_APP_URL=http://localhost:5173/akasha/
 OPENROUTER_APP_NAME=Akasha
 
+OPENAI_API_KEY=<YOUR_OPENAI_KEY>
+OPENAI_MODEL=gpt-5.6-luna
+OPENAI_REASONING_EFFORT=medium
+
+# Configure both vision routes to preserve image chat during provider fallback.
+OPENROUTER_VISION_MODEL=<VISION_AND_TOOL_CAPABLE_OPENROUTER_MODEL_ID>
+OPENAI_VISION_MODEL=gpt-5.6-luna
+
 # Optional runtime tuning. Defaults are normally suitable.
 AKASHA_MODEL_OUTPUT_TOKENS=2048
 AKASHA_GRAPH_MAX_MODEL_CALLS=12
@@ -149,9 +160,7 @@ AKASHA_GRAPH_RECURSION_LIMIT=40
 AKASHA_CHAT_RUN_STALE_SECONDS=600
 AKASHA_LANGGRAPH_POOL_SIZE=10
 
-# The provider/model context window is discovered automatically.
-# Set this only as an intentional upper-bound override.
-# AKASHA_MODEL_CONTEXT_WINDOW=32768
+# The provider/model context window is discovered automatically and cannot be overridden.
 
 # Report MVP.
 AKASHA_REPORT_AI_NARRATIVE=true
@@ -164,7 +173,22 @@ AUTO_SETUP_DB=false
 Use only provider/model combinations approved for the sensitivity of project data. Free
 model endpoints may log prompts or use data under provider-specific terms.
 
-### 7.2 Ollama Alternative
+`MODEL_FALLBACK_PROVIDER=auto` selects the other supported provider. Fallback occurs only
+for rate limits, connection failures, timeouts, and provider 5xx responses. Invalid keys,
+unknown models, unsupported capabilities, and malformed configuration fail clearly instead.
+
+The OpenAI route uses the Responses API with backend-owned, stateless conversation replay;
+OpenRouter continues to use Chat Completions. `OPENAI_REASONING_EFFORT` accepts `none`, `low`,
+`medium`, `high`, `xhigh`, or `max` and defaults to `medium` for GPT-5.6 models.
+
+OpenRouter's optional `OPENROUTER_FALLBACK_MODELS` are attempted by OpenRouter first. If
+that provider route is still unavailable, Akasha retries the request through OpenAI. A stream
+is retried only before its first chunk, preventing mixed or duplicated answers.
+
+`AI_PROVIDER` remains a compatibility setting for older deployments, but it does not enable
+the two-provider router. New deployments should use `MODEL_PROVIDER`.
+
+### 7.2 Legacy Ollama Configuration
 
 The Ollama model must actually support native tool calls. Report AI narrative also requires
 structured JSON; otherwise set `AKASHA_REPORT_AI_NARRATIVE=false` and the deterministic
@@ -180,7 +204,9 @@ OLLAMA_SUPPORTS_STRUCTURED_JSON=true
 
 Do not set capability flags to `true` unless the selected model has been tested for them.
 
-### 7.3 Azure OpenAI Alternative
+Ollama is retained only for compatibility and is not part of the OpenRouter/OpenAI router.
+
+### 7.3 Legacy Azure OpenAI Configuration
 
 ```dotenv
 AI_PROVIDER=azure
@@ -194,7 +220,7 @@ AZURE_OPENAI_API_VERSION=<API_VERSION>
 `AZURE_OPENAI_MODEL` should be the underlying model identity so context-window metadata can
 be resolved when the deployment has a custom name.
 
-### 7.4 Groq Alternative
+### 7.4 Legacy Groq Configuration
 
 ```dotenv
 AI_PROVIDER=groq
@@ -709,12 +735,12 @@ Run the Section 8 SQLAlchemy bootstrap first, then rerun migrations in order.
 - Run `python scripts/setup_langgraph_checkpoint.py`.
 - Verify the checkpoint tables in Section 11.
 
-### OpenRouter startup fails while validating models
+### Model startup fails while validating models
 
 - Confirm the API key and exact model IDs.
 - Confirm the primary and every fallback supports `tools` and `tool_choice`.
 - Remove unavailable fallback IDs or set `OPENROUTER_FALLBACK_MODELS=`.
-- Do not use `AKASHA_MODEL_CONTEXT_WINDOW` to hide an invalid/nonexistent model.
+- Select models whose context-window metadata is available from the provider adapter.
 
 ### `InvalidModelResponse` appears intermittently
 

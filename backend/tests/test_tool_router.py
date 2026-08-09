@@ -52,13 +52,18 @@ class ToolRouterTests(unittest.TestCase):
 
     def test_monthly_block_progress_gets_block_period_tool(self):
         result = route(
-            "Which block in AGE26AL_A16_FT_50MW_PPA_Commissioned had the highest progress last month?"
+            "Which block in AGE26AL_A16_FT_333MW_PPA_Commissioned — 333 MW, "
+            "project ID FY25-P13 has the highest progress in the last month?"
         )
 
         self.assertIncludes(
             result,
             "portfolio_resolve_project_id",
             "p6_get_block_period_progress",
+        )
+        self.assertEqual(
+            result.required_evidence_tools,
+            ("p6_get_block_period_progress",),
         )
 
     def test_rolling_block_and_daily_trend_queries_get_event_tools(self):
@@ -172,9 +177,9 @@ class ToolRouterTests(unittest.TestCase):
 
         self.assertIncludes(
             result,
-            "report_preview_project_progress",
             "report_generate_project_progress",
         )
+        self.assertExcludes(result, "report_preview_project_progress")
 
         comparison = route(
             "Yes, generate the PDF and DOCX.",
@@ -290,19 +295,26 @@ class ToolRouterTests(unittest.TestCase):
         planned_actual_curve = route("Show planned vs actual progress chart for Project X")
         milestone_risk = route("Which projects are at risk of missing planned milestones this month?")
 
-        self.assertIncludes(project_report, "report_preview_project_progress")
+        self.assertIncludes(project_report, "report_generate_project_progress")
+        self.assertExcludes(project_report, "report_preview_project_progress")
         self.assertIncludes(block_snapshot, "p6_get_block_period_progress", "render_chart")
-        self.assertIncludes(portfolio_report, "report_preview_portfolio_progress")
+        self.assertIncludes(portfolio_report, "report_generate_portfolio_progress")
+        self.assertExcludes(portfolio_report, "report_preview_portfolio_progress")
         self.assertExcludes(portfolio_report, "report_preview_project_progress")
         self.assertIncludes(
             comparison_report,
             "render_chart",
-            "report_preview_project_comparison",
             "report_generate_project_comparison",
         )
         self.assertExcludes(comparison_report, "report_preview_project_progress")
         self.assertIncludes(planned_actual_curve, "p6_get_project_summary", "render_chart")
         self.assertIncludes(milestone_risk, "p6_get_portfolio_milestone_risks")
+
+    def test_report_preview_is_reserved_for_an_explicit_preview_request(self):
+        result = route("Preview the scope of a progress report for Project X")
+
+        self.assertIncludes(result, "report_preview_project_progress")
+        self.assertExcludes(result, "report_generate_project_progress")
 
     def test_inherently_visual_queries_auto_route_to_chart(self):
         self.assertIncludes(

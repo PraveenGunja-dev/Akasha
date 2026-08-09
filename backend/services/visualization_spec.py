@@ -21,12 +21,12 @@ ValueFormat = Literal["integer", "decimal", "percent", "days"]
 
 
 SEMANTIC_COLORS = {
-    "primary": "#2563EB",
-    "progress": "#059669",
-    "warning": "#D97706",
-    "critical": "#DC2626",
+    "primary": "#0B74B0",
+    "progress": "#75479C",
+    "warning": "#BD3861",
+    "critical": "#B42318",
     "neutral": "#98A2B3",
-    "teal": "#0891B2",
+    "teal": "#BD3861",
 }
 
 
@@ -192,6 +192,56 @@ def planned_vs_actual_progress_spec(
     )
 
 
+def activity_status_spec(data: dict, project_name: str | None = None) -> VisualizationSpecV1 | None:
+    breakdown = data.get("breakdown") or {}
+    rows = [
+        (str(status), int(count or 0))
+        for status, count in breakdown.items()
+        if int(count or 0) > 0
+    ]
+    if not rows:
+        return None
+    preferred_order = {"completed": 0, "in progress": 1, "not started": 2}
+    rows.sort(key=lambda item: (preferred_order.get(item[0].strip().casefold(), 3), item[0]))
+    name = project_name or data.get("project_name") or "Project"
+    total = int(data.get("total") or sum(value for _, value in rows))
+    colors = []
+    for status, _value in rows:
+        normalized = status.strip().casefold()
+        colors.append(
+            "progress" if "complet" in normalized
+            else "primary" if "progress" in normalized
+            else "neutral" if "not start" in normalized
+            else "warning"
+        )
+    title = f"{name} - Activity Status"
+    return VisualizationSpecV1(
+        chart_id="project.activity-status",
+        chart_type="activity_status",
+        shape="donut",
+        title=title,
+        subtitle=f"Current distribution across {total:,} activities",
+        summary="Activity status composition from the latest synchronized P6 schedule.",
+        accessibility_description=(
+            f"{title}. Donut chart showing "
+            + ", ".join(f"{status}: {value}" for status, value in rows)
+            + "."
+        ),
+        categories=[status for status, _value in rows],
+        series=[VisualizationSeriesV1(
+            name="Activities",
+            shape="donut",
+            values=[value for _status, value in rows],
+            semantic_color="primary",
+            value_format="integer",
+            item_semantic_colors=colors,
+        )],
+        data_as_of=str(data.get("data_as_of")) if data.get("data_as_of") else None,
+        source_tables=list(data.get("sources") or ["p6_activity"]),
+        data_table=[{"status": status, "activities": value} for status, value in rows],
+    )
+
+
 def block_progress_spec(data: dict, project_name: str | None = None, limit: int = 16) -> VisualizationSpecV1 | None:
     blocks = [
         row for row in (data.get("blocks") or [])
@@ -200,7 +250,12 @@ def block_progress_spec(data: dict, project_name: str | None = None, limit: int 
     if not blocks:
         return None
     blocks.sort(key=lambda row: (-float(row["current_activity_completion_pct"]), str(row["block"])))
-    blocks = blocks[:limit]
+    if len(blocks) > limit and limit >= 4:
+        high_count = (limit + 1) // 2
+        low_count = limit - high_count
+        blocks = [*blocks[:high_count], *blocks[-low_count:]]
+    else:
+        blocks = blocks[:limit]
     name = project_name or data.get("project_name") or "Project"
     title = f"{name} — Block Progress Snapshot"
     subtitle = f"Current average activity completion • data as of {data.get('data_as_of') or 'latest sync'}"
@@ -247,14 +302,24 @@ def project_progress_spec(rows: list[dict], *, title: str = "Portfolio Progress 
     usable = usable[:12]
     if not usable:
         return None
+    single_project = len(usable) == 1
     return VisualizationSpecV1(
         chart_id="portfolio.project-progress",
         chart_type="project_comparison",
         shape="radial_progress" if len(usable) <= 4 else "horizontal_bar",
         title=title,
-        subtitle="Top projects by authoritative current P6 progress",
-        summary=f"Comparison of authoritative current progress for {len(usable)} projects.",
-        accessibility_description=f"{title}. Horizontal bars compare current P6 progress by project.",
+        subtitle=(
+            "Authoritative current P6 duration progress"
+            if single_project else "Top projects by authoritative current P6 progress"
+        ),
+        summary=(
+            f"Current authoritative P6 duration progress is {float(usable[0]['progress_pct']):.1f}%."
+            if single_project else f"Comparison of authoritative current progress for {len(usable)} projects."
+        ),
+        accessibility_description=(
+            f"{title}. Gauge shows current P6 duration progress."
+            if single_project else f"{title}. Bars compare current P6 progress by project."
+        ),
         categories=[str(row.get("project_name") or row.get("project_id")) for row in usable],
         series=[VisualizationSeriesV1(
             name="Progress",

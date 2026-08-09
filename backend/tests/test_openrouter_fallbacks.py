@@ -22,6 +22,17 @@ from langchain_core.messages import HumanMessage
 
 
 class OpenRouterFallbackTests(unittest.TestCase):
+    def setUp(self):
+        self.environment = patch.dict(
+            os.environ,
+            {"DATABASE_URL": "sqlite:///:memory:"},
+            clear=True,
+        )
+        self.environment.start()
+
+    def tearDown(self):
+        self.environment.stop()
+
     def test_requested_models_are_the_default_ordered_fallbacks(self):
         with patch.dict(os.environ, {"OPENROUTER_MODEL": "primary/model"}, clear=False):
             os.environ.pop("OPENROUTER_FALLBACK_MODELS", None)
@@ -99,7 +110,6 @@ class OpenRouterFallbackTests(unittest.TestCase):
             "OPENROUTER_FALLBACK_MODELS": "fallback/a,fallback/b",
             "OPENROUTER_API_KEY": "test-key",
         }, clear=False), patch("requests.get", return_value=response):
-            os.environ.pop("AKASHA_MODEL_CONTEXT_WINDOW", None)
             self.assertEqual(resolve_model_context_window(model, "openrouter"), 65_536)
 
     def test_model_without_tool_support_fails_startup_validation(self):
@@ -115,7 +125,6 @@ class OpenRouterFallbackTests(unittest.TestCase):
             "OPENROUTER_FALLBACK_MODELS": "fallback/no-tools",
             "OPENROUTER_API_KEY": "test-key",
         }, clear=False), patch("requests.get", return_value=response):
-            os.environ.pop("AKASHA_MODEL_CONTEXT_WINDOW", None)
             with self.assertRaises(RuntimeError):
                 resolve_model_context_window(model, "openrouter")
 

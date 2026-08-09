@@ -25,6 +25,7 @@ from services.chart_spec_service import ChartSpecService
 from services.project_catalog_service import ProjectCatalogService
 from services.visualization_spec import (
     activity_composition_spec,
+    activity_status_spec,
     baseline_slip_spec,
     block_progress_spec,
     daily_completion_spec,
@@ -35,17 +36,16 @@ from services.visualization_spec import (
 
 logger = logging.getLogger(__name__)
 
-# Fixed categorical palette — validated CVD-safe in light AND dark (Tailwind-600 band).
-# Assigned in order, never cycled. A 7th series is not a new hue — fold into "Other".
-PALETTE = ["#2563EB", "#059669", "#D97706", "#7C3AED", "#0891B2", "#DC2626"]
+# Adani logo colors lead the palette; tonal tints provide quiet extra series.
+PALETTE = ["#0B74B0", "#75479C", "#BD3861", "#4B91BC", "#966EB5", "#CC6787"]
 
 # Semantic status colors (reserved — never reused as a generic "series N" hue).
 STATUS_COLORS = {
-    "completed": "#059669",   # green — done / good
-    "in_progress": "#2563EB",  # blue — active
-    "not_started": "#64748B",  # slate — neutral, not-yet-begun
-    "delayed": "#DC2626",      # red — behind / critical
-    "at_risk": "#D97706",      # amber — warning
+    "completed": "#75479C",
+    "in_progress": "#0B74B0",
+    "not_started": "#98A2B3",
+    "delayed": "#B42318",
+    "at_risk": "#BD3861",
 }
 
 # Chart types this engine can render, with the data shape each one fits.
@@ -61,6 +61,7 @@ CHART_TYPES = {
     "daily_completion_trend": "Daily activity actual-finish events with cumulative completion-event context.",
     "planned_vs_actual_progress": "Cumulative planned versus actual activity-finish S-curve through the P6 data cutoff.",
     "block_progress": "Horizontal bar of the current average activity completion by project block.",
+    "project_overview": "Coordinated four-chart executive overview for one project.",
 }
 
 
@@ -100,10 +101,11 @@ def _base_option(accessibility_description: str) -> dict:
         "animationEasing": "cubicOut",
         "aria": {
             "enabled": True,
-            "decal": {"show": True},
+            "decal": {"show": False},
             "description": accessibility_description,
         },
-        "textStyle": {"fontFamily": "Inter, ui-sans-serif, system-ui, sans-serif"},
+        "color": PALETTE,
+        "textStyle": {"fontFamily": "Aptos, Avenir Next, Segoe UI, sans-serif"},
     }
 
 
@@ -203,7 +205,7 @@ def _finalize_chart(chart: dict) -> dict:
     option = chart.get("option") or {}
     option.setdefault("aria", {
         "enabled": True,
-        "decal": {"show": True},
+        "decal": {"show": False},
         "description": chart.get("accessibility_description") or title,
     })
     subtitle = chart.get("subtitle")
@@ -404,6 +406,22 @@ def build_project_comparison_dashboard(db: Session, project_ids: list[str]) -> l
     return [_chart_from_semantic(spec) for spec in specs if spec is not None][:4]
 
 
+def build_project_overview_dashboard(db: Session, project_id: str) -> list[dict]:
+    """Return a coordinated, decision-focused overview for one project."""
+    comparison = ChartSpecService.project_comparison(db, [project_id])
+    rows = comparison.get("projects") or []
+    project_name = rows[0]["project_name"] if rows else _display_name(db, project_id)
+    specs = [
+        project_progress_spec(rows, title=f"{project_name} - Overall Progress"),
+        planned_vs_actual_progress_spec(
+            ChartSpecService.planned_vs_actual_progress(db, project_id), project_name
+        ),
+        activity_status_spec(ChartSpecService.activity_status(db, project_id), project_name),
+        block_progress_spec(ChartSpecService.block_progress(db, project_id), project_name, limit=8),
+    ]
+    return [_chart_from_semantic(spec) for spec in specs if spec is not None][:4]
+
+
 # ============================================
 # Grounded chart builders (one per chart_type)
 # ============================================
@@ -426,11 +444,16 @@ def _chart_activity_status(db: Session, project_id: str) -> dict:
         )
         data.append({"name": status, "value": count, "color": color})
 
+    semantic = activity_status_spec(b, name)
     return {
         "chart_type": "activity_status",
         "title": f"{name} — Activity Status",
         "data_points": b.get("total", 0),
         "option": _rose_option(f"{name} — Activity Status", f"{b.get('total', 0)} activities", data),
+        "visualization_spec": _semantic_transport(semantic),
+        "summary": semantic.summary if semantic else None,
+        "accessibility_description": semantic.accessibility_description if semantic else None,
+        "data_table": semantic.data_table if semantic else [],
         "_source_tables": b["sources"],
     }
 

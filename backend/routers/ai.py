@@ -45,7 +45,7 @@ load_dotenv(override=False)
 router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
-orchestrator = ChatOrchestrator(default_llm=os.environ.get("AI_PROVIDER", "ollama").lower())
+orchestrator = ChatOrchestrator(default_llm=configured_provider_name())
 
 from typing import Optional, List
 
