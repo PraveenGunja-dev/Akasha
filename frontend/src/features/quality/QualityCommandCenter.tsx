@@ -3,7 +3,8 @@ import ReactECharts from 'echarts-for-react';
 import {
   Shield, AlertTriangle, CheckCircle2, Clock, Users, DollarSign,
   RefreshCw, ChevronDown, ChevronRight, XCircle, Activity,
-  TrendingUp, Package, MapPin, Filter, Search, ArrowUpRight
+  TrendingUp, Package, MapPin, Filter, Search, ArrowUpRight,
+  ClipboardCheck, RotateCcw
 } from 'lucide-react';
 
 /* ── Status config ── */
@@ -96,6 +97,8 @@ export default function QualityCommandCenter() {
 
   const ov = overview || {};
   const byStatus = ov.by_status || {};
+  const rfiByStatus = ov.rfi_by_status || {};
+  const rfiByHandler = ov.rfi_by_handler || {};
   const aging = ov.aging || {};
   const trend = ov.trend || [];
   const topDefects = ov.top_defects || [];
@@ -256,6 +259,58 @@ export default function QualityCommandCenter() {
           <div className="mt-4 p-3 bg-orange-500/5 border border-orange-500/20 rounded-xl flex items-center gap-3">
             <XCircle className="w-4 h-4 text-orange-500 shrink-0" />
             <span className="text-sm"><strong className="text-orange-500">{byStatus.rejected}</strong> NCs rejected — sent back to contractor for re-work</span>
+          </div>
+        )}
+      </div>
+
+      {/* ── RFI Inspection Pipeline ── */}
+      <div className="bg-card border border-border rounded-2xl p-6">
+        <h3 className="text-sm font-bold uppercase tracking-widest text-muted-foreground mb-5 flex items-center gap-2">
+          <ClipboardCheck className="w-4 h-4 text-primary" /> RFI Inspection Pipeline
+          <span className="ml-auto normal-case tracking-normal text-xs font-semibold text-muted-foreground">
+            {(ov.total_rfis || 0).toLocaleString()} inspections raised
+          </span>
+        </h3>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+          <KPI label="Pass Rate" value={`${ov.rfi_pass_rate || 0}%`} sub={`${(ov.rfis_completed || 0).toLocaleString()} passed`}
+            icon={CheckCircle2} color={(ov.rfi_pass_rate || 0) >= 90 ? 'text-success' : 'text-warning'} />
+          <KPI label="Rejected" value={(ov.rfis_rejected || 0).toLocaleString()} sub="Awaiting re-submission"
+            icon={RotateCcw} color="text-orange-500" alert={(ov.rfis_rejected || 0) > 500} />
+          <KPI label="In Flight" value={(ov.rfis_in_flight || 0).toLocaleString()} sub="Awaiting sign-off"
+            icon={Clock} color="text-blue-500" />
+          <KPI label="With Contractor" value={(rfiByHandler.contractor || 0).toLocaleString()} sub="Re-work outstanding"
+            icon={Users} color="text-destructive" alert={(rfiByHandler.contractor || 0) > 500} />
+        </div>
+
+        <div className="flex gap-4">
+          <WorkflowStage label="In Review (EE)" count={rfiByStatus.submitted || 0} total={ov.total_rfis} color="text-amber-500" />
+          <WorkflowStage label="In Review (QI)" count={rfiByStatus.approved || 0} total={ov.total_rfis} color="text-blue-500" />
+          <WorkflowStage label="Completed" count={rfiByStatus.completed || 0} total={ov.total_rfis} color="text-success" isLast />
+        </div>
+
+        {(ov.rfis_rejected || 0) > 0 && (
+          <div className="mt-4 p-3 bg-orange-500/5 border border-orange-500/20 rounded-xl flex items-center gap-3">
+            <XCircle className="w-4 h-4 text-orange-500 shrink-0" />
+            <span className="text-sm">
+              <strong className="text-orange-500">{(ov.rfis_rejected || 0).toLocaleString()}</strong> inspections rejected — work sent back to the contractor and not yet re-submitted
+            </span>
+          </div>
+        )}
+
+        {Object.keys(rfiByHandler).length > 0 && (
+          <div className="mt-4 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mr-1">Open with</span>
+            {Object.entries(rfiByHandler)
+              .sort((a: any, b: any) => b[1] - a[1])
+              .map(([handler, count]: any) => (
+                <span key={handler} className="px-2.5 py-1 rounded-lg bg-muted text-xs font-semibold">
+                  <span className={HANDLER_CONFIG[handler]?.color || 'text-muted-foreground'}>
+                    {HANDLER_CONFIG[handler]?.label || handler}
+                  </span>
+                  <span className="text-muted-foreground ml-1.5">{count.toLocaleString()}</span>
+                </span>
+              ))}
           </div>
         )}
       </div>

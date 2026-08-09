@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   Shield, AlertTriangle, CheckCircle2, Clock, Users, XCircle,
-  Package, MapPin, Search, Filter, ChevronDown
+  Package, MapPin, Search, Filter, ChevronDown, ClipboardCheck
 } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -89,12 +89,14 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
     );
   }
 
-  if (!data || data.total_ncs === 0) {
+  // A project can have inspections without any non-conformances, so only show the
+  // empty state when neither exists — otherwise its RFI record would be hidden.
+  if (!data || (data.total_ncs === 0 && data.total_rfis === 0)) {
     return (
       <div className="flex flex-col items-center justify-center py-20 text-center">
         <CheckCircle2 className="w-12 h-12 text-success/40 mb-3" />
-        <h3 className="font-semibold text-lg">No Quality Issues</h3>
-        <p className="text-sm text-muted-foreground mt-1">No NCs have been recorded for this project. Try syncing data.</p>
+        <h3 className="font-semibold text-lg">No Quality Records</h3>
+        <p className="text-sm text-muted-foreground mt-1">No NCs or inspections have been recorded for this project. Try syncing data.</p>
       </div>
     );
   }
@@ -116,7 +118,10 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
         <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">RFI Progress</span>
           <span className="text-2xl font-bold text-success">{data.rfis_completed}<span className="text-sm text-muted-foreground font-normal">/{data.total_rfis}</span></span>
-          <span className="text-[10px] text-muted-foreground">{data.total_rfis > 0 ? Math.round(data.rfis_completed / data.total_rfis * 100) : 0}% completed</span>
+          <span className="text-[10px] text-muted-foreground">
+            {data.total_rfis > 0 ? Math.round(data.rfis_completed / data.total_rfis * 100) : 0}% passed
+            {(data.rfis_rejected || 0) > 0 && <span className="text-orange-500 font-semibold"> · {data.rfis_rejected} rejected</span>}
+          </span>
         </div>
         <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Closure Rate</span>
@@ -129,6 +134,45 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
           <span className="text-[10px] text-muted-foreground">Composite quality metric</span>
         </div>
       </div>
+
+      {/* ── Inspections (RFI) ── */}
+      {(data.total_rfis || 0) > 0 && (
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+          <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground mb-4 flex items-center gap-2">
+            <ClipboardCheck className="w-3.5 h-3.5 text-primary" /> Inspections
+            <span className="text-foreground ml-1">{data.total_rfis} raised</span>
+          </h3>
+          <div className="grid grid-cols-3 gap-3">
+            <div className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl bg-success/10">
+              <span className="text-3xl font-black text-success">{data.rfis_completed || 0}</span>
+              <span className="text-[9px] font-bold text-success uppercase tracking-widest">Passed</span>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl bg-orange-500/10">
+              <span className="text-3xl font-black text-orange-500">{data.rfis_rejected || 0}</span>
+              <span className="text-[9px] font-bold text-orange-500 uppercase tracking-widest text-center leading-tight">Rejected<br />Re-work</span>
+            </div>
+            <div className="flex flex-col items-center justify-center gap-1 p-4 rounded-xl bg-blue-500/10">
+              <span className="text-3xl font-black text-blue-500">{data.rfis_in_flight || 0}</span>
+              <span className="text-[9px] font-bold text-blue-500 uppercase tracking-widest text-center leading-tight">In Flight<br />Awaiting</span>
+            </div>
+          </div>
+          {Object.keys(data.rfi_by_handler || {}).length > 0 && (
+            <div className="mt-4 flex flex-wrap items-center gap-2">
+              <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mr-1">Open with</span>
+              {Object.entries(data.rfi_by_handler)
+                .sort((a: any, b: any) => b[1] - a[1])
+                .map(([handler, count]: any) => (
+                  <span key={handler} className="px-2.5 py-1 rounded-lg bg-muted text-[11px] font-semibold">
+                    <span className={HANDLER_LABELS[handler]?.color || 'text-muted-foreground'}>
+                      {HANDLER_LABELS[handler]?.label?.replace(' Pending', '') || handler}
+                    </span>
+                    <span className="text-muted-foreground ml-1.5">{count}</span>
+                  </span>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ── Analytics Grid ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

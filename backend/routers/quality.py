@@ -29,6 +29,41 @@ def get_quality_overview(
     all_ncs = q.all()
     total = len(all_ncs)
 
+    # ── RFI aggregates ──
+    # RFIs outnumber NCs ~76:1 (43k+ rows), so these are grouped in SQL rather
+    # than loaded into memory the way the NC breakdowns below are.
+    rfi_status_q = db.query(models.PulseRFI.status, func.count(models.PulseRFI.id))
+    rfi_handler_q = db.query(models.PulseRFI.current_handler, func.count(models.PulseRFI.id)) \
+        .filter(models.PulseRFI.status != "completed")
+    if cluster:
+        rfi_status_q = rfi_status_q.filter(models.PulseRFI.cluster_name == cluster)
+        rfi_handler_q = rfi_handler_q.filter(models.PulseRFI.cluster_name == cluster)
+
+    rfi_by_status = {
+        (s or "unknown"): c
+        for s, c in rfi_status_q.group_by(models.PulseRFI.status).all()
+    }
+    rfi_by_handler = {
+        (h or "unknown"): c
+        for h, c in rfi_handler_q.group_by(models.PulseRFI.current_handler).all()
+    }
+
+    total_rfis = sum(rfi_by_status.values())
+    rfis_completed = rfi_by_status.get("completed", 0)
+    rfis_rejected = rfi_by_status.get("rejected", 0)
+    # In-flight: raised/submitted/approved — awaiting someone's sign-off.
+    rfis_in_flight = total_rfis - rfis_completed - rfis_rejected
+
+    rfi_stats = {
+        "total_rfis": total_rfis,
+        "rfis_completed": rfis_completed,
+        "rfis_rejected": rfis_rejected,
+        "rfis_in_flight": rfis_in_flight,
+        "rfi_pass_rate": round((rfis_completed / total_rfis) * 100, 1) if total_rfis else 0,
+        "rfi_by_status": rfi_by_status,
+        "rfi_by_handler": rfi_by_handler,
+    }
+
     if total == 0:
         return {
             "total_ncs": 0, "open_ncs": 0, "critical_open": 0,
@@ -37,6 +72,7 @@ def get_quality_overview(
             "by_status": {}, "by_category": {}, "by_cluster": {},
             "by_handler": {}, "by_package": {},
             "aging": {}, "trend": [], "top_defects": [],
+            **rfi_stats,
         }
 
     now = datetime.now(timezone.utc).replace(tzinfo=None)
@@ -145,6 +181,7 @@ def get_quality_overview(
         "aging": aging,
         "trend": trend,
         "top_defects": top_defects,
+        **rfi_stats,
     }
 
 
@@ -281,6 +318,15 @@ def get_project_quality(project_name: str, db: Session = Depends(get_db)):
     total_ncs = len(ncs)
     total_rfis = len(rfis)
     rfis_completed = sum(1 for r in rfis if r.status == "completed")
+    rfis_rejected = sum(1 for r in rfis if r.status == "rejected")
+    rfis_in_flight = total_rfis - rfis_completed - rfis_rejected
+
+    # Who is holding the open RFIs on this project
+    rfi_by_handler = {}
+    for r in rfis:
+        if r.status != "completed":
+            key = r.current_handler or "unknown"
+            rfi_by_handler[key] = rfi_by_handler.get(key, 0) + 1
 
     # NC status breakdown
     by_status = {}
@@ -347,6 +393,9 @@ def get_project_quality(project_name: str, db: Session = Depends(get_db)):
         "total_ncs": total_ncs,
         "total_rfis": total_rfis,
         "rfis_completed": rfis_completed,
+        "rfis_rejected": rfis_rejected,
+        "rfis_in_flight": rfis_in_flight,
+        "rfi_by_handler": rfi_by_handler,
         "quality_score": quality_score,
         "closure_rate": closure_rate,
         "by_status": by_status,
