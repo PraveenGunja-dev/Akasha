@@ -2,6 +2,7 @@ import os
 import sys
 from pathlib import Path
 import unittest
+from unittest.mock import patch
 
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
@@ -10,7 +11,13 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from engine.agent import TOOLS, _tools_for_request
-from engine.graph.tools import RiskMetricArguments, model_tool_schemas
+from engine.graph.tools import ARGUMENT_MODELS, RiskMetricArguments, model_tool_schemas
+from engine.model_provider import (
+    OpenAIProvider,
+    OpenRouterProvider,
+    _responses_tools,
+    _validate_function_tools,
+)
 from engine.graph.tool_router import select_tool_route
 from pydantic import ValidationError
 
@@ -34,6 +41,52 @@ class ToolRouterTests(unittest.TestCase):
     def assertExcludes(self, result, *names):
         for name in names:
             self.assertNotIn(name, result.tool_names)
+
+    def test_complete_tool_catalog_is_provider_portable(self):
+        schemas = model_tool_schemas()
+        canonical_names = tuple(tool["function"]["name"] for tool in schemas)
+
+        self.assertEqual(len(canonical_names), 41)
+        self.assertEqual(len(canonical_names), len(set(canonical_names)))
+        self.assertEqual(set(canonical_names), set(ARGUMENT_MODELS))
+        self.assertEqual(_validate_function_tools(schemas), canonical_names)
+
+        # OpenRouter receives the canonical Chat Completions schemas. OpenAI's
+        # Responses adapter flattens only the function wrapper; names and JSON
+        # parameter contracts must remain byte-for-byte equivalent.
+        openai_tools = _responses_tools(schemas)
+        self.assertEqual(
+            tuple(tool["name"] for tool in openai_tools),
+            canonical_names,
+        )
+        for canonical, translated in zip(schemas, openai_tools):
+            self.assertEqual(
+                translated["parameters"],
+                canonical["function"]["parameters"],
+            )
+            self.assertEqual(
+                translated.get("description"),
+                canonical["function"].get("description"),
+            )
+
+    def test_langgraph_binds_the_same_complete_catalog_to_both_providers(self):
+        schemas = model_tool_schemas()
+        environment = {
+            "OPENAI_MODEL": "gpt-5.6-luna",
+            "OPENAI_API_KEY": "test-openai-key",
+            "OPENROUTER_MODEL": "test/router-model",
+            "OPENROUTER_API_KEY": "test-openrouter-key",
+            "DATABASE_URL": "sqlite:///:memory:",
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            openai_bound = OpenAIProvider().chat_model().bind_tools(schemas)
+            openrouter_bound = OpenRouterProvider().chat_model().bind_tools(schemas)
+
+        self.assertEqual(
+            openai_bound.kwargs["tools"],
+            openrouter_bound.kwargs["tools"],
+        )
+        self.assertEqual(len(openai_bound.kwargs["tools"]), 41)
 
     def test_current_project_progress_gets_focused_p6_tools(self):
         result = route(

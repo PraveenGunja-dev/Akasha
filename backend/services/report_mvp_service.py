@@ -28,6 +28,7 @@ from services.visualization_spec import (
     duration_comparison_spec,
     portfolio_status_spec,
     planned_vs_actual_progress_spec,
+    project_capacity_comparison_spec,
     project_progress_spec,
 )
 from services import transmission_service
@@ -348,18 +349,24 @@ def build_project_comparison_dataset(db, project_ids: list[str]) -> dict:
             **row,
             "capacity_mwac": catalog.capacity_mwac if catalog else None,
             "spv_name": catalog.spv_name if catalog else None,
-            "status": "Delayed" if (row.get("baseline_slip_days") or 0) > 0 else "On track",
+            "status": (
+                "P6 unavailable"
+                if not row.get("p6_available")
+                else "Delayed" if (row.get("baseline_slip_days") or 0) > 0
+                else "On track"
+            ),
         })
     if len(rows) < 2:
-        raise ValueError("Schedule data is unavailable for enough projects to create a comparison report.")
+        raise ValueError("Project mapping data is unavailable for enough projects to create a comparison report.")
     cutoffs = [row["data_as_of"] for row in rows if row.get("data_as_of")]
     cutoff = max(cutoffs, default=None)
-    visualizations = [
+    visualizations = [spec for spec in [
         project_progress_spec(rows, title="Project Comparison — % Complete"),
         activity_composition_spec(rows),
         duration_comparison_spec(rows),
         baseline_slip_spec(rows),
-    ]
+        project_capacity_comparison_spec(rows),
+    ] if spec is not None][:4]
     return {
         "metadata": {
             "report_type": COMPARISON_REPORT_TYPE,
@@ -371,11 +378,12 @@ def build_project_comparison_dataset(db, project_ids: list[str]) -> dict:
             "limitations": [
                 "SPI/CPI are reported only when present in the synchronized extract.",
                 "Forecast-versus-baseline slippage is a direct calendar-date comparison, not a historical progress curve.",
+                "Catalog attributes remain comparable when P6 schedule metrics are unavailable.",
             ],
         },
         "projects": rows,
         "report_visualizations": {
-            spec.chart_id: spec.transport() for spec in visualizations if spec is not None
+            spec.chart_id: spec.transport() for spec in visualizations
         },
     }
 

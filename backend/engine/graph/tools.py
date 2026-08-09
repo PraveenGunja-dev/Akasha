@@ -503,6 +503,19 @@ def execute_authenticated_tool(
 
 
 def model_tool_schemas() -> list[dict]:
+    declared_names = [
+        str((tool.get("function") or {}).get("name") or "")
+        for tool in TOOLS
+    ]
+    if len(declared_names) != len(set(declared_names)):
+        raise RuntimeError("The Akasha tool catalog contains duplicate names.")
+    missing_models = sorted(set(declared_names) - set(ARGUMENT_MODELS))
+    orphan_models = sorted(set(ARGUMENT_MODELS) - set(declared_names))
+    if missing_models or orphan_models:
+        raise RuntimeError(
+            "The Akasha tool catalog and argument models are out of sync: "
+            f"missing={missing_models}, orphaned={orphan_models}."
+        )
     schemas = []
     for legacy_tool in TOOLS:
         tool = deepcopy(legacy_tool)

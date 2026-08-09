@@ -124,6 +124,45 @@ class ChartSpecServiceTests(unittest.TestCase):
         }
         self.assertEqual(slips["Project One P6"], 361)
 
+    def test_project_comparison_preserves_mapping_facts_without_p6(self):
+        self.db.add(models.ProjectMapping(
+            project_id="P-2",
+            project="Project Two",
+            project_name_from_p6="Project Two PSS-05 (39 Loc.)",
+            cluster="Wind",
+            capacity_mwac=202.8,
+        ))
+        mapping = self.db.query(models.ProjectMapping).filter_by(project_id="P-1").one()
+        mapping.project_name_from_p6 = "Project One PSS-08 (05 Loc.)"
+        mapping.cluster = "Wind"
+        mapping.capacity_mwac = 26.0
+        self.db.commit()
+
+        data = ChartSpecService.project_comparison(self.db, ["P-1", "P-2"])
+
+        self.assertEqual(len(data["projects"]), 2)
+        self.assertEqual(data["projects"][0]["capacity_mwac"], 26.0)
+        self.assertEqual(data["projects"][0]["location_count"], 5)
+        self.assertFalse(data["projects"][0]["p6_available"])
+        self.assertIsNone(data["projects"][0]["progress_pct"])
+        self.assertEqual(data["projects"][1]["capacity_mwac"], 202.8)
+
+        dashboard, confirmation = build_chart_result(self.db, {
+            "chart_type": "project_comparison",
+            "project_ids": ["P-1", "P-2"],
+        })
+        self.assertEqual(len(dashboard["charts"]), 1)
+        self.assertEqual(
+            dashboard["charts"][0]["chart_type"],
+            "project_capacity_comparison",
+        )
+        self.assertEqual(
+            dashboard["charts"][0]["data_table"][1]["location_count"],
+            39,
+        )
+        self.assertIn('"capacity_mwac": 202.8', confirmation)
+        self.assertIn('"p6_available": false', confirmation)
+
     def test_daily_trend_and_block_snapshot_use_grounded_p6_events(self):
         self.db.add(models.P6Project(
             p6_object_id=11,

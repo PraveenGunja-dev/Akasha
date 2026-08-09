@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import defaultdict
+import re
 
 from sqlalchemy.orm import Session
 
@@ -53,30 +54,43 @@ class ChartSpecService:
         for project_id in project_ids:
             project = ProjectCatalogService.get_by_project_id(db, project_id)
             schedule = ScheduleMetricsService.get_by_project_id(db, project_id)
-            if schedule.p6_available:
-                forecast_finish = schedule.finish_date
-                baseline_finish = schedule.baseline_finish
-                baseline_slip_days = None
-                if forecast_finish is not None and baseline_finish is not None:
-                    forecast_date = forecast_finish.date() if hasattr(forecast_finish, "date") else forecast_finish
-                    baseline_date = baseline_finish.date() if hasattr(baseline_finish, "date") else baseline_finish
-                    baseline_slip_days = (forecast_date - baseline_date).days
-                rows.append({
-                    "project_id": project_id,
-                    "project_name": project.display_name if project else project_id,
-                    "progress_pct": schedule.progress_pct or 0,
-                    "completed_activities": schedule.completed_activities or 0,
-                    "in_progress_activities": schedule.in_progress_activities or 0,
-                    "not_started_activities": schedule.not_started_activities or 0,
-                    "planned_duration": schedule.planned_duration,
-                    "actual_duration": schedule.actual_duration,
-                    "remaining_duration": schedule.remaining_duration,
-                    "baseline_slip_days": baseline_slip_days,
-                    "forecast_finish": forecast_date.isoformat() if forecast_finish is not None else None,
-                    "baseline_finish": baseline_date.isoformat() if baseline_finish is not None else None,
-                    "data_as_of": schedule.freshness["data_as_of"],
-                })
-        rows.sort(key=lambda row: row["progress_pct"], reverse=True)
+            if project is None and not schedule.p6_available:
+                continue
+
+            forecast_finish = schedule.finish_date if schedule.p6_available else None
+            baseline_finish = schedule.baseline_finish if schedule.p6_available else None
+            forecast_date = forecast_finish.date() if hasattr(forecast_finish, "date") else forecast_finish
+            baseline_date = baseline_finish.date() if hasattr(baseline_finish, "date") else baseline_finish
+            baseline_slip_days = None
+            if forecast_date is not None and baseline_date is not None:
+                baseline_slip_days = (forecast_date - baseline_date).days
+
+            display_name = project.display_name if project else project_id
+            location_match = re.search(r"\((\d+)\s*Loc\.?\)", display_name, re.IGNORECASE)
+            rows.append({
+                "project_id": project_id,
+                "project_name": display_name,
+                "cluster": project.cluster if project else None,
+                "subcluster": project.subcluster if project else None,
+                "category": project.category if project else None,
+                "capacity_mwac": project.capacity_mwac if project else None,
+                "capacity_mwdc": project.capacity_mwdc if project else None,
+                "location_count": int(location_match.group(1)) if location_match else None,
+                "p6_available": schedule.p6_available,
+                # Zero is a real schedule metric, not a substitute for missing P6 data.
+                "progress_pct": schedule.progress_pct if schedule.p6_available else None,
+                "completed_activities": schedule.completed_activities if schedule.p6_available else None,
+                "in_progress_activities": schedule.in_progress_activities if schedule.p6_available else None,
+                "not_started_activities": schedule.not_started_activities if schedule.p6_available else None,
+                "planned_duration": schedule.planned_duration if schedule.p6_available else None,
+                "actual_duration": schedule.actual_duration if schedule.p6_available else None,
+                "remaining_duration": schedule.remaining_duration if schedule.p6_available else None,
+                "baseline_slip_days": baseline_slip_days,
+                "forecast_finish": forecast_date.isoformat() if forecast_date is not None else None,
+                "baseline_finish": baseline_date.isoformat() if baseline_date is not None else None,
+                "data_as_of": schedule.freshness["data_as_of"] if schedule.p6_available else None,
+                "unavailable_metrics": [] if schedule.p6_available else ["P6 schedule"],
+            })
         return {"projects": rows, "sources": ["project_mapping", "p6_project"]}
 
     @staticmethod

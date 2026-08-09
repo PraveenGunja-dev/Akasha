@@ -337,8 +337,53 @@ def project_progress_spec(rows: list[dict], *, title: str = "Portfolio Progress 
     )
 
 
+def project_capacity_comparison_spec(rows: list[dict]) -> VisualizationSpecV1 | None:
+    usable = [
+        row for row in rows
+        if row.get("project_name") and row.get("capacity_mwac") is not None
+    ]
+    if len(usable) < 2:
+        return None
+    values = [float(row["capacity_mwac"]) for row in usable]
+    largest = max(usable, key=lambda row: float(row["capacity_mwac"]))
+    return VisualizationSpecV1(
+        chart_id="comparison.installed-capacity",
+        chart_type="project_capacity_comparison",
+        shape="vertical_bar",
+        title="Installed Capacity Comparison",
+        subtitle="Mapped project capacity; independent of P6 schedule availability",
+        summary=(
+            f"{largest['project_name']} has the largest mapped capacity at "
+            f"{float(largest['capacity_mwac']):g} MW AC."
+        ),
+        accessibility_description="Vertical bars compare mapped project capacity in megawatts AC.",
+        categories=[str(row["project_name"]) for row in usable],
+        series=[VisualizationSeriesV1(
+            name="Capacity",
+            shape="bar",
+            values=values,
+            semantic_color="primary",
+            value_format="decimal",
+        )],
+        x_axis_title="Project",
+        y_axis_title="Capacity (MW AC)",
+        source_tables=["project_mapping"],
+        data_table=[{
+            "project_id": row.get("project_id"),
+            "project_name": row["project_name"],
+            "capacity_mwac": row.get("capacity_mwac"),
+            "location_count": row.get("location_count"),
+            "cluster": row.get("cluster"),
+            "p6_available": row.get("p6_available", False),
+        } for row in usable],
+    )
+
+
 def activity_composition_spec(rows: list[dict]) -> VisualizationSpecV1 | None:
-    usable = [row for row in rows if row.get("project_name")]
+    usable = [
+        row for row in rows
+        if row.get("project_name") and row.get("p6_available", True)
+    ]
     if not usable:
         return None
     categories = [str(row["project_name"]) for row in usable]

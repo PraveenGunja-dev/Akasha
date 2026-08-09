@@ -31,6 +31,7 @@ from services.visualization_spec import (
     daily_completion_spec,
     duration_comparison_spec,
     planned_vs_actual_progress_spec,
+    project_capacity_comparison_spec,
     project_progress_spec,
 )
 
@@ -402,6 +403,7 @@ def build_project_comparison_dashboard(db: Session, project_ids: list[str]) -> l
         activity_composition_spec(rows),
         duration_comparison_spec(rows),
         baseline_slip_spec(rows),
+        project_capacity_comparison_spec(rows),
     ]
     return [_chart_from_semantic(spec) for spec in specs if spec is not None][:4]
 
@@ -460,23 +462,31 @@ def _chart_activity_status(db: Session, project_id: str) -> dict:
 
 def _chart_project_comparison(db: Session, project_ids: list) -> dict:
     data = ChartSpecService.project_comparison(db, project_ids)
-    rows = [(row["project_name"], row["progress_pct"]) for row in data["projects"]]
-    if not rows:
+    projects = data["projects"]
+    if not projects:
         return _no_data("project_comparison", "None of the requested projects were found.")
 
-    rows.sort(key=lambda r: r[1], reverse=True)
+    semantic = project_progress_spec(projects, title="Project Comparison — % Complete")
+    if semantic is None:
+        semantic = project_capacity_comparison_spec(projects)
+    if semantic is None:
+        return _no_data(
+            "project_comparison",
+            "The projects were found, but no common comparison metric is available.",
+        )
+    rows = list(zip(semantic.categories, semantic.series[0].values))
     categories = [r[0] for r in rows]
     values = [r[1] for r in rows]
-    semantic = project_progress_spec(data["projects"], title="Project Comparison — % Complete")
+    unit = "%" if semantic.chart_type == "project_comparison" else " MW AC"
     return {
-        "chart_type": "project_comparison",
-        "title": "Project Comparison — % Complete",
+        "chart_type": semantic.chart_type,
+        "title": semantic.title,
         "data_points": len(rows),
         # Single measure across entities → single hue (not categorical), per dataviz rules.
         "option": _hbar_option(
-            "Project Comparison — % Complete", f"{len(rows)} projects",
-            categories, [{"name": "% Complete", "data": values, "color": PALETTE[0]}],
-            value_formatter="{value}%",
+            semantic.title, f"{len(rows)} projects",
+            categories, [{"name": semantic.series[0].name, "data": values, "color": PALETTE[0]}],
+            value_formatter=f"{{value}}{unit}",
         ),
         "visualization_spec": _semantic_transport(semantic),
         "summary": semantic.summary if semantic else None,

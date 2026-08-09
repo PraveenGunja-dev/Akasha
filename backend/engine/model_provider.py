@@ -276,13 +276,38 @@ def _responses_input(messages: list[Any]) -> list[dict[str, Any]]:
     return result
 
 
+def _validate_function_tools(tools: list[dict[str, Any]]) -> tuple[str, ...]:
+    """Fail closed if a provider would receive a partial or malformed tool catalog."""
+    names = []
+    for tool in tools:
+        function = tool.get("function") if isinstance(tool, Mapping) else None
+        if tool.get("type") != "function" or not isinstance(function, Mapping):
+            raise ProviderConfigurationError("Akasha model tools must use function-tool schemas.")
+        name = str(function.get("name") or "").strip()
+        parameters = function.get("parameters")
+        if not name or not isinstance(parameters, Mapping):
+            raise ProviderConfigurationError(
+                "Every Akasha model tool requires a name and JSON-schema parameters."
+            )
+        if name in names:
+            raise ProviderConfigurationError(f"Duplicate model tool name: {name}")
+        names.append(name)
+    return tuple(names)
+
+
 def _responses_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    expected_names = _validate_function_tools(tools)
     converted = []
     for tool in tools:
         if tool.get("type") == "function" and isinstance(tool.get("function"), Mapping):
             converted.append({"type": "function", **dict(tool["function"])})
         else:
             converted.append(dict(tool))
+    converted_names = tuple(str(tool.get("name") or "") for tool in converted)
+    if converted_names != expected_names:
+        raise ProviderConfigurationError(
+            "OpenAI tool-schema translation changed the canonical tool catalog."
+        )
     return converted
 
 
@@ -395,6 +420,8 @@ class ModelProvider(ABC):
         if vision:
             required.append("vision")
         self.require_capabilities(*required)
+        if tools:
+            _validate_function_tools(tools)
 
         kwargs: dict[str, Any] = {
             "model": self.model,
@@ -721,6 +748,8 @@ class OpenAIProvider(ModelProvider):
         if kwargs.get("vision"):
             required.append("vision")
         self.require_capabilities(*required)
+        if kwargs.get("tools"):
+            _validate_function_tools(kwargs["tools"])
 
         options = self._request_options(
             messages,

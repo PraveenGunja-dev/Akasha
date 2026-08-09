@@ -62,6 +62,7 @@ from services.dynamic_visualization import (
     build_dynamic_visualization,
     visualization_catalog_summary,
 )
+from services.chart_spec_service import ChartSpecService
 from engine.kpi_engine import compute_project_kpis
 from engine.response_quality import (
     EXECUTIVE_REWRITE_INSTRUCTION,
@@ -1130,11 +1131,17 @@ def build_chart_result(db: Session, kwargs: dict):
     if requested_type in {"project_comparison", "auto"} and len(project_ids) >= 2:
         charts = build_project_comparison_dashboard(db, project_ids)
         if charts:
+            comparison = ChartSpecService.project_comparison(db, project_ids)
             confirmation = json.dumps({
                 "status": "chart_dashboard_rendered",
                 "chart_type": "project_comparison_dashboard",
                 "chart_count": len(charts),
                 "titles": [chart.get("title") for chart in charts],
+                "comparison": comparison.get("projects", []),
+                "guidance": (
+                    "Compare available mapping facts even when P6 schedule metrics are unavailable; "
+                    "keep unavailable schedule values null and disclose that limitation."
+                ),
             })
             return {
                 "schema_version": "visualization.bundle.v1",
@@ -1644,6 +1651,7 @@ def run_deep_analysis_agent_stream(
                 "- When discussing data, write naturally like a senior human analyst reporting to leadership. Do not sound like a robotic chatbot.\n"
                 "- AVOID all AI clichés (e.g., \"It is important to note,\" \"Furthermore,\" \"Delve,\" \"In conclusion\", \"Based on the provided data\").\n"
                 "- Get straight to the point. Give the exact numbers requested.\n"
+                "- For project comparisons, compare available mapping facts such as capacity, cluster, and location count even if P6 is unavailable. Never treat missing P6 as missing project data.\n"
                 "- Use bold text to highlight key metrics or variances to make it easy for humans to read.\n"
                 "- When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules.\n"
                 "- ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
