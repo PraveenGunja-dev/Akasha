@@ -9,6 +9,7 @@ sys.path.append(backend_dir)
 
 import models
 from database import engine, SessionLocal
+from scripts.ingest_sap_data import build_wbs_mapping, match_wbs_to_master
 
 def parse_date(date_str):
     if not date_str:
@@ -27,6 +28,9 @@ def parse_date(date_str):
         return None
 
 def ingest_einvoice():
+    print("Dropping old table if exists...")
+    models.EInvoiceRecord.__table__.drop(bind=engine, checkfirst=True)
+    
     print("Creating tables if not exists...")
     models.Base.metadata.create_all(bind=engine)
     
@@ -37,6 +41,13 @@ def ingest_einvoice():
     if not os.path.exists(einvoice_path):
         print(f"Error: Could not find E-Invoice data at {einvoice_path}")
         return
+        
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE.xlsx")
+    print("Building WBS mapping from SAP Master...")
+    wbs_map = build_wbs_mapping(master_path)
+    
+    print("Pre-loading PO to WBS mappings...")
+    po_wbs = {po.purchasing_document: po.wbs_element for po in db.query(models.MTPOAmount.purchasing_document, models.MTPOAmount.wbs_element).all() if po.purchasing_document}
 
     print("Reading E-Invoice JSON data...")
     with open(einvoice_path, 'r', encoding='utf-8') as f:
@@ -66,6 +77,17 @@ def ingest_einvoice():
         except ValueError:
             so_amt = 0.0
 
+        work_order_no = inv.get('workOrderNo')
+        
+        # Try to resolve p6ProjectName
+        p6_proj_name = None
+        if work_order_no:
+            wbs = po_wbs.get(work_order_no)
+            if wbs:
+                match = match_wbs_to_master(wbs, wbs_map)
+                if match:
+                    p6_proj_name = match.get('project_name')
+
         record = models.EInvoiceRecord(
             invoiceNo=inv.get('invoiceNo'),
             invoiceCode=inv.get('invoiceCode'),
@@ -82,7 +104,9 @@ def ingest_einvoice():
             invoiceDate=parse_date(inv.get('invoiceDate')),
             createdAt=parse_date(inv.get('createdAt')),
             completionDate=parse_date(inv.get('completionDate')),
-            workDescription=inv.get('workDescription')
+            workDescription=inv.get('workDescription'),
+            workOrderNo=work_order_no,
+            p6ProjectName=p6_proj_name
         )
         records.append(record)
 

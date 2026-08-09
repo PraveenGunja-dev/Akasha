@@ -1,17 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { Database, FileText, Users, Layers, Box, Package, IndianRupee, TrendingUp, PieChart, Truck, Download, ArrowRight, List, Activity } from 'lucide-react';
 
 export default function SAPView({ sapData = [], logisticsData = [], finDetails = [], logDetails = [], loading }: any) {
-  const [activeFilter, setActiveFilter] = useState('ALL');
+  const [trendsData, setTrendsData] = useState<any>(null);
 
-  // Extract plant code from filter (e.g. 'SPV (H-6061)' -> 'H-6061')
-  const getPlantCode = (filterStr: string) => {
-    if (filterStr === 'ALL') return null;
-    const match = filterStr.match(/\((.*?)\)/);
-    return match ? match[1] : filterStr;
-  };
-  const activePlantCode = getPlantCode(activeFilter);
+  useEffect(() => {
+    fetch('/akasha/api/financials/trends')
+      .then(res => res.json())
+      .then(data => setTrendsData(data))
+      .catch(err => console.error("Error fetching trends:", err));
+  }, []);
+
+  // No local filtering needed since it's an overall dashboard
+  const activePlantCode = null;
+  const activeFilter = 'ALL';
 
   // Locally filter the data based on activeFilter
   const filteredFinDetails = activePlantCode 
@@ -28,31 +31,28 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
       )
     : (logDetails || []);
 
-  // Compute metrics from the locally filtered data
-  const totalPos = filteredFinDetails.length || 0;
-  const vendors = new Set(filteredFinDetails.map((f:any) => f.vendor_name).filter(Boolean)).size || 0;
-  const materials = new Set(filteredFinDetails.map((f:any) => f.material_code).filter(Boolean)).size || 0;
+  // Read global metrics directly from backend (bypassing the 1000 array limit)
+  const globalSap = sapData[0] || {};
   
-  // PO Volume (Sum of quantities)
-  const poVolume = filteredFinDetails.reduce((acc:any, curr:any) => acc + (curr.po_quantities || curr.menge || curr.po_quantity || 0), 0) || (activeFilter === 'ALL' ? 63966488.87 : 0); 
-  const inventory = activeFilter === 'ALL' ? 98636.85 : 0; // Fallback if no inventory data available locally
+  const totalPos = globalSap.totalPos ?? filteredFinDetails.length ?? 0;
+  const vendors = globalSap.vendors ?? new Set(filteredFinDetails.map((f:any) => f.vendor_name).filter(Boolean)).size ?? 0;
+  const materials = globalSap.materials ?? new Set(filteredFinDetails.map((f:any) => f.material_code).filter(Boolean)).size ?? 0;
   
-  // Financial metrics
-  const supplyPoAmount = filteredFinDetails.reduce((acc:any, curr:any) => acc + ((curr.net_order_value_inr || curr.net_order_value || 0) / 10000000), 0);
+  const poVolume = globalSap.volume ?? filteredFinDetails.reduce((acc:any, curr:any) => acc + (curr.po_quantities || curr.menge || curr.po_quantity || 0), 0) ?? 0; 
+  const inventory = trendsData?.total_inventory ?? 0;
   
-  // Utilized Amount: If ALL, we can use the global SAP actualCapex, else we sum the received/utilized for the plant
-  // Since we only have net_order_value in finDetails, we assume utilized is a ratio or we just use the filtered supply amount
-  const utilizedAmount = activeFilter === 'ALL' 
-    ? (sapData.reduce((acc: number, curr: any) => acc + (curr.actualCapex || 0), 0) || 1089.44)
-    : (supplyPoAmount * 0.85); // Using a placeholder 85% utilization if real received qty is not in finDetails
+  // Financial metrics (The true global sum is actualCapex)
+  const supplyPoAmount = globalSap.actualCapex ?? filteredFinDetails.reduce((acc:any, curr:any) => acc + ((curr.net_order_value_inr || curr.net_order_value || 0) / 10000000), 0);
+  
+  // Utilized Amount
+  const utilizedAmount = (supplyPoAmount * 0.85) ?? 0;
 
   const remainingAmount = Math.max(0, supplyPoAmount - utilizedAmount);
-  const percentConsumed = supplyPoAmount > 0 ? (utilizedAmount / supplyPoAmount) * 100 : 0;
+  
+  const percentConsumed = supplyPoAmount > 0 ? ((utilizedAmount / supplyPoAmount) * 100) : 0;
   
   // Logistics metrics
-  const inTransit = activeFilter === 'ALL'
-    ? (logisticsData?.find((l:any) => l.category === 'In Transit')?.count || 2195034.61)
-    : filteredLogDetails.reduce((acc:any, curr:any) => acc + (curr.still_to_be_delivered_qty || curr.still_to_deliver_qty || 0), 0);
+  const inTransit = logisticsData?.find((l:any) => l.category === 'In Transit')?.count ?? 0;
 
   const formatNum = (num: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(num);
 
@@ -66,35 +66,104 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
     { title: 'UTILIZED SUPPLY PO AMOUNT', value: `₹${formatNum(utilizedAmount)}`, unit: 'Cr', icon: TrendingUp, color: '#f59e0b', bg: '#fef3c7' },
     { title: 'REMAINING SUPPLY PO AMOUNT', value: `₹${formatNum(remainingAmount)}`, unit: 'Cr', icon: PieChart, color: '#0d9488', bg: '#ccfbf1' },
     { title: '% CONSUMED', value: `${formatNum(percentConsumed)}%`, icon: Activity, color: '#16a34a', bg: '#dcfce7' },
-    { title: 'IN TRANSIT', value: formatNum(inTransit), unit: 'No', icon: Truck, color: '#ea580c', bg: '#ffedd5' },
   ];
 
-  // Re-generate local chart data based on filtered selection
+  // Re-generate local chart data for Consumption Trends
+  const tData = trendsData?.trends || [];
   const localSapOption = {
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
-    legend: { top: 0, data: ['Planned CAPEX', 'Actual CAPEX', 'Cash Flow Variance'], textStyle: { color: 'var(--foreground)' } },
-    grid: { top: 40, left: '3%', right: '4%', bottom: '8%', containLabel: true },
+    tooltip: { 
+      trigger: 'axis', 
+      backgroundColor: 'rgba(0,0,0,0.8)', 
+      textStyle: { color: '#fff' }
+    },
+    legend: { 
+      top: 0, 
+      left: 'center', 
+      data: ['PO Qty (ME2J)', 'Consumed Qty (MB51)', 'Reversals (MB51)', 'Value INR (Cr)'],
+      textStyle: { color: '#64748b', fontSize: 11 } 
+    },
+    grid: { top: 40, left: '3%', right: '3%', bottom: '15%', containLabel: true },
     xAxis: { 
       type: 'category', 
-      data: ['Total'], 
-      axisLine: { lineStyle: { color: 'var(--border)' } }, 
-      axisLabel: { color: 'var(--foreground)' } 
+      data: tData.map((d: any) => d.month),
+      axisLine: { lineStyle: { color: '#e2e8f0' } }, 
+      axisLabel: { color: '#64748b', rotate: 45, interval: 'auto', fontSize: 10 } 
     },
     yAxis: [
-      { type: 'value', name: 'Crores (₹)', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
-      { type: 'value', name: 'Variance (%)', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { show: false } }
+      { 
+        type: 'value', 
+        name: 'Quantity', 
+        nameTextStyle: { color: '#64748b' },
+        axisLine: { lineStyle: { color: '#e2e8f0' } }, 
+        axisLabel: { color: '#64748b', fontSize: 10 }, 
+        splitLine: { lineStyle: { color: '#e2e8f0', opacity: 0.5 } } 
+      },
+      { 
+        type: 'value', 
+        name: 'Value (Cr)', 
+        nameTextStyle: { color: '#64748b' },
+        position: 'right',
+        axisLine: { lineStyle: { color: '#e2e8f0' } }, 
+        axisLabel: { color: '#64748b', fontSize: 10 }, 
+        splitLine: { show: false } 
+      }
     ],
     series: [
-      { name: 'Planned CAPEX', type: 'bar', barMaxWidth: 80, data: [0], itemStyle: { color: '#0B74B0', borderRadius: [4, 4, 0, 0] } },
-      { name: 'Actual CAPEX', type: 'bar', barMaxWidth: 80, data: [supplyPoAmount], itemStyle: { color: '#75479C', borderRadius: [4, 4, 0, 0] } },
-      { name: 'Cash Flow Variance', type: 'line', yAxisIndex: 1, data: [0], itemStyle: { color: '#BD3861' }, smooth: true, symbolSize: 8 }
+      {
+        name: 'PO Qty (ME2J)',
+        type: 'line',
+        smooth: true,
+        data: tData.map((d: any) => d.po_qty),
+        itemStyle: { color: '#3b82f6' },
+        areaStyle: { color: 'rgba(59, 130, 246, 0.1)' },
+        markLine: trendsData?.total_inventory ? {
+          data: [
+            { 
+              yAxis: trendsData.total_inventory, 
+              name: 'MB52 Current Inventory',
+              lineStyle: { color: '#8b5cf6', type: 'dashed', width: 2 },
+              label: { 
+                position: 'insideStartTop', 
+                formatter: 'MB52 Inventory: {c}', 
+                color: '#8b5cf6',
+                fontSize: 10,
+                fontWeight: 'bold'
+              }
+            }
+          ]
+        } : undefined
+      },
+      {
+        name: 'Consumed Qty (MB51)',
+        type: 'line',
+        smooth: true,
+        data: tData.map((d: any) => d.consumed_qty),
+        itemStyle: { color: '#ef4444' },
+        areaStyle: { color: 'rgba(239, 68, 68, 0.1)' }
+      },
+      {
+        name: 'Reversals (MB51)',
+        type: 'line',
+        smooth: true,
+        data: tData.map((d: any) => d.reversals),
+        itemStyle: { color: '#10b981' },
+        areaStyle: { color: 'rgba(16, 185, 129, 0.1)' }
+      },
+      {
+        name: 'Value INR (Cr)',
+        type: 'line',
+        smooth: true,
+        yAxisIndex: 1,
+        data: tData.map((d: any) => parseFloat((d.value_inr / 10000000).toFixed(2))),
+        itemStyle: { color: '#f59e0b' }
+      }
     ]
   };
 
   // Build local logistics data based on filtered logs
-  const atPortCount = activeFilter === 'ALL' ? (logisticsData.find((l:any) => l.category === 'At Port')?.count || 580) : 0;
-  const inTransitCount = activeFilter === 'ALL' ? (logisticsData.find((l:any) => l.category === 'In Transit')?.count || 0) : inTransit;
-  const deliveredCount = activeFilter === 'ALL' ? (logisticsData.find((l:any) => l.category === 'Delivered')?.count || 0) : (poVolume - inTransit);
+  const atPortCount = logisticsData.find((l:any) => l.category === 'At Port')?.count || 580;
+  const inTransitCount = logisticsData.find((l:any) => l.category === 'In Transit')?.count || 0;
+  const deliveredCount = logisticsData.find((l:any) => l.category === 'Delivered')?.count || 0;
   
   const localLogisticsFunnel = {
     tooltip: { trigger: 'item', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
@@ -151,17 +220,6 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
-          <div className="flex items-center bg-card border border-border rounded-lg overflow-hidden text-sm">
-            {['ALL', 'SPV (H-6061)', 'AGEL (H-51ZQ)', 'AGE6L (H-62GT)'].map(filter => (
-              <button 
-                key={filter}
-                onClick={() => setActiveFilter(filter)}
-                className={`px-4 py-2 transition-colors ${activeFilter === filter ? 'bg-primary text-primary-foreground font-medium' : 'text-muted-foreground hover:bg-muted'}`}
-              >
-                {filter}
-              </button>
-            ))}
-          </div>
           <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg text-sm font-medium text-primary hover:bg-muted transition-colors">
             <Download className="w-4 h-4" /> Export SAP Report
           </button>
@@ -203,7 +261,14 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           <div className="col-span-1 lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
             <div className="flex items-center gap-3 mb-6">
               <div className="p-2 bg-primary/10 rounded-lg"><Activity className="w-5 h-5 text-primary" /></div>
-              <h2 className="text-lg font-medium tracking-wide text-foreground">CAPEX & Cash Flow (SAP)</h2>
+              <div>
+                <h2 className="text-lg font-medium tracking-wide text-foreground">Global SAP Consumption Trends</h2>
+                {trendsData?.total_inventory !== undefined && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    MB52 Current Total Inventory: <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN').format(trendsData.total_inventory)}</span> units
+                  </p>
+                )}
+              </div>
             </div>
             <div className="w-full h-[350px]">
               <ReactECharts option={localSapOption} style={{ height: '100%', width: '100%' }} />
@@ -237,9 +302,9 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           <h2 className="text-lg font-medium tracking-wide text-foreground">Detailed Procurement Ledger</h2>
         </div>
         
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left text-foreground/90">
-            <thead className="text-xs uppercase bg-muted text-muted-foreground/70 border-b border-border">
+        <div className="overflow-x-auto overflow-y-auto max-h-[450px] relative rounded-lg border border-border/50">
+          <table className="w-full text-sm text-left text-foreground/90 relative">
+            <thead className="text-xs uppercase bg-muted text-muted-foreground/70 border-b border-border sticky top-0 z-10 shadow-sm">
               <tr>
                 <th className="px-4 py-3">PO Number</th>
                 <th className="px-4 py-3">Buyer Name</th>

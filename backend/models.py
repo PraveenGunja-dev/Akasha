@@ -730,3 +730,11 @@ class EInvoiceRecord(Base):
     createdAt = Column(DateTime)
     completionDate = Column(DateTime)
     workDescription = Column(String)
+    workOrderNo = Column(String, index=True)
+    p6ProjectName = Column(String, index=True)
+    # Workflow fields
+    stage = Column(String, index=True)
+    isPending = Column(Boolean, default=False, index=True)
+    submittedOn = Column(DateTime)
+    currentApprover = Column(String)
+    latestAction = Column(String)

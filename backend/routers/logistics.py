@@ -93,6 +93,6 @@ def get_logistics_details(project_name: Optional[str] = None, portfolio: Optiona
         else:
             return []
             
-    results = query.order_by(models.MTPOAmount.still_to_deliver_qty.desc()).limit(100).all()
+    results = query.order_by(models.MTPOAmount.still_to_deliver_qty.desc()).limit(1000).all()
     _LOG_CACHE[cache_key] = {"data": results, "timestamp": time.time()}
     return results

@@ -1,28 +1,76 @@
-import React, { useState, useEffect } from 'react';
-import { rajasthanApi } from '../../services/rajasthanApi';
-import { khavdaApi } from '../../services/khavdaApi';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+import 'leaflet/dist/leaflet.css';
+import L from 'leaflet';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  RefreshCw, Search, X, ChevronDown, ChevronRight, Zap, MapPin,
+  AlertTriangle, CheckCircle2, Clock, Loader2, Database, Calendar, Package,
+} from 'lucide-react';
+import {
+  type TcEdge, statusMeta, voltageWeight, parseStageProgress, edgeCompletionPct, parseLengthKm,
+} from './transmission/gridHelpers';
+import { findSubstationCoord, type SubstationCoord } from './transmission/gridCoords';
+
+interface NetworkPayload {
+  nodes: any[];
+  edges: TcEdge[];
+}
+
+const EMPTY_NETWORK: NetworkPayload = { nodes: [], edges: [] };
+
+function substationIcon(color: string) {
+  return new L.DivIcon({
+    html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>`,
+    className: 'tc-substation-dot',
+    iconSize: [10, 10],
+    iconAnchor: [5, 5],
+  });
+}
+
+const SUBSTATION_ICON = substationIcon('#6366f1');
+
+function FitToPoints({ points }: { points: [number, number][] }) {
+  const map = useMap();
+  const fittedRef = useRef(false);
+  useEffect(() => {
+    if (fittedRef.current || points.length === 0) return;
+    fittedRef.current = true;
+    map.fitBounds(points, { padding: [40, 40], maxZoom: 7 });
+  }, [points, map]);
+  return null;
+}
+
+const REGION_FILTERS = ['all', 'Rajasthan', 'Khavda'] as const;
+const STATUS_FILTERS = ['all', 'charged', 'in_progress', 'under_bidding'] as const;
 
 export default function TransmissionDataViewer({ dashboardData }: { dashboardData?: any }) {
-  const [data, setData] = useState<any>({
-    rajasthanNetwork: null,
-    khavdaProjects: null,
-  });
+  const [rajasthanNetwork, setRajasthanNetwork] = useState<NetworkPayload>(EMPTY_NETWORK);
+  const [khavdaNetwork, setKhavdaNetwork] = useState<NetworkPayload>(EMPTY_NETWORK);
+  const [khavdaProjectsRaw, setKhavdaProjectsRaw] = useState<any>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [regionFilter, setRegionFilter] = useState<typeof REGION_FILTERS[number]>('all');
+  const [statusFilter, setStatusFilter] = useState<typeof STATUS_FILTERS[number]>('all');
+  const [mapSearch, setMapSearch] = useState('');
+
+  const [tableSearch, setTableSearch] = useState('');
+  const [selectedProject, setSelectedProject] = useState<any | null>(null);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   const fetchTransmissionData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const [kProjectsRes, rNetworkRes] = await Promise.all([
+      const [rajRes, khnRes, khpRes] = await Promise.all([
+        fetch('/akasha/api/tc/rajasthan/network').then(r => r.json()).catch(e => ({ error: e.message })),
+        fetch('/akasha/api/tc/khavda/network').then(r => r.json()).catch(e => ({ error: e.message })),
         fetch('/akasha/api/tc/khavda/projects').then(r => r.json()).catch(e => ({ error: e.message })),
-        fetch('/akasha/api/tc/rajasthan/network').then(r => r.json()).catch(e => ({ error: e.message }))
       ]);
-
-      setData({
-        rajasthanNetwork: rNetworkRes,
-        khavdaProjects: kProjectsRes,
-      });
+      setRajasthanNetwork(rajRes?.edges ? rajRes : EMPTY_NETWORK);
+      setKhavdaNetwork(khnRes?.edges ? khnRes : EMPTY_NETWORK);
+      setKhavdaProjectsRaw(khpRes);
     } catch (err: any) {
       setError(err.message || 'Error fetching transmission data');
     } finally {
@@ -30,25 +78,90 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
     }
   };
 
-  useEffect(() => {
-    fetchTransmissionData();
-    // Refresh twice a day logic could be added here or in a global service
-    // e.g. setInterval(fetchTransmissionData, 12 * 60 * 60 * 1000)
-  }, []);
+  useEffect(() => { fetchTransmissionData(); }, []);
+
+  const allEdges = useMemo(
+    () => [...rajasthanNetwork.edges, ...khavdaNetwork.edges],
+    [rajasthanNetwork, khavdaNetwork]
+  );
+
+  const stats = useMemo(() => {
+    const total = allEdges.length;
+    const charged = allEdges.filter(e => e.normalized_status === 'charged').length;
+    const inProgress = allEdges.filter(e => e.normalized_status === 'in_progress').length;
+    const underBidding = allEdges.filter(e => e.normalized_status === 'under_bidding').length;
+    const totalLengthKm = allEdges.reduce((sum, e) => sum + parseLengthKm(e.length), 0);
+    const avgCompletion = total > 0
+      ? Math.round(allEdges.reduce((sum, e) => sum + edgeCompletionPct(e), 0) / total)
+      : 0;
+    return { total, charged, inProgress, underBidding, totalLengthKm, avgCompletion };
+  }, [allEdges]);
+
+  const filteredEdges = useMemo(() => {
+    return allEdges.filter(e => {
+      if (regionFilter !== 'all' && e.region !== regionFilter) return false;
+      if (statusFilter !== 'all' && e.normalized_status !== statusFilter) return false;
+      return true;
+    });
+  }, [allEdges, regionFilter, statusFilter]);
+
+  const geoEdges = useMemo(() => {
+    return filteredEdges.map(e => {
+      const from = findSubstationCoord(e.from_label);
+      const to = findSubstationCoord(e.to_label);
+      return { edge: e, from, to };
+    }).filter(x => x.from && x.to) as { edge: TcEdge; from: SubstationCoord; to: SubstationCoord }[];
+  }, [filteredEdges]);
+
+  const unmappedCount = filteredEdges.length - geoEdges.length;
+
+  const substationMarkers = useMemo(() => {
+    const map = new Map<string, SubstationCoord>();
+    geoEdges.forEach(({ from, to }) => {
+      map.set(from.name, from);
+      map.set(to.name, to);
+    });
+    return Array.from(map.values());
+  }, [geoEdges]);
+
+  const fitPoints = useMemo<[number, number][]>(
+    () => substationMarkers.map(s => [s.lat, s.lng]),
+    [substationMarkers]
+  );
+
+  const searchMatch = useMemo(() => {
+    if (!mapSearch.trim()) return null;
+    const q = mapSearch.toLowerCase();
+    return substationMarkers.find(s => s.name.toLowerCase().includes(q)) || null;
+  }, [mapSearch, substationMarkers]);
+
+  const projects: any[] = dashboardData?.projects || [];
+  const filteredProjects = useMemo(() => {
+    if (!tableSearch.trim()) return projects;
+    const q = tableSearch.toLowerCase();
+    return projects.filter(p =>
+      (p.project_name || '').toLowerCase().includes(q) ||
+      (p.p6_project_name || '').toLowerCase().includes(q)
+    );
+  }, [projects, tableSearch]);
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
-      <div className="flex justify-between items-center bg-white/40 border border-border p-6 rounded-2xl backdrop-blur-xl">
+      {/* Header */}
+      <div className="flex justify-between items-center bg-card/60 border border-border p-6 rounded-2xl backdrop-blur-xl">
         <div>
-          <h2 className="text-2xl font-light tracking-wide text-foreground">Transmission Data Explorer</h2>
-          <p className="text-sm text-muted-foreground mt-1">Raw API Data from Rajasthan & Khavda Endpoints</p>
+          <h2 className="text-2xl font-light tracking-wide text-foreground">Transmission Grid</h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Live substation network &amp; line status across Rajasthan and Khavda corridors
+          </p>
         </div>
-        <button 
+        <button
           onClick={fetchTransmissionData}
-          className="px-4 py-2 bg-primary/20 text-primary border border-primary/30 rounded-full hover:bg-primary/30 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/30 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-60"
           disabled={loading}
         >
-          {loading ? 'Fetching...' : 'Refresh Data'}
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          {loading ? 'Refreshing...' : 'Refresh Data'}
         </button>
       </div>
 
@@ -58,16 +171,161 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
         </div>
       )}
 
-      {/* SECTION: UNIFIED PROJECT EXPLORER (Moved from Executive Overview) */}
-      <div className="mt-8">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-sm">
-            <h3 className="text-white font-bold text-lg">M</h3>
-          </div>
-          <h2 className="text-xl font-medium text-foreground tracking-wide">Transmission Mapping Details</h2>
+      {/* Stat Cards */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-4">
+        <StatTile label="Total Lines" value={stats.total} icon={<Zap className="w-4 h-4" />} tone="primary" />
+        <StatTile label="Charged" value={stats.charged} icon={<CheckCircle2 className="w-4 h-4" />} tone="success" />
+        <StatTile label="In Progress" value={stats.inProgress} icon={<Clock className="w-4 h-4" />} tone="warning" />
+        <StatTile label="Under Bidding" value={stats.underBidding} icon={<AlertTriangle className="w-4 h-4" />} tone="destructive" />
+        <StatTile label="Route Length" value={`${Math.round(stats.totalLengthKm).toLocaleString()} km`} icon={<MapPin className="w-4 h-4" />} tone="muted" />
+        <StatTile label="Avg. Completion" value={`${stats.avgCompletion}%`} icon={<Database className="w-4 h-4" />} tone="muted" />
+      </div>
+
+      {/* Map */}
+      <div className="glass-panel rounded-2xl overflow-hidden shadow-lg border border-border relative">
+        <div className="absolute top-4 left-4 z-[1000] flex flex-wrap gap-2">
+          {REGION_FILTERS.map(r => (
+            <FilterChip key={r} active={regionFilter === r} onClick={() => setRegionFilter(r)}>
+              {r === 'all' ? 'All Regions' : r}
+            </FilterChip>
+          ))}
+          <div className="w-px bg-border mx-1" />
+          {STATUS_FILTERS.map(s => (
+            <FilterChip key={s} active={statusFilter === s} onClick={() => setStatusFilter(s)} dotColor={s !== 'all' ? statusMeta(s).color : undefined}>
+              {s === 'all' ? 'All Statuses' : statusMeta(s).label}
+            </FilterChip>
+          ))}
         </div>
 
-        <div className="glass-card rounded-2xl overflow-hidden shadow-lg border border-white/20">
+        <div className="absolute top-4 right-4 z-[1000] w-64">
+          <div className="flex items-center bg-card border border-border shadow-lg rounded-lg overflow-hidden">
+            <div className="pl-3 py-2 text-muted-foreground"><Search className="w-4 h-4" /></div>
+            <input
+              type="text"
+              placeholder="Find substation..."
+              className="w-full bg-transparent border-none px-2 py-2 text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+              value={mapSearch}
+              onChange={(e) => setMapSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="absolute bottom-4 left-4 z-[1000] bg-card/95 border border-border rounded-lg shadow-lg px-3 py-2.5 text-[11px]">
+          <div className="font-bold text-foreground uppercase tracking-wider mb-1.5">Line Status</div>
+          {(['charged', 'in_progress', 'under_bidding'] as const).map(s => {
+            const meta = statusMeta(s);
+            return (
+              <div key={s} className="flex items-center gap-2 py-0.5">
+                <div style={{ width: 18, height: 3, background: meta.color, borderRadius: 2 }} />
+                <span className="text-muted-foreground">{meta.label}</span>
+              </div>
+            );
+          })}
+          {unmappedCount > 0 && (
+            <div className="mt-1.5 pt-1.5 border-t border-border/50 text-muted-foreground">
+              {unmappedCount} line{unmappedCount === 1 ? '' : 's'} not shown (substation coordinates unavailable)
+            </div>
+          )}
+        </div>
+
+        <div className="h-[560px] w-full [&_.leaflet-container]:!font-sans">
+          <MapContainer
+            center={[24.5, 74.5]}
+            zoom={5}
+            minZoom={4}
+            scrollWheelZoom={true}
+            style={{ height: '100%', width: '100%' }}
+            attributionControl={false}
+          >
+            <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/positron/{z}/{x}/{y}{r}.png" />
+            <FitToPoints points={fitPoints} />
+
+            {geoEdges.map(({ edge, from, to }) => {
+              const meta = statusMeta(edge.normalized_status);
+              const pct = edgeCompletionPct(edge);
+              return (
+                <Polyline
+                  key={edge.id}
+                  positions={[[from.lat, from.lng], [to.lat, to.lng]]}
+                  pathOptions={{
+                    color: meta.color,
+                    weight: voltageWeight(edge.voltage),
+                    opacity: 0.85,
+                    dashArray: meta.dash,
+                    lineCap: 'round',
+                  }}
+                >
+                  <Popup>
+                    <div className="min-w-[220px]">
+                      <h3 className="font-bold text-sm text-foreground border-b pb-1 mb-2">
+                        {edge.from_label} &harr; {edge.to_label}
+                      </h3>
+                      <div className="text-xs text-foreground grid grid-cols-2 gap-y-1 gap-x-3 mb-2">
+                        <div><span className="text-muted-foreground">Region</span><br /><span className="font-semibold">{edge.region}</span></div>
+                        <div><span className="text-muted-foreground">Voltage</span><br /><span className="font-semibold">{edge.voltage || '—'}</span></div>
+                        <div><span className="text-muted-foreground">Length</span><br /><span className="font-semibold">{edge.length || '—'} km</span></div>
+                        <div><span className="text-muted-foreground">Expected</span><br /><span className="font-semibold">{edge.expected_date || '—'}</span></div>
+                        {edge.contractor && <div className="col-span-2"><span className="text-muted-foreground">Contractor</span><br /><span className="font-semibold">{edge.contractor}</span></div>}
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: meta.color }}>
+                        <span>{meta.label}</span><span>{pct}%</span>
+                      </div>
+                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta.color }} />
+                      </div>
+                      {edge.projects?.length > 0 && (
+                        <div className="mt-2 pt-2 border-t flex flex-wrap gap-1">
+                          {edge.projects.map((p, i) => (
+                            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">{p}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </Polyline>
+              );
+            })}
+
+            {substationMarkers.map(sub => (
+              <Marker
+                key={sub.name}
+                position={[sub.lat, sub.lng]}
+                icon={sub.name === searchMatch?.name ? substationIcon('#f59e0b') : SUBSTATION_ICON}
+              >
+                <Popup>
+                  <div className="text-xs">
+                    <div className="font-bold text-sm text-foreground mb-1">{sub.name}</div>
+                    <div className="text-muted-foreground">Substation area (approx. location)</div>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+          </MapContainer>
+        </div>
+      </div>
+
+      {/* Project Mapping Table */}
+      <div>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-sm">
+              <h3 className="text-white font-bold text-lg">M</h3>
+            </div>
+            <h2 className="text-xl font-medium text-foreground tracking-wide">Project &harr; Transmission Mapping</h2>
+          </div>
+          <div className="flex items-center bg-card border border-border rounded-lg overflow-hidden w-64">
+            <div className="pl-3 py-1.5 text-muted-foreground"><Search className="w-4 h-4" /></div>
+            <input
+              type="text"
+              placeholder="Search project..."
+              className="w-full bg-transparent border-none px-2 py-1.5 text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+              value={tableSearch}
+              onChange={(e) => setTableSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
+        <div className="bg-card rounded-2xl overflow-hidden shadow-lg border border-border">
           <div className="overflow-x-auto">
             <table className="w-full text-sm text-left">
               <thead className="bg-muted text-muted-foreground uppercase tracking-widest text-[10px] font-bold border-b border-border">
@@ -76,45 +334,42 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                   <th className="px-6 py-4">Capacity</th>
                   <th className="px-6 py-4">P6 Schedule</th>
                   <th className="px-6 py-4">SAP Inventory</th>
-                  <th className="px-6 py-4">Transmission JSON</th>
+                  <th className="px-6 py-4">Transmission Lines</th>
+                  <th className="px-6 py-4" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/30">
-                {/* Fallback to raw data if unified dashboardData is not passed */}
-                {dashboardData?.projects?.map((proj: any, idx: number) => (
-                  <tr key={idx} className="hover:bg-muted transition-colors group">
-                    <td className="px-6 py-4 font-medium text-foreground">{proj.project_name}</td>
-                    <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mw} MW</td>
+                {filteredProjects.length === 0 && (
+                  <tr><td colSpan={6} className="px-6 py-10 text-center text-muted-foreground italic">
+                    {projects.length === 0 ? 'No project mapping data available.' : 'No projects match your search.'}
+                  </td></tr>
+                )}
+                {filteredProjects.map((proj: any, idx: number) => (
+                  <tr
+                    key={proj.mapping_id ?? idx}
+                    className="hover:bg-muted transition-colors cursor-pointer"
+                    onClick={() => setSelectedProject(proj)}
+                  >
+                    <td className="px-6 py-4 font-medium text-foreground">{proj.project_name || proj.p6_project_name || 'Unknown'}</td>
+                    <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mwac ? `${proj.capacity_mwac} MW` : '—'}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        proj.p6.health === 'On Track' ? 'bg-success/100/10 text-success' :
-                        proj.p6.health === 'Delayed' ? 'bg-destructive/100/10 text-destructive' : 'bg-muted0/10 text-muted-foreground'
+                        proj.p6?.health === 'On Track' ? 'bg-success/10 text-success' :
+                        proj.p6?.health === 'Delayed' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'
                       }`}>
-                        {proj.p6.health}
+                        {proj.p6?.health || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono">{proj.sap.inventory_mw} MW</td>
+                    <td className="px-6 py-4 font-mono">{proj.sap?.inv_qty ?? 0}</td>
                     <td className="px-6 py-4">
-                      <div className="relative group/tc">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border cursor-help ${
-                          proj.tc.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
-                        }`}>
-                          {proj.tc.status}
-                        </span>
-                        {/* Hover JSON Tooltip */}
-                        {proj.tc.has_data && (
-                          <div className="absolute left-0 bottom-full mb-2 hidden group-hover/tc:block z-50">
-                            <div className="bg-black/90 dark:bg-[#0B1020]/95 backdrop-blur-xl border border-white/20 p-4 rounded-xl shadow-2xl w-[300px]">
-                              <h4 className="text-[10px] text-purple-400 font-bold uppercase tracking-wider mb-2">Transmission JSON</h4>
-                              <div className="max-h-[200px] overflow-y-auto custom-scrollbar">
-                                <pre className="text-[10px] text-green-400/90 font-mono whitespace-pre-wrap">
-                                  {JSON.stringify(proj.tc.data, null, 2)}
-                                </pre>
-                              </div>
-                            </div>
-                          </div>
-                        )}
-                      </div>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
+                        proj.tc?.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
+                      }`}>
+                        {proj.tc?.status || '0 Edges'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <ChevronRight className="w-4 h-4 text-muted-foreground" />
                     </td>
                   </tr>
                 ))}
@@ -123,26 +378,187 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
           </div>
         </div>
       </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-8">
-        <DataCard title="Raw Khavda Blocks API" data={data.khavdaProjects} />
-        <DataCard title="Raw Rajasthan Edges API" data={data.rajasthanNetwork} />
+
+      {/* Detail Drawer */}
+      <AnimatePresence>
+        {selectedProject && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 backdrop-blur-sm z-[2000]"
+              onClick={() => setSelectedProject(null)}
+            />
+            <motion.div
+              initial={{ x: 420, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 420, opacity: 0 }}
+              transition={{ type: 'spring', bounce: 0.1, duration: 0.4 }}
+              className="fixed right-4 top-4 bottom-4 w-[26rem] max-w-[90vw] bg-background border border-border rounded-2xl shadow-2xl flex flex-col z-[2001] overflow-hidden"
+            >
+              <div className="p-5 border-b border-border bg-muted flex items-start justify-between">
+                <div>
+                  <h3 className="text-base font-bold text-foreground leading-tight">
+                    {selectedProject.project_name || selectedProject.p6_project_name}
+                  </h3>
+                  <p className="text-xs text-muted-foreground mt-1">{selectedProject.capacity_mwac ? `${selectedProject.capacity_mwac} MW` : ''}</p>
+                </div>
+                <button onClick={() => setSelectedProject(null)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {selectedProject.p6 && (
+                  <DetailSection icon={<Calendar className="w-4 h-4" />} title="P6 Schedule" color="#3B82F6">
+                    <DetailRow label="Health" value={selectedProject.p6.health || 'N/A'} />
+                    <DetailRow label="Progress" value={`${selectedProject.p6.progress ?? 0}%`} />
+                    <DetailRow label="Start Date" value={selectedProject.p6.start_date || '—'} />
+                    <DetailRow label="Finish Date" value={selectedProject.p6.finish_date || '—'} />
+                  </DetailSection>
+                )}
+
+                {selectedProject.sap && (
+                  <DetailSection icon={<Package className="w-4 h-4" />} title="SAP Material" color="#F59E0B">
+                    <div className="grid grid-cols-2 gap-2">
+                      <MiniStat label="Required" value={selectedProject.sap.req_qty ?? 0} />
+                      <MiniStat label="Inventory" value={selectedProject.sap.inv_qty ?? 0} />
+                      <MiniStat label="In Transit" value={selectedProject.sap.it_qty ?? 0} />
+                      <MiniStat label="PO Qty" value={selectedProject.sap.po_qty ?? 0} />
+                    </div>
+                  </DetailSection>
+                )}
+
+                <DetailSection icon={<Zap className="w-4 h-4" />} title="Transmission Linkage" color="#8B5CF6">
+                  {!selectedProject.tc?.has_data ? (
+                    <p className="text-xs text-muted-foreground italic">No transmission lines linked to this project yet.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {['khavda', 'rajasthan'].map(region => {
+                        const lines = selectedProject.tc.data?.[region] || [];
+                        if (lines.length === 0) return null;
+                        return (
+                          <div key={region}>
+                            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
+                              {region} ({lines.length})
+                            </div>
+                            <div className="space-y-1.5">
+                              {lines.map((line: any, i: number) => {
+                                const meta = statusMeta((line.status || '').toLowerCase().includes('charg') ? 'charged' : undefined);
+                                return (
+                                  <div key={i} className="flex items-center justify-between px-2.5 py-1.5 bg-muted rounded-lg border border-border text-xs">
+                                    <span className="text-foreground truncate pr-2">{line.voltage || 'Line'}</span>
+                                    <span className="text-[10px] font-bold uppercase" style={{ color: meta.color }}>{line.status}</span>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </DetailSection>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Debug / Raw API Payloads */}
+      <div className="border border-border rounded-2xl overflow-hidden">
+        <button
+          onClick={() => setDebugOpen(!debugOpen)}
+          className="w-full flex items-center justify-between px-5 py-3 bg-muted hover:bg-muted/70 transition-colors"
+        >
+          <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <Database className="w-3.5 h-3.5" /> Raw API Debug Data
+          </span>
+          <ChevronDown className={`w-4 h-4 text-muted-foreground transition-transform ${debugOpen ? 'rotate-180' : ''}`} />
+        </button>
+        {debugOpen && (
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 p-4 bg-background">
+            <DataCard title={`Rajasthan Network (${rajasthanNetwork.edges.length} lines)`} data={rajasthanNetwork} />
+            <DataCard title={`Khavda Network (${khavdaNetwork.edges.length} lines)`} data={khavdaNetwork} />
+            <DataCard title="Khavda Block Hierarchy (raw)" data={khavdaProjectsRaw} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-function DataCard({ title, data }: { title: string, data: any }) {
+function StatTile({ label, value, icon, tone }: { label: string; value: string | number; icon: React.ReactNode; tone: 'primary' | 'success' | 'warning' | 'destructive' | 'muted' }) {
+  const toneClasses: Record<string, string> = {
+    primary: 'text-primary bg-primary/10',
+    success: 'text-success bg-success/10',
+    warning: 'text-warning bg-warning/10',
+    destructive: 'text-destructive bg-destructive/10',
+    muted: 'text-muted-foreground bg-muted',
+  };
   return (
-    <div className="bg-white/30 border border-border/40 rounded-2xl p-6 backdrop-blur-lg flex flex-col max-h-[500px]">
-      <h3 className="text-lg font-medium text-foreground mb-4">{title}</h3>
-      <div className="flex-1 overflow-auto bg-black/40 rounded-xl p-4 custom-scrollbar">
+    <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
+      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${toneClasses[tone]}`}>{icon}</div>
+      <div className="text-xl font-bold text-foreground">{value}</div>
+      <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</div>
+    </div>
+  );
+}
+
+function FilterChip({ active, onClick, children, dotColor }: { active: boolean; onClick: () => void; children: React.ReactNode; dotColor?: string }) {
+  return (
+    <button
+      onClick={onClick}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm transition-colors ${
+        active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-foreground border-border hover:bg-muted'
+      }`}
+    >
+      {dotColor && <span className="w-2 h-2 rounded-full" style={{ background: active ? '#fff' : dotColor }} />}
+      {children}
+    </button>
+  );
+}
+
+function DetailSection({ icon, title, color, children }: { icon: React.ReactNode; title: string; color: string; children: React.ReactNode }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="border-b border-border">
+      <button onClick={() => setOpen(!open)} className="w-full flex items-center gap-2 px-5 py-3 hover:bg-muted transition-colors">
+        <div className="w-5 h-5 rounded flex items-center justify-center" style={{ backgroundColor: `${color}15`, color }}>{icon}</div>
+        <span className="text-[11px] font-bold text-foreground flex-1 text-left uppercase tracking-wider">{title}</span>
+        <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && <div className="px-5 pb-4 space-y-1.5">{children}</div>}
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="flex justify-between items-center py-0.5">
+      <span className="text-[11px] text-muted-foreground">{label}</span>
+      <span className="text-[11px] font-semibold font-mono text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: any }) {
+  return (
+    <div className="bg-muted rounded-lg p-2.5 text-center border border-border">
+      <div className="text-sm font-bold text-foreground">{value}</div>
+      <div className="text-[9px] text-muted-foreground uppercase font-bold tracking-wider">{label}</div>
+    </div>
+  );
+}
+
+function DataCard({ title, data }: { title: string; data: any }) {
+  return (
+    <div className="bg-muted/50 border border-border/40 rounded-xl p-4 flex flex-col max-h-[400px]">
+      <h3 className="text-xs font-bold text-foreground mb-2 uppercase tracking-wider">{title}</h3>
+      <div className="flex-1 overflow-auto bg-black/90 rounded-lg p-3 custom-scrollbar">
         {data ? (
-          <pre className="text-xs text-muted-foreground whitespace-pre-wrap font-mono">
+          <pre className="text-[10px] text-green-400/90 whitespace-pre-wrap font-mono">
             {JSON.stringify(data, null, 2)}
           </pre>
         ) : (
-          <p className="text-sm text-muted-foreground italic">No data available...</p>
+          <p className="text-xs text-muted-foreground italic">No data available...</p>
         )}
       </div>
     </div>

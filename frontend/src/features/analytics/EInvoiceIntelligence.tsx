@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import { 
-  FileText, Activity, AlertCircle, CheckCircle2, TrendingUp, 
+  FileText, Activity, AlertCircle, CheckCircle2, TrendingUp, TrendingDown,
   MapPin, Box, Filter, Search, ChevronDown, ChevronUp, Calendar, PieChart
 } from 'lucide-react';
 
@@ -15,6 +15,7 @@ export default function EInvoiceIntelligence() {
   const [searchTerm, setSearchTerm] = useState('');
   const [typeFilter, setTypeFilter] = useState('All');
   const [statusFilter, setStatusFilter] = useState('All');
+  const [vendorViewMode, setVendorViewMode] = useState<'Top Billed' | 'Lowest Execution'>('Top Billed');
 
   useEffect(() => {
     fetch('/akasha/api/einvoice/global')
@@ -68,6 +69,7 @@ export default function EInvoiceIntelligence() {
   });
 
   const projectTypeOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
     tooltip: { trigger: 'item', formatter: '{b}: ₹{c} L ({d}%)', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
     legend: { bottom: '0%', left: 'center', textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle' },
     series: [
@@ -86,26 +88,70 @@ export default function EInvoiceIntelligence() {
     ]
   };
 
-  const topVendors = [...(distributions.byVendor || [])].sort((a: any, b: any) => b.value - a.value).slice(0, 10);
+  let activeVendors = [];
+  if (vendorViewMode === 'Top Billed') {
+    activeVendors = [...(distributions.byVendor || [])].sort((a: any, b: any) => b.invoice - a.invoice).slice(0, 10);
+  } else {
+    activeVendors = [...(distributions.byVendor || [])]
+      .filter((v: any) => v.so > 0)
+      .map((v: any) => ({ ...v, execPercent: (v.invoice / v.so) * 100 }))
+      .sort((a: any, b: any) => a.execPercent - b.execPercent)
+      .slice(0, 10);
+  }
+
   const vendorOption = {
-    tooltip: { trigger: 'item', formatter: '{b}: ₹{c} L ({d}%)', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
-    legend: { type: 'scroll', orient: 'vertical', right: 0, top: 20, bottom: 20, textStyle: { color: '#94a3b8', fontSize: 10, width: 100, overflow: 'truncate' } },
+    textStyle: { fontFamily: 'Adani, sans-serif' },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: function(params: any) {
+      let tooltip = `<div class="font-bold text-sm mb-1">${params[0].name}</div>`;
+      params.forEach((p: any) => {
+        let valStr = p.seriesName === 'Execution %' ? p.value + '%' : '₹' + p.value + ' L';
+        tooltip += `<div><span style="display:inline-block;margin-right:4px;border-radius:10px;width:10px;height:10px;background-color:${p.color};"></span>${p.seriesName}: <b>${valStr}</b></div>`;
+      });
+      return tooltip;
+    }, backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
+    legend: { top: 0, right: 0, textStyle: { color: '#94a3b8', fontSize: 10 } },
+    grid: { left: '2%', right: '2%', bottom: '2%', top: '15%', containLabel: true },
+    xAxis: { 
+      type: 'category', 
+      data: activeVendors.map((v: any) => v.name || 'Unknown'),
+      axisLabel: { color: '#94a3b8', fontSize: 9, width: 60, overflow: 'truncate', interval: 0, rotate: 30 }
+    },
+    yAxis: [
+      { type: 'value', splitLine: { lineStyle: { color: '#1e293b', type: 'dashed' } }, axisLabel: { color: '#94a3b8', fontSize: 9 } },
+      { type: 'value', min: 0, max: 100, splitLine: { show: false }, axisLabel: { formatter: '{value}%', color: vendorViewMode === 'Lowest Execution' ? '#ef4444' : '#10b981', fontSize: 9 } }
+    ],
     series: [
       {
-        type: 'pie',
-        radius: ['40%', '70%'],
-        center: ['35%', '50%'],
-        itemStyle: { borderRadius: 4, borderWidth: 0 },
-        label: { show: false },
-        data: topVendors.map((item: any) => ({
-          name: item.name || 'Unknown',
-          value: Number((item.value / 100000).toFixed(2))
-        }))
+        name: 'Billed',
+        type: 'bar',
+        barGap: 0,
+        data: activeVendors.map((item: any) => Number((item.invoice / 100000).toFixed(2))),
+        itemStyle: { color: '#3b82f6', borderRadius: [2, 2, 0, 0] }
+      },
+      {
+        name: 'SO Value',
+        type: 'bar',
+        data: activeVendors.map((item: any) => Number((item.so / 100000).toFixed(2))),
+        itemStyle: { color: '#64748b', borderRadius: [2, 2, 0, 0] }
+      },
+      {
+        name: 'Execution %',
+        type: 'line',
+        yAxisIndex: 1,
+        data: activeVendors.map((item: any) => {
+          if (vendorViewMode === 'Lowest Execution') return Number(item.execPercent.toFixed(1));
+          return item.so > 0 ? Number(((item.invoice / item.so) * 100).toFixed(1)) : 0;
+        }),
+        itemStyle: { color: vendorViewMode === 'Lowest Execution' ? '#ef4444' : '#10b981' },
+        lineStyle: { width: 2, type: 'dashed' },
+        symbol: 'circle',
+        symbolSize: 6
       }
     ]
   };
 
   const statusOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
     tooltip: { trigger: 'item', formatter: '{b}: ₹{c} L ({d}%)', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
     legend: { bottom: '0%', left: 'center', textStyle: { color: '#94a3b8', fontSize: 11 }, icon: 'circle' },
     series: [
@@ -125,6 +171,7 @@ export default function EInvoiceIntelligence() {
 
   const monthData = distributions.byMonth || [];
   const monthOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
     tooltip: { trigger: 'axis', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
     grid: { left: '3%', right: '4%', bottom: '10%', top: '10%', containLabel: true },
     xAxis: { 
@@ -159,6 +206,7 @@ export default function EInvoiceIntelligence() {
 
   const topLocations = [...(distributions.byLocation || [])].sort((a: any, b: any) => b.value - a.value).slice(0, 5).reverse();
   const locationOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}<br/><b>₹{c} L</b>', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
     grid: { left: '2%', right: '12%', bottom: '2%', top: '2%', containLabel: true },
     xAxis: { type: 'value', show: false },
@@ -167,7 +215,7 @@ export default function EInvoiceIntelligence() {
       data: topLocations.map((v: any) => v.name || 'Unknown'),
       axisLine: { show: false },
       axisTick: { show: false },
-      axisLabel: { color: '#94a3b8', width: 100, overflow: 'truncate', fontSize: 10, fontFamily: 'monospace' }
+      axisLabel: { color: '#94a3b8', width: 100, overflow: 'truncate', fontSize: 10, fontFamily: 'Adani' }
     },
     series: [
       {
@@ -175,7 +223,60 @@ export default function EInvoiceIntelligence() {
         data: topLocations.map((v: any) => Number((v.value / 100000).toFixed(2))),
         itemStyle: { color: '#10b981', borderRadius: [0, 4, 4, 0] },
         barWidth: '40%',
-        label: { show: true, position: 'right', color: '#94a3b8', formatter: '₹{c} L', fontSize: 10, fontFamily: 'monospace' }
+        label: { show: true, position: 'right', color: '#94a3b8', formatter: '₹{c} L', fontSize: 10, fontFamily: 'Adani' }
+      }
+    ]
+  };
+
+  const funnelData = distributions.byStage || [];
+  const funnelOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
+    tooltip: { trigger: 'item', formatter: '{b} : {c}', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
+    color: ['#3b82f6', '#8b5cf6', '#f59e0b', '#ef4444', '#10b981'],
+    series: [
+      {
+        name: 'Workflow Stage',
+        type: 'funnel',
+        left: '15%', right: '25%', top: 20, bottom: 20,
+        min: 0, max: Math.max(...funnelData.map((d: any) => d.value), 1),
+        minSize: '15%', maxSize: '90%',
+        sort: 'descending',
+        gap: 3,
+        label: { show: true, position: 'right', formatter: '{b}: {c}', color: '#64748b', fontSize: 12, fontWeight: 'bold' },
+        labelLine: { length: 15, lineStyle: { width: 1, type: 'solid', color: '#cbd5e1' } },
+        itemStyle: { borderColor: '#ffffff', borderWidth: 2, borderRadius: 4 },
+        data: funnelData
+      }
+    ]
+  };
+
+  const approverData = (distributions.byApprover || []).slice(0, 10).reverse();
+  const approverOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
+    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' }, formatter: '{b}<br/>Count: {c} pending', backgroundColor: 'rgba(15, 23, 42, 0.9)', borderColor: '#334155', textStyle: { color: '#f8fafc' } },
+    grid: { left: '5%', right: '12%', bottom: '5%', top: '5%', containLabel: true },
+    xAxis: { type: 'value', show: false },
+    yAxis: { 
+      type: 'category', 
+      data: approverData.map((v: any) => v.name),
+      axisLine: { show: false }, axisTick: { show: false },
+      axisLabel: { 
+        color: '#ef4444', 
+        fontWeight: 'bold', 
+        fontSize: 11,
+        formatter: function (value: string) {
+            return value.length > 25 ? value.substring(0, 25) + '...' : value;
+        }
+      }
+    },
+    series: [
+      {
+        name: 'Pending Invoices',
+        type: 'bar',
+        data: approverData.map((v: any) => v.count),
+        itemStyle: { color: '#ef4444', borderRadius: [0, 4, 4, 0] },
+        barWidth: '50%',
+        label: { show: true, position: 'right', color: '#ef4444', fontWeight: 'bold' }
       }
     ]
   };
@@ -196,8 +297,22 @@ export default function EInvoiceIntelligence() {
       if (date && !isNaN(date.getTime())) {
         const dateStr = date.toISOString().split('T')[0];
         const amt = parseFloat(inv.invoiceAmount) || 0;
+        const soAmt = parseFloat(inv.SOAmount) || 0;
         const status = (inv.statusDesc || 'Pending').trim();
-        return [dateStr, Number((amt / 100000).toFixed(2)), inv.invoiceNo, inv.vendorName || 'Unknown', status];
+        return [
+          dateStr, 
+          Number((amt / 100000).toFixed(2)), 
+          inv.invoiceNo, 
+          inv.vendorName || 'Unknown', 
+          status,
+          inv.packageName || 'N/A',
+          inv.projectType || 'N/A',
+          inv.workLocation || 'N/A',
+          inv.workOrderNo || 'N/A',
+          inv.workDescription || 'N/A',
+          inv.p6ProjectName || 'Unknown Project',
+          Number((soAmt / 100000).toFixed(2))
+        ];
       }
     }
     return null;
@@ -213,11 +328,53 @@ export default function EInvoiceIntelligence() {
   }));
 
   const scatterOption = {
+    textStyle: { fontFamily: 'Adani, sans-serif' },
     tooltip: { 
       trigger: 'item',
       formatter: (params: any) => {
         const p = params.value;
-        return `<div class="text-xs"><b>${p[0]}</b><br/>Status: <b>${p[4]}</b><br/>Vendor: ${p[3]}<br/>Invoice: ${p[2]}<br/>Amount: ₹${p[1]} L</div>`;
+        return `
+          <div class="text-xs space-y-2" style="max-width: 300px; white-space: normal;">
+            <div class="flex justify-between items-center border-b border-slate-600 pb-1 mb-1">
+              <span class="font-bold text-sm text-slate-100">Invoice Details</span>
+              <span class="text-slate-400 font-mono">${p[0]}</span>
+            </div>
+            
+            <div class="space-y-1">
+              <div class="font-semibold text-slate-400 mb-1 uppercase text-[10px] tracking-wider">Project Details</div>
+              <div><span class="text-slate-400">Name:</span> <span class="text-sky-300 font-bold">${p[10]}</span></div>
+              <div><span class="text-slate-400">Type:</span> ${p[6]}</div>
+              <div><span class="text-slate-400">Package:</span> ${p[5]}</div>
+              <div><span class="text-slate-400">Location:</span> ${p[7]}</div>
+              <div><span class="text-slate-400">Desc:</span> ${p[9]}</div>
+            </div>
+
+            <div class="border-t border-slate-600 my-1"></div>
+
+            <div class="space-y-1">
+              <div class="font-semibold text-slate-400 mb-1 uppercase text-[10px] tracking-wider">Vendor Details</div>
+              <div><span class="text-slate-400">Vendor:</span> <span class="text-slate-200 font-medium">${p[3]}</span></div>
+              <div><span class="text-slate-400">Invoice:</span> ${p[2]}</div>
+              <div><span class="text-slate-400">WO:</span> ${p[8]}</div>
+            </div>
+
+            <div class="border-t border-slate-600 my-1"></div>
+
+            <div class="flex justify-between items-center bg-slate-800/50 p-2 rounded border border-slate-700">
+              <div>
+                <div class="text-slate-400 text-[10px] uppercase">Status</div>
+                <div class="font-bold ${(p[4] || '').toLowerCase() === 'completed' ? 'text-emerald-400' : 'text-warning'}">${p[4]}</div>
+              </div>
+              <div class="text-right">
+                <div class="text-slate-400 text-[10px] uppercase">SO Amount</div>
+                <div class="font-bold text-slate-300 text-sm mb-1">₹${p[11]} L</div>
+                
+                <div class="text-slate-400 text-[10px] uppercase border-t border-slate-600 pt-1 mt-1">Invoice Amount</div>
+                <div class="font-bold text-sky-400 text-sm">₹${p[1]} L</div>
+              </div>
+            </div>
+          </div>
+        `;
       },
       backgroundColor: 'rgba(15, 23, 42, 0.95)', 
       borderColor: '#334155', 
@@ -313,6 +470,55 @@ export default function EInvoiceIntelligence() {
           </div>
         </div>
 
+        {/* Workflow Funnel */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
+            <Filter className="w-4 h-4 text-primary" />
+            Workflow Pipeline
+          </h3>
+          <div className="h-[250px] w-full">
+            <ReactECharts option={funnelOption} style={{ height: '100%', width: '100%' }} />
+          </div>
+        </div>
+
+        {/* Approver Bottlenecks */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
+            <AlertCircle className="w-4 h-4 text-destructive" />
+            Approver Bottlenecks
+          </h3>
+          <div className="h-[250px] w-full">
+            <ReactECharts option={approverOption} style={{ height: '100%', width: '100%' }} />
+          </div>
+        </div>
+
+        {/* Vendor Dual Axis */}
+        <div className="bg-card border border-border rounded-xl p-5 shadow-sm col-span-1 lg:col-span-2 xl:col-span-2">
+          <div className="flex justify-between items-center mb-4">
+            <h3 className="text-sm font-bold text-foreground uppercase tracking-wider flex items-center gap-2">
+              {vendorViewMode === 'Top Billed' ? <Activity className="w-4 h-4 text-primary" /> : <TrendingDown className="w-4 h-4 text-destructive" />}
+              Vendor Performance Analytics
+            </h3>
+            <div className="flex bg-muted/50 p-1 rounded-lg border border-border">
+              <button 
+                onClick={() => setVendorViewMode('Top Billed')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${vendorViewMode === 'Top Billed' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Top Billed
+              </button>
+              <button 
+                onClick={() => setVendorViewMode('Lowest Execution')}
+                className={`px-3 py-1 text-xs font-medium rounded-md transition-all ${vendorViewMode === 'Lowest Execution' ? 'bg-destructive text-destructive-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+              >
+                Lagging
+              </button>
+            </div>
+          </div>
+          <div className="h-[250px] w-full">
+            <ReactECharts option={vendorOption} style={{ height: '100%', width: '100%' }} />
+          </div>
+        </div>
+        
         {/* Invoice Status */}
         <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
           <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
@@ -321,17 +527,6 @@ export default function EInvoiceIntelligence() {
           </h3>
           <div className="h-[250px] w-full">
             <ReactECharts option={statusOption} style={{ height: '100%', width: '100%' }} />
-          </div>
-        </div>
-
-        {/* Top Vendors */}
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-foreground mb-4 uppercase tracking-wider flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" />
-            Top 10 Vendors
-          </h3>
-          <div className="h-[250px] w-full">
-            <ReactECharts option={vendorOption} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
 
