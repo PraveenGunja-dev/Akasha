@@ -8,6 +8,7 @@ from datetime import datetime
 
 from database import get_db
 import models
+from slr_rules import exclude_overhead_lines
 from services.project_service import filter_tc_edges_by_kps
 
 def _safe_parse_phase(projects_json):
@@ -762,7 +763,11 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             preq_count, preq_value = db.query(
                 func.count(models.MTSLRData.id),
                 func.sum(models.MTSLRData.commitment_amount)
-            ).filter(or_(*wbs_filters_slr), models.MTSLRData.type == "PReq").first()
+            ).filter(
+                or_(*wbs_filters_slr),
+                models.MTSLRData.type == "PReq",
+                exclude_overhead_lines(),
+            ).first()
 
             top_vendors = db.query(
                 models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
@@ -1305,8 +1310,12 @@ def get_project_slr_data(
             "data": []
         }
         
-    # Query SLR data
-    slr_query = db.query(models.MTSLRData).filter(models.MTSLRData.plant_code.in_(codes_to_query))
+    # Query SLR data. Overhead/service lines (SPGS, PMC, ISA) are consolidated
+    # contract charges, not material POs, and are excluded from PO metrics.
+    slr_query = db.query(models.MTSLRData).filter(
+        models.MTSLRData.plant_code.in_(codes_to_query),
+        exclude_overhead_lines(),
+    )
     records = slr_query.all()
     
     # Group by unique PO document (C.Document)
