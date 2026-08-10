@@ -124,6 +124,17 @@ def sync_pulse_data(db: Session = Depends(get_db)):
         logger.error(f"Pulse sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Pulse sync failed: {str(e)}")
 
+@router.post("/einvoice/sync")
+def sync_einvoice_data():
+    from scripts.sync_einvoice_live import sync_einvoice_live
+    try:
+        sync_einvoice_live()
+        return {"status": "success", "message": "Synced E-Invoice Data"}
+    except Exception as e:
+        logger.error(f"E-Invoice sync failed: {e}")
+        raise HTTPException(status_code=500, detail=f"E-Invoice sync failed: {str(e)}")
+
+
 import base64
 from datetime import datetime
 import dotenv

@@ -125,7 +125,8 @@ export default function PMAGDashboard() {
         fetch('/akasha/api/tc/sync', { method: 'POST' }),
         fetch('/akasha/api/mapping/sync', { method: 'POST' }),
         fetch('/akasha/api/p6/sync', { method: 'POST' }),
-        fetch('/akasha/api/capacity/sync', { method: 'POST' })
+        fetch('/akasha/api/capacity/sync', { method: 'POST' }),
+        fetch('/akasha/api/einvoice/sync', { method: 'POST' })
       ]);
     } catch (error) {
       console.error("Sync failed:", error);
