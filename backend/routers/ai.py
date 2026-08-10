@@ -31,6 +31,7 @@ class ChatRequest(BaseModel):
     sessionId: Optional[str] = None
     isDeepAnalysis: bool = False
     imageData: Optional[str] = None
+    stream: Optional[bool] = None
 
 class FeedbackRequest(BaseModel):
     messageId: int
@@ -125,7 +126,49 @@ def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, s
         return chat_completion
     return chat_completion.choices[0].message.content
 
-def call_ollama(messages, temperature, max_tokens, json_response=False, stream=False):
+def call_openrouter(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
+    import openai
+    import httpx
+    import os
+    
+    api_key = os.environ.get("OPENROUTER_API_KEY")
+    if not api_key:
+        raise Exception("OpenRouter API key missing in environment")
+    
+    model_name = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
+    
+    client = openai.OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=api_key,
+        http_client=httpx.Client(verify=False, trust_env=False),
+        timeout=httpx.Timeout(300.0, connect=30.0)
+    )
+    
+    kwargs = {
+        "messages": messages,
+        "model": model_name,
+        "temperature": temperature,
+        "max_tokens": max_tokens
+    }
+    if json_response:
+        kwargs["response_format"] = {"type": "json_object"}
+        
+    if stream:
+        kwargs["stream"] = True
+        return client.chat.completions.create(**kwargs)
+    else:
+        response = client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
+
+def call_ollama(messages, temperature=0.7, max_tokens=2048, json_response=False, stream=False):
+    provider = get_ai_provider()
+    if provider == "openrouter":
+        return call_openrouter(messages, temperature=temperature, max_tokens=max_tokens, json_response=json_response, stream=stream)
+    elif provider == "groq":
+        return call_groq(messages, temperature=temperature, max_tokens=max_tokens, json_response=json_response, stream=stream)
+    elif provider == "azure":
+        return call_azure_openai_curl(messages, temperature=temperature, max_tokens=max_tokens, json_response=json_response)
+
     import openai
     import httpx
     import os
@@ -166,9 +209,69 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
     project_names = [req.projectId] if req.projectId else None
     
     try:
-        # We need to stream the response
         from fastapi.responses import StreamingResponse
         import json
+        
+        # Handle Non-Streaming JSON requests (from AkashaChat, FloatingCopilot, RightCopilot, etc.)
+        if req.stream is False:
+            full_content = ""
+            tools_used = []
+            pending_suggestions = []
+            visualizations = []
+            
+            for chunk in orchestrator.process_message_stream(
+                db=db,
+                message=req.message,
+                session_id=session_id,
+                history=req.history,
+                project_names=project_names,
+                is_deep_analysis=True,
+                image_data=req.imageData
+            ):
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "metadata":
+                        response_obj = chunk.get("response")
+                        if response_obj:
+                            tools_used = response_obj.sources_used
+                        if chunk.get("suggestions"):
+                            pending_suggestions = chunk.get("suggestions")
+                    elif chunk.get("type") == "visualization":
+                        visualizations.append(chunk)
+                    elif chunk.get("type") == "suggestions":
+                        pending_suggestions = chunk.get("suggestions")
+                elif isinstance(chunk, str):
+                    full_content += chunk
+
+            db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
+            if not db_session:
+                db_session = models.ChatSession(session_id=session_id, title=req.message[:50])
+                db.add(db_session)
+                db.commit()
+                
+            user_msg = models.ChatMessage(session_id=session_id, role="user", content=req.message)
+            db.add(user_msg)
+
+            asst_msg = models.ChatMessage(
+                session_id=session_id,
+                role="assistant",
+                content=full_content,
+                intent_type="deep_analysis",
+                sources_used={"tables": tools_used},
+            )
+            db.add(asst_msg)
+            db.commit()
+
+            if not pending_suggestions:
+                pending_suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
+
+            return {
+                "response": full_content,
+                "content": full_content,
+                "suggestions": pending_suggestions,
+                "visualizations": visualizations,
+                "sources": tools_used,
+                "session_id": session_id
+            }
         
         def event_stream():
             # Run orchestrator as a generator
@@ -184,51 +287,54 @@ def chat_with_copilot(req: ChatRequest, db: Session = Depends(get_db)):
                 is_deep_analysis=True,
                 image_data=req.imageData
             ):
-                if isinstance(chunk, dict) and chunk.get("type") == "metadata":
-                    # End of stream metadata
-                    response_obj = chunk["response"]
-                    
-                    # Ensure session exists
-                    db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
-                    if not db_session:
-                        db_session = models.ChatSession(session_id=session_id, title=req.message[:50])
-                        db.add(db_session)
+                if isinstance(chunk, dict):
+                    if chunk.get("type") == "metadata":
+                        response_obj = chunk.get("response")
+                        if not response_obj:
+                            continue
+                        
+                        # Ensure session exists
+                        db_session = db.query(models.ChatSession).filter_by(session_id=session_id).first()
+                        if not db_session:
+                            db_session = models.ChatSession(session_id=session_id, title=req.message[:50])
+                            db.add(db_session)
+                            db.commit()
+                            db.refresh(db_session)
+                            
+                        # Create user message
+                        user_msg = models.ChatMessage(session_id=session_id, role="user", content=req.message)
+                        db.add(user_msg)
+                        
+                        # Create assistant message
+                        asst_msg = models.ChatMessage(
+                            session_id=session_id,
+                            role="assistant",
+                            content=response_obj.content,
+                            intent_type=response_obj.intent_type,
+                            project_ids=",".join(response_obj.project_ids) if response_obj.project_ids else None,
+                            data_domains=",".join(response_obj.domains) if response_obj.domains else None,
+                            data_as_of=response_obj.data_as_of,
+                            sources_used={"tables": response_obj.sources_used},
+                            latency_ms=response_obj.latency_ms,
+                        )
+                        db.add(asst_msg)
                         db.commit()
-                        db.refresh(db_session)
+                        db.refresh(asst_msg)
                         
-                    # Create user message
-                    user_msg = models.ChatMessage(session_id=session_id, role="user", content=req.message)
-                    db.add(user_msg)
-                    
-                    # Create assistant message
-                    asst_msg = models.ChatMessage(
-                        session_id=session_id,
-                        role="assistant",
-                        content=response_obj.content,
-                        intent_type=response_obj.intent_type,
-                        project_ids=",".join(response_obj.project_ids) if response_obj.project_ids else None,
-                        data_domains=",".join(response_obj.domains) if response_obj.domains else None,
-                        data_as_of=response_obj.data_as_of,
-                        sources_used={"tables": response_obj.sources_used},
-                        latency_ms=response_obj.latency_ms,
-                    )
-                    db.add(asst_msg)
-                    db.commit()
-                    db.refresh(asst_msg)
-                    
-                    suggestions = []
-                    if response_obj.intent_type == "factual":
-                        suggestions = ["Why is that?", "Compare this to baseline", "Show me the trend"]
-                    elif response_obj.intent_type == "analytical":
-                        suggestions = ["What should we do about it?", "Who is responsible?", "Show detailed breakdown"]
-                    else:
-                        suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
-                        
-                    yield f"data: {json.dumps({'type': 'metadata', 'metadata': {'message_id': asst_msg.id, 'data_as_of': response_obj.data_as_of, 'latency_ms': response_obj.latency_ms, 'intent': response_obj.intent_type, 'sources': response_obj.sources_used}, 'suggestions': suggestions})}\n\n"
-                elif isinstance(chunk, dict) and chunk.get("type") == "visualization":
-                    # Chart spec from the agent — forward the ECharts option to the frontend.
-                    yield f"data: {json.dumps({'type': 'visualization', 'chart_type': chunk.get('chart_type'), 'title': chunk.get('title'), 'spec': chunk.get('spec')})}\n\n"
-                else:
+                        suggestions = chunk.get("suggestions")
+                        if not suggestions:
+                            if response_obj.intent_type == "factual":
+                                suggestions = ["Why is that?", "Compare this to baseline", "Show me the trend"]
+                            elif response_obj.intent_type == "analytical":
+                                suggestions = ["What should we do about it?", "Who is responsible?", "Show detailed breakdown"]
+                            else:
+                                suggestions = ["Give me the specific numbers", "What are the biggest risks?", "Summarize material gaps"]
+                            
+                        yield f"data: {json.dumps({'type': 'metadata', 'metadata': {'message_id': asst_msg.id, 'data_as_of': response_obj.data_as_of, 'latency_ms': response_obj.latency_ms, 'intent': response_obj.intent_type, 'sources': response_obj.sources_used}, 'suggestions': suggestions})}\n\n"
+                    elif chunk.get("type") == "visualization":
+                        # Chart spec from the agent — forward the ECharts option to the frontend.
+                        yield f"data: {json.dumps({'type': 'visualization', 'chart_type': chunk.get('chart_type'), 'title': chunk.get('title'), 'spec': chunk.get('spec')})}\n\n"
+                elif isinstance(chunk, str) and chunk:
                     yield f"data: {json.dumps({'type': 'token', 'content': chunk})}\n\n"
 
         return StreamingResponse(

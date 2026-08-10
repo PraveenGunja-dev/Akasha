@@ -19,3 +19,5 @@ alembic
 
 PyMuPDF
 pywin32
+python-docx
+reportlab

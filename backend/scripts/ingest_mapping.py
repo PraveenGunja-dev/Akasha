@@ -9,8 +9,13 @@ from sqlalchemy import text
 
 def ingest_mapping():
     db = SessionLocal()
-    mapping_file_old = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")
-    mapping_file_new = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "SAP Master sheet AKASHA (1).xlsx")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data")
+    mapping_file_old = os.path.join(data_dir, "Project_Name_Master.xlsx")
+    
+    # Try preferred AKASHA SAP MASTER FILE.xlsx first
+    mapping_file_new = os.path.join(data_dir, "AKASHA SAP MASTER FILE.xlsx")
+    if not os.path.exists(mapping_file_new):
+        mapping_file_new = os.path.join(data_dir, "SAP Master sheet AKASHA (1).xlsx")
     
     try:
         # Create table if not exists
@@ -22,14 +27,16 @@ def ingest_mapping():
         db.query(models.ProjectMapping).delete()
         db.commit()
 
-        print(f"Reading new mapping {mapping_file_new}...")
+        print(f"Reading new mapping {os.path.basename(mapping_file_new)}...")
         df_new = pd.read_excel(mapping_file_new)
         
-        print(f"Reading old mapping {mapping_file_old}...")
-        df_old = pd.read_excel(mapping_file_old)
-        
-        print("Merging mapping data...")
-        df = pd.merge(df_new, df_old, left_on='P6 ID', right_on='Project ID', how='left').fillna("")
+        if os.path.exists(mapping_file_old):
+            print(f"Reading old mapping {os.path.basename(mapping_file_old)}...")
+            df_old = pd.read_excel(mapping_file_old)
+            print("Merging mapping data...")
+            df = pd.merge(df_new, df_old, left_on='P6 ID', right_on='Project ID', how='left').fillna("")
+        else:
+            df = df_new.fillna("")
         
         mappings = []
         for _, row in df.iterrows():
@@ -49,10 +56,11 @@ def ingest_mapping():
                 project = project_name_from_p6
                 
             spv_name = str(row.get('SPV', '')).strip()
-            plant_code = str(row.get('SPV.1', '')).strip()
+            # Plant code might be 'Plant code ', 'Plant code', or fallback 'SPV.1'
+            plant_code = str(row.get('Plant code ', row.get('Plant code', row.get('SPV.1', '')))).strip()
             agel = str(row.get('AGEL', '')).strip()
             age6l = str(row.get('AGE6L', '')).strip()
-            cluster = str(row.get('Type (Cluster)', '')).strip()
+            cluster = str(row.get('Type (Cluster)', row.get('Cluster', ''))).strip()
             
             # Safely parse capacity
             def parse_float(val):

@@ -38,7 +38,10 @@ def ingest_data():
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data")
     
     # Process MB52 (Inventory) from Local
-    mb52_path = os.path.join(data_dir, "MB52_Khavda_Live_Inventry - Copy (1).xlsx")
+    mb52_path = os.path.join(data_dir, "MB52_Khavda_Live_Inventry 1.xlsx")
+    if not os.path.exists(mb52_path):
+        mb52_path = os.path.join(data_dir, "MB52_Khavda_Live_Inventry - Copy (1).xlsx")
+    
     if os.path.exists(mb52_path):
         try:
             print(f"Processing {os.path.basename(mb52_path)}...")
@@ -51,13 +54,14 @@ def ingest_data():
                     continue
                     
                 unrestricted = safe_float(row.get('Unrestricted', 0))
-                if unrestricted > 0:
+                val_unrestricted = safe_float(row.get('Value_Unrestricted', 0))
+                if unrestricted > 0 or val_unrestricted > 0:
                     inv = models.MTInventory(
                         material_code=mat_code,
-                        material_name=str(row.get('Materail_Name', '')),
+                        material_name=str(row.get('Materail_Name', row.get('Material_Name', ''))),
                         plant_code=str(row.get('Plant', '')),
                         unrestricted_qty=unrestricted,
-                        value_unrestricted=safe_float(row.get('Value_Unrestricted', 0)),
+                        value_unrestricted=val_unrestricted,
                         quantity_inv=unrestricted,
                         storage_location_mapping=str(row.get('Storage_Location', '')),
                         wbs_element=str(row.get('WBS_Element', '')).strip(),
@@ -74,8 +78,11 @@ def ingest_data():
     else:
         print(f"File not found: {mb52_path}")
 
-    # Process ME2J (PO Amount) - Replacing ME2K
-    me2j_path = os.path.join(data_dir, "ME2J.XLSX")
+    # Process ME2J (PO Amount)
+    me2j_path = os.path.join(data_dir, "Me2J 1.xlsx")
+    if not os.path.exists(me2j_path):
+        me2j_path = os.path.join(data_dir, "ME2J.XLSX")
+        
     if os.path.exists(me2j_path):
         try:
             print(f"Processing {os.path.basename(me2j_path)}...")
@@ -118,7 +125,7 @@ def ingest_data():
                         plant_code=str(row.get('Plant', '')),
                         material_code=str(row.get('Material', '')),
                         material_name=str(row.get('Short Text', '')), # Material name/description
-                        vendor_name=str(row.get('Name of Vendor', '')),
+                        vendor_name=str(row.get('Name of Vendor', row.get('Vendor/supplying plant', ''))),
                         short_text=str(row.get('Short Text', '')),
                         order_quantity=qty,
                         po_quantities=qty,
@@ -145,7 +152,9 @@ def ingest_data():
         print(f"File not found: {me2j_path}")
 
     # Process MB51 (Material Documents/Consumption) from Local
-    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 2 (2).XLSX")
+    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 1.XLSX")
+    if not os.path.exists(mb51_path):
+        mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 2 (2).XLSX")
     if os.path.exists(mb51_path):
         try:
             print(f"Processing {os.path.basename(mb51_path)}...")

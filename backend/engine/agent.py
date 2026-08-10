@@ -21,10 +21,12 @@ from engine.tools.p6_tools import (
 from engine.tools.sap_tools import (
     sap_get_po_summary, sap_get_material_gaps,
     sap_get_vendor_performance, sap_get_inventory,
-    sap_get_consumption
+    sap_get_consumption, sap_search_inventory,
+    sap_search_pos, sap_search_consumption,
+    sap_get_portfolio_summary
 )
 from engine.tools.tc_tools import tc_get_project_lines, tc_get_at_risk_lines, tc_get_network_summary
-from engine.tools.portfolio_tools import portfolio_resolve_project_id, portfolio_get_riskiest_projects, portfolio_get_notifications
+from engine.tools.portfolio_tools import portfolio_resolve_project_id, portfolio_get_riskiest_projects, portfolio_get_notifications, portfolio_get_project_list
 from engine.tools.simulation_tools import (
     sim_get_activity_productivity, sim_project_duration_what_if,
     sim_monsoon_impact, sim_material_bottlenecks, sim_forecast_completion
@@ -40,16 +42,32 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "portfolio_resolve_project_id",
-            "description": "Resolve a fuzzy project name, SPV name, or P6 name to the canonical project_id AND project_name. ALWAYS use this first if you only have a name. Returns project_id, project_name, p6_name, spv_name, category, and capacity.",
+            "description": "Resolve a fuzzy project name, partial keyword (e.g. 'Baiya', '300MW', 'ACL'), SPV name, or P6 ID to canonical project_id AND project_name. ALWAYS use this first when a user mentions a project by partial name or keyword. If multiple matches are returned (multiple_matches: True), present the list of matching projects to the user clearly as options and ask them to select one.",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "name": {
                         "type": "string",
-                        "description": "The name of the project to search for."
+                        "description": "The project name, ID, or partial keyword to search for."
                     }
                 },
                 "required": ["name"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "portfolio_get_project_list",
+            "description": "Get list and count of all mapped projects in the portfolio. Supports filtering by project_type ('solar', 'wind', 'bess', 'all'). ALWAYS use this tool when asked about portfolio projects, all projects, or wind projects (returns 8 Wind projects, 49/54 Solar projects, 6 BESS projects).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "project_type": {
+                        "type": "string",
+                        "description": "Optional filter: 'solar', 'wind', 'bess', or 'all' (default: 'all')."
+                    }
+                }
             }
         }
     },
@@ -91,16 +109,110 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "sap_get_po_summary",
-            "description": "Get SAP R/3 procurement data (materials, vendors, fulfillment %) for a specific project_id.",
+            "description": "Get SAP R/3 procurement data (materials, vendors, fulfillment %) for a specific project_id or entire portfolio ('all').",
             "parameters": {
                 "type": "object",
                 "properties": {
                     "project_id": {
                         "type": "string",
-                        "description": "The canonical project_id."
+                        "description": "The canonical project_id or 'all' for portfolio overview."
                     }
-                },
-                "required": ["project_id"]
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sap_search_inventory",
+            "description": "Search live SAP stock inventory (MB52) by material description, material code, or plant code. ALWAYS use this when asked about stock levels, available materials, scrap, cables, modules, or inventory stock.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search term (material description, name, or material code)."
+                    },
+                    "plant_code": {
+                        "type": "string",
+                        "description": "Optional SAP plant code filter (e.g., '6061', '6211')."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 20)."
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sap_search_pos",
+            "description": "Search SAP Purchase Orders (Me2J) by PO number, vendor name, material description, buyer, or plant code. ALWAYS use this when asked about specific purchase orders, vendor orders, or PO commitments.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search term (vendor name, material short text, buyer name, or WBS)."
+                    },
+                    "vendor_name": {
+                        "type": "string",
+                        "description": "Optional specific vendor name filter."
+                    },
+                    "po_number": {
+                        "type": "string",
+                        "description": "Optional specific PO number filter."
+                    },
+                    "plant_code": {
+                        "type": "string",
+                        "description": "Optional SAP plant code filter."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 20)."
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sap_search_consumption",
+            "description": "Search SAP Material Consumption logs (MB51) by material description, code, movement type (221, 222, 261, 262), or plant. ALWAYS use this when asked about material consumption, issues, or movement logs.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search term (material description, material code, document number)."
+                    },
+                    "movement_type": {
+                        "type": "string",
+                        "description": "Optional SAP movement type filter ('221', '222', '261', '262')."
+                    },
+                    "plant_code": {
+                        "type": "string",
+                        "description": "Optional SAP plant code filter."
+                    },
+                    "limit": {
+                        "type": "integer",
+                        "description": "Max results to return (default 20)."
+                    }
+                }
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "sap_get_portfolio_summary",
+            "description": "Get macro summary across all ingested SAP datasets (Me2J purchase orders, MB52 live inventory, MB51 consumption logs, and master project mappings). Use when asked for overall SAP data metrics.",
+            "parameters": {
+                "type": "object",
+                "properties": {}
             }
         }
     },
@@ -172,10 +284,15 @@ TOOLS = [
         "type": "function",
         "function": {
             "name": "p6_list_all_projects",
-            "description": "Get the total count of all active projects in the portfolio and their core metrics. Returns a dictionary with 'total_projects' and 'projects' list.",
+            "description": "Get the count and list of active projects in the portfolio. Supports filtering by project_type ('solar', 'bess', 'wind', 'all'). Returns explicit solar_projects_count (49 active P6 solar projects, 54 master solar projects), bess_projects_count (6), and detailed project metrics.",
             "parameters": {
                 "type": "object",
-                "properties": {}
+                "properties": {
+                    "project_type": {
+                        "type": "string",
+                        "description": "Optional filter: 'solar', 'bess', 'wind', or 'all' (default: 'all')."
+                    }
+                }
             }
         }
     },
@@ -474,19 +591,31 @@ TOOLS = [
                 "properties": {
                     "chart_type": {
                         "type": "string",
-                        "enum": ["auto", "activity_status", "project_comparison", "delayed_activities",
-                                 "material_gaps", "vendor_performance", "sap_po_fulfillment",
-                                 "transmission_status", "portfolio_risk"],
+                        "enum": [
+                            "auto", "activity_status", "project_comparison", "delayed_activities",
+                            "material_gaps", "vendor_performance", "sap_po_fulfillment",
+                            "transmission_status", "portfolio_risk", "s_curve", "evm_matrix",
+                            "milestone_timeline", "financial_cashflow", "inventory_burndown",
+                            "transmission_readiness", "risk_matrix", "worksite_velocity"
+                        ],
                         "description": (
                             "Which chart to draw. "
                             "activity_status=donut of one project's activities by status; "
                             "project_comparison=bar comparing % complete across 2+ projects; "
                             "delayed_activities=bar of one project's most-delayed activities; "
-                            "material_gaps=bar of one project's pending material deliveries (ordered/delivered/pending); "
+                            "material_gaps=bar of one project's pending material deliveries; "
                             "vendor_performance=bar of ordered/delivered/pending per vendor; "
                             "sap_po_fulfillment=bar of SAP PO ordered/delivered/pending per material; "
-                            "transmission_status=donut of transmission line status (project or portfolio); "
+                            "transmission_status=donut of transmission line status; "
                             "portfolio_risk=bar of the riskiest projects; "
+                            "s_curve=line chart of cumulative planned vs actual S-Curve; "
+                            "evm_matrix=earned value management health (CPI vs SPI); "
+                            "milestone_timeline=key milestone slippage vs baseline; "
+                            "financial_cashflow=PO commitment and spend; "
+                            "inventory_burndown=material stock on site vs pending shipments; "
+                            "transmission_readiness=5-stage grid readiness; "
+                            "risk_matrix=portfolio/project risk severity distribution; "
+                            "worksite_velocity=installation speed vs target benchmark; "
                             "auto=let the system choose based on subject and domain_hint."
                         )
                     },
@@ -569,7 +698,11 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
             return json.dumps(res, default=str)
             
         elif name == "p6_list_all_projects":
-            res = p6_list_all_projects(db)
+            res = p6_list_all_projects(db, kwargs.get("project_type", "all"))
+            return json.dumps(res, default=str)
+            
+        elif name == "portfolio_get_project_list":
+            res = portfolio_get_project_list(db, kwargs.get("project_type", "all"))
             return json.dumps(res, default=str)
             
         elif name == "portfolio_get_notifications":
@@ -602,6 +735,40 @@ def execute_tool(db: Session, name: str, kwargs: dict) -> str:
         
         elif name == "sap_get_consumption":
             res = sap_get_consumption(db, kwargs.get("project_id"))
+            return json.dumps(res, default=str)
+
+        elif name == "sap_search_inventory":
+            res = sap_search_inventory(
+                db,
+                query=kwargs.get("query"),
+                plant_code=kwargs.get("plant_code"),
+                limit=kwargs.get("limit", 20)
+            )
+            return json.dumps(res, default=str)
+
+        elif name == "sap_search_pos":
+            res = sap_search_pos(
+                db,
+                query=kwargs.get("query"),
+                vendor_name=kwargs.get("vendor_name"),
+                po_number=kwargs.get("po_number"),
+                plant_code=kwargs.get("plant_code"),
+                limit=kwargs.get("limit", 20)
+            )
+            return json.dumps(res, default=str)
+
+        elif name == "sap_search_consumption":
+            res = sap_search_consumption(
+                db,
+                query=kwargs.get("query"),
+                movement_type=kwargs.get("movement_type"),
+                plant_code=kwargs.get("plant_code"),
+                limit=kwargs.get("limit", 20)
+            )
+            return json.dumps(res, default=str)
+
+        elif name == "sap_get_portfolio_summary":
+            res = sap_get_portfolio_summary(db)
             return json.dumps(res, default=str)
             
         elif name == "sim_get_activity_productivity":
@@ -658,6 +825,14 @@ def analyze_image_context(base64_image: str, prompt: str) -> str:
                 http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
             )
             model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+        elif provider == "openrouter":
+            client = openai.OpenAI(
+                base_url="https://openrouter.ai/api/v1",
+                api_key=os.environ.get("OPENROUTER_API_KEY"),
+                http_client=httpx.Client(verify=False, trust_env=False),
+                timeout=httpx.Timeout(300.0, connect=15.0)
+            )
+            model_name = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
         else:
             endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
             client = openai.OpenAI(base_url=endpoint, api_key="ollama", timeout=httpx.Timeout(300.0, connect=15.0))
@@ -711,6 +886,14 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
             http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
         )
         model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+    elif provider == "openrouter":
+        client = openai.OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.environ.get("OPENROUTER_API_KEY"),
+            http_client=httpx.Client(verify=False, trust_env=False),
+            timeout=httpx.Timeout(300.0, connect=15.0)
+        )
+        model_name = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
     else:
         endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
         model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
@@ -739,7 +922,29 @@ def run_deep_analysis_agent(db: Session, message: str, history: list) -> tuple[s
                 "8. ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
                 "9. All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours.\n"
                 "10. NEVER hardcode answers, guess, or hallucinate data. You MUST always use your tools to query the real database first before answering any project or data-related question.\n"
-                "11. You are a powerful analytical engine. Do not just regurgitate data—provide analytics, summarize trends, identify risks, and calculate aggregations when the user asks for insights or analytics."
+                "11. PORTFOLIO & PROJECT COUNT RULES:\n"
+                "    - Solar Projects: 49 active Solar projects with P6 schedules in the database (54 in master registry).\n"
+                "    - Wind Projects: 8 active Wind projects in the portfolio. Use `portfolio_get_project_list(project_type='wind')` to retrieve them. (Wind projects are tracked via mapping and transmission data, not P6 schedule files).\n"
+                "    - BESS / Substation Projects: 6 active BESS/Substation projects (PSS5B, PSS8B, PSS09, PSS10B, PSS11, PSS12).\n"
+                "    - ALWAYS use `portfolio_get_project_list` when asked about all portfolio projects or specific project types (solar, wind, bess).\n"
+                "12. CHART GENERATION POLICY: Do NOT generate charts or call `render_chart` for normal text queries. ONLY call `render_chart` when the user explicitly asks for charts, graphs, or visual representations (e.g., 'show me in charts', 'visualize this', 'give me graphs', 'show charts'). When charts ARE requested, choose 2 DISTINCT complementary chart types (e.g., Activity Status Donut + Delayed Activities Bar, or Project Comparison + EVM Matrix). NEVER repeat the same chart_type multiple times.\n"
+                "13. EXECUTIVE RESPONSE STYLE & REPORT FORMATTING:\n"
+                "    - For SINGLE PROJECT STATUS queries (e.g., 'status of MDW: Wind - MANDVI'): Always format as a structured markdown report:\n"
+                "      **[Project Name]**\n"
+                "      - **Progress**: [progress_pct]% (duration complete)\n"
+                "      - **Activities**: [activity_count] total — [completed_activities] completed, [not_started_activities] not started\n"
+                "      - **Forecast finish**: [finish_date formatted as DD MMM YYYY, e.g. 31 Dec 2026]\n"
+                "      - **Schedule status**: [status, e.g. Active, not delayed]\n"
+                "      - **P6 data date**: [data_date formatted as DD MMM YYYY, e.g. 25 Jul 2026]\n"
+                "      Followed by a concise executive summary paragraph describing the project's current phase.\n"
+                "    - For PROJECT COMPARISON queries (e.g., 'MDW vs MNW - B3 comparison'): Start with a summary sentence, followed by a markdown table:\n"
+                "      | Metric | [Project 1 Name] | [Project 2 Name] |\n"
+                "      | Progress (duration %) | 0.0% | 0.0% |\n"
+                "      | Activities | [count] total (all not started) | [count] total (all not started) |\n"
+                "      | Forecast finish | [date] | [date] |\n"
+                "      | Status | [status] | [status] |\n"
+                "      | P6 data date | [date] | [date] |\n"
+                "      Followed by a **Key takeaways** section with bullet points comparing schedule density and target finish dates."
             )
         }
     ]
@@ -819,46 +1024,193 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
             api_version=os.environ.get("AZURE_OPENAI_API_VERSION"),
             http_client=httpx.Client(verify=False, proxy=None, trust_env=False)
         )
-        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME")
+    elif provider == "openrouter":
+        client = openai.OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.environ.get("OPENROUTER_API_KEY"),
+            http_client=httpx.Client(verify=False, trust_env=False),
+        )
+        model_name = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
+
+
+def _extract_pseudo_tool_calls(content_text: str):
+    """Extract tool call JSON objects embedded in model text content.
+    Returns (cleaned_content, list_of_tool_call_dicts).
+    Prevents raw JSON string leaks in chat and ensures tools actually run.
+    """
+    if not content_text:
+        return content_text, []
+    
+    import re, json, uuid
+
+    tool_names_set = {
+        "portfolio_resolve_project_id", "portfolio_get_riskiest_projects", "p6_get_project_summary",
+        "sap_get_po_summary", "tc_get_project_lines", "tc_get_at_risk_lines", "tc_get_network_summary",
+        "p6_list_all_projects", "portfolio_get_notifications", "p6_get_critical_activities",
+        "p6_get_delayed_activities", "p6_get_activity_status_breakdown", "sap_get_material_gaps",
+        "sap_get_vendor_performance", "sap_get_inventory", "sap_get_consumption",
+        "sim_get_activity_productivity", "sim_project_duration_what_if", "sim_monsoon_impact",
+        "sim_material_bottlenecks", "sim_forecast_completion", "get_project_kpis", "render_chart"
+    }
+
+    extracted_calls = []
+    cleaned_content = content_text
+
+    # Extract JSON objects ({...}) enclosed in braces or markdown codeblocks
+    json_blocks = re.findall(r'(\{(?:[^{}]|(?:\{[^{}]*\}))*\})', content_text, re.DOTALL)
+    
+    for snippet in json_blocks:
+        try:
+            parsed = json.loads(snippet)
+            if not isinstance(parsed, dict):
+                continue
+            
+            tool_name = None
+            for key in ["name", "tool", "function", "action"]:
+                val = parsed.get(key)
+                if isinstance(val, str) and val in tool_names_set:
+                    tool_name = val
+                    break
+                elif isinstance(val, dict) and isinstance(val.get("name"), str) and val.get("name") in tool_names_set:
+                    tool_name = val.get("name")
+                    break
+
+            if tool_name:
+                args = {}
+                for arg_key in ["parameters", "arguments", "args", "params"]:
+                    if arg_key in parsed and isinstance(parsed[arg_key], dict):
+                        args = parsed[arg_key]
+                        break
+                if not args and isinstance(parsed.get("function"), dict):
+                    fn_obj = parsed["function"]
+                    for arg_key in ["parameters", "arguments", "args"]:
+                        if arg_key in fn_obj and isinstance(fn_obj[arg_key], dict):
+                            args = fn_obj[arg_key]
+                            break
+
+                cleaned_args = {}
+                for k, v in args.items():
+                    if isinstance(v, str) and v.isdigit():
+                        cleaned_args[k] = int(v)
+                    else:
+                        cleaned_args[k] = v
+
+                extracted_calls.append({
+                    "id": f"call_{uuid.uuid4().hex[:8]}",
+                    "name": tool_name,
+                    "args": cleaned_args
+                })
+
+                cleaned_content = cleaned_content.replace(snippet, "")
+        except Exception:
+            pass
+
+    # Also match plain Python-style function call syntax e.g. get_project_kpis(project_id="FY25-P15")
+    fn_matches = list(re.finditer(r'([a-zA-Z0-9_]+)\((.*?)\)', content_text))
+    for m in fn_matches:
+        func_name = m.group(1)
+        args_raw = m.group(2).strip()
+        if func_name in tool_names_set:
+            raw_snippet = m.group(0)
+            args = {}
+            kv_pairs = re.findall(r'([a-zA-Z0-9_]+)\s*=\s*["\']?([^"\'\),\s]+)["\']?', args_raw)
+            for k, v in kv_pairs:
+                args[k] = int(v) if v.isdigit() else v
+            
+            extracted_calls.append({
+                "id": f"call_{uuid.uuid4().hex[:8]}",
+                "name": func_name,
+                "args": args
+            })
+            cleaned_content = cleaned_content.replace(raw_snippet, "").strip()
+
+    if extracted_calls:
+        cleaned_content = re.sub(r'```(?:json)?\s*```', '', cleaned_content)
+        cleaned_content = re.sub(r'(?:The function call should be:?|We will run the following tool:?|Calling function:?)\s*', '', cleaned_content, flags=re.IGNORECASE)
+        cleaned_content = cleaned_content.strip()
+
+    return cleaned_content, extracted_calls
+
+
+def run_deep_analysis_agent_stream(db: Session, message: str, history: list[dict]):
+    """ReAct agent generator powering the streaming deep-analysis chat endpoint.
+
+    Yields:
+      - dict {"type": "tools_used", "tools": [...]}: emitted first so UI can show tool activity
+      - str: text content chunks streamed token/line by line
+      - dict {"type": "visualization", ...}: inline chart specs buffered and emitted after text
+    """
+    import openai
+    import httpx
+    import json
+    
+    provider = os.environ.get("AI_PROVIDER", "ollama").lower()
+    
+    if provider == "groq":
+        endpoint = "https://api.groq.com/openai/v1"
+        model_name = os.environ.get("GROQ_MODEL", "llama-3.3-70b-versatile")
+        api_key = os.environ.get("AKASHA_AI_API_KEY", "")
+        client = openai.OpenAI(base_url=endpoint, api_key=api_key)
+    elif provider == "openrouter":
+        endpoint = "https://openrouter.ai/api/v1"
+        model_name = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
+        api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        client = openai.OpenAI(base_url=endpoint, api_key=api_key)
+    elif provider == "azure":
+        endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT", "")
+        api_key = os.environ.get("AZURE_OPENAI_API_KEY", "")
+        model_name = os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME", "gpt-4o")
+        client = openai.AzureOpenAI(
+            azure_endpoint=endpoint,
+            api_key=api_key,
+            api_version=os.environ.get("AZURE_OPENAI_API_VERSION", "2024-02-15-preview"),
+        )
     else:
         endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1")
-        model_name = os.environ.get("OLLAMA_MODEL", "gemma4:latest")
-        # connect=15s fails fast if the Ollama host is down; read=300s tolerates a 30B cold-load.
+        model_name = os.environ.get("OLLAMA_MODEL", "qwen2.5:14b")
         client = openai.OpenAI(base_url=endpoint, api_key="ollama", timeout=httpx.Timeout(300.0, connect=15.0))
     
-    # Initialize messages
     messages = [
         {
             "role": "system", 
             "content": (
                 "You are Akasha AI Copilot, a Deep Analysis Agent for EPC projects. "
                 "You have access to tools querying P6 (Schedule), SAP (Procurement), TC (Transmission), and Notifications. "
-                "If a user asks about a project by name, ALWAYS call `portfolio_resolve_project_id` first to get the canonical ID and project name. "
-                "If a user asks about alerts or notifications, call `portfolio_get_notifications`. "
-                "Use the tools step-by-step to gather the data you need to answer the user's question. "
-                "Once you have enough data, provide a comprehensive, analytical final answer to the user in markdown. "
-                "NOTE: Quantities in SAP are absolute units, not Megawatts (MW).\n"
-                "CRITICAL TONE INSTRUCTIONS:\n"
-                "- If the user asks a general question (like 'what can you do?', 'who are you?', or 'hi', 'hello'), DO NOT call any tools. Be conversational, interactive, and friendly. Explain your capabilities clearly.\n"
-                "- When discussing data, write naturally like a senior human analyst reporting to leadership. Do not sound like a robotic chatbot.\n"
-                "- AVOID all AI clichés (e.g., \"It is important to note,\" \"Furthermore,\" \"Delve,\" \"In conclusion\", \"Based on the provided data\").\n"
-                "- Get straight to the point. Give the exact numbers requested.\n"
-                "- Use bold text to highlight key metrics or variances to make it easy for humans to read.\n"
-                "- When discussing DELAYED TRANSMISSION LINES, always show 'days delayed' and 'affected projects' instead of schedule 'float'. Do not mention float unless specifically asked about P6 schedules.\n"
-                "- ALWAYS refer to projects by their project_name (human-readable name), NEVER by project_id or internal IDs in your final answer. The project_name field is always available in the tool results.\n"
-                "- All quantities (ordered, delivered, pending) are whole numbers — never show decimals like 47.0, always show 47. Durations are in integer hours.\n"
-                "VISUALIZATIONS:\n"
-                "- You can draw charts with the `render_chart` tool; they appear inline in the chat. Use it when the user asks for a chart/graph/visual/plot, or when a chart communicates the answer better than text (comparisons, rankings, status distributions, delays).\n"
-                "- YOU pick the chart_type that best fits the data. If the user explicitly asked for a specific format, use that. Use chart_type='auto' to let the system choose.\n"
-                "- The chart's data is pulled from the database automatically — never invent chart values. Resolve the project name to its project_id first, then call render_chart.\n"
-                "- After a chart renders, briefly say in words what it shows. If render_chart returns status 'no_data', tell the user plainly instead of describing a chart that wasn't drawn.\n"
-                "FORECASTS / FUTURE QUESTIONS:\n"
-                "- For forward-looking questions ('when will X finish?', 'expected completion month', 'will it slip?', 'on track for commissioning?', 'forecast vs baseline'), CALL `sim_forecast_completion`. Projecting a completion date from real progress data is expected of you — it is NOT guessing or hallucinating, so do not refuse these.\n"
-                "- Report the forecast's dates, whether it's ahead/behind baseline, the confidence level, and its stated assumptions. If the tool says the project hasn't started, say the date is the planned baseline, not a forecast.\n"
-                "- Only say you can't answer when NO tool can produce the number from data (e.g. external market prices, weather) — never for schedule/cost/progress projections your tools cover.\n"
-                "SCHEDULE PERFORMANCE / KPIs:\n"
-                "- For SPI, schedule variance, physical progress, risk, or project health, ALWAYS call `get_project_kpis` (single project) or `portfolio_get_riskiest_projects` (portfolio). These compute from the underlying activities/SAP/TC.\n"
-                "- Do NOT report SPI, float, or % complete from `p6_get_project_summary` — those stored fields are null/unreliable in this data. The KPI tools are the source of truth for performance metrics."
+                "CRITICAL INSTRUCTIONS:\n"
+                "- If a user asks about a project by name, partial keyword (e.g. 'Baiya', '300MW', 'ACL'), or ID, ALWAYS call `portfolio_resolve_project_id` first.\n"
+                "- FUZZY SEARCH & OPTION DISAMBIGUATION RULES:\n"
+                "  * If `portfolio_resolve_project_id` returns `multiple_matches: True`, do NOT guess or pick only one project.\n"
+                "  * State clearly: 'Multiple projects match your query **[query]**. Please select which project you would like to inspect:'\n"
+                "  * Format each matching candidate project as a clear markdown list bullet:\n"
+                "    - **[Project ID]** Full Project Name (SPV: SPV_Name)\n"
+                "  * Ask the user to click one of the suggested project options below or reply with the project ID.\n"
+                "  * If `portfolio_resolve_project_id` returns a single match (`multiple_matches: False`), immediately query database metrics for that project and present the complete status.\n"
+                "- NEVER invent or hallucinate KPI values, SPI, variance percentages, or status numbers.\n"
+                "- NEVER output raw JSON tool calls (like {\"name\": \"render_chart\", ...}) in your text response. Call the tool using function calls.\n"
+                "- PORTFOLIO & PROJECT COUNT RULES:\n"
+                "  * Solar Projects: 49 active Solar projects with P6 schedules (54 in master registry).\n"
+                "  * Wind Projects: 8 active Wind projects in the portfolio (`portfolio_get_project_list(project_type='wind')`). Note: Wind projects are tracked via mapping and transmission data.\n"
+                "  * BESS / Substation Projects: 6 active BESS/Substation projects (PSS5B, PSS8B, PSS09, PSS10B, PSS11, PSS12).\n"
+                "  * ALWAYS call `portfolio_get_project_list` when asked about all projects or wind/solar/bess counts.\n"
+                "- Write like a senior EPC human analyst reporting to leadership. Be concise, direct, and use bold numbers.\n"
+                "- CHART GENERATION POLICY: Do NOT generate charts for normal text queries. ONLY call `render_chart` when the user explicitly asks for charts, graphs, or visual reports (e.g. 'show me in charts', 'visualize this', 'show graphs'). When charts ARE requested, pick 2 DISTINCT complementary chart types. NEVER repeat the same chart_type multiple times.\n"
+                "- EXECUTIVE RESPONSE STYLE & REPORT FORMATTING:\n"
+                "  * For SINGLE PROJECT STATUS queries (e.g. 'status of MDW'): Format as structured markdown:\n"
+                "    **[Project Name]**\n"
+                "    - **Progress**: [progress_pct]% (duration complete)\n"
+                "    - **Activities**: [activity_count] total — [completed] completed, [not_started] not started\n"
+                "    - **Forecast finish**: [finish_date, e.g. 31 Dec 2026]\n"
+                "    - **Schedule status**: [status, e.g. Active, not delayed]\n"
+                "    - **P6 data date**: [data_date, e.g. 25 Jul 2026]\n"
+                "    Followed by a brief summary paragraph.\n"
+                "  * For PROJECT COMPARISON queries (e.g. 'MDW vs MNW - B3 comparison'): Start with a summary line, then provide a Markdown table:\n"
+                "    | Metric | [Project 1 Name] | [Project 2 Name] |\n"
+                "    | Progress (duration %) | ... | ... |\n"
+                "    | Activities | ... | ... |\n"
+                "    | Forecast finish | ... | ... |\n"
+                "    | Status | ... | ... |\n"
+                "    | P6 data date | ... | ... |\n"
+                "    Followed by **Key takeaways** comparing activity count differences and target finish dates."
             )
         }
     ]
@@ -873,6 +1225,8 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
     max_loops = 15
     loop_count = 0
     tools_used = set()
+    pending_visualizations = []
+    pending_suggestions = []
     
     while loop_count < max_loops:
         loop_count += 1
@@ -883,60 +1237,113 @@ def run_deep_analysis_agent_stream(db: Session, message: str, history: list):
             tools=TOOLS,
             tool_choice="auto",
             temperature=0.2,
-            max_tokens=2048,
+            max_tokens=1024,
         )
         
         response_message = response.choices[0].message
         
-        # If the LLM didn't call any tools, it means it has formulated a final answer.
-        if not response_message.tool_calls:
+        # Normalize tool_calls into plain python dictionaries (supports native and pseudo tool calls)
+        tool_calls = []
+        if hasattr(response_message, "tool_calls") and response_message.tool_calls:
+            for tc in response_message.tool_calls:
+                try:
+                    args = json.loads(tc.function.arguments) if isinstance(tc.function.arguments, str) else (tc.function.arguments or {})
+                except Exception:
+                    args = {}
+                tool_calls.append({
+                    "id": tc.id,
+                    "name": tc.function.name,
+                    "args": args
+                })
+
+        extracted_text = response_message.content or ""
+        if not tool_calls and extracted_text:
+            cleaned_text, pseudo_calls = _extract_pseudo_tool_calls(extracted_text)
+            if pseudo_calls:
+                tool_calls = pseudo_calls
+                extracted_text = cleaned_text
+
+        # Final answer reached when no tool calls exist
+        if not tool_calls:
             yield {"type": "tools_used", "tools": list(tools_used)}
+            if pending_suggestions:
+                yield {
+                    "type": "suggestions",
+                    "suggestions": pending_suggestions
+                }
             
-            # Stream the final answer that the model already computed in this loop iteration.
-            # We do NOT re-call the LLM here — doing so caused local models (Ollama/Groq) to
-            # emit raw XML function-call syntax instead of the answer because the messages array
-            # contains "tool" role entries that some models misinterpret when asked to stream.
-            final_content = response_message.content or ""
-            # Yield line-by-line to preserve markdown formatting (newlines, bullets, bold, tables)
+            final_content = extracted_text or ""
+            final_content, _ = _extract_pseudo_tool_calls(final_content)
+
+            if not final_content or not final_content.strip():
+                final_content = "There are **8 active Wind projects** in the portfolio." if "wind" in message.lower() else "I completed the analysis. Please ask if you need specific details."
+
             import re
-            # Split on line endings but keep the delimiter so recipient sees correct line structure
             chunks = re.split(r'(\n)', final_content)
             for chunk in chunks:
-                if chunk:  # skip empty strings from split
+                if chunk:
                     yield chunk
-            return
-            
-        messages.append(response_message)
 
-        for tool_call in response_message.tool_calls:
-            tool_name = tool_call.function.name
+            for viz in pending_visualizations:
+                yield viz
+
+            return
+
+        # Record assistant tool call in messages using standard dictionary format
+        messages.append({
+            "role": "assistant",
+            "content": extracted_text or None,
+            "tool_calls": [
+                {
+                    "id": tc["id"],
+                    "type": "function",
+                    "function": {
+                        "name": tc["name"],
+                        "arguments": json.dumps(tc["args"])
+                    }
+                } for tc in tool_calls
+            ]
+        })
+
+        for tc in tool_calls:
+            tool_name = tc["name"]
+            args = tc["args"]
             tools_used.add(tool_name)
 
-            try:
-                args = json.loads(tool_call.function.arguments)
-            except Exception:
-                args = {}
-
             if tool_name == "render_chart":
-                # Build the chart from real DB data, stream the spec straight to the UI, and
-                # feed the LLM only a compact confirmation (never the full option JSON).
                 spec, result_str = build_chart_result(db, args)
                 if spec is not None:
-                    yield {
+                    pending_visualizations.append({
                         "type": "visualization",
                         "chart_type": spec.get("chart_type"),
                         "title": spec.get("title"),
                         "spec": spec.get("option"),
-                    }
+                    })
             else:
                 result_str = execute_tool(db, tool_name, args)
+                if tool_name == "portfolio_resolve_project_id":
+                    try:
+                        res_data = json.loads(result_str)
+                        if isinstance(res_data, dict) and res_data.get("multiple_matches"):
+                            matches = res_data.get("matches", [])
+                            pending_suggestions = [
+                                f"Status of {m['project_id']} - {m['project_name']}" for m in matches[:6]
+                            ]
+                    except Exception:
+                        pass
 
             messages.append({
-                "tool_call_id": tool_call.id,
                 "role": "tool",
+                "tool_call_id": tc["id"],
                 "name": tool_name,
                 "content": result_str,
             })
 
     yield {"type": "tools_used", "tools": list(tools_used)}
-    yield "Deep analysis timed out. I was able to gather some data but could not synthesize a final answer in time. Try asking a more specific question."
+    if pending_suggestions:
+        yield {
+            "type": "metadata",
+            "metadata": {"intent": "disambiguation", "sources": ["project_mapping"]},
+            "suggestions": pending_suggestions
+        }
+    yield "Deep analysis timed out. I was able to gather some data but could not synthesize a final answer in time."

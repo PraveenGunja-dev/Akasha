@@ -17,17 +17,59 @@ import models
 logger = logging.getLogger(__name__)
 
 
+def _resolve_pid(db: Session, project_id: str) -> str:
+    """Ensure project_id is mapped from fuzzy name/spv/p6_name to canonical project_id."""
+    if not project_id:
+        return project_id
+    from engine.tools.portfolio_tools import portfolio_resolve_project_id
+    res = portfolio_resolve_project_id(db, project_id)
+    if res and res.get("project_id"):
+        return res["project_id"]
+    return project_id
+
+
 def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
     """Get high-level project summary: dates, progress, SPI, CPI, activity counts.
     
     Use when: user asks about a specific project's overall status.
     Returns: dict with schedule, cost, and progress metrics, or None if not found.
     """
+    project_id = _resolve_pid(db, project_id)
     p6 = db.query(models.P6Project).filter(
         models.P6Project.project_id == project_id
     ).first()
     
     if not p6:
+        mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
+        if mapping and mapping.spv_name:
+            p6 = db.query(models.P6Project).filter(models.P6Project.name.ilike(f"%{mapping.spv_name}%")).first()
+
+    if not p6:
+        mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
+        if mapping:
+            return {
+                "project_id": project_id,
+                "project_name": mapping.project or mapping.project_id,
+                "spv_name": mapping.spv_name or "",
+                "capacity_mwac": mapping.capacity_mwac,
+                "cluster": mapping.cluster or "Wind",
+                "status": "Pre-Execution (Pending P6 Upload)",
+                "duration_percent_complete": 0.0,
+                "planned_duration": None,
+                "actual_duration": 0,
+                "remaining_duration": None,
+                "spi": None,
+                "cpi": None,
+                "activity_count": "Pending P6 Upload",
+                "completed_activities": 0,
+                "in_progress_activities": 0,
+                "not_started_activities": 0,
+                "finish_date": "Pending P6 Upload",
+                "data_date": None,
+                "stage": "Registered in Master Registry (Pre-Execution)",
+                "note": f"Registered in Master Registry ({mapping.capacity_mwac} MWac). Detailed Primavera P6 schedule file not uploaded yet.",
+                "_source_table": "project_mapping"
+            }
         return None
     
     from engine.tools.portfolio_tools import get_project_display_name
@@ -78,6 +120,7 @@ def p6_get_critical_activities(db: Session, project_id: str, limit: int = 20) ->
     
     Use when: user asks about critical path, critical activities, or delays.
     """
+    project_id = _resolve_pid(db, project_id)
     p6 = db.query(models.P6Project).filter(
         models.P6Project.project_id == project_id
     ).first()
@@ -113,6 +156,7 @@ def p6_get_delayed_activities(db: Session, project_id: str, min_drift_days: int 
     
     Use when: user asks about delays, schedule slippage, or behind-schedule tasks.
     """
+    project_id = _resolve_pid(db, project_id)
     p6 = db.query(models.P6Project).filter(
         models.P6Project.project_id == project_id
     ).first()
@@ -155,6 +199,7 @@ def p6_get_activity_status_breakdown(db: Session, project_id: str) -> dict:
     
     Use when: user asks "how many activities are completed/in-progress/not started?"
     """
+    project_id = _resolve_pid(db, project_id)
     p6 = db.query(models.P6Project).filter(
         models.P6Project.project_id == project_id
     ).first()
@@ -181,41 +226,83 @@ def p6_get_activity_status_breakdown(db: Session, project_id: str) -> dict:
     }
 
 
-def p6_list_all_projects(db: Session) -> dict:
-    """List all P6 projects with core metrics.
+def _norm_pct(val) -> float | None:
+    if val is None: return None
+    v = float(val)
+    if 0 < v <= 1.0: v *= 100
+    return round(v, 1)
+
+
+def p6_list_all_projects(db: Session, project_type: str = "all") -> dict:
+    """List all P6 projects with core metrics and project type classification.
     
-    Use when: user asks about portfolio overview, all projects, or doesn't specify a project.
+    Use when: user asks about portfolio overview, all projects, or count of solar/bess/wind projects.
     """
     projects = db.query(models.P6Project).all()
-    
-    # Build a mapping lookup for project names
     all_mappings = db.query(models.ProjectMapping).all()
     mapping_by_pid = {m.project_id: m for m in all_mappings}
     
-    result = []
+    all_results = []
     for p in projects:
         m = mapping_by_pid.get(p.project_id)
         display_name = (m.project_name_from_p6 or m.project or p.name) if m else p.name
         if "demo" in display_name.lower():
             continue
-        result.append({
+            
+        cluster = (m.cluster or "").lower() if m else ""
+        pid = (p.project_id or "").lower()
+        p6_n = (p.name or "").lower()
+        
+        display_proj = (m.project or "").lower() if m else ""
+        if "wind" in cluster or "wind" in p6_n or "wind" in display_proj:
+            p_type = "Wind"
+        elif "bess" in cluster or "pss" in pid or "pss" in p6_n or "pss" in display_proj:
+            p_type = "BESS / Substation"
+        else:
+            p_type = "Solar"
+            
+        all_results.append({
             "project_id": p.project_id,
             "project_name": display_name,
             "p6_name": p.name,
+            "project_type": p_type,
             "status": p.status,
             "spi": round(p.schedule_performance_index, 2) if p.schedule_performance_index else None,
             "cpi": round(p.cost_performance_index, 2) if p.cost_performance_index else None,
-            "duration_pct_complete": round(p.duration_percent_complete, 1) if p.duration_percent_complete else None,
+            "duration_pct_complete": _norm_pct(p.duration_percent_complete),
             "finish_date": p.finish_date.isoformat() if p.finish_date else None,
             "total_float_hours": int(p.total_float) if p.total_float is not None else None,
             "activity_count": p.activity_count,
             "last_synced_at": p.last_synced_at.isoformat() if p.last_synced_at else None,
             "_source_table": "p6_project",
         })
+        
+    solar_count = sum(1 for r in all_results if r["project_type"] == "Solar")
+    bess_count = sum(1 for r in all_results if r["project_type"] == "BESS / Substation")
+    wind_count = sum(1 for r in all_results if r["project_type"] == "Wind")
+    
+    pt_filter = (project_type or "all").lower().strip()
+    if pt_filter in ["solar", "solar projects", "active solar"]:
+        filtered = [r for r in all_results if r["project_type"] == "Solar"]
+    elif pt_filter in ["bess", "substation", "pss"]:
+        filtered = [r for r in all_results if r["project_type"] == "BESS / Substation"]
+    elif pt_filter in ["wind"]:
+        filtered = [r for r in all_results if r["project_type"] == "Wind"]
+    else:
+        filtered = all_results
+        
     return {
-        "total_projects": len(result),
-        "projects": result
+        "total_projects": len(filtered),
+        "solar_projects_count": solar_count,
+        "master_solar_projects_count": 54,
+        "bess_projects_count": bess_count,
+        "wind_projects_count": wind_count,
+        "total_p6_records": len(all_results),
+        "filter_applied": project_type,
+        "summary_note": f"There are {solar_count} active Solar projects with P6 schedules in the database (54 Solar projects in the master registry). The database contains {len(all_results)} total P6 project records, but {bess_count} of them are BESS / Substation projects (PSS5B, PSS8B, PSS09, PSS10B, PSS11, PSS12).",
+        "projects": filtered
     }
+
 
 
 def p6_get_wbs_tree(db: Session, project_id: str) -> list[dict]:

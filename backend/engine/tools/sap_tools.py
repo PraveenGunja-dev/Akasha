@@ -75,15 +75,18 @@ def _safe_int(val) -> int:
     return int(round(float(val)))
 
 
-def sap_get_po_summary(db: Session, project_id: str) -> dict:
+def sap_get_po_summary(db: Session, project_id: str = None) -> dict:
     """Get purchase order summary: total ordered, delivered, pending, value.
     
     Use when: user asks about procurement status, PO progress, material delivery.
     """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    project_name = sap_filter["project_name"]
-    
-    pos = _query_po_by_project(db, sap_filter)
+    if not project_id or str(project_id).lower() in ('all', 'portfolio', 'none', 'nan', ''):
+        pos = db.query(models.MTPOAmount).all()
+        project_name = "Entire Portfolio / Khavda"
+    else:
+        sap_filter = _resolve_sap_filter(db, project_id)
+        project_name = sap_filter["project_name"]
+        pos = _query_po_by_project(db, sap_filter)
     
     if not pos:
         return {"project_id": project_id, "project_name": project_name, "has_data": False, "summary": {}}
@@ -93,11 +96,10 @@ def sap_get_po_summary(db: Session, project_id: str) -> dict:
     total_pending = sum(_safe_int(po.still_to_deliver_qty) for po in pos)
     total_value_inr = sum(po.net_order_value_inr or 0 for po in pos)
     
-    # Find latest upload time for freshness
     latest_upload = max((po.upload_time for po in pos if po.upload_time), default=None)
     
     return {
-        "project_id": project_id,
+        "project_id": project_id or "ALL",
         "project_name": project_name,
         "has_data": True,
         "summary": {
@@ -113,13 +115,18 @@ def sap_get_po_summary(db: Session, project_id: str) -> dict:
     }
 
 
-def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list[dict]:
+def sap_get_material_gaps(db: Session, project_id: str = None, limit: int = 15) -> list[dict]:
     """Get materials with pending deliveries, sorted by gap severity.
     
     Use when: user asks about material shortages, supply gaps, pending deliveries.
     """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    pos = _query_po_by_project(db, sap_filter)
+    if not project_id or str(project_id).lower() in ('all', 'portfolio', 'none', 'nan', ''):
+        pos = db.query(models.MTPOAmount).filter(models.MTPOAmount.still_to_deliver_qty > 0).all()
+        p_name = "Entire Portfolio"
+    else:
+        sap_filter = _resolve_sap_filter(db, project_id)
+        pos = _query_po_by_project(db, sap_filter)
+        p_name = sap_filter["project_name"]
     
     if not pos:
         return []
@@ -142,7 +149,7 @@ def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list
                 "delivered": agg["delivered"],
                 "pending": agg["pending"],
                 "gap_pct": round(agg["pending"] / agg["ordered"] * 100, 1) if agg["ordered"] > 0 else 0,
-                "project_name": sap_filter["project_name"],
+                "project_name": p_name,
                 "_source_table": "mt_poamount",
             })
     
@@ -150,13 +157,18 @@ def sap_get_material_gaps(db: Session, project_id: str, limit: int = 15) -> list
     return gaps[:limit]
 
 
-def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
-    """Get vendor delivery performance for a project.
+def sap_get_vendor_performance(db: Session, project_id: str = None) -> list[dict]:
+    """Get vendor delivery performance.
     
     Use when: user asks about vendor risk, vendor performance, supplier delays.
     """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    pos = _query_po_by_project(db, sap_filter)
+    if not project_id or str(project_id).lower() in ('all', 'portfolio', 'none', 'nan', ''):
+        pos = db.query(models.MTPOAmount).all()
+        p_name = "Entire Portfolio"
+    else:
+        sap_filter = _resolve_sap_filter(db, project_id)
+        pos = _query_po_by_project(db, sap_filter)
+        p_name = sap_filter["project_name"]
     
     if not pos:
         return []
@@ -180,7 +192,7 @@ def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
                 "total_pending": agg["pending"],
                 "po_count": agg["po_count"],
                 "fulfillment_pct": round((agg["ordered"] - agg["pending"]) / agg["ordered"] * 100, 1) if agg["ordered"] > 0 else 0,
-                "project_name": sap_filter["project_name"],
+                "project_name": p_name,
                 "_source_table": "mt_poamount",
             })
     
@@ -188,38 +200,42 @@ def sap_get_vendor_performance(db: Session, project_id: str) -> list[dict]:
     return result
 
 
-def sap_get_inventory(db: Session, project_id: str) -> dict:
-    """Get current inventory (MB52) for a project.
+def sap_get_inventory(db: Session, project_id: str = None) -> dict:
+    """Get current inventory (MB52) for a project or entire portfolio.
     
     Use when: user asks about stock on hand, inventory levels, available materials.
     """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    project_name = sap_filter["project_name"]
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    
-    inv_records = []
-    if wbs:
-        inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.wbs_element.ilike(f"{wbs}%"),
-            models.MTInventory.quantity_inv > 0
-        ).all()
-    
-    if not inv_records and plant_code:
-        inv_records = db.query(models.MTInventory).filter(
-            models.MTInventory.plant_code == plant_code,
-            models.MTInventory.quantity_inv > 0
-        ).all()
+    if not project_id or str(project_id).lower() in ('all', 'portfolio', 'none', 'nan', ''):
+        inv_records = db.query(models.MTInventory).filter(models.MTInventory.quantity_inv > 0).all()
+        project_name = "Entire Portfolio / Khavda"
+    else:
+        sap_filter = _resolve_sap_filter(db, project_id)
+        project_name = sap_filter["project_name"]
+        wbs = sap_filter.get("wbs")
+        plant_code = sap_filter.get("plant_code")
+        
+        inv_records = []
+        if wbs:
+            inv_records = db.query(models.MTInventory).filter(
+                models.MTInventory.wbs_element.ilike(f"{wbs}%"),
+                models.MTInventory.quantity_inv > 0
+            ).all()
+        
+        if not inv_records and plant_code:
+            inv_records = db.query(models.MTInventory).filter(
+                models.MTInventory.plant_code == plant_code,
+                models.MTInventory.quantity_inv > 0
+            ).all()
     
     if not inv_records:
-        return {"project_id": project_id, "project_name": project_name, "has_data": False}
+        return {"project_id": project_id or "ALL", "project_name": project_name, "has_data": False}
     
     total_qty = sum(_safe_int(r.quantity_inv) for r in inv_records)
     total_value = sum(r.value_unrestricted or 0 for r in inv_records)
     latest_upload = max((r.upload_time for r in inv_records if r.upload_time), default=None)
     
     return {
-        "project_id": project_id,
+        "project_id": project_id or "ALL",
         "project_name": project_name,
         "has_data": True,
         "total_items": len(inv_records),
@@ -230,42 +246,46 @@ def sap_get_inventory(db: Session, project_id: str) -> dict:
     }
 
 
-def sap_get_consumption(db: Session, project_id: str) -> dict:
-    """Get material consumption (MB51) data for a project.
+def sap_get_consumption(db: Session, project_id: str = None) -> dict:
+    """Get material consumption (MB51) data for a project or portfolio.
     
     Use when: user asks about material usage, consumption rates, issued quantities.
     """
-    sap_filter = _resolve_sap_filter(db, project_id)
-    project_name = sap_filter["project_name"]
-    wbs = sap_filter.get("wbs")
-    plant_code = sap_filter.get("plant_code")
-    
-    records = []
-    if wbs:
-        records = db.query(models.MTMaterialDocument).filter(
-            models.MTMaterialDocument.wbs_element.ilike(f"{wbs}%")
-        ).all()
-    
-    if not records and plant_code:
-        records = db.query(models.MTMaterialDocument).filter(
-            models.MTMaterialDocument.plant_code == plant_code
-        ).all()
+    if not project_id or str(project_id).lower() in ('all', 'portfolio', 'none', 'nan', ''):
+        records = db.query(models.MTMaterialDocument).all()
+        project_name = "Entire Portfolio / Khavda"
+    else:
+        sap_filter = _resolve_sap_filter(db, project_id)
+        project_name = sap_filter["project_name"]
+        wbs = sap_filter.get("wbs")
+        plant_code = sap_filter.get("plant_code")
+        
+        records = []
+        if wbs:
+            records = db.query(models.MTMaterialDocument).filter(
+                models.MTMaterialDocument.wbs_element.ilike(f"{wbs}%")
+            ).all()
+        
+        if not records and plant_code:
+            records = db.query(models.MTMaterialDocument).filter(
+                models.MTMaterialDocument.plant_code == plant_code
+            ).all()
     
     if not records:
-        return {"project_id": project_id, "project_name": project_name, "has_data": False}
+        return {"project_id": project_id or "ALL", "project_name": project_name, "has_data": False}
     
     issued_qty = 0
     returned_qty = 0
     for r in records:
         mvt = str(r.movement_type).strip() if r.movement_type else ""
         qty = abs(_safe_int(r.quantity))
-        if mvt == "222":
+        if mvt in ("222", "262"):
             returned_qty += qty
         else:
             issued_qty += qty
     
     return {
-        "project_id": project_id,
+        "project_id": project_id or "ALL",
         "project_name": project_name,
         "has_data": True,
         "total_records": len(records),
@@ -273,6 +293,161 @@ def sap_get_consumption(db: Session, project_id: str) -> dict:
         "returned_qty": returned_qty,
         "net_consumed": issued_qty - returned_qty,
         "_source_table": "mt_materialdocument",
+    }
+
+
+def sap_search_inventory(db: Session, query: str = None, plant_code: str = None, limit: int = 20) -> list[dict]:
+    """Search live SAP inventory (MB52) by material description, material code, or plant code.
+    
+    Use when: user asks about specific stock items, e.g. 'how many cables do we have?', 'search scrap in inventory', 'stock at plant 6061'.
+    """
+    q = db.query(models.MTInventory)
+    if plant_code:
+        q = q.filter(models.MTInventory.plant_code == str(plant_code).strip())
+    if query:
+        term = f"%{query.strip()}%"
+        q = q.filter(
+            (models.MTInventory.material_name.ilike(term)) |
+            (models.MTInventory.material_description.ilike(term)) |
+            (models.MTInventory.material_code.ilike(term))
+        )
+    
+    results = q.order_by(models.MTInventory.unrestricted_qty.desc()).limit(limit).all()
+    
+    items = []
+    for r in results:
+        items.append({
+            "material_code": r.material_code,
+            "material_name": r.material_name or r.material_description,
+            "material_description": r.material_description,
+            "plant_code": r.plant_code,
+            "storage_location": r.storage_location_mapping,
+            "wbs_element": r.wbs_element,
+            "unrestricted_qty": r.unrestricted_qty or r.quantity_inv or 0,
+            "base_unit": r.base_unit or "Units",
+            "value_unrestricted_inr": r.value_unrestricted or 0,
+            "_source_table": "mt_inventory"
+        })
+    return items
+
+
+def sap_search_pos(db: Session, query: str = None, vendor_name: str = None, po_number: str = None, plant_code: str = None, limit: int = 20) -> list[dict]:
+    """Search SAP Purchase Orders (ME2J) by PO number, vendor name, material text, buyer, or plant code.
+    
+    Use when: user asks about specific purchase orders, vendor orders, or buyer PO lists, e.g. 'show POs for Junjar Construction', 'find PO 5710005200'.
+    """
+    q = db.query(models.MTPOAmount)
+    if po_number:
+        q = q.filter(models.MTPOAmount.purchasing_document.ilike(f"%{po_number.strip()}%"))
+    if vendor_name:
+        q = q.filter(models.MTPOAmount.vendor_name.ilike(f"%{vendor_name.strip()}%"))
+    if plant_code:
+        q = q.filter(models.MTPOAmount.plant_code == str(plant_code).strip())
+    if query:
+        term = f"%{query.strip()}%"
+        q = q.filter(
+            (models.MTPOAmount.purchasing_document.ilike(term)) |
+            (models.MTPOAmount.vendor_name.ilike(term)) |
+            (models.MTPOAmount.short_text.ilike(term)) |
+            (models.MTPOAmount.material_name.ilike(term)) |
+            (models.MTPOAmount.buyer_name.ilike(term)) |
+            (models.MTPOAmount.wbs_element.ilike(term))
+        )
+    
+    results = q.order_by(models.MTPOAmount.id.desc()).limit(limit).all()
+    
+    items = []
+    for r in results:
+        items.append({
+            "po_number": r.purchasing_document,
+            "vendor_name": r.vendor_name,
+            "material_name": r.short_text or r.material_name,
+            "plant_code": r.plant_code,
+            "wbs_element": r.wbs_element,
+            "ordered_qty": r.order_quantity or 0,
+            "delivered_qty": r.delivered_qty or 0,
+            "pending_qty": r.still_to_deliver_qty or 0,
+            "net_order_value_inr": r.net_order_value_inr or r.net_order_value or 0,
+            "still_to_deliver_inr": r.still_to_deliver_inr or 0,
+            "currency": r.currency or "INR",
+            "buyer_name": r.buyer_name,
+            "delivery_completed": r.delivery_completed_flag,
+            "document_date": r.document_date.strftime("%Y-%m-%d") if r.document_date else None,
+            "_source_table": "mt_poamount"
+        })
+    return items
+
+
+def sap_search_consumption(db: Session, query: str = None, movement_type: str = None, plant_code: str = None, limit: int = 20) -> list[dict]:
+    """Search SAP Material Consumption logs (MB51) by material description/code, movement type (221, 222, 261, 262), or plant.
+    
+    Use when: user asks about material movement or consumption logs, e.g. 'show movement 221 entries', 'consumption of sleeves'.
+    """
+    q = db.query(models.MTMaterialDocument)
+    if movement_type:
+        q = q.filter(models.MTMaterialDocument.movement_type == str(movement_type).strip())
+    if plant_code:
+        q = q.filter(models.MTMaterialDocument.plant_code == str(plant_code).strip())
+    if query:
+        term = f"%{query.strip()}%"
+        q = q.filter(
+            (models.MTMaterialDocument.material_name.ilike(term)) |
+            (models.MTMaterialDocument.material_description.ilike(term)) |
+            (models.MTMaterialDocument.material_code.ilike(term)) |
+            (models.MTMaterialDocument.material_document.ilike(term)) |
+            (models.MTMaterialDocument.wbs_element.ilike(term))
+        )
+    
+    results = q.order_by(models.MTMaterialDocument.id.desc()).limit(limit).all()
+    
+    items = []
+    for r in results:
+        items.append({
+            "material_document": r.material_document,
+            "material_code": r.material_code,
+            "material_name": r.material_name or r.material_description,
+            "movement_type": r.movement_type,
+            "quantity": r.quantity or 0,
+            "base_unit": r.base_unit or "Units",
+            "amount_in_lc": r.amount_in_lc or 0,
+            "plant_code": r.plant_code,
+            "storage_location": r.storage_location,
+            "wbs_element": r.wbs_element,
+            "posting_date": r.posting_date.strftime("%Y-%m-%d") if r.posting_date else None,
+            "_source_table": "mt_materialdocument"
+        })
+    return items
+
+
+def sap_get_portfolio_summary(db: Session) -> dict:
+    """Get macro summary across all ingested SAP datasets (ME2J, MB52, MB51, Master Mapping).
+    
+    Use when: user asks for overall SAP status, total PO value across Khavda, or summary of SAP datasets.
+    """
+    po_count = db.query(models.MTPOAmount).count()
+    po_total_value = db.query(func.sum(models.MTPOAmount.net_order_value_inr)).scalar() or 0.0
+    
+    inv_count = db.query(models.MTInventory).count()
+    inv_total_value = db.query(func.sum(models.MTInventory.value_unrestricted)).scalar() or 0.0
+    
+    consumption_count = db.query(models.MTMaterialDocument).count()
+    mapping_count = db.query(models.ProjectMapping).count()
+    
+    return {
+        "master_project_mappings_count": mapping_count,
+        "purchase_orders_me2j": {
+            "total_records": po_count,
+            "total_value_inr": round(po_total_value, 2),
+            "total_value_cr": round(po_total_value / 10000000.0, 2)
+        },
+        "live_inventory_mb52": {
+            "total_records": inv_count,
+            "total_unrestricted_value_inr": round(inv_total_value, 2),
+            "total_value_cr": round(inv_total_value / 10000000.0, 2)
+        },
+        "consumption_documents_mb51": {
+            "total_records": consumption_count
+        }
     }
 
 
@@ -302,4 +477,5 @@ def sap_get_freshness(db: Session, project_id: str) -> dict:
         "synced_at": latest.isoformat() if latest else None,
         "exists": latest is not None,
     }
+
 

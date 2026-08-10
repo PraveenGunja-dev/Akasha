@@ -47,7 +47,7 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
       const response = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg.content, history: messages })
+        body: JSON.stringify({ message: userMsg.content, history: messages, stream: false })
       });
       
       const data = await response.json();
@@ -55,7 +55,7 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         type: 'bot',
-        content: response.ok ? data.response : `Error: ${data.detail || 'Connection failed'}`
+        content: response.ok && data ? (data.response || data.content || 'Analysis complete.') : `Error: ${data?.detail || 'Connection failed'}`
       }]);
       
       if (response.ok && data.suggestions) {
@@ -129,7 +129,9 @@ export default function AkashaChat({ isOpen, onClose, isFullScreen, onToggleFull
              }`}>
                {msg.type === 'bot' ? (
                  <div className="akasha-response prose prose-sm dark:prose-invert max-w-none prose-p:leading-relaxed">
-                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                     {typeof msg.content === 'string' ? msg.content : (msg.content ? String(msg.content) : '')}
+                   </ReactMarkdown>
                  </div>
                ) : msg.content}
              </div>

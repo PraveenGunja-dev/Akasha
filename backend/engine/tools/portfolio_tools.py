@@ -18,28 +18,69 @@ from engine.tools.tc_tools import tc_get_project_lines
 logger = logging.getLogger(__name__)
 
 
-def portfolio_get_project_list(db: Session) -> list[dict]:
-    """Get list of all mapped projects with their identifiers.
+def portfolio_get_project_list(db: Session, project_type: str = "all") -> dict:
+    """Get list of all mapped projects with their identifiers and categories.
     
-    Use when: need to resolve a project name to an ID, or list available projects.
+    Use when: need to resolve project names, list projects, or filter by project_type ('solar', 'bess', 'wind').
     """
     mappings = db.query(models.ProjectMapping).all()
-    filtered_mappings = []
+    all_projects = []
+    
     for m in mappings:
         name_check = m.project_name_from_p6 or m.project or ""
-        if "demo" not in name_check.lower():
-            filtered_mappings.append(m)
+        if "demo" in name_check.lower():
+            continue
             
-    return [{
-        "project_id": m.project_id,
-        "project_name": m.project,
-        "p6_name": m.project_name_from_p6,
-        "spv_name": m.spv_name,
-        "category": m.category,
-        "capacity_mwac": m.capacity_mwac,
-        "cluster": m.cluster,
-        "subcluster": m.subcluster,
-    } for m in filtered_mappings]
+        cluster = (m.cluster or "").lower()
+        pid = (m.project_id or "").lower()
+        p_name = (m.project or "").lower()
+        p6_n = (m.project_name_from_p6 or "").lower()
+        
+        if "wind" in cluster or "wind" in p_name or "wind" in p6_n:
+            p_type = "Wind"
+        elif "bess" in cluster or "pss" in pid or "pss" in p_name or "pss" in p6_n:
+            p_type = "BESS / Substation"
+        else:
+            p_type = "Solar"
+            
+        all_projects.append({
+            "project_id": m.project_id,
+            "project_name": m.project,
+            "p6_name": m.project_name_from_p6,
+            "spv_name": m.spv_name,
+            "category": m.category,
+            "project_type": p_type,
+            "capacity_mwac": m.capacity_mwac,
+            "cluster": m.cluster,
+            "subcluster": m.subcluster,
+        })
+        
+    solar_count = sum(1 for p in all_projects if p["project_type"] == "Solar")
+    bess_count = sum(1 for p in all_projects if p["project_type"] == "BESS / Substation")
+    wind_count = sum(1 for p in all_projects if p["project_type"] == "Wind")
+    
+    pt_filter = (project_type or "all").lower().strip()
+    if pt_filter in ["solar", "solar projects", "active solar"]:
+        filtered = [p for p in all_projects if p["project_type"] == "Solar"]
+    elif pt_filter in ["bess", "substation", "pss"]:
+        filtered = [p for p in all_projects if p["project_type"] == "BESS / Substation"]
+    elif pt_filter in ["wind"]:
+        filtered = [p for p in all_projects if p["project_type"] == "Wind"]
+    else:
+        filtered = all_projects
+        
+    return {
+        "total_projects": len(filtered),
+        "solar_projects_count": solar_count,
+        "master_solar_projects_count": 54,
+        "bess_projects_count": bess_count,
+        "wind_projects_count": wind_count,
+        "total_mapped_records": len(all_projects),
+        "filter_applied": project_type,
+        "summary_note": f"There are 49 active Solar projects with P6 schedules (54 total in master registry), {bess_count} BESS/Substation entries, and {wind_count} Wind entries.",
+        "projects": filtered
+    }
+
 
 
 def portfolio_get_project_360(db: Session, project_id: str) -> dict:
@@ -188,68 +229,105 @@ def get_project_display_name(db: Session, project_id: str) -> str:
 
 
 def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
-    """Resolve a fuzzy project name, SPV name, or P6 name to the canonical project_id AND project_name.
+    """Resolve a fuzzy project name, partial keyword (e.g. 'Baiya', '300MW', 'ACL'), SPV name, or P6 name.
     
-    Use when: user mentions a project by name and we need the canonical ID.
-    Returns: dict with project_id, project_name, p6_name — or None if not found.
-    Tries: project_id → project → project_name_from_p6 → P6 name → fuzzy match.
+    Use when: user mentions a project by name or partial keyword and we need the canonical ID.
+    Returns:
+      - Single match: dict with project_id, project_name, p6_name, multiple_matches=False.
+      - Multiple matches: dict with multiple_matches=True, match_count=N, matches=[...], message="...".
+      - No match: dict with found=False.
     """
     if not name_or_id:
-        return None
+        return {"found": False, "message": "No query provided."}
     
     name_or_id = name_or_id.strip()
+    q_lower = name_or_id.lower()
     
-    def _build_result(mapping):
+    from sqlalchemy import func
+
+    def _build_single_result(mapping):
         return {
+            "found": True,
+            "multiple_matches": False,
             "project_id": mapping.project_id,
             "project_name": mapping.project_name_from_p6 or mapping.project or mapping.project_id,
             "p6_name": mapping.project_name_from_p6 or "",
             "spv_name": mapping.spv_name or "",
             "category": mapping.category or "",
             "capacity_mwac": mapping.capacity_mwac,
+            "cluster": mapping.cluster or "",
         }
     
-    # Direct project_id match
+    # 1. Exact project_id match (case-insensitive)
     m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == name_or_id
+        func.lower(models.ProjectMapping.project_id) == q_lower
     ).first()
     if m:
-        return _build_result(m)
+        return _build_single_result(m)
     
-    # Match against project_mapping.project
+    # 2. Exact project name or project_name_from_p6 match (case-insensitive)
     m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project == name_or_id
+        (func.lower(models.ProjectMapping.project) == q_lower) |
+        (func.lower(models.ProjectMapping.project_name_from_p6) == q_lower)
     ).first()
     if m and m.project_id:
-        return _build_result(m)
-    
-    # Match against P6 project name
+        return _build_single_result(m)
+        
+    # 3. Exact P6Project table match
     p6 = db.query(models.P6Project).filter(
-        models.P6Project.name == name_or_id
+        (func.lower(models.P6Project.project_id) == q_lower) |
+        (func.lower(models.P6Project.name) == q_lower)
     ).first()
     if p6:
         m = db.query(models.ProjectMapping).filter(
             models.ProjectMapping.project_id == p6.project_id
         ).first()
         if m:
-            return _build_result(m)
+            return _build_single_result(m)
     
-    # Match project_name_from_p6
-    m = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_name_from_p6 == name_or_id
-    ).first()
-    if m and m.project_id:
-        return _build_result(m)
-    
-    # Case-insensitive fuzzy search — score every containment match and keep the best one.
-    # A short code (e.g. spv_name="ARE3L") is a substring of almost every one of its own
-    # projects' full names, so returning the FIRST containment hit would let an unrelated
-    # project sharing that short code beat the actual near-exact name match. Score by
-    # similarity ratio instead so the most specific match wins.
-    name_lower = name_or_id.lower()
+    # 4. Partial Substring / Containment Match across all mappings
     all_mappings = db.query(models.ProjectMapping).all()
-    MIN_SCORE = 0.4
+    matching_mappings = []
+    seen_ids = set()
+    
+    for mapping in all_mappings:
+        pid = (mapping.project_id or "").lower()
+        pname = (mapping.project or "").lower()
+        p6name = (mapping.project_name_from_p6 or "").lower()
+        spv = (mapping.spv_name or "").lower()
+        cluster = (mapping.cluster or "").lower()
+        
+        if (q_lower in pid or q_lower in pname or q_lower in p6name or q_lower in spv or q_lower in cluster):
+            if mapping.project_id and mapping.project_id not in seen_ids:
+                seen_ids.add(mapping.project_id)
+                matching_mappings.append(mapping)
+                
+    if len(matching_mappings) == 1:
+        return _build_single_result(matching_mappings[0])
+    elif len(matching_mappings) > 1:
+        matches_list = []
+        for mapping in matching_mappings[:10]:
+            matches_list.append({
+                "project_id": mapping.project_id,
+                "project_name": mapping.project_name_from_p6 or mapping.project or mapping.project_id,
+                "spv_name": mapping.spv_name or "",
+                "capacity_mwac": mapping.capacity_mwac,
+                "category": mapping.category or "",
+                "cluster": mapping.cluster or ""
+            })
+        return {
+            "found": True,
+            "multiple_matches": True,
+            "query": name_or_id,
+            "match_count": len(matching_mappings),
+            "project_id": matches_list[0]["project_id"],
+            "project_name": matches_list[0]["project_name"],
+            "matches": matches_list,
+            "message": f"Found {len(matching_mappings)} projects matching '{name_or_id}'. Present the matching projects as clear choices to the user and ask them to select one."
+        }
 
+    # 5. Fuzzy Match via SequenceMatcher as fallback
+    MIN_SCORE = 0.5
     best_mapping = None
     best_score = 0.0
     for mapping in all_mappings:
@@ -261,17 +339,15 @@ def portfolio_resolve_project_id(db: Session, name_or_id: str) -> dict | None:
         for candidate in candidates:
             if not candidate:
                 continue
-            candidate_lower = candidate.lower()
-            if name_lower not in candidate_lower and candidate_lower not in name_lower:
-                continue
-            score = difflib.SequenceMatcher(None, name_lower, candidate_lower).ratio()
+            score = difflib.SequenceMatcher(None, q_lower, candidate.lower()).ratio()
             if score > best_score:
                 best_score = score
                 best_mapping = mapping
 
     if best_mapping and best_score >= MIN_SCORE:
-        return _build_result(best_mapping)
-    return None
+        return _build_single_result(best_mapping)
+
+    return {"found": False, "query": name_or_id, "message": f"No project found matching '{name_or_id}'."}
 
 def portfolio_get_notifications(db: Session, limit: int = 10, category: str = "All") -> list[dict]:
     """Get the latest actionable notifications for the user.

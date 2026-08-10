@@ -45,6 +45,12 @@ def tc_get_project_lines(db: Session, project_id: str) -> dict:
     
     Use when: user asks about transmission progress, grid connectivity, line status.
     """
+    if project_id:
+        from engine.tools.portfolio_tools import portfolio_resolve_project_id
+        res = portfolio_resolve_project_id(db, project_id)
+        if res and res.get("project_id"):
+            project_id = res["project_id"]
+
     mapping = db.query(models.ProjectMapping).filter(
         models.ProjectMapping.project_id == project_id
     ).first()

@@ -823,7 +823,7 @@
 }
 
 .copilot-chart-card .chart-body {
-  padding: 12px;
+  padding: 12px 14px 8px 14px;
 }
 
 /* Quick-action chip buttons */

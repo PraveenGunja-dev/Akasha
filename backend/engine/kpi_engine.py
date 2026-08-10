@@ -164,16 +164,35 @@ def compute_project_kpis(db: Session, project_id: str, activities: list = None,
                          pos: list = None, tc_total: int = None, tc_delayed: int = None) -> dict:
     """Full KPI bundle for one project. Prefetched inputs may be passed for portfolio-scale use;
     otherwise they're queried here."""
+    mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
+    if not mapping:
+        from engine.tools.portfolio_tools import portfolio_resolve_project_id
+        resolved = portfolio_resolve_project_id(db, project_id)
+        if resolved and resolved.get("project_id"):
+            project_id = resolved["project_id"]
+            mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
+
     p6 = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
-    if not p6:
+    if not p6 and mapping and mapping.spv_name:
+        p6 = db.query(models.P6Project).filter(models.P6Project.name.ilike(f"%{mapping.spv_name}%")).first()
+
+    if not mapping and not p6:
         return {"project_id": project_id, "error": "Project not found"}
 
-    if activities is None:
-        activities = db.query(models.P6Activity).filter(
-            models.P6Activity.project_object_id == p6.p6_object_id
-        ).all()
-
-    sched = compute_schedule_kpis(p6, activities)
+    if p6:
+        if activities is None:
+            activities = db.query(models.P6Activity).filter(
+                models.P6Activity.project_object_id == p6.p6_object_id
+            ).all()
+        sched = compute_schedule_kpis(p6, activities)
+    else:
+        sched = {
+            "has_data": False,
+            "reason": f"No Primavera P6 schedule file uploaded for this project (Registered capacity: {mapping.capacity_mwac if mapping else 'N/A'} MWac).",
+            "progress_pct": 0.0,
+            "total_activities": "Pending P6 Upload",
+            "schedule_status": "Registered in Master Registry (Pre-Execution / Pending P6 Upload)"
+        }
 
     # Procurement (SAP) — resolve via WBS like the SAP tools do
     if pos is None:
@@ -201,16 +220,24 @@ def compute_project_kpis(db: Session, project_id: str, activities: list = None,
     )
 
     from engine.tools.portfolio_tools import get_project_display_name
+    proj_name = get_project_display_name(db, project_id)
+    capacity_mw = mapping.capacity_mwac if mapping else None
+    spv = mapping.spv_name if mapping else None
+    cluster = mapping.cluster if mapping else None
+
     return {
         "project_id": project_id,
-        "project_name": get_project_display_name(db, project_id),
+        "project_name": proj_name,
+        "spv_name": spv,
+        "cluster": cluster,
+        "capacity_mwac": capacity_mw,
         "schedule": sched,
         "procurement": proc,
         "execution": execu,
         "overall_risk": risk,
         "health": health,
-        "_note": "All KPIs computed from underlying activities/PO/TC data, not from stored summary columns.",
-        "_source_tables": ["p6_activity", "mt_poamount", "tc_network_edge"],
+        "_note": "KPIs computed from available project mapping, schedule, procurement, and transmission data.",
+        "_source_tables": ["project_mapping", "p6_activity", "mt_poamount", "tc_network_edge"],
     }
 
 

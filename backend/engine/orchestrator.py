@@ -137,16 +137,20 @@ class ChatOrchestrator:
             logger.info("Routing to Deep Analysis Agent Stream (ReAct Loop)")
             full_content = ""
             tools_used = []
+            pending_suggestions = []
             
             for chunk in run_deep_analysis_agent_stream(db, message, history):
                 if isinstance(chunk, dict):
-                    if chunk.get("type") == "tools_used":
-                        tools_used = chunk["tools"]
-                    elif chunk.get("type") == "visualization":
+                    c_type = chunk.get("type")
+                    if c_type == "tools_used":
+                        tools_used = chunk.get("tools", [])
+                    elif c_type == "suggestions":
+                        pending_suggestions = chunk.get("suggestions", [])
+                    elif c_type == "visualization":
                         # Forward chart specs straight to the router (not part of text content).
                         yield chunk
                     # Unknown dict types are ignored — never concatenated into text.
-                else:
+                elif isinstance(chunk, str):
                     full_content += chunk
                     yield chunk
             
@@ -161,7 +165,8 @@ class ChatOrchestrator:
                     data_as_of=None,
                     sources_used=tools_used,
                     latency_ms=latency,
-                )
+                ),
+                "suggestions": pending_suggestions
             }
             return
             

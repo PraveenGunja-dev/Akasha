@@ -39,10 +39,10 @@ export default function FloatingCopilot() {
       const res = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMsg, history: messages.slice(-10) })
+        body: JSON.stringify({ message: userMsg, history: messages.slice(-10), stream: false })
       });
       const data = await res.json();
-      setMessages(prev => [...prev, { type: 'bot', content: data.response }]);
+      setMessages(prev => [...prev, { type: 'bot', content: res.ok && data ? (data.response || data.content || 'Analysis complete.') : 'Connection error. Please try again.' }]);
       if (res.ok && data.suggestions) {
         setSuggestions(data.suggestions);
       }
@@ -113,7 +113,9 @@ export default function FloatingCopilot() {
                 }`}>
                   {msg.type === 'bot' ? (
                     <div className="akasha-response prose prose-invert prose-sm max-w-none">
-                      <ReactMarkdown remarkPlugins={[remarkGfm]}>{msg.content}</ReactMarkdown>
+                      <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                        {typeof msg.content === 'string' ? msg.content : (msg.content ? String(msg.content) : '')}
+                      </ReactMarkdown>
                     </div>
                   ) : msg.content}
                 </div>

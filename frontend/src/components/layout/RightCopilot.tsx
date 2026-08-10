@@ -30,7 +30,7 @@ export default function RightCopilot() {
       const response = await fetch('/akasha/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: textToSend, history: messages })
+        body: JSON.stringify({ message: textToSend, history: messages, stream: false })
       });
       
       const data = await response.json();
@@ -39,7 +39,7 @@ export default function RightCopilot() {
       setMessages(prev => [...prev, {
         id: Date.now() + 1,
         type: 'bot',
-        content: response.ok ? data.response : `Error: ${data.detail || 'Failed'}`
+        content: response.ok && data ? (data.response || data.content || 'Analysis complete.') : `Error: ${data?.detail || 'Failed'}`
       }]);
       
       if (response.ok && data.suggestions) {
@@ -106,7 +106,7 @@ export default function RightCopilot() {
                     : 'bg-[#1F2937] text-muted-foreground rounded-tl-none border-border'
                 }`}>
                   <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                    {msg.content}
+                    {typeof msg.content === 'string' ? msg.content : (msg.content ? String(msg.content) : '')}
                   </ReactMarkdown>
                 </div>
              </div>

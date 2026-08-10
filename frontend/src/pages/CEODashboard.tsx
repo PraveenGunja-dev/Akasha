@@ -31,11 +31,19 @@ import SimulationLab from '../features/analytics/SimulationLab';
 import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 import QualityCommandCenter from '../features/quality/QualityCommandCenter';
 
+const IMPLEMENTED_MODULES = [
+  'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
+  'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
+  'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
+  'quality'
+];
+
 export default function CEODashboard() {
   const { projectId } = useParams();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>(() => {
-    return sessionStorage.getItem('ceoActiveTab') || "overview";
+    const saved = sessionStorage.getItem('ceoActiveTab');
+    return (saved && IMPLEMENTED_MODULES.includes(saved)) ? saved : "overview";
   });
   const [previousTab, setPreviousTab] = useState<string>("overview");
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
@@ -52,7 +60,7 @@ export default function CEODashboard() {
   // Load saved tab from session storage or default to 'overview'
   useEffect(() => {
     const savedTab = sessionStorage.getItem('ceoActiveTab');
-    if (savedTab && implementedModules.includes(savedTab)) {
+    if (savedTab && IMPLEMENTED_MODULES.includes(savedTab)) {
       setActiveTab(savedTab);
     }
   }, []);
@@ -199,13 +207,7 @@ export default function CEODashboard() {
     return () => window.removeEventListener('open-simulation-lab', handleOpenSimulation);
   }, [navigate, dashboardData]);
 
-  // To cleanly track which modules are implemented
-  const implementedModules = [
-    'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
-    'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
-    'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
-    'quality'
-  ];
+
 
   const handleTabChange = (tab: string) => {
     setPreviousTab(activeTab);
@@ -305,7 +307,7 @@ export default function CEODashboard() {
                     {activeTab === 'quality' && <QualityCommandCenter />}
                     
                     {/* Placeholders for unbuilt sections */}
-                    {!implementedModules.includes(activeTab) && (
+                    {!IMPLEMENTED_MODULES.includes(activeTab) && (
                       <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-border dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-gray-900/50">
                         <div className="text-center">
                           <h2 className="text-2xl font-semibold text-muted-foreground mb-2">{activeTab.replace('_', ' ')} Module</h2>

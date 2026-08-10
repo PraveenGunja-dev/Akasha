@@ -75,6 +75,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
   const [suggestedFollowups, setSuggestedFollowups] = useState<string[]>([]);
   const [isDeepAnalysis, setIsDeepAnalysis] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [exportMenuOpenId, setExportMenuOpenId] = useState<number | null>(null);
   
   // Voice and Image states
   const [isListening, setIsListening] = useState(false);
@@ -167,6 +168,63 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
       inputRef.current.style.height = Math.min(inputRef.current.scrollHeight, 160) + 'px';
     }
   }, [input]);
+
+  const handleExportReport = async (content: string, format: 'docx' | 'pdf', metadata?: any, visualizations?: ChartViz[]) => {
+    try {
+      const images: string[] = [];
+
+      // 1. Check pre-cached Base64 PNG screenshots from onChartReady
+      if (visualizations && visualizations.length > 0) {
+        visualizations.forEach((v: any) => {
+          if (v && v._b64Image && v._b64Image.length > 500) {
+            images.push(v._b64Image);
+          }
+        });
+      }
+
+      // 2. Secondary fallback: Query live canvas elements in the DOM at export time
+      if (images.length === 0) {
+        const canvasElements = document.querySelectorAll('.copilot-chart-card canvas');
+        canvasElements.forEach((canvas) => {
+          try {
+            const dataUrl = (canvas as HTMLCanvasElement).toDataURL('image/png');
+            if (dataUrl && dataUrl.startsWith('data:image') && dataUrl.length > 500) {
+              images.push(dataUrl);
+            }
+          } catch (e) {
+            console.warn('Chart canvas image capture warning:', e);
+          }
+        });
+      }
+
+      const response = await fetch(`/akasha/api/export/${format}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title: 'Adani Renewables Executive Intelligence Report',
+          content: content,
+          metadata: metadata,
+          images: images,
+          visualizations: visualizations
+        })
+      });
+
+      if (!response.ok) throw new Error('Export failed');
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `Akasha_Report_${new Date().toISOString().slice(0, 10)}.${format}`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    } catch (err) {
+      console.error(`Error downloading ${format}:`, err);
+      alert(`Could not generate ${format.toUpperCase()} report.`);
+    }
+  };
 
   const isLanding = messages.length === 0;
 
@@ -275,7 +333,8 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
           history: messages,
           sessionId: currentThreadId.toString(),
           isDeepAnalysis: isDeepAnalysis,
-          imageData: currentImageData
+          imageData: currentImageData,
+          stream: true
         }),
         signal: controller.signal
       });
@@ -673,7 +732,7 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
             >
               {/* Messages area */}
               <div className="flex-1 overflow-y-auto scrollbar-hide z-10" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
-                <div className="max-w-[80%] mx-auto w-full px-4 py-8 space-y-2">
+                <div className="max-w-[95%] lg:max-w-[90%] mx-auto w-full px-4 py-8 space-y-2">
                   {messages.map((msg, idx) => (
                     <motion.div
                       key={msg.id}
@@ -703,44 +762,74 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
                           <div className="akasha-response prose max-w-none prose-p:text-[14.5px] prose-p:leading-[1.7] prose-p:text-foreground prose-headings:text-foreground prose-headings:text-[16px] prose-strong:text-foreground prose-strong:font-semibold prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-[14px] prose-li:text-foreground prose-table:text-[13px]">
                             <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
-                              {msg.content}
+                              {typeof msg.content === 'string' ? msg.content : (msg.content ? String(msg.content) : '')}
                             </ReactMarkdown>
                           </div>
 
-                          {/* ── Enhanced Chart Cards ── */}
+                          {/* ── Enhanced Chart Cards (2 per row side-by-side) ── */}
                           {msg.visualizations && msg.visualizations.length > 0 && (
-                            <div className="flex flex-col gap-5 mt-5 max-w-[85%]">
-                              {msg.visualizations.map((viz, i) => (
-                                <motion.div
-                                  key={i}
-                                  initial={{ opacity: 0, y: 16 }}
-                                  animate={{ opacity: 1, y: 0 }}
-                                  transition={{ duration: 0.45, delay: i * 0.1 }}
-                                  className="copilot-chart-card"
-                                >
-                                  {/* Chart Header with title + type badge */}
-                                  <div className="chart-header">
-                                    <BarChart3 className="w-4 h-4 text-primary/60" />
-                                    <span className="chart-title">
-                                      {viz.title || 'Visualization'}
-                                    </span>
-                                    {viz.chart_type && (
-                                      <span className="chart-type-badge ml-auto">
-                                        {viz.chart_type}
+                            <div className={`grid gap-4 mt-4 w-full ${msg.visualizations.length > 1 ? 'grid-cols-1 md:grid-cols-2 max-w-[1100px]' : 'grid-cols-1 max-w-[650px]'}`}>
+                              {msg.visualizations.map((viz, i) => {
+                                const isDonut = viz.chart_type === 'activity_status' || viz.chart_type === 'transmission_status' || viz.spec?.series?.[0]?.type === 'pie';
+                                return (
+                                  <motion.div
+                                    key={i}
+                                    initial={{ opacity: 0, y: 16 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    transition={{ duration: 0.45, delay: i * 0.1 }}
+                                    className="copilot-chart-card w-full"
+                                  >
+                                    {/* Chart Header with title + type badge */}
+                                    <div className="chart-header">
+                                      <BarChart3 className="w-4 h-4 text-primary/60 shrink-0" />
+                                      <span className="chart-title truncate">
+                                        {viz.title || 'Visualization'}
                                       </span>
-                                    )}
-                                  </div>
-                                  {/* Chart Body */}
-                                  <div className="chart-body">
-                                    <ReactECharts
-                                      option={viz.spec}
-                                      style={{ height: 340, width: '100%' }}
-                                      notMerge={true}
-                                      opts={{ renderer: 'svg' }}
-                                    />
-                                  </div>
-                                </motion.div>
-                              ))}
+                                      {viz.chart_type && (
+                                        <span className="chart-type-badge ml-auto shrink-0">
+                                          {viz.chart_type}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {/* Chart Body */}
+                                    <div className="chart-body">
+                                      <ReactECharts
+                                        option={viz.spec}
+                                        style={{ height: isDonut ? 280 : 310, width: '100%' }}
+                                        notMerge={true}
+                                        opts={{ renderer: 'canvas' }}
+                                        onChartReady={(echartsInstance) => {
+                                          const captureFinishedChart = () => {
+                                            try {
+                                              const b64 = echartsInstance.getDataURL({
+                                                type: 'png',
+                                                pixelRatio: 3,
+                                                backgroundColor: '#ffffff'
+                                              });
+                                              if (b64 && b64.length > 500) {
+                                                (viz as any)._b64Image = b64;
+                                              }
+                                            } catch (e) {
+                                              console.warn('onChartReady getDataURL failed:', e);
+                                            }
+                                          };
+
+                                          // Listen for ECharts 'finished' event (fires when rendering & expansion animations complete 100%)
+                                          try {
+                                            echartsInstance.off('finished');
+                                            echartsInstance.on('finished', captureFinishedChart);
+                                          } catch (e) {
+                                            // fallback if off/on not supported
+                                          }
+
+                                          // Safety fallback: capture after 1600ms to guarantee animation finish
+                                          setTimeout(captureFinishedChart, 1600);
+                                        }}
+                                      />
+                                    </div>
+                                  </motion.div>
+                                );
+                              })}
                             </div>
                           )}
 
@@ -796,6 +885,59 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                                 )}
                               </div>
                             )}
+
+                            {/* Export Report Dropdown Button */}
+                            <div className="relative mt-2.5 pt-2 border-t border-border/30 text-[11px] inline-block">
+                              <button
+                                onClick={() => setExportMenuOpenId(exportMenuOpenId === msg.id ? null : msg.id)}
+                                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-muted/70 hover:bg-muted text-foreground text-[11px] font-medium transition-all border border-border/70 shadow-2xs hover:border-primary/40 group"
+                                title="Export report into Microsoft Word or PDF document"
+                              >
+                                <FileText className="w-3.5 h-3.5 text-primary group-hover:scale-105 transition-transform" />
+                                <span>Export Report</span>
+                                <ChevronDown className={`w-3 h-3 text-muted-foreground transition-transform duration-200 ${exportMenuOpenId === msg.id ? 'rotate-180' : ''}`} />
+                              </button>
+
+                              {/* Upward Popover Menu (Guaranteed fully visible above input box) */}
+                              <AnimatePresence>
+                                {exportMenuOpenId === msg.id && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setExportMenuOpenId(null)} />
+                                    <motion.div
+                                      initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                                      animate={{ opacity: 1, y: 0, scale: 1 }}
+                                      exit={{ opacity: 0, y: 6, scale: 0.96 }}
+                                      transition={{ duration: 0.16, ease: "easeOut" }}
+                                      className="absolute left-0 bottom-full mb-2 w-52 bg-card border border-border shadow-2xl rounded-xl z-50 p-1.5 backdrop-blur-2xl"
+                                    >
+                                      <div className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground/70 uppercase tracking-wider border-b border-border/40 mb-1">
+                                        Select Export Format
+                                      </div>
+                                      <button
+                                        onClick={() => {
+                                          handleExportReport(msg.content, 'docx', msg.metadata, msg.visualizations);
+                                          setExportMenuOpenId(null);
+                                        }}
+                                        className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg hover:bg-primary/10 text-foreground text-[12px] font-medium transition-colors group/item text-left"
+                                      >
+                                        <div className="w-6 h-6 rounded bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center font-bold text-[10px] shrink-0">W</div>
+                                        <span>Microsoft Word (.docx)</span>
+                                      </button>
+                                      <button
+                                        onClick={() => {
+                                          handleExportReport(msg.content, 'pdf', msg.metadata, msg.visualizations);
+                                          setExportMenuOpenId(null);
+                                        }}
+                                        className="flex items-center gap-2.5 w-full px-2.5 py-2 rounded-lg hover:bg-red-500/10 text-foreground text-[12px] font-medium transition-colors group/item text-left"
+                                      >
+                                        <div className="w-6 h-6 rounded bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center font-bold text-[10px] shrink-0">PDF</div>
+                                        <span>Adobe PDF (.pdf)</span>
+                                      </button>
+                                    </motion.div>
+                                  </>
+                                )}
+                              </AnimatePresence>
+                            </div>
                           </div>
 
                           {/* Suggested Follow-ups */}

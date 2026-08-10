@@ -2,16 +2,34 @@ from langchain_core.prompts import ChatPromptTemplate
 from dotenv import load_dotenv
 import os
 
-load_dotenv()
-provider = os.getenv("AI_PROVIDER", "ollama").lower()
+load_dotenv(override=True)
 
 def get_llm():
-    if provider == "azure":
-        # Placeholder for Azure initialization if this file is ever used.
-        # Currently, the application uses call_azure_openai_curl in routers/ai.py
-        raise NotImplementedError("Azure LLM is handled directly in routers/ai.py")
+    provider = os.getenv("AI_PROVIDER", "openrouter").lower()
+    if provider == "openrouter":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            openai_api_base="https://openrouter.ai/api/v1",
+            openai_api_key=os.getenv("OPENROUTER_API_KEY"),
+            model_name=os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct")
+        )
+    elif provider == "groq":
+        from langchain_openai import ChatOpenAI
+        return ChatOpenAI(
+            openai_api_base="https://api.groq.com/openai/v1",
+            openai_api_key=os.getenv("AKASHA_AI_API_KEY"),
+            model_name="llama-3.3-70b-versatile"
+        )
+    elif provider == "azure":
+        from langchain_openai import AzureChatOpenAI
+        return AzureChatOpenAI(
+            azure_endpoint=os.getenv("AZURE_OPENAI_ENDPOINT"),
+            api_key=os.getenv("AZURE_OPENAI_API_KEY"),
+            api_version=os.getenv("AZURE_OPENAI_API_VERSION"),
+            deployment_name=os.getenv("AZURE_OPENAI_DEPLOYMENT_NAME")
+        )
     else:
-        from langchain_community.chat_models import ChatOpenAI
+        from langchain_openai import ChatOpenAI
         return ChatOpenAI(
             openai_api_base=os.getenv("OLLAMA_ENDPOINT", "http://192.168.0.59:11434/v1"),
             openai_api_key="ollama",
