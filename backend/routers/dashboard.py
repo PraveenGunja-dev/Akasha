@@ -8,7 +8,7 @@ from datetime import datetime
 
 from database import get_db
 import models
-from slr_rules import exclude_overhead_lines
+from slr_rules import exclude_overhead_lines, po_lines_only
 from services.project_service import filter_tc_edges_by_kps
 
 def _safe_parse_phase(projects_json):
@@ -1310,11 +1310,12 @@ def get_project_slr_data(
             "data": []
         }
         
-    # Query SLR data. Overhead/service lines (SPGS, PMC, ISA) are consolidated
-    # contract charges, not material POs, and are excluded from PO metrics.
+    # Query SLR data. Only POrd/PReq rows count as procurement — blank-type rows
+    # are cost lines (Land Cost, Piling, financing) — and overhead/service
+    # descriptions (SPGS, PMC, ISA) are consolidated contract charges, not POs.
     slr_query = db.query(models.MTSLRData).filter(
         models.MTSLRData.plant_code.in_(codes_to_query),
-        exclude_overhead_lines(),
+        po_lines_only(),
     )
     records = slr_query.all()
     
