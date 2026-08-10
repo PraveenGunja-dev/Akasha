@@ -35,10 +35,10 @@ def auto_upgrade_schema():
     with engine.begin() as conn:
         for table_name, table in models.Base.metadata.tables.items():
             if table_name in existing_tables:
-                existing_columns = {c['name'] for c in inspector.get_columns(table_name)}
+                existing_columns = {c['name'].lower() for c in inspector.get_columns(table_name)}
                 
                 for column in table.columns:
-                    if column.name not in existing_columns:
+                    if column.name.lower() not in existing_columns:
                         col_type = str(column.type.compile(engine.dialect))
                         
                         try:
