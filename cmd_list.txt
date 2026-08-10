@@ -1,0 +1,16 @@
+Command 0: Comment out KPIs not needed per tab (Materials, PO Volume, Inventory, % Consumed, In Transit depending on tab), rename Supply PO Amount → PO Amount, replace DollarSign with IndianRupee icon, default SLR type filter to POrd
+Command 1: Override Total POs and PO Amount in the KPI grid using ZPSP (slrData) POrd records
+Command 2: Remove 'ALL' option from SLR Type filters (both pills and dropdown) in ProjectWorkspace
+Command 3: Rename 'Total SLR POs' and add 'Open PO Amount' KPI
+Command 4: Reorder KPI cards to put Open PO Amount before Total Amount
+Command 5: Add downloadSLRReport and Export button to SLR modal
+Command 6: Add Vendor Name to SLR UI table and Global Export
+Command 7: Rename SLR to P0 in UI and Exports
+Command 8: Rename 'P0 Purchase Orders' to 'Purchase Orders'
+Command 9: Flatten CSV export to avoid duplicate amounts
+Command 10: Remove vendor name for PReq rows
+Command 11: Hide Vendor Name column when PReq is selected
+Command 12: Switch SLR export to ExcelJS for better formatting
+Command 13: Add Analytics Summary tab to Excel export
+Command 14: Add Material Lifecycle export function and button
+Command 15: Comment out Project Insights section

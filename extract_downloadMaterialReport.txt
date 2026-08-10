@@ -1,0 +1,69 @@
+  const downloadMaterialReport = async () => {
+    if (!unifiedMaterials || unifiedMaterials.length === 0) return;
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Material Lifecycle');
+
+    worksheet.columns = [
+      { header: 'Code', key: 'code', width: 15 },
+      { header: 'Description', key: 'desc', width: 45 },
+      { header: 'Unit', key: 'unit', width: 12 },
+      { header: 'WBS Tracking', key: 'wbs', width: 25 },
+      { header: 'Ordered', key: 'ordered', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'Consumed', key: 'consumed', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'Inventory', key: 'inventory', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'In Transit', key: 'transit', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'Remaining', key: 'remaining', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'PO Budget', key: 'budget', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Utilized', key: 'utilized', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Inventory Val', key: 'invVal', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Remaining Bal', key: 'remBal', width: 18, style: { numFmt: '₹#,##0.00' } }
+    ];
+
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    unifiedMaterials.forEach((mat: any) => {
+      const masterRow = worksheet.addRow({
+        code: mat.materialCode,
+        desc: mat.materialDescription,
+        unit: mat.baseUnit,
+        wbs: (mat.wbsList || []).join(', '),
+        ordered: mat.orderedQty || 0,
+        consumed: mat.consumedQty || 0,
+        inventory: mat.inventoryQty || 0,
+        transit: mat.inTransitQty || 0,
+        remaining: mat.remainingQty || 0,
+        budget: mat.budgetINR || 0,
+        utilized: mat.deliveredINR || 0,
+        invVal: mat.inventoryValueINR || 0,
+        remBal: mat.remainingBalanceINR || 0
+      });
+      masterRow.font = { bold: true };
+      masterRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+      if (mat.pos && mat.pos.length > 0) {
+        const poNumbers = Array.from(new Set(mat.pos.map((p: any) => p.poNumber)));
+        poNumbers.forEach((poNum: any) => {
+          const items = mat.pos.filter((p: any) => p.poNumber === poNum);
+          const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+          const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+          const dates = Array.from(new Set(items.map((p: any) => p.poDate).filter(Boolean)));
+          
+          worksheet.addRow({
+            code: '',
+            desc: `   ↳ PO: ${poNum}`,
+            unit: dates.join(', '),
+            wbs: `Storage: ${storages.join(', ')}`,
+            ordered: sumQty
+          }).font = { italic: true, color: { argb: 'FF64748B' } };
+        });
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Material_Lifecycle_${p.projectId}.xlsx`);
+  };
+
+  const downloadSLRReport = async () => {

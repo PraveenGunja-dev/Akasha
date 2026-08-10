@@ -21,6 +21,11 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
         { id: 'overview', label: 'Overview', icon: Home },
         { id: 'capacity_overview', label: 'Capacity Overview', icon: BarChart2 },
         { id: 'project360', label: 'Project 360', icon: Command },
+      ]
+    },
+    {
+      title: "Integrations",
+      items: [
         { id: 'financial', label: 'SAP Intelligence', icon: Database },
         { id: 'einvoice_intelligence', label: 'E-Invoice Intelligence', icon: FileText },
         { id: 'transmission_data', label: 'Transmission', icon: Network },

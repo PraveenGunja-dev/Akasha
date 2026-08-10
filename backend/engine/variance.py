@@ -253,7 +253,7 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
     Data path: project_mapping.module_wbs → mt_poamount, mt_materialdocument, mt_inventory
     
     Three SAP tables:
-    - ME2J (mt_poamount): Purchase orders — ordered vs delivered vs pending
+    - ZSPS (mt_poamount): Purchase orders — ordered vs delivered vs pending
     - MB51 (mt_materialdocument): Material consumption movements (221=issue, 222=return)
     - MB52 (mt_inventory): Current stock on hand
     
@@ -291,7 +291,7 @@ def compute_sap_variance(db: Session, project_id: str) -> dict:
     if not wbs_exact:
         return empty_result
 
-    # ── ME2J: Purchase Orders ──
+    # ── ZSPS: Purchase Orders ──
     po_records = db.query(models.MTPOAmount).filter(
         models.MTPOAmount.wbs_element == wbs_exact
     ).all()

@@ -740,7 +740,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             
             po_count = db.query(models.MTPOAmount.purchasing_document).filter(or_(*wbs_filters_po)).distinct().count()
             po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(or_(*wbs_filters_po)).scalar() or 0
-            # Delivered value is already stored in crores by the ME2J ingest.
+            # Delivered value is already stored in crores by the ZSPS ingest.
             po_delivered_cr = db.query(func.sum(models.MTPOAmount.delivered_value_inr_cr)).filter(or_(*wbs_filters_po)).scalar() or 0
 
             inv_count = db.query(models.MTInventory).filter(or_(*wbs_filters_inv)).count()
@@ -1341,6 +1341,7 @@ def get_project_slr_data(
             po_groups[po_key] = {
                 "po_document": po_key,
                 "description": r.description,
+                "vendor_name": r.vendor_name,
                 "type": r.type,
                 "wbs_element": r.wbs_element,
                 "total_actual": 0.0,
@@ -1388,6 +1389,7 @@ def get_project_slr_data(
         result_data.append({
             "po_document": None if po_key.startswith("__unassigned_") else po_key,
             "description": group["description"],
+            "vendor_name": group["vendor_name"],
             "type": group["type"],
             "wbs_element": group["wbs_element"],
             "total": total,

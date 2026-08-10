@@ -19,13 +19,17 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
         if time.time() - entry["timestamp"] < _FIN_TTL:
             return entry["data"]
 
+    from slr_rules import po_lines_only
     po_query = db.query(
-        func.sum(models.MTPOAmount.net_order_value).label("total_val"),
-        func.count(models.MTPOAmount.id).label("total_pos"),
         func.count(func.distinct(models.MTPOAmount.vendor_name)).label("vendors"),
         func.count(func.distinct(models.MTPOAmount.material_code)).label("materials"),
         func.sum(models.MTPOAmount.po_quantities).label("volume")
     )
+    
+    slr_query = db.query(
+        func.sum(func.coalesce(models.MTSLRData.actual_amount, 0) + func.coalesce(models.MTSLRData.commitment_amount, 0)).label("total_val"),
+        func.count(func.distinct(models.MTSLRData.po_document)).label("total_pos")
+    ).filter(po_lines_only(), models.MTSLRData.type == 'POrd')
     
     # 1. Global Portfolio Filter
     map_query = db.query(models.ProjectMapping)
@@ -50,12 +54,27 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
         if wbs_exacts:
             wbs_conditions = [models.MTPOAmount.wbs_element == p for p in wbs_exacts]
             po_query = po_query.filter(or_(*wbs_conditions))
+            
+            # SLR data stores plant code without H- prefix. We can use the prefixes for SLR
+            from dashboard import _extract_wbs_prefixes
+            wbs_prefixes = []
+            for m in mappings:
+                for val in [m.spv_plant_code, m.agel, m.age6l]:
+                    if val:
+                        import re
+                        matches = [c.upper() for c in re.findall(r'H-?\s*([A-Za-z0-9]+)', str(val).strip())]
+                        wbs_prefixes.extend(matches)
+            wbs_prefixes = list(set(wbs_prefixes))
+            if wbs_prefixes:
+                slr_query = slr_query.filter(models.MTSLRData.plant_code.in_(wbs_prefixes))
         else:
             return [{"quarter": "Total", "plannedCapex": 0, "actualCapex": 0, "cashFlowVariancePercent": 0, "totalPos": 0, "vendors": 0, "materials": 0, "volume": 0}]
 
     res = po_query.first()
-    total_po_value = res.total_val or 0
-    total_pos = res.total_pos or 0
+    res_slr = slr_query.first()
+    
+    total_po_value = res_slr.total_val if res_slr else 0
+    total_pos = res_slr.total_pos if res_slr else 0
     vendors = res.vendors or 0
     materials = res.materials or 0
     volume = res.volume or 0

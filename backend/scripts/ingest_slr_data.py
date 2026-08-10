@@ -124,6 +124,14 @@ def ingest_slr():
     df['Type'] = df['Type'].fillna('').astype(str).str.strip()
     df['Description'] = df['Description'].fillna('').astype(str).str.strip()
     
+    # 4. Filter out entire POs if ANY of their lines contain SPGS, PMC, ISA
+    excluded_pos = df[df['Description'].str.contains('SPGS|PMC|ISA', case=False, na=False)]['C.Document'].unique()
+    df = df[~df['C.Document'].isin(excluded_pos)]
+    
+    
+    # Don't fillna('') yet for Vendor Name so that .agg('first') skips NaNs
+    df['Vendor Name'] = df['Vendor Name'].replace(r'^\s*$', pd.NA, regex=True)
+    
     print("Mapping WBS to SAP Master before aggregating...")
     def get_master_prefix(wbs_val):
         if not wbs_val or wbs_val.lower() == 'nan':
@@ -150,6 +158,7 @@ def ingest_slr():
     # 4. Group by C.Document, Matched_Prefix, Type to sum amounts
     agg_df = df.groupby(['C.Document', 'Matched_Prefix', 'Type'], as_index=False).agg({
         'Description': 'first',
+        'Vendor Name': 'first',
         'WBS Element': 'first',
         'Commitment Amt': 'sum',
         'Actual Amount': 'sum'
@@ -165,6 +174,9 @@ def ingest_slr():
         desc = row['Description']
         if desc.lower() == 'nan': desc = ""
             
+        vendor = row['Vendor Name']
+        if pd.isna(vendor) or str(vendor).lower() == 'nan': vendor = ""
+            
         type_val = row['Type']
         if type_val.lower() == 'nan': type_val = ""
         
@@ -174,6 +186,7 @@ def ingest_slr():
         record = models.MTSLRData(
             po_document=po_doc,
             description=desc,
+            vendor_name=vendor,
             actual_amount=actual,
             commitment_amount=comm,
             wbs_element=row['WBS Element'],

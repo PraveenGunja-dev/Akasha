@@ -206,7 +206,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         <div className="relative" ref={notificationRef}>
             <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
             <Bell className="w-4 h-4" />
-            {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-destructive/100 shadow-[0_0_5px_rgba(239,68,68,0.5)]" />}
+            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-[1.5px] ring-background" />}
             </button>
             
             {showNotifications && (

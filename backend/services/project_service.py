@@ -189,25 +189,37 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     # Pre-calculate capacity by plant for pro-rata allocation
 
     # Preload P6 projects and SAP tables ONCE instead of per-project queries.
+    p6_projects = db.query(models.P6Project).all()
+    p6_by_pid = {p.project_id: p for p in p6_projects if p.project_id}
+
     # WBS matching below is always startswith() on a fixed 6-char prefix, which
     # is equivalent to grouping every row by its own wbs_element[:6] - so this
     # index gives identical results to the old per-project OR/startswith query
     # without the ~190 extra DB round-trips that made this endpoint take 4-10s.
-    from collections import defaultdict
+    mtpo_aggs = db.query(
+        func.substr(models.MTPOAmount.wbs_element, 1, 6).label('prefix'),
+        func.sum(models.MTPOAmount.order_quantity).label('ordered_qty'),
+        func.sum(models.MTPOAmount.net_order_value_inr).label('budget_inr'),
+        func.sum(models.MTPOAmount.still_to_deliver_qty).label('in_transit_qty')
+    ).group_by(func.substr(models.MTPOAmount.wbs_element, 1, 6)).all()
 
-    p6_by_pid = {p.project_id: p for p in db.query(models.P6Project).all()}
+    mtpo_by_prefix = {row.prefix: row for row in mtpo_aggs if row.prefix}
 
-    mtpo_by_prefix = defaultdict(list)
-    for rec in db.query(models.MTPOAmount).all():
-        mtpo_by_prefix[(rec.wbs_element or "")[:6]].append(rec)
+    mb51_aggs = db.query(
+        func.substr(models.MTMaterialDocument.wbs_element, 1, 6).label('prefix'),
+        func.sum(models.MTMaterialDocument.quantity).label('consumed_qty'),
+        func.sum(models.MTMaterialDocument.amount_in_lc).label('expenditure_inr')
+    ).group_by(func.substr(models.MTMaterialDocument.wbs_element, 1, 6)).all()
 
-    mb51_by_prefix = defaultdict(list)
-    for rec in db.query(models.MTMaterialDocument).all():
-        mb51_by_prefix[(rec.wbs_element or "")[:6]].append(rec)
+    mb51_by_prefix = {row.prefix: row for row in mb51_aggs if row.prefix}
 
-    mb52_by_prefix = defaultdict(list)
-    for rec in db.query(models.MTInventory).filter(models.MTInventory.quantity_inv > 0).all():
-        mb52_by_prefix[(rec.wbs_element or "")[:6]].append(rec)
+    mb52_aggs = db.query(
+        func.substr(models.MTInventory.wbs_element, 1, 6).label('prefix'),
+        func.sum(models.MTInventory.quantity_inv).label('inventory_qty'),
+        func.sum(models.MTInventory.value_unrestricted).label('inventory_value_inr')
+    ).filter(models.MTInventory.quantity_inv > 0).group_by(func.substr(models.MTInventory.wbs_element, 1, 6)).all()
+
+    mb52_by_prefix = {row.prefix: row for row in mb52_aggs if row.prefix}
 
     results = []
 
@@ -271,37 +283,30 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         wbs_prefixes = list(set(wbs_prefixes))
 
         if wbs_prefixes:
-            me2j_records = [rec for p in wbs_prefixes for rec in mtpo_by_prefix.get(p, [])]
+            for p in wbs_prefixes:
+                # mtpo
+                mtpo_row = mtpo_by_prefix.get(p)
+                if mtpo_row:
+                    ordered_qty += (mtpo_row.ordered_qty or 0.0) * allocation_ratio
+                    budget_inr += (mtpo_row.budget_inr or 0.0) * allocation_ratio
+                    in_transit_qty += (mtpo_row.in_transit_qty or 0.0) * allocation_ratio
+                    
+                # mb51
+                mb51_row = mb51_by_prefix.get(p)
+                if mb51_row:
+                    consumed_qty -= (mb51_row.consumed_qty or 0.0) * allocation_ratio
+                    expenditure_inr -= (mb51_row.expenditure_inr or 0.0) * allocation_ratio
+                    
+                # mb52
+                mb52_row = mb52_by_prefix.get(p)
+                if mb52_row:
+                    inventory_qty += (mb52_row.inventory_qty or 0.0) * allocation_ratio
+                    inventory_value_inr += (mb52_row.inventory_value_inr or 0.0) * allocation_ratio
 
-            for rec in me2j_records:
-                ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
-                budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio
-                in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio
-                if rec.material_code:
-                    mat_str = str(rec.material_code).strip().lstrip('0')
-                    if mat_str:
-                        po_materials.add(mat_str)
-        
-            # --- STEP A: MB51 Consumption ---
-            mb51_records = [rec for p in wbs_prefixes for rec in mb51_by_prefix.get(p, [])]
+        # --- STEP C: ZSPS Purchase Orders ---
+        # Already processed above
 
-            for rec in mb51_records:
-                qty = rec.quantity or 0.0
-                cost = rec.amount_in_lc or 0.0
-                consumed_qty -= (qty * allocation_ratio)
-                expenditure_inr -= (cost * allocation_ratio)
-
-            # --- STEP B: MB52 Inventory ---
-            mb52_records = [rec for p in wbs_prefixes for rec in mb52_by_prefix.get(p, [])]
-            for rec in mb52_records:
-                qty = rec.quantity_inv or 0.0
-                inventory_qty += (qty * allocation_ratio)
-                inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio
-
-        # --- STEP C: ME2J Purchase Orders ---
-        # Already processed above to get po_materials
-
-        # --- STEP D: In-Transit (ME2J Still to Deliver) ---
+        # --- STEP D: In-Transit (ZSPS Still to Deliver) ---
 
         # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
         po_vol = ordered_qty
@@ -501,6 +506,9 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
 
         forecast_finish = p6_proj.scheduled_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.scheduled_finish_date else "N/A"
         forecast_month = p6_proj.scheduled_finish_date.strftime("%b %Y") if p6_proj and p6_proj.scheduled_finish_date else "TBD"
+        
+        baseline_finish = p6_proj.baseline_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.baseline_finish_date else None
+        baseline_month = p6_proj.baseline_finish_date.strftime("%b %Y") if p6_proj and p6_proj.baseline_finish_date else None
 
         results.append({
             # Identifiers
@@ -541,6 +549,8 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "integrationCount": sum([1 if p6_proj else 0, 1 if ordered_qty > 0 or inventory_qty > 0 or consumed_qty > 0 else 0, 1 if tc_edges_count > 0 else 0]),
             "forecastFinish": forecast_finish,
             "forecastMonth": forecast_month,
+            "baselineFinishDate": baseline_finish,
+            "baselineMonth": baseline_month,
             "health": status_tier,  # alias for backward compat
             "keyIssue": primary_issue,  # alias for backward compat
             "recommendedAction": ai_recommendation,  # alias for backward compat
@@ -656,7 +666,7 @@ def get_project_360_detail(db: Session, project_id: str):
     Returns enriched per-project intelligence detail:
     - All P6 fields (dates, floats, costs, baselines)
     - SAP vendor breakdown (from MTPOAmount) — pro-rata allocated to this project
-    - SAP pending delivery details (derived from ME2J still_to_deliver_qty) — WBS-filtered or pro-rata
+    - SAP pending delivery details (derived from ZSPS still_to_deliver_qty) — WBS-filtered or pro-rata
     - SAP inventory details (from MTInventory) — WBS-filtered or pro-rata
     """
     # 1. Resolve mapping
@@ -777,7 +787,7 @@ def get_project_360_detail(db: Session, project_id: str):
                 wbs_prefixes.extend([m.replace('-', '') for m in matches])
     wbs_prefixes = list(set(wbs_prefixes))
 
-    # ── Purchase Orders (ME2J) ──
+    # ── Purchase Orders (ZSPS) ──
     po_records_all = []
     if wbs_prefixes:
         query_conditions = [models.MTPOAmount.wbs_element.startswith(p) for p in wbs_prefixes]

@@ -295,7 +295,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
         }
         description={
           activeModal === 'schedule' ? 'Calculated by aggregating Primavera P6 baseline vs actual schedule variances.' :
-          activeModal === 'supply' ? 'Aggregated from SAP logistics data (ME2J Ordered vs In-Transit vs MB52 Inventory).' :
+          activeModal === 'supply' ? 'Aggregated from SAP logistics data (ZSPS Ordered vs In-Transit vs MB52 Inventory).' :
           'Transmission line connectivity data showing charged, in-progress, and delayed lines per project.'
         }
       />
@@ -339,18 +339,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             </div>
             
             <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
-              {/* Overall Progress */}
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <span>Overall Progress</span>
-                  <span className="text-foreground">{avgProgress}%</span>
-                </div>
-                <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
-                  <div className="h-full bg-primary" style={{ width: `${avgProgress}%` }}></div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3 pt-2 border-t border-border dark:border-gray-700">
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Completing This Mo.</div>
                   <div className="text-xl font-mono font-bold text-primary">{completingThisMonth}</div>
@@ -381,17 +370,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             </div>
             
             <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <span>Material Availability</span>
-                  <span className="text-foreground">{avgMaterial}%</span>
-                </div>
-                <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
-                  <div className={`h-full ${avgMaterial < 80 ? 'bg-warning/100' : 'bg-success/100'}`} style={{ width: `${avgMaterial}%` }}></div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border dark:border-gray-700">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
                   <span className="text-sm font-mono font-semibold text-foreground/80">{fmtNum(totalOrdered)}</span>
@@ -428,16 +407,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
             </div>
             
             <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
-              <div className="flex flex-col gap-1.5">
-                <div className="flex justify-between text-[11px] font-bold uppercase tracking-wider text-muted-foreground">
-                  <span>Lines Charged</span>
-                  <span className="text-foreground">{chargedPct}%</span>
-                </div>
-                <div className="h-2 w-full bg-border/50 rounded-full overflow-hidden">
-                  <div className="h-full bg-success/100 rounded-full transition-all duration-500" style={{ width: `${chargedPct}%` }}></div>
-                </div>
-              </div>
-              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-border dark:border-gray-700">
+              <div className="grid grid-cols-3 gap-2">
                 <div className="flex flex-col gap-0.5 items-center">
                   <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Charged</span>
                   <span className="text-lg font-mono font-bold text-success">{fmtNum(totalCharged)}</span>

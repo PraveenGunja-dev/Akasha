@@ -181,15 +181,15 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         transit_vol = 0.0
         
         po_materials = set()
-        me2j_records = []
+        zsps_records = []
         wbs_exact = None
         if m.module_wbs and str(m.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
             wbs_exact = str(m.module_wbs).strip()
-            me2j_records = db.query(models.MTPOAmount).filter(
+            zsps_records = db.query(models.MTPOAmount).filter(
                 models.MTPOAmount.wbs_element == wbs_exact
             ).all()
             
-            for rec in me2j_records:
+            for rec in zsps_records:
                 ordered_qty += (rec.order_quantity or 0.0) * allocation_ratio
                 budget_inr += (rec.net_order_value_inr or 0.0) * allocation_ratio
                 in_transit_qty += (rec.still_to_deliver_qty or 0.0) * allocation_ratio
@@ -236,10 +236,10 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
                     inventory_qty += (rec.quantity_inv or 0.0) * allocation_ratio
                     inventory_value_inr += (rec.value_unrestricted or 0.0) * allocation_ratio
 
-        # --- STEP C: ME2J Purchase Orders ---
+        # --- STEP C: ZSPS Purchase Orders ---
         # Already processed above to get po_materials
 
-        # --- STEP D: In-Transit (ME2J Still to Deliver) ---
+        # --- STEP D: In-Transit (ZSPS Still to Deliver) ---
 
         # Map legacy variables to actual SAP values to drive multi-dimensional risk flags dynamically
         po_vol = ordered_qty
@@ -546,7 +546,7 @@ def get_project_360_detail(db: Session, project_id: str):
     Returns enriched per-project intelligence detail:
     - All P6 fields (dates, floats, costs, baselines)
     - SAP vendor breakdown (from MTPOAmount) — pro-rata allocated to this project
-    - SAP pending delivery details (derived from ME2J still_to_deliver_qty) — WBS-filtered or pro-rata
+    - SAP pending delivery details (derived from ZSPS still_to_deliver_qty) — WBS-filtered or pro-rata
     - SAP inventory details (from MTInventory) — WBS-filtered or pro-rata
     """
     # 1. Resolve mapping
@@ -567,7 +567,7 @@ def get_project_360_detail(db: Session, project_id: str):
     # SAP Data - WBS Only Mapping
     allocation_ratio = 1.0
 
-    # ── Purchase Orders (ME2J) ──
+    # ── Purchase Orders (ZSPS) ──
     po_records_all = []
     wbs_exact = None
     if mapping and mapping.module_wbs and str(mapping.module_wbs).strip().lower() not in ('nan', 'none', 'null', ''):
@@ -984,7 +984,7 @@ def get_project_360_detail(db: Session, project_id: str):
         }
     }
 
-# ── SAP Vendor / Transit Aggregation (ME2J) ──
+# ── SAP Vendor / Transit Aggregation (ZSPS) ──
     sap_vendors = []
     vendor_summary = {}
     total_po_qty = 0.0

@@ -12,47 +12,64 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
       .catch(err => console.error("Error fetching trends:", err));
   }, []);
 
-  // No local filtering needed since it's an overall dashboard
-  const activePlantCode = null;
-  const activeFilter = 'ALL';
+  const [companyFilter, setCompanyFilter] = useState<'all' | 'spv' | 'agel' | 'age6l'>('all');
+  const [mappings, setMappings] = useState<any[]>([]);
 
-  // Locally filter the data based on activeFilter
-  const filteredFinDetails = activePlantCode 
-    ? (finDetails || []).filter((po: any) => 
-        po.plant_code?.includes(activePlantCode) || 
-        po.wbs_element?.includes(activePlantCode)
-      )
-    : (finDetails || []);
+  useEffect(() => {
+    fetch('/akasha/api/mappings/')
+      .then(res => res.json())
+      .then(data => setMappings(data))
+      .catch(err => console.error("Error fetching mappings:", err));
+  }, []);
 
-  const filteredLogDetails = activePlantCode
-    ? (logDetails || []).filter((po: any) => 
-        po.plant_code?.includes(activePlantCode) || 
-        po.wbs_element?.includes(activePlantCode)
-      )
-    : (logDetails || []);
+  const allSpvCodes = mappings.map(m => m.spv_plant_code).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
+  const allAgelCodes = mappings.map(m => m.agel).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
+  const allAge6lCodes = mappings.map(m => m.age6l).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
+
+  const isMatch = (po: any, codes: string[]) => {
+    return codes.some(c => (po.plant_code || '').includes(c) || (po.wbs_element || '').includes(c));
+  };
+
+  const filteredFinDetails = companyFilter === 'all' 
+    ? (finDetails || [])
+    : (finDetails || []).filter((po: any) => {
+        if (companyFilter === 'spv') return isMatch(po, allSpvCodes);
+        if (companyFilter === 'agel') return isMatch(po, allAgelCodes);
+        if (companyFilter === 'age6l') return isMatch(po, allAge6lCodes);
+        return true;
+      });
+
+  const filteredLogDetails = companyFilter === 'all'
+    ? (logDetails || [])
+    : (logDetails || []).filter((po: any) => {
+        if (companyFilter === 'spv') return isMatch(po, allSpvCodes);
+        if (companyFilter === 'agel') return isMatch(po, allAgelCodes);
+        if (companyFilter === 'age6l') return isMatch(po, allAge6lCodes);
+        return true;
+      });
 
   // Read global metrics directly from backend (bypassing the 1000 array limit)
   const globalSap = sapData[0] || {};
+
+  const totalPos = (companyFilter === 'all' && globalSap.totalPos !== undefined) ? globalSap.totalPos : filteredFinDetails.length;
+  const vendors = (companyFilter === 'all' && globalSap.vendors !== undefined) ? globalSap.vendors : new Set(filteredFinDetails.map((f:any) => f.vendor_name).filter(Boolean)).size;
+  const materials = (companyFilter === 'all' && globalSap.materials !== undefined) ? globalSap.materials : new Set(filteredFinDetails.map((f:any) => f.material_code).filter(Boolean)).size;
   
-  const totalPos = globalSap.totalPos ?? filteredFinDetails.length ?? 0;
-  const vendors = globalSap.vendors ?? new Set(filteredFinDetails.map((f:any) => f.vendor_name).filter(Boolean)).size ?? 0;
-  const materials = globalSap.materials ?? new Set(filteredFinDetails.map((f:any) => f.material_code).filter(Boolean)).size ?? 0;
-  
-  const poVolume = globalSap.volume ?? filteredFinDetails.reduce((acc:any, curr:any) => acc + (curr.po_quantities || curr.menge || curr.po_quantity || 0), 0) ?? 0; 
+  const poVolume = (companyFilter === 'all' && globalSap.volume !== undefined) ? globalSap.volume : filteredFinDetails.reduce((acc:any, curr:any) => acc + (curr.po_quantities || curr.menge || curr.po_quantity || 0), 0); 
   const inventory = trendsData?.total_inventory ?? 0;
   
   // Financial metrics (The true global sum is actualCapex)
-  const supplyPoAmount = globalSap.actualCapex ?? filteredFinDetails.reduce((acc:any, curr:any) => acc + ((curr.net_order_value_inr || curr.net_order_value || 0) / 10000000), 0);
-  
+  const supplyPoAmount = (companyFilter === 'all' && globalSap.actualCapex !== undefined) ? globalSap.actualCapex : filteredFinDetails.reduce((acc:any, curr:any) => acc + ((curr.net_order_value_inr || curr.net_order_value || 0) / 10000000), 0);
+
   // Utilized Amount
   const utilizedAmount = (supplyPoAmount || 0) * 0.85;
 
   const remainingAmount = Math.max(0, supplyPoAmount - utilizedAmount);
-  
+
   const percentConsumed = supplyPoAmount > 0 ? ((utilizedAmount / supplyPoAmount) * 100) : 0;
-  
+
   // Logistics metrics
-  const inTransit = logisticsData?.find((l:any) => l.category === 'In Transit')?.count ?? 0;
+  const inTransit = logisticsData?.find((l: any) => l.category === 'In Transit')?.count ?? 0;
 
   const formatNum = (num: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(num);
 
@@ -62,50 +79,75 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
     { title: 'MATERIALS', value: formatNum(materials), icon: Layers, color: '#0284c7', bg: '#e0f2fe' },
     { title: 'PO VOLUME', value: formatNum(poVolume), unit: 'No', icon: Box, color: '#0ea5e9', bg: '#e0f2fe' },
     { title: 'INVENTORY', value: formatNum(inventory), unit: 'No', icon: Package, color: '#16a34a', bg: '#dcfce7' },
-    { title: 'SUPPLY PO AMOUNT', value: `₹${formatNum(supplyPoAmount)}`, unit: 'Cr', icon: IndianRupee, color: '#db2777', bg: '#fce7f3' },
-    { title: 'UTILIZED SUPPLY PO AMOUNT', value: `₹${formatNum(utilizedAmount)}`, unit: 'Cr', icon: TrendingUp, color: '#f59e0b', bg: '#fef3c7' },
-    { title: 'REMAINING SUPPLY PO AMOUNT', value: `₹${formatNum(remainingAmount)}`, unit: 'Cr', icon: PieChart, color: '#0d9488', bg: '#ccfbf1' },
+    { title: 'PO AMOUNT', value: `₹${formatNum(supplyPoAmount)}`, unit: 'Cr', icon: IndianRupee, color: '#db2777', bg: '#fce7f3' },
+    { title: 'UTILIZED PO AMOUNT', value: `₹${formatNum(utilizedAmount)}`, unit: 'Cr', icon: TrendingUp, color: '#f59e0b', bg: '#fef3c7' },
+    { title: 'REMAINING PO AMOUNT', value: `₹${formatNum(remainingAmount)}`, unit: 'Cr', icon: PieChart, color: '#0d9488', bg: '#ccfbf1' },
     { title: '% CONSUMED', value: `${formatNum(percentConsumed)}%`, icon: Activity, color: '#16a34a', bg: '#dcfce7' },
   ];
 
   // Re-generate local chart data for Consumption Trends
   const tData = trendsData?.trends || [];
   const localSapOption = {
-    tooltip: { 
-      trigger: 'axis', 
-      backgroundColor: 'rgba(0,0,0,0.8)', 
-      textStyle: { color: '#fff' }
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(15, 23, 42, 0.95)',
+      borderColor: 'rgba(51, 65, 85, 0.5)',
+      borderWidth: 1,
+      padding: [12, 16],
+      textStyle: { color: '#f8fafc', fontSize: 12 },
+      formatter: (params: any) => {
+        let out = `<div style="font-weight:600; margin-bottom: 8px; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">${params[0].axisValue}</div>`;
+        out += `<div style="display:flex; flex-direction:column; gap:6px;">`;
+        params.forEach((p: any) => {
+          let val = p.value;
+          let prefix = '';
+          if (p.seriesName.includes('Value')) {
+             prefix = '₹';
+             val = parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Cr';
+          } else {
+             val = parseFloat(val).toLocaleString('en-IN');
+          }
+          out += `<div style="display:flex; justify-content:space-between; align-items:center; gap: 24px;">
+            <div style="display:flex; align-items:center; gap:6px;">
+              ${p.marker} <span style="color:#cbd5e1">${p.seriesName.replace(' (MB51)', '').replace(' (ME2J)', '')}</span>
+            </div>
+            <span style="font-weight:600; font-family: monospace; font-size: 13px;">${prefix}${val}</span>
+          </div>`;
+        });
+        out += `</div>`;
+        return out;
+      }
     },
-    legend: { 
-      top: 0, 
-      left: 'center', 
+    legend: {
+      top: 0,
+      left: 'center',
       data: ['PO Qty (ME2J)', 'Consumed Qty (MB51)', 'Reversals (MB51)', 'Value INR (Cr)'],
-      textStyle: { color: '#64748b', fontSize: 11 } 
+      textStyle: { color: '#64748b', fontSize: 11 }
     },
     grid: { top: 40, left: '3%', right: '3%', bottom: '15%', containLabel: true },
-    xAxis: { 
-      type: 'category', 
+    xAxis: {
+      type: 'category',
       data: tData.map((d: any) => d.month),
-      axisLine: { lineStyle: { color: '#e2e8f0' } }, 
-      axisLabel: { color: '#64748b', rotate: 45, interval: 'auto', fontSize: 10 } 
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisLabel: { color: '#64748b', rotate: 45, interval: 'auto', fontSize: 10 }
     },
     yAxis: [
-      { 
-        type: 'value', 
-        name: 'Quantity', 
+      {
+        type: 'value',
+        name: 'Quantity',
         nameTextStyle: { color: '#64748b' },
-        axisLine: { lineStyle: { color: '#e2e8f0' } }, 
-        axisLabel: { color: '#64748b', fontSize: 10 }, 
-        splitLine: { lineStyle: { color: '#e2e8f0', opacity: 0.5 } } 
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#64748b', fontSize: 10 },
+        splitLine: { lineStyle: { color: '#e2e8f0', opacity: 0.5 } }
       },
-      { 
-        type: 'value', 
-        name: 'Value (Cr)', 
+      {
+        type: 'value',
+        name: 'Value (Cr)',
         nameTextStyle: { color: '#64748b' },
         position: 'right',
-        axisLine: { lineStyle: { color: '#e2e8f0' } }, 
-        axisLabel: { color: '#64748b', fontSize: 10 }, 
-        splitLine: { show: false } 
+        axisLine: { lineStyle: { color: '#e2e8f0' } },
+        axisLabel: { color: '#64748b', fontSize: 10 },
+        splitLine: { show: false }
       }
     ],
     series: [
@@ -118,13 +160,13 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         areaStyle: { color: 'rgba(59, 130, 246, 0.1)' },
         markLine: trendsData?.total_inventory ? {
           data: [
-            { 
-              yAxis: trendsData.total_inventory, 
+            {
+              yAxis: trendsData.total_inventory,
               name: 'MB52 Current Inventory',
               lineStyle: { color: '#8b5cf6', type: 'dashed', width: 2 },
-              label: { 
-                position: 'insideStartTop', 
-                formatter: 'MB52 Inventory: {c}', 
+              label: {
+                position: 'insideStartTop',
+                formatter: 'MB52 Inventory: {c}',
                 color: '#8b5cf6',
                 fontSize: 10,
                 fontWeight: 'bold'
@@ -137,7 +179,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         name: 'Consumed Qty (MB51)',
         type: 'line',
         smooth: true,
-        data: tData.map((d: any) => d.consumed_qty),
+        data: tData.map((d: any) => Math.abs(d.consumed_qty || 0)),
         itemStyle: { color: '#ef4444' },
         areaStyle: { color: 'rgba(239, 68, 68, 0.1)' }
       },
@@ -154,17 +196,17 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         type: 'line',
         smooth: true,
         yAxisIndex: 1,
-        data: tData.map((d: any) => parseFloat((d.value_inr / 10000000).toFixed(2))),
+        data: tData.map((d: any) => parseFloat((Math.abs(d.value_inr || 0) / 10000000).toFixed(2))),
         itemStyle: { color: '#f59e0b' }
       }
     ]
   };
 
   // Build local logistics data based on filtered logs
-  const atPortCount = logisticsData.find((l:any) => l.category === 'At Port')?.count || 580;
-  const inTransitCount = logisticsData.find((l:any) => l.category === 'In Transit')?.count || 0;
-  const deliveredCount = logisticsData.find((l:any) => l.category === 'Delivered')?.count || 0;
-  
+  const atPortCount = logisticsData.find((l: any) => l.category === 'At Port')?.count || 580;
+  const inTransitCount = logisticsData.find((l: any) => l.category === 'In Transit')?.count || 0;
+  const deliveredCount = logisticsData.find((l: any) => l.category === 'Delivered')?.count || 0;
+
   const localLogisticsFunnel = {
     tooltip: { trigger: 'item', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
     series: [
@@ -184,9 +226,9 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         label: { show: true, position: 'inside', formatter: '{b}: {c}' },
         itemStyle: { borderColor: 'var(--background)', borderWidth: 1 },
         data: [
-          { value: atPortCount, name: 'At Port', itemStyle: {color: '#f59e0b'} },
-          { value: inTransitCount, name: 'In Transit', itemStyle: {color: '#75479C'} },
-          { value: deliveredCount, name: 'Delivered', itemStyle: {color: '#0B74B0'} },
+          { value: atPortCount, name: 'At Port', itemStyle: { color: '#f59e0b' } },
+          { value: inTransitCount, name: 'In Transit', itemStyle: { color: '#75479C' } },
+          { value: deliveredCount, name: 'Delivered', itemStyle: { color: '#0B74B0' } },
         ]
       }
     ]
@@ -194,10 +236,10 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
 
   const vendorMap: any = {};
   filteredFinDetails.forEach((po: any) => {
-      const v = po.vendor_name || 'Unknown Vendor';
-      vendorMap[v] = (vendorMap[v] || 0) + ((po.net_order_value_inr || po.net_order_value || 0) / 10000000);
+    const v = po.vendor_name || 'Unknown Vendor';
+    vendorMap[v] = (vendorMap[v] || 0) + ((po.net_order_value_inr || po.net_order_value || 0) / 10000000);
   });
-  const topVendors = Object.keys(vendorMap).map(k => ({name: k.substring(0,25), value: parseFloat(vendorMap[k].toFixed(2))})).sort((a,b) => b.value - a.value).slice(0, 5);
+  const topVendors = Object.keys(vendorMap).map(k => ({ name: k.substring(0, 25), value: parseFloat(vendorMap[k].toFixed(2)) })).sort((a, b) => b.value - a.value).slice(0, 5);
 
   const localVendorOption = {
     tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
@@ -211,7 +253,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
 
   return (
     <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
-      
+
       {/* Header section */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
         <div className="flex items-center gap-2">
@@ -220,6 +262,26 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         </div>
 
         <div className="flex flex-wrap items-center gap-4">
+          <div className="flex items-center bg-muted border border-border rounded-lg p-0.5">
+            {[
+              { key: 'all' as const, label: 'All' },
+              { key: 'spv' as const, label: 'SPV' },
+              { key: 'agel' as const, label: 'AGEL' },
+              { key: 'age6l' as const, label: 'AGE6L' },
+            ].map(opt => (
+              <button
+                key={opt.key}
+                onClick={() => setCompanyFilter(opt.key)}
+                className={`px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider rounded-md transition-all ${
+                  companyFilter === opt.key
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
           <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg text-sm font-medium text-primary hover:bg-muted transition-colors">
             <Download className="w-4 h-4" /> Export SAP Report
           </button>
@@ -238,7 +300,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
                 <kpi.icon className="w-4 h-4" strokeWidth={2.5} />
               </div>
             </div>
-            
+
             <div className="mt-2">
               <div className="flex items-baseline gap-1">
                 <span className="text-2xl font-light tracking-tight" style={{ color: kpi.color }}>
@@ -247,7 +309,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
                 {kpi.unit && <span className="text-xs text-muted-foreground font-medium">{kpi.unit}</span>}
               </div>
             </div>
-            
+
             <div className="mt-3 flex justify-end">
               <button className="text-[10px] font-medium text-muted-foreground flex items-center gap-1 hover:text-primary transition-colors">
                 View Details <ArrowRight className="w-3 h-3" />
@@ -258,42 +320,42 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
-          <div className="col-span-1 lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-primary/10 rounded-lg"><Activity className="w-5 h-5 text-primary" /></div>
-              <div>
-                <h2 className="text-lg font-medium tracking-wide text-foreground">Global SAP Consumption Trends</h2>
-                {trendsData?.total_inventory !== undefined && (
-                  <p className="text-xs text-muted-foreground mt-1">
-                    MB52 Current Total Inventory: <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN').format(trendsData.total_inventory)}</span> units
-                  </p>
-                )}
-              </div>
-            </div>
-            <div className="w-full h-[350px]">
-              <ReactECharts option={localSapOption} style={{ height: '100%', width: '100%' }} />
+        <div className="col-span-1 lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-primary/10 rounded-lg"><Activity className="w-5 h-5 text-primary" /></div>
+            <div>
+              <h2 className="text-lg font-medium tracking-wide text-foreground">Global SAP Consumption Trends</h2>
+              {trendsData?.total_inventory !== undefined && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  MB52 Current Total Inventory: <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN').format(trendsData.total_inventory)}</span> units
+                </p>
+              )}
             </div>
           </div>
+          <div className="w-full h-[350px]">
+            <ReactECharts option={localSapOption} style={{ height: '100%', width: '100%' }} />
+          </div>
+        </div>
 
-          <div className="col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-primary/10 rounded-lg"><Truck className="w-5 h-5 text-primary" /></div>
-              <h2 className="text-lg font-medium tracking-wide text-foreground">Material Logistics Funnel</h2>
-            </div>
-            <div className="w-full h-[250px]">
-              <ReactECharts option={localLogisticsFunnel} style={{ height: '100%', width: '100%' }} />
-            </div>
+        <div className="col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-primary/10 rounded-lg"><Truck className="w-5 h-5 text-primary" /></div>
+            <h2 className="text-lg font-medium tracking-wide text-foreground">Material Logistics Funnel</h2>
           </div>
+          <div className="w-full h-[250px]">
+            <ReactECharts option={localLogisticsFunnel} style={{ height: '100%', width: '100%' }} />
+          </div>
+        </div>
 
-          <div className="col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="p-2 bg-primary/10 rounded-lg"><Users className="w-5 h-5 text-primary" /></div>
-              <h2 className="text-lg font-medium tracking-wide text-foreground">Top Vendors by PO Value</h2>
-            </div>
-            <div className="w-full h-[250px]">
-              <ReactECharts option={localVendorOption} style={{ height: '100%', width: '100%' }} />
-            </div>
+        <div className="col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2 bg-primary/10 rounded-lg"><Users className="w-5 h-5 text-primary" /></div>
+            <h2 className="text-lg font-medium tracking-wide text-foreground">Top Vendors by PO Value</h2>
           </div>
+          <div className="w-full h-[250px]">
+            <ReactECharts option={localVendorOption} style={{ height: '100%', width: '100%' }} />
+          </div>
+        </div>
       </div>
 
       <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
@@ -301,7 +363,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           <div className="p-2 bg-primary/10 rounded-lg"><List className="w-5 h-5 text-primary" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Detailed Procurement Ledger</h2>
         </div>
-        
+
         <div className="overflow-x-auto overflow-y-auto max-h-[450px] relative rounded-lg border border-border/50">
           <table className="w-full text-sm text-left text-foreground/90 relative">
             <thead className="text-xs uppercase bg-muted text-muted-foreground/70 border-b border-border sticky top-0 z-10 shadow-sm">
@@ -327,18 +389,18 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
                   </td>
                   <td className="px-4 py-3">
                     {po.delivery_completed_flag === 'X' ? (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Delivered</span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Delivered</span>
                     ) : (
-                        <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-blue-800">Pending</span>
+                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-blue-800">Pending</span>
                     )}
                   </td>
                   <td className="px-4 py-3 text-right font-medium">{((po.net_order_value_inr || po.net_order_value || 0) / 10000000).toFixed(2)}</td>
                 </tr>
               ))}
               {(!filteredFinDetails || filteredFinDetails.length === 0) && (
-                  <tr>
-                      <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground/70">No detailed records found.</td>
-                  </tr>
+                <tr>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground/70">No detailed records found.</td>
+                </tr>
               )}
             </tbody>
           </table>

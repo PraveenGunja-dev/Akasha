@@ -288,6 +288,7 @@ class MTSLRData(Base):
     id = Column(Integer, primary_key=True, index=True)
     po_document = Column(String, index=True)      # 'A.Document' (PO Number)
     description = Column(String)                  # 'Description'
+    vendor_name = Column(String)                  # 'Vendor Name'
     actual_amount = Column(Float, nullable=True)  # 'Actual Amount'
     commitment_amount = Column(Float, nullable=True) # 'Commitment Amt'
     wbs_element = Column(String, index=True)      # 'WBS Element'

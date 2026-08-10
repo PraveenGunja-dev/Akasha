@@ -2,7 +2,7 @@
 Akasha Tools Layer — SAP Procurement/Supply Chain Tools
 
 MCP-style tool functions for deterministic, read-only access to SAP data.
-Covers: Purchase Orders (ME2J), Material Consumption (MB51), Inventory (MB52).
+Covers: Purchase Orders (ZSPS), Material Consumption (MB51), Inventory (MB52).
 """
 
 import logging

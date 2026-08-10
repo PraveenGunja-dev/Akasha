@@ -3,11 +3,13 @@ import { useParams, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
-  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
+  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, IndianRupee, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
   Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
 import QualityProjectTab from '../quality/QualityProjectTab';
+import * as ExcelJS from 'exceljs';
+import { saveAs } from 'file-saver';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -75,7 +77,7 @@ const ECODCell = ({ edge }: { edge: any }) => {
   const ecod = edge.expectedDate;
   const status = (edge.normalizedStatus || edge.status || '').toLowerCase();
   const inProgress = status === 'in_progress' || status === 'in progress';
-  
+
   let delayMonths = 0;
   if (inProgress && scod && ecod && scod !== '—' && ecod !== '—' && scod !== 'TBD' && ecod !== 'TBD') {
     const parse = (s: string) => {
@@ -93,14 +95,14 @@ const ECODCell = ({ edge }: { edge: any }) => {
       delayMonths = (d2.getFullYear() - d1.getFullYear()) * 12 + (d2.getMonth() - d1.getMonth());
     }
   }
-  
+
   const isDelayed = delayMonths > 0 && inProgress;
-  
+
   return (
     <td className="text-xs font-mono whitespace-nowrap">
       {isDelayed && <AlertTriangle className="w-3 h-3 text-destructive inline mr-1" />}
       <span className={isDelayed ? "text-destructive font-semibold" : ""}>
-        {ecod || '—'} 
+        {ecod || '—'}
         {isDelayed && <span className="text-[10px] ml-1 bg-destructive/100/10 px-1.5 py-0.5 rounded-sm border border-destructive/20 text-destructive font-bold">+{delayMonths}m</span>}
       </span>
     </td>
@@ -269,8 +271,16 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   }, [detail?.einvoice?.invoices]);
   const [slrData, setSlrData] = useState<any>(null);
   const [slrLoading, setSlrLoading] = useState(false);
-  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('ALL');
+  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('POrd');
   const [slrStatusFilter, setSlrStatusFilter] = useState<'ALL' | 'Open' | 'Closed'>('ALL');
+  const slrTopLevelKPIs = useMemo(() => {
+    if (!slrData || !slrData.data) return null;
+    const pords = slrData.data.filter((r: any) => r.type === 'POrd');
+    return {
+      totalPOs: new Set(pords.map((r: any) => r.po_document)).size,
+      totalBudgetINR: pords.reduce((sum: number, r: any) => sum + (r.total || 0), 0)
+    };
+  }, [slrData]);
   const handleSlrTileClick = (status: 'ALL' | 'Open' | 'Closed') => {
     if (expandedMetric === 'slr' && slrStatusFilter === status) {
       setExpandedMetric(null);
@@ -651,6 +661,197 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     }]
   } : null;
 
+  const downloadMaterialReport = async () => {
+    if (!unifiedMaterials || unifiedMaterials.length === 0) return;
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Material Lifecycle');
+
+    worksheet.columns = [
+      { header: 'Code', key: 'code', width: 15 },
+      { header: 'Description', key: 'desc', width: 45 },
+      { header: 'Unit', key: 'unit', width: 12 },
+      { header: 'WBS Tracking', key: 'wbs', width: 25 },
+      { header: 'Ordered', key: 'ordered', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'Consumed', key: 'consumed', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'Inventory', key: 'inventory', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'In Transit', key: 'transit', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'Remaining', key: 'remaining', width: 15, style: { numFmt: '#,##0.00' } },
+      { header: 'PO Budget', key: 'budget', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Utilized', key: 'utilized', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Inventory Val', key: 'invVal', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Remaining Bal', key: 'remBal', width: 18, style: { numFmt: '₹#,##0.00' } }
+    ];
+
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    unifiedMaterials.forEach((mat: any) => {
+      const masterRow = worksheet.addRow({
+        code: mat.materialCode,
+        desc: mat.materialDescription,
+        unit: mat.baseUnit,
+        wbs: (mat.wbsList || []).join(', '),
+        ordered: mat.orderedQty || 0,
+        consumed: mat.consumedQty || 0,
+        inventory: mat.inventoryQty || 0,
+        transit: mat.inTransitQty || 0,
+        remaining: mat.remainingQty || 0,
+        budget: mat.budgetINR || 0,
+        utilized: mat.deliveredINR || 0,
+        invVal: mat.inventoryValueINR || 0,
+        remBal: mat.remainingBalanceINR || 0
+      });
+      masterRow.font = { bold: true };
+      masterRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };
+
+      if (mat.pos && mat.pos.length > 0) {
+        const poNumbers = Array.from(new Set(mat.pos.map((p: any) => p.poNumber)));
+        poNumbers.forEach((poNum: any) => {
+          const items = mat.pos.filter((p: any) => p.poNumber === poNum);
+          const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+          const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+          const dates = Array.from(new Set(items.map((p: any) => p.poDate).filter(Boolean)));
+
+          worksheet.addRow({
+            code: '',
+            desc: `   ↳ PO: ${poNum}`,
+            unit: dates.join(', '),
+            wbs: `Storage: ${storages.join(', ')}`,
+            ordered: sumQty
+          }).font = { italic: true, color: { argb: 'FF64748B' } };
+        });
+      }
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Material_Lifecycle_${p.projectId}.xlsx`);
+  };
+
+  const downloadSLRReport = async () => {
+    if (!slrData || !slrData.data) return;
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Purchase Orders');
+
+    worksheet.columns = [
+      { header: 'PO Number', key: 'po', width: 18 },
+      { header: 'Vendor Name', key: 'vendor', width: 35 },
+      { header: 'Type', key: 'type', width: 12 },
+      { header: 'Description', key: 'desc', width: 45 },
+      { header: 'Total Amount', key: 'total', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Actual', key: 'actual', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Commitment', key: 'commit', width: 18, style: { numFmt: '₹#,##0.00' } },
+      { header: 'Status', key: 'status', width: 15 }
+    ];
+
+    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };
+    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+    const slrFiltered = slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter));
+
+    slrFiltered.forEach((row: any) => {
+      const vendorName = row.type === 'PReq' ? '' : (row.vendor_name || 'Unknown Vendor');
+      const poNumStr = row.po_document ? String(row.po_document) : '';
+
+      if (row.line_items?.length > 0) {
+        row.line_items.forEach((item: any) => {
+          worksheet.addRow({
+            po: poNumStr,
+            vendor: vendorName,
+            type: item.type || '',
+            desc: item.description || '',
+            total: item.total || 0,
+            actual: item.actual || 0,
+            commit: item.commitment || 0,
+            status: item.status || row.status || ''
+          });
+        });
+      } else {
+        worksheet.addRow({
+          po: poNumStr,
+          vendor: vendorName,
+          type: row.type || '',
+          desc: row.description || '',
+          total: row.total || 0,
+          actual: row.actual || 0,
+          commit: row.commitment || 0,
+          status: row.status || ''
+        });
+      }
+    });
+
+    worksheet.eachRow((row, rowNumber) => {
+      if (rowNumber > 1) {
+        row.alignment = { vertical: 'middle' };
+        if (rowNumber % 2 === 0) {
+          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };
+        }
+      }
+    });
+
+    // --- ANALYTICS SUMMARY SHEET ---
+    const analyticsSheet = workbook.addWorksheet('Analytics Summary');
+
+    let totalAmount = 0;
+    let totalActual = 0;
+    let totalCommit = 0;
+    const byType: any = {};
+    const byStatus: any = {};
+    const byVendor: any = {};
+
+    slrFiltered.forEach((r: any) => {
+      totalAmount += (r.total || 0);
+      totalActual += (r.actual || 0);
+      totalCommit += (r.commitment || 0);
+
+      const type = r.type || 'Unknown';
+      byType[type] = (byType[type] || 0) + (r.total || 0);
+
+      const status = r.status || 'Unknown';
+      byStatus[status] = (byStatus[status] || 0) + (r.total || 0);
+
+      if (r.type !== 'PReq') {
+        const vName = r.vendor_name || 'Unknown Vendor';
+        byVendor[vName] = (byVendor[vName] || 0) + (r.total || 0);
+      }
+    });
+
+    const headerStyle = { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } } };
+
+    analyticsSheet.getColumn(1).width = 35;
+    analyticsSheet.getColumn(2).width = 25;
+
+    analyticsSheet.addRow(['OVERVIEW KPIs', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });
+    analyticsSheet.addRow(['Total Purchase Orders', slrFiltered.length]);
+    analyticsSheet.addRow(['Total Amount', totalAmount]).getCell(2).numFmt = '₹#,##0.00';
+    analyticsSheet.addRow(['Total Actual', totalActual]).getCell(2).numFmt = '₹#,##0.00';
+    analyticsSheet.addRow(['Total Commitment', totalCommit]).getCell(2).numFmt = '₹#,##0.00';
+    analyticsSheet.addRow([]);
+
+    analyticsSheet.addRow(['AMOUNT BY PO TYPE', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });
+    Object.entries(byType).sort((a: any, b: any) => b[1] - a[1]).forEach(([k, v]) => {
+      analyticsSheet.addRow([k, v as number]).getCell(2).numFmt = '₹#,##0.00';
+    });
+    analyticsSheet.addRow([]);
+
+    analyticsSheet.addRow(['AMOUNT BY STATUS', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });
+    Object.entries(byStatus).sort((a: any, b: any) => b[1] - a[1]).forEach(([k, v]) => {
+      analyticsSheet.addRow([k, v as number]).getCell(2).numFmt = '₹#,##0.00';
+    });
+    analyticsSheet.addRow([]);
+
+    analyticsSheet.addRow(['TOP VENDORS (BY AMOUNT)', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });
+    Object.entries(byVendor).sort((a: any, b: any) => b[1] - a[1]).slice(0, 15).forEach(([k, v]) => {
+      analyticsSheet.addRow([k, v as number]).getCell(2).numFmt = '₹#,##0.00';
+    });
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    saveAs(new Blob([buffer]), `Purchase_Orders_Breakdown_${p.projectId}.xlsx`);
+  };
+
   const downloadSAPReport = () => {
     if (!sap) return;
 
@@ -718,6 +919,42 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           inv.inventoryValueINR
         ]);
       });
+      rows.push(['']);
+    }
+
+    // SLR Purchase Orders with Line Items
+    if (slrData?.data?.length > 0) {
+      rows.push(['--- Purchase Orders ---']);
+      rows.push(['PO Number', 'Vendor Name', 'Type', 'Description', 'Total Amount', 'Actual', 'Commitment', 'Status']);
+      slrData.data.forEach((row: any) => {
+        const vendorName = row.type === 'PReq' ? '-' : (row.vendor_name || 'Unknown Vendor');
+
+        if (row.line_items?.length > 0) {
+          row.line_items.forEach((item: any) => {
+            rows.push([
+              row.po_document || '',
+              `"${vendorName.replace(/"/g, '""')}"`,
+              item.type || '',
+              `"${(item.description || '').replace(/"/g, '""')}"`,
+              item.total || 0,
+              item.actual || 0,
+              item.commitment || 0,
+              item.status || row.status || ''
+            ]);
+          });
+        } else {
+          rows.push([
+            row.po_document || '',
+            `"${vendorName.replace(/"/g, '""')}"`,
+            row.type || '',
+            `"${(row.description || '').replace(/"/g, '""')}"`,
+            row.total || 0,
+            row.actual || 0,
+            row.commitment || 0,
+            row.status || ''
+          ]);
+        }
+      });
     }
 
     const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
@@ -754,9 +991,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   try {
                     const p6Promise = fetch(`/akasha/api/p6/sync/${detail.p6.p6ObjectId}`, { method: 'POST' });
                     const tcPromise = fetch(`/akasha/api/tc/sync/${encodeURIComponent(p.projectId)}`, { method: 'POST' });
-                    
+
                     const [p6Res, tcRes] = await Promise.all([p6Promise, tcPromise]);
-                    
+
                     if (p6Res.ok || tcRes.ok) {
                       window.location.reload();
                     }
@@ -782,40 +1019,41 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         {/* ── Hero Section ── */}
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
-          <HeroMetric label="Supply PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-primary" />
-          
-          <HeroMetric 
-            label={`COD Done (${detail?.mapping?.unitType || 'Units'})`} 
-            value={detail?.mapping?.codBlocksDone || 0} 
-            icon={CheckCircle2} 
-            color="text-success" 
-            hasBreakdown={(detail?.mapping?.codBlocksDone || 0) > 0} 
-            onClick={() => (detail?.mapping?.codBlocksDone || 0) > 0 && setShowCodModal('done')} 
-            active={showCodModal === 'done'} 
+          <HeroMetric label="PO Amount" value={slrTopLevelKPIs ? `₹${(slrTopLevelKPIs.totalBudgetINR / 10000000).toFixed(1)}` : (detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0')} unit="Cr" icon={Database} color="text-primary" />
+
+          <HeroMetric
+            label={`COD Done (${detail?.mapping?.unitType || 'Units'})`}
+            value={detail?.mapping?.codBlocksDone || 0}
+            icon={CheckCircle2}
+            color="text-success"
+            hasBreakdown={(detail?.mapping?.codBlocksDone || 0) > 0}
+            onClick={() => (detail?.mapping?.codBlocksDone || 0) > 0 && setShowCodModal('done')}
+            active={showCodModal === 'done'}
           />
           <HeroMetric label="MW Generated" value={detail?.mapping?.mwGenerated || 0} unit="MW" icon={Zap} color="text-primary" />
-          <HeroMetric 
-            label="Pending COD" 
-            value={detail?.mapping?.pendingCodBlocks || 0} 
-            icon={AlertTriangle} 
-            color="text-warning" 
-            hasBreakdown={(detail?.mapping?.pendingCodBlocks || 0) > 0} 
-            onClick={() => (detail?.mapping?.pendingCodBlocks || 0) > 0 && setShowCodModal('pending')} 
-            active={showCodModal === 'pending'} 
+          <HeroMetric
+            label="Pending COD"
+            value={detail?.mapping?.pendingCodBlocks || 0}
+            icon={AlertTriangle}
+            color="text-warning"
+            hasBreakdown={(detail?.mapping?.pendingCodBlocks || 0) > 0}
+            onClick={() => (detail?.mapping?.pendingCodBlocks || 0) > 0 && setShowCodModal('pending')}
+            active={showCodModal === 'pending'}
           />
-          
+
           <HeroMetric label="Schedule Variance" value={`${p.scheduleVariance > 0 ? '+' : ''}${p.scheduleVariance}`} unit="days" icon={Clock} color={p.scheduleVariance < -10 ? 'text-destructive' : 'text-foreground/80'} hasBreakdown={(detail?.p6?.delayedActivities?.length || 0) > 0} onClick={() => (detail?.p6?.delayedActivities?.length || 0) > 0 && setShowDelayedModal(true)} active={showDelayedModal} />
           <HeroMetric label="Forecast COD" value={p.forecastFinish || p.forecastMonth} icon={Calendar} color="text-primary" />
           {((detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)) > 0 && (
             <HeroMetric label="Transmission Lines" value={(detail?.tc?.summary?.totalKhavdaEdges || 0) + (detail?.tc?.summary?.totalRajasthanEdges || 0)} icon={MapPin} color="text-primary" />
           )}
           {(detail?.tc?.summary?.totalNodes || 0) > 0 && (
-            <HeroMetric label="Substations" value={detail?.tc?.summary?.totalNodes || 0} icon={Zap} color="text-warning" />
+            <HeroMetric label="Substations" value={(detail?.tc?.summary?.totalNodes || 0) + (detail?.tc?.summary?.totalNodes || 0)} icon={Zap} color="text-warning" />
           )}
           <HeroMetric label="Baseline COD" value={p6?.baselineFinishDate || 'Not Set'} icon={CalendarClock} color="text-teal-500 dark:text-teal-400" />
         </div>
 
         {/* ── AI Project Summary ── */}
+        {false && (
         <div className="intelligence-card p-6 relative overflow-hidden">
           <div className="absolute top-0 right-0 w-72 h-72 bg-primary/[0.03] blur-[100px] rounded-full pointer-events-none"></div>
 
@@ -920,6 +1158,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             </div>
           </div>
         </div>
+        )}
 
         {/* ── Tab Navigation ── */}
         <div className="flex items-center gap-2 border-b border-border bg-slate-100/50 dark:bg-gray-900/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
@@ -1148,803 +1387,836 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   <>
                     <>
                       {!sap || (sap.summary.totalPOs === 0 && sap.summary.totalConsumedQty === 0 && sap.summary.totalInventoryQty === 0) ? (
-                    <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
-                      <Database className="w-10 h-10 text-muted-foreground/20 mb-3" />
-                      <p className="text-muted-foreground/60 text-sm">No SAP procurement data found for this plant code.</p>
-                      <p className="text-muted-foreground/40 text-xs mt-1">Plant code: {sapFilter === 'spv' ? project?.sapPlantCode : sapFilter === 'agel' ? project?.agelCode : sapFilter === 'age6l' ? project?.age6lCode : '—'}</p>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                        <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
-                        <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
-                        <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} />
-                        <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="No" icon={Package} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />
-                        <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="No" icon={Box} color="text-success dark:text-success" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
-
-                        <HeroMetric label="Supply PO Amount" value={fmtCost(sap.summary.totalBudgetINR)} icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
-                        <HeroMetric label="Utilized Supply PO Amount" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
-                        <HeroMetric label="Remaining Supply PO Amount" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
-                        <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'} />
-                        <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="No" icon={Truck} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
-                      </div>
-
-                      {/* SLR KPIs */}
-                      {slrLoading ? (
-                        <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-border">
-                          <Loader2 className="w-5 h-5 text-primary animate-spin" />
-                          <span className="text-sm text-muted-foreground/60">Loading SLR data...</span>
+                        <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
+                          <Database className="w-10 h-10 text-muted-foreground/20 mb-3" />
+                          <p className="text-muted-foreground/60 text-sm">No SAP procurement data found for this plant code.</p>
+                          <p className="text-muted-foreground/40 text-xs mt-1">Plant code: {sapFilter === 'spv' ? project?.sapPlantCode : sapFilter === 'agel' ? project?.agelCode : sapFilter === 'age6l' ? project?.age6lCode : '—'}</p>
                         </div>
-                      ) : slrData && slrData.data?.length > 0 && (() => {
-                        const slrTypes = Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))) as string[];
-                        const slrFiltered = slrTypeFilter === 'ALL' ? slrData.data : slrData.data.filter((r: any) => r.type === slrTypeFilter);
-                        const filteredOpen = slrFiltered.filter((r: any) => r.status === 'Open').length;
-                        const filteredClosed = slrFiltered.length - filteredOpen;
-                        const filteredAmount = slrFiltered.reduce((s: number, r: any) => s + (r.total || 0), 0);
-                        return (
-                          <div className="mt-4 pt-4 border-t border-border">
-                            {slrTypes.length > 1 && (
-                              <div className="flex items-center gap-2 mb-3">
-                                <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Type:</span>
-                                {['ALL', ...slrTypes].map((t: string) => (
-                                  <button
-                                    key={t}
-                                    onClick={() => setSlrTypeFilter(t)}
-                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${slrTypeFilter === t ? 'bg-primary/15 border-primary/30 text-primary font-semibold' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                                  >
-                                    {t === 'ALL' ? 'All' : t}
-                                  </button>
-                                ))}
-                              </div>
+                      ) : (
+                        <>
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                            {/* Total POs — shown in all tabs (POrd count only, pulled from SLR data) */}
+                            <HeroMetric label="Total POs" value={slrTopLevelKPIs ? slrTopLevelKPIs.totalPOs : sap.summary.totalPOs} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
+                            {/* Vendors — shown in all tabs */}
+                            <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
+                            {/* Materials — commented out for ALL, SPV, AGEL, AGE6L */}
+                            {/* <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} /> */}
+                            {/* PO Volume — commented out for ALL, SPV, AGEL, AGE6L */}
+                            {/* <HeroMetric label="PO Volume" value={fmtMW(sap.summary.totalOrderedQty)} unit="No" icon={Package} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} /> */}
+                            {/* Inventory — commented out for ALL, SPV, AGE6L; shown for AGEL */}
+                            {(sapFilter === 'agel') && (
+                              <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="No" icon={Box} color="text-success dark:text-success" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
                             )}
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                              <HeroMetric label="Total SLR POs" value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
-                              <HeroMetric label="Open POs" value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
-                              <HeroMetric label="Closed POs" value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
-                              <HeroMetric label="Total Amount" value={`₹${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={DollarSign} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
-                            </div>
-                          </div>
-                        );
-                      })()}
 
-                      {/* ── Interactive Breakdown Panel ── */}
-                      {expandedMetric && (
-                        <div className="intelligence-card p-5 animate-in slide-in-from-top-2 duration-300 border-primary/20">
-                          <div className="flex items-center justify-between mb-4">
-                            <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-2">
-                              <Zap className="w-3.5 h-3.5" />
-                              {expandedMetric === 'pos' && 'Purchase Order Breakdown'}
-                              {expandedMetric === 'vendors' && 'Vendor Breakdown'}
-                              {expandedMetric === 'materials' && 'Material Type Breakdown'}
-                              {expandedMetric === 'volume' && 'PO Volume by Material'}
-                              {expandedMetric === 'inventory' && 'Inventory Breakdown (Qty & Value)'}
-                              {expandedMetric === 'budget' && 'Budget Allocation by Material'}
-                              {expandedMetric === 'utilized' && 'Utilization by Material'}
-                              {expandedMetric === 'remaining' && 'Remaining Balance by Material'}
-                              {expandedMetric === 'transit' && 'In-Transit Breakdown'}
-                              {expandedMetric === 'slr' && 'SLR Purchase Orders Breakdown'}
-                            </h4>
-                            <div className="flex items-center gap-2">
-                              {expandedMetric === 'slr' && (
-                                <button
-                                  onClick={() => setShowSlrAnalytics(v => !v)}
-                                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${showSlrAnalytics ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
-                                >
-                                  <BarChart3 className="w-3 h-3" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}
-                                </button>
-                              )}
-                              <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors">✕ Close</button>
-                            </div>
+                            {/* PO Amount (renamed from Supply PO Amount) — shown in all tabs, uses IndianRupee icon, pulled from SLR data */}
+                            <HeroMetric label="PO Amount" value={fmtCost(slrTopLevelKPIs ? slrTopLevelKPIs.totalBudgetINR : sap.summary.totalBudgetINR)} icon={IndianRupee} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
+                            {/* Utilized PO Amount (renamed from Utilized Supply PO Amount) — shown in all tabs */}
+                            <HeroMetric label="Utilized PO Amount" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
+                            {/* Remaining PO Amount (renamed from Remaining Supply PO Amount) — shown in all tabs */}
+                            <HeroMetric label="Remaining PO Amount" value={fmtCost((slrTopLevelKPIs ? slrTopLevelKPIs.totalBudgetINR : sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
+                            {/* % Consumed — commented out for ALL, SPV; shown for AGEL, AGE6L */}
+                            {(sapFilter === 'agel' || sapFilter === 'age6l') && (
+                              <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'} />
+                            )}
+                            {/* In Transit — commented out for ALL, SPV, AGE6L; shown for AGEL */}
+                            {(sapFilter === 'agel') && (
+                              <HeroMetric label="In Transit" value={fmtMW(sap.summary.totalInTransitQty)} unit="No" icon={Truck} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />
+                            )}
                           </div>
-                          {expandedMetric !== 'slr' && (
-                          <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin">
-                            <table className="intel-table w-full text-xs">
-                              <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
-                                {/* ── PO Breakdown ── */}
-                                {expandedMetric === 'pos' && (
-                                  <tr>
-                                    <th className="text-left">PO Number</th>
-                                    <th className="text-left">PO Date</th>
-                                    <th className="text-left">Material Description</th>
-                                    <th className="text-left">Vendor</th>
-                                    <th className="text-right">Ordered Qty</th>
-                                    <th className="text-right">Budget (INR)</th>
-                                    <th className="text-right">Delivered Value</th>
-                                    <th className="text-center">Storage</th>
-                                  </tr>
-                                )}
-                                {/* ── Vendor Breakdown ── */}
-                                {expandedMetric === 'vendors' && (
-                                  <tr>
-                                    <th className="text-left">Vendor Name</th>
-                                    <th className="text-center">PO Count</th>
-                                    <th className="text-center">Materials</th>
-                                    <th className="text-right">Total Ordered Qty</th>
-                                    <th className="text-right">Supply PO Amount (INR)</th>
-                                  </tr>
-                                )}
-                                {/* ── Material Type Breakdown ── */}
-                                {expandedMetric === 'materials' && (
-                                  <tr>
-                                    <th className="text-left">Material Code</th>
-                                    <th className="text-left">Material Description</th>
-                                    <th className="text-right">Ordered</th>
-                                    <th className="text-right">Consumed</th>
-                                    <th className="text-right">Inventory</th>
-                                    <th className="text-right">In Transit</th>
-                                  </tr>
-                                )}
-                                {/* ── Volume Breakdown ── */}
-                                {expandedMetric === 'volume' && (
-                                  <tr>
-                                    <th className="text-left">Material Code</th>
-                                    <th className="text-left">Material Description</th>
-                                    <th className="text-right">Ordered Qty</th>
-                                    <th className="text-right">% of Total</th>
-                                    <th className="text-left">Distribution</th>
-                                  </tr>
-                                )}
-                                {/* ── Inventory Breakdown ── */}
-                                {expandedMetric === 'inventory' && (
-                                  <tr>
-                                    <th className="text-left">Material Code</th>
-                                    <th className="text-left">Material Description</th>
-                                    <th className="text-right">Inventory Qty</th>
-                                    <th className="text-right">Inventory Value (INR)</th>
-                                    <th className="text-center">Storage Location</th>
-                                  </tr>
-                                )}
-                                {/* ── Budget / Utilized / Remaining ── */}
-                                {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && (
-                                  <tr>
-                                    <th className="text-left">Material Code</th>
-                                    <th className="text-left">Material Description</th>
-                                    <th className="text-right">Supply PO Amount</th>
-                                    <th className="text-right">Consumed Amt</th>
-                                    <th className="text-right">Remaining</th>
-                                    <th className="text-left">Utilization</th>
-                                  </tr>
-                                )}
-                                {/* ── Transit Breakdown ── */}
-                                {expandedMetric === 'transit' && (
-                                  <tr>
-                                    <th className="text-left">Material Code</th>
-                                    <th className="text-left">Vendor</th>
-                                    <th className="text-right">In-Transit Qty</th>
-                                    <th className="text-left">WBS Element</th>
-                                  </tr>
-                                )}
-                              </thead>
-                              <tbody className="divide-y divide-border/30">
-                                {/* ── PO Rows ── */}
-                                {expandedMetric === 'pos' && Array.from(new Set((sap.purchaseOrders || []).map((p: any) => p.poNumber))).slice(0, 100).map((poNum: any) => {
-                                  const items = (sap.purchaseOrders || []).filter((p: any) => p.poNumber === poNum);
-                                  const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
-                                  const sumBudget = items.reduce((sum: number, p: any) => sum + (p.budgetINR || 0), 0);
-                                  const sumDelivered = items.reduce((sum: number, p: any) => sum + (p.deliveredINR || 0), 0);
-                                  const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
-                                  const isExpanded = expandedPOs[`sap-pos-${poNum}`];
-                                  return (
-                                    <React.Fragment key={`sap-pos-${poNum}`}>
-                                      <tr 
-                                        className="hover:bg-muted transition-colors cursor-pointer"
-                                        onClick={() => setExpandedPOs(prev => ({ ...prev, [`sap-pos-${poNum}`]: !prev[`sap-pos-${poNum}`] }))}
+
+                          {/* SLR KPIs */}
+                          {slrLoading ? (
+                            <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-border">
+                              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                              <span className="text-sm text-muted-foreground/60">Loading SLR data...</span>
+                            </div>
+                          ) : slrData && slrData.data?.length > 0 && (() => {
+                            const slrTypes = Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))) as string[];
+                            const slrFiltered = slrTypeFilter === 'ALL' ? slrData.data : slrData.data.filter((r: any) => r.type === slrTypeFilter);
+                            const filteredOpen = slrFiltered.filter((r: any) => r.status === 'Open').length;
+                            const filteredClosed = slrFiltered.length - filteredOpen;
+                            const filteredAmount = slrFiltered.reduce((s: number, r: any) => s + (r.total || 0), 0);
+                            const filteredOpenAmount = slrFiltered.filter((r: any) => r.status === 'Open').reduce((s: number, r: any) => s + (r.total || 0), 0);
+                            return (
+                              <div className="mt-4 pt-4 border-t border-border">
+                                {slrTypes.length > 1 && (
+                                  <div className="flex items-center gap-2 mb-3">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Type:</span>
+                                    {slrTypes.map((t: string) => (
+                                      <button
+                                        key={t}
+                                        onClick={() => setSlrTypeFilter(t)}
+                                        className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${slrTypeFilter === t ? 'bg-primary/15 border-primary/30 text-primary font-semibold' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                                       >
-                                        <td className="text-left font-mono font-medium text-primary/80 flex items-center gap-2">
-                                          {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
-                                          {poNum}
-                                        </td>
-                                        <td className="text-left text-foreground/70">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB') : '—'}</td>
-                                        <td className="text-left text-foreground/70 max-w-[150px] truncate" title="Multiple Materials">
-                                          {items.length === 1 ? (items[0].materialName || items[0].materialCode) : `${items.length} items`}
-                                        </td>
-                                        <td className="text-left text-foreground/70 max-w-[150px] truncate" title={items[0]?.vendorName}>{items[0]?.vendorName || '—'}</td>
-                                        <td className="text-right font-mono font-semibold text-primary">{Number(sumQty || 0).toLocaleString('en-IN')} Unit</td>
-                                        <td className="text-right font-mono text-foreground/70">{fmtCost(sumBudget)}</td>
-                                        <td className="text-right font-mono text-success">{fmtCost(sumDelivered)}</td>
-                                        <td className="text-center">
-                                          {storages.length > 0 ? storages.map((s: any, idx) => (
-                                            <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{s}</span>
-                                          )) : '—'}
-                                        </td>
-                                      </tr>
-                                      {isExpanded && items.map((po: any, j: number) => (
-                                        <tr key={`sap-pos-${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
-                                          <td className="text-left font-mono font-medium text-muted-foreground pl-10 text-[10px]">Line Item {j + 1}</td>
-                                          <td className="text-left text-muted-foreground">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB') : '—'}</td>
-                                          <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
-                                          <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
-                                          <td className="text-right font-mono text-muted-foreground">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
-                                          <td className="text-right font-mono text-muted-foreground">{fmtCost(po.budgetINR)}</td>
-                                          <td className="text-right font-mono text-muted-foreground">{fmtCost(po.deliveredINR)}</td>
-                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
-                                        </tr>
-                                      ))}
-                                    </React.Fragment>
-                                  );
-                                })}
-                                {/* ── Vendor Rows ── */}
-                                {expandedMetric === 'vendors' && (sap.vendorBreakdown || []).map((v: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted transition-colors">
-                                    <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={v.vendorName}>{v.vendorName}</td>
-                                    <td className="text-center font-mono font-semibold text-primary">{v.poCount}</td>
-                                    <td className="text-center font-mono text-purple-400">{v.materialCount}</td>
-                                    <td className="text-right font-mono font-semibold text-foreground">{Number(v.totalOrderedQty || 0).toLocaleString('en-IN')}</td>
-                                    <td className="text-right font-mono text-pink-400">{fmtCost(v.totalBudgetINR)}</td>
-                                  </tr>
-                                ))}
-                                {/* ── Materials Rows ── */}
-                                {expandedMetric === 'materials' && unifiedMaterials.slice(0, 50).map((mat: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted transition-colors">
-                                    <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
-                                    <td className="text-left text-foreground/70 max-w-[180px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                    <td className="text-right font-mono text-primary">{mat.orderedQty ? <>{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                    <td className="text-right font-mono text-success">{mat.consumedQty ? <>{Number(mat.consumedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                    <td className="text-right font-mono text-purple-400">{mat.inventoryQty ? <>{Number(mat.inventoryQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                    <td className="text-right font-mono text-warning">{mat.inTransitQty ? <>{Number(mat.inTransitQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                  </tr>
-                                ))}
-                                {/* ── Volume Rows ── */}
-                                {expandedMetric === 'volume' && unifiedMaterials.filter((m: any) => m.orderedQty > 0).slice(0, 30).map((mat: any, i: number) => {
-                                  const pct = sap.summary.totalOrderedQty ? (mat.orderedQty / sap.summary.totalOrderedQty) * 100 : 0;
-                                  return (
-                                    <tr key={i} className="hover:bg-muted transition-colors">
-                                      <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
-                                      <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                      <td className="text-right font-mono font-semibold text-primary">{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</td>
-                                      <td className="text-right font-mono text-foreground/60">{pct.toFixed(1)}%</td>
-                                      <td className="text-left"><div className="w-full h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${Math.min(pct, 100)}%` }}></div></div></td>
-                                    </tr>
-                                  );
-                                })}
-                                {/* ── Inventory Rows ── */}
-                                {expandedMetric === 'inventory' && (sap.inventory || []).filter((inv: any) => (inv.inventoryQty || 0) > 0).slice(0, 50).map((inv: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted transition-colors">
-                                    <td className="text-left font-mono text-primary/80">{inv.materialCode}</td>
-                                    <td className="text-left text-foreground/70 max-w-[150px] truncate">{inv.materialName || '—'}</td>
-                                    <td className="text-right font-mono font-semibold text-success">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')} {inv.baseUnit && inv.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{inv.baseUnit}</span> : unifiedMaterialsMap[inv.materialCode]?.baseUnit && unifiedMaterialsMap[inv.materialCode]?.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[inv.materialCode].baseUnit}</span> : null}</td>
-                                    <td className="text-right font-mono text-purple-400">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                    <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
-                                  </tr>
-                                ))}
-                                {/* ── Budget / Utilized / Remaining Rows ── */}
-                                {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && unifiedMaterials.filter((m: any) => expandedMetric === 'budget' ? m.budgetINR > 0 : expandedMetric === 'utilized' ? m.consumedAmountINR > 0 : m.remainingBalanceINR !== 0).sort((a: any, b: any) => {
-                                  if (expandedMetric === 'utilized') return b.consumedAmountINR - a.consumedAmountINR;
-                                  if (expandedMetric === 'remaining') return b.remainingBalanceINR - a.remainingBalanceINR;
-                                  return b.budgetINR - a.budgetINR;
-                                }).slice(0, 50).map((mat: any, i: number) => {
-                                  const utilPct = mat.budgetINR ? (mat.consumedAmountINR / mat.budgetINR) * 100 : 0;
-                                  return (
-                                    <tr key={i} className="hover:bg-muted transition-colors">
-                                      <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
-                                      <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                      <td className="text-right font-mono text-pink-400">{fmtCost(mat.budgetINR)}</td>
-                                      <td className="text-right font-mono text-warning">{fmtCost(mat.consumedAmountINR)}</td>
-                                      <td className="text-right font-mono text-teal-400">{fmtCost(mat.remainingBalanceINR)}</td>
-                                      <td className="text-left">
-                                        <div className="flex items-center gap-2">
-                                          <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${utilPct > 90 ? 'bg-destructive/100' : utilPct > 60 ? 'bg-warning/100' : 'bg-success/100'}`} style={{ width: `${Math.min(utilPct, 100)}%` }}></div></div>
-                                          <span className={`text-[10px] font-mono font-bold ${utilPct > 90 ? 'text-destructive' : utilPct > 60 ? 'text-warning' : 'text-success'}`}>{utilPct.toFixed(0)}%</span>
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                                {/* ── Transit Rows ── */}
-                                {expandedMetric === 'transit' && (sap.inTransit || []).filter((t: any) => (t.inTransitQty || 0) > 0).slice(0, 50).map((t: any, i: number) => (
-                                  <tr key={i} className="hover:bg-muted transition-colors">
-                                    <td className="text-left font-mono text-primary/80">{t.materialCode}</td>
-                                    <td className="text-left text-foreground/70 max-w-[150px] truncate" title={t.vendorName}>{t.vendorName || '—'}</td>
-                                    <td className="text-right font-mono font-semibold text-warning">{Number(t.inTransitQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[t.materialCode]?.baseUnit && unifiedMaterialsMap[t.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[t.materialCode].baseUnit}</span>}</td>
-                                    <td className="text-left font-mono text-foreground/50 text-[10px]">{t.wbsElement || '—'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          )}
-                          {/* Summary footer */}
-                          {expandedMetric === 'inventory' && (
-                            <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
-                              <span className="text-muted-foreground">Total Inventory Value:</span>
-                              <span className="font-mono font-bold text-purple-400">{fmtCost(sap.summary.totalInventoryValueINR)}</span>
-                              <span className="text-muted-foreground ml-4">Total Inventory Qty:</span>
-                              <span className="font-mono font-bold text-success">{fmtMW(sap.summary.totalInventoryQty)}</span>
-                            </div>
-                          )}
-                          {expandedMetric === 'transit' && (
-                            <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
-                              <span className="text-muted-foreground">Total In-Transit Qty:</span>
-                              <span className="font-mono font-bold text-warning">{fmtMW(sap.summary.totalInTransitQty)}</span>
-                              <span className="text-muted-foreground ml-4">Unique Materials in Transit:</span>
-                              <span className="font-mono font-bold text-warning">{new Set((sap.inTransit || []).map((t: any) => t.materialCode)).size}</span>
-                            </div>
-                          )}
-
-                          {expandedMetric === 'slr' && slrData?.data && slrData.data.length > 0 && (
-                            <>
-                              {showSlrAnalytics && (
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                <div className="intelligence-card p-4 h-[300px] flex flex-col">
-                                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground">PO Status Distribution</h3>
-                                  <div className="flex-1 min-h-0">
-                                    <ReactECharts
-                                      option={{
-                                        tooltip: { trigger: 'item' },
-                                        color: ['#3b82f6', '#94a3b8'],
-                                        legend: { bottom: 0, textStyle: { color: '#888' } },
-                                        series: [{
-                                          type: 'pie',
-                                          radius: ['50%', '70%'],
-                                          center: ['50%', '45%'],
-                                          data: [
-                                            { value: slrData.open_pos, name: 'Open' },
-                                            { value: slrData.closed_pos, name: 'Closed' }
-                                          ]
-                                        }]
-                                      }}
-                                      style={{ height: '100%', width: '100%' }}
-                                    />
+                                        {t}
+                                      </button>
+                                    ))}
                                   </div>
-                                </div>
-                                
-                                <div className="intelligence-card p-4 h-[300px] flex flex-col">
-                                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Amount by Category</h3>
-                                  <div className="flex-1 min-h-0">
-                                    <ReactECharts
-                                      option={{
-                                        tooltip: { trigger: 'item', formatter: (params: any) => `${params.name}: ₹${params.value.toLocaleString()}` },
-                                        color: ['#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899', '#10b981', '#3b82f6', '#f43f5e', '#84cc16', '#6366f1', '#14b8a6', '#94a3b8'],
-                                        legend: { type: 'scroll', bottom: 0, textStyle: { color: '#888', fontSize: 10 } },
-                                        series: [{
-                                          type: 'pie',
-                                          radius: ['40%', '70%'],
-                                          center: ['50%', '45%'],
-                                          data: (() => {
-                                            const entries = Object.entries(slrData.data.reduce((acc: any, row: any) => { 
-                                              const desc = row.description ? row.description.trim() : 'Unknown';
-                                              acc[desc] = (acc[desc] || 0) + row.total; 
-                                              return acc; 
-                                            }, {})).map(([k, v]) => ({ name: k, value: v as number })).sort((a: any, b: any) => b.value - a.value);
-                                            
-                                            if (entries.length <= 10) return entries;
-                                            
-                                            const top10 = entries.slice(0, 10);
-                                            const othersValue = entries.slice(10).reduce((sum: number, item: any) => sum + item.value, 0);
-                                            return [...top10, { name: 'Others', value: othersValue }];
-                                          })(),
-                                          itemStyle: {
-                                            borderRadius: 4,
-                                            borderColor: 'rgba(0,0,0,0.1)',
-                                            borderWidth: 2
-                                          },
-                                          label: { show: false }
-                                        }]
-                                      }}
-                                      style={{ height: '100%', width: '100%' }}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="intelligence-card p-4 h-[300px] flex flex-col">
-                                  <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Amount by Type</h3>
-                                  <div className="flex-1 min-h-0">
-                                    <ReactECharts
-                                      option={{
-                                        tooltip: { trigger: 'axis', formatter: (params: any) => `₹${params[0].value.toLocaleString()}` },
-                                        grid: { top: 10, right: 20, bottom: 20, left: 70 },
-                                        xAxis: {
-                                          type: 'value',
-                                          axisLabel: { formatter: (val: number) => `₹${(val/10000000).toFixed(0)}Cr`, fontSize: 9, color: '#888' },
-                                          splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
-                                        },
-                                        yAxis: {
-                                          type: 'category',
-                                          data: Object.entries(slrData.data.reduce((acc: any, row: any) => { acc[row.type || 'Unknown'] = (acc[row.type || 'Unknown'] || 0) + row.total; return acc; }, {})).map(([k, v]) => ({ name: k, amount: v as number })).sort((a: any, b: any) => b.amount - a.amount).slice(0, 5).reverse().map((d: any) => d.name),
-                                          axisLabel: { fontSize: 9, color: '#888' }
-                                        },
-                                        series: [{
-                                          data: Object.entries(slrData.data.reduce((acc: any, row: any) => { acc[row.type || 'Unknown'] = (acc[row.type || 'Unknown'] || 0) + row.total; return acc; }, {})).map(([k, v]) => ({ name: k, amount: v as number })).sort((a: any, b: any) => b.amount - a.amount).slice(0, 5).reverse().map((d: any) => d.amount),
-                                          type: 'bar',
-                                          itemStyle: { color: '#ec4899', borderRadius: [0, 4, 4, 0] }
-                                        }]
-                                      }}
-                                      style={{ height: '100%', width: '100%' }}
-                                    />
-                                  </div>
+                                )}
+                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                  <HeroMetric label="Total POs" value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
+                                  <HeroMetric label="Open POs" value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                                  <HeroMetric label="Closed POs" value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
+                                  <HeroMetric label="Open PO Amount" value={`₹${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-warning dark:text-warning" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                                  <HeroMetric label="Total Amount" value={`₹${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
                                 </div>
                               </div>
-                              )}
+                            );
+                          })()}
 
-                              <div className="overflow-hidden flex flex-col rounded-xl border border-border/50 mt-4">
-                                <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
-                                  <h3 className="text-sm font-semibold text-foreground">SLR Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>
-                                  <div className="flex items-center gap-2">
-                                    <select
-                                      value={slrStatusFilter}
-                                      onChange={(e) => setSlrStatusFilter(e.target.value as 'ALL' | 'Open' | 'Closed')}
-                                      className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
-                                    >
-                                      <option value="ALL">All Statuses</option>
-                                      <option value="Open">Open</option>
-                                      <option value="Closed">Closed</option>
-                                    </select>
-                                    <select
-                                      value={slrTypeFilter}
-                                      onChange={(e) => setSlrTypeFilter(e.target.value)}
-                                      className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
-                                    >
-                                      <option value="ALL">All Types</option>
-                                      {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (
-                                        <option key={type} value={type}>{type}</option>
-                                      ))}
-                                    </select>
-                                  </div>
+                          {/* ── Interactive Breakdown Panel ── */}
+                          {expandedMetric && (
+                            <div className="intelligence-card p-5 animate-in slide-in-from-top-2 duration-300 border-primary/20">
+                              <div className="flex items-center justify-between mb-4">
+                                <h4 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-2">
+                                  <Zap className="w-3.5 h-3.5" />
+                                  {expandedMetric === 'pos' && 'Purchase Order Breakdown'}
+                                  {expandedMetric === 'vendors' && 'Vendor Breakdown'}
+                                  {expandedMetric === 'materials' && 'Material Type Breakdown'}
+                                  {expandedMetric === 'volume' && 'PO Volume by Material'}
+                                  {expandedMetric === 'inventory' && 'Inventory Breakdown (Qty & Value)'}
+                                  {expandedMetric === 'budget' && 'Budget Allocation by Material'}
+                                  {expandedMetric === 'utilized' && 'Utilization by Material'}
+                                  {expandedMetric === 'remaining' && 'Remaining Balance by Material'}
+                                  {expandedMetric === 'transit' && 'In-Transit Breakdown'}
+                                  {expandedMetric === 'slr' && 'Purchase Orders Breakdown'}
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                  {expandedMetric === 'slr' && (
+                                    <>
+                                      <button
+                                        onClick={() => setShowSlrAnalytics(v => !v)}
+                                        className={`text-xs px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 font-medium shadow-sm ${showSlrAnalytics ? 'bg-primary border-primary text-primary-foreground' : 'bg-background border-border text-foreground hover:bg-muted'}`}
+                                      >
+                                        <BarChart3 className="w-3.5 h-3.5" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}
+                                      </button>
+                                      <button
+                                        onClick={downloadSLRReport}
+                                        className="text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-all flex items-center gap-1.5 font-medium shadow-sm"
+                                      >
+                                        <Download className="w-3.5 h-3.5" /> Export Data
+                                      </button>
+                                    </>
+                                  )}
+                                  <button onClick={() => setExpandedMetric(null)} className="text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors">✕ Close</button>
                                 </div>
-                                <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
-                                  <table className="w-full text-sm text-left relative">
-                                    <thead className="bg-muted border-b border-border sticky top-0 z-10">
-                                      <tr>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground">PO Number</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground">Type</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground">Description</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Lines</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Total Amount</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Actual</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Commitment</th>
-                                        <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Status</th>
-                                      </tr>
+                              </div>
+                              {expandedMetric !== 'slr' && (
+                                <div className="overflow-x-auto max-h-[350px] overflow-y-auto scrollbar-thin">
+                                  <table className="intel-table w-full text-xs">
+                                    <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+                                      {/* ── PO Breakdown ── */}
+                                      {expandedMetric === 'pos' && (
+                                        <tr>
+                                          <th className="text-left">PO Number</th>
+                                          <th className="text-left">PO Date</th>
+                                          <th className="text-left">Material Description</th>
+                                          <th className="text-left">Vendor</th>
+                                          <th className="text-right">Ordered Qty</th>
+                                          <th className="text-right">Budget (INR)</th>
+                                          <th className="text-right">Delivered Value</th>
+                                          <th className="text-center">Storage</th>
+                                        </tr>
+                                      )}
+                                      {/* ── Vendor Breakdown ── */}
+                                      {expandedMetric === 'vendors' && (
+                                        <tr>
+                                          <th className="text-left">Vendor Name</th>
+                                          <th className="text-center">PO Count</th>
+                                          <th className="text-center">Materials</th>
+                                          <th className="text-right">Total Ordered Qty</th>
+                                          <th className="text-right">Supply PO Amount (INR)</th>
+                                        </tr>
+                                      )}
+                                      {/* ── Material Type Breakdown ── */}
+                                      {expandedMetric === 'materials' && (
+                                        <tr>
+                                          <th className="text-left">Material Code</th>
+                                          <th className="text-left">Material Description</th>
+                                          <th className="text-right">Ordered</th>
+                                          <th className="text-right">Consumed</th>
+                                          <th className="text-right">Inventory</th>
+                                          <th className="text-right">In Transit</th>
+                                        </tr>
+                                      )}
+                                      {/* ── Volume Breakdown ── */}
+                                      {expandedMetric === 'volume' && (
+                                        <tr>
+                                          <th className="text-left">Material Code</th>
+                                          <th className="text-left">Material Description</th>
+                                          <th className="text-right">Ordered Qty</th>
+                                          <th className="text-right">% of Total</th>
+                                          <th className="text-left">Distribution</th>
+                                        </tr>
+                                      )}
+                                      {/* ── Inventory Breakdown ── */}
+                                      {expandedMetric === 'inventory' && (
+                                        <tr>
+                                          <th className="text-left">Material Code</th>
+                                          <th className="text-left">Material Description</th>
+                                          <th className="text-right">Inventory Qty</th>
+                                          <th className="text-right">Inventory Value (INR)</th>
+                                          <th className="text-center">Storage Location</th>
+                                        </tr>
+                                      )}
+                                      {/* ── Budget / Utilized / Remaining ── */}
+                                      {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && (
+                                        <tr>
+                                          <th className="text-left">Material Code</th>
+                                          <th className="text-left">Material Description</th>
+                                          <th className="text-right">Supply PO Amount</th>
+                                          <th className="text-right">Consumed Amt</th>
+                                          <th className="text-right">Remaining</th>
+                                          <th className="text-left">Utilization</th>
+                                        </tr>
+                                      )}
+                                      {/* ── Transit Breakdown ── */}
+                                      {expandedMetric === 'transit' && (
+                                        <tr>
+                                          <th className="text-left">Material Code</th>
+                                          <th className="text-left">Vendor</th>
+                                          <th className="text-right">In-Transit Qty</th>
+                                          <th className="text-left">WBS Element</th>
+                                        </tr>
+                                      )}
                                     </thead>
-                                    <tbody className="divide-y divide-border">
-                                      {slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).map((row: any, i: number) => {
-                                        const isExpanded = expandedPOs[`slr-${row.po_document}-${i}`];
+                                    <tbody className="divide-y divide-border/30">
+                                      {/* ── PO Rows ── */}
+                                      {expandedMetric === 'pos' && Array.from(new Set((sap.purchaseOrders || []).map((p: any) => p.poNumber))).slice(0, 100).map((poNum: any) => {
+                                        const items = (sap.purchaseOrders || []).filter((p: any) => p.poNumber === poNum);
+                                        const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+                                        const sumBudget = items.reduce((sum: number, p: any) => sum + (p.budgetINR || 0), 0);
+                                        const sumDelivered = items.reduce((sum: number, p: any) => sum + (p.deliveredINR || 0), 0);
+                                        const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+                                        const isExpanded = expandedPOs[`sap-pos-${poNum}`];
                                         return (
-                                          <React.Fragment key={i}>
-                                            <tr 
-                                              className="hover:bg-muted/30 transition-colors cursor-pointer"
-                                              onClick={() => setExpandedPOs(prev => ({ ...prev, [`slr-${row.po_document}-${i}`]: !prev[`slr-${row.po_document}-${i}`] }))}
+                                          <React.Fragment key={`sap-pos-${poNum}`}>
+                                            <tr
+                                              className="hover:bg-muted transition-colors cursor-pointer"
+                                              onClick={() => setExpandedPOs(prev => ({ ...prev, [`sap-pos-${poNum}`]: !prev[`sap-pos-${poNum}`] }))}
                                             >
-                                              <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
-                                                {row.line_count > 1 ? (isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />) : <span className="w-3" />}
-                                                {row.po_document || <span className="italic text-muted-foreground/60 font-sans">Unassigned</span>}
+                                              <td className="text-left font-mono font-medium text-primary/80 flex items-center gap-2">
+                                                {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                                                {poNum}
                                               </td>
-                                              <td className="px-4 py-3 text-muted-foreground">{row.type || '—'}</td>
-                                              <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
-                                              <td className="px-4 py-3 text-center"><span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">{row.line_count || 1}</span></td>
-                                              <td className="px-4 py-3 text-right font-mono">₹{row.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                              <td className="px-4 py-3 text-right text-emerald-500/80 font-mono">₹{row.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                              <td className="px-4 py-3 text-right text-amber-500/80 font-mono">₹{row.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                              <td className="px-4 py-3 text-center">
-                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${
-                                                  row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
-                                                }`}>
-                                                  {row.status}
-                                                </span>
+                                              <td className="text-left text-foreground/70">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB') : '—'}</td>
+                                              <td className="text-left text-foreground/70 max-w-[150px] truncate" title="Multiple Materials">
+                                                {items.length === 1 ? (items[0].materialName || items[0].materialCode) : `${items.length} items`}
+                                              </td>
+                                              <td className="text-left text-foreground/70 max-w-[150px] truncate" title={items[0]?.vendorName}>{items[0]?.vendorName || '—'}</td>
+                                              <td className="text-right font-mono font-semibold text-primary">{Number(sumQty || 0).toLocaleString('en-IN')} Unit</td>
+                                              <td className="text-right font-mono text-foreground/70">{fmtCost(sumBudget)}</td>
+                                              <td className="text-right font-mono text-success">{fmtCost(sumDelivered)}</td>
+                                              <td className="text-center">
+                                                {storages.length > 0 ? storages.map((s: any, idx) => (
+                                                  <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{s}</span>
+                                                )) : '—'}
                                               </td>
                                             </tr>
-                                            {isExpanded && row.line_items && row.line_items.map((item: any, j: number) => (
-                                              <tr key={`${i}-item-${j}`} className="bg-background/40 hover:bg-muted/20 transition-colors">
-                                                <td className="px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono">Line {j + 1}</td>
-                                                <td className="px-4 py-2 text-[11px] text-muted-foreground">{item.type || '—'}</td>
-                                                <td className="px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]" title={item.description}>{item.description || '—'}</td>
-                                                <td className="px-4 py-2 text-center text-[11px] text-muted-foreground">{item.wbs_element}</td>
-                                                <td className="px-4 py-2 text-right text-[11px] text-muted-foreground font-mono">₹{item.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                                <td className="px-4 py-2 text-right text-[11px] text-emerald-500/50 font-mono">₹{item.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                                <td className="px-4 py-2 text-right text-[11px] text-amber-500/50 font-mono">₹{item.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>
-                                                <td className="px-4 py-2"></td>
+                                            {isExpanded && items.map((po: any, j: number) => (
+                                              <tr key={`sap-pos-${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
+                                                <td className="text-left font-mono font-medium text-muted-foreground pl-10 text-[10px]">Line Item {j + 1}</td>
+                                                <td className="text-left text-muted-foreground">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
+                                                <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
+                                                <td className="text-right font-mono text-muted-foreground">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
+                                                <td className="text-right font-mono text-muted-foreground">{fmtCost(po.budgetINR)}</td>
+                                                <td className="text-right font-mono text-muted-foreground">{fmtCost(po.deliveredINR)}</td>
+                                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
                                               </tr>
                                             ))}
                                           </React.Fragment>
                                         );
                                       })}
+                                      {/* ── Vendor Rows ── */}
+                                      {expandedMetric === 'vendors' && (sap.vendorBreakdown || []).map((v: any, i: number) => (
+                                        <tr key={i} className="hover:bg-muted transition-colors">
+                                          <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={v.vendorName}>{v.vendorName}</td>
+                                          <td className="text-center font-mono font-semibold text-primary">{v.poCount}</td>
+                                          <td className="text-center font-mono text-purple-400">{v.materialCount}</td>
+                                          <td className="text-right font-mono font-semibold text-foreground">{Number(v.totalOrderedQty || 0).toLocaleString('en-IN')}</td>
+                                          <td className="text-right font-mono text-pink-400">{fmtCost(v.totalBudgetINR)}</td>
+                                        </tr>
+                                      ))}
+                                      {/* ── Materials Rows ── */}
+                                      {expandedMetric === 'materials' && unifiedMaterials.slice(0, 50).map((mat: any, i: number) => (
+                                        <tr key={i} className="hover:bg-muted transition-colors">
+                                          <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
+                                          <td className="text-left text-foreground/70 max-w-[180px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                          <td className="text-right font-mono text-primary">{mat.orderedQty ? <>{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                          <td className="text-right font-mono text-success">{mat.consumedQty ? <>{Number(mat.consumedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                          <td className="text-right font-mono text-purple-400">{mat.inventoryQty ? <>{Number(mat.inventoryQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                          <td className="text-right font-mono text-warning">{mat.inTransitQty ? <>{Number(mat.inTransitQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                        </tr>
+                                      ))}
+                                      {/* ── Volume Rows ── */}
+                                      {expandedMetric === 'volume' && unifiedMaterials.filter((m: any) => m.orderedQty > 0).slice(0, 30).map((mat: any, i: number) => {
+                                        const pct = sap.summary.totalOrderedQty ? (mat.orderedQty / sap.summary.totalOrderedQty) * 100 : 0;
+                                        return (
+                                          <tr key={i} className="hover:bg-muted transition-colors">
+                                            <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
+                                            <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                            <td className="text-right font-mono font-semibold text-primary">{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</td>
+                                            <td className="text-right font-mono text-foreground/60">{pct.toFixed(1)}%</td>
+                                            <td className="text-left"><div className="w-full h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-gradient-to-r from-blue-500 to-cyan-400" style={{ width: `${Math.min(pct, 100)}%` }}></div></div></td>
+                                          </tr>
+                                        );
+                                      })}
+                                      {/* ── Inventory Rows ── */}
+                                      {expandedMetric === 'inventory' && (sap.inventory || []).filter((inv: any) => (inv.inventoryQty || 0) > 0).slice(0, 50).map((inv: any, i: number) => (
+                                        <tr key={i} className="hover:bg-muted transition-colors">
+                                          <td className="text-left font-mono text-primary/80">{inv.materialCode}</td>
+                                          <td className="text-left text-foreground/70 max-w-[150px] truncate">{inv.materialName || '—'}</td>
+                                          <td className="text-right font-mono font-semibold text-success">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')} {inv.baseUnit && inv.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{inv.baseUnit}</span> : unifiedMaterialsMap[inv.materialCode]?.baseUnit && unifiedMaterialsMap[inv.materialCode]?.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[inv.materialCode].baseUnit}</span> : null}</td>
+                                          <td className="text-right font-mono text-purple-400">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
+                                        </tr>
+                                      ))}
+                                      {/* ── Budget / Utilized / Remaining Rows ── */}
+                                      {(expandedMetric === 'budget' || expandedMetric === 'utilized' || expandedMetric === 'remaining') && unifiedMaterials.filter((m: any) => expandedMetric === 'budget' ? m.budgetINR > 0 : expandedMetric === 'utilized' ? m.consumedAmountINR > 0 : m.remainingBalanceINR !== 0).sort((a: any, b: any) => {
+                                        if (expandedMetric === 'utilized') return b.consumedAmountINR - a.consumedAmountINR;
+                                        if (expandedMetric === 'remaining') return b.remainingBalanceINR - a.remainingBalanceINR;
+                                        return b.budgetINR - a.budgetINR;
+                                      }).slice(0, 50).map((mat: any, i: number) => {
+                                        const utilPct = mat.budgetINR ? (mat.consumedAmountINR / mat.budgetINR) * 100 : 0;
+                                        return (
+                                          <tr key={i} className="hover:bg-muted transition-colors">
+                                            <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
+                                            <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                            <td className="text-right font-mono text-pink-400">{fmtCost(mat.budgetINR)}</td>
+                                            <td className="text-right font-mono text-warning">{fmtCost(mat.consumedAmountINR)}</td>
+                                            <td className="text-right font-mono text-teal-400">{fmtCost(mat.remainingBalanceINR)}</td>
+                                            <td className="text-left">
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${utilPct > 90 ? 'bg-destructive/100' : utilPct > 60 ? 'bg-warning/100' : 'bg-success/100'}`} style={{ width: `${Math.min(utilPct, 100)}%` }}></div></div>
+                                                <span className={`text-[10px] font-mono font-bold ${utilPct > 90 ? 'text-destructive' : utilPct > 60 ? 'text-warning' : 'text-success'}`}>{utilPct.toFixed(0)}%</span>
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        );
+                                      })}
+                                      {/* ── Transit Rows ── */}
+                                      {expandedMetric === 'transit' && (sap.inTransit || []).filter((t: any) => (t.inTransitQty || 0) > 0).slice(0, 50).map((t: any, i: number) => (
+                                        <tr key={i} className="hover:bg-muted transition-colors">
+                                          <td className="text-left font-mono text-primary/80">{t.materialCode}</td>
+                                          <td className="text-left text-foreground/70 max-w-[150px] truncate" title={t.vendorName}>{t.vendorName || '—'}</td>
+                                          <td className="text-right font-mono font-semibold text-warning">{Number(t.inTransitQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[t.materialCode]?.baseUnit && unifiedMaterialsMap[t.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[t.materialCode].baseUnit}</span>}</td>
+                                          <td className="text-left font-mono text-foreground/50 text-[10px]">{t.wbsElement || '—'}</td>
+                                        </tr>
+                                      ))}
                                     </tbody>
                                   </table>
                                 </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                      )}
+                              )}
+                              {/* Summary footer */}
+                              {expandedMetric === 'inventory' && (
+                                <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
+                                  <span className="text-muted-foreground">Total Inventory Value:</span>
+                                  <span className="font-mono font-bold text-purple-400">{fmtCost(sap.summary.totalInventoryValueINR)}</span>
+                                  <span className="text-muted-foreground ml-4">Total Inventory Qty:</span>
+                                  <span className="font-mono font-bold text-success">{fmtMW(sap.summary.totalInventoryQty)}</span>
+                                </div>
+                              )}
+                              {expandedMetric === 'transit' && (
+                                <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
+                                  <span className="text-muted-foreground">Total In-Transit Qty:</span>
+                                  <span className="font-mono font-bold text-warning">{fmtMW(sap.summary.totalInTransitQty)}</span>
+                                  <span className="text-muted-foreground ml-4">Unique Materials in Transit:</span>
+                                  <span className="font-mono font-bold text-warning">{new Set((sap.inTransit || []).map((t: any) => t.materialCode)).size}</span>
+                                </div>
+                              )}
 
-                          
-                      {/* Allocation Context */}
-                      {sap.allocation && (
-                        <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/[0.04] border border-primary/[0.08] text-[11px] text-muted-foreground/60">
-                          <Database className="w-3.5 h-3.5 text-primary/50 shrink-0" />
-                          <span>
-                            Data allocated to this project: <span className="font-semibold text-foreground/70">{sap.allocation.projectCapacityMW} MW</span> of{' '}
-                            <span className="font-medium text-foreground/60">{sap.allocation.totalPlantCapacityMW} MW</span> total plant capacity
-                            <span className="text-muted-foreground/40"> · </span>
-                            Ratio: <span className="font-mono font-semibold text-primary/70">{(sap.allocation.allocationRatio * 100).toFixed(1)}%</span>
-                            {sap.allocation.wbsFilter && (
-                              <>
-                                <span className="text-muted-foreground/40"> · </span>
-                                WBS: <span className="font-mono text-foreground/60">{sap.allocation.wbsFilter}</span>
-                              </>
-                            )}
-                          </span>
-                        </div>
-                      )}
+                              {expandedMetric === 'slr' && slrData?.data && slrData.data.length > 0 && (
+                                <>
+                                  {showSlrAnalytics && (
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                      <div className="intelligence-card p-4 h-[300px] flex flex-col">
+                                        <h3 className="text-sm font-semibold mb-2 text-muted-foreground">PO Status Distribution</h3>
+                                        <div className="flex-1 min-h-0">
+                                          <ReactECharts
+                                            option={{
+                                              tooltip: { trigger: 'item' },
+                                              color: ['#3b82f6', '#94a3b8'],
+                                              legend: { bottom: 0, textStyle: { color: '#888' } },
+                                              series: [{
+                                                type: 'pie',
+                                                radius: ['50%', '70%'],
+                                                center: ['50%', '45%'],
+                                                data: [
+                                                  { value: slrData.open_pos, name: 'Open' },
+                                                  { value: slrData.closed_pos, name: 'Closed' }
+                                                ]
+                                              }]
+                                            }}
+                                            style={{ height: '100%', width: '100%' }}
+                                          />
+                                        </div>
+                                      </div>
 
-                      {/* Unified Material Tracking & Chart */}
-                      <div className="space-y-6">
+                                      <div className="intelligence-card p-4 h-[300px] flex flex-col">
+                                        <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Amount by Category</h3>
+                                        <div className="flex-1 min-h-0">
+                                          <ReactECharts
+                                            option={{
+                                              tooltip: { trigger: 'item', formatter: (params: any) => `${params.name}: ₹${params.value.toLocaleString()}` },
+                                              color: ['#8b5cf6', '#06b6d4', '#f59e0b', '#ec4899', '#10b981', '#3b82f6', '#f43f5e', '#84cc16', '#6366f1', '#14b8a6', '#94a3b8'],
+                                              legend: { type: 'scroll', bottom: 0, textStyle: { color: '#888', fontSize: 10 } },
+                                              series: [{
+                                                type: 'pie',
+                                                radius: ['40%', '70%'],
+                                                center: ['50%', '45%'],
+                                                data: (() => {
+                                                  const entries = Object.entries(slrData.data.reduce((acc: any, row: any) => {
+                                                    const desc = row.description ? row.description.trim() : 'Unknown';
+                                                    acc[desc] = (acc[desc] || 0) + row.total;
+                                                    return acc;
+                                                  }, {})).map(([k, v]) => ({ name: k, value: v as number })).sort((a: any, b: any) => b.value - a.value);
 
-                        {/* Analytics Line Chart */}
-                        <div className="intelligence-card p-6 flex flex-col h-[400px]">
-                          <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                            <BarChart3 className="w-4 h-4 text-primary/70" /> Consumption Trends
-                          </h3>
-                          <div className="flex-1">
-                            {!sap.consumption || sap.consumption.length === 0 ? (
-                              <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted">
-                                <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-3" />
-                                <p className="text-sm font-medium text-muted-foreground/70">No Consumption Data</p>
-                                <p className="text-xs text-muted-foreground/40 mt-1 max-w-[250px] text-center">There are no MB51 material consumption records for this selection.</p>
-                              </div>
-                            ) : (
-                              <ReactECharts
-                                option={{
-                                  tooltip: { trigger: 'axis', backgroundColor: 'rgba(9,9,11,0.9)', borderColor: '#27272a', textStyle: { color: '#e4e4e7' } },
-                                  legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
-                                  grid: { top: 30, right: 10, bottom: 40, left: 40 },
-                                  xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
-                                  yAxis: [
-                                    { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: '#27272a' } } },
-                                    { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
-                                  ],
-                                  series: [
-                                    { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
-                                    { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity > 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
-                                    { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.amountINR : (c.quantity > 0 ? c.amountINR : 0)).slice(0, 40), itemStyle: { color: '#3b82f6' } }
-                                  ]
-                                }}
-                                style={{ height: '100%', width: '100%' }}
-                              />
-                            )}
-                          </div>
-                        </div>
+                                                  if (entries.length <= 10) return entries;
 
-                        {/* Unified Table */}
-                        <div className="intelligence-card p-6">
-                          <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                              <Box className="w-4 h-4 text-primary/70" /> Material Lifecycle & Tracking
-                            </h3>
-                            <div className="flex bg-muted p-1 rounded-md border border-border">
-                              <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>
-                              <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>
-                              <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>
+                                                  const top10 = entries.slice(0, 10);
+                                                  const othersValue = entries.slice(10).reduce((sum: number, item: any) => sum + item.value, 0);
+                                                  return [...top10, { name: 'Others', value: othersValue }];
+                                                })(),
+                                                itemStyle: {
+                                                  borderRadius: 4,
+                                                  borderColor: 'rgba(0,0,0,0.1)',
+                                                  borderWidth: 2
+                                                },
+                                                label: { show: false }
+                                              }]
+                                            }}
+                                            style={{ height: '100%', width: '100%' }}
+                                          />
+                                        </div>
+                                      </div>
+
+                                      <div className="intelligence-card p-4 h-[300px] flex flex-col">
+                                        <h3 className="text-sm font-semibold mb-2 text-muted-foreground">Amount by Type</h3>
+                                        <div className="flex-1 min-h-0">
+                                          <ReactECharts
+                                            option={{
+                                              tooltip: { trigger: 'axis', formatter: (params: any) => `₹${params[0].value.toLocaleString()}` },
+                                              grid: { top: 10, right: 20, bottom: 20, left: 70 },
+                                              xAxis: {
+                                                type: 'value',
+                                                axisLabel: { formatter: (val: number) => `₹${(val / 10000000).toFixed(0)}Cr`, fontSize: 9, color: '#888' },
+                                                splitLine: { lineStyle: { color: 'rgba(255,255,255,0.05)' } }
+                                              },
+                                              yAxis: {
+                                                type: 'category',
+                                                data: Object.entries(slrData.data.reduce((acc: any, row: any) => { acc[row.type || 'Unknown'] = (acc[row.type || 'Unknown'] || 0) + row.total; return acc; }, {})).map(([k, v]) => ({ name: k, amount: v as number })).sort((a: any, b: any) => b.amount - a.amount).slice(0, 5).reverse().map((d: any) => d.name),
+                                                axisLabel: { fontSize: 9, color: '#888' }
+                                              },
+                                              series: [{
+                                                data: Object.entries(slrData.data.reduce((acc: any, row: any) => { acc[row.type || 'Unknown'] = (acc[row.type || 'Unknown'] || 0) + row.total; return acc; }, {})).map(([k, v]) => ({ name: k, amount: v as number })).sort((a: any, b: any) => b.amount - a.amount).slice(0, 5).reverse().map((d: any) => d.amount),
+                                                type: 'bar',
+                                                itemStyle: { color: '#ec4899', borderRadius: [0, 4, 4, 0] }
+                                              }]
+                                            }}
+                                            style={{ height: '100%', width: '100%' }}
+                                          />
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  <div className="overflow-hidden flex flex-col rounded-xl border border-border/50 mt-4">
+                                    <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
+                                      <h3 className="text-sm font-semibold text-foreground">Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>
+                                      <div className="flex items-center gap-2">
+                                        <select
+                                          value={slrStatusFilter}
+                                          onChange={(e) => setSlrStatusFilter(e.target.value as 'ALL' | 'Open' | 'Closed')}
+                                          className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
+                                        >
+                                          <option value="ALL">All Statuses</option>
+                                          <option value="Open">Open</option>
+                                          <option value="Closed">Closed</option>
+                                        </select>
+                                        <select
+                                          value={slrTypeFilter}
+                                          onChange={(e) => setSlrTypeFilter(e.target.value)}
+                                          className="bg-background border border-border text-xs rounded px-2 py-1 text-foreground"
+                                        >
+                                          {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (
+                                            <option key={type} value={type}>{type}</option>
+                                          ))}
+                                        </select>
+                                      </div>
+                                    </div>
+                                    <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
+                                      <table className="w-full text-sm text-left relative">
+                                        <thead className="bg-muted border-b border-border sticky top-0 z-10">
+                                          <tr>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground">PO Number</th>
+                                            {slrTypeFilter !== 'PReq' && <th className="px-4 py-3 font-semibold text-muted-foreground">Vendor Name</th>}
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground">Type</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground">Description</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Lines</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Total Amount</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Actual</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Commitment</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Status</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-border">
+                                          {slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).map((row: any, i: number) => {
+                                            const isExpanded = expandedPOs[`slr-${row.po_document}-${i}`];
+                                            const vendorName = row.type === 'PReq' ? '-' : (row.vendor_name || 'Unknown Vendor');
+                                            return (
+                                              <React.Fragment key={i}>
+                                                <tr
+                                                  className="hover:bg-muted/30 transition-colors cursor-pointer"
+                                                  onClick={() => setExpandedPOs(prev => ({ ...prev, [`slr-${row.po_document}-${i}`]: !prev[`slr-${row.po_document}-${i}`] }))}
+                                                >
+                                                  <td className="px-4 py-3 font-medium text-foreground flex items-center gap-2">
+                                                    {row.line_count > 1 ? (isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />) : <span className="w-3" />}
+                                                    {row.po_document || <span className="italic text-muted-foreground/60 font-sans">Unassigned</span>}
+                                                  </td>
+                                                  {slrTypeFilter !== 'PReq' && <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]" title={vendorName}>{vendorName}</td>}
+                                                  <td className="px-4 py-3 text-muted-foreground">{row.type || '—'}</td>
+                                                  <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
+                                                  <td className="px-4 py-3 text-center"><span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">{row.line_count || 1}</span></td>
+                                                  <td className="px-4 py-3 text-right font-mono">₹{row.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                  <td className="px-4 py-3 text-right text-emerald-500/80 font-mono">₹{row.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                  <td className="px-4 py-3 text-right text-amber-500/80 font-mono">₹{row.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                  <td className="px-4 py-3 text-center">
+                                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
+                                                      }`}>
+                                                      {row.status}
+                                                    </span>
+                                                  </td>
+                                                </tr>
+                                                {isExpanded && row.line_items && row.line_items.map((item: any, j: number) => (
+                                                  <tr key={`${i}-item-${j}`} className="bg-background/40 hover:bg-muted/20 transition-colors">
+                                                    <td className="px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono">Line {j + 1}</td>
+                                                    {slrTypeFilter !== 'PReq' && <td className="px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[200px]" title={vendorName}>{vendorName}</td>}
+                                                    <td className="px-4 py-2 text-[11px] text-muted-foreground">{item.type || '—'}</td>
+                                                    <td className="px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]" title={item.description}>{item.description || '—'}</td>
+                                                    <td className="px-4 py-2 text-center text-[11px] text-muted-foreground">{item.wbs_element}</td>
+                                                    <td className="px-4 py-2 text-right text-[11px] text-muted-foreground font-mono">₹{item.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2 text-right text-[11px] text-emerald-500/50 font-mono">₹{item.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2 text-right text-[11px] text-amber-500/50 font-mono">₹{item.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2"></td>
+                                                  </tr>
+                                                ))}
+                                              </React.Fragment>
+                                            );
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </div>
+                                </>
+                              )}
                             </div>
-                          </div>
+                          )}
 
-                          <div className="overflow-x-auto h-[calc(100vh-320px)] min-h-[400px] overflow-y-auto scrollbar-thin rounded-lg border border-border">
-                            <table className="intel-table relative w-full text-xs">
-                              <thead className="sticky top-0 z-20">
-                                {/* Top Grouped Header */}
-                                <tr className="bg-slate-200/90 dark:bg-slate-800/90 backdrop-blur-md shadow-sm text-[10px] uppercase tracking-wider text-center font-bold">
-                                  <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-foreground">Material Intelligence</th>
-                                  <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">Volumetric Data (Qty)</th>
-                                  <th colSpan={4} className="py-2.5 border-b border-border/50 text-blue-700 dark:text-blue-400 bg-blue-500/5">Financial Impact (INR)</th>
-                                </tr>
-                                {/* Sub Header */}
-                                <tr className="bg-slate-100/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md text-[10px] uppercase tracking-wider whitespace-nowrap">
-                                  <th className="w-8 py-2 border-b border-border"></th>
-                                  <th className="text-center py-2 border-b border-border">Code</th>
-                                  <th className="text-left py-2 border-b border-border">Description</th>
-                                  <th className="text-center py-2 border-b border-border">Unit</th>
-                                  <th className="text-left py-2 border-b border-border border-r border-border/30">WBS Tracking</th>
 
-                                  {/* Qty */}
-                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Ordered</th>
-                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Consumed</th>
-                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Inventory</th>
-                                  <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">In Transit</th>
-                                  <th className="text-center py-2 border-b border-border border-r border-border/30 bg-emerald-50/50 dark:bg-emerald-900/10">Remaining</th>
+                          {/* Allocation Context */}
+                          {sap.allocation && (
+                            <div className="flex items-center gap-3 px-4 py-2.5 rounded-lg bg-primary/[0.04] border border-primary/[0.08] text-[11px] text-muted-foreground/60">
+                              <Database className="w-3.5 h-3.5 text-primary/50 shrink-0" />
+                              <span>
+                                Data allocated to this project: <span className="font-semibold text-foreground/70">{sap.allocation.projectCapacityMW} MW</span> of{' '}
+                                <span className="font-medium text-foreground/60">{sap.allocation.totalPlantCapacityMW} MW</span> total plant capacity
+                                <span className="text-muted-foreground/40"> · </span>
+                                Ratio: <span className="font-mono font-semibold text-primary/70">{(sap.allocation.allocationRatio * 100).toFixed(1)}%</span>
+                                {sap.allocation.wbsFilter && (
+                                  <>
+                                    <span className="text-muted-foreground/40"> · </span>
+                                    WBS: <span className="font-mono text-foreground/60">{sap.allocation.wbsFilter}</span>
+                                  </>
+                                )}
+                              </span>
+                            </div>
+                          )}
 
-                                  {/* Financials */}
-                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">PO Budget</th>
-                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Utilized</th>
-                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Inventory Val</th>
-                                  <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Remaining Bal</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {unifiedMaterials.map((mat: any, i: number) => {
-                                  const isExpanded = expandedMaterial === mat.materialCode;
-                                  return (
-                                    <React.Fragment key={i}>
-                                      {/* Master Row */}
-                                      <tr className={`cursor-pointer transition-colors border-b border-border/40 ${isExpanded ? 'bg-primary/5' : 'hover:bg-primary/5'}`} onClick={() => setExpandedMaterial(isExpanded ? null : mat.materialCode)}>
-                                        <td className="text-center text-muted-foreground py-2.5">
-                                          {isExpanded ? <ChevronUp className="w-4 h-4 mx-auto" /> : <ChevronDown className="w-4 h-4 mx-auto" />}
-                                        </td>
-                                        <td className="text-center font-mono font-medium text-primary/90">{mat.materialCode}</td>
-                                        <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                        <td className="text-center font-mono text-muted-foreground/80">{mat.baseUnit}</td>
-                                        <td className="text-left border-r border-border/30">
-                                          {mat.wbsList && mat.wbsList.length > 0 ? (
-                                            <div className="flex items-center gap-1 flex-wrap max-w-[150px]">
-                                              <span className="px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] font-mono whitespace-nowrap truncate max-w-[100px]" title={mat.wbsList[0]}>{mat.wbsList[0]}</span>
-                                              {mat.wbsList.length > 1 && (
-                                                <span className="text-[9px] text-muted-foreground font-medium" title={mat.wbsList.slice(1).join(', ')}>+{mat.wbsList.length - 1}</span>
-                                              )}
-                                            </div>
-                                          ) : <span className="text-muted-foreground/40">—</span>}
-                                        </td>
-                                        
-                                        {/* Quantities */}
-                                        <td className="text-center font-mono font-semibold text-primary bg-emerald-50/20 dark:bg-emerald-900/5">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono font-semibold text-success bg-emerald-50/20 dark:bg-emerald-900/5">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono text-purple-500 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono text-warning bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
-                                        <td className="text-center font-mono font-semibold text-orange-500 border-r border-border/30 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
-                                        
-                                        {/* Financials */}
-                                        <td className="text-center font-mono text-foreground/70 bg-blue-50/20 dark:bg-blue-900/5">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                        <td className="text-center font-mono text-success/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
-                                        <td className="text-center font-mono text-purple-500/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                        <td className="text-center font-mono text-warning/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
-                                      </tr>
+                          {/* Unified Material Tracking & Chart */}
+                          <div className="space-y-6">
 
-                                      {/* Drill-down Detail Row */}
-                                      {isExpanded && (
-                                        <tr className="bg-muted border-b border-border">
-                                          <td colSpan={12} className="p-0">
-                                            <div className="p-6 space-y-6">
+                            {/* Analytics Line Chart */}
+                            <div className="intelligence-card p-6 flex flex-col h-[400px]">
+                              <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                                <BarChart3 className="w-4 h-4 text-primary/70" /> Consumption Trends
+                              </h3>
+                              <div className="flex-1">
+                                {!sap.consumption || sap.consumption.length === 0 ? (
+                                  <div className="h-full w-full flex flex-col items-center justify-center border border-dashed border-border/40 rounded-xl bg-muted">
+                                    <BarChart3 className="w-8 h-8 text-muted-foreground/20 mb-3" />
+                                    <p className="text-sm font-medium text-muted-foreground/70">No Consumption Data</p>
+                                    <p className="text-xs text-muted-foreground/40 mt-1 max-w-[250px] text-center">There are no MB51 material consumption records for this selection.</p>
+                                  </div>
+                                ) : (
+                                  <ReactECharts
+                                    option={{
+                                      tooltip: { trigger: 'axis', backgroundColor: 'rgba(9,9,11,0.9)', borderColor: '#27272a', textStyle: { color: '#e4e4e7' } },
+                                      legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
+                                      grid: { top: 30, right: 10, bottom: 40, left: 40 },
+                                      xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
+                                      yAxis: [
+                                        { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: '#27272a' } } },
+                                        { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
+                                      ],
+                                      series: [
+                                        { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
+                                        { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity > 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
+                                        { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.amountINR : (c.quantity > 0 ? c.amountINR : 0)).slice(0, 40), itemStyle: { color: '#3b82f6' } }
+                                      ]
+                                    }}
+                                    style={{ height: '100%', width: '100%' }}
+                                  />
+                                )}
+                              </div>
+                            </div>
 
-                                              {/* PO Details */}
-                                              {mat.pos.length > 0 && (
-                                                <div>
-                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> Purchase Orders</h4>
-                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
-                                                    <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
-                                                        <tr>
-                                                          <th className="text-left font-semibold py-2 px-4">PO Number</th>
-                                                          <th className="text-left font-semibold py-2 px-4">PO Date</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Ordered Qty</th>
-                                                          <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-border/30">
-                                                        {Array.from(new Set(mat.pos.map((p: any) => p.poNumber))).map((poNum: any) => {
-                                                          const items = mat.pos.filter((p: any) => p.poNumber === poNum);
-                                                          const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
-                                                          const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
-                                                          const isExpanded = expandedPOs[`${mat.materialCode}-${poNum}`];
-                                                          return (
-                                                            <React.Fragment key={poNum}>
-                                                              <tr 
-                                                                className="hover:bg-muted transition-colors cursor-pointer"
-                                                                onClick={() => setExpandedPOs(prev => ({ ...prev, [`${mat.materialCode}-${poNum}`]: !prev[`${mat.materialCode}-${poNum}`] }))}
-                                                              >
-                                                                <td className="text-left font-mono font-medium text-foreground py-2 px-4 flex items-center gap-2">
-                                                                  {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
-                                                                  {poNum}
-                                                                </td>
-                                                                <td className="text-left font-mono text-muted-foreground py-2 px-4">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
-                                                                <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{sumQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Unit</td>
-                                                                <td className="text-center py-2 px-4">
-                                                                  {storages.length > 0 ? storages.map((s: any, idx) => (
-                                                                    <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{s}</span>
-                                                                  )) : '—'}
-                                                                </td>
-                                                              </tr>
-                                                              {isExpanded && items.map((po: any, j: number) => (
-                                                                <tr key={`${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
-                                                                  <td className="text-left font-mono font-medium text-muted-foreground py-2 px-4 pl-10 text-[10px]">Line Item {j + 1}</td>
-                                                                  <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
-                                                                  <td className="text-right font-mono text-muted-foreground py-2 px-4">{po.orderedQty} Unit</td>
+                            {/* Unified Table */}
+                            <div className="intelligence-card p-6">
+                              <div className="flex items-center justify-between mb-4">
+                                <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                                  <Box className="w-4 h-4 text-primary/70" /> Material Lifecycle & Tracking
+                                </h3>
+                                <div className="flex items-center gap-3">
+                                  <div className="flex bg-muted p-1 rounded-md border border-border">
+                                    <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>
+                                    <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>
+                                    <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>
+                                  </div>
+                                  <button onClick={downloadMaterialReport} className="flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors shadow-sm">
+                                    <Download className="w-3.5 h-3.5" /> Export Data
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="overflow-x-auto h-[calc(100vh-320px)] min-h-[400px] overflow-y-auto scrollbar-thin rounded-lg border border-border">
+                                <table className="intel-table relative w-full text-xs">
+                                  <thead className="sticky top-0 z-20">
+                                    {/* Top Grouped Header */}
+                                    <tr className="bg-slate-200/90 dark:bg-slate-800/90 backdrop-blur-md shadow-sm text-[10px] uppercase tracking-wider text-center font-bold">
+                                      <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-foreground">Material Intelligence</th>
+                                      <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">Volumetric Data (Qty)</th>
+                                      <th colSpan={4} className="py-2.5 border-b border-border/50 text-blue-700 dark:text-blue-400 bg-blue-500/5">Financial Impact (INR)</th>
+                                    </tr>
+                                    {/* Sub Header */}
+                                    <tr className="bg-slate-100/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md text-[10px] uppercase tracking-wider whitespace-nowrap">
+                                      <th className="w-8 py-2 border-b border-border"></th>
+                                      <th className="text-center py-2 border-b border-border">Code</th>
+                                      <th className="text-left py-2 border-b border-border">Description</th>
+                                      <th className="text-center py-2 border-b border-border">Unit</th>
+                                      <th className="text-left py-2 border-b border-border border-r border-border/30">WBS Tracking</th>
+
+                                      {/* Qty */}
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Ordered</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Consumed</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Inventory</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">In Transit</th>
+                                      <th className="text-center py-2 border-b border-border border-r border-border/30 bg-emerald-50/50 dark:bg-emerald-900/10">Remaining</th>
+
+                                      {/* Financials */}
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">PO Budget</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Utilized</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Inventory Val</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Remaining Bal</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    {unifiedMaterials.map((mat: any, i: number) => {
+                                      const isExpanded = expandedMaterial === mat.materialCode;
+                                      return (
+                                        <React.Fragment key={i}>
+                                          {/* Master Row */}
+                                          <tr className={`cursor-pointer transition-colors border-b border-border/40 ${isExpanded ? 'bg-primary/5' : 'hover:bg-primary/5'}`} onClick={() => setExpandedMaterial(isExpanded ? null : mat.materialCode)}>
+                                            <td className="text-center text-muted-foreground py-2.5">
+                                              {isExpanded ? <ChevronUp className="w-4 h-4 mx-auto" /> : <ChevronDown className="w-4 h-4 mx-auto" />}
+                                            </td>
+                                            <td className="text-center font-mono font-medium text-primary/90">{mat.materialCode}</td>
+                                            <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
+                                            <td className="text-center font-mono text-muted-foreground/80">{mat.baseUnit}</td>
+                                            <td className="text-left border-r border-border/30">
+                                              {mat.wbsList && mat.wbsList.length > 0 ? (
+                                                <div className="flex items-center gap-1 flex-wrap max-w-[150px]">
+                                                  <span className="px-1.5 py-0.5 bg-primary/10 text-primary border border-primary/20 rounded text-[9px] font-mono whitespace-nowrap truncate max-w-[100px]" title={mat.wbsList[0]}>{mat.wbsList[0]}</span>
+                                                  {mat.wbsList.length > 1 && (
+                                                    <span className="text-[9px] text-muted-foreground font-medium" title={mat.wbsList.slice(1).join(', ')}>+{mat.wbsList.length - 1}</span>
+                                                  )}
+                                                </div>
+                                              ) : <span className="text-muted-foreground/40">—</span>}
+                                            </td>
+
+                                            {/* Quantities */}
+                                            <td className="text-center font-mono font-semibold text-primary bg-emerald-50/20 dark:bg-emerald-900/5">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono font-semibold text-success bg-emerald-50/20 dark:bg-emerald-900/5">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono text-purple-500 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono text-warning bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono font-semibold text-orange-500 border-r border-border/30 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
+
+                                            {/* Financials */}
+                                            <td className="text-center font-mono text-foreground/70 bg-blue-50/20 dark:bg-blue-900/5">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                            <td className="text-center font-mono text-success/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
+                                            <td className="text-center font-mono text-purple-500/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                            <td className="text-center font-mono text-warning/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
+                                          </tr>
+
+                                          {/* Drill-down Detail Row */}
+                                          {isExpanded && (
+                                            <tr className="bg-muted border-b border-border">
+                                              <td colSpan={12} className="p-0">
+                                                <div className="p-6 space-y-6">
+
+                                                  {/* PO Details */}
+                                                  {mat.pos.length > 0 && (
+                                                    <div>
+                                                      <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><FileText className="w-3.5 h-3.5" /> Purchase Orders</h4>
+                                                      <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
+                                                        <table className="intel-table w-full text-xs">
+                                                          <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                            <tr>
+                                                              <th className="text-left font-semibold py-2 px-4">PO Number</th>
+                                                              <th className="text-left font-semibold py-2 px-4">PO Date</th>
+                                                              <th className="text-right font-semibold py-2 px-4">Ordered Qty</th>
+                                                              <th className="text-center font-semibold py-2 px-4 w-32">Storage Location</th>
+                                                            </tr>
+                                                          </thead>
+                                                          <tbody className="divide-y divide-border/30">
+                                                            {Array.from(new Set(mat.pos.map((p: any) => p.poNumber))).map((poNum: any) => {
+                                                              const items = mat.pos.filter((p: any) => p.poNumber === poNum);
+                                                              const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+                                                              const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+                                                              const isExpanded = expandedPOs[`${mat.materialCode}-${poNum}`];
+                                                              return (
+                                                                <React.Fragment key={poNum}>
+                                                                  <tr
+                                                                    className="hover:bg-muted transition-colors cursor-pointer"
+                                                                    onClick={() => setExpandedPOs(prev => ({ ...prev, [`${mat.materialCode}-${poNum}`]: !prev[`${mat.materialCode}-${poNum}`] }))}
+                                                                  >
+                                                                    <td className="text-left font-mono font-medium text-foreground py-2 px-4 flex items-center gap-2">
+                                                                      {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
+                                                                      {poNum}
+                                                                    </td>
+                                                                    <td className="text-left font-mono text-muted-foreground py-2 px-4">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                                                    <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{sumQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Unit</td>
+                                                                    <td className="text-center py-2 px-4">
+                                                                      {storages.length > 0 ? storages.map((s: any, idx) => (
+                                                                        <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{s}</span>
+                                                                      )) : '—'}
+                                                                    </td>
+                                                                  </tr>
+                                                                  {isExpanded && items.map((po: any, j: number) => (
+                                                                    <tr key={`${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
+                                                                      <td className="text-left font-mono font-medium text-muted-foreground py-2 px-4 pl-10 text-[10px]">Line Item {j + 1}</td>
+                                                                      <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                                                      <td className="text-right font-mono text-muted-foreground py-2 px-4">{po.orderedQty} Unit</td>
+                                                                      <td className="text-center py-2 px-4">
+                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                                      </td>
+                                                                    </tr>
+                                                                  ))}
+                                                                </React.Fragment>
+                                                              );
+                                                            })}
+                                                          </tbody>
+                                                        </table>
+                                                      </div>
+                                                    </div>
+                                                  )}
+
+                                                  {/* Consumption Details */}
+                                                  {mat.consumptions.length > 0 && (
+                                                    <div>
+                                                      <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Consumptions</h4>
+                                                      <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
+                                                        <table className="intel-table w-full text-xs">
+                                                          <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                            <tr>
+                                                              <th className="text-center font-semibold py-2 px-4 w-24">Movement</th>
+                                                              <th className="text-left font-semibold py-2 px-4">WBS Element</th>
+                                                              <th className="text-left font-semibold py-2 px-4">Date</th>
+                                                              <th className="text-left font-semibold py-2 px-4">Vendor</th>
+                                                              <th className="text-right font-semibold py-2 px-4">Quantity</th>
+                                                            </tr>
+                                                          </thead>
+                                                          <tbody className="divide-y divide-border/30">
+                                                            {mat.consumptions.slice(0, 50).map((c: any, j: number) => {
+                                                              const matchingPo = mat.pos.find((p: any) => p.wbsElement === c.wbsElement) || mat.pos[0];
+                                                              const vendor = matchingPo?.vendorName || '—';
+                                                              return (
+                                                                <tr key={j} className="hover:bg-muted transition-colors">
                                                                   <td className="text-center py-2 px-4">
-                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/100/10 text-success dark:text-success' : 'bg-destructive/100/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
+                                                                  </td>
+                                                                  <td className="text-left font-mono text-foreground/80 font-medium py-2 px-4">{c.wbsElement || '—'}</td>
+                                                                  <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{c.postingDate ? new Date(c.postingDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                                  <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
+                                                                  <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
+                                                                </tr>
+                                                              );
+                                                            })}
+                                                          </tbody>
+                                                        </table>
+                                                      </div>
+                                                    </div>
+                                                  )}
+
+                                                  {/* Inventory Details */}
+                                                  {mat.inventories.length > 0 && (
+                                                    <div>
+                                                      <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Inventory Storage</h4>
+                                                      <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
+                                                        <table className="intel-table w-full text-xs">
+                                                          <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
+                                                            <tr>
+                                                              <th className="text-left font-semibold py-2 px-4">WBS Element</th>
+                                                              <th className="text-left font-semibold py-2 px-4">Date</th>
+                                                              <th className="text-left font-semibold py-2 px-4">Vendor</th>
+                                                              <th className="text-right font-semibold py-2 px-4">Inventory Qty</th>
+                                                              <th className="text-right font-semibold py-2 px-4">Value (INR)</th>
+                                                              <th className="text-center font-semibold py-2 px-4 w-32">Location</th>
+                                                            </tr>
+                                                          </thead>
+                                                          <tbody className="divide-y divide-border/30">
+                                                            {mat.inventories.map((inv: any, j: number) => {
+                                                              const matchingPo = mat.pos.find((p: any) => p.wbsElement === inv.wbsElement || p.poNumber === inv.purchaseOrder) || mat.pos[0];
+                                                              const vendor = matchingPo?.vendorName || '—';
+                                                              const dateStr = matchingPo?.documentDate ? new Date(matchingPo.documentDate).toLocaleDateString('en-GB') : '—';
+                                                              return (
+                                                                <tr key={j} className="hover:bg-muted transition-colors">
+                                                                  <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
+                                                                  <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{dateStr}</td>
+                                                                  <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
+                                                                  <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
+                                                                  <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
+                                                                  <td className="text-center py-2 px-4">
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
                                                                   </td>
                                                                 </tr>
-                                                              ))}
-                                                            </React.Fragment>
-                                                          );
-                                                        })}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
-                                                </div>
-                                              )}
+                                                              );
+                                                            })}
+                                                          </tbody>
+                                                        </table>
+                                                      </div>
+                                                    </div>
+                                                  )}
 
-                                              {/* Consumption Details */}
-                                              {mat.consumptions.length > 0 && (
-                                                <div>
-                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Activity className="w-3.5 h-3.5" /> Consumptions</h4>
-                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
-                                                    <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
-                                                        <tr>
-                                                          <th className="text-center font-semibold py-2 px-4 w-24">Movement</th>
-                                                          <th className="text-left font-semibold py-2 px-4">WBS Element</th>
-                                                          <th className="text-left font-semibold py-2 px-4">Date</th>
-                                                          <th className="text-left font-semibold py-2 px-4">Vendor</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Quantity</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-border/30">
-                                                        {mat.consumptions.slice(0, 50).map((c: any, j: number) => {
-                                                          const matchingPo = mat.pos.find((p: any) => p.wbsElement === c.wbsElement) || mat.pos[0];
-                                                          const vendor = matchingPo?.vendorName || '—';
-                                                          return (
-                                                            <tr key={j} className="hover:bg-muted transition-colors">
-                                                              <td className="text-center py-2 px-4">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/100/10 text-success dark:text-success' : 'bg-destructive/100/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
-                                                              </td>
-                                                              <td className="text-left font-mono text-foreground/80 font-medium py-2 px-4">{c.wbsElement || '—'}</td>
-                                                              <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{c.postingDate ? new Date(c.postingDate).toLocaleDateString('en-GB') : '—'}</td>
-                                                              <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
-                                                              <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
-                                                            </tr>
-                                                          );
-                                                        })}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
                                                 </div>
-                                              )}
-
-                                              {/* Inventory Details */}
-                                              {mat.inventories.length > 0 && (
-                                                <div>
-                                                  <h4 className="text-xs uppercase text-muted-foreground mb-3 font-semibold tracking-wider flex items-center gap-2"><Package className="w-3.5 h-3.5" /> Inventory Storage</h4>
-                                                  <div className="rounded-md border border-border bg-background/50 overflow-hidden shadow-sm">
-                                                    <table className="intel-table w-full text-xs">
-                                                      <thead className="bg-muted text-[10px] text-muted-foreground uppercase tracking-wider">
-                                                        <tr>
-                                                          <th className="text-left font-semibold py-2 px-4">WBS Element</th>
-                                                          <th className="text-left font-semibold py-2 px-4">Date</th>
-                                                          <th className="text-left font-semibold py-2 px-4">Vendor</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Inventory Qty</th>
-                                                          <th className="text-right font-semibold py-2 px-4">Value (INR)</th>
-                                                          <th className="text-center font-semibold py-2 px-4 w-32">Location</th>
-                                                        </tr>
-                                                      </thead>
-                                                      <tbody className="divide-y divide-border/30">
-                                                        {mat.inventories.map((inv: any, j: number) => {
-                                                          const matchingPo = mat.pos.find((p: any) => p.wbsElement === inv.wbsElement || p.poNumber === inv.purchaseOrder) || mat.pos[0];
-                                                          const vendor = matchingPo?.vendorName || '—';
-                                                          const dateStr = matchingPo?.documentDate ? new Date(matchingPo.documentDate).toLocaleDateString('en-GB') : '—';
-                                                          return (
-                                                            <tr key={j} className="hover:bg-muted transition-colors">
-                                                              <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
-                                                              <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{dateStr}</td>
-                                                              <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
-                                                              <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
-                                                              <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
-                                                              <td className="text-center py-2 px-4">
-                                                                <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
-                                                              </td>
-                                                            </tr>
-                                                          );
-                                                        })}
-                                                      </tbody>
-                                                    </table>
-                                                  </div>
-                                                </div>
-                                              )}
-
-                                            </div>
-                                          </td>
-                                        </tr>
-                                      )}
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
+                                              </td>
+                                            </tr>
+                                          )}
+                                        </React.Fragment>
+                                      );
+                                    })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      </div>
+                        </>
+                      )}
                     </>
-                  )}
-                </>
-              </>
+                  </>
 
 
-                  </div>
+                </div>
               )}
             </div>
           )}
@@ -1972,7 +2244,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <HeroMetric label="Completed Amount" value={detail.einvoice.summary.completedAmountINR ? `₹${(detail.einvoice.summary.completedAmountINR / 100000).toFixed(2)}` : '₹0'} unit="Lacs" icon={CheckCircle2} color="text-success" />
                     <HeroMetric label="Pending Amount" value={detail.einvoice.summary.pendingAmountINR ? `₹${(detail.einvoice.summary.pendingAmountINR / 100000).toFixed(2)}` : '₹0'} unit="Lacs" icon={AlertTriangle} color="text-warning" />
                   </div>
-                  
+
                   <div className="intelligence-card p-0 overflow-hidden">
                     <div className="p-4 border-b border-border bg-muted/30">
                       <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
@@ -2024,10 +2296,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             const sumInv = invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.invoiceAmount) || 0), 0);
                             const sumSO = invoices.reduce((acc: number, inv: any) => acc + (parseFloat(inv.SOAmount) || 0), 0);
                             const vendorName = invoices[0]?.vendorName || '—';
-                            
+
                             return (
                               <React.Fragment key={idx}>
-                                <tr 
+                                <tr
                                   className={`cursor-pointer transition-colors hover:bg-muted/50 ${isExpanded ? 'bg-primary/5' : ''}`}
                                   onClick={() => setExpandedEInvoices(prev => ({ ...prev, [wo]: !prev[wo] }))}
                                 >
@@ -2050,7 +2322,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   <td className="text-right font-mono text-muted-foreground font-semibold py-3 px-4">₹{sumSO.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                   <td className="text-right font-mono font-bold text-foreground py-3 px-4">₹{sumInv.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
                                 </tr>
-                                
+
                                 {isExpanded && invoices.map((inv: any, j: number) => (
                                   <tr key={`${idx}-${j}`} className="bg-background/40 hover:bg-muted/30 transition-colors">
                                     <td className="text-left font-mono text-muted-foreground py-2.5 px-4 pl-10 text-[11px] flex items-center gap-2">
@@ -2177,7 +2449,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               </div>
                               <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-success/100/5 border-emerald-500/10' : 'bg-warning/100/5 border-amber-500/10'}`}>
                                 <span className={`text-xs font-semibold flex items-center gap-1.5 ${p6.finishDate ? 'text-success dark:text-success' : 'text-warning dark:text-warning'}`}>
-                                  {p6.finishDate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />} 
+                                  {p6.finishDate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                                   {p6.finishDate ? 'Actual Finish' : 'Must Finish By'}
                                 </span>
                                 <span className={`text-sm font-bold ${p6.finishDate ? 'text-success dark:text-emerald-300' : 'text-warning dark:text-amber-300'}`}>
@@ -2206,7 +2478,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           <Maximize2 className="w-4 h-4" />
                         </button>
                       </div>
-                      
+
                       <div className="flex-1 overflow-x-auto custom-scrollbar pr-2 py-6">
                         {p6.milestones && p6.milestones.length > 0 ? (
                           <div className="flex items-center px-6 min-w-max h-[240px]">
@@ -2219,92 +2491,85 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                               return (
                                 <div key={i} className={`relative flex items-center shrink-0 w-[260px] mr-16 transition-transform duration-500 hover:z-50 ${isEven ? 'translate-y-[45px]' : '-translate-y-[45px]'}`}>
-                                  
+
                                   {/* Input Port */}
                                   {i !== 0 && (
-                                    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${
-                                      isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 
-                                      isInProgress ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse' : 
-                                      'border-border shadow-inner'
-                                    }`}></div>
+                                    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' :
+                                        isInProgress ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse' :
+                                          'border-border shadow-inner'
+                                      }`}></div>
                                   )}
-                                  
+
                                   {/* Node Card */}
-                                  <div className={`group w-full rounded-2xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${
-                                      isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-[0_8px_30px_-4px_rgba(59,130,246,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(59,130,246,0.4)] backdrop-blur-md' : 
-                                      isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-[0_8px_30px_-4px_rgba(245,158,11,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(245,158,11,0.4)] backdrop-blur-md ring-1 ring-amber-500/20 ring-inset' : 
-                                      'bg-card/40 dark:bg-card/40 border-border shadow-lg hover:shadow-xl backdrop-blur-sm hover:border-border/80'
-                                  }`}>
+                                  <div className={`group w-full rounded-2xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-[0_8px_30px_-4px_rgba(59,130,246,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(59,130,246,0.4)] backdrop-blur-md' :
+                                      isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-[0_8px_30px_-4px_rgba(245,158,11,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(245,158,11,0.4)] backdrop-blur-md ring-1 ring-amber-500/20 ring-inset' :
+                                        'bg-card/40 dark:bg-card/40 border-border shadow-lg hover:shadow-xl backdrop-blur-sm hover:border-border/80'
+                                    }`}>
                                     {/* Glass reflection overlay */}
                                     <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/0 via-white/5 to-white/0 dark:from-white/0 dark:via-white/5 dark:to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
                                     {/* Header */}
-                                    <div className={`px-4 py-3 flex items-center gap-3 border-b ${
-                                        isCompleted ? 'border-primary/20 text-primary' : 
-                                        isInProgress ? 'border-amber-500/20 text-amber-500' : 
-                                        'border-border text-muted-foreground group-hover:text-foreground transition-colors'
-                                    }`}>
-                                        <div className={`w-7 h-7 rounded-xl flex items-center justify-center shadow-inner text-[11px] font-black tracking-tighter ${
-                                          isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white shadow-primary/40' : 
-                                          isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/40 animate-pulse' : 
-                                          'bg-muted border border-border text-muted-foreground group-hover:bg-muted/80 transition-colors'
+                                    <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'border-primary/20 text-primary' :
+                                        isInProgress ? 'border-amber-500/20 text-amber-500' :
+                                          'border-border text-muted-foreground group-hover:text-foreground transition-colors'
+                                      }`}>
+                                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shadow-inner text-[11px] font-black tracking-tighter ${isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white shadow-primary/40' :
+                                          isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/40 animate-pulse' :
+                                            'bg-muted border border-border text-muted-foreground group-hover:bg-muted/80 transition-colors'
                                         }`}>
-                                          {isCompleted ? <Check className="w-4 h-4 text-white" /> : i + 1}
-                                        </div>
-                                        <h4 className="text-[12px] font-bold uppercase tracking-wide truncate flex-1 drop-shadow-sm" title={m.name}>
-                                          {m.name}
-                                        </h4>
+                                        {isCompleted ? <Check className="w-4 h-4 text-white" /> : i + 1}
+                                      </div>
+                                      <h4 className="text-[12px] font-bold uppercase tracking-wide truncate flex-1 drop-shadow-sm" title={m.name}>
+                                        {m.name}
+                                      </h4>
                                     </div>
 
                                     {/* Body */}
                                     <div className="px-4 py-3 flex items-center justify-between relative overflow-hidden">
-                                        <div className="flex items-center gap-2">
-                                          {isCompleted ? (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-md text-[10px] font-semibold border border-primary/20">
-                                              <CheckCircle2 className="w-3 h-3" /> Done
-                                            </div>
-                                          ) : isInProgress ? (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md text-[10px] font-semibold border border-amber-500/20">
-                                              <Activity className="w-3 h-3 animate-pulse" /> Active
-                                            </div>
-                                          ) : (
-                                            <div className="flex items-center gap-1.5 px-2 py-1 bg-muted text-muted-foreground rounded-md text-[10px] font-semibold border border-border">
-                                              <Clock className="w-3 h-3" /> Pending
-                                            </div>
-                                          )}
-                                        </div>
-                                        <div className={`font-mono text-[10px] px-2 py-1 rounded-md border backdrop-blur-sm font-medium ${
-                                          isCompleted ? 'bg-primary/5 text-primary border-primary/20' : 
-                                          isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' : 
-                                          'bg-card/50 text-muted-foreground border-border shadow-inner'
+                                      <div className="flex items-center gap-2">
+                                        {isCompleted ? (
+                                          <div className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-md text-[10px] font-semibold border border-primary/20">
+                                            <CheckCircle2 className="w-3 h-3" /> Done
+                                          </div>
+                                        ) : isInProgress ? (
+                                          <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md text-[10px] font-semibold border border-amber-500/20">
+                                            <Activity className="w-3 h-3 animate-pulse" /> Active
+                                          </div>
+                                        ) : (
+                                          <div className="flex items-center gap-1.5 px-2 py-1 bg-muted text-muted-foreground rounded-md text-[10px] font-semibold border border-border">
+                                            <Clock className="w-3 h-3" /> Pending
+                                          </div>
+                                        )}
+                                      </div>
+                                      <div className={`font-mono text-[10px] px-2 py-1 rounded-md border backdrop-blur-sm font-medium ${isCompleted ? 'bg-primary/5 text-primary border-primary/20' :
+                                          isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' :
+                                            'bg-card/50 text-muted-foreground border-border shadow-inner'
                                         }`}>
-                                          {dateStr}
-                                        </div>
+                                        {dateStr}
+                                      </div>
                                     </div>
                                   </div>
 
                                   {/* Output Port */}
                                   {!isLast && (
-                                    <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${
-                                      isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' : 
-                                      'border-border shadow-inner'
-                                    }`}></div>
+                                    <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' :
+                                        'border-border shadow-inner'
+                                      }`}></div>
                                   )}
 
                                   {/* Connection Wire (SVG Bezier Fix) */}
                                   {!isLast && (
                                     <svg width="64" height="90" className="absolute left-[calc(100%-2px)] pointer-events-none drop-shadow-md" style={{ top: isEven ? 'calc(50% - 90px)' : '50%', zIndex: 0 }}>
-                                      <path 
-                                        d={isEven ? "M 0 90 C 32 90, 32 0, 64 0" : "M 0 0 C 32 0, 32 90, 64 90"} 
-                                        fill="none" 
-                                        stroke="currentColor" 
-                                        strokeWidth={isCompleted ? "3" : "2"} 
+                                      <path
+                                        d={isEven ? "M 0 90 C 32 90, 32 0, 64 0" : "M 0 0 C 32 0, 32 90, 64 90"}
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeWidth={isCompleted ? "3" : "2"}
                                         strokeDasharray={isInProgress ? "4 4" : "0"}
-                                        className={`transition-all duration-700 ${
-                                          isCompleted ? 'text-primary' : 
-                                          isInProgress ? 'text-amber-500 animate-[dash_2s_linear_infinite]' : 
-                                          'text-border dark:text-gray-700'
-                                        }`}
+                                        className={`transition-all duration-700 ${isCompleted ? 'text-primary' :
+                                            isInProgress ? 'text-amber-500 animate-[dash_2s_linear_infinite]' :
+                                              'text-border dark:text-gray-700'
+                                          }`}
                                       />
                                     </svg>
                                   )}
@@ -2494,7 +2759,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <HeroMetric label="Charged" value={tc.summary.chargedLines} icon={Zap} color="text-success" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'charged' ? null : 'charged')} active={expandedTcMetric === 'charged'} />
                     <HeroMetric label="In Progress" value={tc.summary.inProgressLines} icon={Activity} color="text-primary" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'in_progress' ? null : 'in_progress')} active={expandedTcMetric === 'in_progress'} />
                     <HeroMetric label="Delayed" value={tc.summary.delayedLines} icon={AlertTriangle} color="text-destructive" hasBreakdown onClick={() => setExpandedTcMetric(expandedTcMetric === 'delayed' ? null : 'delayed')} active={expandedTcMetric === 'delayed'} />
-                    
+
                     {(() => {
                       let mappedMW = tc.summary.totalMW;
                       if (!mappedMW) {
@@ -2631,8 +2896,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td>
                                   <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
                                     (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                      (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                        'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.status || '—'}
                                   </span>
@@ -2688,8 +2953,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td>
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
                                     (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                      (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                        'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.normalizedStatus || edge.status || '—'}
                                   </span>
@@ -2738,8 +3003,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td>
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(n.status || '').toLowerCase() === 'charged' || (n.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
                                     (n.status || '').toLowerCase() === 'in_progress' || (n.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                    (n.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
-                                      'bg-slate-500/10 text-slate-500 border border-slate-500/20'
+                                      (n.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                        'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {n.status || '—'}
                                   </span>
@@ -2755,7 +3020,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               )}
             </div>
           )}
-          
+
           {/* ════════ QUALITY TAB (NEW) ════════ */}
           {activeTab === 'quality' && (
             <div className="intelligence-card p-6 min-h-[500px]">
@@ -2792,50 +3057,50 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               </div>
               <button onClick={() => setShowCodModal(null)} className="p-2 rounded-lg hover:bg-accent text-muted-foreground transition-colors"><X className="w-5 h-5" /></button>
             </div>
-            
+
             <div className="p-6 overflow-y-auto custom-scrollbar flex-1">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {Object.entries(detail.mapping.blocksStatus)
                   .filter(([_, status]: any) => showCodModal === 'done' ? status.cod === 'Completed' : status.cod !== 'Completed')
-                  .sort(([a], [b]) => a.localeCompare(b, undefined, {numeric: true}))
+                  .sort(([a], [b]) => a.localeCompare(b, undefined, { numeric: true }))
                   .map(([bName, status]: any) => (
-                  <div key={bName} className="p-4 rounded-xl border border-border bg-background shadow-sm space-y-3">
-                    <div className="flex justify-between items-center pb-2 border-b border-border/50">
-                      <span className="font-bold text-sm truncate pr-2">{bName}</span>
-                      <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold shrink-0 ${status.cod === 'Completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
-                        {status.cod === 'Completed' ? 'COD Done' : 'Pending'}
-                      </span>
-                    </div>
-                    
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <div>
-                        <div className="text-muted-foreground mb-1 text-[10px] uppercase">COD</div>
-                        {status.cod === 'Completed' ? (
-                          <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
-                            <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.cod_actual_date || 'Done'}
-                          </div>
-                        ) : (
-                          <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
-                            <Clock className="w-3 h-3 shrink-0" /> {status.cod_forecast_date || 'TBD'}
-                          </div>
-                        )}
+                    <div key={bName} className="p-4 rounded-xl border border-border bg-background shadow-sm space-y-3">
+                      <div className="flex justify-between items-center pb-2 border-b border-border/50">
+                        <span className="font-bold text-sm truncate pr-2">{bName}</span>
+                        <span className={`text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-bold shrink-0 ${status.cod === 'Completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
+                          {status.cod === 'Completed' ? 'COD Done' : 'Pending'}
+                        </span>
                       </div>
-                      
-                      <div>
-                        <div className="text-muted-foreground mb-1 text-[10px] uppercase">Trial Run</div>
-                        {status.tr === 'Completed' ? (
-                          <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
-                            <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.tr_actual_date || 'Done'}
-                          </div>
-                        ) : (
-                          <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
-                            <Clock className="w-3 h-3 shrink-0" /> Pending
-                          </div>
-                        )}
+
+                      <div className="grid grid-cols-2 gap-2 text-xs">
+                        <div>
+                          <div className="text-muted-foreground mb-1 text-[10px] uppercase">COD</div>
+                          {status.cod === 'Completed' ? (
+                            <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
+                              <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.cod_actual_date || 'Done'}
+                            </div>
+                          ) : (
+                            <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                              <Clock className="w-3 h-3 shrink-0" /> {status.cod_forecast_date || 'TBD'}
+                            </div>
+                          )}
+                        </div>
+
+                        <div>
+                          <div className="text-muted-foreground mb-1 text-[10px] uppercase">Trial Run</div>
+                          {status.tr === 'Completed' ? (
+                            <div className="font-semibold text-success flex items-center gap-1 truncate text-[11px]">
+                              <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.tr_actual_date || 'Done'}
+                            </div>
+                          ) : (
+                            <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                              <Clock className="w-3 h-3 shrink-0" /> Pending
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
               </div>
             </div>
           </div>
@@ -2936,9 +3201,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
                             <td className="px-4 py-3">
                               <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(act.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                    (act.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                      'bg-red-500/10 text-red-500 border border-red-500/20'
-                                    }`}>
+                                (act.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
+                                  'bg-red-500/10 text-red-500 border border-red-500/20'
+                                }`}>
                                 {act.status}
                               </span>
                             </td>
@@ -2962,97 +3227,92 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </table>
               </div>
               {/* Workflow Modal */}
-      {showWorkflowModal && (
-        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-            <div className="flex items-center justify-between p-4 border-b bg-card z-20">
-              <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
-                <Network className="w-5 h-5 text-primary" /> Full Project Workflow
-              </h2>
-              <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
-              <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
-                {p6?.milestones?.map((m: any, i: number) => {
-                  const isLast = i === p6.milestones.length - 1;
-                  const isEven = i % 2 === 0;
-                  const isCompleted = m.status === 'Completed';
-                  const isInProgress = m.status === 'In Progress';
-                  const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
-
-                  return (
-                    <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
-                      
-                      {/* Input Port */}
-                      {i !== 0 && (
-                        <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${
-                          isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
-                        }`}></div>
-                      )}
-                      
-                      {/* Node Card */}
-                      <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${
-                          isCompleted ? 'border-primary shadow-primary/20' : 
-                          isInProgress ? 'border-amber-500 shadow-amber-500/20' : 
-                          'border-border shadow-black/5'
-                      }`}>
-                        <div className={`px-4 py-3 flex items-center gap-3 border-b ${
-                            isCompleted ? 'bg-primary/5 border-primary/20 text-primary' : 
-                            isInProgress ? 'bg-warning/100/5 border-warning/20 text-warning' : 
-                            'bg-muted border-border text-muted-foreground'
-                        } rounded-t-2xl`}>
-                            <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${
-                              isCompleted ? 'bg-primary text-primary-foreground' : 
-                              isInProgress ? 'bg-warning/100 text-white' : 
-                              'bg-background border border-border text-foreground'
-                            }`}>
-                              {i + 1}
-                            </div>
-                            <h4 className="text-[13px] font-bold uppercase tracking-tight line-clamp-2 leading-tight flex-1" title={m.name}>
-                              {m.name}
-                            </h4>
-                        </div>
-
-                        <div className="px-4 py-3.5 flex items-center justify-between bg-card rounded-b-2xl">
-                            <div className="flex items-center gap-2">
-                              <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-warning/100 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
-                            </div>
-                            <span className="font-mono text-[10px] text-foreground bg-muted px-2 py-1 rounded-md border border-border">{dateStr}</span>
-                        </div>
-                      </div>
-
-                      {/* Output Port */}
-                      {!isLast && (
-                        <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${
-                          isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
-                        }`}></div>
-                      )}
-
-                      {/* Connection Wire */}
-                      {!isLast && (
-                        <svg className="absolute left-[calc(100%-1.5px)] pointer-events-none" style={{ width: '6rem', height: '160px', top: isEven ? 'calc(50% - 160px)' : '50%', zIndex: -10 }}>
-                          <path 
-                            d={isEven ? "M 0 160 C 48 160, 48 0, 96 0" : "M 0 0 C 48 0, 48 160, 96 160"} 
-                            fill="none" 
-                            stroke="currentColor" 
-                            strokeWidth="3" 
-                            className={isCompleted ? 'text-primary' : 'text-primary/20'}
-                          />
-                        </svg>
-                      )}
+              {showWorkflowModal && (
+                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                    <div className="flex items-center justify-between p-4 border-b bg-card z-20">
+                      <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
+                        <Network className="w-5 h-5 text-primary" /> Full Project Workflow
+                      </h2>
+                      <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
+                        <X className="w-5 h-5" />
+                      </button>
                     </div>
-                  )
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
-    </div>
+                    <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
+                      <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
+                        {p6?.milestones?.map((m: any, i: number) => {
+                          const isLast = i === p6.milestones.length - 1;
+                          const isEven = i % 2 === 0;
+                          const isCompleted = m.status === 'Completed';
+                          const isInProgress = m.status === 'In Progress';
+                          const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
+
+                          return (
+                            <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
+
+                              {/* Input Port */}
+                              {i !== 0 && (
+                                <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                                  }`}></div>
+                              )}
+
+                              {/* Node Card */}
+                              <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${isCompleted ? 'border-primary shadow-primary/20' :
+                                  isInProgress ? 'border-amber-500 shadow-amber-500/20' :
+                                    'border-border shadow-black/5'
+                                }`}>
+                                <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'bg-primary/5 border-primary/20 text-primary' :
+                                    isInProgress ? 'bg-warning/100/5 border-warning/20 text-warning' :
+                                      'bg-muted border-border text-muted-foreground'
+                                  } rounded-t-2xl`}>
+                                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${isCompleted ? 'bg-primary text-primary-foreground' :
+                                      isInProgress ? 'bg-warning/100 text-white' :
+                                        'bg-background border border-border text-foreground'
+                                    }`}>
+                                    {i + 1}
+                                  </div>
+                                  <h4 className="text-[13px] font-bold uppercase tracking-tight line-clamp-2 leading-tight flex-1" title={m.name}>
+                                    {m.name}
+                                  </h4>
+                                </div>
+
+                                <div className="px-4 py-3.5 flex items-center justify-between bg-card rounded-b-2xl">
+                                  <div className="flex items-center gap-2">
+                                    <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-warning/100 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
+                                  </div>
+                                  <span className="font-mono text-[10px] text-foreground bg-muted px-2 py-1 rounded-md border border-border">{dateStr}</span>
+                                </div>
+                              </div>
+
+                              {/* Output Port */}
+                              {!isLast && (
+                                <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                                  }`}></div>
+                              )}
+
+                              {/* Connection Wire */}
+                              {!isLast && (
+                                <svg className="absolute left-[calc(100%-1.5px)] pointer-events-none" style={{ width: '6rem', height: '160px', top: isEven ? 'calc(50% - 160px)' : '50%', zIndex: -10 }}>
+                                  <path
+                                    d={isEven ? "M 0 160 C 48 160, 48 0, 96 0" : "M 0 0 C 48 0, 48 160, 96 160"}
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeWidth="3"
+                                    className={isCompleted ? 'text-primary' : 'text-primary/20'}
+                                  />
+                                </svg>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+            </div>
           </div>
         </div>
       )}

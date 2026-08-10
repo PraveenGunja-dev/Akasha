@@ -1,0 +1,584 @@
+[
+  {
+    "step": 82,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Comment out KPIs not needed per tab (Materials, PO Volume, Inventory, % Consumed, In Transit depending on tab), rename Supply PO Amount \u2192 PO Amount, replace DollarSign with IndianRupee icon, default SLR type filter to POrd",
+      "Instruction": "1. Add IndianRupee to lucide-react imports\n2. Replace the KPI grid with conditional rendering based on sapFilter:\n   - ALL & SPV: Show Total POs, Vendors, PO Amount, Utilized PO Amount, Remaining PO Amount (comment out Materials, PO Volume, Inventory, % Consumed, In Transit)\n   - AGEL: Comment out Materials, PO Volume (keep the rest)\n   - AGE6L: Comment out Materials, PO Volume, Inventory, In Transit; use IndianRupee icon\n3. Rename \"Supply PO Amount\" \u2192 \"PO Amount\", \"Utilized Supply PO Amount\" \u2192 \"Utilized PO Amount\", \"Remaining Supply PO Amount\" \u2192 \"Remaining PO Amount\"\n4. Replace DollarSign with IndianRupee for amount-related KPIs in this section\n5. Default slrTypeFilter to 'POrd' instead of 'ALL'\n6. In the SLR section, change label from \"Total SLR POs\" and show POrd-only count by default",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 7,
+          "ReplacementContent": "  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, IndianRupee, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,\r\n  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt",
+          "StartLine": 6,
+          "TargetContent": "  Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,\r\n  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1170,
+          "ReplacementContent": "                      <div className=\"grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4\">\r\n                        {/* Total POs \u2014 shown in all tabs (POrd count only) */}\r\n                        <HeroMetric label=\"Total POs\" value={sap.summary.totalPOs} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />\r\n                        {/* Vendors \u2014 shown in all tabs */}\r\n                        <HeroMetric label=\"Vendors\" value={sap.summary.totalVendors} icon={Users} color=\"text-purple-500 dark:text-purple-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />\r\n                        {/* Materials \u2014 commented out for ALL, SPV, AGEL, AGE6L */}\r\n                        {/* <HeroMetric label=\"Materials\" value={unifiedMaterials.length} icon={Layers} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} /> */}\r\n                        {/* PO Volume \u2014 commented out for ALL, SPV, AGEL, AGE6L */}\r\n                        {/* <HeroMetric label=\"PO Volume\" value={fmtMW(sap.summary.totalOrderedQty)} unit=\"No\" icon={Package} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} /> */}\r\n                        {/* Inventory \u2014 commented out for ALL, SPV, AGE6L; shown for AGEL */}\r\n                        {(sapFilter === 'agel') && (\r\n                          <HeroMetric label=\"Inventory\" value={fmtMW(sap.summary.totalInventoryQty)} unit=\"No\" icon={Box} color=\"text-success dark:text-success\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />\r\n                        )}\r\n\r\n                        {/* PO Amount (renamed from Supply PO Amount) \u2014 shown in all tabs, uses IndianRupee icon */}\r\n                        <HeroMetric label=\"PO Amount\" value={fmtCost(sap.summary.totalBudgetINR)} icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />\r\n                        {/* Utilized PO Amount (renamed from Utilized Supply PO Amount) \u2014 shown in all tabs */}\r\n                        <HeroMetric label=\"Utilized PO Amount\" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />\r\n                        {/* Remaining PO Amount (renamed from Remaining Supply PO Amount) \u2014 shown in all tabs */}\r\n                        <HeroMetric label=\"Remaining PO Amount\" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color=\"text-teal-500 dark:text-teal-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />\r\n                        {/* % Consumed \u2014 commented out for ALL, SPV; shown for AGEL, AGE6L */}\r\n                        {(sapFilter === 'agel' || sapFilter === 'age6l') && (\r\n                          <HeroMetric label=\"% Consumed\" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'} />\r\n                        )}\r\n                        {/* In Transit \u2014 commented out for ALL, SPV, AGE6L; shown for AGEL */}\r\n                        {(sapFilter === 'agel') && (\r\n                          <HeroMetric label=\"In Transit\" value={fmtMW(sap.summary.totalInTransitQty)} unit=\"No\" icon={Truck} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />\r\n                        )}\r\n                      </div>",
+          "StartLine": 1158,
+          "TargetContent": "                      <div className=\"grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4\">\r\n                        <HeroMetric label=\"Total POs\" value={sap.summary.totalPOs} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />\r\n                        <HeroMetric label=\"Vendors\" value={sap.summary.totalVendors} icon={Users} color=\"text-purple-500 dark:text-purple-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />\r\n                        <HeroMetric label=\"Materials\" value={unifiedMaterials.length} icon={Layers} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} />\r\n                        <HeroMetric label=\"PO Volume\" value={fmtMW(sap.summary.totalOrderedQty)} unit=\"No\" icon={Package} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'volume' ? null : 'volume')} active={expandedMetric === 'volume'} />\r\n                        <HeroMetric label=\"Inventory\" value={fmtMW(sap.summary.totalInventoryQty)} unit=\"No\" icon={Box} color=\"text-success dark:text-success\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />\r\n\r\n                        <HeroMetric label=\"Supply PO Amount\" value={fmtCost(sap.summary.totalBudgetINR)} icon={DollarSign} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />\r\n                        <HeroMetric label=\"Utilized Supply PO Amount\" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />\r\n                        <HeroMetric label=\"Remaining Supply PO Amount\" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color=\"text-teal-500 dark:text-teal-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />\r\n                        <HeroMetric label=\"% Consumed\" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'} />\r\n                        <HeroMetric label=\"In Transit\" value={fmtMW(sap.summary.totalInTransitQty)} unit=\"No\" icon={Truck} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'transit' ? null : 'transit')} active={expandedMetric === 'transit'} />\r\n                      </div>"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 272,
+          "ReplacementContent": "  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('POrd');",
+          "StartLine": 272,
+          "TargetContent": "  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('ALL');"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1204,
+          "ReplacementContent": "                              <HeroMetric label=\"Total SLR POs\" value={slrFiltered.length} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\r\n                              <HeroMetric label=\"Open POs\" value={filteredOpen} icon={Activity} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\r\n                              <HeroMetric label=\"Closed POs\" value={filteredClosed} icon={Check} color=\"text-muted-foreground dark:text-muted-foreground\" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />\r\n                              <HeroMetric label=\"Total Amount\" value={`\u20b9${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />",
+          "StartLine": 1201,
+          "TargetContent": "                              <HeroMetric label=\"Total SLR POs\" value={slrFiltered.length} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\r\n                              <HeroMetric label=\"Open POs\" value={filteredOpen} icon={Activity} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\r\n                              <HeroMetric label=\"Closed POs\" value={filteredClosed} icon={Check} color=\"text-muted-foreground dark:text-muted-foreground\" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />\r\n                              <HeroMetric label=\"Total Amount\" value={`\u20b9${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={DollarSign} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Editing KPI section",
+      "toolSummary": "KPI commenting and renaming"
+    }
+  },
+  {
+    "step": 86,
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": false,
+      "Description": "Rename hero-level Supply PO Amount label to PO Amount for consistency",
+      "EndLine": 785,
+      "Instruction": "Rename \"Supply PO Amount\" to \"PO Amount\" in the hero metric section at top of project view",
+      "ReplacementContent": "          <HeroMetric label=\"PO Amount\" value={detail?.sap?.summary?.totalBudgetINR ? `\u20b9${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '\u20b90'} unit=\"Cr\" icon={Database} color=\"text-primary\" />",
+      "StartLine": 785,
+      "TargetContent": "          <HeroMetric label=\"Supply PO Amount\" value={detail?.sap?.summary?.totalBudgetINR ? `\u20b9${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '\u20b90'} unit=\"Cr\" icon={Database} color=\"text-primary\" />",
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Renaming label",
+      "toolSummary": "Hero label rename"
+    }
+  },
+  {
+    "step": 94,
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": false,
+      "Description": "Enhanced export to include vendor name in the PO table and SLR data with line items for a complete report",
+      "EndLine": 731,
+      "Instruction": "Enhance the downloadSAPReport function to also export SLR data with line items, and ensure vendor name is included in all sections",
+      "ReplacementContent": "  const downloadSAPReport = () => {\n    if (!sap) return;\n\n    const rows = [];\n    rows.push(['--- SAP Intelligence Report ---']);\n    rows.push(['Project:', p.projectName]);\n    rows.push(['Capacity (MW):', mapping?.capacityMW || '']);\n    rows.push(['']);\n\n    rows.push(['--- Vendor Summary ---']);\n    rows.push(['Vendor Name', 'Vendor Code', 'POs', 'Materials', 'Ordered Qty', 'Budget INR']);\n    sap.vendorBreakdown?.forEach((v: any) => {\n      rows.push([\n        `\"${v.vendorName?.replace(/\"/g, '\"\"') || ''}\"`,\n        v.vendorCode || '',\n        v.poCount,\n        v.materialCount,\n        v.totalQty,\n        v.totalValue\n      ]);\n    });\n    rows.push(['']);\n\n    // Purchase Orders\n    rows.push(['--- Purchase Orders (ME2M) ---']);\n    rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Material Name', 'Material Type', 'Ordered Qty', 'Budget INR', 'Plant Code']);\n    sap.purchaseOrders?.forEach((po: any) => {\n      rows.push([\n        po.poNumber,\n        `\"${po.vendorName?.replace(/\"/g, '\"\"') || ''}\"`,\n        po.materialCode,\n        `\"${po.materialName?.replace(/\"/g, '\"\"') || ''}\"`,\n        `\"${po.materialType || ''}\"`,\n        po.orderedQty,\n        po.budgetINR,\n        po.plantCode\n      ]);\n    });\n    rows.push(['']);\n\n    // In Transit\n    if (sap.inTransit?.length > 0) {\n      rows.push(['--- In-Transit Shipments (MIGO) ---']);\n      rows.push(['PO Number', 'Vendor Name', 'Material Code', 'In Transit Qty']);\n      sap.inTransit.forEach((t: any) => {\n        rows.push([\n          t.poNumber,\n          `\"${t.vendorName?.replace(/\"/g, '\"\"') || ''}\"`,\n          t.materialCode,\n          t.inTransitQty\n        ]);\n      });\n      rows.push(['']);\n    }\n\n    // Inventory\n    if (sap.inventory?.length > 0) {\n      rows.push(['--- Site Inventory (MB52) ---']);\n      rows.push(['Material Code', 'Storage Location', 'Inventory Qty', 'Inventory Value']);\n      sap.inventory.forEach((inv: any) => {\n        rows.push([\n          inv.materialCode,\n          `\"${inv.storageLocation || ''}\"`,\n          inv.inventoryQty,\n          inv.inventoryValueINR\n        ]);\n      });\n      rows.push(['']);\n    }\n\n    // SLR Purchase Orders with Line Items\n    if (slrData?.data?.length > 0) {\n      rows.push(['--- SLR Purchase Orders ---']);\n      rows.push(['PO Number', 'Type', 'Description', 'Lines', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n      slrData.data.forEach((row: any) => {\n        rows.push([\n          row.po_document || '',\n          row.type || '',\n          `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n          row.line_count || 1,\n          row.total || 0,\n          row.actual || 0,\n          row.commitment || 0,\n          row.status || ''\n        ]);\n        // Include line items for each PO\n        if (row.line_items?.length > 0) {\n          row.line_items.forEach((item: any, j: number) => {\n            rows.push([\n              `  Line ${j + 1}`,\n              item.type || '',\n              `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n              item.wbs_element || '',\n              item.total || 0,\n              item.actual || 0,\n              item.commitment || 0,\n              ''\n            ]);\n          });\n        }\n      });\n    }\n\n    const csvContent = \"data:text/csv;charset=utf-8,\" + rows.map(e => e.join(\",\")).join(\"\\n\");\n    const encodedUri = encodeURI(csvContent);\n    const link = document.createElement(\"a\");\n    link.setAttribute(\"href\", encodedUri);\n    link.setAttribute(\"download\", `SAP_Intelligence_${p.projectId}.csv`);\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n  };",
+      "StartLine": 654,
+      "TargetContent": "  const downloadSAPReport = () => {\n    if (!sap) return;\n\n    const rows = [];\n    rows.push(['--- SAP Intelligence Report ---']);\n    rows.push(['Project:', p.projectName]);\n    rows.push(['Capacity (MW):', mapping?.capacityMW || '']);\n    rows.push(['']);\n\n    rows.push(['--- Vendor Summary ---']);\n    rows.push(['Vendor Name', 'Vendor Code', 'POs', 'Materials', 'Ordered Qty', 'Budget INR']);\n    sap.vendorBreakdown?.forEach((v: any) => {\n      rows.push([\n        `\"${v.vendorName?.replace(/\"/g, '\"\"') || ''}\"`,\n        v.vendorCode || '',\n        v.poCount,\n        v.materialCount,\n        v.totalQty,\n        v.totalValue\n      ]);\n    });\n    rows.push(['']);\n\n    // Purchase Orders\n    rows.push(['--- Purchase Orders (ME2M) ---']);\n    rows.push(['PO Number', 'Vendor Name', 'Material Code', 'Material Name', 'Material Type', 'Ordered Qty', 'Budget INR', 'Plant Code']);\n    sap.purchaseOrders?.forEach((po: any) => {\n      rows.push([\n        po.poNumber,\n        `\"${po.vendorName?.replace(/\"/g, '\"\"') || ''}\"`,\n        po.materialCode,\n        `\"${po.materialName?.replace(/\"/g, '\"\"') || ''}\"`,\n        `\"${po.materialType || ''}\"`,\n        po.orderedQty,\n        po.budgetINR,\n        po.plantCode\n      ]);\n    });\n    rows.push(['']);\n\n    // In Transit\n    if (sap.inTransit?.length > 0) {\n      rows.push(['--- In-Transit Shipments (MIGO) ---']);\n      rows.push(['PO Number', 'Vendor Name', 'Material Code', 'In Transit Qty']);\n      sap.inTransit.forEach((t: any) => {\n        rows.push([\n          t.poNumber,\n          `\"${t.vendorName?.replace(/\"/g, '\"\"') || ''}\"`,\n          t.materialCode,\n          t.inTransitQty\n        ]);\n      });\n      rows.push(['']);\n    }\n\n    // Inventory\n    if (sap.inventory?.length > 0) {\n      rows.push(['--- Site Inventory (MB52) ---']);\n      rows.push(['Material Code', 'Storage Location', 'Inventory Qty', 'Inventory Value']);\n      sap.inventory.forEach((inv: any) => {\n        rows.push([\n          inv.materialCode,\n          `\"${inv.storageLocation || ''}\"`,\n          inv.inventoryQty,\n          inv.inventoryValueINR\n        ]);\n      });\n    }\n\n    const csvContent = \"data:text/csv;charset=utf-8,\" + rows.map(e => e.join(\",\")).join(\"\\n\");\n    const encodedUri = encodeURI(csvContent);\n    const link = document.createElement(\"a\");\n    link.setAttribute(\"href\", encodedUri);\n    link.setAttribute(\"download\", `SAP_Intelligence_${p.projectId}.csv`);\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n  };",
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Enhancing export function",
+      "toolSummary": "Export with line items"
+    }
+  },
+  {
+    "step": 232,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Override Total POs and PO Amount in the KPI grid using ZPSP (slrData) POrd records",
+      "Instruction": "Add useMemo for slrTotalPOs and slrPOAmount from slrData, and replace sap.summary.totalPOs with slrTotalPOs and sap.summary.totalBudgetINR with slrPOAmount in the hero metrics. Also update the hero section progress bar PO Amount text to use the new slrPOAmount.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 275,
+          "ReplacementContent": "  const [slrData, setSlrData] = useState<any>(null);\n  const [slrLoading, setSlrLoading] = useState(false);\n  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('POrd');\n  const [slrStatusFilter, setSlrStatusFilter] = useState<'ALL' | 'Open' | 'Closed'>('ALL');\n  const slrTopLevelKPIs = useMemo(() => {\n    if (!slrData || !slrData.data) return null;\n    const pords = slrData.data.filter((r: any) => r.type === 'POrd');\n    return {\n      totalPOs: new Set(pords.map((r: any) => r.po_document)).size,\n      totalBudgetINR: pords.reduce((sum: number, r: any) => sum + (r.total || 0), 0)\n    };\n  }, [slrData]);\n  const handleSlrTileClick = (status: 'ALL' | 'Open' | 'Closed') => {\n    if (expandedMetric === 'slr' && slrStatusFilter === status) {",
+          "StartLine": 270,
+          "TargetContent": "  const [slrData, setSlrData] = useState<any>(null);\n  const [slrLoading, setSlrLoading] = useState(false);\n  const [slrTypeFilter, setSlrTypeFilter] = useState<string>('POrd');\n  const [slrStatusFilter, setSlrStatusFilter] = useState<'ALL' | 'Open' | 'Closed'>('ALL');\n  const handleSlrTileClick = (status: 'ALL' | 'Open' | 'Closed') => {\n    if (expandedMetric === 'slr' && slrStatusFilter === status) {"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 785,
+          "ReplacementContent": "        <div className=\"grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3\">\n          <HeroMetric label=\"Progress\" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />\n          <HeroMetric label=\"PO Amount\" value={slrTopLevelKPIs ? `\u20b9${(slrTopLevelKPIs.totalBudgetINR / 10000000).toFixed(1)}` : (detail?.sap?.summary?.totalBudgetINR ? `\u20b9${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '\u20b90')} unit=\"Cr\" icon={Database} color=\"text-primary\" />",
+          "StartLine": 783,
+          "TargetContent": "        <div className=\"grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3\">\n          <HeroMetric label=\"Progress\" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />\n          <HeroMetric label=\"PO Amount\" value={detail?.sap?.summary?.totalBudgetINR ? `\u20b9${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '\u20b90'} unit=\"Cr\" icon={Database} color=\"text-primary\" />"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1194,
+          "ReplacementContent": "                      <div className=\"grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4\">\n                        {/* Total POs \u2014 shown in all tabs (POrd count only, pulled from SLR data) */}\n                        <HeroMetric label=\"Total POs\" value={slrTopLevelKPIs ? slrTopLevelKPIs.totalPOs : sap.summary.totalPOs} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />",
+          "StartLine": 1192,
+          "TargetContent": "                      <div className=\"grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4\">\n                        {/* Total POs \u2014 shown in all tabs (POrd count only) */}\n                        <HeroMetric label=\"Total POs\" value={sap.summary.totalPOs} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1211,
+          "ReplacementContent": "                        {/* PO Amount (renamed from Supply PO Amount) \u2014 shown in all tabs, uses IndianRupee icon, pulled from SLR data */}\n                        <HeroMetric label=\"PO Amount\" value={fmtCost(slrTopLevelKPIs ? slrTopLevelKPIs.totalBudgetINR : sap.summary.totalBudgetINR)} icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />\n                        {/* Utilized PO Amount (renamed from Utilized Supply PO Amount) \u2014 shown in all tabs */}\n                        <HeroMetric label=\"Utilized PO Amount\" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />\n                        {/* Remaining PO Amount (renamed from Remaining Supply PO Amount) \u2014 shown in all tabs */}\n                        <HeroMetric label=\"Remaining PO Amount\" value={fmtCost((slrTopLevelKPIs ? slrTopLevelKPIs.totalBudgetINR : sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color=\"text-teal-500 dark:text-teal-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />",
+          "StartLine": 1206,
+          "TargetContent": "                        {/* PO Amount (renamed from Supply PO Amount) \u2014 shown in all tabs, uses IndianRupee icon */}\n                        <HeroMetric label=\"PO Amount\" value={fmtCost(sap.summary.totalBudgetINR)} icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />\n                        {/* Utilized PO Amount (renamed from Utilized Supply PO Amount) \u2014 shown in all tabs */}\n                        <HeroMetric label=\"Utilized PO Amount\" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />\n                        {/* Remaining PO Amount (renamed from Remaining Supply PO Amount) \u2014 shown in all tabs */}\n                        <HeroMetric label=\"Remaining PO Amount\" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color=\"text-teal-500 dark:text-teal-400\" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Modifying ProjectWorkspace",
+      "toolSummary": "ProjectWorkspace KPI updates"
+    }
+  },
+  {
+    "step": 259,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Remove 'ALL' option from SLR Type filters (both pills and dropdown) in ProjectWorkspace",
+      "Instruction": "Remove the 'ALL' button mapping in the pill filter and the 'ALL' option from the dropdown select for SLR Type.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 1255,
+          "ReplacementContent": "                                {slrTypes.map((t: string) => (\n                                  <button\n                                    key={t}\n                                    onClick={() => setSlrTypeFilter(t)}\n                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${slrTypeFilter === t ? 'bg-primary/15 border-primary/30 text-primary font-semibold' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}\n                                  >\n                                    {t}\n                                  </button>\n                                ))}",
+          "StartLine": 1247,
+          "TargetContent": "                                {['ALL', ...slrTypes].map((t: string) => (\n                                  <button\n                                    key={t}\n                                    onClick={() => setSlrTypeFilter(t)}\n                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${slrTypeFilter === t ? 'bg-primary/15 border-primary/30 text-primary font-semibold' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}\n                                  >\n                                    {t === 'ALL' ? 'All' : t}\n                                  </button>\n                                ))}"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1639,
+          "ReplacementContent": "                                    <select\n                                      value={slrTypeFilter}\n                                      onChange={(e) => setSlrTypeFilter(e.target.value)}\n                                      className=\"bg-background border border-border text-xs rounded px-2 py-1 text-foreground\"\n                                    >\n                                      {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (\n                                        <option key={type} value={type}>{type}</option>\n                                      ))}\n                                    </select>",
+          "StartLine": 1630,
+          "TargetContent": "                                    <select\n                                      value={slrTypeFilter}\n                                      onChange={(e) => setSlrTypeFilter(e.target.value)}\n                                      className=\"bg-background border border-border text-xs rounded px-2 py-1 text-foreground\"\n                                    >\n                                      <option value=\"ALL\">All Types</option>\n                                      {Array.from(new Set(slrData.data.map((r: any) => r.type).filter(Boolean))).map((type: any) => (\n                                        <option key={type} value={type}>{type}</option>\n                                      ))}\n                                    </select>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Removing ALL options",
+      "toolSummary": "Remove ALL from filters"
+    }
+  },
+  {
+    "step": 271,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Rename 'Total SLR POs' and add 'Open PO Amount' KPI",
+      "Instruction": "Rename 'Total SLR POs' label to 'Total POs'. Compute filteredOpenAmount and add a new HeroMetric for 'Open PO Amount'. Change grid columns to 5.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 1242,
+          "ReplacementContent": "                        const filteredClosed = slrFiltered.length - filteredOpen;\n                        const filteredAmount = slrFiltered.reduce((s: number, r: any) => s + (r.total || 0), 0);\n                        const filteredOpenAmount = slrFiltered.filter((r: any) => r.status === 'Open').reduce((s: number, r: any) => s + (r.total || 0), 0);\n                        return (",
+          "StartLine": 1240,
+          "TargetContent": "                        const filteredClosed = slrFiltered.length - filteredOpen;\n                        const filteredAmount = slrFiltered.reduce((s: number, r: any) => s + (r.total || 0), 0);\n                        return ("
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1263,
+          "ReplacementContent": "                            <div className=\"grid grid-cols-2 md:grid-cols-5 gap-4\">\n                              <HeroMetric label=\"Total POs\" value={slrFiltered.length} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                              <HeroMetric label=\"Open POs\" value={filteredOpen} icon={Activity} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\n                              <HeroMetric label=\"Closed POs\" value={filteredClosed} icon={Check} color=\"text-muted-foreground dark:text-muted-foreground\" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />\n                              <HeroMetric label=\"Total Amount\" value={`\u20b9${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                              <HeroMetric label=\"Open PO Amount\" value={`\u20b9${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\n                            </div>",
+          "StartLine": 1258,
+          "TargetContent": "                            <div className=\"grid grid-cols-2 md:grid-cols-4 gap-4\">\n                              <HeroMetric label=\"Total SLR POs\" value={slrFiltered.length} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                              <HeroMetric label=\"Open POs\" value={filteredOpen} icon={Activity} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\n                              <HeroMetric label=\"Closed POs\" value={filteredClosed} icon={Check} color=\"text-muted-foreground dark:text-muted-foreground\" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />\n                              <HeroMetric label=\"Total Amount\" value={`\u20b9${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                            </div>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Modifying KPI names and adding Open PO Amount",
+      "toolSummary": "SLR KPI updates"
+    }
+  },
+  {
+    "step": 277,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Reorder KPI cards to put Open PO Amount before Total Amount",
+      "Instruction": "Swap the positions of the 'Total Amount' and 'Open PO Amount' HeroMetrics in the SLR KPI grid.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 1261,
+          "ReplacementContent": "                              <HeroMetric label=\"Total POs\" value={slrFiltered.length} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                              <HeroMetric label=\"Open POs\" value={filteredOpen} icon={Activity} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\n                              <HeroMetric label=\"Closed POs\" value={filteredClosed} icon={Check} color=\"text-muted-foreground dark:text-muted-foreground\" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />\n                              <HeroMetric label=\"Open PO Amount\" value={`\u20b9${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\n                              <HeroMetric label=\"Total Amount\" value={`\u20b9${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />",
+          "StartLine": 1255,
+          "TargetContent": "                              <HeroMetric label=\"Total POs\" value={slrFiltered.length} icon={FileText} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                              <HeroMetric label=\"Open POs\" value={filteredOpen} icon={Activity} color=\"text-primary dark:text-primary\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />\n                              <HeroMetric label=\"Closed POs\" value={filteredClosed} icon={Check} color=\"text-muted-foreground dark:text-muted-foreground\" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />\n                              <HeroMetric label=\"Total Amount\" value={`\u20b9${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-pink-500 dark:text-pink-400\" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />\n                              <HeroMetric label=\"Open PO Amount\" value={`\u20b9${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit=\"Cr\" icon={IndianRupee} color=\"text-warning dark:text-warning\" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Reordering KPI cards",
+      "toolSummary": "Reorder KPI cards"
+    }
+  },
+  {
+    "step": 325,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Add downloadSLRReport and Export button to SLR modal",
+      "Instruction": "Create downloadSLRReport function and insert an Export button in the SLR breakdown modal.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 662,
+          "ReplacementContent": "  const downloadSLRReport = () => {\n    if (!slrData || !slrData.data) return;\n    \n    const poVendorMap = new Map();\n    if (sap && sap.purchaseOrders) {\n      sap.purchaseOrders.forEach((po: any) => {\n        poVendorMap.set(po.poNumber, po.vendorName || 'Unknown Vendor');\n      });\n    }\n\n    const rows = [];\n    rows.push(['--- SLR Purchase Orders Breakdown ---']);\n    rows.push(['PO Number', 'Vendor Name', 'Type', 'Description', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n\n    const slrFiltered = slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter));\n\n    slrFiltered.forEach((row: any) => {\n      const vendorName = poVendorMap.get(row.po_document) || 'Unknown Vendor';\n      \n      rows.push([\n        row.po_document || '',\n        `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n        row.type || '',\n        `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n        row.total || 0,\n        row.actual || 0,\n        row.commitment || 0,\n        row.status || ''\n      ]);\n      \n      if (row.line_items?.length > 0) {\n        row.line_items.forEach((item: any, j: number) => {\n          rows.push([\n            `  Line ${j + 1}`,\n            `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n            item.type || '',\n            `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n            item.total || 0,\n            item.actual || 0,\n            item.commitment || 0,\n            ''\n          ]);\n        });\n      }\n    });\n\n    const csvContent = \"data:text/csv;charset=utf-8,\" + rows.map(e => e.join(\",\")).join(\"\\n\");\n    const encodedUri = encodeURI(csvContent);\n    const link = document.createElement(\"a\");\n    link.setAttribute(\"href\", encodedUri);\n    link.setAttribute(\"download\", `SLR_Breakdown_${p.projectId}.csv`);\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n  };\n\n  const downloadSAPReport = () => {",
+          "StartLine": 662,
+          "TargetContent": "  const downloadSAPReport = () => {"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1297,
+          "ReplacementContent": "                              {expandedMetric === 'slr' && (\n                                <>\n                                  <button\n                                    onClick={() => setShowSlrAnalytics(v => !v)}\n                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${showSlrAnalytics ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}\n                                  >\n                                    <BarChart3 className=\"w-3 h-3\" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}\n                                  </button>\n                                  <button\n                                    onClick={downloadSLRReport}\n                                    className=\"text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-1.5\"\n                                  >\n                                    <Download className=\"w-3 h-3\" /> Export\n                                  </button>\n                                </>\n                              )}\n                              <button onClick={() => setExpandedMetric(null)} className=\"text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors\">\u2715 Close</button>\n                            </div>",
+          "StartLine": 1287,
+          "TargetContent": "                            <div className=\"flex items-center gap-2\">\n                              {expandedMetric === 'slr' && (\n                                <button\n                                  onClick={() => setShowSlrAnalytics(v => !v)}\n                                  className={`text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${showSlrAnalytics ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}\n                                >\n                                  <BarChart3 className=\"w-3 h-3\" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}\n                                </button>\n                              )}\n                              <button onClick={() => setExpandedMetric(null)} className=\"text-muted-foreground hover:text-foreground text-xs px-2 py-1 rounded hover:bg-muted transition-colors\">\u2715 Close</button>\n                            </div>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Adding Export button and function",
+      "toolSummary": "SLR Export logic"
+    }
+  },
+  {
+    "step": 334,
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": false,
+      "Description": "Fix TSX syntax error by restoring missing div",
+      "EndLine": 1344,
+      "Instruction": "Restore the missing `<div className=\"flex items-center gap-2\">` after the `</h4>` that was accidentally deleted.",
+      "ReplacementContent": "                              {expandedMetric === 'slr' && 'SLR Purchase Orders Breakdown'}\n                            </h4>\n                            <div className=\"flex items-center gap-2\">\n                              {expandedMetric === 'slr' && (",
+      "StartLine": 1341,
+      "TargetContent": "                              {expandedMetric === 'slr' && 'SLR Purchase Orders Breakdown'}\n                            </h4>\n                              {expandedMetric === 'slr' && (",
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Fixing TSX syntax error",
+      "toolSummary": "Syntax error fix"
+    }
+  },
+  {
+    "step": 343,
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": false,
+      "Description": "Improve Export and Analytics button styling",
+      "EndLine": 1359,
+      "Instruction": "Update button classes for Show Analytics and Export to look premium.",
+      "ReplacementContent": "                              {expandedMetric === 'slr' && (\n                                <>\n                                  <button\n                                    onClick={() => setShowSlrAnalytics(v => !v)}\n                                    className={`text-xs px-3 py-1.5 rounded-full border transition-all flex items-center gap-1.5 font-medium shadow-sm ${showSlrAnalytics ? 'bg-primary border-primary text-primary-foreground' : 'bg-background border-border text-foreground hover:bg-muted'}`}\n                                  >\n                                    <BarChart3 className=\"w-3.5 h-3.5\" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}\n                                  </button>\n                                  <button\n                                    onClick={downloadSLRReport}\n                                    className=\"text-xs px-3 py-1.5 rounded-full border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-all flex items-center gap-1.5 font-medium shadow-sm\"\n                                  >\n                                    <Download className=\"w-3.5 h-3.5\" /> Export Data\n                                  </button>\n                                </>\n                              )}",
+      "StartLine": 1344,
+      "TargetContent": "                              {expandedMetric === 'slr' && (\n                                <>\n                                  <button\n                                    onClick={() => setShowSlrAnalytics(v => !v)}\n                                    className={`text-xs px-2.5 py-1 rounded-full border transition-colors flex items-center gap-1.5 ${showSlrAnalytics ? 'bg-primary/15 border-primary/30 text-primary' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}\n                                  >\n                                    <BarChart3 className=\"w-3 h-3\" /> {showSlrAnalytics ? 'Hide Analytics' : 'Show Analytics'}\n                                  </button>\n                                  <button\n                                    onClick={downloadSLRReport}\n                                    className=\"text-xs px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:text-foreground hover:bg-muted transition-colors flex items-center gap-1.5\"\n                                  >\n                                    <Download className=\"w-3 h-3\" /> Export\n                                  </button>\n                                </>\n                              )}",
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Updating UI button styles",
+      "toolSummary": "Button UI refresh"
+    }
+  },
+  {
+    "step": 370,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Add Vendor Name to SLR UI table and Global Export",
+      "Instruction": "1. Build poVendorMap globally or right in the render for the UI to use. 2. Add Vendor Name to UI table. 3. Update the global downloadSAPReport to include Vendor Name in its SLR section.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 796,
+          "ReplacementContent": "    // SLR Purchase Orders with Line Items\n    if (slrData?.data?.length > 0) {\n      const poVendorMap = new Map();\n      if (sap && sap.purchaseOrders) {\n        sap.purchaseOrders.forEach((po: any) => {\n          poVendorMap.set(po.poNumber, po.vendorName || 'Unknown Vendor');\n        });\n      }\n\n      rows.push(['--- SLR Purchase Orders ---']);\n      rows.push(['PO Number', 'Vendor Name', 'Type', 'Description', 'Lines', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n      slrData.data.forEach((row: any) => {\n        const vendorName = poVendorMap.get(row.po_document) || 'Unknown Vendor';\n        rows.push([\n          row.po_document || '',\n          `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n          row.type || '',\n          `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,",
+          "StartLine": 788,
+          "TargetContent": "    // SLR Purchase Orders with Line Items\n    if (slrData?.data?.length > 0) {\n      rows.push(['--- SLR Purchase Orders ---']);\n      rows.push(['PO Number', 'Type', 'Description', 'Lines', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n      slrData.data.forEach((row: any) => {\n        rows.push([\n          row.po_document || '',\n          row.type || '',\n          `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 814,
+          "ReplacementContent": "        // Include line items for each PO\n        if (row.line_items?.length > 0) {\n          row.line_items.forEach((item: any, j: number) => {\n            rows.push([\n              `  Line ${j + 1}`,\n              `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n              item.type || '',\n              `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n              '',\n              item.total || 0,\n              item.actual || 0,\n              item.commitment || 0,\n              ''\n            ]);\n          });\n        }",
+          "StartLine": 803,
+          "TargetContent": "        // Include line items for each PO\n        if (row.line_items?.length > 0) {\n          row.line_items.forEach((item: any, j: number) => {\n            rows.push([\n              `  Line ${j + 1}`,\n              item.type || '',\n              `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n              item.wbs_element || '',\n              item.total || 0,\n              item.actual || 0,\n              item.commitment || 0,\n              ''\n            ]);\n          });\n        }"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1718,
+          "ReplacementContent": "                                      <tr>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">PO Number</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Vendor Name</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Type</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Description</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-center\">Lines</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-right\">Total Amount</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-right\">Actual</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-right\">Commitment</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-center\">Status</th>\n                                      </tr>",
+          "StartLine": 1710,
+          "TargetContent": "                                      <tr>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">PO Number</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Type</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Description</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-center\">Lines</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-right\">Total Amount</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-right\">Actual</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-right\">Commitment</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground text-center\">Status</th>\n                                      </tr>"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1757,
+          "ReplacementContent": "                                      {slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).map((row: any, i: number) => {\n                                        const isExpanded = expandedPOs[`slr-${row.po_document}-${i}`];\n                                        const vendorName = sap?.purchaseOrders?.find((p: any) => p.poNumber === row.po_document)?.vendorName || 'Unknown Vendor';\n                                        return (\n                                          <React.Fragment key={i}>\n                                            <tr \n                                              className=\"hover:bg-muted/30 transition-colors cursor-pointer\"\n                                              onClick={() => setExpandedPOs(prev => ({ ...prev, [`slr-${row.po_document}-${i}`]: !prev[`slr-${row.po_document}-${i}`] }))}\n                                            >\n                                              <td className=\"px-4 py-3 font-medium text-foreground flex items-center gap-2\">\n                                                {row.line_count > 1 ? (isExpanded ? <ChevronUp className=\"w-3 h-3 text-muted-foreground\" /> : <ChevronDown className=\"w-3 h-3 text-muted-foreground\" />) : <span className=\"w-3\" />}\n                                                {row.po_document || <span className=\"italic text-muted-foreground/60 font-sans\">Unassigned</span>}\n                                              </td>\n                                              <td className=\"px-4 py-3 text-muted-foreground truncate max-w-[200px]\" title={vendorName}>{vendorName}</td>\n                                              <td className=\"px-4 py-3 text-muted-foreground\">{row.type || '\u2014'}</td>\n                                              <td className=\"px-4 py-3 text-muted-foreground truncate max-w-[250px]\" title={row.description}>{row.description || '\u2014'}</td>\n                                              <td className=\"px-4 py-3 text-center\"><span className=\"text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium\">{row.line_count || 1}</span></td>\n                                              <td className=\"px-4 py-3 text-right font-mono\">\u20b9{row.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                              <td className=\"px-4 py-3 text-right text-emerald-500/80 font-mono\">\u20b9{row.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                              <td className=\"px-4 py-3 text-right text-amber-500/80 font-mono\">\u20b9{row.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                              <td className=\"px-4 py-3 text-center\">\n                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${\n                                                  row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'\n                                                }`}>\n                                                  {row.status}\n                                                </span>\n                                              </td>\n                                            </tr>\n                                            {isExpanded && row.line_items && row.line_items.map((item: any, j: number) => (\n                                              <tr key={`${i}-item-${j}`} className=\"bg-background/40 hover:bg-muted/20 transition-colors\">\n                                                <td className=\"px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono\">Line {j + 1}</td>\n                                                <td className=\"px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[200px]\" title={vendorName}>{vendorName}</td>\n                                                <td className=\"px-4 py-2 text-[11px] text-muted-foreground\">{item.type || '\u2014'}</td>\n                                                <td className=\"px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]\" title={item.description}>{item.description || '\u2014'}</td>\n                                                <td className=\"px-4 py-2 text-center text-[11px] text-muted-foreground\">{item.wbs_element}</td>\n                                                <td className=\"px-4 py-2 text-right text-[11px] text-muted-foreground font-mono\">\u20b9{item.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                                <td className=\"px-4 py-2 text-right text-[11px] text-emerald-500/50 font-mono\">\u20b9{item.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                                <td className=\"px-4 py-2 text-right text-[11px] text-amber-500/50 font-mono\">\u20b9{item.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                                <td className=\"px-4 py-2\"></td>\n                                              </tr>",
+          "StartLine": 1722,
+          "TargetContent": "                                      {slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).map((row: any, i: number) => {\n                                        const isExpanded = expandedPOs[`slr-${row.po_document}-${i}`];\n                                        return (\n                                          <React.Fragment key={i}>\n                                            <tr \n                                              className=\"hover:bg-muted/30 transition-colors cursor-pointer\"\n                                              onClick={() => setExpandedPOs(prev => ({ ...prev, [`slr-${row.po_document}-${i}`]: !prev[`slr-${row.po_document}-${i}`] }))}\n                                            >\n                                              <td className=\"px-4 py-3 font-medium text-foreground flex items-center gap-2\">\n                                                {row.line_count > 1 ? (isExpanded ? <ChevronUp className=\"w-3 h-3 text-muted-foreground\" /> : <ChevronDown className=\"w-3 h-3 text-muted-foreground\" />) : <span className=\"w-3\" />}\n                                                {row.po_document || <span className=\"italic text-muted-foreground/60 font-sans\">Unassigned</span>}\n                                              </td>\n                                              <td className=\"px-4 py-3 text-muted-foreground\">{row.type || '\u2014'}</td>\n                                              <td className=\"px-4 py-3 text-muted-foreground truncate max-w-[250px]\" title={row.description}>{row.description || '\u2014'}</td>\n                                              <td className=\"px-4 py-3 text-center\"><span className=\"text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium\">{row.line_count || 1}</span></td>\n                                              <td className=\"px-4 py-3 text-right font-mono\">\u20b9{row.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                              <td className=\"px-4 py-3 text-right text-emerald-500/80 font-mono\">\u20b9{row.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                              <td className=\"px-4 py-3 text-right text-amber-500/80 font-mono\">\u20b9{row.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                              <td className=\"px-4 py-3 text-center\">\n                                                <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${\n                                                  row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'\n                                                }`}>\n                                                  {row.status}\n                                                </span>\n                                              </td>\n                                            </tr>\n                                            {isExpanded && row.line_items && row.line_items.map((item: any, j: number) => (\n                                              <tr key={`${i}-item-${j}`} className=\"bg-background/40 hover:bg-muted/20 transition-colors\">\n                                                <td className=\"px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono\">Line {j + 1}</td>\n                                                <td className=\"px-4 py-2 text-[11px] text-muted-foreground\">{item.type || '\u2014'}</td>\n                                                <td className=\"px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]\" title={item.description}>{item.description || '\u2014'}</td>\n                                                <td className=\"px-4 py-2 text-center text-[11px] text-muted-foreground\">{item.wbs_element}</td>\n                                                <td className=\"px-4 py-2 text-right text-[11px] text-muted-foreground font-mono\">\u20b9{item.total.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                                <td className=\"px-4 py-2 text-right text-[11px] text-emerald-500/50 font-mono\">\u20b9{item.actual.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                                <td className=\"px-4 py-2 text-right text-[11px] text-amber-500/50 font-mono\">\u20b9{item.commitment.toLocaleString(undefined, {maximumFractionDigits:2})}</td>\n                                                <td className=\"px-4 py-2\"></td>\n                                              </tr>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Adding Vendor Name to UI table and Global Export",
+      "toolSummary": "Vendor Name updates"
+    }
+  },
+  {
+    "step": 379,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Rename SLR to P0 in UI and Exports",
+      "Instruction": "Replace 'SLR Purchase Orders' with 'P0 Purchase Orders' across the UI and export strings as requested by the user.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 673,
+          "ReplacementContent": "    const rows = [];\n    rows.push(['--- P0 Purchase Orders Breakdown ---']);",
+          "StartLine": 672,
+          "TargetContent": "    const rows = [];\n    rows.push(['--- SLR Purchase Orders Breakdown ---']);"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 797,
+          "ReplacementContent": "      rows.push(['--- P0 Purchase Orders ---']);",
+          "StartLine": 797,
+          "TargetContent": "      rows.push(['--- SLR Purchase Orders ---']);"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1351,
+          "ReplacementContent": "                              {expandedMetric === 'slr' && 'P0 Purchase Orders Breakdown'}",
+          "StartLine": 1351,
+          "TargetContent": "                              {expandedMetric === 'slr' && 'SLR Purchase Orders Breakdown'}"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1695,
+          "ReplacementContent": "                                  <h3 className=\"text-sm font-semibold text-foreground\">P0 Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>",
+          "StartLine": 1695,
+          "TargetContent": "                                  <h3 className=\"text-sm font-semibold text-foreground\">SLR Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Renaming SLR to P0",
+      "toolSummary": "UI renaming update"
+    }
+  },
+  {
+    "step": 385,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Rename 'P0 Purchase Orders' to 'Purchase Orders'",
+      "Instruction": "Replace 'P0 Purchase Orders' with 'Purchase Orders' across the UI and export strings to remove the redundancy.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 673,
+          "ReplacementContent": "    const rows = [];\n    rows.push(['--- Purchase Orders Breakdown ---']);",
+          "StartLine": 672,
+          "TargetContent": "    const rows = [];\n    rows.push(['--- P0 Purchase Orders Breakdown ---']);"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 797,
+          "ReplacementContent": "      rows.push(['--- Purchase Orders ---']);",
+          "StartLine": 797,
+          "TargetContent": "      rows.push(['--- P0 Purchase Orders ---']);"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1351,
+          "ReplacementContent": "                              {expandedMetric === 'slr' && 'Purchase Orders Breakdown'}",
+          "StartLine": 1351,
+          "TargetContent": "                              {expandedMetric === 'slr' && 'P0 Purchase Orders Breakdown'}"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1695,
+          "ReplacementContent": "                                  <h3 className=\"text-sm font-semibold text-foreground\">Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>",
+          "StartLine": 1695,
+          "TargetContent": "                                  <h3 className=\"text-sm font-semibold text-foreground\">P0 Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Renaming P0 Purchase Orders to Purchase Orders",
+      "toolSummary": "UI naming update"
+    }
+  },
+  {
+    "step": 394,
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": false,
+      "Description": "Rename download filename to remove SLR",
+      "EndLine": 712,
+      "Instruction": "Change the filename of the downloaded CSV from 'SLR_Breakdown' to 'Purchase_Orders_Breakdown'",
+      "ReplacementContent": "    link.setAttribute(\"download\", `Purchase_Orders_Breakdown_${p.projectId}.csv`);",
+      "StartLine": 712,
+      "TargetContent": "    link.setAttribute(\"download\", `SLR_Breakdown_${p.projectId}.csv`);",
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Renaming downloaded CSV filename",
+      "toolSummary": "Filename update"
+    }
+  },
+  {
+    "step": 406,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Flatten CSV export to avoid duplicate amounts",
+      "Instruction": "Modify downloadSLRReport and downloadSAPReport to export a flat list of line items with the PO Number, instead of both the parent row and child rows. Remove 'Lines' column.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 706,
+          "ReplacementContent": "      if (row.line_items?.length > 0) {\n        row.line_items.forEach((item: any) => {\n          rows.push([\n            row.po_document || '',\n            `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n            item.type || '',\n            `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n            item.total || 0,\n            item.actual || 0,\n            item.commitment || 0,\n            item.status || row.status || ''\n          ]);\n        });\n      } else {\n        rows.push([\n          row.po_document || '',\n          `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n          row.type || '',\n          `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n          row.total || 0,\n          row.actual || 0,\n          row.commitment || 0,\n          row.status || ''\n        ]);\n      }\n    });",
+          "StartLine": 680,
+          "TargetContent": "      \n      rows.push([\n        row.po_document || '',\n        `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n        row.type || '',\n        `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n        row.total || 0,\n        row.actual || 0,\n        row.commitment || 0,\n        row.status || ''\n      ]);\n      \n      if (row.line_items?.length > 0) {\n        row.line_items.forEach((item: any, j: number) => {\n          rows.push([\n            `  Line ${j + 1}`,\n            `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n            item.type || '',\n            `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n            item.total || 0,\n            item.actual || 0,\n            item.commitment || 0,\n            ''\n          ]);\n        });\n      }\n    });"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 828,
+          "ReplacementContent": "      rows.push(['PO Number', 'Vendor Name', 'Type', 'Description', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n      slrData.data.forEach((row: any) => {\n        const vendorName = poVendorMap.get(row.po_document) || 'Unknown Vendor';\n        \n        if (row.line_items?.length > 0) {\n          row.line_items.forEach((item: any) => {\n            rows.push([\n              row.po_document || '',\n              `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n              item.type || '',\n              `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n              item.total || 0,\n              item.actual || 0,\n              item.commitment || 0,\n              item.status || row.status || ''\n            ]);\n          });\n        } else {\n          rows.push([\n            row.po_document || '',\n            `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n            row.type || '',\n            `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n            row.total || 0,\n            row.actual || 0,\n            row.commitment || 0,\n            row.status || ''\n          ]);\n        }\n      });",
+          "StartLine": 798,
+          "TargetContent": "      rows.push(['PO Number', 'Vendor Name', 'Type', 'Description', 'Lines', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n      slrData.data.forEach((row: any) => {\n        const vendorName = poVendorMap.get(row.po_document) || 'Unknown Vendor';\n        rows.push([\n          row.po_document || '',\n          `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n          row.type || '',\n          `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n          row.line_count || 1,\n          row.total || 0,\n          row.actual || 0,\n          row.commitment || 0,\n          row.status || ''\n        ]);\n        // Include line items for each PO\n        if (row.line_items?.length > 0) {\n          row.line_items.forEach((item: any, j: number) => {\n            rows.push([\n              `  Line ${j + 1}`,\n              `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n              item.type || '',\n              `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n              '',\n              item.total || 0,\n              item.actual || 0,\n              item.commitment || 0,\n              ''\n            ]);\n          });\n        }\n      });"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Flattening CSV exports",
+      "toolSummary": "Export duplication fix"
+    }
+  },
+  {
+    "step": 418,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Remove vendor name for PReq rows",
+      "Instruction": "Update vendorName logic in both UI and exports to show empty/dash for 'PReq' rows since purchase requisitions do not have assigned vendors yet.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 679,
+          "ReplacementContent": "      const rawVendor = poVendorMap.get(row.po_document);\n      const vendorName = row.type === 'PReq' ? '' : (rawVendor || 'Unknown Vendor');",
+          "StartLine": 679,
+          "TargetContent": "      const vendorName = poVendorMap.get(row.po_document) || 'Unknown Vendor';"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 799,
+          "ReplacementContent": "        const rawVendor = poVendorMap.get(row.po_document);\n        const vendorName = row.type === 'PReq' ? '' : (rawVendor || 'Unknown Vendor');",
+          "StartLine": 799,
+          "TargetContent": "        const vendorName = poVendorMap.get(row.po_document) || 'Unknown Vendor';"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1733,
+          "ReplacementContent": "                                        const rawVendor = sap?.purchaseOrders?.find((p: any) => p.poNumber === row.po_document)?.vendorName;\n                                        const vendorName = row.type === 'PReq' ? '\u2014' : (rawVendor || 'Unknown Vendor');",
+          "StartLine": 1733,
+          "TargetContent": "                                        const vendorName = sap?.purchaseOrders?.find((p: any) => p.poNumber === row.po_document)?.vendorName || 'Unknown Vendor';"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Updating Vendor Name logic",
+      "toolSummary": "PReq vendor name fix"
+    }
+  },
+  {
+    "step": 430,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Hide Vendor Name column when PReq is selected",
+      "Instruction": "Conditionally render the Vendor Name column in the UI table so it hides entirely if the 'PReq' filter is selected.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 1722,
+          "ReplacementContent": "                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">PO Number</th>\n                                        {slrTypeFilter !== 'PReq' && <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Vendor Name</th>}",
+          "StartLine": 1721,
+          "TargetContent": "                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">PO Number</th>\n                                        <th className=\"px-4 py-3 font-semibold text-muted-foreground\">Vendor Name</th>"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1747,
+          "ReplacementContent": "                                              </td>\n                                              {slrTypeFilter !== 'PReq' && <td className=\"px-4 py-3 text-muted-foreground truncate max-w-[200px]\" title={vendorName}>{vendorName}</td>}",
+          "StartLine": 1746,
+          "TargetContent": "                                              </td>\n                                              <td className=\"px-4 py-3 text-muted-foreground truncate max-w-[200px]\" title={vendorName}>{vendorName}</td>"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1765,
+          "ReplacementContent": "                                                <td className=\"px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono\">Line {j + 1}</td>\n                                                {slrTypeFilter !== 'PReq' && <td className=\"px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[200px]\" title={vendorName}>{vendorName}</td>}",
+          "StartLine": 1764,
+          "TargetContent": "                                                <td className=\"px-4 py-2 pl-10 text-[11px] text-muted-foreground font-mono\">Line {j + 1}</td>\n                                                <td className=\"px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[200px]\" title={vendorName}>{vendorName}</td>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Hiding Vendor Name conditionally",
+      "toolSummary": "PReq Vendor Name hide"
+    }
+  },
+  {
+    "step": 455,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Switch SLR export to ExcelJS for better formatting",
+      "Instruction": "Add imports for exceljs and file-saver, and rewrite downloadSLRReport to generate a fully formatted Excel file instead of a plain CSV.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 11,
+          "ReplacementContent": "import QualityProjectTab from '../quality/QualityProjectTab';\nimport * as ExcelJS from 'exceljs';\nimport { saveAs } from 'file-saver';",
+          "StartLine": 10,
+          "TargetContent": "import QualityProjectTab from '../quality/QualityProjectTab';"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 716,
+          "ReplacementContent": "  const downloadSLRReport = async () => {\n    if (!slrData || !slrData.data) return;\n\n    const workbook = new ExcelJS.Workbook();\n    const worksheet = workbook.addWorksheet('Purchase Orders');\n\n    worksheet.columns = [\n      { header: 'PO Number', key: 'po', width: 18 },\n      { header: 'Vendor Name', key: 'vendor', width: 35 },\n      { header: 'Type', key: 'type', width: 12 },\n      { header: 'Description', key: 'desc', width: 45 },\n      { header: 'Total Amount', key: 'total', width: 18, style: { numFmt: '\u20b9#,##0.00' } },\n      { header: 'Actual', key: 'actual', width: 18, style: { numFmt: '\u20b9#,##0.00' } },\n      { header: 'Commitment', key: 'commit', width: 18, style: { numFmt: '\u20b9#,##0.00' } },\n      { header: 'Status', key: 'status', width: 15 }\n    ];\n\n    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };\n    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };\n    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };\n\n    const slrFiltered = slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter));\n\n    slrFiltered.forEach((row: any) => {\n      const rawVendor = poVendorMap.get(row.po_document);\n      const vendorName = row.type === 'PReq' ? '' : (rawVendor || 'Unknown Vendor');\n      const poNumStr = row.po_document ? String(row.po_document) : '';\n\n      if (row.line_items?.length > 0) {\n        row.line_items.forEach((item: any) => {\n          worksheet.addRow({\n            po: poNumStr,\n            vendor: vendorName,\n            type: item.type || '',\n            desc: item.description || '',\n            total: item.total || 0,\n            actual: item.actual || 0,\n            commit: item.commitment || 0,\n            status: item.status || row.status || ''\n          });\n        });\n      } else {\n        worksheet.addRow({\n          po: poNumStr,\n          vendor: vendorName,\n          type: row.type || '',\n          desc: row.description || '',\n          total: row.total || 0,\n          actual: row.actual || 0,\n          commit: row.commitment || 0,\n          status: row.status || ''\n        });\n      }\n    });\n\n    worksheet.eachRow((row, rowNumber) => {\n      if (rowNumber > 1) {\n        row.alignment = { vertical: 'middle' };\n        if (rowNumber % 2 === 0) {\n          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };\n        }\n      }\n    });\n\n    const buffer = await workbook.xlsx.writeBuffer();\n    saveAs(new Blob([buffer]), `Purchase_Orders_Breakdown_${p.projectId}.xlsx`);\n  };",
+          "StartLine": 668,
+          "TargetContent": "  const downloadSLRReport = () => {\n    if (!slrData || !slrData.data) {\n      return;\n    }\n\n    const rows = [];\n    rows.push(['--- Purchase Orders Breakdown ---']);\n    rows.push(['PO Number', 'Vendor Name', 'Type', 'Description', 'Total Amount', 'Actual', 'Commitment', 'Status']);\n\n    const slrFiltered = slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter));\n\n    slrFiltered.forEach((row: any) => {\n      const rawVendor = poVendorMap.get(row.po_document);\n      const vendorName = row.type === 'PReq' ? '' : (rawVendor || 'Unknown Vendor');\n      if (row.line_items?.length > 0) {\n        row.line_items.forEach((item: any) => {\n          rows.push([\n            row.po_document || '',\n            `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n            item.type || '',\n            `\"${(item.description || '').replace(/\"/g, '\"\"')}\"`,\n            item.total || 0,\n            item.actual || 0,\n            item.commitment || 0,\n            item.status || row.status || ''\n          ]);\n        });\n      } else {\n        rows.push([\n          row.po_document || '',\n          `\"${vendorName.replace(/\"/g, '\"\"')}\"`,\n          row.type || '',\n          `\"${(row.description || '').replace(/\"/g, '\"\"')}\"`,\n          row.total || 0,\n          row.actual || 0,\n          row.commitment || 0,\n          row.status || ''\n        ]);\n      }\n    });\n\n    const csvContent = \"data:text/csv;charset=utf-8,\" + rows.map(e => e.join(\",\")).join(\"\\n\");\n    const encodedUri = encodeURI(csvContent);\n    const link = document.createElement(\"a\");\n    link.setAttribute(\"href\", encodedUri);\n    link.setAttribute(\"download\", `Purchase_Orders_Breakdown_${p.projectId}.csv`);\n    document.body.appendChild(link);\n    link.click();\n    document.body.removeChild(link);\n  };"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Switching export to ExcelJS",
+      "toolSummary": "ExcelJS export formatting"
+    }
+  },
+  {
+    "step": 467,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Add Analytics Summary tab to Excel export",
+      "Instruction": "Generate a second worksheet inside the Excel file containing dynamic summary tables (Overview, By Type, By Status, Top Vendors) based on the filtered data.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 734,
+          "ReplacementContent": "    worksheet.eachRow((row, rowNumber) => {\n      if (rowNumber > 1) {\n        row.alignment = { vertical: 'middle' };\n        if (rowNumber % 2 === 0) {\n          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };\n        }\n      }\n    });\n\n    // --- ANALYTICS SUMMARY SHEET ---\n    const analyticsSheet = workbook.addWorksheet('Analytics Summary');\n    \n    let totalAmount = 0;\n    let totalActual = 0;\n    let totalCommit = 0;\n    const byType: any = {};\n    const byStatus: any = {};\n    const byVendor: any = {};\n\n    slrFiltered.forEach((r: any) => {\n      totalAmount += (r.total || 0);\n      totalActual += (r.actual || 0);\n      totalCommit += (r.commitment || 0);\n      \n      const type = r.type || 'Unknown';\n      byType[type] = (byType[type] || 0) + (r.total || 0);\n      \n      const status = r.status || 'Unknown';\n      byStatus[status] = (byStatus[status] || 0) + (r.total || 0);\n      \n      if (r.type !== 'PReq') {\n        const rawVendor = poVendorMap.get(r.po_document);\n        const vName = rawVendor || 'Unknown Vendor';\n        byVendor[vName] = (byVendor[vName] || 0) + (r.total || 0);\n      }\n    });\n\n    const headerStyle = { font: { bold: true, color: { argb: 'FFFFFFFF' } }, fill: { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } } };\n\n    analyticsSheet.getColumn(1).width = 35;\n    analyticsSheet.getColumn(2).width = 25;\n    \n    analyticsSheet.addRow(['OVERVIEW KPIs', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });\n    analyticsSheet.addRow(['Total Purchase Orders', slrFiltered.length]);\n    analyticsSheet.addRow(['Total Amount', totalAmount]).getCell(2).numFmt = '\u20b9#,##0.00';\n    analyticsSheet.addRow(['Total Actual', totalActual]).getCell(2).numFmt = '\u20b9#,##0.00';\n    analyticsSheet.addRow(['Total Commitment', totalCommit]).getCell(2).numFmt = '\u20b9#,##0.00';\n    analyticsSheet.addRow([]);\n\n    analyticsSheet.addRow(['AMOUNT BY PO TYPE', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });\n    Object.entries(byType).sort((a: any, b: any) => b[1] - a[1]).forEach(([k, v]) => {\n      analyticsSheet.addRow([k, v as number]).getCell(2).numFmt = '\u20b9#,##0.00';\n    });\n    analyticsSheet.addRow([]);\n\n    analyticsSheet.addRow(['AMOUNT BY STATUS', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });\n    Object.entries(byStatus).sort((a: any, b: any) => b[1] - a[1]).forEach(([k, v]) => {\n      analyticsSheet.addRow([k, v as number]).getCell(2).numFmt = '\u20b9#,##0.00';\n    });\n    analyticsSheet.addRow([]);\n\n    analyticsSheet.addRow(['TOP VENDORS (BY AMOUNT)', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });\n    Object.entries(byVendor).sort((a: any, b: any) => b[1] - a[1]).slice(0, 15).forEach(([k, v]) => {\n      analyticsSheet.addRow([k, v as number]).getCell(2).numFmt = '\u20b9#,##0.00';\n    });\n\n    const buffer = await workbook.xlsx.writeBuffer();",
+          "StartLine": 726,
+          "TargetContent": "    worksheet.eachRow((row, rowNumber) => {\n      if (rowNumber > 1) {\n        row.alignment = { vertical: 'middle' };\n        if (rowNumber % 2 === 0) {\n          row.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8FAFC' } };\n        }\n      }\n    });\n\n    const buffer = await workbook.xlsx.writeBuffer();"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Adding Excel Analytics sheet",
+      "toolSummary": "Excel analytics update"
+    }
+  },
+  {
+    "step": 494,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Add Material Lifecycle export function and button",
+      "Instruction": "Add a function to generate an Excel file mirroring the structured material lifecycle table, and add an Export button to the UI header.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 659,
+          "ReplacementContent": "  const downloadMaterialReport = async () => {\n    if (!unifiedMaterials || unifiedMaterials.length === 0) return;\n\n    const workbook = new ExcelJS.Workbook();\n    const worksheet = workbook.addWorksheet('Material Lifecycle');\n\n    worksheet.columns = [\n      { header: 'Code', key: 'code', width: 15 },\n      { header: 'Description', key: 'desc', width: 45 },\n      { header: 'Unit', key: 'unit', width: 12 },\n      { header: 'WBS Tracking', key: 'wbs', width: 25 },\n      { header: 'Ordered', key: 'ordered', width: 15, style: { numFmt: '#,##0.00' } },\n      { header: 'Consumed', key: 'consumed', width: 15, style: { numFmt: '#,##0.00' } },\n      { header: 'Inventory', key: 'inventory', width: 15, style: { numFmt: '#,##0.00' } },\n      { header: 'In Transit', key: 'transit', width: 15, style: { numFmt: '#,##0.00' } },\n      { header: 'Remaining', key: 'remaining', width: 15, style: { numFmt: '#,##0.00' } },\n      { header: 'PO Budget', key: 'budget', width: 18, style: { numFmt: '\u20b9#,##0.00' } },\n      { header: 'Utilized', key: 'utilized', width: 18, style: { numFmt: '\u20b9#,##0.00' } },\n      { header: 'Inventory Val', key: 'invVal', width: 18, style: { numFmt: '\u20b9#,##0.00' } },\n      { header: 'Remaining Bal', key: 'remBal', width: 18, style: { numFmt: '\u20b9#,##0.00' } }\n    ];\n\n    worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };\n    worksheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF334155' } };\n    worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };\n\n    unifiedMaterials.forEach((mat: any) => {\n      const masterRow = worksheet.addRow({\n        code: mat.materialCode,\n        desc: mat.materialDescription,\n        unit: mat.baseUnit,\n        wbs: (mat.wbsList || []).join(', '),\n        ordered: mat.orderedQty || 0,\n        consumed: mat.consumedQty || 0,\n        inventory: mat.inventoryQty || 0,\n        transit: mat.inTransitQty || 0,\n        remaining: mat.remainingQty || 0,\n        budget: mat.budgetINR || 0,\n        utilized: mat.deliveredINR || 0,\n        invVal: mat.inventoryValueINR || 0,\n        remBal: mat.remainingBalanceINR || 0\n      });\n      masterRow.font = { bold: true };\n      masterRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF1F5F9' } };\n\n      if (mat.pos && mat.pos.length > 0) {\n        const poNumbers = Array.from(new Set(mat.pos.map((p: any) => p.poNumber)));\n        poNumbers.forEach((poNum: any) => {\n          const items = mat.pos.filter((p: any) => p.poNumber === poNum);\n          const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);\n          const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));\n          const dates = Array.from(new Set(items.map((p: any) => p.poDate).filter(Boolean)));\n          \n          worksheet.addRow({\n            code: '',\n            desc: `   \u21b3 PO: ${poNum}`,\n            unit: dates.join(', '),\n            wbs: `Storage: ${storages.join(', ')}`,\n            ordered: sumQty\n          }).font = { italic: true, color: { argb: 'FF64748B' } };\n        });\n      }\n    });\n\n    const buffer = await workbook.xlsx.writeBuffer();\n    saveAs(new Blob([buffer]), `Material_Lifecycle_${p.projectId}.xlsx`);\n  };\n\n  const downloadSLRReport = async () => {",
+          "StartLine": 658,
+          "TargetContent": "  const downloadSLRReport = async () => {"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1989,
+          "ReplacementContent": "                            <div className=\"flex items-center gap-3\">\n                              <div className=\"flex bg-muted p-1 rounded-md border border-border\">\n                                <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>\n                                <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>\n                                <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>\n                              </div>\n                              <button onClick={downloadMaterialReport} className=\"flex items-center gap-1.5 px-3 py-1.5 bg-background border border-border rounded-md text-xs font-medium text-foreground hover:bg-muted transition-colors shadow-sm\">\n                                <Download className=\"w-3.5 h-3.5\" /> Export Data\n                              </button>\n                            </div>",
+          "StartLine": 1985,
+          "TargetContent": "                            <div className=\"flex bg-muted p-1 rounded-md border border-border\">\n                              <button onClick={() => setInventoryFilter('ALL')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'ALL' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>All Stock</button>\n                              <button onClick={() => setInventoryFilter('COMPANY')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'COMPANY' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Company (CS01)</button>\n                              <button onClick={() => setInventoryFilter('PROJECT')} className={`px-3 py-1 text-xs font-medium rounded-sm transition-all ${inventoryFilter === 'PROJECT' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground hover:bg-muted'}`}>Project (PS01)</button>\n                            </div>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Adding Material Lifecycle export",
+      "toolSummary": "Material export button update"
+    }
+  },
+  {
+    "step": 524,
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Comment out Project Insights section",
+      "Instruction": "Wrap the Project Insights JSX block in `{false && ( ... )}` to safely hide it from rendering without causing nested comment issues.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 1073,
+          "ReplacementContent": "        {/* \u2500\u2500 AI Project Summary \u2500\u2500 */}\n        {false && (\n        <div className=\"intelligence-card p-6 relative overflow-hidden\">",
+          "StartLine": 1072,
+          "TargetContent": "        {/* \u2500\u2500 AI Project Summary \u2500\u2500 */}\n        <div className=\"intelligence-card p-6 relative overflow-hidden\">"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 1176,
+          "ReplacementContent": "        </div>\n        )}",
+          "StartLine": 1176,
+          "TargetContent": "        </div>"
+        }
+      ],
+      "TargetFile": "d:\\Akasha_Platform\\frontend\\src\\features\\projects\\ProjectWorkspace.tsx",
+      "toolAction": "Hiding Project Insights",
+      "toolSummary": "Hide Project Insights"
+    }
+  }
+]

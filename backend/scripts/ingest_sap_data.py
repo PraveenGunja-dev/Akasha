@@ -190,34 +190,47 @@ def ingest_data():
         print(f"File not found: {mb52_path}")
 
     # ================================================================
-    # Process ME2J 1 (PO Amount) — NEW with WBS mapping + Statistical filter
+    # Process ZSPS (PO Amount) — Replacing ME2J, merging with ME2J metadata
     # ================================================================
+    zsps_path = os.path.join(data_dir, "ZPSPS007 (3).xlsx")
     me2j_path = os.path.join(data_dir, "Me2J 1.xlsx")
-    if os.path.exists(me2j_path):
+    
+    if os.path.exists(zsps_path):
         try:
-            print(f"Processing {os.path.basename(me2j_path)}...")
-            df = pd.read_excel(me2j_path)
+            print(f"Processing {os.path.basename(zsps_path)}...")
+            df = pd.read_excel(zsps_path)
             print(f"  Total rows read: {len(df)}")
             
-            # --- Filter: Statistical column must be empty ---
-            if 'Statistical' in df.columns:
-                df = df[df['Statistical'].isna() | (df['Statistical'].astype(str).str.strip() == '') | (df['Statistical'].astype(str).str.lower() == 'nan')]
-                print(f"  After Statistical=empty filter: {len(df)}")
+            # Filter where C.Document is not null (has PO)
+            df = df[df['C.Document'].notna()]
+            print(f"  After dropping empty POs: {len(df)}")
+
+            # --- Load ME2J for lookup mapping ---
+            po_lookup = {}
+            if os.path.exists(me2j_path):
+                print("  Loading ME2J for supplementary PO data (Buyer Name, Date, etc.)...")
+                df_me2j = pd.read_excel(me2j_path, usecols=lambda c: c in [
+                    'Purchasing Document', 'Buyer Name', 'Document Date', 
+                    'Storage Location', 'Material', 'Plant', 'Currency', 'Delivery Completed'
+                ])
+                df_me2j = df_me2j.drop_duplicates(subset=['Purchasing Document'])
+                # Convert to dict for fast lookup
+                po_lookup = df_me2j.set_index('Purchasing Document').to_dict('index')
+                print(f"  Loaded {len(po_lookup)} unique POs from ME2J.")
+            else:
+                print("  WARNING: Me2J 1.xlsx not found, supplementary data will be missing.")
 
             po_amounts = []
             skipped_no_wbs = 0
             skipped_no_match = 0
             
             for _, row in df.iterrows():
-                po_doc = safe_str(row.get('Purchasing Document', ''))
+                po_doc = safe_str(row.get('C.Document', ''))
                 if not po_doc or po_doc.lower() == 'nan':
                     continue
                 
-                # Use 'WBS Element' (col 121, dashed format like H-621R-05-03) first,
-                # fallback to 'WBS element' (col 14, clean format like H621R0503)
+                # ZSPS has 'WBS Element'
                 wbs_el = safe_str(row.get('WBS Element', ''))
-                if not wbs_el or wbs_el.lower() in ('nan', 'none'):
-                    wbs_el = safe_str(row.get('WBS element', ''))
                     
                 if not wbs_el or wbs_el.lower() in ('nan', 'none'):
                     skipped_no_wbs += 1
@@ -228,36 +241,39 @@ def ingest_data():
                 if not master_info:
                     skipped_no_match += 1
                     continue
-
-                # --- Extract only required columns ---
-                qty = safe_float(row.get('Order Quantity', 0))
-                still_qty = safe_float(row.get('Still to be delivered (qty)', 0))
                 
-                # PO Pending Value in Local Currency -> still_to_deliver_inr
-                still_inr = safe_float(row.get('PO Pending Value in Local Currency', 0))
-                if still_inr == 0:
-                    still_inr = safe_float(row.get('Still to be delivered (value)', 0))
+                # --- Lookup supplementary ME2J Data ---
+                # po_doc might be string, but the dict index might be float or int if parsed as numeric
+                # We try both exact string and numeric cast
+                po_doc_key = po_doc
+                if po_doc_key not in po_lookup:
+                    try:
+                        po_doc_key = float(po_doc)
+                    except ValueError:
+                        pass
                 
-                # PO Value in Local Currency -> net_order_value_inr
-                net_value_inr = safe_float(row.get('PO Value in Local Currency', 0))
-                if net_value_inr == 0:
-                    net_value_inr = safe_float(row.get('Net Order Value', 0))
+                me2j_data = po_lookup.get(po_doc_key, {})
 
-                del_qty = qty - still_qty if qty >= still_qty else 0
-                del_val_inr = net_value_inr - still_inr if net_value_inr >= still_inr else 0
+                # --- Extract only required columns based on ZSPS ---
+                qty = safe_float(row.get('C.Quantity', 0))
+                del_qty = safe_float(row.get('A.Quantity', 0))
+                still_qty = qty - del_qty if qty >= del_qty else 0
+                
+                # ZSPS provides Commitment Amt (Pending) and Actual Amount (Delivered)
+                still_inr = safe_float(row.get('Commitment Amt', 0))
+                del_val_inr = safe_float(row.get('Actual Amount', 0))
+                net_value_inr = still_inr + del_val_inr
+                
                 del_val_cr = del_val_inr / 10000000
-
-                # Document Date
-                doc_date = safe_date(row.get('Document Date'))
 
                 po = models.MTPOAmount(
                     purchasing_document=po_doc,
                     wbs_element=wbs_el,
-                    plant_code=safe_str(row.get('Plant', '')),
-                    material_code=safe_str(row.get('Material', '')),
-                    material_name=safe_str(row.get('Short Text', '')),
-                    vendor_name=safe_str(row.get('Name of Vendor', '')),
-                    short_text=safe_str(row.get('Short Text', '')),
+                    plant_code=safe_str(me2j_data.get('Plant', '')), 
+                    material_code=safe_str(me2j_data.get('Material', '')), 
+                    material_name=safe_str(row.get('Description', '')),
+                    vendor_name=safe_str(row.get('Vendor Name', '')),
+                    short_text=safe_str(row.get('Short text', '')),
                     order_quantity=qty,
                     po_quantities=qty,
                     net_order_value=net_value_inr,
@@ -266,11 +282,11 @@ def ingest_data():
                     still_to_deliver_inr=still_inr,
                     delivered_qty=del_qty,
                     delivered_value_inr_cr=del_val_cr,
-                    storage_location=safe_str(row.get('Storage Location', '')),
-                    currency=safe_str(row.get('Currency', '')),
-                    buyer_name=safe_str(row.get('Buyer Name', '')),
-                    delivery_completed_flag=safe_str(row.get('Delivery Completed', '')),
-                    document_date=doc_date,
+                    storage_location=safe_str(me2j_data.get('Storage Location', '')),
+                    currency=safe_str(me2j_data.get('Currency', 'INR')),
+                    buyer_name=safe_str(me2j_data.get('Buyer Name', '')),
+                    delivery_completed_flag=safe_str(me2j_data.get('Delivery Completed', '')),
+                    document_date=safe_date(me2j_data.get('Document Date')),
                 )
                 po_amounts.append(po)
             
@@ -284,18 +300,18 @@ def ingest_data():
                 total_inserted += len(batch)
                 print(f"  Inserted batch {i // BATCH_SIZE + 1}: {len(batch)} records (total: {total_inserted})")
             
-            print(f"  ME2J Summary:")
+            print(f"  ZSPS Summary:")
             print(f"    Inserted: {total_inserted}")
             print(f"    Skipped (no WBS): {skipped_no_wbs}")
             print(f"    Skipped (WBS not in master): {skipped_no_match}")
             
         except Exception as e:
             db.rollback()
-            print(f"Error processing ME2J: {e}")
+            print(f"Error processing ZSPS: {e}")
             import traceback
             traceback.print_exc()
     else:
-        print(f"File not found: {me2j_path}")
+        print(f"File not found: {zsps_path}")
 
     # ================================================================
     # Process MB51 (Material Documents/Consumption) — unchanged
