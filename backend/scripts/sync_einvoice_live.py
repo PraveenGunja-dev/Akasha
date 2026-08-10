@@ -1,7 +1,10 @@
 import os
 import sys
 import requests
+import urllib3
 from dotenv import load_dotenv
+
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # Add backend directory to sys.path
 backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -25,21 +28,23 @@ def fetch_live_invoices():
               "Set EINVOICE_TOKEN_URL, EINVOICE_CLIENT_ID and EINVOICE_CLIENT_SECRET in backend/.env")
         return []
 
+    r = None
     try:
-        r = requests.post(token_url, data={'grant_type': 'client_credentials'}, auth=(client_id, client_secret))
+        r = requests.post(token_url, data={'grant_type': 'client_credentials'}, auth=(client_id, client_secret), verify=False)
         r.raise_for_status()
         token = r.json().get('access_token')
         print("Successfully obtained access token!")
     except Exception as e:
         print(f"Failed to authenticate: {e}")
-        if r: print(r.text)
+        if r is not None: print(r.text)
         return []
 
     print("Fetching invoices from LIVE SAP API...")
     api_url = 'https://adani-green-energy-limited-asset-tagging-renewables-dev583d013a.cfapps.ap11.hana.ondemand.com/odata/v2/InvoiceChatBotService/getAllInvoices'
     
+    res = None
     try:
-        res = requests.get(api_url, headers={'Authorization': f'Bearer {token}'})
+        res = requests.get(api_url, headers={'Authorization': f'Bearer {token}'}, verify=False)
         res.raise_for_status()
         data = res.json()
         results = data.get('d', {}).get('results', []) if 'd' in data else data
@@ -47,7 +52,7 @@ def fetch_live_invoices():
         return results
     except Exception as e:
         print(f"Failed to fetch invoices: {e}")
-        if res: print(res.text)
+        if res is not None: print(res.text)
         return []
 
 
