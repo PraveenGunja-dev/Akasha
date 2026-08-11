@@ -522,7 +522,14 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         
         nc_count = nc_by_project.get(p_name) or nc_by_project.get(p_name_p6) or 0
         rfi_count = rfi_by_project.get(p_name) or rfi_by_project.get(p_name_p6) or 0
-        invoice_count = sum(invoice_by_prefix.get(p, 0) for p in prefixes)
+        prefixes = []
+        if m.spv_plant_code:
+            prefixes.append(m.spv_plant_code)
+        if m.project:
+            parts = m.project.split(" ")
+            if parts:
+                prefixes.append(parts[0])
+        invoice_count = sum(invoice_by_prefix.get(p[:6], 0) for p in prefixes)
         
         results.append({
             "ncCount": nc_count,
