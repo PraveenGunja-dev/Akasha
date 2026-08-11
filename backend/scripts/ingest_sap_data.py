@@ -142,7 +142,7 @@ def ingest_data():
     print("Connecting to database...")
     db = SessionLocal()
     
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Data", "NEW31")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "Data", "NEW31")
     
     # Pre-clear existing data
     print("Clearing old SAP data...")
