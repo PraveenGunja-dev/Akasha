@@ -196,6 +196,13 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     # is equivalent to grouping every row by its own wbs_element[:6] - so this
     # index gives identical results to the old per-project OR/startswith query
     # without the ~190 extra DB round-trips that made this endpoint take 4-10s.
+    nc_aggs = db.query(models.PulseNC.project_name, func.count(models.PulseNC.id)).group_by(models.PulseNC.project_name).all()
+    nc_by_project = {row[0].lower(): row[1] for row in nc_aggs if row[0]}
+    rfi_aggs = db.query(models.PulseRFI.project_name, func.count(models.PulseRFI.id)).group_by(models.PulseRFI.project_name).all()
+    rfi_by_project = {row[0].lower(): row[1] for row in rfi_aggs if row[0]}
+    inv_aggs = db.query(func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6), func.count(func.distinct(models.EInvoiceRecord.id))).join(models.EInvoiceRecord, models.MTEInvoicePOLookup.purchasing_document == models.EInvoiceRecord.workOrderNo).group_by(func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6)).all()
+    invoice_by_prefix = {row[0]: row[1] for row in inv_aggs if row[0]}
+
     mtpo_aggs = db.query(
         func.substr(models.MTPOAmount.wbs_element, 1, 6).label('prefix'),
         func.sum(models.MTPOAmount.order_quantity).label('ordered_qty'),
@@ -510,7 +517,17 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         baseline_finish = p6_proj.baseline_finish_date.strftime("%Y-%m-%d") if p6_proj and p6_proj.baseline_finish_date else None
         baseline_month = p6_proj.baseline_finish_date.strftime("%b %Y") if p6_proj and p6_proj.baseline_finish_date else None
 
+        p_name = m.project.lower() if m.project else ""
+        p_name_p6 = m.project_name_from_p6.lower() if m.project_name_from_p6 else ""
+        
+        nc_count = nc_by_project.get(p_name) or nc_by_project.get(p_name_p6) or 0
+        rfi_count = rfi_by_project.get(p_name) or rfi_by_project.get(p_name_p6) or 0
+        invoice_count = sum(invoice_by_prefix.get(p, 0) for p in prefixes)
+        
         results.append({
+            "ncCount": nc_count,
+            "rfiCount": rfi_count,
+            "invoiceCount": invoice_count,
             # Identifiers
             "projectId": p6_proj.project_id if p6_proj else (m.project_id or ""),
             "projectName": p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "Unmapped Project"),

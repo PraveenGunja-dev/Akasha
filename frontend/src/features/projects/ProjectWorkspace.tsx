@@ -1454,10 +1454,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   </div>
                                 )}
                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Total PRs" : "Total POs"} value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
-                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Open PRs" : "Open POs"} value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
-                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Closed PRs" : "Closed POs"} value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
-                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Open PR Amount" : "Open PO Amount"} value={`₹${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-warning dark:text-warning" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                                  <HeroMetric label="Total POs" value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
+                                  <HeroMetric label="Open POs" value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                                  <HeroMetric label="Closed POs" value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
+                                  <HeroMetric label="Open PO Amount" value={`₹${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-warning dark:text-warning" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
                                   <HeroMetric label="Total Amount" value={`₹${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
                                 </div>
                               </div>
@@ -3226,6 +3226,36 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   </tbody>
                 </table>
               </div>
+              {/* Workflow Modal */}
+              {showWorkflowModal && (
+                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+                  <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+                    <div className="flex items-center justify-between p-4 border-b bg-card z-20">
+                      <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
+                        <Network className="w-5 h-5 text-primary" /> Full Project Workflow
+                      </h2>
+                      <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
+                        <X className="w-5 h-5" />
+                      </button>
+                    </div>
+
+                    <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
+                      <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
+                        {p6?.milestones?.map((m: any, i: number) => {
+                          const isLast = i === p6.milestones.length - 1;
+                          const isEven = i % 2 === 0;
+                          const isCompleted = m.status === 'Completed';
+                          const isInProgress = m.status === 'In Progress';
+                          const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
+
+                          return (
+                            <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
+
+                              {/* Input Port */}
+                              {i !== 0 && (
+                                <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                                  }`}></div>
+                              )}
 
                               {/* Node Card */}
                               <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${isCompleted ? 'border-primary shadow-primary/20' :
@@ -3286,36 +3316,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           </div>
         </div>
       )}
-              {/* Workflow Modal */}
-              {showWorkflowModal && (
-                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-                  <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-                    <div className="flex items-center justify-between p-4 border-b bg-card z-20">
-                      <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
-                        <Network className="w-5 h-5 text-primary" /> Full Project Workflow
-                      </h2>
-                      <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-
-                    <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
-                      <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
-                        {p6?.milestones?.map((m: any, i: number) => {
-                          const isLast = i === p6.milestones.length - 1;
-                          const isEven = i % 2 === 0;
-                          const isCompleted = m.status === 'Completed';
-                          const isInProgress = m.status === 'In Progress';
-                          const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
-
-                          return (
-                            <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
-
-                              {/* Input Port */}
-                              {i !== 0 && (
-                                <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
-                                  }`}></div>
-                              )}
     </div>
   );
 }

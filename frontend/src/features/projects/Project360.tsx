@@ -494,8 +494,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
       <div className="absolute inset-0 opacity-0 group-hover:opacity-5 transition-opacity duration-300 pointer-events-none" style={{ backgroundColor: accentColor }} />
       <div className="absolute left-0 top-0 bottom-0 w-[3px] opacity-0 group-hover:opacity-100 transition-opacity" style={{ backgroundColor: accentColor }}></div>
 
-      {/* 1. Project Details (35%) */}
-      <div className="flex flex-col gap-1.5 w-[35%] min-w-[250px] pr-4">
+      {/* 1. Project Details (30%) */}
+      <div className="flex flex-col gap-1.5 w-[30%] min-w-[200px] pr-4">
         <div className="flex items-center gap-2">
           <h3 className="text-[14px] font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate">
             {project.projectName}
@@ -512,8 +512,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-      {/* 2. Schedule Performance (25%) */}
-      <div className="w-[25%] min-w-[150px] flex flex-col justify-center gap-1.5 border-l border-border pl-4 pr-4">
+      {/* 2. Schedule Performance (20%) */}
+      <div className="w-[20%] min-w-[130px] flex flex-col justify-center gap-1.5 border-l border-border pl-4 pr-4">
         <div className="flex flex-col gap-1 w-full max-w-[120px]">
           <div className="flex justify-between text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
             <span>Progress</span>
@@ -530,8 +530,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
         </div>
       </div>
 
-      {/* 3. Supply Funnel (25%) */}
-      <div className="w-[25%] min-w-[180px] flex flex-col justify-center border-l border-border pl-4 pr-4 py-0.5">
+      {/* 3. Supply Funnel (20%) */}
+      <div className="w-[20%] min-w-[150px] flex flex-col justify-center border-l border-border pl-4 pr-4 py-0.5">
         <div className="flex justify-between items-center text-[10px] mb-0.5">
           <span className="text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
           <span className="font-mono font-semibold text-foreground/80">{fmtNum(project.orderedQty)}</span>
@@ -547,20 +547,36 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
       </div>
 
       {/* 4. Timeline Forecast (15%) */}
-      <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
+      <div className="w-[15%] min-w-[120px] flex items-center justify-between border-l border-border pl-4 pr-4">
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold w-12">Base</span>
+            <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold w-8">Base</span>
             <span className="text-[11px] font-mono font-semibold text-foreground/60">{project.baselineMonth || 'N/A'}</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`text-[9px] uppercase tracking-widest font-semibold w-12 ${project.codAtRisk ? 'text-destructive/70' : 'text-primary/70'}`}>Fcst</span>
+            <span className={`text-[9px] uppercase tracking-widest font-semibold w-8 ${project.codAtRisk ? 'text-destructive/70' : 'text-primary/70'}`}>Fcst</span>
             <span className={`text-[13px] font-mono font-bold ${project.codAtRisk ? 'text-destructive' : 'text-foreground/90'}`}>{project.forecastMonth}</span>
           </div>
         </div>
-        <div className="flex flex-col items-end gap-0.5 ml-2">
+        <div className="flex flex-col items-end gap-0.5 ml-1">
           <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Lines</span>
           <span className="text-[13px] font-mono font-bold text-primary">{project.tcEdgesCount || 0}</span>
+        </div>
+      </div>
+
+      {/* 5. Quality & Docs (15%) */}
+      <div className="w-[15%] min-w-[150px] flex flex-col justify-center border-l border-border pl-4 pr-6">
+        <div className="flex justify-between items-center text-[10px] mb-0.5">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">Invoices</span>
+          <span className="font-mono font-semibold text-foreground/80">{project.invoiceCount || 0}</span>
+        </div>
+        <div className="flex justify-between items-center text-[10px] mb-0.5">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">NCs</span>
+          <span className="font-mono font-semibold text-warning">{project.ncCount || 0}</span>
+        </div>
+        <div className="flex justify-between items-center text-[10px]">
+          <span className="text-muted-foreground uppercase tracking-widest font-semibold">RFIs</span>
+          <span className="font-mono font-semibold text-primary">{project.rfiCount || 0}</span>
         </div>
       </div>
 
@@ -574,26 +590,31 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
    ═══════════════════════════════════════════════════════════ */
 const SkeletonRow = () => (
   <div className="flex items-stretch border-b border-muted dark:border-border bg-white/40 animate-pulse">
-    <div className="w-[35%] min-w-[250px] p-4 flex items-start gap-3">
+    <div className="w-[30%] min-w-[200px] p-4 flex items-start gap-3">
       <div className="flex-1 mt-1">
         <div className="w-3/4 h-5 bg-gray-200 dark:bg-card rounded mb-2"></div>
         <div className="w-1/2 h-4 bg-gray-200 dark:bg-card rounded"></div>
       </div>
     </div>
-    <div className="w-[25%] min-w-[150px] border-l border-border p-4 flex flex-col justify-center">
+    <div className="w-[20%] min-w-[130px] border-l border-border p-4 flex flex-col justify-center">
       <div className="w-full h-2 bg-gray-200 dark:bg-card rounded-full mb-3"></div>
       <div className="w-20 h-3 bg-gray-200 dark:bg-card rounded"></div>
     </div>
-    <div className="w-[20%] min-w-[180px] border-l border-border p-4 flex flex-col justify-center gap-2">
+    <div className="w-[20%] min-w-[150px] border-l border-border p-4 flex flex-col justify-center gap-2">
       <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
       <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
       <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
     </div>
-    <div className="w-[15%] min-w-[150px] flex items-center justify-between border-l border-border pl-4 pr-6">
+    <div className="w-[15%] min-w-[120px] flex items-center justify-between border-l border-border pl-4 pr-4">
       <div className="flex flex-col gap-2">
         <div className="w-16 h-3 bg-gray-200 dark:bg-card rounded"></div>
         <div className="w-16 h-4 bg-gray-200 dark:bg-card rounded"></div>
       </div>
+    </div>
+    <div className="w-[15%] min-w-[150px] flex flex-col justify-center gap-2 border-l border-border pl-4 pr-6">
+      <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
+      <div className="w-full h-3 bg-gray-200 dark:bg-card rounded"></div>
     </div>
   </div>
 );
@@ -767,10 +788,11 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       {loading ? (
         <div className="bento-card overflow-hidden mb-8 p-0">
           <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
-            <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
-            <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
-            <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
+            <div className="w-[30%] min-w-[200px] pr-4">Project Details</div>
+            <div className="w-[20%] min-w-[130px] pl-4">Schedule</div>
+            <div className="w-[20%] min-w-[150px] pl-4">Supply Chain</div>
+            <div className="w-[15%] min-w-[120px] pl-4">Timeline Forecast</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Quality & Docs</div>
           </div>
           <div className="flex flex-col">
             {[...Array(6)].map((_, i) => <SkeletonRow key={i} />)}
@@ -788,10 +810,11 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       ) : (
         <div className="bento-card overflow-hidden mb-8 p-0 flex flex-col max-h-[700px]">
           <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground shrink-0 z-10">
-            <div className="w-[35%] min-w-[250px] pr-4">Project Details</div>
-            <div className="w-[25%] min-w-[150px] pl-4">Schedule</div>
-            <div className="w-[25%] min-w-[180px] pl-4">Supply Chain</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Timeline Forecast</div>
+            <div className="w-[30%] min-w-[200px] pr-4">Project Details</div>
+            <div className="w-[20%] min-w-[130px] pl-4">Schedule</div>
+            <div className="w-[20%] min-w-[150px] pl-4">Supply Chain</div>
+            <div className="w-[15%] min-w-[120px] pl-4">Timeline Forecast</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Quality & Docs</div>
           </div>
           <div className="flex flex-col overflow-y-auto custom-scrollbar flex-1 relative">
             {filtered.map((project, index) => (
