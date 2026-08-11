@@ -108,6 +108,7 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None):
     return dynamic_spi, dynamic_cpi
 
 def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
+    import re
     query = db.query(models.ProjectMapping)
     if portfolio_type and portfolio_type.lower() != "all portfolios":
         portfolio_type = re.sub(r'[\+]+', ' ', portfolio_type).strip()
@@ -523,12 +524,17 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         nc_count = nc_by_project.get(p_name) or nc_by_project.get(p_name_p6) or 0
         rfi_count = rfi_by_project.get(p_name) or rfi_by_project.get(p_name_p6) or 0
         prefixes = []
-        if m.spv_plant_code:
-            prefixes.append(m.spv_plant_code)
+        for val in [m.spv_plant_code, m.agel, m.age6l]:
+            if val:
+                matches = [c.strip()[:6] for c in re.findall(r'H-\S+', str(val).strip()) if len(c.strip()) >= 6]
+                prefixes.extend(matches)
+                prefixes.extend([mx.replace('-', '') for mx in matches])
         if m.project:
             parts = m.project.split(" ")
             if parts:
-                prefixes.append(parts[0])
+                prefixes.append(parts[0][:6])
+        prefixes = list(set(prefixes))
+        
         invoice_count = sum(invoice_by_prefix.get(p[:6], 0) for p in prefixes)
         
         results.append({
