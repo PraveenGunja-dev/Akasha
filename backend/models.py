@@ -695,6 +695,15 @@ class PulseRFI(Base):
 # ==========================================
 # E-Invoice Model
 # ==========================================
+class MTEInvoicePOLookup(Base):
+    """Hidden lookup table specifically for mapping ME2J/ZSPS POs to WBS elements for E-Invoices.
+    This prevents missing ME2J POs from polluting the main SAP Intelligence dashboards."""
+    __tablename__ = "mt_einvoice_po_lookup"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    purchasing_document = Column(String(50), index=True)
+    wbs_element = Column(String(255), index=True)
+
 class EInvoiceRecord(Base):
     __tablename__ = "einvoice_records"
 

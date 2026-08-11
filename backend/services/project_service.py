@@ -589,38 +589,15 @@ def normalize_block(name):
 
 def get_project_einvoices(db, mapping):
     """
-    Reads the static E-invoice JSON file, maps work orders to WBS elements,
+    Reads from EInvoiceRecord in DB, maps work orders to WBS elements,
     and returns invoices that belong to this project mapping.
     """
-    import json
-    import os
     import re
-    from models import MTPOAmount
+    from models import MTPOAmount, EInvoiceRecord
+    from sqlalchemy import or_
+    import re
+    from models import MTPOAmount, EInvoiceRecord, MTEInvoicePOLookup
     
-    file_path = r'd:\Akasha_Platform\Data\NEW31\Get All Invoices Production(E-invoice) json response.txt'
-    if not os.path.exists(file_path):
-        return {"invoices": [], "summary": {}}
-        
-    try:
-        with open(file_path, 'r', encoding='utf-8') as f:
-            data = json.load(f)
-    except Exception as e:
-        print(f"Error loading einvoice JSON: {e}")
-        return {"invoices": [], "summary": {}}
-        
-    all_invoices = data.get('d', {}).get('results', [])
-    work_orders = set(inv.get('workOrderNo') for inv in all_invoices if inv.get('workOrderNo'))
-    
-    if not work_orders:
-        return {"invoices": [], "summary": {}}
-        
-    # Query WBS for these POs
-    pos = db.query(MTPOAmount.purchasing_document, MTPOAmount.wbs_element).filter(
-        MTPOAmount.purchasing_document.in_(list(work_orders))
-    ).all()
-    po_wbs_map = {po[0]: po[1] for po in pos if po[1]}
-    
-    # Get project prefixes
     prefixes = []
     if mapping:
         for val in [mapping.spv_plant_code, mapping.agel, mapping.age6l]:
@@ -632,28 +609,82 @@ def get_project_einvoices(db, mapping):
     if not prefixes:
         return {"invoices": [], "summary": {}}
         
+    # Query MTEInvoicePOLookup to get PO numbers for these prefixes (combines ZSPS and ME2J)
+    query_conditions = [MTEInvoicePOLookup.wbs_element.startswith(p) for p in prefixes]
+    if not query_conditions:
+        return {"invoices": [], "summary": {}}
+        
+    pos = db.query(MTEInvoicePOLookup.purchasing_document).filter(or_(*query_conditions)).all()
+    
     project_pos = set()
-    for po_num, wbs in po_wbs_map.items():
-        if any(wbs.startswith(p) for p in prefixes):
-            project_pos.add(po_num)
-            
+    for po in pos:
+        if po[0]:
+            val = str(po[0]).strip()
+            if val.endswith('.0'):
+                val = val[:-2]
+            project_pos.add(val)
+    
+    if not project_pos:
+        return {"invoices": [], "summary": {}}
+        
     # Filter invoices
-    project_invoices = [inv for inv in all_invoices if inv.get('workOrderNo') in project_pos]
+    db_invoices = db.query(EInvoiceRecord).filter(EInvoiceRecord.workOrderNo.in_(list(project_pos))).all()
     
-    # Calculate summary
-    total_amount = sum(float(inv.get('invoiceAmount') or 0) for inv in project_invoices)
-    total_so_amount = sum(float(inv.get('SOAmount') or 0) for inv in project_invoices)
-    completed_invoices = [inv for inv in project_invoices if str(inv.get('statusDesc')).lower() == 'completed']
-    pending_invoices = [inv for inv in project_invoices if str(inv.get('statusDesc')).lower() != 'completed']
+    project_invoices = []
+    total_amount = 0.0
+    total_so_amount = 0.0
+    completed_count = 0
+    pending_count = 0
+    completed_amount = 0.0
+    pending_amount = 0.0
     
+    for inv in db_invoices:
+        amt = inv.invoiceAmount or 0.0
+        so_amt = inv.soAmount or 0.0
+        
+        inv_dict = {
+            "invoiceNo": inv.invoiceNo,
+            "invoiceCode": inv.invoiceCode,
+            "invoiceRequestID": inv.invoiceRequestID,
+            "vendorName": inv.vendorName,
+            "sapVendorCode": inv.sapVendorCode,
+            "projectType": inv.projectType,
+            "packageName": inv.packageName,
+            "workLocation": inv.workLocation,
+            "site": inv.site,
+            "invoiceAmount": str(amt),
+            "SOAmount": str(so_amt),
+            "statusDesc": inv.statusDesc,
+            "stage": inv.stage,
+            "isPending": inv.isPending,
+            "currentApprover": inv.currentApprover,
+            "invoiceDate": inv.invoiceDate.isoformat() + "Z" if inv.invoiceDate else None,
+            "createdAt": inv.createdAt.isoformat() + "Z" if inv.createdAt else None,
+            "completionDate": inv.completionDate.isoformat() + "Z" if inv.completionDate else None,
+            "workDescription": inv.workDescription,
+            "workOrderNo": inv.workOrderNo,
+            "p6ProjectName": inv.p6ProjectName
+        }
+        project_invoices.append(inv_dict)
+        
+        total_amount += amt
+        total_so_amount += so_amt
+        status = (inv.statusDesc or 'Pending').strip()
+        if status.lower() == 'completed':
+            completed_count += 1
+            completed_amount += amt
+        else:
+            pending_count += 1
+            pending_amount += amt
+
     summary = {
         "totalInvoices": len(project_invoices),
         "totalInvoiceAmountINR": total_amount,
         "totalSOAmountINR": total_so_amount,
-        "completedCount": len(completed_invoices),
-        "pendingCount": len(pending_invoices),
-        "completedAmountINR": sum(float(inv.get('invoiceAmount') or 0) for inv in completed_invoices),
-        "pendingAmountINR": sum(float(inv.get('invoiceAmount') or 0) for inv in pending_invoices)
+        "completedCount": completed_count,
+        "pendingCount": pending_count,
+        "completedAmountINR": completed_amount,
+        "pendingAmountINR": pending_amount
     }
     
     return {
@@ -867,8 +898,12 @@ def get_project_360_detail(db: Session, project_id: str):
         if mat_code_raw.endswith('.0'):
             mat_code_raw = mat_code_raw[:-2]
 
+        po_num_raw = str(po.purchasing_document).strip() if po.purchasing_document else ""
+        if po_num_raw.endswith('.0'):
+            po_num_raw = po_num_raw[:-2]
+
         sap_vendors.append({
-            "poNumber": po.purchasing_document,
+            "poNumber": po_num_raw,
             "vendorCode": vendor_code,
             "vendorName": vendor_name,
             "materialCode": mat_code_raw,
@@ -890,7 +925,7 @@ def get_project_360_detail(db: Session, project_id: str):
         transit_qty = getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio
         if transit_qty > 0:
             sap_intransit.append({
-                "poNumber": po.purchasing_document,
+                "poNumber": po_num_raw,
                 "materialCode": mat_code_raw,
                 "materialName": po.material_name,
                 "inTransitQty": transit_qty,
@@ -955,11 +990,14 @@ def get_project_360_detail(db: Session, project_id: str):
         mat_code_raw = str(inv.material_code).strip()
         if mat_code_raw.endswith('.0'):
             mat_code_raw = mat_code_raw[:-2]
+        po_num_raw = str(inv.purchase_order).strip() if inv.purchase_order else ""
+        if po_num_raw.endswith('.0'):
+            po_num_raw = po_num_raw[:-2]
             
         sap_inventory.append({
             "materialCode": mat_code_raw,
             "materialName": inv.material_description or inv.material_name,
-            "purchaseOrder": inv.purchase_order,
+            "purchaseOrder": po_num_raw,
             "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio,
             "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio,
             "wbsElement": inv.wbs_element,

@@ -32,6 +32,13 @@ def safe_str(val):
         return ''
     return str(val).strip()
 
+def safe_sap_id(val):
+    """Return trimmed string without trailing .0 from pandas float parsing."""
+    s = safe_str(val)
+    if s.endswith('.0'):
+        return s[:-2]
+    return s
+
 def safe_date(val):
     """Parse a date value, return None on failure."""
     try:
@@ -131,15 +138,23 @@ def ingest_data():
     wbs_map = build_wbs_mapping(master_path)
     print(f"  Loaded {len(wbs_map)} WBS codes from master.")
 
-    # ================================================================
-    # Clear old data
-    # ================================================================
-    print("Clearing old data...")
-    db.query(models.MTInventory).delete()
-    db.query(models.MTPOAmount).delete()
-    db.query(models.MTMaterialDocument).delete()
-    db.commit()
+    # ================================================================def main():
+    print("Connecting to database...")
+    db = SessionLocal()
     
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "Data", "NEW31")
+    
+    # Pre-clear existing data
+    print("Clearing old SAP data...")
+    try:
+        db.query(models.MTInventory).delete()
+        db.query(models.MTPOAmount).delete()
+        db.query(models.MTMaterialDocument).delete()
+        db.query(models.MTEInvoicePOLookup).delete()
+        db.commit()
+    except Exception as e:
+        db.rollback()
+        print(f"Error clearing old data: {e}")
     # ================================================================
     # Process MB52 (Inventory) — unchanged
     # ================================================================
@@ -150,7 +165,7 @@ def ingest_data():
             df = pd.read_excel(mb52_path)
             inventories = []
             for _, row in df.iterrows():
-                mat_code = str(row.get('Material', '')).strip()
+                mat_code = safe_sap_id(row.get('Material', ''))
                 # Skip Total rows and empty rows
                 if not mat_code or mat_code.lower() == 'nan' or 'total' in mat_code.lower():
                     continue
@@ -207,11 +222,13 @@ def ingest_data():
 
             # --- Load ME2J for lookup mapping ---
             po_lookup = {}
+            df_me2j = None
             if os.path.exists(me2j_path):
                 print("  Loading ME2J for supplementary PO data (Buyer Name, Date, etc.)...")
                 df_me2j = pd.read_excel(me2j_path, usecols=lambda c: c in [
                     'Purchasing Document', 'Buyer Name', 'Document Date', 
-                    'Storage Location', 'Material', 'Plant', 'Currency', 'Delivery Completed'
+                    'Storage Location', 'Material', 'Plant', 'Currency', 'Delivery Completed',
+                    'WBS Element'
                 ])
                 df_me2j = df_me2j.drop_duplicates(subset=['Purchasing Document'])
                 # Convert to dict for fast lookup
@@ -225,7 +242,7 @@ def ingest_data():
             skipped_no_match = 0
             
             for _, row in df.iterrows():
-                po_doc = safe_str(row.get('C.Document', ''))
+                po_doc = safe_sap_id(row.get('C.Document', ''))
                 if not po_doc or po_doc.lower() == 'nan':
                     continue
                 
@@ -270,7 +287,7 @@ def ingest_data():
                     purchasing_document=po_doc,
                     wbs_element=wbs_el,
                     plant_code=safe_str(me2j_data.get('Plant', '')), 
-                    material_code=safe_str(me2j_data.get('Material', '')), 
+                    material_code=safe_sap_id(me2j_data.get('Material', '')), 
                     material_name=safe_str(row.get('Description', '')),
                     vendor_name=safe_str(row.get('Vendor Name', '')),
                     short_text=safe_str(row.get('Short text', '')),
@@ -310,6 +327,45 @@ def ingest_data():
             print(f"Error processing ZSPS: {e}")
             import traceback
             traceback.print_exc()
+            
+        # ================================================================
+        # Populate MTEInvoicePOLookup from BOTH ZSPS and ME2J
+        # ================================================================
+        print("Populating E-Invoice PO Lookup Table from ZSPS and ME2J...")
+        try:
+            lookup_records = {}
+            
+            # Extract from ME2J
+            if df_me2j is not None:
+                for _, row in df_me2j.iterrows():
+                    po_doc = safe_sap_id(row.get('Purchasing Document', ''))
+                    wbs_el = safe_str(row.get('WBS Element', ''))
+                    if po_doc and wbs_el and wbs_el.lower() not in ('nan', 'none'):
+                        lookup_records[po_doc] = wbs_el
+            
+            # Extract from ZSPS (overrides ME2J if conflict)
+            for _, row in df.iterrows():
+                po_doc = safe_sap_id(row.get('C.Document', ''))
+                wbs_el = safe_str(row.get('WBS Element', ''))
+                if po_doc and wbs_el and wbs_el.lower() not in ('nan', 'none'):
+                    lookup_records[po_doc] = wbs_el
+                    
+            lookup_inserts = [
+                models.MTEInvoicePOLookup(purchasing_document=po, wbs_element=wbs)
+                for po, wbs in lookup_records.items()
+            ]
+            
+            # Batch insert
+            for i in range(0, len(lookup_inserts), BATCH_SIZE):
+                batch = lookup_inserts[i:i + BATCH_SIZE]
+                db.add_all(batch)
+                db.commit()
+                
+            print(f"  Inserted {len(lookup_records)} unique PO -> WBS lookups for E-Invoice Mapping.")
+        except Exception as e:
+            db.rollback()
+            print(f"Error populating E-Invoice PO Lookup: {e}")
+            
     else:
         print(f"File not found: {zsps_path}")
 
@@ -324,7 +380,7 @@ def ingest_data():
             material_docs = []
             for _, row in df.iterrows():
                 doc = str(row.get('Material_Document', ''))
-                mat_code = str(row.get('Material', '')).strip()
+                mat_code = safe_sap_id(row.get('Material', ''))
                 
                 # Skip Total rows and invalid entries
                 if not doc or doc.lower() == 'nan' or 'total' in mat_code.lower():
@@ -365,7 +421,7 @@ def ingest_data():
                     amount_in_lc_cr=amt_lc / 10000000 if amt_lc != 0 else 0,
                     storage_location=str(row.get('Storage_Location', '')),
                     block_plot_name=str(row.get('Block_Plot_Name', '')),
-                    purchase_order=str(row.get('Purchase_Order', '')),
+                    purchase_order=safe_sap_id(row.get('Purchase_Order', '')),
                     base_unit=str(row.get('Base_Unit_of_Measure', ''))
                 )
                 material_docs.append(m_doc)
