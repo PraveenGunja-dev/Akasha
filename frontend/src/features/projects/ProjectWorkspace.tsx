@@ -1454,10 +1454,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   </div>
                                 )}
                                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                  <HeroMetric label="Total POs" value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
-                                  <HeroMetric label="Open POs" value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
-                                  <HeroMetric label="Closed POs" value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
-                                  <HeroMetric label="Open PO Amount" value={`₹${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-warning dark:text-warning" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Total PRs" : "Total POs"} value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
+                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Open PRs" : "Open POs"} value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
+                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Closed PRs" : "Closed POs"} value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
+                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Open PR Amount" : "Open PO Amount"} value={`₹${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-warning dark:text-warning" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
                                   <HeroMetric label="Total Amount" value={`₹${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
                                 </div>
                               </div>
@@ -3030,7 +3030,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </h2>
                 <p className="text-sm text-muted-foreground mt-1">Non-conformances and inspections synced from SAP Pulse for {p.projectName}</p>
               </div>
-              <QualityProjectTab projectName={p.projectName} />
+              <QualityProjectTab projectName={p.projectId} />
             </div>
           )}
 
@@ -3226,6 +3226,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   </tbody>
                 </table>
               </div>
+
+            </div>
+          </div>
+        </div>
+      )}
               {/* Workflow Modal */}
               {showWorkflowModal && (
                 <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -3312,10 +3317,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </div>
               )}
 
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

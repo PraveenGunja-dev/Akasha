@@ -639,12 +639,20 @@ def get_project_360_detail(db: Session, project_id: str):
             
     for inv in inv_records:
         mat_str = str(inv.material_code).strip().lstrip('0') if inv.material_code else ''
+        po_num_raw = str(inv.purchase_order).strip() if inv.purchase_order else ""
+        if po_num_raw.endswith('.0'):
+            po_num_raw = po_num_raw[:-2]
+
+        mat_code_raw = str(inv.material_code).strip() if inv.material_code else ""
+        if mat_code_raw.endswith('.0'):
+            mat_code_raw = mat_code_raw[:-2]
+
         # Filter inventory to only materials that are in POs
         if mat_str in po_materials:
             sap_inventory.append({
-                "materialCode": inv.material_code,
+                "materialCode": mat_code_raw,
                 "materialName": inv.material_description or inv.material_name,
-                "purchaseOrder": inv.purchase_order,
+                "purchaseOrder": po_num_raw,
                 "inventoryQty": (inv.quantity_inv or 0.0) * allocation_ratio,
                 "inventoryValueINR": (inv.value_unrestricted or 0.0) * allocation_ratio,
                 "wbsElement": inv.wbs_element,
@@ -1005,8 +1013,16 @@ def get_project_360_detail(db: Session, project_id: str):
                 vendor_code = parts[0]
                 vendor_name = parts[1]
 
+        mat_code_raw = str(po.material_code).strip() if po.material_code else ""
+        if mat_code_raw.endswith('.0'):
+            mat_code_raw = mat_code_raw[:-2]
+
+        po_num_raw = str(po.purchasing_document).strip() if po.purchasing_document else ""
+        if po_num_raw.endswith('.0'):
+            po_num_raw = po_num_raw[:-2]
+
         sap_vendors.append({
-            "poNumber": po.purchasing_document,
+            "poNumber": po_num_raw,
             "vendorCode": vendor_code,
             "vendorName": vendor_name,
             "materialCode": po.material_code,
@@ -1026,7 +1042,7 @@ def get_project_360_detail(db: Session, project_id: str):
         transit_qty = getattr(po, "still_to_deliver_qty", 0.0) * allocation_ratio
         if transit_qty > 0:
             sap_intransit.append({
-                "poNumber": po.purchasing_document,
+                "poNumber": po_num_raw,
                 "materialCode": po.material_code,
                 "materialName": po.material_name,
                 "inTransitQty": transit_qty,

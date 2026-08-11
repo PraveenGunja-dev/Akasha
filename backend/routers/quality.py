@@ -267,8 +267,15 @@ def get_project_quality(project_name: str, db: Session = Depends(get_db)):
     p6_proj = db.query(models.P6Project).filter(models.P6Project.project_id == project_name).first()
     search_name = p6_proj.name if p6_proj and p6_proj.name else project_name
     
+    mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_name).first()
+    mapping_name = mapping.project if mapping and mapping.project else None
+    
     query_filter_nc = models.PulseNC.project_name.ilike(f"%{search_name}%")
     query_filter_rfi = models.PulseRFI.project_name.ilike(f"%{search_name}%")
+    
+    if mapping_name:
+        query_filter_nc = or_(query_filter_nc, models.PulseNC.project_name.ilike(f"%{mapping_name}%"))
+        query_filter_rfi = or_(query_filter_rfi, models.PulseRFI.project_name.ilike(f"%{mapping_name}%"))
 
     # Heuristic 1: SPV prefix pattern on the actual name (e.g. AGE25BL_BANDHA_FT...)
     parts = search_name.split('_')
