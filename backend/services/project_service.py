@@ -133,11 +133,13 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     act_stats = {}
     for pid, status, is_critical, count, sum_pct in activity_stats_raw:
         if pid not in act_stats:
-            act_stats[pid] = {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
+            act_stats[pid] = {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'TotalCritical': 0, 'SumPct': 0.0}
         act_stats[pid][status] += count
-        if status == 'Completed' and is_critical is True:
+        if status == 'Completed' and is_critical:
             act_stats[pid]['CompletedCritical'] += count
         act_stats[pid]['Total'] += count
+        if is_critical:
+            act_stats[pid]['TotalCritical'] += count
         if sum_pct:
             act_stats[pid]['SumPct'] += sum_pct
     # Bulk calculate activity completion timeline and delayed activities
@@ -230,6 +232,19 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     mb52_by_prefix = {row.prefix: row for row in mb52_aggs if row.prefix}
 
     results = []
+
+    # Deduplicate mappings by project_id — keep the entry with the richest metadata
+    seen_pids = {}
+    for m in mappings:
+        pid = m.project_id or ""
+        if pid not in seen_pids:
+            seen_pids[pid] = m
+        else:
+            # Prefer mapping that has cluster or category populated
+            existing = seen_pids[pid]
+            if (not existing.cluster and m.cluster) or (not existing.category and m.category):
+                seen_pids[pid] = m
+    mappings = list(seen_pids.values())
 
     for m in mappings:
         # 1. P6 Data
@@ -593,6 +608,7 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "durationPercentComplete": round(pct_complete, 1),
             # Activity
             "activityCount": activity_info.get('Total', 0),
+            "criticalActivityCount": activity_info.get('TotalCritical', 0),
             "completedActivities": activity_info.get('Completed', 0),
             "completedCriticalActivities": activity_info.get('CompletedCritical', 0),
             "inProgressActivities": activity_info.get('In Progress', 0),
@@ -635,6 +651,12 @@ def get_project_einvoices(db, mapping):
                 matches = [c.strip()[:6] for c in re.findall(r'H-\S+', str(val).strip()) if len(c.strip()) >= 6]
                 prefixes.extend(matches)
                 prefixes.extend([mx.replace('-', '') for mx in matches])
+        
+        if mapping.project:
+            parts = mapping.project.split(" ")
+            if parts:
+                prefixes.append(parts[0][:6])
+        prefixes = list(set(prefixes))
                 
     if not prefixes:
         return {"invoices": [], "summary": {}}
@@ -730,9 +752,17 @@ def get_project_360_detail(db: Session, project_id: str):
     - SAP pending delivery details (derived from ZSPS still_to_deliver_qty) — WBS-filtered or pro-rata
     - SAP inventory details (from MTInventory) — WBS-filtered or pro-rata
     """
-    # 1. Resolve mapping
+    # 1. Resolve mapping and P6 project flexibly
+    from sqlalchemy import or_
     mapping = db.query(models.ProjectMapping).filter(
-        models.ProjectMapping.project_id == project_id
+        or_(
+            models.ProjectMapping.project_id == project_id,
+            models.ProjectMapping.project_id.ilike(project_id),
+            models.ProjectMapping.project_name_from_p6 == project_id,
+            models.ProjectMapping.project_name_from_p6.ilike(project_id),
+            models.ProjectMapping.project == project_id,
+            models.ProjectMapping.project.ilike(project_id)
+        )
     ).first()
     
     from sqlalchemy.orm import selectinload

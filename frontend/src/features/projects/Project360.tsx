@@ -100,13 +100,14 @@ const MetricBreakdownModal = ({
     if (type === 'activity') return (b.integrationCount || 0) - (a.integrationCount || 0);
     if (type === 'supply') return (a.materialAvailability || 0) - (b.materialAvailability || 0);
     if (type === 'transmission') return (b.tcEdgesCount || 0) - (a.tcEdgesCount || 0);
+    if (type === 'critical') return (b.delayedActivities || 0) - (a.delayedActivities || 0);
     return 0;
   });
 
   return (
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6 animate-in fade-in duration-200">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative w-full max-w-4xl bg-card border border-border shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="relative w-full max-w-5xl bg-card border border-border shadow-2xl rounded-2xl overflow-hidden flex flex-col max-h-[85vh]">
         
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-border bg-muted">
@@ -131,7 +132,8 @@ const MetricBreakdownModal = ({
                 {type === 'schedule' && (
                   <>
                     <th className="px-6 py-3 font-semibold text-right">Progress</th>
-                    <th className="px-6 py-3 font-semibold text-right">SPI</th>
+                    <th className="px-6 py-3 font-semibold text-right">NCs</th>
+                    <th className="px-6 py-3 font-semibold text-right">RFIs</th>
                     <th className="px-6 py-3 font-semibold text-right">Delay Impact</th>
                   </>
                 )}
@@ -158,6 +160,13 @@ const MetricBreakdownModal = ({
                     <th className="px-6 py-3 font-semibold text-right">Delayed</th>
                   </>
                 )}
+                {type === 'critical' && (
+                  <>
+                    <th className="px-6 py-3 font-semibold text-right">Critical Activities</th>
+                    <th className="px-6 py-3 font-semibold text-right">Completing This Mo.</th>
+                    <th className="px-6 py-3 font-semibold text-right">Delayed</th>
+                  </>
+                )}
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -177,7 +186,8 @@ const MetricBreakdownModal = ({
                            <span className="font-mono text-xs">{Math.round((p.progress || 0) * 100)}%</span>
                         </div>
                       </td>
-                      <td className={`px-6 py-3 font-mono text-xs text-right ${p.spi < 0.95 ? 'text-warning font-bold' : 'text-success'}`}>{(p.spi || 0).toFixed(2)}</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${(p.ncCount || 0) > 0 ? 'text-warning font-bold' : 'text-success'}`}>{p.ncCount || 0}</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${(p.rfiCount || 0) > 0 ? 'text-primary font-bold' : 'text-muted-foreground'}`}>{p.rfiCount || 0}</td>
                       <td className={`px-6 py-3 font-mono text-xs text-right ${p.delayDays > 0 ? 'text-destructive font-bold' : 'text-success'}`}>{p.delayDays || 0}d</td>
                     </>
                   )}
@@ -211,6 +221,13 @@ const MetricBreakdownModal = ({
                       <td className={`px-6 py-3 font-mono text-xs text-right ${(p.tcData?.progress?.delayed?.count || 0) > 0 ? 'text-destructive font-bold' : 'text-success'}`}>{p.tcData?.progress?.delayed?.count || 0}</td>
                     </>
                   )}
+                  {type === 'critical' && (
+                    <>
+                      <td className="px-6 py-3 font-mono text-xs text-right">{p.criticalActivityCount || 0}</td>
+                      <td className="px-6 py-3 font-mono text-xs text-right text-primary font-bold">{p.activitiesCompletingThisMonth || 0}</td>
+                      <td className={`px-6 py-3 font-mono text-xs text-right ${(p.delayedActivities || 0) > 0 ? 'text-destructive font-bold' : 'text-success'}`}>{p.delayedActivities || 0}</td>
+                    </>
+                  )}
                 </tr>
               ))}
             </tbody>
@@ -237,6 +254,8 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const avgDelayDays = delayedProjects.length > 0 ? Math.round(delayedProjects.reduce((s, d) => s + d.delayDays, 0) / delayedProjects.length) : 0;
   const totalInProgressAct = data.reduce((s, d) => s + (d.inProgressActivities || 0), 0);
   const completedProjects = data.filter(d => { const p = d.progress || 0; return (p >= 0.99) || (p >= 99); }).length;
+  const totalNCs = data.reduce((s, d) => s + (d.ncCount || 0), 0);
+  const totalRFIs = data.reduce((s, d) => s + (d.rfiCount || 0), 0);
   
   // ── Monthly Completion Forecast ──
   const now = new Date();
@@ -250,7 +269,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   
   const completedCriticalActivities = data.reduce((s, d) => s + (d.completedCriticalActivities || 0), 0);
   const delayedActivities = data.reduce((s, d) => s + (d.delayedActivities || 0), 0);
-  const totalActivities = data.reduce((s, d) => s + (d.activityCount || 0), 0) || 1; // fallback to 1 to prevent division by zero
+  const totalActivities = data.reduce((s, d) => s + (d.criticalActivityCount || 0), 0) || 1; // fallback to 1 to prevent division by zero
 
   // ── SAP Material Metrics ──
   const avgMaterial = Math.round(data.reduce((s, d) => s + d.materialAvailability, 0) / data.length);
@@ -289,14 +308,16 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
         type={activeModal || 'schedule'}
         data={data}
         title={
-          activeModal === 'schedule' ? 'Schedule & Progress Breakdown' :
+          activeModal === 'schedule' ? 'Schedule & Quality Breakdown' :
           activeModal === 'supply' ? 'Material & Supply Chain Breakdown' :
-          'Transmission Lines Breakdown'
+          activeModal === 'transmission' ? 'Transmission Lines Breakdown' :
+          'Critical Activities Breakdown'
         }
         description={
-          activeModal === 'schedule' ? 'Calculated by aggregating Primavera P6 baseline vs actual schedule variances.' :
+          activeModal === 'schedule' ? 'Calculated by aggregating Primavera P6 schedule variances along with Quality (NCs) and Documentation (RFIs) data.' :
           activeModal === 'supply' ? 'Aggregated from SAP logistics data (ZSPS Ordered vs In-Transit vs MB52 Inventory).' :
-          'Transmission line connectivity data showing charged, in-progress, and delayed lines per project.'
+          activeModal === 'transmission' ? 'Transmission line connectivity data showing charged, in-progress, and delayed lines per project.' :
+          'Breakdown of critical path activities, forecasting upcoming completions and current delays from P6.'
         }
       />
       <div className="bento-card relative overflow-hidden group transition-all duration-300 mb-8 p-0">
@@ -314,7 +335,6 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
                   <span className="w-1.5 h-1.5 rounded-full bg-success/100 animate-pulse"></span> Live
                 </span>
               </h3>
-              <p className="text-[10px] text-muted-foreground mt-0.5">Powered by P6 · SAP · Transmission · {fmtMW(totalCapacity)} Total Portfolio</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -330,134 +350,141 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-0 md:divide-x divide-y md:divide-y-0 xl:divide-y-0 divide-border/30">
           
           {/* Column 1: Schedule & Progress */}
-          <div className="p-5 space-y-4">
+          <div className="p-6 space-y-6 relative hover:bg-muted/30 transition-colors">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-primary"></span> P6 Schedule</div>
-              <button onClick={() => setActiveModal('schedule')} className="text-muted-foreground hover:text-primary transition-colors bg-muted hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
-                <Info className="w-3.5 h-3.5" />
+              <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-primary" /> P6 Schedule
+              </div>
+              <button onClick={() => setActiveModal('schedule')} className="text-muted-foreground hover:text-primary transition-colors">
+                <Info className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Completing This Mo.</div>
-                  <div className="text-xl font-mono font-bold text-primary">{completingThisMonth}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground mb-1">Avg Delay</div>
-                  <div className={`text-xl font-mono font-bold ${avgDelayDays > 0 ? 'text-destructive' : 'text-success'}`}>{avgDelayDays}d</div>
-                </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Avg Progress</div>
+                <div className="text-2xl tracking-tight text-primary">{avgProgress}%</div>
               </div>
-              <div className="pt-2 border-t border-border dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">In-Progress Activities</span>
-                  <span className="text-sm font-mono font-bold text-foreground">{fmtNum(totalInProgressAct)}</span>
-                </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Total NCs</div>
+                <div className="text-2xl tracking-tight text-warning">{fmtNum(totalNCs)}</div>
               </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Total RFIs</div>
+                <div className="text-2xl tracking-tight text-primary">{fmtNum(totalRFIs)}</div>
+              </div>
+            </div>
+            <div className="pt-6 border-t border-border/50 flex justify-between items-end">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">In-Progress Activities</span>
+              <span className="text-lg font-medium text-foreground">{fmtNum(totalInProgressAct)}</span>
             </div>
           </div>
 
-
-
-          {/* Column 3: Material & Supply Chain */}
-          <div className="p-5 space-y-4">
+          {/* Column 2: Material & Supply Chain */}
+          <div className="p-6 space-y-6 relative hover:bg-muted/30 transition-colors">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-warning/100"></span> SAP Pipeline</div>
-              <button onClick={() => setActiveModal('supply')} className="text-muted-foreground hover:text-primary transition-colors bg-muted hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
-                <Info className="w-3.5 h-3.5" />
+              <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-warning" /> SAP Pipeline
+              </div>
+              <button onClick={() => setActiveModal('supply')} className="text-muted-foreground hover:text-primary transition-colors">
+                <Info className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Ordered</span>
-                  <span className="text-sm font-mono font-semibold text-foreground/80">{fmtNum(totalOrdered)}</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Consumed</span>
-                  <span className="text-sm font-mono font-semibold text-success">{fmtNum(totalConsumed)}</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Inventory</span>
-                  <span className="text-sm font-mono font-semibold text-primary">{fmtNum(totalInventory)}</span>
-                </div>
+            <div className="grid grid-cols-3 gap-x-2 gap-y-6">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Ordered</div>
+                <div className="text-[17px] text-foreground/80">{fmtNum(totalOrdered)}</div>
               </div>
-              <div className="grid grid-cols-2 gap-2 pt-2 border-t border-border dark:border-gray-700">
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Transit</span>
-                  <span className="text-sm font-mono font-semibold text-warning">{fmtNum(totalInTransit)}</span>
-                </div>
-                <div className="flex flex-col gap-0.5">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Pending</span>
-                  <span className="text-sm font-mono font-semibold text-destructive">{fmtNum(totalPending)}</span>
-                </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Consumed</div>
+                <div className="text-[17px] text-success">{fmtNum(totalConsumed)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Inventory</div>
+                <div className="text-[17px] text-primary">{fmtNum(totalInventory)}</div>
+              </div>
+              
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Transit</div>
+                <div className="text-[17px] text-warning">{fmtNum(totalInTransit)}</div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Pending</div>
+                <div className="text-[17px] text-destructive">{fmtNum(totalPending)}</div>
               </div>
             </div>
           </div>
 
           {/* Column 3: Transmission Lines */}
-          <div className="p-5 space-y-4">
+          <div className="p-6 space-y-6 relative hover:bg-muted/30 transition-colors">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-success/100"></span> Transmission</div>
-              <button onClick={() => setActiveModal('transmission')} className="text-muted-foreground hover:text-primary transition-colors bg-muted hover:bg-primary/10 rounded-md p-1 border border-transparent hover:border-primary/20">
-                <Info className="w-3.5 h-3.5" />
+              <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-success" /> Transmission
+              </div>
+              <button onClick={() => setActiveModal('transmission')} className="text-muted-foreground hover:text-primary transition-colors">
+                <Info className="w-4 h-4" />
               </button>
             </div>
             
-            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-4">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="flex flex-col gap-0.5 items-center">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Charged</span>
-                  <span className="text-lg font-mono font-bold text-success">{fmtNum(totalCharged)}</span>
-                </div>
-                <div className="flex flex-col gap-0.5 items-center">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">In Prog.</span>
-                  <span className="text-lg font-mono font-bold text-warning">{fmtNum(totalInProgressTC)}</span>
-                </div>
-                <div className="flex flex-col gap-0.5 items-center">
-                  <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-semibold">Delayed</span>
-                  <span className={`text-lg font-mono font-bold ${totalTCDelayed > 0 ? 'text-destructive' : 'text-success'}`}>{fmtNum(totalTCDelayed)}</span>
-                </div>
+            <div className="grid grid-cols-3 gap-2">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Charged</div>
+                <div className="text-[22px] text-success tracking-tight">{fmtNum(totalCharged)}</div>
               </div>
-              <div className="pt-2 border-t border-border dark:border-gray-700">
-                <div className="flex justify-between items-center">
-                  <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Total Lines</span>
-                  <span className="text-sm font-mono font-bold text-foreground">{fmtNum(totalTCLines)}</span>
-                </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">In Prog.</div>
+                <div className="text-[22px] text-warning tracking-tight">{fmtNum(totalInProgressTC)}</div>
               </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Delayed</div>
+                <div className={`text-[22px] tracking-tight ${totalTCDelayed > 0 ? 'text-destructive' : 'text-success'}`}>{fmtNum(totalTCDelayed)}</div>
+              </div>
+            </div>
+            
+            <div className="pt-6 border-t border-border/50 flex justify-between items-end">
+              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">Total Lines</span>
+              <span className="text-lg font-medium text-foreground">{fmtNum(totalTCLines)}</span>
             </div>
           </div>
 
           {/* Column 4: Completion Forecast */}
-          <div className="p-5 space-y-4">
+          <div className="p-6 space-y-6 relative hover:bg-muted/30 transition-colors">
             <div className="flex items-center justify-between">
-              <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5"><span className="w-1.5 h-1.5 rounded-full bg-purple-500"></span> Critical Activities Forecast</div>
+              <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground flex items-center gap-2">
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-500" /> Critical Activities
+              </div>
+              <button onClick={() => setActiveModal('critical')} className="text-muted-foreground hover:text-primary transition-colors">
+                <Info className="w-4 h-4" />
+              </button>
             </div>
             
-            <div className="bg-muted dark:bg-gray-900/50 rounded-xl p-4 border border-muted dark:border-border space-y-3">
+            <div className="space-y-4">
               {[
                 { label: monthNames[thisMonth], count: completingThisMonth, color: 'text-primary', bg: 'bg-primary' },
-                { label: monthNames[nextMonthIdx], count: completingNextMonth, color: 'text-warning', bg: 'bg-warning/100' },
-                { label: '2+ Months', count: completingLater, color: 'text-purple-500', bg: 'bg-purple-500' },
+                { label: monthNames[nextMonthIdx], count: completingNextMonth, color: 'text-warning', bg: 'bg-warning' },
+                { label: 'Later', count: completingLater, color: 'text-purple-500', bg: 'bg-purple-500' },
               ].map((item, i) => (
-                <div key={i} className="flex items-center justify-between gap-3">
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground w-20 shrink-0">{item.label}</span>
-                  <div className="flex-1 h-2 bg-border/50 rounded-full overflow-hidden">
-                    <div className={`h-full ${item.bg} rounded-full transition-all duration-500`} style={{ width: `${(item.count / totalActivities) * 100}%` }}></div>
+                <div key={i} className="flex items-center gap-4">
+                  <span className="text-[11px] uppercase tracking-widest text-muted-foreground w-12 shrink-0">{item.label}</span>
+                  <div className="flex-1 h-1 bg-muted rounded-full relative">
+                    <div className={`absolute left-0 top-0 bottom-0 ${item.bg} rounded-full`} style={{ width: `${Math.max(2, (item.count / totalActivities) * 100)}%` }}>
+                      <div className={`absolute right-0 top-1/2 -translate-y-1/2 w-2 h-2 ${item.bg} rounded-full translate-x-1 shadow-sm border border-card`} />
+                    </div>
                   </div>
-                  <span className={`text-sm font-mono font-bold ${item.color} w-8 text-right`}>{fmtNum(item.count)}</span>
+                  <span className={`text-[15px] ${item.color} w-10 text-right`}>{fmtNum(item.count)}</span>
                 </div>
               ))}
-              
-              <div className="pt-3 border-t border-border dark:border-gray-700 flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Completed (Crit.)</span>
-                <span className="text-lg font-mono font-bold text-success">{fmtNum(completedCriticalActivities)}</span>
+            </div>
+            
+            <div className="pt-6 border-t border-border/50 grid grid-cols-2 gap-4">
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Completed</div>
+                <div className="text-[22px] text-success">{fmtNum(completedCriticalActivities)}</div>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Delayed (Crit.)</span>
-                <span className={`text-lg font-mono font-bold ${delayedActivities > 0 ? 'text-destructive' : 'text-success'}`}>{fmtNum(delayedActivities)}</span>
+              <div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1">Delayed</div>
+                <div className={`text-[22px] ${delayedActivities > 0 ? 'text-destructive' : 'text-success'}`}>{fmtNum(delayedActivities)}</div>
               </div>
             </div>
           </div>
@@ -791,8 +818,8 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
             <div className="w-[30%] min-w-[200px] pr-4">Project Details</div>
             <div className="w-[20%] min-w-[130px] pl-4">Schedule</div>
             <div className="w-[20%] min-w-[150px] pl-4">Supply Chain</div>
-            <div className="w-[15%] min-w-[120px] pl-4">Timeline Forecast</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Quality & Docs</div>
+            <div className="w-[15%] min-w-[120px] pl-4">Timeline</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Quality</div>
           </div>
           <div className="flex flex-col">
             {[...Array(6)].map((_, i) => <SkeletonRow key={i} />)}
@@ -813,8 +840,8 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
             <div className="w-[30%] min-w-[200px] pr-4">Project Details</div>
             <div className="w-[20%] min-w-[130px] pl-4">Schedule</div>
             <div className="w-[20%] min-w-[150px] pl-4">Supply Chain</div>
-            <div className="w-[15%] min-w-[120px] pl-4">Timeline Forecast</div>
-            <div className="w-[15%] min-w-[150px] pl-4">Quality & Docs</div>
+            <div className="w-[15%] min-w-[120px] pl-4">Timeline</div>
+            <div className="w-[15%] min-w-[150px] pl-4">Quality</div>
           </div>
           <div className="flex flex-col overflow-y-auto custom-scrollbar flex-1 relative">
             {filtered.map((project, index) => (

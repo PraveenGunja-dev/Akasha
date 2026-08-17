@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger, JSON
+from sqlalchemy import Column, Integer, String, Float, DateTime, Boolean, ForeignKey, BigInteger, JSON, Text
 from sqlalchemy.orm import relationship
 from database import Base
 from datetime import datetime
@@ -390,6 +390,35 @@ class TcNetworkEdge(Base):
     # Optional mapping to a primary global project if possible, though edges often span multiple projects
     mapping_id = Column(Integer, ForeignKey("project_mapping.id"), nullable=True)
     
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+class TcLineGeometry(Base):
+    """Real-world route geometry for a transmission line.
+
+    tc_network_edge only records which two substations a line joins, so the map could
+    draw nothing but a straight chord. This table holds the traced route (an ordered
+    list of [lat, lng] points) so lines follow their actual alignment.
+
+    Populated by scripts/ingest_line_geometry.py. `source` records where the geometry
+    came from ('osm' today, 'survey' when the transmission team supplies alignments)
+    and `match_confidence` how firmly it was tied to the edge, so the UI can present
+    an uncertain trace differently from a surveyed one.
+    """
+    __tablename__ = "tc_line_geometry"
+
+    id = Column(Integer, primary_key=True, index=True)
+    region = Column(String, index=True)
+    edge_id = Column(String, index=True)
+
+    path = Column(Text)  # JSON: [[lat, lng], ...]
+    point_count = Column(Integer)
+    length_km = Column(Float, nullable=True)
+
+    source = Column(String)          # 'osm' | 'survey'
+    source_ref = Column(String)      # e.g. comma-separated OSM way ids
+    voltage = Column(String)
+    match_confidence = Column(String)  # 'high' | 'medium' | 'low'
+
     upload_time = Column(DateTime, default=datetime.utcnow)
 
 class P6Activity(Base):

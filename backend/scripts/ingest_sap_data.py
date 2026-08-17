@@ -207,7 +207,7 @@ def ingest_data():
     # ================================================================
     # Process ZSPS (PO Amount) — Replacing ME2J, merging with ME2J metadata
     # ================================================================
-    zsps_path = os.path.join(data_dir, "ZPSPS007 (3).xlsx")
+    zsps_path = os.path.join(data_dir, "ZPSPS007 1.xlsx")
     me2j_path = os.path.join(data_dir, "Me2J 1.xlsx")
     
     if os.path.exists(zsps_path):
@@ -218,7 +218,27 @@ def ingest_data():
             
             # Filter where C.Document is not null (has PO)
             df = df[df['C.Document'].notna()]
-            print(f"  After dropping empty POs: {len(df)}")
+            
+            # --- APPLY BUSINESS LOGIC FILTERS ---
+            # 1. Summary should be blank (i.e. not 'X')
+            if 'Summary' in df.columns:
+                df = df[df['Summary'].isna() | (df['Summary'].astype(str).str.strip() == '') | (df['Summary'].astype(str).str.lower() == 'nan')]
+            
+            # 2. Type column should not be blank
+            if 'Type' in df.columns:
+                df = df[df['Type'].notna() & (df['Type'].astype(str).str.strip() != '') & (df['Type'].astype(str).str.lower() != 'nan')]
+                
+            # 3. Skip if both Commitment Amt and Actual Amount are 0
+            comm_amt = pd.to_numeric(df['Commitment Amt'], errors='coerce').fillna(0.0)
+            act_amt = pd.to_numeric(df['Actual Amount'], errors='coerce').fillna(0.0)
+            df = df[(comm_amt != 0) | (act_amt != 0)]
+            
+            # 4. Exclude entire POs if Description contains SPGS, PMC, or ISA
+            if 'Description' in df.columns:
+                excluded_pos = df[df['Description'].astype(str).str.contains('SPGS|PMC|ISA', case=False, na=False)]['C.Document'].unique()
+                df = df[~df['C.Document'].isin(excluded_pos)]
+                
+            print(f"  After applying all filters: {len(df)}")
 
             # --- Load ME2J for lookup mapping ---
             po_lookup = {}

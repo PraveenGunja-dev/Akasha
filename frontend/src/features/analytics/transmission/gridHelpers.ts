@@ -16,6 +16,12 @@ export interface TcEdge {
   expected_date?: string;
   mapping_id?: number | null;
   projects: string[];
+  /** Traced route from tc_line_geometry, as [lat, lng] points. Null when unmatched,
+   *  in which case the map falls back to a straight substation-to-substation chord. */
+  path?: [number, number][] | null;
+  path_source?: string | null;
+  path_confidence?: 'high' | 'medium' | 'low' | null;
+  path_length_km?: number | null;
 }
 
 export interface TcNode {
@@ -28,10 +34,14 @@ export interface TcNode {
   y?: number;
 }
 
+// Reserved status palette - fixed, never themed, and never reused as series colors.
+// Validated for separation on both surfaces (worst adjacent CVD ΔE 11.3, normal-vision
+// ΔE 27.6). Warning sits below 3:1 on a light surface by design, so status is always
+// paired with a written label in the legend and popups rather than carried by hue alone.
 export const STATUS_META: Record<string, { label: string; color: string; dash?: string }> = {
-  charged: { label: "Charged", color: "#10b981" },
-  in_progress: { label: "In Progress", color: "#f59e0b", dash: "6, 8" },
-  under_bidding: { label: "Under Bidding", color: "#ef4444", dash: "2, 6" },
+  charged: { label: "Charged", color: "#0ca30c" },
+  in_progress: { label: "In Progress", color: "#fab219", dash: "6, 8" },
+  under_bidding: { label: "Under Bidding", color: "#d03b3b", dash: "2, 6" },
 };
 
 export function statusMeta(normalizedStatus?: string) {

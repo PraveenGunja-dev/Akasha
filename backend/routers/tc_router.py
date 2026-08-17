@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from database import get_db
-from models import TcProjectEntry, TcNetworkEdge, TcNetworkNode
+from models import TcProjectEntry, TcNetworkEdge, TcNetworkNode, TcLineGeometry
 import json
 
 router = APIRouter(
@@ -17,6 +17,20 @@ def get_khavda_projects(db: Session = Depends(get_db)):
 def _build_network(db: Session, region: str):
     nodes = db.query(TcNetworkNode).filter(TcNetworkNode.region == region).all()
     edges = db.query(TcNetworkEdge).filter(TcNetworkEdge.region == region).all()
+
+    # Traced route geometry, where scripts/ingest_line_geometry.py has matched one.
+    # Edges without a match fall back to a straight substation-to-substation chord.
+    geometry_by_edge = {}
+    for g in db.query(TcLineGeometry).filter(TcLineGeometry.region == region).all():
+        try:
+            geometry_by_edge[g.edge_id] = {
+                "path": json.loads(g.path) if g.path else None,
+                "path_source": g.source,
+                "path_confidence": g.match_confidence,
+                "path_length_km": g.length_km,
+            }
+        except Exception:
+            continue
 
     # Deduplicate edges by edge_id since they are duplicated per mapping_id in DB
     seen_edges = set()
@@ -46,8 +60,13 @@ def _build_network(db: Session, region: str):
             "stringing": e.stringing,
             "expected_date": e.expected_date,
             "mapping_id": e.mapping_id,
-            "projects": []
+            "projects": [],
+            "path": None,
+            "path_source": None,
+            "path_confidence": None,
+            "path_length_km": None,
         }
+        edge_dict.update(geometry_by_edge.get(e.edge_id, {}))
 
         if e.projects:
             try:

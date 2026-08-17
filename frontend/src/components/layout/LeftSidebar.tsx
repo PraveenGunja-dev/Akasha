@@ -12,7 +12,8 @@ interface SidebarProps {
 }
 
 export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = false, onCloseMobile }: SidebarProps) {
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(true);
+  const [isHovered, setIsHovered] = useState(false);
 
   const menuSections = [
     {
@@ -35,16 +36,16 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
   ];
 
   const aiSections = [
-    { id: 'ai_copilot', label: 'Ask Akasha', icon: MessageSquare },
-    { id: 'executive_brief', label: 'Briefing', icon: FileText },
-    { id: 'smart_search', label: 'Search', icon: Search },
+    // { id: 'ai_copilot', label: 'Ask Akasha', icon: MessageSquare },
+    // { id: 'executive_brief', label: 'Briefing', icon: FileText },
+    // { id: 'smart_search', label: 'Search', icon: Search },
     { id: 'project_map', label: 'Project Map', icon: Network },
     { id: 'knowledge_graph', label: 'Knowledge Graph', icon: Share2 },
     { id: 'simulation_lab', label: 'Simulation', icon: Activity },
   ];
 
   const adminSections = [
-    { id: 'reports', label: 'Reports', icon: FileText },
+    // { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'admin', label: 'Admin', icon: Settings },
   ];
 
@@ -54,23 +55,24 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
   };
 
   // Whether we show labels (expanded desktop or mobile drawer)
-  const showLabel = !collapsed || isMobileOpen;
+  const isEffectivelyCollapsed = collapsed && !isHovered;
+  const showLabel = !isEffectivelyCollapsed || isMobileOpen;
 
   const NavItem = ({ item, accent = false }: { item: { id: string; label: string; icon: any }; accent?: boolean }) => {
     const isActive = activeTab === item.id;
     return (
       <div className="relative group">
         {/* Tooltip when collapsed */}
-        {collapsed && !isMobileOpen && (
+        {isEffectivelyCollapsed && !isMobileOpen && (
           <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-md bg-card text-white text-[11px] font-medium whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity z-[60] shadow-lg">
             {item.label}
           </div>
         )}
         <button
           onClick={() => handleTabClick(item.id)}
-          title={collapsed ? item.label : undefined}
+          title={isEffectivelyCollapsed ? item.label : undefined}
           className={`w-full flex items-center gap-2.5 rounded-lg text-[13px] font-medium transition-all duration-150
-            ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}
+            ${isEffectivelyCollapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}
             ${isActive
               ? 'bg-primary text-white shadow-sm shadow-primary/25'
               : accent
@@ -88,7 +90,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
   const sidebarInner = (
     <div className="flex flex-col h-full">
       {/* ─── Brand Bar ─── */}
-      <div className={`flex items-center shrink-0 border-b border-muted dark:border-border h-[73px] ${collapsed && !isMobileOpen ? 'justify-center px-2' : 'px-4 justify-between'}`}>
+      <div className={`flex items-center shrink-0 border-b border-muted dark:border-border h-[73px] ${isEffectivelyCollapsed && !isMobileOpen ? 'justify-center px-2' : 'px-4 justify-between'}`}>
         <div className="flex items-center overflow-hidden">
           {!showLabel && (
             <span className="text-[22px] font-heading font-black tracking-tighter leading-none uppercase bg-gradient-to-r from-brand-blue via-brand-purple to-brand-pink text-transparent bg-clip-text mx-auto">A</span>
@@ -144,20 +146,21 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
         </div>
       </nav>
 
-      {/* ─── Collapse toggle (desktop only) ─── */}
+      {/* ─── Collapse toggle (desktop only) ─── 
       <div className="hidden md:flex shrink-0 border-t border-muted dark:border-border px-2.5 py-2">
         <button
           onClick={() => setCollapsed(!collapsed)}
           className="w-full flex items-center justify-center gap-2 py-1.5 rounded-lg text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-muted-foreground hover:bg-muted dark:hover:bg-card transition-colors text-xs font-medium"
         >
-          {collapsed ? <ChevronRight className="w-4 h-4" /> : (
+          {isEffectivelyCollapsed ? <ChevronRight className="w-4 h-4" /> : (
             <>
-              <ChevronLeft className="w-4 h-4" />
-              <span>Collapse</span>
+              {collapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronLeft className="w-4 h-4" />}
+              <span>{collapsed ? 'Pin Sidebar' : 'Collapse'}</span>
             </>
           )}
         </button>
       </div>
+      */}
     </div>
   );
 
@@ -165,8 +168,10 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
     <>
       {/* Desktop sidebar */}
       <aside
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
         className={`hidden md:block h-screen bg-card border-r border-border dark:border-border z-50 shrink-0 transition-[width] duration-200 ease-in-out
-          ${collapsed ? 'w-[60px]' : 'w-[210px]'}`}
+          ${isEffectivelyCollapsed ? 'w-[60px]' : 'w-[210px]'}`}
       >
         {sidebarInner}
       </aside>

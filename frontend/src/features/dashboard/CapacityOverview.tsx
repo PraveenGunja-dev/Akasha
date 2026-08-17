@@ -65,64 +65,38 @@ interface CapacityData {
   monthly_trends?: any[];
 }
 
-const KPICard = ({ title, value, unit, icon: Icon, color, trend, trendValue, sparklineData, onClick }: any) => {
-  const isRed = color === 'red';
-  const isEmerald = color === 'emerald';
-  const isAmber = color === 'amber';
-  const isBlue = color === 'blue';
-  
-  const iconColor = isRed ? 'text-destructive' : isEmerald ? 'text-success' : isAmber ? 'text-warning' : isBlue ? 'text-primary' : 'text-primary';
-  const glowColor = isRed ? 'from-red-500/20 to-rose-500/5' : isEmerald ? 'from-emerald-500/20 to-teal-500/5' : isAmber ? 'from-amber-500/20 to-orange-500/5' : isBlue ? 'from-blue-500/20 to-cyan-500/5' : 'from-primary/20 to-indigo-500/5';
-  const chartColor = isRed ? '#ef4444' : isEmerald ? '#10b981' : isAmber ? '#f59e0b' : isBlue ? '#3b82f6' : '#0ea5e9';
-
-  const sparklineOptions = {
-    xAxis: { type: 'category', show: false, data: sparklineData.map((_: any, i: number) => i) },
-    yAxis: { type: 'value', show: false, min: 'dataMin' },
-    series: [{
-      data: sparklineData.map((d: any) => d.value),
-      type: 'line',
-      smooth: true,
-      symbol: 'none',
-      lineStyle: { width: 2, color: chartColor, shadowColor: chartColor, shadowBlur: 8, shadowOffsetY: 2 },
-      areaStyle: {
-        color: {
-          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-          colorStops: [{ offset: 0, color: chartColor }, { offset: 1, color: 'transparent' }]
-        },
-        opacity: 0.3
-      }
-    }],
-    grid: { left: 0, right: 0, top: 0, bottom: 0 }
+const KPICard = ({ title, value, unit, icon: Icon, color, onClick }: any) => {
+  // Vibrant solid colors matching reference image
+  const bgColors: Record<string, string> = {
+    primary: 'bg-blue-600 hover:bg-blue-700 text-white border-blue-500',
+    emerald: 'bg-emerald-500 hover:bg-emerald-600 text-white border-emerald-400',
+    amber: 'bg-amber-500 hover:bg-amber-600 text-white border-amber-400',
+    purple: 'bg-purple-600 hover:bg-purple-700 text-white border-purple-500',
+    pink: 'bg-pink-600 hover:bg-pink-700 text-white border-pink-500'
   };
 
+  const cardClass = bgColors[color] || bgColors.primary;
+
   return (
-    <motion.div variants={itemVariants} whileHover={{ y: -4 }} className="h-full">
+    <motion.div variants={itemVariants} whileHover={{ y: -4, scale: 1.02 }} className="h-full">
       <div 
         onClick={onClick}
-        className="relative h-full px-5 py-4 flex flex-col justify-between group overflow-hidden cursor-pointer rounded-2xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] dark:shadow-[0_8px_30px_rgb(0,0,0,0.1)] transition-all duration-300"
+        className={`relative h-full px-6 py-5 flex flex-col justify-between group overflow-hidden cursor-pointer rounded-2xl shadow-lg transition-all duration-300 border ${cardClass}`}
       >
-        {/* Animated Gradient Background Blob */}
-        <div className={`absolute -right-10 -top-10 w-32 h-32 rounded-full bg-gradient-to-br ${glowColor} opacity-50 blur-2xl group-hover:scale-150 transition-transform duration-700`} />
+        {/* Subtle texture/gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-br from-white/10 to-transparent opacity-50" />
+        <div className="absolute -right-8 -top-8 w-32 h-32 rounded-full bg-white/10 blur-2xl group-hover:bg-white/20 transition-all duration-700" />
         
-        <div className="flex justify-between items-start mb-2 relative z-10">
-          <h4 className="text-[11px] font-bold text-muted-foreground uppercase tracking-[0.1em] leading-tight flex items-center gap-1.5">
-            <Icon className={`w-3.5 h-3.5 ${iconColor}`} /> {title}
+        <div className="flex justify-between items-start mb-4 relative z-10">
+          <h4 className="text-[12px] font-bold uppercase tracking-[0.1em] leading-tight flex items-center gap-2 text-white/90">
+            <Icon className="w-4 h-4 opacity-80" /> {title}
           </h4>
-          {trend && (
-            <div className={`flex items-center gap-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full backdrop-blur-md ${trend === 'up' ? 'text-success bg-success/100/10 border border-success/20' : 'text-destructive bg-destructive/100/10 border border-destructive/20'}`}>
-              {trend === 'up' ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />} {trendValue}
-            </div>
-          )}
         </div>
         
-        <div className="flex items-end justify-between relative z-10 mt-1">
-          <div className="flex items-baseline gap-1">
-            <span className="text-3xl font-black tracking-tight text-foreground dark:text-white leading-none group-hover:scale-105 transform origin-left transition-transform duration-300">{value}</span>
-            {unit && <span className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest">{unit}</span>}
-          </div>
-          
-          <div className="h-8 w-20 opacity-80 group-hover:opacity-100 transition-opacity">
-            <ReactECharts option={sparklineOptions} style={{ height: '100%', width: '100%' }} />
+        <div className="flex items-end justify-between relative z-10 mt-2">
+          <div className="flex items-baseline gap-1.5">
+            <span className="text-4xl font-black tracking-tight leading-none text-white drop-shadow-sm">{value}</span>
+            {unit && <span className="text-[12px] font-bold uppercase tracking-widest text-white/80">{unit}</span>}
           </div>
         </div>
       </div>
@@ -273,7 +247,8 @@ export default function CapacityOverview() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeKpi, setActiveKpi] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<'FY' | 'Monthly'>('FY');
+  const [chartFilter, setChartFilter] = useState<string>('All');
+  const [viewMode, setViewMode] = useState<'FY' | 'Monthly'>('Monthly');
   const [searchParams] = useSearchParams();
   const portfolio = searchParams.get('portfolio');
 
@@ -326,64 +301,69 @@ export default function CapacityOverview() {
 
   // Common Premium Chart Styling
   const commonChartOptions = {
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(255, 255, 255, 0.8)', borderColor: '#e5e7eb', textStyle: { color: '#374151', fontSize: 12 }, padding: [12, 16], borderRadius: 12, extraCssText: 'backdrop-filter: blur(8px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);' },
-    legend: { bottom: 0, itemWidth: 14, itemHeight: 14, textStyle: { color: '#6b7280', fontSize: 12, fontWeight: 600, fontFamily: 'inherit' }, icon: 'circle' },
-    grid: { top: 20, left: 10, right: 20, bottom: 45, containLabel: true },
-    xAxis: { type: 'category', boundaryGap: false, axisLine: { lineStyle: { color: '#e5e7eb' } }, axisLabel: { color: '#6b7280', fontWeight: 'bold', fontFamily: 'inherit', margin: 12 } },
-    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#f3f4f6' } }, axisLabel: { color: '#9ca3af', fontFamily: 'inherit', fontWeight: 600 } },
+    tooltip: { 
+      trigger: 'axis', 
+      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+      borderColor: '#e5e7eb', 
+      textStyle: { color: '#374151', fontSize: 13, fontWeight: 500 }, 
+      padding: [12, 16], 
+      borderRadius: 12, 
+      extraCssText: 'backdrop-filter: blur(10px); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);',
+      valueFormatter: (value: any) => Number(value).toFixed(1) + ' MW'
+    },
+    legend: { bottom: 0, itemWidth: 12, itemHeight: 12, textStyle: { color: '#6b7280', fontSize: 11, fontWeight: 600, fontFamily: 'inherit' }, icon: 'circle' },
+    grid: { top: 30, left: 10, right: 30, bottom: 45, containLabel: true },
+    xAxis: { type: 'category', boundaryGap: false, axisLine: { lineStyle: { color: '#e5e7eb' } }, axisLabel: { color: '#6b7280', fontWeight: '600', fontFamily: 'inherit', margin: 12, fontSize: 11 } },
+    yAxis: { type: 'value', splitLine: { lineStyle: { type: 'dashed', color: '#f3f4f6' } }, axisLabel: { color: '#9ca3af', fontFamily: 'inherit', fontWeight: 600, fontSize: 11 } },
   };
 
   const getSeries = (data: any[], key: string, color: string, name: string) => ({
-    name, type: 'line', smooth: true, showSymbol: data.length < 5, symbol: 'circle', symbolSize: 8,
-    lineStyle: { width: 3, color, shadowColor: color, shadowBlur: 10, shadowOffsetY: 3 },
-    itemStyle: { color, borderColor: '#fff', borderWidth: 2 },
-    areaStyle: {
-      color: {
-        type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
-        colorStops: [{ offset: 0, color: color + '50' }, { offset: 1, color: color + '05' }]
-      }
-    },
+    name, type: 'line', smooth: true, showSymbol: false, symbol: 'circle', symbolSize: 6,
+    lineStyle: { width: 2.5, color },
+    itemStyle: { color },
     data: data.map(d => d[key])
   });
+
+  const getBarSeries = (data: any[], key: string, color: string, name: string) => ({
+    name, type: 'bar', barMaxWidth: 40,
+    itemStyle: { color, borderRadius: [4, 4, 0, 0] },
+    data: data.map(d => d[key])
+  });
+
+  const allSeries = [
+    { key: "Solar COD", color: "#ea580c", name: "Solar COD", type: 'Solar', kpi: 'COD' },
+    { key: "Solar Trial Run", color: "#eab308", name: "Solar TR", type: 'Solar', kpi: 'TR' },
+    { key: "Wind COD", color: "#0284c7", name: "Wind COD", type: 'Wind', kpi: 'COD' },
+    { key: "Wind Trial Run", color: "#38bdf8", name: "Wind TR", type: 'Wind', kpi: 'TR' },
+  ];
+
+  const visibleSeriesDef = allSeries.filter(s => {
+    if (chartFilter === 'All') return true;
+    if (chartFilter === 'COD Done') return s.kpi === 'COD';
+    if (chartFilter === 'Trial Run Only') return s.kpi === 'TR';
+    if (chartFilter === 'Solar Portfolio') return s.type === 'Solar';
+    if (chartFilter === 'Wind Portfolio') return s.type === 'Wind';
+    return true;
+  });
+
+  // Helper to format "YYYY-MM" to "MMM 'YY" (e.g. "2025-07" -> "Jul '25")
+  const formatMonthLabel = (label: string) => {
+    if (!label || !label.includes('-')) return label;
+    const [year, month] = label.split('-');
+    const date = new Date(parseInt(year), parseInt(month) - 1);
+    return date.toLocaleDateString('en-US', { month: 'short' }) + " '" + year.substring(2);
+  };
 
   const fyEchartOption = {
     ...commonChartOptions,
     xAxis: { ...commonChartOptions.xAxis, data: fyDataObj.map(d => d.name) },
-    series: [
-      getSeries(fyDataObj, "Solar COD", "#f59e0b", "Solar COD"),
-      getSeries(fyDataObj, "Solar Trial Run", "#fde047", "Solar TR"),
-      getSeries(fyDataObj, "Wind COD", "#3b82f6", "Wind COD"),
-      getSeries(fyDataObj, "Wind Trial Run", "#93c5fd", "Wind TR"),
-    ]
+    series: visibleSeriesDef.map(s => getBarSeries(fyDataObj, s.key, s.color, s.name))
   };
 
   const monthlyEchartOption = {
     ...commonChartOptions,
-    xAxis: { ...commonChartOptions.xAxis, data: cumulativeMonthlyData.map((d: any) => d.name) },
-    series: [
-      getSeries(cumulativeMonthlyData, "Solar COD", "#f59e0b", "Solar COD"),
-      getSeries(cumulativeMonthlyData, "Solar Trial Run", "#fde047", "Solar TR"),
-      getSeries(cumulativeMonthlyData, "Wind COD", "#3b82f6", "Wind COD"),
-      getSeries(cumulativeMonthlyData, "Wind Trial Run", "#93c5fd", "Wind TR"),
-    ]
-  };
-
-  const pieEchartOption = {
-    tooltip: { trigger: 'item', formatter: '{b}: {c} MW ({d}%)', backgroundColor: 'rgba(255, 255, 255, 0.9)', borderRadius: 8, extraCssText: 'backdrop-filter: blur(8px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);' },
-    series: [
-      {
-        type: 'pie',
-        radius: ['55%', '75%'],
-        center: ['50%', '50%'],
-        avoidLabelOverlap: false,
-        itemStyle: { borderRadius: 12, borderColor: '#fff', borderWidth: 3 },
-        label: { show: false },
-        data: [
-          { value: totalSolar, name: 'Solar', itemStyle: { color: '#f59e0b' } },
-          { value: totalWind, name: 'Wind', itemStyle: { color: '#3b82f6' } }
-        ]
-      }
-    ]
+    xAxis: { ...commonChartOptions.xAxis, data: cumulativeMonthlyData.map((d: any) => formatMonthLabel(d.name)) },
+    series: visibleSeriesDef.map(s => getSeries(cumulativeMonthlyData, s.key, s.color, s.name))
   };
 
   // KPI Calculations
@@ -427,38 +407,57 @@ export default function CapacityOverview() {
       
       {/* Top Metric Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KPICard title="COD Done" value={totalCod.toFixed(1)} unit="MW" icon={Zap} color="primary" trend={trendCod?.dir} trendValue={trendCod?.val} sparklineData={spark1} onClick={() => setActiveKpi('COD Done')} />
-        <KPICard title="Trial Run Only" value={totalTr.toFixed(1)} unit="MW" icon={Activity} color="emerald" trend={trendTr?.dir} trendValue={trendTr?.val} sparklineData={spark2} onClick={() => setActiveKpi('Trial Run Only')} />
-        <KPICard title="Solar Portfolio" value={totalSolar.toFixed(1)} unit="MW" icon={Sun} color="amber" trend={trendSolar?.dir} trendValue={trendSolar?.val} sparklineData={spark3} onClick={() => setActiveKpi('Solar Portfolio')} />
-        <KPICard title="Wind Portfolio" value={totalWind.toFixed(1)} unit="MW" icon={Wind} color="blue" trend={trendWind?.dir} trendValue={trendWind?.val} sparklineData={spark4} onClick={() => setActiveKpi('Wind Portfolio')} />
+        <KPICard title="COD Done" value={totalCod.toFixed(1)} unit="MW" icon={Zap} color="primary" onClick={() => { setActiveKpi('COD Done'); setChartFilter('COD Done'); }} />
+        <KPICard title="Trial Run Only" value={totalTr.toFixed(1)} unit="MW" icon={Activity} color="emerald" onClick={() => { setActiveKpi('Trial Run Only'); setChartFilter('Trial Run Only'); }} />
+        <KPICard title="Solar Portfolio" value={totalSolar.toFixed(1)} unit="MW" icon={Sun} color="amber" onClick={() => { setActiveKpi('Solar Portfolio'); setChartFilter('Solar Portfolio'); }} />
+        <KPICard title="Wind Portfolio" value={totalWind.toFixed(1)} unit="MW" icon={Wind} color="purple" onClick={() => { setActiveKpi('Wind Portfolio'); setChartFilter('Wind Portfolio'); }} />
       </div>
 
       {/* Analytics Dashboard Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      <div className="flex flex-col gap-4">
         {/* Main Chart */}
-        <motion.div variants={itemVariants} className="p-5 lg:col-span-2 flex flex-col h-[400px] rounded-2xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
+        <motion.div variants={itemVariants} className="p-5 flex flex-col h-[400px] rounded-2xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)]">
           <div className="flex justify-between items-center mb-4">
             <h3 className="text-[12px] font-bold text-foreground dark:text-white uppercase tracking-[0.08em] flex items-center gap-2">
               <Calendar className="w-4 h-4 text-primary" /> Capacity Trajectory
             </h3>
-            <div className="flex bg-muted dark:bg-gray-900/80 backdrop-blur p-1 rounded-xl shadow-inner border border-border/50 dark:border-gray-700/50 relative">
-              {viewMode === 'FY' ? (
-                 <motion.div layoutId="chartViewToggle" className="absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg shadow-sm" />
-              ) : (
-                 <motion.div layoutId="chartViewToggle" className="absolute right-1 top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg shadow-sm" />
-              )}
-              <button 
-                onClick={() => setViewMode('FY')} 
-                className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'FY' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Financial Year
-              </button>
-              <button 
-                onClick={() => setViewMode('Monthly')} 
-                className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'Monthly' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
-              >
-                Monthly Trend
-              </button>
+            
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+              {/* Chart Filters */}
+              <div className="flex bg-muted dark:bg-gray-900/80 backdrop-blur p-1 rounded-xl shadow-inner border border-border/50 dark:border-gray-700/50">
+                {['All', 'COD', 'TR', 'Solar', 'Wind'].map(f => {
+                   const mappedFilter = f === 'COD' ? 'COD Done' : f === 'TR' ? 'Trial Run Only' : f === 'Solar' ? 'Solar Portfolio' : f === 'Wind' ? 'Wind Portfolio' : 'All';
+                   return (
+                     <button
+                       key={f}
+                       onClick={() => setChartFilter(mappedFilter)}
+                       className={`px-3 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors ${chartFilter === mappedFilter ? 'bg-white dark:bg-gray-700 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                     >
+                       {f}
+                     </button>
+                   );
+                })}
+              </div>
+
+              <div className="flex bg-muted dark:bg-gray-900/80 backdrop-blur p-1 rounded-xl shadow-inner border border-border/50 dark:border-gray-700/50 relative">
+                {viewMode === 'FY' ? (
+                   <motion.div layoutId="chartViewToggle" className="absolute left-1 top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg shadow-sm" />
+                ) : (
+                   <motion.div layoutId="chartViewToggle" className="absolute right-1 top-1 bottom-1 w-[calc(50%-4px)] bg-white dark:bg-gray-700 rounded-lg shadow-sm" />
+                )}
+                <button 
+                  onClick={() => setViewMode('FY')} 
+                  className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'FY' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Financial Year
+                </button>
+                <button 
+                  onClick={() => setViewMode('Monthly')} 
+                  className={`px-4 py-1.5 text-[11px] font-bold uppercase rounded-lg transition-colors relative z-10 w-28 ${viewMode === 'Monthly' ? 'text-primary' : 'text-muted-foreground hover:text-foreground'}`}
+                >
+                  Monthly Trend
+                </button>
+              </div>
             </div>
           </div>
           <div className="flex-1 w-full min-h-0 relative">
@@ -472,43 +471,15 @@ export default function CapacityOverview() {
                 className="absolute inset-0"
               >
                 {viewMode === 'FY' ? (
-                  <ReactECharts option={fyEchartOption} style={{ height: '100%', width: '100%' }} />
+                  <ReactECharts option={fyEchartOption} style={{ height: '100%', width: '100%' }} notMerge={true} />
                 ) : (
-                  <ReactECharts option={monthlyEchartOption} style={{ height: '100%', width: '100%' }} />
+                  <ReactECharts option={monthlyEchartOption} style={{ height: '100%', width: '100%' }} notMerge={true} />
                 )}
               </motion.div>
             </AnimatePresence>
           </div>
         </motion.div>
-
-        {/* Donut Chart */}
-        <motion.div variants={itemVariants} className="p-5 flex flex-col h-[400px] rounded-2xl bg-white/70 dark:bg-gray-900/70 backdrop-blur-xl border border-white/40 dark:border-white/10 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden relative">
-          <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-48 h-48 bg-gradient-to-br from-amber-500/10 to-blue-500/10 rounded-full blur-2xl" />
-
-          <h3 className="text-[12px] font-bold text-foreground dark:text-white uppercase tracking-[0.08em] mb-2 flex items-center gap-2">
-            <Activity className="w-4 h-4 text-primary" /> Portfolio Mix
-          </h3>
-          <div className="flex-1 relative flex items-center justify-center">
-            <ReactECharts option={pieEchartOption} style={{ height: '100%', width: '100%' }} />
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest">Total</span>
-              <span className="text-2xl font-black text-foreground dark:text-white leading-none mt-1">{(totalSolar + totalWind).toFixed(0)}</span>
-              <span className="text-[10px] font-bold text-muted-foreground">MW</span>
-            </div>
-          </div>
-          <div className="flex justify-center gap-6 mt-2 pt-4 border-t border-muted dark:border-border">
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-warning/100"></div><span className="text-[11px] font-bold text-muted-foreground uppercase">Solar</span></div>
-              <span className="text-[13px] font-bold text-foreground dark:text-white">{totalSolar.toFixed(1)} MW</span>
-            </div>
-            <div className="flex flex-col items-center">
-              <div className="flex items-center gap-1.5 mb-1"><div className="w-2 h-2 rounded-full bg-primary/100"></div><span className="text-[11px] font-bold text-muted-foreground uppercase">Wind</span></div>
-              <span className="text-[13px] font-bold text-foreground dark:text-white">{totalWind.toFixed(1)} MW</span>
-            </div>
-          </div>
-        </motion.div>
       </div>
-
 
     </motion.div>
   );

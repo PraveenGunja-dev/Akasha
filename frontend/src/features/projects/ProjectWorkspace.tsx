@@ -1054,110 +1054,110 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
         {/* ── AI Project Summary ── */}
         {false && (
-        <div className="intelligence-card p-6 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-72 h-72 bg-primary/[0.03] blur-[100px] rounded-full pointer-events-none"></div>
+          <div className="intelligence-card p-6 relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-72 h-72 bg-primary/[0.03] blur-[100px] rounded-full pointer-events-none"></div>
 
-          <div className="flex items-start gap-4 mb-4 relative z-10">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center shrink-0 border border-primary/10">
-              <BarChart3 className="w-5 h-5 text-primary/80" />
-            </div>
-            <div className="flex-1">
-              <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
-                Project Insights
-              </h3>
-            </div>
-          </div>
-
-          <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
-            {/* Left: AI Diagnostic */}
-            <div className="lg:col-span-8">
-              <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Diagnostic Analysis</h4>
-              <div className="border-l-2 border-primary/30 pl-4 min-h-[80px]">
-                {diagLoading ? (
-                  <div className="flex items-center gap-3">
-                    <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
-                    <span className="text-sm text-muted-foreground/60 animate-pulse">Analyzing project data...</span>
-                  </div>
-                ) : diagnostic ? (
-                  <div className="columns-1 md:columns-2 gap-8 prose prose-sm max-w-none text-foreground/80">
-                    {diagnostic.executiveSummary && (
-                      <div className="break-inside-avoid mb-6">
-                        <h4 className="text-sm font-bold text-foreground mb-1">Executive Summary</h4>
-                        <p>{diagnostic.executiveSummary}</p>
-                      </div>
-                    )}
-                    {diagnostic.keyFindings && diagnostic.keyFindings.length > 0 && (
-                      <div className="break-inside-avoid mb-6">
-                        <h4 className="text-sm font-bold text-foreground mb-1">Key Findings</h4>
-                        <ul className="list-disc pl-4 space-y-1">
-                          {diagnostic.keyFindings.map((f: string, i: number) => <li key={i}>{f}</li>)}
-                        </ul>
-                      </div>
-                    )}
-                    {diagnostic.riskAssessment && (
-                      <div className="break-inside-avoid mb-6">
-                        <h4 className="text-sm font-bold text-foreground mb-1">Risk Assessment</h4>
-                        <p>{diagnostic.riskAssessment}</p>
-                      </div>
-                    )}
-                    {diagnostic.rootCauseAnalysis && (
-                      <div className="break-inside-avoid mb-6">
-                        <h4 className="text-sm font-bold text-foreground mb-1">Root Cause Analysis</h4>
-                        <p>{diagnostic.rootCauseAnalysis}</p>
-                      </div>
-                    )}
-                    {diagnostic.recommendedActions && diagnostic.recommendedActions.length > 0 && (
-                      <div className="break-inside-avoid mb-6">
-                        <h4 className="text-sm font-bold text-foreground mb-1">Recommended Actions</h4>
-                        <ul className="list-disc pl-4 space-y-1">
-                          {diagnostic.recommendedActions.map((f: string, i: number) => <li key={i}>{f}</li>)}
-                        </ul>
-                      </div>
-                    )}
-                    {diagnostic.expectedOutcome && (
-                      <div className="break-inside-avoid mb-6">
-                        <h4 className="text-sm font-bold text-foreground mb-1">Expected Outcome</h4>
-                        <p>{diagnostic.expectedOutcome}</p>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-foreground/80 leading-relaxed">Diagnostic unavailable.</p>
-                )}
+            <div className="flex items-start gap-4 mb-4 relative z-10">
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary/20 to-purple-600/20 flex items-center justify-center shrink-0 border border-primary/10">
+                <BarChart3 className="w-5 h-5 text-primary/80" />
+              </div>
+              <div className="flex-1">
+                <h3 className="text-base font-semibold text-foreground flex items-center gap-2">
+                  Project Insights
+                </h3>
               </div>
             </div>
 
-            {/* Right: Key Metrics + Action */}
-            <div className="space-y-4 lg:col-span-4">
-              <div>
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">Key Issue</h4>
-                <div className="flex items-center gap-2">
-                  <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${p.keyIssue === 'On Track' ? 'bg-success/100/10 text-success border border-success/20' : 'bg-destructive/100/10 text-destructive border border-destructive/20'
-                    }`}>
-                    {p.keyIssue === 'On Track' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
-                    {p.keyIssue}
-                  </span>
+            <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8">
+              {/* Left: AI Diagnostic */}
+              <div className="lg:col-span-8">
+                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-3">Diagnostic Analysis</h4>
+                <div className="border-l-2 border-primary/30 pl-4 min-h-[80px]">
+                  {diagLoading ? (
+                    <div className="flex items-center gap-3">
+                      <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                      <span className="text-sm text-muted-foreground/60 animate-pulse">Analyzing project data...</span>
+                    </div>
+                  ) : diagnostic ? (
+                    <div className="columns-1 md:columns-2 gap-8 prose prose-sm max-w-none text-foreground/80">
+                      {diagnostic.executiveSummary && (
+                        <div className="break-inside-avoid mb-6">
+                          <h4 className="text-sm font-bold text-foreground mb-1">Executive Summary</h4>
+                          <p>{diagnostic.executiveSummary}</p>
+                        </div>
+                      )}
+                      {diagnostic.keyFindings && diagnostic.keyFindings.length > 0 && (
+                        <div className="break-inside-avoid mb-6">
+                          <h4 className="text-sm font-bold text-foreground mb-1">Key Findings</h4>
+                          <ul className="list-disc pl-4 space-y-1">
+                            {diagnostic.keyFindings.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {diagnostic.riskAssessment && (
+                        <div className="break-inside-avoid mb-6">
+                          <h4 className="text-sm font-bold text-foreground mb-1">Risk Assessment</h4>
+                          <p>{diagnostic.riskAssessment}</p>
+                        </div>
+                      )}
+                      {diagnostic.rootCauseAnalysis && (
+                        <div className="break-inside-avoid mb-6">
+                          <h4 className="text-sm font-bold text-foreground mb-1">Root Cause Analysis</h4>
+                          <p>{diagnostic.rootCauseAnalysis}</p>
+                        </div>
+                      )}
+                      {diagnostic.recommendedActions && diagnostic.recommendedActions.length > 0 && (
+                        <div className="break-inside-avoid mb-6">
+                          <h4 className="text-sm font-bold text-foreground mb-1">Recommended Actions</h4>
+                          <ul className="list-disc pl-4 space-y-1">
+                            {diagnostic.recommendedActions.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                          </ul>
+                        </div>
+                      )}
+                      {diagnostic.expectedOutcome && (
+                        <div className="break-inside-avoid mb-6">
+                          <h4 className="text-sm font-bold text-foreground mb-1">Expected Outcome</h4>
+                          <p>{diagnostic.expectedOutcome}</p>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-foreground/80 leading-relaxed">Diagnostic unavailable.</p>
+                  )}
                 </div>
               </div>
-              <div>
-                <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">Recommended Action</h4>
-                <p className="text-sm text-primary/80 leading-relaxed bg-primary/[0.04] border border-primary/10 rounded-lg px-4 py-3">
-                  {p.recommendedAction}
-                </p>
-              </div>
 
-              <div className="mt-6 pt-4 border-t border-border">
-                <button
-                  onClick={() => window.dispatchEvent(new CustomEvent('open-simulation-lab', { detail: { projectId } }))}
-                  className="w-full flex items-center justify-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2.5 text-sm font-semibold"
-                >
-                  <Activity className="w-4 h-4" />
-                  Run Scenario Analysis
-                </button>
+              {/* Right: Key Metrics + Action */}
+              <div className="space-y-4 lg:col-span-4">
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">Key Issue</h4>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${p.keyIssue === 'On Track' ? 'bg-success/100/10 text-success border border-success/20' : 'bg-destructive/100/10 text-destructive border border-destructive/20'
+                      }`}>
+                      {p.keyIssue === 'On Track' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+                      {p.keyIssue}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">Recommended Action</h4>
+                  <p className="text-sm text-primary/80 leading-relaxed bg-primary/[0.04] border border-primary/10 rounded-lg px-4 py-3">
+                    {p.recommendedAction}
+                  </p>
+                </div>
+
+                <div className="mt-6 pt-4 border-t border-border">
+                  <button
+                    onClick={() => window.dispatchEvent(new CustomEvent('open-simulation-lab', { detail: { projectId } }))}
+                    className="w-full flex items-center justify-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2.5 text-sm font-semibold"
+                  >
+                    <Activity className="w-4 h-4" />
+                    Run Scenario Analysis
+                  </button>
+                </div>
               </div>
             </div>
           </div>
-        </div>
         )}
 
         {/* ── Tab Navigation ── */}
@@ -1582,15 +1582,24 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                     </thead>
                                     <tbody className="divide-y divide-border/30">
                                       {/* ── PO Rows ── */}
-                                      {expandedMetric === 'pos' && Array.from(new Set((sap.purchaseOrders || []).map((p: any) => p.poNumber))).slice(0, 100).map((poNum: any) => {
-                                        const items = (sap.purchaseOrders || []).filter((p: any) => p.poNumber === poNum);
-                                        const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
-                                        const sumBudget = items.reduce((sum: number, p: any) => sum + (p.budgetINR || 0), 0);
-                                        const sumDelivered = items.reduce((sum: number, p: any) => sum + (p.deliveredINR || 0), 0);
-                                        const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
-                                        const isExpanded = expandedPOs[`sap-pos-${poNum}`];
-                                        return (
-                                          <React.Fragment key={`sap-pos-${poNum}`}>
+                                      {expandedMetric === 'pos' && (() => {
+                                        let validPOs = sap.purchaseOrders || [];
+                                        if (slrData && slrData.data) {
+                                          const slrFiltered = slrTypeFilter === 'ALL' ? slrData.data : slrData.data.filter((r: any) => r.type === slrTypeFilter);
+                                          const validPoNumbers = new Set(slrFiltered.map((r: any) => String(r.po_document || r.poNumber)));
+                                          validPOs = validPOs.filter((p: any) => validPoNumbers.has(String(p.poNumber)));
+                                        }
+                                        const uniquePoNumbers = Array.from(new Set(validPOs.map((p: any) => p.poNumber))).slice(0, 100);
+                                        
+                                        return uniquePoNumbers.map((poNum: any) => {
+                                          const items = validPOs.filter((p: any) => p.poNumber === poNum);
+                                          const sumQty = items.reduce((sum: number, p: any) => sum + (p.orderedQty || 0), 0);
+                                          const sumBudget = items.reduce((sum: number, p: any) => sum + (p.budgetINR || 0), 0);
+                                          const sumDelivered = items.reduce((sum: number, p: any) => sum + (p.deliveredINR || 0), 0);
+                                          const storages = Array.from(new Set(items.map((p: any) => p.storageLocation).filter(Boolean)));
+                                          const isExpanded = expandedPOs[`sap-pos-${poNum}`];
+                                          return (
+                                            <React.Fragment key={`sap-pos-${poNum}`}>
                                             <tr
                                               className="hover:bg-muted transition-colors cursor-pointer"
                                               onClick={() => setExpandedPOs(prev => ({ ...prev, [`sap-pos-${poNum}`]: !prev[`sap-pos-${poNum}`] }))}
@@ -1627,7 +1636,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                             ))}
                                           </React.Fragment>
                                         );
-                                      })}
+                                      });
+                                      })()}
                                       {/* ── Vendor Rows ── */}
                                       {expandedMetric === 'vendors' && (sap.vendorBreakdown || []).map((v: any, i: number) => (
                                         <tr key={i} className="hover:bg-muted transition-colors">
@@ -2495,27 +2505,27 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   {/* Input Port */}
                                   {i !== 0 && (
                                     <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' :
-                                        isInProgress ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse' :
-                                          'border-border shadow-inner'
+                                      isInProgress ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse' :
+                                        'border-border shadow-inner'
                                       }`}></div>
                                   )}
 
                                   {/* Node Card */}
                                   <div className={`group w-full rounded-2xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-[0_8px_30px_-4px_rgba(59,130,246,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(59,130,246,0.4)] backdrop-blur-md' :
-                                      isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-[0_8px_30px_-4px_rgba(245,158,11,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(245,158,11,0.4)] backdrop-blur-md ring-1 ring-amber-500/20 ring-inset' :
-                                        'bg-card/40 dark:bg-card/40 border-border shadow-lg hover:shadow-xl backdrop-blur-sm hover:border-border/80'
+                                    isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-[0_8px_30px_-4px_rgba(245,158,11,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(245,158,11,0.4)] backdrop-blur-md ring-1 ring-amber-500/20 ring-inset' :
+                                      'bg-card/40 dark:bg-card/40 border-border shadow-lg hover:shadow-xl backdrop-blur-sm hover:border-border/80'
                                     }`}>
                                     {/* Glass reflection overlay */}
                                     <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/0 via-white/5 to-white/0 dark:from-white/0 dark:via-white/5 dark:to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
 
                                     {/* Header */}
                                     <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'border-primary/20 text-primary' :
-                                        isInProgress ? 'border-amber-500/20 text-amber-500' :
-                                          'border-border text-muted-foreground group-hover:text-foreground transition-colors'
+                                      isInProgress ? 'border-amber-500/20 text-amber-500' :
+                                        'border-border text-muted-foreground group-hover:text-foreground transition-colors'
                                       }`}>
                                       <div className={`w-7 h-7 rounded-xl flex items-center justify-center shadow-inner text-[11px] font-black tracking-tighter ${isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white shadow-primary/40' :
-                                          isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/40 animate-pulse' :
-                                            'bg-muted border border-border text-muted-foreground group-hover:bg-muted/80 transition-colors'
+                                        isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/40 animate-pulse' :
+                                          'bg-muted border border-border text-muted-foreground group-hover:bg-muted/80 transition-colors'
                                         }`}>
                                         {isCompleted ? <Check className="w-4 h-4 text-white" /> : i + 1}
                                       </div>
@@ -2542,8 +2552,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         )}
                                       </div>
                                       <div className={`font-mono text-[10px] px-2 py-1 rounded-md border backdrop-blur-sm font-medium ${isCompleted ? 'bg-primary/5 text-primary border-primary/20' :
-                                          isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' :
-                                            'bg-card/50 text-muted-foreground border-border shadow-inner'
+                                        isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' :
+                                          'bg-card/50 text-muted-foreground border-border shadow-inner'
                                         }`}>
                                         {dateStr}
                                       </div>
@@ -2553,7 +2563,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   {/* Output Port */}
                                   {!isLast && (
                                     <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' :
-                                        'border-border shadow-inner'
+                                      'border-border shadow-inner'
                                       }`}></div>
                                   )}
 
@@ -2567,8 +2577,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         strokeWidth={isCompleted ? "3" : "2"}
                                         strokeDasharray={isInProgress ? "4 4" : "0"}
                                         className={`transition-all duration-700 ${isCompleted ? 'text-primary' :
-                                            isInProgress ? 'text-amber-500 animate-[dash_2s_linear_infinite]' :
-                                              'text-border dark:text-gray-700'
+                                          isInProgress ? 'text-amber-500 animate-[dash_2s_linear_infinite]' :
+                                            'text-border dark:text-gray-700'
                                           }`}
                                       />
                                     </svg>
@@ -3231,91 +3241,91 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           </div>
         </div>
       )}
-              {/* Workflow Modal */}
-              {showWorkflowModal && (
-                <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-                  <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
-                    <div className="flex items-center justify-between p-4 border-b bg-card z-20">
-                      <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
-                        <Network className="w-5 h-5 text-primary" /> Full Project Workflow
-                      </h2>
-                      <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
+      {/* Workflow Modal */}
+      {showWorkflowModal && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-card w-[95vw] h-[90vh] rounded-2xl shadow-2xl border border-border flex flex-col overflow-hidden animate-in fade-in zoom-in duration-200">
+            <div className="flex items-center justify-between p-4 border-b bg-card z-20">
+              <h2 className="text-lg font-bold flex items-center gap-2 text-foreground">
+                <Network className="w-5 h-5 text-primary" /> Full Project Workflow
+              </h2>
+              <button onClick={() => setShowWorkflowModal(false)} className="p-2 hover:bg-muted rounded-full text-muted-foreground hover:text-foreground transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
 
-                    <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
-                      <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
-                        {p6?.milestones?.map((m: any, i: number) => {
-                          const isLast = i === p6.milestones.length - 1;
-                          const isEven = i % 2 === 0;
-                          const isCompleted = m.status === 'Completed';
-                          const isInProgress = m.status === 'In Progress';
-                          const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
+            <div className="flex-1 overflow-auto bg-muted p-12 custom-scrollbar">
+              <div className="flex items-center gap-24 min-w-max h-[400px] px-12 py-12">
+                {p6?.milestones?.map((m: any, i: number) => {
+                  const isLast = i === p6.milestones.length - 1;
+                  const isEven = i % 2 === 0;
+                  const isCompleted = m.status === 'Completed';
+                  const isInProgress = m.status === 'In Progress';
+                  const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
 
-                          return (
-                            <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
+                  return (
+                    <div key={i} className={`relative flex items-center shrink-0 w-[280px] ${isEven ? 'translate-y-[80px]' : '-translate-y-[80px]'}`}>
 
-                              {/* Input Port */}
-                              {i !== 0 && (
-                                <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
-                                  }`}></div>
-                              )}
+                      {/* Input Port */}
+                      {i !== 0 && (
+                        <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted || isInProgress ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                          }`}></div>
+                      )}
 
-                              {/* Node Card */}
-                              <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${isCompleted ? 'border-primary shadow-primary/20' :
-                                  isInProgress ? 'border-amber-500 shadow-amber-500/20' :
-                                    'border-border shadow-black/5'
-                                }`}>
-                                <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'bg-primary/5 border-primary/20 text-primary' :
-                                    isInProgress ? 'bg-warning/100/5 border-warning/20 text-warning' :
-                                      'bg-muted border-border text-muted-foreground'
-                                  } rounded-t-2xl`}>
-                                  <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${isCompleted ? 'bg-primary text-primary-foreground' :
-                                      isInProgress ? 'bg-warning/100 text-white' :
-                                        'bg-background border border-border text-foreground'
-                                    }`}>
-                                    {i + 1}
-                                  </div>
-                                  <h4 className="text-[13px] font-bold uppercase tracking-tight line-clamp-2 leading-tight flex-1" title={m.name}>
-                                    {m.name}
-                                  </h4>
-                                </div>
+                      {/* Node Card */}
+                      <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${isCompleted ? 'border-primary shadow-primary/20' :
+                        isInProgress ? 'border-amber-500 shadow-amber-500/20' :
+                          'border-border shadow-black/5'
+                        }`}>
+                        <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'bg-primary/5 border-primary/20 text-primary' :
+                          isInProgress ? 'bg-warning/100/5 border-warning/20 text-warning' :
+                            'bg-muted border-border text-muted-foreground'
+                          } rounded-t-2xl`}>
+                          <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${isCompleted ? 'bg-primary text-primary-foreground' :
+                            isInProgress ? 'bg-warning/100 text-white' :
+                              'bg-background border border-border text-foreground'
+                            }`}>
+                            {i + 1}
+                          </div>
+                          <h4 className="text-[13px] font-bold uppercase tracking-tight line-clamp-2 leading-tight flex-1" title={m.name}>
+                            {m.name}
+                          </h4>
+                        </div>
 
-                                <div className="px-4 py-3.5 flex items-center justify-between bg-card rounded-b-2xl">
-                                  <div className="flex items-center gap-2">
-                                    <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-warning/100 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
-                                  </div>
-                                  <span className="font-mono text-[10px] text-foreground bg-muted px-2 py-1 rounded-md border border-border">{dateStr}</span>
-                                </div>
-                              </div>
-
-                              {/* Output Port */}
-                              {!isLast && (
-                                <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
-                                  }`}></div>
-                              )}
-
-                              {/* Connection Wire */}
-                              {!isLast && (
-                                <svg className="absolute left-[calc(100%-1.5px)] pointer-events-none" style={{ width: '6rem', height: '160px', top: isEven ? 'calc(50% - 160px)' : '50%', zIndex: -10 }}>
-                                  <path
-                                    d={isEven ? "M 0 160 C 48 160, 48 0, 96 0" : "M 0 0 C 48 0, 48 160, 96 160"}
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="3"
-                                    className={isCompleted ? 'text-primary' : 'text-primary/20'}
-                                  />
-                                </svg>
-                              )}
-                            </div>
-                          )
-                        })}
+                        <div className="px-4 py-3.5 flex items-center justify-between bg-card rounded-b-2xl">
+                          <div className="flex items-center gap-2">
+                            <div className={`w-2.5 h-2.5 rounded-full shadow-sm ${isCompleted ? 'bg-primary' : isInProgress ? 'bg-warning/100 animate-pulse' : 'bg-muted-foreground/30'}`}></div>
+                          </div>
+                          <span className="font-mono text-[10px] text-foreground bg-muted px-2 py-1 rounded-md border border-border">{dateStr}</span>
+                        </div>
                       </div>
+
+                      {/* Output Port */}
+                      {!isLast && (
+                        <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.5)]' : 'border-muted-foreground/50'
+                          }`}></div>
+                      )}
+
+                      {/* Connection Wire */}
+                      {!isLast && (
+                        <svg className="absolute left-[calc(100%-1.5px)] pointer-events-none" style={{ width: '6rem', height: '160px', top: isEven ? 'calc(50% - 160px)' : '50%', zIndex: -10 }}>
+                          <path
+                            d={isEven ? "M 0 160 C 48 160, 48 0, 96 0" : "M 0 0 C 48 0, 48 160, 96 160"}
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            className={isCompleted ? 'text-primary' : 'text-primary/20'}
+                          />
+                        </svg>
+                      )}
                     </div>
-                  </div>
-                </div>
-              )}
+                  )
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

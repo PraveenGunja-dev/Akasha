@@ -103,6 +103,18 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
         if "demo" not in name_check.lower():
             filtered_mappings.append(m)
             
+    # Deduplicate mappings to prevent double counting
+    dedup = {}
+    for m in filtered_mappings:
+        if m.project_id:
+            if m.project_id not in dedup:
+                dedup[m.project_id] = m
+            else:
+                existing = dedup[m.project_id]
+                if len(m.spv_plant_code or '') > len(existing.spv_plant_code or ''):
+                    dedup[m.project_id] = m
+    filtered_mappings = list(dedup.values())
+
     if portfolio and portfolio.lower() != "all portfolios":
         mapped_ids = [m.project_id for m in filtered_mappings if m.project_id]
         raw_p6_projects = [p for p in raw_p6_projects if p.project_id in mapped_ids]

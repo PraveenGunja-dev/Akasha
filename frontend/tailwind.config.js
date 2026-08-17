@@ -1,98 +1,101 @@
 /** @type {import('tailwindcss').Config} */
+
+/* Every colour below resolves to a CSS variable declared in src/index.css.
+   Both themes are carried by the variables, so a utility like
+   `text-fg-secondary` is correct in light and dark with no `dark:` twin. */
+
+const ramp = (name) =>
+  Object.fromEntries(
+    [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((s) => [
+      s,
+      `var(--${name}-${s})`,
+    ])
+  );
+
+const statusTriad = (name) => ({
+  DEFAULT: `var(--status-${name}-solid)`,
+  fg: `var(--status-${name}-fg)`,
+  bg: `var(--status-${name}-bg)`,
+  border: `var(--status-${name}-border)`,
+  solid: `var(--status-${name}-solid)`,
+});
+
 export default {
   darkMode: ["class"],
-  content: [
-    "./index.html",
-    "./src/**/*.{ts,tsx,js,jsx}"
-  ],
+  content: ["./index.html", "./src/**/*.{ts,tsx,js,jsx}"],
   theme: {
     extend: {
       colors: {
+        /* ── Brand anchors ── */
         brand: {
           blue: "var(--brand-blue)",
-          pink: "var(--brand-pink)",
           purple: "var(--brand-purple)",
+          pink: "var(--brand-pink)",
         },
-        border: "var(--border)",
-        input: "var(--input)",
-        ring: "var(--ring)",
-        background: {
-          DEFAULT: "var(--background)",
-          50: 'var(--background-50)',
-          100: 'var(--background-100)',
-          200: 'var(--background-200)',
-          300: 'var(--background-300)',
-          400: 'var(--background-400)',
-          500: 'var(--background-500)',
-          600: 'var(--background-600)',
-          700: 'var(--background-700)',
-          800: 'var(--background-800)',
-          900: 'var(--background-900)',
-          950: 'var(--background-950)',
-        },
-        foreground: "var(--foreground)",
-        text: {
-          50: 'var(--text-50)',
-          100: 'var(--text-100)',
-          200: 'var(--text-200)',
-          300: 'var(--text-300)',
-          400: 'var(--text-400)',
-          500: 'var(--text-500)',
-          600: 'var(--text-600)',
-          700: 'var(--text-700)',
-          800: 'var(--text-800)',
-          900: 'var(--text-900)',
-          950: 'var(--text-950)',
-        },
+
+        /* ── Neutral ramp: this is the interface ── */
+        neutral: { 0: "var(--neutral-0)", ...ramp("neutral") },
+
+        /* ── Brand ramps ── */
         primary: {
           DEFAULT: "var(--primary)",
           foreground: "var(--primary-foreground)",
-          50: 'var(--primary-50)',
-          100: 'var(--primary-100)',
-          200: 'var(--primary-200)',
-          300: 'var(--primary-300)',
-          400: 'var(--primary-400)',
-          500: 'var(--primary-500)',
-          600: 'var(--primary-600)',
-          700: 'var(--primary-700)',
-          800: 'var(--primary-800)',
-          900: 'var(--primary-900)',
-          950: 'var(--primary-950)',
+          ...ramp("primary"),
         },
         secondary: {
           DEFAULT: "var(--secondary)",
           foreground: "var(--secondary-foreground)",
-          50: 'var(--secondary-50)',
-          100: 'var(--secondary-100)',
-          200: 'var(--secondary-200)',
-          300: 'var(--secondary-300)',
-          400: 'var(--secondary-400)',
-          500: 'var(--secondary-500)',
-          600: 'var(--secondary-600)',
-          700: 'var(--secondary-700)',
-          800: 'var(--secondary-800)',
-          900: 'var(--secondary-900)',
-          950: 'var(--secondary-950)',
+          ...ramp("secondary"),
         },
         accent: {
           DEFAULT: "var(--accent)",
           foreground: "var(--accent-foreground)",
-          50: 'var(--accent-50)',
-          100: 'var(--accent-100)',
-          200: 'var(--accent-200)',
-          300: 'var(--accent-300)',
-          400: 'var(--accent-400)',
-          500: 'var(--accent-500)',
-          600: 'var(--accent-600)',
-          700: 'var(--accent-700)',
-          800: 'var(--accent-800)',
-          900: 'var(--accent-900)',
-          950: 'var(--accent-950)',
+          ...ramp("accent"),
         },
-        muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
+
+        /* ── Surface elevation ladder ── */
+        surface: {
+          0: "var(--surface-0)",
+          1: "var(--surface-1)",
+          2: "var(--surface-2)",
+          3: "var(--surface-3)",
+          sunken: "var(--surface-sunken)",
         },
+
+        /* ── Foreground hierarchy ── */
+        fg: {
+          DEFAULT: "var(--fg-primary)",
+          primary: "var(--fg-primary)",
+          secondary: "var(--fg-secondary)",
+          tertiary: "var(--fg-tertiary)",
+          disabled: "var(--fg-disabled)",
+          "on-solid": "var(--fg-on-solid)",
+        },
+
+        /* ── Status system: five states + one AI accent ──
+           Reserved. Never use these as chart series colours. */
+        status: {
+          critical: statusTriad("critical"),
+          risk: statusTriad("risk"),
+          watch: statusTriad("watch"),
+          healthy: statusTriad("healthy"),
+          done: statusTriad("done"),
+          ai: statusTriad("ai"),
+        },
+
+        /* ── Lines ── */
+        border: {
+          DEFAULT: "var(--border)",
+          subtle: "var(--border-subtle)",
+          default: "var(--border-default)",
+          strong: "var(--border-strong)",
+        },
+        input: "var(--input)",
+        ring: "var(--ring)",
+
+        /* ── Legacy semantic aliases (~4,000 existing call sites) ── */
+        background: "var(--background)",
+        foreground: "var(--foreground)",
         card: {
           DEFAULT: "var(--card)",
           foreground: "var(--card-foreground)",
@@ -101,6 +104,10 @@ export default {
           DEFAULT: "var(--popover)",
           foreground: "var(--popover-foreground)",
         },
+        muted: {
+          DEFAULT: "var(--muted)",
+          foreground: "var(--muted-foreground)",
+        },
         destructive: {
           DEFAULT: "var(--destructive)",
           foreground: "var(--destructive-foreground)",
@@ -108,26 +115,48 @@ export default {
         success: "var(--success)",
         warning: "var(--warning)",
       },
-      backgroundImage: {
-        'gradient-primary-secondary': 'var(--linearPrimarySecondary)',
-        'gradient-primary-accent': 'var(--linearPrimaryAccent)',
-        'gradient-secondary-accent': 'var(--linearSecondaryAccent)',
-        'radial-primary-secondary': 'var(--radialPrimarySecondary)',
-        'radial-primary-accent': 'var(--radialPrimaryAccent)',
-        'radial-secondary-accent': 'var(--radialSecondaryAccent)',
+
+      /* 12px ceiling on data surfaces. `rounded-full` stays for dots and avatars. */
+      borderRadius: {
+        sm: "var(--r-sm)",
+        DEFAULT: "var(--r-md)",
+        md: "var(--r-md)",
+        lg: "var(--r-lg)",
+        xl: "var(--r-xl)",
+        "2xl": "var(--r-xl)", // clamped — was 16px
+        "3xl": "var(--r-xl)", // clamped — was 24px
       },
-      keyframes: {
-        'gradient-flow': {
-          '0%': { 'background-position': '0% 50%' },
-          '100%': { 'background-position': '100% 50%' },
-        },
+
+      /* Two elevation steps plus an overlay step. */
+      boxShadow: {
+        none: "none",
+        sm: "var(--elev-1)",
+        DEFAULT: "var(--elev-1)",
+        md: "var(--elev-2)",
+        lg: "var(--elev-2)",
+        xl: "var(--elev-overlay)",
+        "2xl": "var(--elev-overlay)",
+        overlay: "var(--elev-overlay)",
+        card: "var(--shadow-card)",
+        "card-hover": "var(--shadow-card-hover)",
       },
-      animation: {
-        'gradient-flow': 'gradient-flow 2.5s linear infinite',
-      }
+
+      fontFamily: {
+        sans: ["Adani", "ui-sans-serif", "system-ui", "sans-serif"],
+        heading: ["Adani", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+
+      transitionTimingFunction: {
+        DEFAULT: "cubic-bezier(0.2, 0, 0, 1)",
+        ease: "cubic-bezier(0.2, 0, 0, 1)",
+      },
+      transitionDuration: {
+        DEFAULT: "160ms",
+        fast: "120ms",
+        base: "160ms",
+        slow: "200ms",
+      },
     },
   },
-  plugins: [
-    require('@tailwindcss/typography'),
-  ],
-}
+  plugins: [require("@tailwindcss/typography")],
+};

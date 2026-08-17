@@ -1,11 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useRef, useEffect } from 'react';
 import {
-  TrendingUp, Activity, DollarSign,
-  AlertTriangle, Zap, Clock, Layers, MapPin, Package, RefreshCw, AlertCircle, Bot, CheckCircle2, Shield
+  TrendingUp, Activity, DollarSign, IndianRupee,
+  AlertTriangle, Zap, Clock, Layers, MapPin, Package, RefreshCw, AlertCircle, Bot, CheckCircle2, Shield, Info
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import KPIDetailsModal from '../../components/ui/KPIDetailsModal';
+import { useChartTheme } from '../../lib/chartTheme';
 
 const containerVariants: any = {
   hidden: { opacity: 0 },
@@ -20,33 +21,155 @@ const itemVariants: any = {
   show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } }
 };
 
-const KPICard = ({ title, value, subtext, trend, trendValue, trendLabel, icon: Icon, color, onClick }: any) => {
-  const isRed = color === 'red';
-  const isEmerald = color === 'emerald';
-  const isAmber = color === 'amber';
+const KPIInfoTooltip = ({ info, align = 'center' }: { info: React.ReactNode, align?: 'left' | 'center' | 'right' }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const tooltipRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
-  const iconColor = isRed ? 'text-destructive' : isEmerald ? 'text-success' : isAmber ? 'text-warning' : 'text-primary';
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleClickOutside = (e: MouseEvent) => {
+      if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [isOpen]);
+
+  let alignClasses = "left-1/2 -translate-x-1/2";
+  let arrowClasses = "left-1/2 -translate-x-1/2";
+  
+  if (align === 'right') {
+    alignClasses = "right-0 translate-x-2";
+    arrowClasses = "right-4 translate-x-0";
+  } else if (align === 'left') {
+    alignClasses = "left-0 -translate-x-2";
+    arrowClasses = "left-4 translate-x-0";
+  }
 
   return (
-    <motion.div variants={itemVariants} className="h-full">
+    <div className="relative" style={{ zIndex: isOpen ? 50 : 1 }}>
+      <button
+        ref={triggerRef}
+        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
+        onMouseEnter={() => setIsOpen(true)}
+        onMouseLeave={() => setIsOpen(false)}
+        className="p-0.5 rounded-full hover:bg-primary/10 transition-colors focus:outline-none"
+        aria-label="More info"
+      >
+        <Info className="w-3 h-3 text-muted-foreground hover:text-primary transition-colors" />
+      </button>
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div
+            ref={tooltipRef}
+            initial={{ opacity: 0, y: -4, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -4, scale: 0.95 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className={`absolute top-full mt-2 w-64 p-3 rounded-xl
+              bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl
+              border border-gray-200/60 dark:border-gray-700/60
+              shadow-[0_8px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]
+              pointer-events-auto text-left ${alignClasses}`}
+            style={{ zIndex: 9999 }}
+          >
+            <div className={`absolute -top-1.5 w-3 h-3 rotate-45
+              bg-white/95 dark:bg-gray-900/95
+              border-l border-t border-gray-200/60 dark:border-gray-700/60 ${arrowClasses}`} />
+            <div className="text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 font-medium relative z-10 normal-case tracking-normal">
+              {info}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+};
+
+/* Three tile weights. The KPI band uses one hero, two primary and four
+   supporting tiles so the eye lands somewhere first — an equal grid of seven
+   gives the reader no entry point. */
+const KPI_SIZE: Record<string, { metric: string; pad: string }> = {
+  hero:       { metric: 'metric-xl', pad: 'px-5 py-4' },
+  primary:    { metric: 'metric-lg', pad: 'px-4 py-3.5' },
+  supporting: { metric: 'metric-md', pad: 'px-3.5 py-3' },
+};
+
+const KPICard = ({
+  title, value, unit, subtext, stats, trend, trendValue, trendLabel,
+  icon: Icon, color, tone, size = 'primary', onClick, info, infoAlign, className = '',
+}: any) => {
+  const s = KPI_SIZE[size] ?? KPI_SIZE.primary;
+
+  // Legacy `color` prop maps onto the status system.
+  const resolved = tone ?? (
+    color === 'red' ? 'critical' :
+    color === 'amber' ? 'warning' :
+    color === 'emerald' ? 'healthy' : 'neutral'
+  );
+
+  const iconColor =
+    resolved === 'critical' ? 'text-destructive' :
+    resolved === 'warning' ? 'text-warning' :
+    resolved === 'healthy' ? 'text-success' : 'text-primary';
+
+  // Only states that demand attention get an accent rail — colour stays
+  // informational rather than decorative.
+  const accent =
+    resolved === 'critical' ? 'intelligence-card-critical' :
+    resolved === 'warning' ? 'intelligence-card-warning' : '';
+
+  return (
+    <motion.div variants={itemVariants} className={`h-full ${className}`}>
       <div
         onClick={onClick}
-        className="bento-card h-full px-4 py-3.5 cursor-pointer flex flex-col justify-between group"
+        role="button"
+        tabIndex={0}
+        onKeyDown={(e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); }
+        }}
+        className={`bento-card ${accent} h-full ${s.pad} cursor-pointer flex flex-col justify-between group`}
       >
-        <div className="flex justify-between items-start mb-2">
-          <h4 className="text-[10px] font-semibold text-muted-foreground uppercase tracking-[0.08em] leading-tight">{title}</h4>
-          <Icon className={`w-4 h-4 ${iconColor} opacity-60 group-hover:opacity-100 transition-opacity`} />
+        <div className="flex justify-between items-start gap-2 mb-2">
+          <div className="flex items-center gap-1 min-w-0">
+            <h4 className="section-label leading-tight truncate">{title}</h4>
+            {info && <KPIInfoTooltip info={info} align={infoAlign} />}
+          </div>
+          <Icon className={`w-4 h-4 shrink-0 ${iconColor} opacity-70 group-hover:opacity-100 transition-opacity`} />
         </div>
+
         <div>
-          <div className="text-xl font-bold tracking-tight text-foreground dark:text-white leading-none mb-1">{value}</div>
-          {subtext && <div className="text-[10px] text-muted-foreground font-medium">{subtext}</div>}
+          <div className={s.metric}>
+            <span>{value}</span>
+            {unit && <span className="metric-unit">{unit}</span>}
+          </div>
+
+          {subtext && <div className="text-[10px] text-fg-tertiary font-medium mt-1.5">{subtext}</div>}
+
+          {/* Supporting figures share the tile rather than each claiming one. */}
+          {stats?.length > 0 && (
+            <div className="flex items-center gap-5 mt-3 pt-2.5 border-t border-border-subtle">
+              {stats.map((st: any) => (
+                <div key={st.label} className="min-w-0">
+                  <div className="text-[9px] uppercase tracking-[0.07em] text-fg-tertiary font-semibold">{st.label}</div>
+                  <div className="metric-sm mt-0.5">
+                    <span>{st.value}</span>
+                    {st.unit && <span className="metric-unit">{st.unit}</span>}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           {trend && (
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold mt-2">
-              <span className={`flex items-center gap-0.5 px-1.5 py-0.5 rounded ${trend === 'up' ? 'text-success bg-success/10' : trend === 'down' ? 'text-destructive bg-destructive/10' : 'text-primary bg-primary/10'}`}>
+            <div className="flex items-center gap-1.5 mt-2.5">
+              <span className={`delta ${trend === 'up' ? 'delta-up' : trend === 'down' ? 'delta-down' : 'delta-flat'}`}>
                 {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '●'} {trendValue}
               </span>
-              <span className="text-muted-foreground">{trendLabel}</span>
+              <span className="text-[10px] text-fg-tertiary font-medium">{trendLabel}</span>
             </div>
           )}
         </div>
@@ -58,6 +181,9 @@ const KPICard = ({ title, value, subtext, trend, trendValue, trendLabel, icon: I
 export default function ExecutiveOverview({ dashboardData, briefing, briefingLoading, briefingError }: any) {
   const [activeKpiModal, setActiveKpiModal] = useState<string | null>(null);
   const [activeListTab, setActiveListTab] = useState<'top' | 'low' | 'delayed'>('top');
+  // Axis/grid/tooltip chrome and the series palette all come from the shared
+  // theme — nothing below hardcodes a colour any more.
+  const { themeName, categorical, status: statusColors, chrome } = useChartTheme();
   const summary = dashboardData?.summary || {};
   const projects = dashboardData?.projects || [];
 
@@ -167,51 +293,38 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
       .slice(0, 5);
   }, [projects]);
 
+  // Material pipeline is an ordered progression (Requirement → PO → Transit →
+  // GRN), so it reads as one sequential ramp rather than four unrelated hues.
   const costChartOptions = {
-    backgroundColor: 'transparent',
-    textStyle: { fontFamily: 'inherit' },
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { textStyle: { color: '#94a3b8', fontSize: 11 }, top: 0, right: 0 },
-    grid: { left: '3%', right: '4%', bottom: '3%', top: '15%', containLabel: true },
-    xAxis: {
-      type: 'value',
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'rgba(150, 150, 150, 0.2)', type: 'dashed' } }
-    },
+    legend: { top: 0, right: 0 },
+    grid: { left: 8, right: 16, bottom: 4, top: 32, containLabel: true },
+    xAxis: { type: 'value', name: 'Qty', nameLocation: 'end' },
     yAxis: {
       type: 'category',
-      data: topSapProjects.map(p => p.project_name?.substring(0, 15) + '...'),
-      axisLabel: { color: '#94a3b8', fontWeight: '600', fontSize: 11 }
+      data: topSapProjects.map(p => p.p6_project_name || p.project_name),
+      axisLabel: { fontWeight: 600, fontSize: 11 }
     },
     series: [
-      { name: 'Requirement', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.req_qty || 0), itemStyle: { color: '#bfdbfe' } },
-      { name: 'PO Raised', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.po_qty || 0), itemStyle: { color: '#60a5fa' } },
-      { name: 'In-Transit', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.in_transit_qty || 0), itemStyle: { color: '#fbbf24' } },
-      { name: 'Inventory/GRN', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.inventory_qty || 0), itemStyle: { color: '#34d399' } }
-    ]
+      { name: 'Requirement', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.req_qty || 0) },
+      { name: 'PO Raised', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.po_qty || 0) },
+      { name: 'In-Transit', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.in_transit_qty || 0) },
+      { name: 'Inventory/GRN', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.inventory_qty || 0) }
+    ].map((s, i) => ({
+      ...s,
+      itemStyle: { color: [chrome.gridLine, categorical[0], categorical[3], categorical[1]][i] }
+    }))
   };
 
   const originalScatterOptions = {
-    backgroundColor: 'transparent',
-    textStyle: { fontFamily: 'inherit' },
     tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${p.data[0]}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>COD: ${p.data[3]}` },
-    grid: { left: '3%', right: '7%', bottom: '3%', top: '15%', containLabel: true },
-    xAxis: {
-      type: 'value', name: 'Progress (%)',
-      nameTextStyle: { color: '#94a3b8', fontWeight: '600', padding: [0, 0, 10, 0] },
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'rgba(150, 150, 150, 0.2)', type: 'dashed' } }
-    },
-    yAxis: {
-      type: 'value', name: 'Capacity (MW)',
-      nameTextStyle: { color: '#94a3b8', fontWeight: '600' },
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'rgba(150, 150, 150, 0.2)', type: 'dashed' } }
-    },
+    grid: { left: 8, right: 24, bottom: 4, top: 32, containLabel: true },
+    xAxis: { type: 'value', name: 'Progress (%)', nameTextStyle: { padding: [0, 0, 10, 0] } },
+    yAxis: { type: 'value', name: 'Capacity (MW)' },
     series: [{
       name: 'Projects', type: 'scatter',
       symbolSize: (data: any) => Math.max(10, Math.min(data[1] / 10, 40)),
-      itemStyle: { color: '#3b82f6', opacity: 0.6, borderColor: '#ffffff', borderWidth: 1 },
+      itemStyle: { color: categorical[0], opacity: 0.7, borderColor: chrome.surface1, borderWidth: 1 },
       data: projects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => {
         const codDateStr = p.p6?.planned_finish_date || p.p6?.scheduled_finish_date || p.p6?.finish_date;
         const cod = codDateStr ? new Date(codDateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
@@ -220,29 +333,22 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     }]
   };
 
+  // Here colour DOES encode state (complete / delayed / running), so this is
+  // the one series on the screen allowed to use the reserved status palette.
   const queueScatterOptions = {
-    backgroundColor: 'transparent',
-    textStyle: { fontFamily: 'inherit' },
     tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${Number(p.data[0]).toFixed(1)}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>COD: ${p.data[5]}<br/>Status: ${p.data[3]}${p.data[4] > 0 ? ' (' + p.data[4] + ' days delayed)' : ''}` },
-    grid: { left: '3%', right: '4%', bottom: '5%', top: '10%', containLabel: true },
-    xAxis: {
-      type: 'value', name: 'Progress (%)',
-      nameTextStyle: { color: '#94a3b8', fontWeight: '600' },
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'rgba(150, 150, 150, 0.2)', type: 'dashed' } }
-    },
-    yAxis: {
-      type: 'value', name: 'Capacity (MW)',
-      nameTextStyle: { color: '#94a3b8', fontWeight: '600' },
-      axisLabel: { color: '#94a3b8' },
-      splitLine: { lineStyle: { color: 'rgba(150, 150, 150, 0.2)', type: 'dashed' } }
-    },
+    grid: { left: 8, right: 16, bottom: 0, top: 24, containLabel: true },
+    xAxis: { type: 'value', name: 'Progress (%)' },
+    yAxis: { type: 'value', name: 'Capacity (MW)' },
     series: [{
       name: 'Projects', type: 'scatter',
       symbolSize: (data: any) => Math.max(8, Math.min(data[1] / 15, 30)),
       itemStyle: {
-        color: (params: any) => params.data[0] >= 90 ? '#34d399' : params.data[3] === 'Delayed' ? '#f87171' : '#60a5fa',
-        opacity: 0.8, borderColor: '#ffffff', borderWidth: 1
+        color: (params: any) =>
+          params.data[0] >= 90 ? statusColors.done
+            : params.data[3] === 'Delayed' ? statusColors.critical
+            : statusColors.healthy,
+        opacity: 0.85, borderColor: chrome.surface1, borderWidth: 1
       },
       data: listProjects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => {
         let delayDays = 0;
@@ -263,33 +369,201 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     }]
   };
 
+  const isLoading = !dashboardData || !dashboardData.summary || Object.keys(dashboardData.summary).length === 0;
+
+  if (isLoading) {
+    return (
+      <div className="flex flex-col gap-4 w-full pb-8">
+        {/* KPI band skeleton — mirrors the real two-tier layout so the page
+            doesn't reflow when data lands. */}
+        <div className="flex flex-col gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3">
+            {/* Spans written out in full — Tailwind's JIT scans literal text,
+                so an interpolated `lg:col-span-${n}` would never be emitted. */}
+            {['lg:col-span-6', 'lg:col-span-3', 'lg:col-span-3'].map((span, i) => (
+              <div key={i} className={`${span} bento-card h-[132px] px-5 py-4 flex flex-col justify-between animate-pulse`}>
+                <div className="flex justify-between items-start">
+                  <div className="h-2.5 w-28 bg-fg-tertiary/20 rounded-sm"></div>
+                  <div className="w-4 h-4 bg-fg-tertiary/20 rounded-full"></div>
+                </div>
+                <div>
+                  <div className={`${i === 0 ? 'h-8 w-40' : 'h-6 w-20'} bg-fg-tertiary/20 rounded-sm mb-2`}></div>
+                  <div className="h-2 w-32 bg-fg-tertiary/20 rounded-sm"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="lg:col-span-3 bento-card h-[96px] px-3.5 py-3 flex flex-col justify-between animate-pulse">
+                <div className="flex justify-between items-start">
+                  <div className="h-2.5 w-24 bg-fg-tertiary/20 rounded-sm"></div>
+                  <div className="w-4 h-4 bg-fg-tertiary/20 rounded-full"></div>
+                </div>
+                <div>
+                  <div className="h-5 w-16 bg-fg-tertiary/20 rounded-sm mb-2"></div>
+                  <div className="h-2 w-24 bg-fg-tertiary/20 rounded-sm"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* ROW 2: Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <div className="lg:col-span-2 bg-card border border-border rounded-xl shadow-sm p-6 min-h-[300px] animate-pulse">
+            <div className="flex justify-between items-center mb-6">
+              <div className="h-4 w-48 bg-muted-foreground/20 rounded"></div>
+              <div className="flex gap-4">
+                <div className="h-3 w-20 bg-muted-foreground/20 rounded"></div>
+                <div className="h-3 w-20 bg-muted-foreground/20 rounded"></div>
+              </div>
+            </div>
+            <div className="w-full h-[350px] bg-muted/40 rounded-lg"></div>
+          </div>
+          <div className="lg:col-span-1 bg-card border border-border rounded-xl shadow-sm p-6 min-h-[300px] animate-pulse">
+            <div className="flex justify-between items-center mb-6">
+              <div className="h-4 w-40 bg-muted-foreground/20 rounded"></div>
+            </div>
+            <div className="w-full h-[350px] bg-muted/40 rounded-lg"></div>
+          </div>
+        </div>
+
+        {/* ROW 3: Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-1">
+           <div className="bg-card border border-border rounded-xl shadow-sm p-6 min-h-[300px] animate-pulse">
+            <div className="flex justify-between items-center mb-6">
+              <div className="h-4 w-48 bg-muted-foreground/20 rounded"></div>
+            </div>
+            <div className="w-full h-[300px] bg-muted/40 rounded-lg"></div>
+          </div>
+          <div className="bg-card border border-border rounded-xl shadow-sm p-6 min-h-[300px] animate-pulse">
+            <div className="flex justify-between items-center mb-6">
+              <div className="h-4 w-48 bg-muted-foreground/20 rounded"></div>
+            </div>
+            <div className="w-full h-[300px] bg-muted/40 rounded-lg"></div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4 w-full pb-8">
 
-      {/* ROW 1: All KPIs in a single row on desktop */}
+      {/* ══ KPI BAND ══
+          Two tiers on a 12-column grid: one hero + two primary tiles carry the
+          "how are we doing" answer, four supporting tiles sit beneath. All
+          seven drill-downs are preserved. At 2560 the extra width flows into
+          the hero tile rather than into dead margin. */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-3"
+        className="flex flex-col gap-3"
       >
-        <KPICard title="Total Projects" value={totalProjects} trend="up" trendValue={onTrackProjects} trendLabel="On Track" icon={Activity} color="blue" onClick={() => setActiveKpiModal('Total Projects')} />
-        <KPICard title="Portfolio Capacity" value={`COD: ${Math.round(codMW)} MW`} subtext={`Trial Run: ${Math.round(trMW)} MW | Total: ${Math.round(totalMW)} MW`} icon={Zap} color="emerald" onClick={() => setActiveKpiModal('Portfolio Capacity')} />
-        <KPICard title="Delayed Projects" value={delayedProjects} icon={AlertTriangle} color="red" onClick={() => setActiveKpiModal('Delayed Projects')} />
-        
-        {/* Quality Pulse KPI */}
-        <KPICard 
-          title="Quality (Pulse)" 
-          value={`${summary?.quality?.open_ncs || 0} Open NCs`} 
-          subtext={`${summary?.quality?.closure_rate || 0}% Closure Rate`} 
-          icon={Shield} 
-          color="amber" 
-          onClick={() => setActiveKpiModal('Quality (Pulse)')} 
-        />
+        {/* Tier 1 — focal */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3">
+          <KPICard
+            className="lg:col-span-6"
+            size="hero"
+            tone="neutral"
+            title="Portfolio Capacity"
+            value={Math.round(codMW).toLocaleString('en-IN')}
+            unit="MW at COD"
+            stats={[
+              { label: 'Trial Run', value: Math.round(trMW).toLocaleString('en-IN'), unit: 'MW' },
+              { label: 'Total Planned', value: Math.round(totalMW).toLocaleString('en-IN'), unit: 'MW' },
+            ]}
+            icon={Zap}
+            onClick={() => setActiveKpiModal('Portfolio Capacity')}
+            info={
+              <div className="space-y-1">
+                <div><strong>Breaks down our power generation:</strong></div>
+                <div><strong>COD</strong> is capacity that is fully operational and generating revenue.</div>
+                <div><strong>Trial Run</strong> is capacity currently being tested. <strong>Total</strong> is the overall planned capacity.</div>
+              </div>
+            }
+          />
+          <KPICard
+            className="lg:col-span-3"
+            size="primary"
+            tone="neutral"
+            title="Total Projects"
+            value={totalProjects}
+            trend="up"
+            trendValue={onTrackProjects}
+            trendLabel="on track"
+            icon={Activity}
+            onClick={() => setActiveKpiModal('Total Projects')}
+            info="Total number of active projects we are monitoring. 'On Track' means the project is running on schedule without any delays."
+          />
+          <KPICard
+            className="lg:col-span-3"
+            size="primary"
+            tone={delayedProjects > 0 ? 'critical' : 'healthy'}
+            title="Delayed Projects"
+            value={delayedProjects}
+            subtext="behind P6 baseline finish"
+            icon={AlertTriangle}
+            onClick={() => setActiveKpiModal('Delayed Projects')}
+            info="Projects that have fallen behind their original planned completion dates in our Primavera P6 schedule."
+          />
+        </div>
 
-        <KPICard title="Remaining PO Value" value={`₹${Math.max(0, remainingPOValue).toFixed(1)} Cr`} subtext="Pending Delivery" icon={DollarSign} color="amber" onClick={() => setActiveKpiModal('Remaining PO Value')} />
-        <KPICard title="Total PO Value" value={`₹${(totalPOValue / 10000000).toFixed(1)} Cr`} icon={DollarSign} color="emerald" onClick={() => setActiveKpiModal('Total PO Value')} />
-        <KPICard title="Completed Projects" value={progressStages.completed} icon={CheckCircle2} color="emerald" onClick={() => setActiveKpiModal('Completed Projects')} />
+        {/* Tier 2 — supporting */}
+        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">
+          <KPICard
+            className="lg:col-span-3"
+            size="supporting"
+            tone="warning"
+            title="Quality (Pulse)"
+            value={summary?.quality?.open_ncs || 0}
+            unit="open NCs"
+            subtext={`${(summary?.quality?.total_rfis || 0) - (summary?.quality?.completed_rfis || 0)} open RFIs`}
+            icon={Shield}
+            onClick={() => setActiveKpiModal('Quality (Pulse)')}
+            info="Live data from the Pulse Quality system. Shows how many Non-Conformance (NC) and Request for Information (RFI) issues are currently open and need attention."
+          />
+          <KPICard
+            className="lg:col-span-3"
+            size="supporting"
+            tone="neutral"
+            title="Total PO Value"
+            value={`₹${(totalPOValue / 10000000).toFixed(1)}`}
+            unit="Cr"
+            subtext="all purchase orders, SAP"
+            icon={IndianRupee}
+            onClick={() => setActiveKpiModal('Total PO Value')}
+            info="The total value of all Purchase Orders across every project, pulled directly from SAP. Click this card to see the breakdown by project."
+          />
+          {/*
+          <KPICard
+            className="lg:col-span-3"
+            size="supporting"
+            tone="warning"
+            title="Remaining PO Value"
+            value={`₹${Math.max(0, remainingPOValue).toFixed(1)}`}
+            unit="Cr"
+            subtext="pending delivery"
+            icon={IndianRupee}
+            onClick={() => setActiveKpiModal('Remaining PO Value')}
+            info="The value of materials we have ordered from vendors but haven't received yet. Calculated by taking Total PO Value minus materials already delivered."
+          />
+          */}
+          <KPICard
+            className="lg:col-span-3"
+            size="supporting"
+            tone="healthy"
+            title="Completed Projects"
+            value={progressStages.completed}
+            subtext="100% delivered"
+            icon={CheckCircle2}
+            onClick={() => setActiveKpiModal('Completed Projects')}
+            info="Projects that are 100% complete and successfully delivered."
+            infoAlign="right"
+          />
+        </div>
       </motion.div>
 
       {/* ROW 2: Layout */}
@@ -298,7 +572,7 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         {/* Left Col (Span 2) */}
         <div className="lg:col-span-2 flex flex-col gap-4">
 
-          {/* SECTION: AI EXECUTIVE BRIEF */}
+          {/* SECTION: AI EXECUTIVE BRIEF
           <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-4">
             <div className="flex justify-between items-center mb-4">
               <div className="flex items-center gap-2">
@@ -354,31 +628,35 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
               </div>
             </div>
           </motion.div>
+          */}
 
-          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bg-card border border-border dark:border-border rounded-xl shadow-sm p-6 flex-1 flex flex-col min-h-[450px]">
+          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bg-card border border-border dark:border-border rounded-xl shadow-sm p-6 flex-1 flex flex-col min-h-[300px]">
             <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
               <h4 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2">
                 <Activity className="w-5 h-5 text-primary" /> Project Execution Queue
               </h4>
+              {/*
               <div className="flex bg-muted dark:bg-card p-1 border border-border dark:border-gray-700 rounded-lg text-xs font-semibold">
                 <button onClick={() => setActiveListTab('top')} className={`px-4 py-1.5 rounded-md transition-all ${activeListTab === 'top' ? 'bg-white dark:bg-gray-700 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}>All</button>
                 <button onClick={() => setActiveListTab('low')} className={`px-4 py-1.5 rounded-md transition-all ${activeListTab === 'low' ? 'bg-white dark:bg-gray-700 text-warning shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}>&lt; 50%</button>
                 <button onClick={() => setActiveListTab('delayed')} className={`px-4 py-1.5 rounded-md transition-all ${activeListTab === 'delayed' ? 'bg-white dark:bg-gray-700 text-destructive shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}>Delayed</button>
               </div>
+              */}
+              <div className="flex items-center gap-5 text-xs font-medium text-foreground dark:text-muted-foreground">
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3b82f6] shadow-sm ring-1 ring-white/10"></div> On Track (&lt; 90%)</div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#10b981] shadow-sm ring-1 ring-white/10"></div> Near Completion (&ge; 90%)</div>
+                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#ef4444] shadow-sm ring-1 ring-white/10"></div> Delayed</div>
+              </div>
             </div>
-            <div className="flex justify-end items-center gap-5 px-2 mb-2 text-xs font-medium text-foreground dark:text-muted-foreground">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3b82f6] shadow-sm ring-1 ring-white/10"></div> On Track (&lt; 90%)</div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#10b981] shadow-sm ring-1 ring-white/10"></div> Near Completion (&ge; 90%)</div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#ef4444] shadow-sm ring-1 ring-white/10"></div> Delayed</div>
-            </div>
-            <div className="flex-1 w-full min-h-[350px]">
-              <ReactECharts option={queueScatterOptions} style={{ height: '100%', width: '100%' }} />
+            <div className="flex-1 w-full min-h-[250px]">
+              <ReactECharts theme={themeName} option={queueScatterOptions} style={{ height: '100%', width: '100%' }} />
             </div>
           </motion.div>
         </div>
 
         {/* Right Col */}
         <div className="flex flex-col gap-4">
+          {/*
           <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6 flex-none">
             <div className="flex justify-between items-center mb-6">
               <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2"><Layers className="w-5 h-5 text-primary" /> Progress Stage</h3>
@@ -400,14 +678,15 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
               ))}
             </div>
           </motion.div>
+          */}
 
-          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6 flex-1 overflow-hidden flex flex-col">
+          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6 h-fit">
             <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center justify-between mb-4 shrink-0">
               <span className="flex items-center gap-2"><Activity className="w-5 h-5 text-primary" /> Transmission Network</span>
             </h3>
-            <div className="space-y-1 overflow-y-auto custom-scrollbar pr-2 flex-1">
+            <div className="space-y-1 overflow-y-auto custom-scrollbar pr-2">
               {transmissionOverview.map((node, i) => (
-                <div key={i} className="flex justify-between items-center py-3 border-b border-muted dark:border-border last:border-0 text-sm">
+                <div key={i} className="flex justify-between items-center py-1.5 border-b border-muted dark:border-border last:border-0 text-sm">
                   <div className="flex items-center gap-2.5 text-foreground dark:text-muted-foreground font-semibold flex-1 pr-2">
                     <Zap className={`w-4 h-4 text-success shrink-0`} />
                     <span className="line-clamp-1" title={node.key}>{node.key}</span>
@@ -427,14 +706,14 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
             <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> SAP Material Pipeline (Qty)</h3>
           </div>
           <div className="flex-1 w-full">
-            <ReactECharts option={costChartOptions} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts theme={themeName} option={costChartOptions} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
 
         <div className="bento-card p-4 flex flex-col h-[350px]">
           <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2 mb-4"><Activity className="w-5 h-5 text-primary" /> Progress vs Capacity Distribution</h3>
           <div className="flex-1 w-full">
-            <ReactECharts option={originalScatterOptions} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts theme={themeName} option={originalScatterOptions} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
       </motion.div>

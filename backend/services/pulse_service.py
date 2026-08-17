@@ -211,7 +211,7 @@ class PulseService:
             "quality_name": quality.get("NAME"),
             # Work breakdown
             "package_name": package.get("NAME"),
-            "inspection_point_name": subactivity.get("NAME"),
+            "inspection_point_name": inspection_point.get("INSPECTION_POINT_NAME"),
             # Timestamps
             "created_at": _parse_datetime(raw.get("CREATED_AT")),
             "updated_at": _parse_datetime(raw.get("UPDATED_AT")),
@@ -300,7 +300,24 @@ class PulseService:
         existing_mappings = db.query(models.ProjectMapping).all()
         mapped_names = {m.project.lower() if m.project else "": m for m in existing_mappings}
         mapped_p6_names = {m.project_name_from_p6.lower() if m.project_name_from_p6 else "": m for m in existing_mappings}
+        
         new_mappings_added = 0
+        for p_name, p_data in pulse_projects_dict.items():
+            key = p_name.lower()
+            if key not in mapped_names and key not in mapped_p6_names:
+                # Inject a dummy project mapping so Pulse data links to the dashboard
+                dummy_mapping = models.ProjectMapping(
+                    project_id=f"PULSE-{p_name.upper().replace(' ', '-')}",
+                    project=p_name,
+                    project_name_from_p6=p_name,
+                    technology=p_data.get("type") or "Unknown",
+                    state=p_data.get("cluster") or "Unknown",
+                    stage="Execution",
+                    spv="Unknown"
+                )
+                db.add(dummy_mapping)
+                new_mappings_added += 1
+
         if new_mappings_added > 0:
             db.commit()
             logger.info(f"Added {new_mappings_added} new Pulse projects to ProjectMapping.")

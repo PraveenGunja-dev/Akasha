@@ -75,8 +75,8 @@ def sync_einvoice_live():
     print("Building WBS mapping from SAP Master...")
     wbs_map = build_wbs_mapping(master_path)
     
-    print("Pre-loading PO to WBS mappings...")
-    po_wbs = {po.purchasing_document: po.wbs_element for po in db.query(models.MTPOAmount.purchasing_document, models.MTPOAmount.wbs_element).all() if po.purchasing_document}
+    print("Pre-loading PO to WBS mappings from ZSPS/ME2J E-Invoice lookup table...")
+    po_wbs = {po.purchasing_document: po.wbs_element for po in db.query(models.MTEInvoicePOLookup.purchasing_document, models.MTEInvoicePOLookup.wbs_element).all() if po.purchasing_document}
 
     print(f"Found {len(results)} invoice records. Clearing old records in DB...")
     db.query(models.EInvoiceRecord).delete()

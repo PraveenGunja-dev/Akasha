@@ -1,16 +1,16 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, CircleMarker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-  RefreshCw, Search, X, ChevronDown, ChevronRight, Zap, MapPin,
+  RefreshCw, Search, X, ChevronDown, ChevronRight, Zap, MapPin, Layers,
   AlertTriangle, CheckCircle2, Clock, Loader2, Database, Calendar, Package,
 } from 'lucide-react';
 import {
   type TcEdge, statusMeta, voltageWeight, parseStageProgress, edgeCompletionPct, parseLengthKm,
 } from './transmission/gridHelpers';
-import { findSubstationCoord, type SubstationCoord } from './transmission/gridCoords';
+import { findSubstationCoord, SOURCE_LABEL, type SubstationCoord } from './transmission/gridCoords';
 
 interface NetworkPayload {
   nodes: any[];
@@ -19,27 +19,166 @@ interface NetworkPayload {
 
 const EMPTY_NETWORK: NetworkPayload = { nodes: [], edges: [] };
 
-function substationIcon(color: string) {
+// Carto retired the /rastertiles/positron path (404s), which left the map as a blank
+// grey panel. These are the current styles, all verified reachable without a key.
+// `dark` marks a surface the routes must glow against rather than be outlined on.
+const BASE_LAYERS = {
+  light: {
+    label: 'Light',
+    url: 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+    subdomains: 'abcd', dark: false,
+  },
+  streets: {
+    label: 'Streets',
+    url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+    subdomains: 'abcd', dark: false,
+  },
+  satellite: {
+    label: 'Satellite',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    subdomains: '', dark: true,
+  },
+  dark: {
+    label: 'Dark',
+    url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png',
+    subdomains: 'abcd', dark: true,
+  },
+} as const;
+
+type BaseLayerKey = keyof typeof BASE_LAYERS;
+
+// Marker size tracks voltage class so the 765 kV pooling stations read as hubs.
+function markerRadius(kv?: number): number {
+  if (!kv) return 11;
+  if (kv >= 765) return 20;
+  if (kv >= 400) return 16;
+  if (kv >= 220) return 13;
+  return 11;
+}
+
+function substationIcon(sub: SubstationCoord, highlighted: boolean, colocatedLinks: number) {
+  const size = markerRadius(sub.kv);
+  const c = size / 2;
+  const fill = highlighted ? '#f59e0b' : '#6366f1';
+  // A dashed ring flags a coordinate we could not confidently place.
+  const dash = sub.source === 'approx' ? 'stroke-dasharray="2 2"' : '';
+  // An outer ring marks a campus carrying links that begin and end on the same site.
+  const campusRing = colocatedLinks > 0
+    ? `<circle cx="${c}" cy="${c}" r="${c * 0.86}" fill="none" stroke="${fill}" stroke-width="1.25" stroke-opacity="0.85" />`
+    : '';
   return new L.DivIcon({
-    html: `<div style="width:10px;height:10px;border-radius:50%;background:${color};border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.4);"></div>`,
+    // A tight core with a faint halo. The earlier halo was wide and opaque enough that
+    // clustered stations merged into one blob at national zoom.
+    html: `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="overflow:visible">
+      <circle cx="${c}" cy="${c}" r="${c * 0.9}" fill="${fill}" fill-opacity="0.10" />
+      ${campusRing}
+      <circle cx="${c}" cy="${c}" r="${c * 0.42}" fill="${fill}" stroke="#fff" stroke-width="1.5" ${dash}
+        style="filter:drop-shadow(0 1px 1.5px rgba(0,0,0,0.3))" />
+    </svg>`,
     className: 'tc-substation-dot',
-    iconSize: [10, 10],
-    iconAnchor: [5, 5],
+    iconSize: [size, size],
+    iconAnchor: [c, c],
   });
 }
 
-const SUBSTATION_ICON = substationIcon('#6366f1');
-
-function FitToPoints({ points }: { points: [number, number][] }) {
+/** Reports zoom and viewport so styling can add detail as the reader moves in. */
+function MapWatcher({ onChange }: { onChange: (view: { zoom: number; bounds: L.LatLngBounds }) => void }) {
   const map = useMap();
-  const fittedRef = useRef(false);
   useEffect(() => {
-    if (fittedRef.current || points.length === 0) return;
-    fittedRef.current = true;
-    map.fitBounds(points, { padding: [40, 40], maxZoom: 7 });
-  }, [points, map]);
+    const report = () => onChange({ zoom: map.getZoom(), bounds: map.getBounds() });
+    report();
+    map.on('zoomend moveend', report);
+    return () => { map.off('zoomend moveend', report); };
+  }, [map, onChange]);
   return null;
 }
+
+/** Tower positions along traced routes, drawn only when zoomed in far enough to read them.
+ *  Vertices are clipped to the viewport and thinned to a fixed budget - a traced corridor
+ *  can carry 1,500 points, and drawing every one of them costs far more than it shows. */
+function TowerVertices({
+  edges, bounds, isDark,
+}: {
+  edges: { edge: TcEdge }[];
+  bounds: L.LatLngBounds;
+  isDark: boolean;
+}) {
+  const points = useMemo(() => {
+    const visible: [number, number][] = [];
+    for (const { edge } of edges) {
+      if (!edge.path) continue;
+      for (const point of edge.path) {
+        if (bounds.contains(point as [number, number])) visible.push(point);
+      }
+    }
+    const BUDGET = 900;
+    const stride = Math.ceil(visible.length / BUDGET) || 1;
+    return visible.filter((_, i) => i % stride === 0);
+  }, [edges, bounds]);
+
+  return (
+    <>
+      {points.map((point, i) => (
+        <CircleMarker
+          key={i}
+          center={point}
+          radius={1.6}
+          interactive={false}
+          pathOptions={{
+            color: isDark ? '#ffffff' : '#334155',
+            weight: 0,
+            fillOpacity: isDark ? 0.55 : 0.4,
+            fillColor: isDark ? '#ffffff' : '#334155',
+          }}
+        />
+      ))}
+    </>
+  );
+}
+
+// Detail thresholds. At national zoom the map is a portfolio overview and anything
+// more than the routes themselves is noise; moving in earns labels, then towers.
+const ZOOM_LABELS = 7;   // station names become permanent
+const ZOOM_VERTICES = 9; // tower positions along traced routes appear
+
+/** Line weight grows with zoom so routes stay hairline-fine when zoomed out.
+ *  Weights are deliberately thin - a luminous 1.5px trace reads as infrastructure,
+ *  a 5px one reads as a diagram. */
+function zoomWeight(base: number, zoom: number) {
+  const thin = base * 0.55;
+  if (zoom <= 5) return Math.max(1, thin - 0.5);
+  if (zoom <= 7) return Math.max(1.2, thin);
+  if (zoom >= 11) return thin + 1.4;
+  if (zoom >= 9) return thin + 0.7;
+  return thin + 0.3;
+}
+
+// The portfolio reaches from Kutch to Varanasi to north Karnataka, but the working
+// area is Gujarat and Rajasthan. Panning is fenced to the subcontinent so the map can
+// never drift out over Arabia or China, which is what made it read as mostly empty.
+const INDIA_BOUNDS: [[number, number], [number, number]] = [[6.0, 66.0], [36.5, 90.0]];
+const DEFAULT_CENTER: [number, number] = [23.2, 73.0];
+
+/** Frames the visible network, and re-frames it whenever the filters change.
+ *  Keyed on the filter rather than on `points` so panning is never yanked back, but
+ *  tracked with a ref so the first fit still happens once the network finishes loading. */
+function FitToPoints({ points, fitKey }: { points: [number, number][]; fitKey: string }) {
+  const map = useMap();
+  const fittedKeyRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (points.length === 0 || fittedKeyRef.current === fitKey) return;
+    fittedKeyRef.current = fitKey;
+    map.fitBounds(points, { padding: [50, 50], maxZoom: 8 });
+  }, [fitKey, points, map]);
+  return null;
+}
+
+// How firmly the ingest tied an OSM alignment to the edge - see ingest_line_geometry.py.
+const ROUTE_CONFIDENCE: Record<string, string> = {
+  high: 'Traced route',
+  medium: 'Traced route (multi-segment)',
+  low: 'Likely route, unverified',
+};
 
 const REGION_FILTERS = ['all', 'Rajasthan', 'Khavda'] as const;
 const STATUS_FILTERS = ['all', 'charged', 'in_progress', 'under_bidding'] as const;
@@ -58,6 +197,21 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
   const [tableSearch, setTableSearch] = useState('');
   const [selectedProject, setSelectedProject] = useState<any | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
+  const [hoveredEdgeId, setHoveredEdgeId] = useState<string | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
+  const [view, setView] = useState<{ zoom: number; bounds: L.LatLngBounds | null }>({ zoom: 5, bounds: null });
+  const zoom = view.zoom;
+
+  const [baseLayer, setBaseLayer] = useState<BaseLayerKey>('light');
+  const [layersOpen, setLayersOpen] = useState(false);
+  const [overlays, setOverlays] = useState({
+    substations: true,
+    labels: true,
+    towers: true,
+    straight: true,
+  });
+  const base = BASE_LAYERS[baseLayer];
+  const isDark = base.dark;
 
   const fetchTransmissionData = async () => {
     setLoading(true);
@@ -105,24 +259,51 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
     });
   }, [allEdges, regionFilter, statusFilter]);
 
-  const geoEdges = useMemo(() => {
-    return filteredEdges.map(e => {
-      const from = findSubstationCoord(e.from_label);
-      const to = findSubstationCoord(e.to_label);
-      return { edge: e, from, to };
-    }).filter(x => x.from && x.to) as { edge: TcEdge; from: SubstationCoord; to: SubstationCoord }[];
+  type LocatedEdge = { edge: TcEdge; from: SubstationCoord; to: SubstationCoord };
+
+  // Edges whose endpoints share a campus (HVDC terminal at a pooling station, a LILO tap,
+  // a GIS bay) have zero length on the map. Drawing them would render nothing at all, so
+  // they are pulled out and reported on the substation marker instead.
+  const { geoEdges, colocatedEdges, unmappedCount } = useMemo(() => {
+    const located = filteredEdges
+      .map(e => ({ edge: e, from: findSubstationCoord(e.from_label), to: findSubstationCoord(e.to_label) }))
+      .filter(x => x.from && x.to) as LocatedEdge[];
+    const drawable: LocatedEdge[] = [];
+    const sameSite: LocatedEdge[] = [];
+    for (const item of located) {
+      (item.from.lat === item.to.lat && item.from.lng === item.to.lng ? sameSite : drawable).push(item);
+    }
+    return {
+      geoEdges: drawable,
+      colocatedEdges: sameSite,
+      unmappedCount: filteredEdges.length - located.length,
+    };
   }, [filteredEdges]);
 
-  const unmappedCount = filteredEdges.length - geoEdges.length;
+  const tracedCount = useMemo(
+    () => geoEdges.filter(({ edge }) => (edge.path?.length ?? 0) >= 2).length,
+    [geoEdges]
+  );
+
+  // substation name -> the co-located links terminating there
+  const colocatedBySite = useMemo(() => {
+    const map = new Map<string, TcEdge[]>();
+    colocatedEdges.forEach(({ edge, from }) => {
+      const list = map.get(from.name) ?? [];
+      list.push(edge);
+      map.set(from.name, list);
+    });
+    return map;
+  }, [colocatedEdges]);
 
   const substationMarkers = useMemo(() => {
     const map = new Map<string, SubstationCoord>();
-    geoEdges.forEach(({ from, to }) => {
+    [...geoEdges, ...colocatedEdges].forEach(({ from, to }) => {
       map.set(from.name, from);
       map.set(to.name, to);
     });
     return Array.from(map.values());
-  }, [geoEdges]);
+  }, [geoEdges, colocatedEdges]);
 
   const fitPoints = useMemo<[number, number][]>(
     () => substationMarkers.map(s => [s.lat, s.lng]),
@@ -197,62 +378,219 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
           ))}
         </div>
 
-        <div className="absolute top-4 right-4 z-[1000] w-64">
-          <div className="flex items-center bg-card border border-border shadow-lg rounded-lg overflow-hidden">
-            <div className="pl-3 py-2 text-muted-foreground"><Search className="w-4 h-4" /></div>
-            <input
-              type="text"
-              placeholder="Find substation..."
-              className="w-full bg-transparent border-none px-2 py-2 text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
-              value={mapSearch}
-              onChange={(e) => setMapSearch(e.target.value)}
-            />
+        <div className="absolute top-4 right-4 z-[1000] w-64 space-y-2">
+          <div className="flex items-center gap-1.5">
+            <div className="flex items-center flex-1 bg-card border border-border shadow-lg rounded-lg overflow-hidden">
+              <div className="pl-3 py-2 text-muted-foreground"><Search className="w-4 h-4" /></div>
+              <input
+                type="text"
+                placeholder="Find substation..."
+                className="w-full bg-transparent border-none px-2 py-2 text-sm text-foreground focus:outline-none placeholder:text-muted-foreground"
+                value={mapSearch}
+                onChange={(e) => setMapSearch(e.target.value)}
+              />
+            </div>
+            <button
+              onClick={() => setLayersOpen(o => !o)}
+              title="Layers"
+              className={`shrink-0 p-2 rounded-lg border shadow-lg transition-colors ${
+                layersOpen ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+              }`}
+            >
+              <Layers className="w-4 h-4" />
+            </button>
           </div>
+
+          {layersOpen && (
+            <div className="bg-card/95 backdrop-blur-sm border border-border rounded-xl shadow-lg overflow-hidden">
+              <div className="px-3 pt-2.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Base map
+              </div>
+              <div className="grid grid-cols-2 gap-1.5 px-3 pb-2.5">
+                {(Object.keys(BASE_LAYERS) as BaseLayerKey[]).map(key => (
+                  <button
+                    key={key}
+                    onClick={() => setBaseLayer(key)}
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${
+                      baseLayer === key
+                        ? 'bg-primary text-primary-foreground border-primary'
+                        : 'bg-background text-foreground border-border hover:bg-muted'
+                    }`}
+                  >
+                    {BASE_LAYERS[key].label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="px-3 pt-2 pb-1 border-t border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Overlays
+              </div>
+              <div className="px-3 pb-2.5 space-y-0.5">
+                {([
+                  ['substations', 'Substations'],
+                  ['labels', `Station labels (zoom ${ZOOM_LABELS}+)`],
+                  ['towers', `Tower points (zoom ${ZOOM_VERTICES}+)`],
+                  ['straight', 'Untraced straight lines'],
+                ] as const).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2 py-0.5 cursor-pointer text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={overlays[key]}
+                      onChange={() => setOverlays(o => ({ ...o, [key]: !o[key] }))}
+                      className="accent-primary w-3.5 h-3.5"
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
-        <div className="absolute bottom-4 left-4 z-[1000] bg-card/95 border border-border rounded-lg shadow-lg px-3 py-2.5 text-[11px]">
-          <div className="font-bold text-foreground uppercase tracking-wider mb-1.5">Line Status</div>
-          {(['charged', 'in_progress', 'under_bidding'] as const).map(s => {
-            const meta = statusMeta(s);
-            return (
-              <div key={s} className="flex items-center gap-2 py-0.5">
-                <div style={{ width: 18, height: 3, background: meta.color, borderRadius: 2 }} />
-                <span className="text-muted-foreground">{meta.label}</span>
+        {/* Legend. Status is always visible; the full key stays folded away so the map
+            is not competing with a wall of text at a glance. */}
+        <div className="absolute bottom-4 left-4 z-[1000] bg-card/95 backdrop-blur-sm border border-border rounded-xl shadow-lg text-[11px] w-[188px] overflow-hidden">
+          <div className="px-3 pt-2.5 pb-2 flex items-center gap-x-3 gap-y-1 flex-wrap">
+            {(['charged', 'in_progress', 'under_bidding'] as const).map(s => {
+              const meta = statusMeta(s);
+              return (
+                <div key={s} className="flex items-center gap-1.5">
+                  <span style={{ width: 14, height: 3, background: meta.color, borderRadius: 2 }} />
+                  <span className="text-muted-foreground">{meta.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          {geoEdges.length > 0 && (
+            <div className="px-3 pb-2 text-[10px] text-muted-foreground">
+              {tracedCount} of {geoEdges.length} routes traced
+            </div>
+          )}
+
+          <button
+            onClick={() => setLegendOpen(o => !o)}
+            className="w-full flex items-center justify-between px-3 py-1.5 border-t border-border/50 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground hover:bg-muted transition-colors"
+          >
+            Full key
+            <ChevronDown className={`w-3 h-3 transition-transform ${legendOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {legendOpen && (
+            <div className="px-3 pb-2.5 pt-1.5 border-t border-border/50 space-y-2">
+              <div>
+                <div className="font-semibold text-foreground uppercase tracking-wider mb-1 text-[10px]">Substation</div>
+                {([[765, '765 kV'], [400, '400 kV'], [220, '≤ 220 kV']] as const).map(([kv, label]) => (
+                  <div key={kv} className="flex items-center gap-2 py-0.5">
+                    <span className="inline-flex w-[18px] justify-center">
+                      <span className="rounded-full bg-[#6366f1] border border-white"
+                        style={{ width: markerRadius(kv) * 0.45, height: markerRadius(kv) * 0.45 }} />
+                    </span>
+                    <span className="text-muted-foreground">{label}</span>
+                  </div>
+                ))}
+                <div className="flex items-center gap-2 py-0.5">
+                  <span className="inline-flex w-[18px] justify-center">
+                    <span className="w-2 h-2 rounded-full border-[1.5px] border-dashed border-[#6366f1]" />
+                  </span>
+                  <span className="text-muted-foreground">Approximate area</span>
+                </div>
+                <div className="flex items-center gap-2 py-0.5">
+                  <span className="inline-flex w-[18px] justify-center">
+                    <span className="w-3 h-3 rounded-full border border-[#6366f1] flex items-center justify-center">
+                      <span className="w-1 h-1 rounded-full bg-[#6366f1]" />
+                    </span>
+                  </span>
+                  <span className="text-muted-foreground">In-campus links</span>
+                </div>
               </div>
-            );
-          })}
-          {unmappedCount > 0 && (
-            <div className="mt-1.5 pt-1.5 border-t border-border/50 text-muted-foreground">
-              {unmappedCount} line{unmappedCount === 1 ? '' : 's'} not shown (substation coordinates unavailable)
+
+              <div>
+                <div className="font-semibold text-foreground uppercase tracking-wider mb-1 text-[10px]">Route</div>
+                <div className="flex items-center gap-2 py-0.5">
+                  <span style={{ width: 18, height: 3, background: 'hsl(var(--muted-foreground))', borderRadius: 2 }} />
+                  <span className="text-muted-foreground">Traced alignment</span>
+                </div>
+                <div className="flex items-center gap-2 py-0.5">
+                  <span style={{ width: 18, height: 2, background: 'hsl(var(--muted-foreground))', borderRadius: 2, opacity: 0.45 }} />
+                  <span className="text-muted-foreground">Straight-line only</span>
+                </div>
+              </div>
+
+              {(unmappedCount > 0 || colocatedEdges.length > 0) && (
+                <div className="pt-1.5 border-t border-border/50 text-[10px] text-muted-foreground space-y-0.5">
+                  {colocatedEdges.length > 0 && <div>{colocatedEdges.length} in-campus link{colocatedEdges.length === 1 ? '' : 's'} shown on the substation</div>}
+                  {unmappedCount > 0 && <div>{unmappedCount} line{unmappedCount === 1 ? '' : 's'} without coordinates</div>}
+                </div>
+              )}
             </div>
           )}
         </div>
 
         <div className="h-[560px] w-full [&_.leaflet-container]:!font-sans">
           <MapContainer
-            center={[24.5, 74.5]}
-            zoom={5}
-            minZoom={4}
+            center={DEFAULT_CENTER}
+            zoom={6}
+            minZoom={5}
+            maxBounds={INDIA_BOUNDS}
+            maxBoundsViscosity={1}
             scrollWheelZoom={true}
             style={{ height: '100%', width: '100%' }}
             attributionControl={false}
           >
-            <TileLayer url="https://{s}.basemaps.cartocdn.com/rastertiles/positron/{z}/{x}/{y}{r}.png" />
-            <FitToPoints points={fitPoints} />
+            <TileLayer key={baseLayer} url={base.url} subdomains={base.subdomains || undefined} />
+            <FitToPoints points={fitPoints} fitKey={`${regionFilter}|${statusFilter}`} />
+            <MapWatcher onChange={setView} />
+            {overlays.towers && view.bounds && zoom >= ZOOM_VERTICES && (
+              <TowerVertices edges={geoEdges} bounds={view.bounds} isDark={isDark} />
+            )}
 
-            {geoEdges.map(({ edge, from, to }) => {
+            {geoEdges
+              .filter(({ edge }) => overlays.straight || (edge.path?.length ?? 0) >= 2)
+              .map(({ edge, from, to }) => {
               const meta = statusMeta(edge.normalized_status);
               const pct = edgeCompletionPct(edge);
+              const weight = zoomWeight(voltageWeight(edge.voltage), zoom);
+              const hovered = hoveredEdgeId === edge.id;
+              // A traced route follows the real alignment; without one we can only draw the
+              // straight chord, so it is rendered fainter to read as an approximation.
+              const traced = (edge.path?.length ?? 0) >= 2;
+              const positions: [number, number][] = traced
+                ? edge.path!
+                : [[from.lat, from.lng], [to.lat, to.lng]];
+              const dashArray = traced ? meta.dash : '3, 7';
+              // A low-confidence trace is a plausible alignment rather than a verified one,
+              // so it sits visually between a confirmed route and a bare straight line.
+              const routeOpacity = !traced ? 0.45 : edge.path_confidence === 'low' ? 0.7 : 0.9;
               return (
+                <React.Fragment key={edge.id}>
+                  {/* A wide, faint stroke in the line's own colour. On the dark surface this
+                      reads as the route glowing rather than as an outline drawn around it. */}
+                  <Polyline
+                    positions={positions}
+                    interactive={false}
+                    pathOptions={{
+                      color: isDark ? meta.color : '#ffffff',
+                      weight: weight + (isDark ? 6 : 3.5),
+                      opacity: isDark ? (hovered ? 0.3 : 0.16) : hovered ? 0.9 : 0.55,
+                      lineCap: 'round',
+                      lineJoin: 'round',
+                    }}
+                  />
                 <Polyline
-                  key={edge.id}
-                  positions={[[from.lat, from.lng], [to.lat, to.lng]]}
+                  positions={positions}
+                  eventHandlers={{
+                    mouseover: () => setHoveredEdgeId(edge.id),
+                    mouseout: () => setHoveredEdgeId(null),
+                  }}
                   pathOptions={{
                     color: meta.color,
-                    weight: voltageWeight(edge.voltage),
-                    opacity: 0.85,
-                    dashArray: meta.dash,
+                    weight: hovered ? weight + 1.5 : traced ? weight : weight - 0.5,
+                    opacity: hovered ? 1 : routeOpacity,
+                    dashArray,
                     lineCap: 'round',
+                    lineJoin: 'round',
+                    className: dashArray ? 'tc-line-flow' : undefined,
                   }}
                 >
                   <Popup>
@@ -266,6 +604,14 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                         <div><span className="text-muted-foreground">Length</span><br /><span className="font-semibold">{edge.length || '—'} km</span></div>
                         <div><span className="text-muted-foreground">Expected</span><br /><span className="font-semibold">{edge.expected_date || '—'}</span></div>
                         {edge.contractor && <div className="col-span-2"><span className="text-muted-foreground">Contractor</span><br /><span className="font-semibold">{edge.contractor}</span></div>}
+                        <div className="col-span-2">
+                          <span className="text-muted-foreground">Route</span><br />
+                          <span className="font-semibold">
+                            {traced
+                              ? `${ROUTE_CONFIDENCE[edge.path_confidence ?? 'high']} · ${edge.path!.length} pts${edge.path_length_km ? ` · ${Math.round(edge.path_length_km)} km` : ''}`
+                              : 'Straight-line approximation'}
+                          </span>
+                        </div>
                       </div>
                       <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: meta.color }}>
                         <span>{meta.label}</span><span>{pct}%</span>
@@ -283,23 +629,61 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                     </div>
                   </Popup>
                 </Polyline>
+                </React.Fragment>
               );
             })}
 
-            {substationMarkers.map(sub => (
-              <Marker
-                key={sub.name}
-                position={[sub.lat, sub.lng]}
-                icon={sub.name === searchMatch?.name ? substationIcon('#f59e0b') : SUBSTATION_ICON}
-              >
-                <Popup>
-                  <div className="text-xs">
-                    <div className="font-bold text-sm text-foreground mb-1">{sub.name}</div>
-                    <div className="text-muted-foreground">Substation area (approx. location)</div>
-                  </div>
-                </Popup>
-              </Marker>
-            ))}
+            {(overlays.substations ? substationMarkers : []).map(sub => {
+              const sameSite = colocatedBySite.get(sub.name) ?? [];
+              return (
+                <Marker
+                  key={sub.name}
+                  position={[sub.lat, sub.lng]}
+                  icon={substationIcon(sub, sub.name === searchMatch?.name, sameSite.length)}
+                  zIndexOffset={sub.kv && sub.kv >= 765 ? 100 : 0}
+                >
+                  <Tooltip
+                    direction="top"
+                    offset={[0, -8]}
+                    opacity={1}
+                    className="tc-substation-label"
+                    permanent={overlays.labels && zoom >= ZOOM_LABELS}
+                  >
+                    {sub.name}{sub.kv ? ` · ${sub.kv} kV` : ''}
+                  </Tooltip>
+                  <Popup>
+                    <div className="text-xs min-w-[200px]">
+                      <div className="font-bold text-sm text-foreground mb-1">{sub.name}</div>
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 mb-2">
+                        <div><span className="text-muted-foreground">Voltage</span><br /><span className="font-semibold">{sub.kv ? `${sub.kv} kV` : '—'}</span></div>
+                        <div><span className="text-muted-foreground">Position</span><br /><span className="font-semibold font-mono">{sub.lat.toFixed(4)}, {sub.lng.toFixed(4)}</span></div>
+                      </div>
+                      <div className={`text-[10px] font-semibold uppercase tracking-wider ${sub.source === 'approx' ? 'text-warning' : 'text-muted-foreground'}`}>
+                        {SOURCE_LABEL[sub.source]}
+                      </div>
+                      {sameSite.length > 0 && (
+                        <div className="mt-2 pt-2 border-t">
+                          <div className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground mb-1">
+                            {sameSite.length} link{sameSite.length === 1 ? '' : 's'} within this campus
+                          </div>
+                          <div className="space-y-0.5 max-h-28 overflow-y-auto">
+                            {sameSite.map(link => {
+                              const meta = statusMeta(link.normalized_status);
+                              return (
+                                <div key={link.id} className="flex items-center justify-between gap-2">
+                                  <span className="text-[10px] text-foreground truncate">{link.from_label} &harr; {link.to_label}</span>
+                                  <span className="text-[9px] font-bold uppercase shrink-0" style={{ color: meta.color }}>{link.voltage || meta.label}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </Popup>
+                </Marker>
+              );
+            })}
           </MapContainer>
         </div>
       </div>

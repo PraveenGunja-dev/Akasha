@@ -49,7 +49,18 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
             (ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
             (ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
-    mappings = query.all()
+    mappings_raw = query.all()
+    
+    dedup = {}
+    for m in mappings_raw:
+        if m.project_id:
+            if m.project_id not in dedup:
+                dedup[m.project_id] = m
+            else:
+                existing = dedup[m.project_id]
+                if len(m.spv_plant_code or '') > len(existing.spv_plant_code or ''):
+                    dedup[m.project_id] = m
+    mappings = list(dedup.values())
 
     now = datetime.utcnow()
     week_start = now - timedelta(days=now.weekday())
