@@ -129,7 +129,7 @@ def match_wbs_to_master(wbs_val, wbs_map):
 def ingest_data():
     db = SessionLocal()
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
-    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE.xlsx")
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
     
     # ================================================================
     # Build WBS mapping from SAP Master
@@ -158,7 +158,7 @@ def ingest_data():
     # ================================================================
     # Process MB52 (Inventory) — unchanged
     # ================================================================
-    mb52_path = os.path.join(data_dir, "MB52_Khavda_Live_Inventry 1.xlsx")
+    mb52_path = os.path.join(data_dir, "MB52_Khavda_Live_Inventry 2.xlsx")
     if os.path.exists(mb52_path):
         try:
             print(f"Processing {os.path.basename(mb52_path)}...")
@@ -207,8 +207,8 @@ def ingest_data():
     # ================================================================
     # Process ZSPS (PO Amount) — Replacing ME2J, merging with ME2J metadata
     # ================================================================
-    zsps_path = os.path.join(data_dir, "ZPSPS007 1.xlsx")
-    me2j_path = os.path.join(data_dir, "Me2J 1.xlsx")
+    zsps_path = os.path.join(data_dir, "ZPSPS007_merged.xlsx")
+    me2j_path = os.path.join(data_dir, "ME2J 2.xlsx")
     
     if os.path.exists(zsps_path):
         try:
@@ -392,7 +392,7 @@ def ingest_data():
     # ================================================================
     # Process MB51 (Material Documents/Consumption) — unchanged
     # ================================================================
-    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 1.XLSX")
+    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 2.XLSX")
     if os.path.exists(mb51_path):
         try:
             print(f"Processing {os.path.basename(mb51_path)}...")

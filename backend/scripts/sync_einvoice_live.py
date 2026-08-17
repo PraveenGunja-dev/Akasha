@@ -71,7 +71,7 @@ def sync_einvoice_live():
     db = SessionLocal()
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
         
-    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE.xlsx")
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
     print("Building WBS mapping from SAP Master...")
     wbs_map = build_wbs_mapping(master_path)
     

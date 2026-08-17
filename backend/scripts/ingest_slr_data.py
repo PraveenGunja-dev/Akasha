@@ -71,8 +71,8 @@ def match_wbs_to_master(wbs_val, wbs_map):
 
 def ingest_slr():
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
-    file_path = os.path.join(data_dir, "ZPSPS007 (3).xlsx")
-    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE.xlsx")
+    file_path = os.path.join(data_dir, "ZPSPS007_merged.xlsx")
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
     
     if not os.path.exists(file_path):
         print(f"File not found: {file_path}")

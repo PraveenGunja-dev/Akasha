@@ -240,10 +240,17 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         if pid not in seen_pids:
             seen_pids[pid] = m
         else:
-            # Prefer mapping that has cluster or category populated
+            # Prefer mapping that has WBS codes, then cluster or category
             existing = seen_pids[pid]
-            if (not existing.cluster and m.cluster) or (not existing.category and m.category):
+            
+            existing_wbs_count = sum(1 for wbs in [existing.spv_plant_code, existing.agel, existing.age6l] if wbs and wbs.startswith('H-'))
+            m_wbs_count = sum(1 for wbs in [m.spv_plant_code, m.agel, m.age6l] if wbs and wbs.startswith('H-'))
+            
+            if m_wbs_count > existing_wbs_count:
                 seen_pids[pid] = m
+            elif m_wbs_count == existing_wbs_count:
+                if (not existing.cluster and m.cluster) or (not existing.category and m.category):
+                    seen_pids[pid] = m
     mappings = list(seen_pids.values())
 
     for m in mappings:

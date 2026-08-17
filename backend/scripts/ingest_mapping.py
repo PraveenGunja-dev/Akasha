@@ -10,7 +10,7 @@ import models
 def ingest_mapping():
     db = SessionLocal()
     mapping_file_old = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")
-    mapping_file_new = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "NEW31", "AKASHA SAP MASTER FILE.xlsx")
+    mapping_file_new = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "NEW31", "AKASHA SAP MASTER FILE (2).xlsx")
     
     try:
         # Create table if not exists
