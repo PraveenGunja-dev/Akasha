@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import {
   Home, Command, Network, MessageSquare, FileText, Search, Activity,
-  Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2, Share2, Database
+  Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2, Share2, Database,
+  Calendar, ClipboardList
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -25,12 +26,14 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
       ]
     },
     {
-      title: "Integrations",
+      title: "Applications",
       items: [
         { id: 'financial', label: 'SAP Intelligence', icon: Database },
         { id: 'einvoice_intelligence', label: 'E-Invoice Intelligence', icon: FileText },
         { id: 'transmission_data', label: 'Transmission', icon: Network },
         { id: 'quality', label: 'Quality', icon: Activity },
+        { id: 'schedule', label: 'P6', icon: Calendar },
+        { id: 'dpr', label: 'DPR', icon: ClipboardList },
       ]
     }
   ];

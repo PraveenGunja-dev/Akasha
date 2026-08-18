@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X } from 'lucide-react';
+import { X, Wrench } from 'lucide-react';
 import LeftSidebar from '../components/layout/LeftSidebar';
 import TopHeader from '../components/layout/TopHeader';
+import ModulePlaceholder from '../components/layout/ModulePlaceholder';
 
 import ExecutiveOverview from '../features/dashboard/ExecutiveOverview';
 import Project360 from '../features/projects/Project360';
@@ -57,6 +58,18 @@ export default function CEODashboard() {
       setActiveTab(savedTab);
     }
   }, []);
+
+  // Prevent background scrolling when modal is open
+  useEffect(() => {
+    if (modalSimulationContext) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [modalSimulationContext]);
 
   // Reset project when returning to root dashboard via explicit back button
   useEffect(() => {
@@ -265,7 +278,17 @@ export default function CEODashboard() {
                 }} 
               />
             )}
-            {activeTab === 'simulation_lab' && <SimulationLab p6Data={p6Data} dashboardData={dashboardData} initialProject={selectedProject} simulationContext={simulationContext} />}
+            {activeTab === 'simulation_lab' && (
+              <div className="flex-1 flex flex-col items-center justify-center bg-card border border-border dark:border-border rounded-2xl shadow-sm text-center h-full min-h-[500px]">
+                <div className="w-20 h-20 bg-sky-100 dark:bg-sky-500/20 text-sky-500 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                  <Wrench className="w-10 h-10" />
+                </div>
+                <h2 className="text-2xl font-bold text-foreground dark:text-white mb-3">Simulation Lab</h2>
+                <p className="text-muted-foreground max-w-md text-[15px] leading-relaxed">
+                  Development is currently in progress.<br/>This feature will be available in an upcoming release.
+                </p>
+              </div>
+            )}
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */
@@ -311,12 +334,7 @@ export default function CEODashboard() {
                     
                     {/* Placeholders for unbuilt sections */}
                     {!implementedModules.includes(activeTab) && (
-                      <div className="flex items-center justify-center h-[500px] border-2 border-dashed border-border dark:border-slate-700 rounded-2xl bg-white/50 dark:bg-gray-900/50">
-                        <div className="text-center">
-                          <h2 className="text-2xl font-semibold text-muted-foreground mb-2">{activeTab.replace('_', ' ')} Module</h2>
-                          <p className="text-sm text-muted-foreground">This module is currently in development.</p>
-                        </div>
-                      </div>
+                      <ModulePlaceholder moduleName={activeTab} />
                     )}
                   </motion.div>
                 </AnimatePresence>
@@ -349,13 +367,38 @@ export default function CEODashboard() {
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex-1 overflow-hidden w-full h-full relative p-6 md:p-8">
+            <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center">
+              <div className="w-20 h-20 bg-sky-100 dark:bg-sky-500/20 text-sky-500 rounded-full flex items-center justify-center mb-6 shadow-inner">
+                <Wrench className="w-10 h-10" />
+              </div>
+              <h2 className="text-2xl font-bold text-foreground dark:text-white mb-3">Simulation Lab</h2>
+              <p className="text-muted-foreground max-w-md text-[15px] leading-relaxed text-center mb-8">
+                Development is currently in progress.<br/>This feature will be available in an upcoming release.
+              </p>
+
+              <div className="w-full max-w-md border border-border rounded-xl p-5 bg-card">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 text-center">Upcoming Integrations</h3>
+                <ul className="space-y-3">
+                  {[
+                    "Monte Carlo Schedule Risk Analysis",
+                    "AI-Driven Alternative Scenario Generation",
+                    "Cost vs. Time Trade-off Modeling"
+                  ].map((feature, idx) => (
+                    <li key={idx} className="flex items-center gap-3 text-[14px] text-foreground/80">
+                      <div className="w-1.5 h-1.5 rounded-full bg-sky-500/60"></div>
+                      {feature}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              {/*
               <SimulationLab 
                 p6Data={p6Data} 
                 dashboardData={dashboardData} 
                 initialProject={selectedProject} 
                 simulationContext={modalSimulationContext} 
               />
+              */}
             </div>
           </div>
         </div>

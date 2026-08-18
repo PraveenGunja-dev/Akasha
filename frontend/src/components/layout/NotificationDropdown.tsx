@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, Filter, Play, Sparkles, Loader2 } from 'lucide-react';
+import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, Filter, Play, Sparkles, Loader2, Maximize2, Minimize2, X } from 'lucide-react';
 
 export default function NotificationDropdown({ notifications, onClose, onMarkAllRead, onSimulate }: any) {
   const [activeTab, setActiveTab] = useState('All');
@@ -10,10 +10,22 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
   const [tabNotifications, setTabNotifications] = useState<any[]>([]);
   const [tabHasMore, setTabHasMore] = useState(true);
   const [isLoadingTab, setIsLoadingTab] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
 
   useEffect(() => {
     fetchTabNotifications(activeTab, 0, true);
   }, [activeTab]);
+
+  useEffect(() => {
+    if (isFullScreen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isFullScreen]);
 
   const fetchTabNotifications = async (tab: string, skip = 0, reset = false) => {
     if (reset) setIsLoadingTab(true);
@@ -85,17 +97,34 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
     return <CalendarDays className="w-4 h-4 text-sky-500" />;
   };
 
+  const dropdownClasses = "absolute right-0 top-full mt-3 w-[450px] bg-card border border-border dark:border-border rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] z-[100] flex flex-col overflow-hidden max-h-[600px] transform origin-top-right transition-all";
+  const fullScreenClasses = "fixed top-[5vh] left-[5vw] w-[90vw] h-[90vh] bg-card border border-border dark:border-border rounded-2xl shadow-2xl z-[100] flex flex-col overflow-hidden transition-all";
+
   return (
-    <div className="absolute right-0 top-full mt-3 w-[450px] bg-card border border-border dark:border-border rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] z-50 flex flex-col overflow-hidden max-h-[600px] transform origin-top-right transition-all">
-      <div className="p-4 border-b border-muted dark:border-border flex items-center justify-between bg-sky-50/50 dark:bg-sky-900/10">
-        <div className="flex items-center gap-2">
-          <span className="font-bold text-[15px] tracking-tight text-foreground dark:text-white">Notifications</span>
-          <span className="px-2 py-0.5 bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 rounded-full text-[10px] font-bold">
-            {tabNotifications.length} {tabHasMore ? '+' : ''}
-          </span>
+    <>
+      {isFullScreen && (
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[90]" onClick={onClose} />
+      )}
+      <div className={isFullScreen ? fullScreenClasses : dropdownClasses}>
+        <div className="p-4 border-b border-muted dark:border-border flex items-center justify-between bg-sky-50/50 dark:bg-sky-900/10 shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[15px] tracking-tight text-foreground dark:text-white">Notifications</span>
+            <span className="px-2 py-0.5 bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 rounded-full text-[10px] font-bold">
+              {tabNotifications.length} {tabHasMore ? '+' : ''}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/5 rounded-lg">
+              {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+            </button>
+            <button onClick={onMarkAllRead} className="text-[12px] text-sky-500 hover:text-sky-600 font-semibold transition-colors px-2 py-1 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg">Mark all read</button>
+            {isFullScreen && (
+              <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors hover:bg-black/5 dark:hover:bg-white/5 rounded-lg">
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
-        <button onClick={onMarkAllRead} className="text-[12px] text-sky-500 hover:text-sky-600 font-semibold transition-colors px-2 py-1 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg">Mark all read</button>
-      </div>
 
       {/* Tabs */}
       <div className="p-3 bg-muted dark:bg-gray-900/50 border-b border-muted dark:border-border">
@@ -131,6 +160,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
           </div>
         ) : (
           <>
+            <div className={isFullScreen ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-4" : ""}>
             {Object.entries(tabNotifications.reduce((acc: any, n: any) => {
               const dispName = n.p6_project_name || n.project_name || 'Global';
               if (!acc[dispName]) acc[dispName] = [];
@@ -139,10 +169,10 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
             }, {})).map(([projectName, group]: [string, any]) => (
               <div 
                 key={projectName} 
-                className={`p-3 border-b border-muted dark:border-border hover:bg-muted dark:hover:bg-white/5 transition-all group relative bg-card ${group.every((n: any) => n.is_read) ? 'opacity-70' : ''}`}
+                className={`p-3 transition-all group relative bg-card ${isFullScreen ? 'border border-muted dark:border-border rounded-xl shadow-sm hover:shadow-md' : 'border-b border-muted dark:border-border hover:bg-muted dark:hover:bg-white/5'} ${group.every((n: any) => n.is_read) ? 'opacity-70' : ''}`}
               >
                 {!group.every((n: any) => n.is_read) && (
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-sky-500 rounded-r-full" />
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-sky-500 ${isFullScreen ? 'rounded-l-xl' : 'rounded-r-full'}`} />
                 )}
                 
                 <div className="flex gap-3 relative z-10">
@@ -178,6 +208,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                           </p>
                           
                           {/* Expanded Actions for Individual Notifications */}
+                          {/* AI Suggestion and Simulation commented out for now
                           {expandedProjects[projectName] && (n.change_type?.includes('Delay') || n.message?.toLowerCase().includes('delay') || n.change_type?.includes('Critical')) && (
                             <div className="mt-2 flex flex-col gap-1.5">
                               <div className="flex gap-1.5">
@@ -215,6 +246,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                               )}
                             </div>
                           )}
+                          */}
                         </div>
                       ))}
                       {!expandedProjects[projectName] && group.length > 2 && (
@@ -243,6 +275,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                     </div>
                     
                     {/* Actions & AI Suggestions (Grouped, only when collapsed) */}
+                    {/* AI Suggestion and Simulation commented out for now
                     {!expandedProjects[projectName] && group.some((n: any) => n.change_type?.includes('Delay') || n.message?.toLowerCase().includes('delay') || n.change_type?.includes('Critical')) && (
                       <div className="mt-1 flex flex-col gap-1.5">
                         <div className="flex gap-1.5">
@@ -280,10 +313,12 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                         )}
                       </div>
                     )}
+                    */}
                   </div>
                 </div>
               </div>
             ))}
+            </div>
             
             {tabHasMore && (
               <div className="p-4 flex justify-center border-t border-muted dark:border-border">
@@ -300,5 +335,6 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
         )}
       </div>
     </div>
+    </>
   );
 }
