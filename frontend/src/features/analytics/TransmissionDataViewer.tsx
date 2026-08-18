@@ -717,7 +717,6 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                   <th className="px-6 py-4">Project Name</th>
                   <th className="px-6 py-4">Capacity</th>
                   <th className="px-6 py-4">P6 Schedule</th>
-                  <th className="px-6 py-4">SAP Inventory</th>
                   <th className="px-6 py-4">Transmission Lines</th>
                   <th className="px-6 py-4" />
                 </tr>
@@ -744,7 +743,6 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                         {proj.p6?.health || 'N/A'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 font-mono">{proj.sap?.inv_qty ?? 0}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
                         proj.tc?.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
