@@ -791,7 +791,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                 {selectedProject.p6 && (
                   <DetailSection icon={<Calendar className="w-4 h-4" />} title="P6 Schedule" color="#3B82F6">
                     <DetailRow label="Health" value={selectedProject.p6.health || 'N/A'} />
-                    <DetailRow label="Progress" value={`${selectedProject.p6.progress ?? 0}%`} />
+                    <DetailRow label="Progress" value={`${Number(selectedProject.p6.progress ?? 0).toFixed(2)}%`} />
                     <DetailRow label="Start Date" value={selectedProject.p6.start_date || '—'} />
                     <DetailRow label="Finish Date" value={selectedProject.p6.finish_date || '—'} />
                   </DetailSection>
@@ -822,12 +822,19 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                               {region} ({lines.length})
                             </div>
                             <div className="space-y-1.5">
-                              {lines.map((line: any, i: number) => {
-                                const meta = statusMeta((line.status || '').toLowerCase().includes('charg') ? 'charged' : undefined);
+                              {Object.values(lines.reduce((acc: any, line: any) => {
+                                const key = `${line.voltage || 'Line'}_${line.status || 'Unknown'}`;
+                                if (!acc[key]) acc[key] = { voltage: line.voltage || 'Line', status: line.status || 'Unknown', count: 0 };
+                                acc[key].count++;
+                                return acc;
+                              }, {})).map((group: any, i: number) => {
+                                const meta = statusMeta((group.status || '').toLowerCase().includes('charg') ? 'charged' : undefined);
                                 return (
                                   <div key={i} className="flex items-center justify-between px-2.5 py-1.5 bg-muted rounded-lg border border-border text-xs">
-                                    <span className="text-foreground truncate pr-2">{line.voltage || 'Line'}</span>
-                                    <span className="text-[10px] font-bold uppercase" style={{ color: meta.color }}>{line.status}</span>
+                                    <span className="text-foreground truncate pr-2">
+                                      {group.count > 1 ? <span className="font-bold text-primary mr-1">{group.count}x</span> : ''}{group.voltage}
+                                    </span>
+                                    <span className="text-[10px] font-bold uppercase" style={{ color: meta.color }}>{group.status}</span>
                                   </div>
                                 );
                               })}
