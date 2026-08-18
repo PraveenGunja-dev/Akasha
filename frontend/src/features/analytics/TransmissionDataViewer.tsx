@@ -846,8 +846,8 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
         )}
       </AnimatePresence>
 
-      {/* Debug / Raw API Payloads */}
-      <div className="border border-border rounded-2xl overflow-hidden">
+      {/* Debug / Raw API Payloads 
+      <div className="border border-border rounded-2xl overflow-hidden mt-6">
         <button
           onClick={() => setDebugOpen(!debugOpen)}
           className="w-full flex items-center justify-between px-5 py-3 bg-muted hover:bg-muted/70 transition-colors"
@@ -865,6 +865,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
           </div>
         )}
       </div>
+      */}
     </div>
   );
 }

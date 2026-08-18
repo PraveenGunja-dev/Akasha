@@ -32,7 +32,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
         { id: 'einvoice_intelligence', label: 'E-Invoice Intelligence', icon: FileText },
         { id: 'transmission_data', label: 'Transmission', icon: Network },
         { id: 'quality', label: 'Quality', icon: Activity },
-        { id: 'schedule', label: 'P6', icon: Calendar },
+        // { id: 'schedule', label: 'P6', icon: Calendar },
         { id: 'dpr', label: 'DPR', icon: ClipboardList },
       ]
     }
