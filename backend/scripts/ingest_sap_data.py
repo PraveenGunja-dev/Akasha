@@ -206,8 +206,7 @@ def ingest_data():
 
     # ================================================================
     # Process ZSPS (PO Amount) — Replacing ME2J, merging with ME2J metadata
-    # ================================================================
-    zsps_path = os.path.join(data_dir, "ZPSPS007_merged.xlsx")
+    zsps_path = os.path.join(data_dir, "ZPSPS0071.xlsx")
     me2j_path = os.path.join(data_dir, "ME2J 2.xlsx")
     
     if os.path.exists(zsps_path):
@@ -392,7 +391,7 @@ def ingest_data():
     # ================================================================
     # Process MB51 (Material Documents/Consumption) — unchanged
     # ================================================================
-    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 2.XLSX")
+    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 4.XLSX")
     if os.path.exists(mb51_path):
         try:
             print(f"Processing {os.path.basename(mb51_path)}...")
