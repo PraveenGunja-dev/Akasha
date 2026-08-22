@@ -915,7 +915,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
         {/* STEP 2: STRATEGIES */}
         {/* ========================================== */}
         {activeStep === 2 && (
-          <div className="flex gap-6 animate-in fade-in">
+          <div className="flex gap-6 animate-in fade-in items-start">
             {/* Constraints Sidebar */}
             <div className="w-[320px] shrink-0 bg-card border border-border rounded-xl shadow-sm p-5 flex flex-col gap-6">
               <div className="flex items-center gap-2 border-b border-border pb-3">
@@ -1034,7 +1034,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               <button
                 onClick={generateStrategies}
                 disabled={isGeneratingStrategies}
-                className="w-full mt-auto bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 rounded-lg shadow transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-bold py-3 rounded-lg shadow transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Activity className="w-4 h-4 fill-current" />
                 {isGeneratingStrategies ? 'Generating...' : 'Generate Strategies'}
@@ -1060,9 +1060,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-6 h-full">
+                <div className="flex gap-6">
                   {/* Strategies List */}
-                  <div className="flex-1 space-y-4 overflow-y-auto pb-4 custom-scrollbar pr-2" onWheel={(e) => e.stopPropagation()} onTouchMove={(e) => e.stopPropagation()}>
+                  <div className="flex-1 space-y-4 pb-4">
                     <div className="flex items-center justify-between mb-2">
                       <h3 className="font-bold flex items-center gap-2"><Activity className="w-4 h-4 text-purple-600" /> Generated Strategies</h3>
                       <span className="text-xs font-bold bg-purple-100 text-purple-700 px-2 py-0.5 rounded uppercase tracking-wider">{strategies.length} Options</span>
@@ -1114,7 +1114,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               {strategies.length > 0 && !isGeneratingStrategies && (
                 <button
                   onClick={executeStrategy}
-                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2 mt-auto"
+                  className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-5 h-5 fill-current" /> Execute Strategy
                 </button>
