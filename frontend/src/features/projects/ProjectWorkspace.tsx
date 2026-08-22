@@ -1961,7 +1961,35 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 ) : (
                                   <ReactECharts
                                     option={{
-                                      tooltip: { trigger: 'axis', backgroundColor: 'rgba(9,9,11,0.9)', borderColor: '#27272a', textStyle: { color: '#e4e4e7' } },
+                                      tooltip: { 
+                                        trigger: 'axis', 
+                                        backgroundColor: 'rgba(9,9,11,0.95)', 
+                                        borderColor: '#27272a', 
+                                        textStyle: { color: '#e4e4e7' },
+                                        formatter: (params: any) => {
+                                          const raw = params[0]?.data?.raw;
+                                          let html = `<div style="font-weight:600;margin-bottom:8px;border-bottom:1px solid #27272a;padding-bottom:6px;">${params[0].axisValue}</div>`;
+                                          
+                                          if (raw) {
+                                            html += `<div style="font-size:11px;color:#a1a1aa;margin-bottom:8px;line-height:1.5;">
+                                              <div><strong style="color:#d4d4d8;">Mat:</strong> ${raw.materialCode} - ${raw.materialDescription || raw.materialName || 'Unknown'}</div>
+                                              <div><strong style="color:#d4d4d8;">WBS:</strong> ${raw.wbsElement || '-'} &nbsp;|&nbsp; <strong style="color:#d4d4d8;">Plant:</strong> ${raw.plantCode || '-'}</div>
+                                              <div><strong style="color:#d4d4d8;">Base Unit:</strong> ${raw.baseUnit || 'EA'} &nbsp;|&nbsp; <strong style="color:#d4d4d8;">Movement:</strong> ${raw.movementType || '-'}</div>
+                                            </div>`;
+                                          }
+                                          
+                                          params.forEach((param: any) => {
+                                            const val = param.value !== undefined && param.value !== null ? Number(param.value).toLocaleString() : '0';
+                                            html += `
+                                              <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+                                                <span>${param.marker} <span style="color:#a1a1aa;margin-right:24px;">${param.seriesName}</span></span>
+                                                <span style="font-weight:600;color:#fff;">${val}</span>
+                                              </div>
+                                            `;
+                                          });
+                                          return html;
+                                        }
+                                      },
                                       legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
                                       grid: { top: 30, right: 10, bottom: 40, left: 40 },
                                       xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
@@ -1970,9 +1998,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
                                       ],
                                       series: [
-                                        { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
-                                        { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => c.quantity > 0 ? c.quantity : 0).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
-                                        { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => c.quantity < 0 ? c.amountINR : (c.quantity > 0 ? c.amountINR : 0)).slice(0, 40), itemStyle: { color: '#3b82f6' } }
+                                        { name: 'Consumed Qty', type: 'line', smooth: true, data: sap.consumption.map((c: any) => ({ value: c.quantity < 0 ? c.quantity : 0, raw: c })).slice(0, 40), itemStyle: { color: '#ef4444' }, areaStyle: { color: 'rgba(239, 68, 68, 0.1)' } },
+                                        { name: 'Reversals', type: 'line', smooth: true, data: sap.consumption.map((c: any) => ({ value: c.quantity > 0 ? c.quantity : 0, raw: c })).slice(0, 40), itemStyle: { color: '#10b981' }, areaStyle: { color: 'rgba(16, 185, 129, 0.1)' } },
+                                        { name: 'Value INR', type: 'line', smooth: true, yAxisIndex: 1, data: sap.consumption.map((c: any) => ({ value: c.quantity < 0 ? c.amountINR : (c.quantity > 0 ? c.amountINR : 0), raw: c })).slice(0, 40), itemStyle: { color: '#3b82f6' } }
                                       ]
                                     }}
                                     style={{ height: '100%', width: '100%' }}

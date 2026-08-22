@@ -279,15 +279,12 @@ export default function CEODashboard() {
               />
             )}
             {activeTab === 'simulation_lab' && (
-              <div className="flex-1 flex flex-col items-center justify-center bg-card border border-border dark:border-border rounded-2xl shadow-sm text-center h-full min-h-[500px]">
-                <div className="w-20 h-20 bg-sky-100 dark:bg-sky-500/20 text-sky-500 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                  <Wrench className="w-10 h-10" />
-                </div>
-                <h2 className="text-2xl font-bold text-foreground dark:text-white mb-3">Simulation Lab</h2>
-                <p className="text-muted-foreground max-w-md text-[15px] leading-relaxed">
-                  Development is currently in progress.<br/>This feature will be available in an upcoming release.
-                </p>
-              </div>
+              <SimulationLab 
+                p6Data={p6Data} 
+                dashboardData={dashboardData} 
+                initialProject={selectedProject} 
+                simulationContext={simulationContext} 
+              />
             )}
           </div>
         ) : (
@@ -367,38 +364,13 @@ export default function CEODashboard() {
             >
               <X className="w-5 h-5" />
             </button>
-            <div className="flex-1 overflow-y-auto flex flex-col items-center justify-center">
-              <div className="w-20 h-20 bg-sky-100 dark:bg-sky-500/20 text-sky-500 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                <Wrench className="w-10 h-10" />
-              </div>
-              <h2 className="text-2xl font-bold text-foreground dark:text-white mb-3">Simulation Lab</h2>
-              <p className="text-muted-foreground max-w-md text-[15px] leading-relaxed text-center mb-8">
-                Development is currently in progress.<br/>This feature will be available in an upcoming release.
-              </p>
-
-              <div className="w-full max-w-md border border-border rounded-xl p-5 bg-card">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-4 text-center">Upcoming Integrations</h3>
-                <ul className="space-y-3">
-                  {[
-                    "Monte Carlo Schedule Risk Analysis",
-                    "AI-Driven Alternative Scenario Generation",
-                    "Cost vs. Time Trade-off Modeling"
-                  ].map((feature, idx) => (
-                    <li key={idx} className="flex items-center gap-3 text-[14px] text-foreground/80">
-                      <div className="w-1.5 h-1.5 rounded-full bg-sky-500/60"></div>
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              {/*
+            <div className="flex-1 flex overflow-hidden">
               <SimulationLab 
                 p6Data={p6Data} 
                 dashboardData={dashboardData} 
                 initialProject={selectedProject} 
                 simulationContext={modalSimulationContext} 
               />
-              */}
             </div>
           </div>
         </div>

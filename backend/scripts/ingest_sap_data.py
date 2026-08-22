@@ -65,8 +65,8 @@ def build_wbs_mapping(master_path):
         codes = []
         if pd.isna(val):
             return codes
-        val_str = str(val).strip()
-        if val_str in ('Not Found', '-', 'None', ''):
+        val_str = safe_sap_id(val)
+        if val_str.lower() in ('not found', '-', 'none', '', 'nan'):
             return codes
         parts = val_str.replace('\n', ' ').split()
         for part in parts:
@@ -396,6 +396,10 @@ def ingest_data():
         try:
             print(f"Processing {os.path.basename(mb51_path)}...")
             df = pd.read_excel(mb51_path)
+            # Standardize column names since the new file uses spaces instead of underscores
+            if hasattr(df.columns, 'str'):
+                df.columns = df.columns.str.replace(' ', '_')
+            
             material_docs = []
             for _, row in df.iterrows():
                 doc = str(row.get('Material_Document', ''))
