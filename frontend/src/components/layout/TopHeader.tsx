@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard, RefreshCw } from 'lucide-react';
+import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard, RefreshCw, BookOpen } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
@@ -195,6 +195,16 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
           <span className="hidden lg:inline text-shadow-sm">Ask Akasha</span>
         </button>
         */}
+
+        {/* User Guide */}
+        <a 
+          href="/AKASHA_USER_GUIDE.docx" 
+          download
+          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-[12px] font-semibold transition-colors shadow-sm"
+        >
+          <BookOpen className="w-3.5 h-3.5" />
+          <span className="hidden lg:inline text-shadow-sm">User Guide</span>
+        </a>
 
         <button 
           onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} 
