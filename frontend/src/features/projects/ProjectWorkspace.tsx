@@ -242,7 +242,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'schedule' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'intelligence' | 'schedule' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality'>('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
