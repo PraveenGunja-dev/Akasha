@@ -267,34 +267,16 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
         portfolio_summary["total_po_qty"] += po_qty
 
         # TC Data
-        project_entries = [pe for pe in all_tc_entries if pe.mapping_id == m.id]
-        phases = set(str(pe.phase).strip().upper() for pe in project_entries if pe.phase)
-        
         tc_khavda = []
         tc_rajasthan = []
         
-        if phases:
-            for edge in all_tc_edges:
-                if phases.intersection(parsed_edge_phases.get(edge.id, set())):
-                    if edge.region == "Khavda":
-                        tc_khavda.append(edge)
-                    elif edge.region == "Rajasthan":
-                        tc_rajasthan.append(edge)
-                        
-        # Direct mappings
+        # Direct mappings only
         for edge in all_tc_edges:
             if edge.mapping_id == m.id:
                 if edge.region == "Khavda":
                     tc_khavda.append(edge)
                 elif edge.region == "Rajasthan":
                     tc_rajasthan.append(edge)
-
-        # Deduplicate
-        tc_khavda = list({e.id: e for e in tc_khavda}.values())
-        tc_rajasthan = list({e.id: e for e in tc_rajasthan}.values())
-        
-        tc_khavda = filter_tc_edges_by_kps(tc_khavda, project_entries)
-        tc_rajasthan = filter_tc_edges_by_kps(tc_rajasthan, project_entries)
         
         tc_summary = "0 Edges"
         if tc_khavda and tc_rajasthan:

@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { ProjectWBS } from './ProjectWBS';
 import QualityProjectTab from '../quality/QualityProjectTab';
+import ProjectIntelligence from '../intelligence/ProjectIntelligence';
 import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 
@@ -1163,6 +1164,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         {/* ── Tab Navigation ── */}
         <div className="flex items-center gap-2 border-b border-border bg-slate-100/50 dark:bg-gray-900/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
           <TabBtn active={activeTab === 'overview'} label="Overview" icon={BarChart3} onClick={() => setActiveTab('overview')} />
+          <TabBtn active={activeTab === 'intelligence'} label="Intelligence Hub" icon={Brain} onClick={() => setActiveTab('intelligence')} />
           <TabBtn active={activeTab === 'schedule'} label="Schedule" icon={Calendar} onClick={() => setActiveTab('schedule')} />
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'einvoice'} label="E-Invoice" icon={Receipt} onClick={() => setActiveTab('einvoice')} />
@@ -1248,6 +1250,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   ))}
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* ════════ INTELLIGENCE TAB (NEW) ════════ */}
+          {activeTab === 'intelligence' && (
+            <div className="animate-in fade-in duration-300">
+              <ProjectIntelligence projectId={p.projectId} />
             </div>
           )}
 

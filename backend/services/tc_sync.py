@@ -233,8 +233,9 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
                 pe.phase = entry.get("phase")
                 pe.kps = entry.get("kps")
                 pe.pss = entry.get("pss")
-                pe.breakup = str(entry.get("breakup"))
-                pe.mw = str(entry.get("mw"))
+                pe.breakup = str(entry.get("breakup")) if entry.get("breakup") else ""
+                mw_val = entry.get("mw")
+                pe.mw = float(mw_val) if mw_val and str(mw_val).strip() else None
             else:
                 pe = TcProjectEntry(
                     region=region,
@@ -243,8 +244,8 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
                     kps=entry.get("kps"),
                     pss=entry.get("pss"),
                     block=block,
-                    breakup=str(entry.get("breakup")),
-                    mw=str(entry.get("mw")),
+                    breakup=str(entry.get("breakup")) if entry.get("breakup") else "",
+                    mw=float(entry.get("mw")) if entry.get("mw") and str(entry.get("mw")).strip() else None,
                     mapping_id=pm.id
                 )
                 db.add(pe)

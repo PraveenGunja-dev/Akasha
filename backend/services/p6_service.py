@@ -287,7 +287,13 @@ def _map_p6_response(raw: Dict[str, Any], field_map: Dict[str, str], date_fields
 # P6 Service Class
 # ==========================================
 class P6Service:
+    # Class-level flag to track auth failures and prevent account lockouts (too many 401s)
+    _GLOBAL_AUTH_FAILED = False
+    
     def __init__(self):
+        if P6Service._GLOBAL_AUTH_FAILED:
+            raise Exception("P6 Authentication previously failed (401). Aborting to prevent account lockout. Please check credentials in .env")
+            
         self.base_url = os.getenv("ORACLE_P6_BASE_URL", "https://sin1.p6.oraclecloud.com/adani/p6ws/restapi")
         self.auth_token_b64 = os.getenv("ORACLE_P6_AUTH_TOKEN")
         self.token_url = os.getenv("ORACLE_P6_TOKEN_URL", "https://sin1.p6.oraclecloud.com/adani/p6ws/oauth/token")
@@ -339,10 +345,24 @@ class P6Service:
                 return text
             else:
                 return response.json().get("access_token", "")
+        except requests.exceptions.HTTPError as e:
+            if getattr(e.response, "status_code", None) in (401, 403):
+                P6Service._GLOBAL_AUTH_FAILED = True
+                raise Exception(f"P6 Auth Error (401/403). Credentials invalid. Aborting to prevent lockout.")
+            logger.error(f"Failed to fetch P6 OAuth token: {e}")
+            return self.auth_token_b64
         except Exception as e:
             logger.error(f"Failed to fetch P6 OAuth token: {e}")
             # Fallback to returning the basic token just in case
             return self.auth_token_b64
+
+
+    def _handle_request_error(self, e):
+        """Helper to catch 401s during API calls and lock down the service."""
+        if isinstance(e, requests.exceptions.HTTPError) and getattr(e.response, "status_code", None) in (401, 403):
+            P6Service._GLOBAL_AUTH_FAILED = True
+            logger.error("P6 API returned 401 Unauthorized. Locking down P6Service to prevent account lockout.")
+            raise Exception("P6 API Authentication Failed (401). Check .env credentials.")
 
 
     # ------------------------------------------
@@ -373,6 +393,7 @@ class P6Service:
             logger.info(f"Fetched {len(data)} projects from P6")
             return data
         except requests.exceptions.HTTPError as e:
+            self._handle_request_error(e)
             logger.error(f"P6 HTTP Error fetching projects: {e} - {e.response.text if hasattr(e, 'response') and e.response else ''}")
             return []
         except Exception as e:
@@ -400,6 +421,7 @@ class P6Service:
             logger.info(f"Fetched {len(data)} baseline projects from P6")
             return data
         except requests.exceptions.HTTPError as e:
+            self._handle_request_error(e)
             logger.error(f"P6 HTTP Error fetching baselines: {e} - {e.response.text if hasattr(e, 'response') and e.response else ''}")
             return []
         except Exception as e:
@@ -590,8 +612,11 @@ class P6Service:
         try:
             response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
             response.raise_for_status()
-            data = response.json()
-            return data
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            self._handle_request_error(e)
+            logger.error(f"[REAL P6 API] Error fetching WBS: {e}")
+            return []
         except Exception as e:
             logger.error(f"[REAL P6 API] Error fetching WBS: {e}")
             return []
@@ -611,8 +636,11 @@ class P6Service:
         try:
             response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
             response.raise_for_status()
-            data = response.json()
-            return data
+            return response.json()
+        except requests.exceptions.HTTPError as e:
+            self._handle_request_error(e)
+            logger.error(f"[REAL P6 API] Error fetching Resource Assignments: {e}")
+            return []
         except Exception as e:
             logger.error(f"[REAL P6 API] Error fetching Resource Assignments: {e}")
             return []
@@ -750,7 +778,11 @@ class P6Service:
             response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
             response.raise_for_status()
             return response.json()
-        except requests.exceptions.RequestException as e:
+        except requests.exceptions.HTTPError as e:
+            self._handle_request_error(e)
+            logger.error(f"Error fetching activities from P6: {e}")
+            return []
+        except Exception as e:
             logger.error(f"Error fetching activities from P6: {e}")
             return []
 

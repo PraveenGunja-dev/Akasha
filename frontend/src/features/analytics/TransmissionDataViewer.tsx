@@ -547,6 +547,10 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
 
             {geoEdges
               .filter(({ edge }) => overlays.straight || (edge.path?.length ?? 0) >= 2)
+              // Straight chords first so every traced route draws over them. Leaflet
+              // paints in insertion order, and an approximation crossing over a real
+              // alignment is exactly the wrong thing to put on top.
+              .sort((a, b) => (a.edge.path?.length ?? 0) - (b.edge.path?.length ?? 0))
               .map(({ edge, from, to }) => {
               const meta = statusMeta(edge.normalized_status);
               const pct = edgeCompletionPct(edge);
@@ -558,14 +562,18 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
               const positions: [number, number][] = traced
                 ? edge.path!
                 : [[from.lat, from.lng], [to.lat, to.lng]];
-              const dashArray = traced ? meta.dash : '3, 7';
+              const dashArray = traced ? meta.dash : '2, 8';
               // A low-confidence trace is a plausible alignment rather than a verified one,
               // so it sits visually between a confirmed route and a bare straight line.
-              const routeOpacity = !traced ? 0.45 : edge.path_confidence === 'low' ? 0.7 : 0.9;
+              const routeOpacity = !traced ? 0.28 : edge.path_confidence === 'low' ? 0.7 : 0.9;
               return (
                 <React.Fragment key={edge.id}>
                   {/* A wide, faint stroke in the line's own colour. On the dark surface this
-                      reads as the route glowing rather than as an outline drawn around it. */}
+                      reads as the route glowing rather than as an outline drawn around it.
+                      Only traced routes earn it: haloing a straight chord gives an
+                      approximation the visual weight of a surveyed alignment, and with
+                      most edges unmatched that is what turned the map into a spiderweb. */}
+                  {traced && (
                   <Polyline
                     positions={positions}
                     interactive={false}
@@ -577,6 +585,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                       lineJoin: 'round',
                     }}
                   />
+                  )}
                 <Polyline
                   positions={positions}
                   eventHandlers={{
@@ -585,12 +594,15 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                   }}
                   pathOptions={{
                     color: meta.color,
-                    weight: hovered ? weight + 1.5 : traced ? weight : weight - 0.5,
+                    weight: hovered ? weight + 1.5 : traced ? weight : Math.max(0.8, weight - 1),
                     opacity: hovered ? 1 : routeOpacity,
                     dashArray,
                     lineCap: 'round',
                     lineJoin: 'round',
-                    className: dashArray ? 'tc-line-flow' : undefined,
+                    // Drift the dashes only along real alignments. Animating the straight
+                    // chords too sets most of the map moving at once, which reads as
+                    // activity the data does not actually show.
+                    className: dashArray && traced ? 'tc-line-flow' : undefined,
                   }}
                 >
                   <Popup>
@@ -733,7 +745,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                     className="hover:bg-muted transition-colors cursor-pointer"
                     onClick={() => setSelectedProject(proj)}
                   >
-                    <td className="px-6 py-4 font-medium text-foreground">{proj.project_name || proj.p6_project_name || 'Unknown'}</td>
+                    <td className="px-6 py-4 font-medium text-foreground">{proj.p6_project_name || proj.project_name || 'Unknown'}</td>
                     <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mwac ? `${proj.capacity_mwac} MW` : '—'}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${

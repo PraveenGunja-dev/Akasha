@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Home, Command, Network, MessageSquare, FileText, Search, Activity,
   Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2, Share2, Database,
-  Calendar, ClipboardList
+  Calendar, ClipboardList, Brain
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -21,6 +21,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
       title: "Dashboard",
       items: [
         { id: 'overview', label: 'Overview', icon: Home },
+        { id: 'portfolio_intelligence', label: 'Intelligence Hub', icon: Brain },
         { id: 'capacity_overview', label: 'Capacity Overview', icon: BarChart2 },
         { id: 'project360', label: 'Project 360', icon: Command },
       ]

@@ -79,7 +79,7 @@ export const SUBSTATION_COORDS: SubstationCoord[] = [
 
   // Located in OSM only at a lower voltage than the project scope implies - treat as indicative.
   { name: "Bhadla", lat: 27.5274, lng: 71.9455, kv: 220, source: "approx", aliases: ["Bhadla-III", "Bhadla-LV"] },
-  { name: "Dwarka", lat: 22.2303, lng: 68.9833, kv: 66, source: "approx" },
+  { name: "Dwarka", lat: 28.5796, lng: 77.0430, kv: 220, source: "approx" },
   { name: "Fatehpur", lat: 27.9847, lng: 74.9581, kv: 132, source: "approx" },
   { name: "Kurawar", lat: 23.5240, lng: 77.0306, kv: 132, source: "approx" },
   { name: "Sirohi", lat: 24.8668, lng: 72.8336, kv: 220, source: "approx" },
