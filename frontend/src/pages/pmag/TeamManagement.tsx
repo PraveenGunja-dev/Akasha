@@ -173,41 +173,41 @@ export default function TeamManagement({ data, theme }: any) {
                 {/* Dept 1 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Engineering</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">85%</div>
-                  <div className="h-6 bg-destructive/100/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">105%</div>
-                  <div className="h-6 bg-warning/100/20 text-warning dark:text-warning rounded-sm flex items-center justify-center text-[10px] font-medium border border-warning/20">95%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">80%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">85%</div>
+                  <div className="h-6 bg-destructive/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">105%</div>
+                  <div className="h-6 bg-warning/20 text-warning dark:text-warning rounded-sm flex items-center justify-center text-[10px] font-medium border border-warning/20">95%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">80%</div>
                 </div>
                 {/* Dept 2 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Project Mgmt</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">70%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">75%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">80%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">85%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">70%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">75%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">80%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">85%</div>
                 </div>
                 {/* Dept 3 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Field Ops</div>
-                  <div className="h-6 bg-destructive/100/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">110%</div>
-                  <div className="h-6 bg-destructive/100/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">110%</div>
-                  <div className="h-6 bg-warning/100/20 text-warning dark:text-warning rounded-sm flex items-center justify-center text-[10px] font-medium border border-warning/20">98%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">90%</div>
+                  <div className="h-6 bg-destructive/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">110%</div>
+                  <div className="h-6 bg-destructive/20 text-destructive dark:text-destructive rounded-sm flex items-center justify-center text-[10px] font-bold border border-destructive/20">110%</div>
+                  <div className="h-6 bg-warning/20 text-warning dark:text-warning rounded-sm flex items-center justify-center text-[10px] font-medium border border-warning/20">98%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">90%</div>
                 </div>
                 {/* Dept 4 */}
                 <div className="grid grid-cols-[1fr_repeat(4,_minmax(0,_1fr))] gap-1 items-center px-1">
                   <div className="truncate text-[11px] font-bold text-foreground">Risk & Comp</div>
                   <div className="h-6 bg-slate-200 dark:bg-card text-foreground dark:text-muted-foreground rounded-sm flex items-center justify-center text-[10px] font-medium border border-border dark:border-slate-700">40%</div>
                   <div className="h-6 bg-slate-200 dark:bg-card text-foreground dark:text-muted-foreground rounded-sm flex items-center justify-center text-[10px] font-medium border border-border dark:border-slate-700">40%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">50%</div>
-                  <div className="h-6 bg-success/100/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">60%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">50%</div>
+                  <div className="h-6 bg-success/20 text-success dark:text-success rounded-sm flex items-center justify-center text-[10px] font-medium border border-success/20">60%</div>
                 </div>
               </div>
             </div>
             <div className="mt-4 pt-3 border-t border-border flex justify-between text-[10px] font-bold text-muted-foreground shrink-0">
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-success/100/50 border border-emerald-500/50"></span> Optimal</div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-warning/100/50 border border-amber-500/50"></span> High</div>
-              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-destructive/100/50 border border-red-500/50"></span> Over (100%+)</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-success/50 border border-emerald-500/50"></span> Optimal</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-warning/50 border border-amber-500/50"></span> High</div>
+              <div className="flex items-center gap-1.5"><span className="w-2 h-2 rounded-sm bg-destructive/50 border border-red-500/50"></span> Over (100%+)</div>
             </div>
           </div>
 
@@ -260,7 +260,7 @@ export default function TeamManagement({ data, theme }: any) {
             <div key={i} className="flex gap-4 py-3 border-b border-border/50 last:border-0 hover:bg-muted dark:hover:bg-white/50 transition-colors px-2 rounded">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
                 log.type === 'admin' ? 'bg-primary/10 text-primary' : 
-                log.type === 'alert' ? 'bg-destructive/100/10 text-destructive' : 'bg-slate-200 dark:bg-card text-muted-foreground dark:text-muted-foreground'
+                log.type === 'alert' ? 'bg-destructive/10 text-destructive' : 'bg-slate-200 dark:bg-card text-muted-foreground dark:text-muted-foreground'
               }`}>
                 {log.type === 'admin' ? <Settings2 className="w-4 h-4" /> : log.type === 'alert' ? <ShieldAlert className="w-4 h-4" /> : <Users className="w-4 h-4" />}
               </div>

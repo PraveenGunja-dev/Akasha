@@ -53,10 +53,10 @@ export default function PortfolioHealth({ p6Data, logisticsData }: any) {
         </div>
 
         <div className="bg-white/40 backdrop-blur-md border border-border/60 hover:bg-card hover:border-emerald-500/40 hover:shadow-[0_8px_30px_rgb(0,0,0,0.06)] dark:hover:shadow-[0_8px_30px_rgba(16,185,129,0.1)] transition-all duration-300 rounded-3xl p-7 relative group overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-success/100/5 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-0"></div>
+          <div className="absolute top-0 right-0 w-64 h-64 bg-success/5 blur-[100px] rounded-full pointer-events-none transition-opacity duration-500 group-hover:opacity-100 opacity-0"></div>
           <div className="relative z-10">
             <div className="flex items-center gap-3 mb-6">
-              <div className="p-2.5 bg-success/100/10 rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm border border-success/20"><PieChart className="w-5 h-5 text-success" /></div>
+              <div className="p-2.5 bg-success/10 rounded-xl transition-transform duration-300 group-hover:scale-110 group-hover:-rotate-3 shadow-sm border border-success/20"><PieChart className="w-5 h-5 text-success" /></div>
               <h3 className="text-[13px] font-semibold text-foreground tracking-widest uppercase transition-colors group-hover:text-success">Overall Logistics Status</h3>
             </div>
             <div className="w-full h-[300px]">

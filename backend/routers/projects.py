@@ -4,7 +4,7 @@ from sqlalchemy import func, case
 from typing import Optional
 from database import get_db
 import models
-from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm
+from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm, build_evm_index
 import time
 
 _SUMMARY_CACHE = {}
@@ -73,6 +73,9 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
     
     act_dict = {a[0]: {'critical': a[1], 'eng': a[2], 'ord': a[3], 'deliv': a[4]} for a in act_stats}
 
+    # Fold the SAP tables once instead of re-scanning them per project below.
+    evm_index = build_evm_index(db)
+
     result = []
     for p in stored_projects:
         item = {column.name: getattr(p, column.name) for column in p.__table__.columns}
@@ -90,7 +93,7 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
         item["actualDuration"] = p.actual_duration
         item["actualTotalCost"] = p.actual_total_cost
         # Calculate EVM SPI and CPI dynamically
-        dynamic_spi, dynamic_cpi = calculate_dynamic_evm(db, p)
+        dynamic_spi, dynamic_cpi = calculate_dynamic_evm(db, p, index=evm_index)
         
         item["schedulePerformanceIndex"] = dynamic_spi
         item["schedule_performance_index"] = dynamic_spi

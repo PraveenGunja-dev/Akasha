@@ -504,7 +504,7 @@ export default function KnowledgeGraph() {
                 {/* Health + Progress (Projects) */}
                 {selectedNode.health && (
                   <div className="p-4 border-b border-border space-y-3">
-                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${selectedNode.health === 'delayed' ? 'bg-destructive/100/10' : 'bg-success/100/10'}`}>
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${selectedNode.health === 'delayed' ? 'bg-destructive/10' : 'bg-success/10'}`}>
                       <div className={`w-2.5 h-2.5 rounded-full animate-pulse ${selectedNode.health === 'delayed' ? 'bg-destructive/100' : 'bg-success/100'}`} />
                       <span className={`text-xs font-bold uppercase tracking-wider ${selectedNode.health === 'delayed' ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'}`}>
                         {selectedNode.health === 'delayed' ? 'Delayed' : 'On Track'}
@@ -533,11 +533,11 @@ export default function KnowledgeGraph() {
                 {selectedNode.delayed !== undefined && (
                   <div className="p-4 border-b border-border">
                     <div className="grid grid-cols-2 gap-3 mb-4">
-                      <div className="bg-destructive/100/10 rounded-xl p-3 text-center border border-destructive/20">
+                      <div className="bg-destructive/10 rounded-xl p-3 text-center border border-destructive/20">
                         <div className="text-xl font-bold text-destructive dark:text-destructive">{selectedNode.delayed}</div>
                         <div className="text-[9px] text-destructive/80 dark:text-destructive/80 uppercase font-bold mt-0.5">Delayed</div>
                       </div>
-                      <div className="bg-success/100/10 rounded-xl p-3 text-center border border-success/20">
+                      <div className="bg-success/10 rounded-xl p-3 text-center border border-success/20">
                         <div className="text-xl font-bold text-success dark:text-success">{selectedNode.on_track}</div>
                         <div className="text-[9px] text-success/80 dark:text-success/80 uppercase font-bold mt-0.5">On Track</div>
                       </div>
@@ -554,7 +554,7 @@ export default function KnowledgeGraph() {
                                 <div className="text-xs font-semibold text-foreground truncate" title={proj.name}>{proj.name}</div>
                                 <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">{proj.capacity} MW</div>
                               </div>
-                              <div className={`px-2 py-1 rounded-md text-[10px] font-bold shrink-0 ${proj.health === 'delayed' ? 'bg-destructive/100/15 text-destructive dark:text-destructive' : 'bg-success/100/15 text-success dark:text-success'}`}>
+                              <div className={`px-2 py-1 rounded-md text-[10px] font-bold shrink-0 ${proj.health === 'delayed' ? 'bg-destructive/15 text-destructive dark:text-destructive' : 'bg-success/15 text-success dark:text-success'}`}>
                                 {proj.progress}%
                               </div>
                             </div>
@@ -585,7 +585,7 @@ export default function KnowledgeGraph() {
                     <MiniCard label="Requisitions" value={selectedNode.sap.requirement_count} sub={`₹${selectedNode.sap.requirement_value_cr} Cr`} />
                     <MiniCard label="Inventory" value={selectedNode.sap.inventory_items} sub={`₹${selectedNode.sap.inventory_value_cr} Cr`} />
                   </div>
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/100/10 border border-warning/20 mb-3">
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-warning/10 border border-warning/20 mb-3">
                     <Truck className="w-4 h-4 text-warning dark:text-warning" />
                     <span className="text-xs text-warning dark:text-warning font-semibold">{selectedNode.sap.in_transit_count} in transit · ₹{selectedNode.sap.in_transit_cr} Cr</span>
                   </div>
@@ -623,11 +623,11 @@ export default function KnowledgeGraph() {
                         <span className="text-sm font-bold text-foreground">{selectedNode.tc.total_lines}</span>
                         <span className="text-[9px] uppercase font-bold text-muted-foreground">Total</span>
                       </div>
-                      <div className="bg-success/100/10 border border-success/20 rounded flex flex-col items-center justify-center py-2">
+                      <div className="bg-success/10 border border-success/20 rounded flex flex-col items-center justify-center py-2">
                         <span className="text-sm font-bold text-success dark:text-success">{selectedNode.tc.charged_lines}</span>
                         <span className="text-[9px] uppercase font-bold text-success dark:text-success">Charged</span>
                       </div>
-                      <div className="bg-destructive/100/10 border border-destructive/20 rounded flex flex-col items-center justify-center py-2">
+                      <div className="bg-destructive/10 border border-destructive/20 rounded flex flex-col items-center justify-center py-2">
                         <span className="text-sm font-bold text-destructive dark:text-destructive">{selectedNode.tc.delayed_lines}</span>
                         <span className="text-[9px] uppercase font-bold text-destructive dark:text-destructive">Delayed</span>
                       </div>
@@ -636,9 +636,9 @@ export default function KnowledgeGraph() {
                       <div className="flex flex-col gap-1.5 max-h-[250px] overflow-y-auto scrollbar-thin">
                         {selectedNode.tc.lines.map((line: any, idx: number) => {
                           const norm = line.normalized_status || 'in_progress';
-                          const badgeColor = norm === 'charged' ? 'bg-success/100/10 text-success dark:text-success' :
-                            norm === 'delayed' ? 'bg-destructive/100/10 text-destructive dark:text-destructive' :
-                            'bg-primary/100/10 text-primary dark:text-primary';
+                          const badgeColor = norm === 'charged' ? 'bg-success/10 text-success dark:text-success' :
+                            norm === 'delayed' ? 'bg-destructive/10 text-destructive dark:text-destructive' :
+                            'bg-primary/10 text-primary dark:text-primary';
                           const displayStatus = norm === 'charged' ? 'CHARGED' : norm === 'delayed' ? 'DELAYED' : 'IN PROGRESS';
 
                           return (

@@ -268,7 +268,7 @@ export default function DataIntegrationHub() {
       </div>
 
       {syncError && (
-        <div className="mb-6 p-4 bg-destructive/100/10 border border-destructive/20 rounded-md flex items-start gap-3 text-destructive text-sm">
+        <div className="mb-6 p-4 bg-destructive/10 border border-destructive/20 rounded-md flex items-start gap-3 text-destructive text-sm">
           <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
           <div>
             <h4 className="font-semibold mb-1">Live Sync Failed</h4>
@@ -279,7 +279,7 @@ export default function DataIntegrationHub() {
 
       {/* P6 Password Expiry Warning Banner */}
       {p6ConfigStatus && p6ConfigStatus.is_expiring_soon && (
-        <div className="mb-6 p-4 bg-warning/100/10 border border-warning/20 rounded-md flex items-center justify-between text-warning dark:text-warning">
+        <div className="mb-6 p-4 bg-warning/10 border border-warning/20 rounded-md flex items-center justify-between text-warning dark:text-warning">
           <div className="flex items-start gap-3">
             <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" />
             <div>
@@ -693,7 +693,7 @@ export default function DataIntegrationHub() {
               </div>
               
               {passwordUpdateResult && (
-                <div className={`p-3 rounded-md text-sm ${passwordUpdateResult.error ? 'bg-destructive/100/10 text-destructive' : 'bg-success/100/10 text-success'}`}>
+                <div className={`p-3 rounded-md text-sm ${passwordUpdateResult.error ? 'bg-destructive/10 text-destructive' : 'bg-success/10 text-success'}`}>
                   {passwordUpdateResult.error || passwordUpdateResult.success}
                 </div>
               )}

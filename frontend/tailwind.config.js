@@ -4,20 +4,31 @@
    Both themes are carried by the variables, so a utility like
    `text-fg-secondary` is correct in light and dark with no `dark:` twin. */
 
+/* Tailwind cannot put an alpha channel on a token that resolves to a hex, so
+   every opacity utility on a semantic colour — `bg-primary/10`,
+   `border-success/20`, `text-foreground/80` — matched no plugin and emitted
+   nothing at all. 842 such utilities across 43 files were rendering as
+   *absent*, not as tinted. color-mix restores the modifier without touching a
+   single token definition in index.css: Tailwind substitutes <alpha-value>
+   with the modifier, or with 1 when the utility carries none.
+   Needs Chrome 111 / Safari 16.2 / Firefox 113 (all Feb 2023 or earlier). */
+const tok = (name) =>
+  `color-mix(in srgb, var(--${name}) calc(<alpha-value> * 100%), transparent)`;
+
 const ramp = (name) =>
   Object.fromEntries(
     [50, 100, 200, 300, 400, 500, 600, 700, 800, 900, 950].map((s) => [
       s,
-      `var(--${name}-${s})`,
+      tok(`${name}-${s}`),
     ])
   );
 
 const statusTriad = (name) => ({
-  DEFAULT: `var(--status-${name}-solid)`,
-  fg: `var(--status-${name}-fg)`,
-  bg: `var(--status-${name}-bg)`,
-  border: `var(--status-${name}-border)`,
-  solid: `var(--status-${name}-solid)`,
+  DEFAULT: tok(`status-${name}-solid`),
+  fg: tok(`status-${name}-fg`),
+  bg: tok(`status-${name}-bg`),
+  border: tok(`status-${name}-border`),
+  solid: tok(`status-${name}-solid`),
 });
 
 export default {
@@ -28,48 +39,48 @@ export default {
       colors: {
         /* ── Brand anchors ── */
         brand: {
-          blue: "var(--brand-blue)",
-          purple: "var(--brand-purple)",
-          pink: "var(--brand-pink)",
+          blue: tok("brand-blue"),
+          purple: tok("brand-purple"),
+          pink: tok("brand-pink"),
         },
 
         /* ── Neutral ramp: this is the interface ── */
-        neutral: { 0: "var(--neutral-0)", ...ramp("neutral") },
+        neutral: { 0: tok("neutral-0"), ...ramp("neutral") },
 
         /* ── Brand ramps ── */
         primary: {
-          DEFAULT: "var(--primary)",
-          foreground: "var(--primary-foreground)",
+          DEFAULT: tok("primary"),
+          foreground: tok("primary-foreground"),
           ...ramp("primary"),
         },
         secondary: {
-          DEFAULT: "var(--secondary)",
-          foreground: "var(--secondary-foreground)",
+          DEFAULT: tok("secondary"),
+          foreground: tok("secondary-foreground"),
           ...ramp("secondary"),
         },
         accent: {
-          DEFAULT: "var(--accent)",
-          foreground: "var(--accent-foreground)",
+          DEFAULT: tok("accent"),
+          foreground: tok("accent-foreground"),
           ...ramp("accent"),
         },
 
         /* ── Surface elevation ladder ── */
         surface: {
-          0: "var(--surface-0)",
-          1: "var(--surface-1)",
-          2: "var(--surface-2)",
-          3: "var(--surface-3)",
-          sunken: "var(--surface-sunken)",
+          0: tok("surface-0"),
+          1: tok("surface-1"),
+          2: tok("surface-2"),
+          3: tok("surface-3"),
+          sunken: tok("surface-sunken"),
         },
 
         /* ── Foreground hierarchy ── */
         fg: {
-          DEFAULT: "var(--fg-primary)",
-          primary: "var(--fg-primary)",
-          secondary: "var(--fg-secondary)",
-          tertiary: "var(--fg-tertiary)",
-          disabled: "var(--fg-disabled)",
-          "on-solid": "var(--fg-on-solid)",
+          DEFAULT: tok("fg-primary"),
+          primary: tok("fg-primary"),
+          secondary: tok("fg-secondary"),
+          tertiary: tok("fg-tertiary"),
+          disabled: tok("fg-disabled"),
+          "on-solid": tok("fg-on-solid"),
         },
 
         /* ── Status system: five states + one AI accent ──
@@ -85,35 +96,35 @@ export default {
 
         /* ── Lines ── */
         border: {
-          DEFAULT: "var(--border)",
-          subtle: "var(--border-subtle)",
-          default: "var(--border-default)",
-          strong: "var(--border-strong)",
+          DEFAULT: tok("border"),
+          subtle: tok("border-subtle"),
+          default: tok("border-default"),
+          strong: tok("border-strong"),
         },
-        input: "var(--input)",
-        ring: "var(--ring)",
+        input: tok("input"),
+        ring: tok("ring"),
 
         /* ── Legacy semantic aliases (~4,000 existing call sites) ── */
-        background: "var(--background)",
-        foreground: "var(--foreground)",
+        background: tok("background"),
+        foreground: tok("foreground"),
         card: {
-          DEFAULT: "var(--card)",
-          foreground: "var(--card-foreground)",
+          DEFAULT: tok("card"),
+          foreground: tok("card-foreground"),
         },
         popover: {
-          DEFAULT: "var(--popover)",
-          foreground: "var(--popover-foreground)",
+          DEFAULT: tok("popover"),
+          foreground: tok("popover-foreground"),
         },
         muted: {
-          DEFAULT: "var(--muted)",
-          foreground: "var(--muted-foreground)",
+          DEFAULT: tok("muted"),
+          foreground: tok("muted-foreground"),
         },
         destructive: {
-          DEFAULT: "var(--destructive)",
-          foreground: "var(--destructive-foreground)",
+          DEFAULT: tok("destructive"),
+          foreground: tok("destructive-foreground"),
         },
-        success: "var(--success)",
-        warning: "var(--warning)",
+        success: tok("success"),
+        warning: tok("warning"),
       },
 
       /* 12px ceiling on data surfaces. `rounded-full` stays for dots and avatars. */
@@ -144,6 +155,13 @@ export default {
       fontFamily: {
         sans: ["Adani", "ui-sans-serif", "system-ui", "sans-serif"],
         heading: ["Adani", "ui-sans-serif", "system-ui", "sans-serif"],
+      },
+
+      /* `animate-spin-slow` was used on the loading icon in both Intelligence
+         screens but never declared anywhere, so those spinners sat frozen
+         while the page reported it was analysing. */
+      animation: {
+        "spin-slow": "spin 3s linear infinite",
       },
 
       transitionTimingFunction: {

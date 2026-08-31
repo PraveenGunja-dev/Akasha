@@ -104,7 +104,7 @@ const ECODCell = ({ edge }: { edge: any }) => {
       {isDelayed && <AlertTriangle className="w-3 h-3 text-destructive inline mr-1" />}
       <span className={isDelayed ? "text-destructive font-semibold" : ""}>
         {ecod || '—'}
-        {isDelayed && <span className="text-[10px] ml-1 bg-destructive/100/10 px-1.5 py-0.5 rounded-sm border border-destructive/20 text-destructive font-bold">+{delayMonths}m</span>}
+        {isDelayed && <span className="text-[10px] ml-1 bg-destructive/10 px-1.5 py-0.5 rounded-sm border border-destructive/20 text-destructive font-bold">+{delayMonths}m</span>}
       </span>
     </td>
   );
@@ -1133,7 +1133,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 <div>
                   <h4 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground/50 mb-2">Key Issue</h4>
                   <div className="flex items-center gap-2">
-                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${p.keyIssue === 'On Track' ? 'bg-success/100/10 text-success border border-success/20' : 'bg-destructive/100/10 text-destructive border border-destructive/20'
+                    <span className={`inline-flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${p.keyIssue === 'On Track' ? 'bg-success/10 text-success border border-success/20' : 'bg-destructive/10 text-destructive border border-destructive/20'
                       }`}>
                       {p.keyIssue === 'On Track' ? <CheckCircle2 className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
                       {p.keyIssue}
@@ -1272,10 +1272,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                   <div className="relative pl-4 border-l-2 border-border space-y-6">
                     {[
-                      { icon: Flag, color: 'text-success', bg: 'bg-success/100/10', border: 'border-success/20', label: 'Project Start', value: p.startDate || '—', desc: 'Official commencement' },
-                      { icon: Activity, color: 'text-primary', bg: 'bg-primary/100/10', border: 'border-primary/20', label: 'Data Date', value: p6?.dataDate || '—', desc: 'Latest schedule update' },
-                      { icon: Target, color: 'text-warning', bg: 'bg-warning/100/10', border: 'border-warning/20', label: 'Baseline Finish', value: p.baselineFinishDate || '—', desc: 'Original target' },
-                      { icon: CalendarClock, color: 'text-destructive', bg: 'bg-destructive/100/10', border: 'border-destructive/20', label: 'Forecast Finish', value: p.forecastFinish, desc: 'Current projection' },
+                      { icon: Flag, color: 'text-success', bg: 'bg-success/10', border: 'border-success/20', label: 'Project Start', value: p.startDate || '—', desc: 'Official commencement' },
+                      { icon: Activity, color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/20', label: 'Data Date', value: p6?.dataDate || '—', desc: 'Latest schedule update' },
+                      { icon: Target, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/20', label: 'Baseline Finish', value: p.baselineFinishDate || '—', desc: 'Original target' },
+                      { icon: CalendarClock, color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20', label: 'Forecast Finish', value: p.forecastFinish, desc: 'Current projection' },
                     ].map((item, idx) => (
                       <div key={idx} className="relative">
                         <div className={`absolute -left-[23px] top-1 w-3 h-3 rounded-full border-2 border-background ${item.bg.replace('/10', '')}`} />
@@ -1315,7 +1315,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {p6?.delayedActivities && p6.delayedActivities.length > 0 && (
                     <div
                       onClick={() => setShowDelayedModal(true)}
-                      className="intelligence-card p-4 flex items-center justify-between bg-destructive/100/10 border-destructive/20 cursor-pointer hover:bg-destructive/100/20 transition-colors"
+                      className="intelligence-card p-4 flex items-center justify-between bg-destructive/10 border-destructive/20 cursor-pointer hover:bg-destructive/20 transition-colors"
                     >
                       <div>
                         <span className="block text-[10px] font-bold uppercase tracking-wider text-destructive">Delayed Activities</span>
@@ -1627,7 +1627,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                               <td className="text-right font-mono text-success">{fmtCost(sumDelivered)}</td>
                                               <td className="text-center">
                                                 {storages.length > 0 ? storages.map((s: any, idx) => (
-                                                  <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{s}</span>
+                                                  <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{s}</span>
                                                 )) : '—'}
                                               </td>
                                             </tr>
@@ -1640,7 +1640,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                 <td className="text-right font-mono text-muted-foreground">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
                                                 <td className="text-right font-mono text-muted-foreground">{fmtCost(po.budgetINR)}</td>
                                                 <td className="text-right font-mono text-muted-foreground">{fmtCost(po.deliveredINR)}</td>
-                                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
+                                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
                                               </tr>
                                             ))}
                                           </React.Fragment>
@@ -1688,7 +1688,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                           <td className="text-left text-foreground/70 max-w-[150px] truncate">{inv.materialName || '—'}</td>
                                           <td className="text-right font-mono font-semibold text-success">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')} {inv.baseUnit && inv.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{inv.baseUnit}</span> : unifiedMaterialsMap[inv.materialCode]?.baseUnit && unifiedMaterialsMap[inv.materialCode]?.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[inv.materialCode].baseUnit}</span> : null}</td>
                                           <td className="text-right font-mono text-purple-400">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
+                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
                                         </tr>
                                       ))}
                                       {/* ── Budget / Utilized / Remaining Rows ── */}
@@ -2145,7 +2145,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                     <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{sumQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Unit</td>
                                                                     <td className="text-center py-2 px-4">
                                                                       {storages.length > 0 ? storages.map((s: any, idx) => (
-                                                                        <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{s}</span>
+                                                                        <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{s}</span>
                                                                       )) : '—'}
                                                                     </td>
                                                                   </tr>
@@ -2155,7 +2155,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                       <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
                                                                       <td className="text-right font-mono text-muted-foreground py-2 px-4">{po.orderedQty} Unit</td>
                                                                       <td className="text-center py-2 px-4">
-                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
                                                                       </td>
                                                                     </tr>
                                                                   ))}
@@ -2190,7 +2190,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                               return (
                                                                 <tr key={j} className="hover:bg-muted transition-colors">
                                                                   <td className="text-center py-2 px-4">
-                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/100/10 text-success dark:text-success' : 'bg-destructive/100/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/10 text-success dark:text-success' : 'bg-destructive/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
                                                                   </td>
                                                                   <td className="text-left font-mono text-foreground/80 font-medium py-2 px-4">{c.wbsElement || '—'}</td>
                                                                   <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{c.postingDate ? new Date(c.postingDate).toLocaleDateString('en-GB') : '—'}</td>
@@ -2234,7 +2234,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                   <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
                                                                   <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
                                                                   <td className="text-center py-2 px-4">
-                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/100/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
                                                                   </td>
                                                                 </tr>
                                                               );
@@ -2453,9 +2453,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           {/* Start Phase */}
                           <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/100/5 rounded-full blur-2xl pointer-events-none"></div>
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none"></div>
                             <div className="flex items-center gap-2 mb-4 relative z-10">
-                              <div className="w-7 h-7 rounded-lg bg-primary/100/10 flex items-center justify-center border border-primary/20">
+                              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
                                 <Activity className="w-3.5 h-3.5 text-primary" />
                               </div>
                               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Start Phase</span>
@@ -2469,7 +2469,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Planned</span>
                                 <span className="text-sm font-medium">{p6.plannedStartDate || '—'}</span>
                               </div>
-                              <div className="flex justify-between items-center bg-primary/100/5 -mx-2 px-2 py-1.5 rounded border border-blue-500/10">
+                              <div className="flex justify-between items-center bg-primary/5 -mx-2 px-2 py-1.5 rounded border border-blue-500/10">
                                 <span className="text-xs text-primary dark:text-primary font-semibold flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Actual</span>
                                 <span className="text-sm font-bold text-blue-700 dark:text-blue-300">{p6.startDate || 'Pending'}</span>
                               </div>
@@ -2478,9 +2478,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                           {/* Finish Phase */}
                           <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-success/100/5 rounded-full blur-2xl pointer-events-none"></div>
+                            <div className="absolute top-0 right-0 w-24 h-24 bg-success/5 rounded-full blur-2xl pointer-events-none"></div>
                             <div className="flex items-center gap-2 mb-4 relative z-10">
-                              <div className="w-7 h-7 rounded-lg bg-success/100/10 flex items-center justify-center border border-success/20">
+                              <div className="w-7 h-7 rounded-lg bg-success/10 flex items-center justify-center border border-success/20">
                                 <CheckCircle2 className="w-3.5 h-3.5 text-success" />
                               </div>
                               <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Finish Phase</span>
@@ -2494,7 +2494,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Scheduled</span>
                                 <span className="text-sm font-medium">{p6.scheduledFinishDate || p6.finishDate || '—'}</span>
                               </div>
-                              <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-success/100/5 border-emerald-500/10' : 'bg-warning/100/5 border-amber-500/10'}`}>
+                              <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-success/5 border-emerald-500/10' : 'bg-warning/5 border-amber-500/10'}`}>
                                 <span className={`text-xs font-semibold flex items-center gap-1.5 ${p6.finishDate ? 'text-success dark:text-success' : 'text-warning dark:text-warning'}`}>
                                   {p6.finishDate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
                                   {p6.finishDate ? 'Actual Finish' : 'Must Finish By'}
@@ -2769,7 +2769,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     <h3 className="text-lg font-bold text-foreground">Live Transmission Commissioning Portal</h3>
                     <p className="text-sm text-muted-foreground mt-1">Access the live Adani Transmission dashboard for deep-dive real-time metrics.</p>
 
-                    <div className="flex items-center gap-2 mt-3 text-xs bg-success/100/10 border border-success/20 text-success dark:text-success px-3 py-1.5 rounded-md w-fit">
+                    <div className="flex items-center gap-2 mt-3 text-xs bg-success/10 border border-success/20 text-success dark:text-success px-3 py-1.5 rounded-md w-fit">
                       <div className="w-2 h-2 rounded-full bg-success/100 animate-pulse" />
                       <span><strong>Auto-Login Enabled:</strong> You will be securely authenticated automatically.</span>
                     </div>
@@ -2885,8 +2885,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   <td className="font-mono text-xs">{edge.length || '—'}</td>
                                   <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
                                   <td>
-                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-success/100/10 text-success border border-success/20' :
-                                      edge.normalizedStatus === 'in_progress' ? 'bg-warning/100/10 text-warning border border-warning/20' :
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${edge.normalizedStatus === 'charged' ? 'bg-success/10 text-success border border-success/20' :
+                                      edge.normalizedStatus === 'in_progress' ? 'bg-warning/10 text-warning border border-warning/20' :
                                         'bg-muted text-muted-foreground border border-border'
                                       }`}>
                                       {edge.status || '—'}
@@ -3159,7 +3159,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <div className="bg-card border border-border rounded-2xl w-full max-w-5xl max-h-[85vh] flex flex-col shadow-2xl overflow-hidden ring-1 ring-black/5 dark:ring-white/10" onClick={e => e.stopPropagation()}>
             <div className="flex items-center justify-between p-6 border-b border-border bg-muted">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-destructive/10 dark:bg-destructive/100/10 flex items-center justify-center">
+                <div className="w-10 h-10 rounded-xl bg-destructive/10 dark:bg-destructive/10 flex items-center justify-center">
                   <AlertTriangle className="w-5 h-5 text-destructive dark:text-destructive" />
                 </div>
                 <div>
@@ -3315,7 +3315,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           'border-border shadow-black/5'
                         }`}>
                         <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'bg-primary/5 border-primary/20 text-primary' :
-                          isInProgress ? 'bg-warning/100/5 border-warning/20 text-warning' :
+                          isInProgress ? 'bg-warning/5 border-warning/20 text-warning' :
                             'bg-muted border-border text-muted-foreground'
                           } rounded-t-2xl`}>
                           <div className={`w-7 h-7 rounded-lg flex items-center justify-center shadow-md text-xs font-bold ${isCompleted ? 'bg-primary text-primary-foreground' :

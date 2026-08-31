@@ -14,14 +14,14 @@ interface KPIDetailsModalProps {
 }
 
 const kpiConfig: Record<string, { icon: React.ElementType, gradient: string, glow: string, bg: string }> = {
-  'Total Projects': { icon: Briefcase, gradient: 'from-blue-500 to-indigo-500', glow: 'shadow-blue-500/20', bg: 'bg-primary/100/10 text-primary' },
+  'Total Projects': { icon: Briefcase, gradient: 'from-blue-500 to-indigo-500', glow: 'shadow-blue-500/20', bg: 'bg-primary/10 text-primary' },
   'Portfolio Capacity': { icon: Activity, gradient: 'from-cyan-400 to-blue-500', glow: 'shadow-cyan-500/20', bg: 'bg-cyan-500/10 text-cyan-500' },
-  'Delayed Projects': { icon: AlertTriangle, gradient: 'from-rose-500 to-red-600', glow: 'shadow-red-500/20', bg: 'bg-destructive/100/10 text-destructive' },
-  'Average Progress': { icon: Target, gradient: 'from-emerald-400 to-teal-500', glow: 'shadow-emerald-500/20', bg: 'bg-success/100/10 text-success' },
+  'Delayed Projects': { icon: AlertTriangle, gradient: 'from-rose-500 to-red-600', glow: 'shadow-red-500/20', bg: 'bg-destructive/10 text-destructive' },
+  'Average Progress': { icon: Target, gradient: 'from-emerald-400 to-teal-500', glow: 'shadow-emerald-500/20', bg: 'bg-success/10 text-success' },
   'Total PO Value': { icon: Hash, gradient: 'from-violet-500 to-purple-600', glow: 'shadow-purple-500/20', bg: 'bg-purple-500/10 text-purple-500' },
   'Completed Projects': { icon: CheckCircle2, gradient: 'from-green-400 to-emerald-500', glow: 'shadow-green-500/20', bg: 'bg-green-500/10 text-green-500' },
-  'Remaining PO Value': { icon: Layers, gradient: 'from-orange-400 to-rose-500', glow: 'shadow-orange-500/20', bg: 'bg-warning/100/10 text-warning' },
-  'Quality (Pulse)': { icon: Shield, gradient: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/20', bg: 'bg-warning/100/10 text-warning' },
+  'Remaining PO Value': { icon: Layers, gradient: 'from-orange-400 to-rose-500', glow: 'shadow-orange-500/20', bg: 'bg-warning/10 text-warning' },
+  'Quality (Pulse)': { icon: Shield, gradient: 'from-amber-400 to-orange-500', glow: 'shadow-orange-500/20', bg: 'bg-warning/10 text-warning' },
 };
 
 export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, summary }: KPIDetailsModalProps) {
@@ -185,7 +185,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
       }
 
       let status = 'On Track';
-      let statusColor = 'bg-primary/10 text-primary border-primary/20 dark:bg-primary/100/10';
+      let statusColor = 'bg-primary/10 text-primary border-primary/20 dark:bg-primary/10';
 
       let codMw = p.cod_mw || 0;
       let trMw = p.tr_mw || 0;
@@ -206,10 +206,10 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
 
       if (isFullyDone) {
         status = 'COD Done';
-        statusColor = 'bg-success/10 text-success border-success/20 dark:bg-success/100/10';
+        statusColor = 'bg-success/10 text-success border-success/20 dark:bg-success/10';
       } else if (isPartiallyDone) {
         status = `COD Partial (${codMw} MW)`;
-        statusColor = 'bg-success/10 text-success border-success/20 dark:bg-success/100/10';
+        statusColor = 'bg-success/10 text-success border-success/20 dark:bg-success/10';
         if (hasTR) {
           status += ` + TR (${trMw} MW)`;
         }
@@ -218,10 +218,10 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
         statusColor = 'bg-blue-500/10 text-blue-500 border-blue-500/20 dark:bg-blue-500/10';
       } else if (isCrossedTimeline) {
         status = 'Crossed Timeline (COD Not Done)';
-        statusColor = 'bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/100/10';
+        statusColor = 'bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/10';
       } else if (isDelayed) {
         status = 'Lagging (COD Not Done)';
-        statusColor = 'bg-warning/10 text-warning-foreground border-warning/30 dark:bg-warning/100/10 dark:text-orange-400';
+        statusColor = 'bg-warning/10 text-warning-foreground border-warning/30 dark:bg-warning/10 dark:text-orange-400';
       }
 
       const baselineStr = p.p6?.baseline_finish_date;
@@ -544,7 +544,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
                             className={`group flex justify-between items-center px-5 py-4 rounded-2xl transition-all duration-300 ${item.id ? 'cursor-pointer hover:bg-muted dark:hover:bg-white/5 hover:shadow-md hover:scale-[1.02] border border-muted dark:border-border' : 'cursor-default border border-transparent'}`}
                           >
                             <div className="flex items-center gap-4 overflow-hidden pr-4 flex-1">
-                               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isAlert ? 'bg-destructive/10 dark:bg-destructive/100/10 text-destructive dark:text-destructive' : isDone ? 'bg-success/10 dark:bg-success/100/10 text-success dark:text-success' : 'bg-primary/10 dark:bg-primary/100/10 text-primary dark:text-primary'}`}>
+                               <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 font-bold text-sm ${isAlert ? 'bg-destructive/10 dark:bg-destructive/10 text-destructive dark:text-destructive' : isDone ? 'bg-success/10 dark:bg-success/10 text-success dark:text-success' : 'bg-primary/10 dark:bg-primary/10 text-primary dark:text-primary'}`}>
                                  {item.name.substring(0, 1).toUpperCase()}
                                </div>
                                <div className="flex flex-col gap-1 min-w-0">

@@ -67,7 +67,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
 
       <div className="bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-destructive/100/10 rounded-lg"><ShieldAlert className="w-5 h-5 text-destructive" /></div>
+          <div className="p-2 bg-destructive/10 rounded-lg"><ShieldAlert className="w-5 h-5 text-destructive" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Risk Heatmap (Probability vs Impact)</h2>
         </div>
         <div className="w-full h-[350px]">
@@ -79,7 +79,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
         {/* Schedule Risk Register */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-destructive/100/10 rounded-lg"><List className="w-5 h-5 text-destructive" /></div>
+            <div className="p-2 bg-destructive/10 rounded-lg"><List className="w-5 h-5 text-destructive" /></div>
             <h2 className="text-lg font-medium tracking-wide text-foreground">Top Schedule Risks</h2>
           </div>
           
@@ -109,7 +109,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
         {/* Financial Risk Register */}
         <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
           <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-warning/100/10 rounded-lg"><List className="w-5 h-5 text-warning" /></div>
+            <div className="p-2 bg-warning/10 rounded-lg"><List className="w-5 h-5 text-warning" /></div>
             <h2 className="text-lg font-medium tracking-wide text-foreground">Top Financial Risks (Vendor Concentration)</h2>
           </div>
           

@@ -125,7 +125,7 @@ export default function LoginPage() {
 
             {/* Error */}
             {error && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-destructive/100/10 border border-destructive/20 text-destructive text-sm font-medium animate-in slide-in-from-top-2 duration-200">
+              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-destructive/10 border border-destructive/20 text-destructive text-sm font-medium animate-in slide-in-from-top-2 duration-200">
                 <div className="w-1.5 h-1.5 rounded-full bg-destructive/100 shrink-0" />
                 {error}
               </div>

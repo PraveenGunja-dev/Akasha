@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import P6Project, P6BaselineProject, ProjectMapping, TcProjectEntry, TcNetworkEdge, MTTrialRun
 from datetime import datetime, timedelta
-from services.project_service import calculate_dynamic_evm
+from services.project_service import calculate_dynamic_evm, build_evm_index
 
 router = APIRouter(prefix="/api/pmag", tags=["PMAG Dashboard"])
 
@@ -77,6 +77,10 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
 
     project_rows = []
 
+    # Same fix as /api/summary: fold the SAP tables once rather than issuing
+    # three table-scanning queries per project inside the loop below.
+    evm_index = build_evm_index(db)
+
     for m in mappings:
         p = p6_map.get(m.project_id)
         if not p:
@@ -140,7 +144,7 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
                 p6_pct *= 100
             planned_pct = min(100, p6_pct + 5)
             
-        dynamic_spi, _ = calculate_dynamic_evm(db, p, m)
+        dynamic_spi, _ = calculate_dynamic_evm(db, p, m, index=evm_index)
             
         project_rows.append({
             "name": display_name,

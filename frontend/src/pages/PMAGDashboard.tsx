@@ -245,7 +245,7 @@ export default function PMAGDashboard() {
               <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">{user?.role}</p>
             </div>
           )}
-          <button onClick={handleLogout} className={`w-full flex items-center gap-2 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/100/10 transition-colors ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}`}>
+          <button onClick={handleLogout} className={`w-full flex items-center gap-2 rounded-lg text-[12px] font-medium text-muted-foreground hover:text-destructive hover:bg-destructive/10 dark:hover:bg-destructive/10 transition-colors ${collapsed && !isMobileOpen ? 'justify-center p-2.5' : 'px-3 py-2'}`}>
             <LogOut className="w-4 h-4" />
             {showLabel && <span>Sign Out</span>}
           </button>

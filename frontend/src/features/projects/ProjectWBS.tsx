@@ -2,8 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { Layers, ChevronDown, ChevronRight, CheckCircle2, Clock, PlayCircle, Save, X, Edit2, Loader2, AlertTriangle } from 'lucide-react';
 
 const statusColors: any = {
-  'Completed': 'bg-success/100/10 text-success border-success/20',
-  'In Progress': 'bg-primary/100/10 text-primary border-primary/20',
+  'Completed': 'bg-success/10 text-success border-success/20',
+  'In Progress': 'bg-primary/10 text-primary border-primary/20',
   'Not Started': 'bg-muted0/10 text-muted-foreground border-slate-500/20',
 };
 
@@ -97,14 +97,14 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
   const isDelayed = false; 
 
   return (
-    <div className={`flex flex-col border-b border-border/30 hover:bg-muted transition-colors ${isDelayed ? 'bg-destructive/100/5' : ''}`}>
+    <div className={`flex flex-col border-b border-border/30 hover:bg-muted transition-colors ${isDelayed ? 'bg-destructive/5' : ''}`}>
       {/* View Mode Row / Edit Mode Header Row */}
       <div className="grid grid-cols-12 gap-4 py-2.5 px-4 items-center">
         <div className="col-span-5 flex flex-col gap-1">
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium text-foreground">{act.name}</span>
             {isDelayed && (
-              <span className="flex items-center gap-1 text-[10px] font-bold text-destructive bg-destructive/100/10 px-1.5 py-0.5 rounded">
+              <span className="flex items-center gap-1 text-[10px] font-bold text-destructive bg-destructive/10 px-1.5 py-0.5 rounded">
                 <AlertTriangle className="w-3 h-3" /> DELAYED
               </span>
             )}
@@ -120,7 +120,7 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
         {isEditing ? (
            <div className="col-span-7 flex justify-end gap-2 items-center">
               <span className="text-xs font-semibold text-primary mr-2">EDITING ACTIVITY</span>
-              <button className="flex items-center gap-1 bg-success/100/10 text-success border border-success/20 px-3 py-1 rounded hover:bg-success/100/20 transition-colors text-xs font-semibold" onClick={handleSave} disabled={isSaving}>
+              <button className="flex items-center gap-1 bg-success/10 text-success border border-success/20 px-3 py-1 rounded hover:bg-success/20 transition-colors text-xs font-semibold" onClick={handleSave} disabled={isSaving}>
                 {isSaving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />} SAVE TO P6
               </button>
               <button className="flex items-center gap-1 bg-muted border border-border px-3 py-1 rounded hover:bg-muted transition-colors text-xs font-semibold text-muted-foreground" onClick={() => { setIsEditing(false); setError(null); }} disabled={isSaving}>
@@ -153,7 +153,7 @@ const ActivityRow = ({ act, onUpdateActivity }: ActivityRowProps) => {
       {/* Expanded Edit Form */}
       {isEditing && (
         <div className="px-4 pb-4 pt-2 border-t border-border/20 bg-background/50 grid grid-cols-12 gap-6 relative">
-          {error && <div className="absolute top-0 left-0 right-0 bg-destructive/100/10 text-destructive text-xs text-center py-1 font-semibold">{error}</div>}
+          {error && <div className="absolute top-0 left-0 right-0 bg-destructive/10 text-destructive text-xs text-center py-1 font-semibold">{error}</div>}
           
           <div className="col-span-12 md:col-span-5 grid grid-cols-2 gap-4">
             <div className="col-span-2">

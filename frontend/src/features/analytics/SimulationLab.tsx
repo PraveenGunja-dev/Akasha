@@ -587,7 +587,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                     isActive 
                       ? 'px-5 bg-gradient-to-r from-blue-600 to-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]' 
                       : isCompleted 
-                        ? 'w-10 bg-success/100/10 hover:bg-success/100/20' 
+                        ? 'w-10 bg-success/10 hover:bg-success/20' 
                         : 'w-10 bg-transparent hover:bg-muted'
                   }`}
                   onClick={() => { if (isCompleted) setActiveStep(step.id); }}
@@ -628,9 +628,9 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             <>
               {/* Context Banner */}
               {simulationContext && (
-                <div className="bg-warning/100/10 border border-warning/20 rounded-xl p-4 mb-6 animate-in fade-in slide-in-from-top-4">
+                <div className="bg-warning/10 border border-warning/20 rounded-xl p-4 mb-6 animate-in fade-in slide-in-from-top-4">
                   <div className="flex items-start gap-3">
-                    <div className="bg-warning/100/20 p-2 rounded-lg">
+                    <div className="bg-warning/20 p-2 rounded-lg">
                       <Bell className="w-5 h-5 text-warning" />
                     </div>
                     <div>
@@ -667,7 +667,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                       const proj = projects.find((p: any) => p.id === selectedProject);
                       return proj ? (
                         <div className="flex items-center gap-2 ml-3">
-                          <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md ${proj.critical ? 'bg-destructive/100/15 text-destructive border border-destructive/20' : 'bg-warning/100/15 text-warning border border-warning/20'}`}>
+                          <span className={`text-[9px] font-extrabold uppercase tracking-widest px-2 py-0.5 rounded-md ${proj.critical ? 'bg-destructive/15 text-destructive border border-destructive/20' : 'bg-warning/15 text-warning border border-warning/20'}`}>
                             SPI {proj.spi}
                           </span>
                           <span className="text-[11px] font-semibold text-muted-foreground flex items-center gap-1">
@@ -875,7 +875,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                                     <div key={notif.id || i} className="p-2.5 bg-muted border border-border rounded flex flex-col gap-1.5 shadow-sm">
                                       <div className="flex items-center justify-between">
                                         <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{new Date(notif.created_at).toLocaleDateString()}</span>
-                                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-destructive/100/10 text-destructive' : 'bg-primary/100/10 text-primary'}`}>
+                                        <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
                                           {notif.change_type || notif.category}
                                         </span>
                                       </div>
@@ -941,7 +941,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               <div className="space-y-4">
                 {/* Weather Live Panel */}
                 <div className="bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-800/50 dark:to-slate-900/50 border border-border dark:border-slate-700 p-3 rounded-lg relative overflow-hidden">
-                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary/100/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
+                  <div className="absolute top-0 right-0 w-24 h-24 bg-primary/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/3"></div>
                   <div className="relative z-10">
                     <div className="flex items-center gap-2 mb-3">
                       <CloudRain className="w-4 h-4 text-primary" />
@@ -1186,7 +1186,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
             )}
 
             {executionTasks.length > 0 && resolvedTasks.length === executionTasks.length && (
-              <div className="mt-8 bg-success/10 dark:bg-success/100/10 border border-success/20 dark:border-success/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">
+              <div className="mt-8 bg-success/10 dark:bg-success/10 border border-success/20 dark:border-success/20 rounded-xl p-6 text-center animate-in slide-in-from-bottom-4 shadow-sm">
                 <CheckCircle2 className="w-12 h-12 text-success mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-success dark:text-success">Issue Resolved</h3>
                 <p className="text-success/80 dark:text-success/80 mt-2 font-medium">All automated actions and required tasks have been successfully processed and pushed to their respective systems.</p>

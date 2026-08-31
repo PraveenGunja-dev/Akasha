@@ -31,7 +31,7 @@ export default function PMAGDPRTracker({ dpr_tracker }: any) {
                 {site.days.map((d: any, j: number) => (
                   <td key={j} className="text-center py-4 border-b border-muted dark:border-border">
                     <div className="flex flex-col items-center justify-center gap-1.5">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${d.status === 'submitted' ? 'bg-success/10 dark:bg-success/100/20 text-success' : d.status === 'pending' ? 'bg-warning/10 dark:bg-warning/100/20 text-warning' : 'bg-destructive/10 dark:bg-destructive/100/20 text-destructive'}`} title={`${d.date}: ${d.status}`}>
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${d.status === 'submitted' ? 'bg-success/10 dark:bg-success/20 text-success' : d.status === 'pending' ? 'bg-warning/10 dark:bg-warning/20 text-warning' : 'bg-destructive/10 dark:bg-destructive/20 text-destructive'}`} title={`${d.date}: ${d.status}`}>
                         {d.status === 'submitted' ? <CheckCircle2 className="w-4 h-4" /> : d.status === 'pending' ? <Clock className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
                       </div>
                       <span className="text-[10px] font-medium text-muted-foreground capitalize">{d.status}</span>

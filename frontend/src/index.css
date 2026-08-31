@@ -435,6 +435,17 @@
     text-transform: none;
   }
 
+  /* Denominator on a score — "68 /100". Larger than a unit because it is part
+     of the figure rather than a label on it, and it must stay readable when
+     the value beside it is the thing being scanned. */
+  .metric-denominator {
+    font-size: 0.5em;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+    color: var(--fg-tertiary);
+    text-transform: none;
+  }
+
   /* Deltas carry direction + semantic colour. Never colour alone. */
   .delta {
     display: inline-flex;

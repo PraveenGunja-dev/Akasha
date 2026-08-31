@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { useChartTheme } from '../../lib/chartTheme';
 import { Database, FileText, Users, Layers, Box, Package, IndianRupee, TrendingUp, PieChart, Truck, Download, ArrowRight, List, Activity } from 'lucide-react';
 
 export default function SAPView({ sapData = [], logisticsData = [], finDetails = [], logDetails = [], loading }: any) {
+  // Axis, grid and tooltip chrome come from the shared theme so this screen
+  // follows the light/dark toggle instead of pinning slate values.
+  const { themeName, chrome } = useChartTheme();
   const [trendsData, setTrendsData] = useState<any>(null);
 
   useEffect(() => {
@@ -73,16 +77,19 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
 
   const formatNum = (num: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(num);
 
+  // Two tiers. Counts describe the dataset; money describes the position — so
+  // money reads at the larger step. Colour is deliberately absent: none of
+  // these nine figures encodes a state, so none of them earns a hue.
   const kpis = [
-    { title: 'TOTAL POS', value: formatNum(totalPos), icon: FileText, color: '#0284c7', bg: '#e0f2fe' },
-    { title: 'VENDORS', value: formatNum(vendors), icon: Users, color: '#9333ea', bg: '#f3e8ff' },
-    { title: 'MATERIALS', value: formatNum(materials), icon: Layers, color: '#0284c7', bg: '#e0f2fe' },
-    { title: 'PO VOLUME', value: formatNum(poVolume), unit: 'No', icon: Box, color: '#0ea5e9', bg: '#e0f2fe' },
-    { title: 'INVENTORY', value: formatNum(inventory), unit: 'No', icon: Package, color: '#16a34a', bg: '#dcfce7' },
-    { title: 'PO AMOUNT', value: `₹${formatNum(supplyPoAmount)}`, unit: 'Cr', icon: IndianRupee, color: '#db2777', bg: '#fce7f3' },
-    { title: 'UTILIZED PO AMOUNT', value: `₹${formatNum(utilizedAmount)}`, unit: 'Cr', icon: TrendingUp, color: '#f59e0b', bg: '#fef3c7' },
-    { title: 'REMAINING PO AMOUNT', value: `₹${formatNum(remainingAmount)}`, unit: 'Cr', icon: PieChart, color: '#0d9488', bg: '#ccfbf1' },
-    { title: '% CONSUMED', value: `${formatNum(percentConsumed)}%`, icon: Activity, color: '#16a34a', bg: '#dcfce7' },
+    { title: 'Total POs', value: formatNum(totalPos), icon: FileText },
+    { title: 'Vendors', value: formatNum(vendors), icon: Users },
+    { title: 'Materials', value: formatNum(materials), icon: Layers },
+    { title: 'PO Volume', value: formatNum(poVolume), unit: 'No', icon: Box },
+    { title: 'Inventory', value: formatNum(inventory), unit: 'No', icon: Package },
+    { title: 'PO Amount', value: `₹${formatNum(supplyPoAmount)}`, unit: 'Cr', icon: IndianRupee, size: 'primary' },
+    { title: 'Utilized PO Amount', value: `₹${formatNum(utilizedAmount)}`, unit: 'Cr', icon: TrendingUp, size: 'primary' },
+    { title: 'Remaining PO Amount', value: `₹${formatNum(remainingAmount)}`, unit: 'Cr', icon: PieChart, size: 'primary' },
+    { title: '% Consumed', value: formatNum(percentConsumed), unit: '%', icon: Activity, size: 'primary', bar: percentConsumed },
   ];
 
   // Re-generate local chart data for Consumption Trends
@@ -90,13 +97,13 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
   const localSapOption = {
     tooltip: {
       trigger: 'axis',
-      backgroundColor: 'rgba(15, 23, 42, 0.95)',
-      borderColor: 'rgba(51, 65, 85, 0.5)',
+      backgroundColor: chrome.surface2,
+      borderColor: chrome.borderSubtle,
       borderWidth: 1,
       padding: [12, 16],
-      textStyle: { color: '#f8fafc', fontSize: 12 },
+      textStyle: { color: chrome.fgPrimary, fontSize: 12 },
       formatter: (params: any) => {
-        let out = `<div style="font-weight:600; margin-bottom: 8px; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">${params[0].axisValue}</div>`;
+        let out = `<div style="font-weight:600; margin-bottom: 8px; color: ${chrome.fgTertiary}; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px;">${params[0].axisValue}</div>`;
         out += `<div style="display:flex; flex-direction:column; gap:6px;">`;
         params.forEach((p: any) => {
           let val = p.value;
@@ -109,7 +116,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           }
           out += `<div style="display:flex; justify-content:space-between; align-items:center; gap: 24px;">
             <div style="display:flex; align-items:center; gap:6px;">
-              ${p.marker} <span style="color:#cbd5e1">${p.seriesName.replace(' (MB51)', '').replace(' (ME2J)', '')}</span>
+              ${p.marker} <span style="color:${chrome.fgSecondary}">${p.seriesName.replace(' (MB51)', '').replace(' (ME2J)', '')}</span>
             </div>
             <span style="font-weight:600; font-family: monospace; font-size: 13px;">${prefix}${val}</span>
           </div>`;
@@ -121,32 +128,32 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
     legend: {
       top: 0,
       left: 'center',
-      data: ['PO Qty (ME2J)', 'Consumed Qty (MB51)', 'Reversals (MB51)', 'Value INR (Cr)'],
-      textStyle: { color: '#64748b', fontSize: 11 }
+      data: ['PO Qty (ME2J)', 'Inventory on hand (MB52)', 'Consumed Qty (MB51)', 'Reversals (MB51)', 'Value INR (Cr)'],
+      textStyle: { color: chrome.fgSecondary, fontSize: 11 }
     },
     grid: { top: 40, left: '3%', right: '3%', bottom: '15%', containLabel: true },
     xAxis: {
       type: 'category',
       data: tData.map((d: any) => d.month),
-      axisLine: { lineStyle: { color: '#e2e8f0' } },
-      axisLabel: { color: '#64748b', rotate: 45, interval: 'auto', fontSize: 10 }
+      axisLine: { lineStyle: { color: chrome.axisLine } },
+      axisLabel: { color: chrome.fgTertiary, rotate: 45, interval: 'auto', fontSize: 10 }
     },
     yAxis: [
       {
         type: 'value',
         name: 'Quantity',
-        nameTextStyle: { color: '#64748b' },
-        axisLine: { lineStyle: { color: '#e2e8f0' } },
-        axisLabel: { color: '#64748b', fontSize: 10 },
-        splitLine: { lineStyle: { color: '#e2e8f0', opacity: 0.5 } }
+        nameTextStyle: { color: chrome.fgTertiary },
+        axisLine: { lineStyle: { color: chrome.axisLine } },
+        axisLabel: { color: chrome.fgTertiary, fontSize: 10 },
+        splitLine: { lineStyle: { color: chrome.gridLine } }
       },
       {
         type: 'value',
         name: 'Value (Cr)',
-        nameTextStyle: { color: '#64748b' },
+        nameTextStyle: { color: chrome.fgTertiary },
         position: 'right',
-        axisLine: { lineStyle: { color: '#e2e8f0' } },
-        axisLabel: { color: '#64748b', fontSize: 10 },
+        axisLine: { lineStyle: { color: chrome.axisLine } },
+        axisLabel: { color: chrome.fgTertiary, fontSize: 10 },
         splitLine: { show: false }
       }
     ],
@@ -158,22 +165,22 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
         data: tData.map((d: any) => d.po_qty),
         itemStyle: { color: '#3b82f6' },
         areaStyle: { color: 'rgba(59, 130, 246, 0.1)' },
-        markLine: trendsData?.total_inventory ? {
-          data: [
-            {
-              yAxis: trendsData.total_inventory,
-              name: 'MB52 Current Inventory',
-              lineStyle: { color: '#8b5cf6', type: 'dashed', width: 2 },
-              label: {
-                position: 'insideStartTop',
-                formatter: 'MB52 Inventory: {c}',
-                color: '#8b5cf6',
-                fontSize: 10,
-                fontWeight: 'bold'
-              }
-            }
-          ]
-        } : undefined
+      },
+      {
+        /* Stock on hand at each month end.
+           This used to be a flat dashed markLine pinned at the current MB52
+           total, which drew the same value across every month and said nothing
+           about how stock moved. MB52 has no dates — every row is a snapshot —
+           so the position is reconstructed backwards from that closing total
+           through the dated MB51 movements. The line therefore ends exactly on
+           the MB52 figure shown above the chart. */
+        name: 'Inventory on hand (MB52)',
+        type: 'line',
+        smooth: true,
+        showSymbol: false,
+        data: tData.map((d: any) => d.inventory_qty ?? null),
+        itemStyle: { color: '#8b5cf6' },
+        lineStyle: { color: '#8b5cf6', width: 2, type: 'dashed' },
       },
       {
         name: 'Consumed Qty (MB51)',
@@ -291,40 +298,47 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {kpis.map((kpi, idx) => (
-          <div key={idx} className="bg-card border border-border rounded-xl p-4 flex flex-col justify-between shadow-sm relative group hover:shadow-md transition-all">
-            <div className="flex items-start justify-between mb-2">
-              <h3 className="text-[10px] font-bold text-muted-foreground uppercase tracking-widest leading-tight w-2/3 truncate" title={kpi.title}>
+          <div key={idx} className="bento-card px-4 py-3.5 flex flex-col justify-between group cursor-pointer">
+            <div className="flex items-start justify-between gap-2">
+              <h3 className="section-label leading-tight truncate" title={kpi.title}>
                 {kpi.title}
               </h3>
-              <div className="p-1.5 rounded-full" style={{ backgroundColor: kpi.bg, color: kpi.color }}>
-                <kpi.icon className="w-4 h-4" strokeWidth={2.5} />
-              </div>
+              <kpi.icon className="w-4 h-4 shrink-0 text-primary opacity-70 group-hover:opacity-100 transition-opacity" />
             </div>
 
-            <div className="mt-2">
-              <div className="flex items-baseline gap-1">
-                <span className="text-2xl font-light tracking-tight" style={{ color: kpi.color }}>
-                  {kpi.value}
-                </span>
-                {kpi.unit && <span className="text-xs text-muted-foreground font-medium">{kpi.unit}</span>}
+            <div className="mt-3">
+              <div className={kpi.size === 'primary' ? 'metric-lg' : 'metric-md'}>
+                <span>{kpi.value}</span>
+                {kpi.unit && <span className="metric-unit">{kpi.unit}</span>}
               </div>
+
+              {/* One tile carries a proportion, so it shows it rather than
+                  asking the reader to hold two numbers in their head. */}
+              {kpi.bar !== undefined && (
+                <div className="mt-2.5 h-1.5 rounded-sm bg-surface-sunken overflow-hidden">
+                  <div
+                    className="h-full bg-primary rounded-sm"
+                    style={{ width: `${Math.min(100, Math.max(0, kpi.bar))}%` }}
+                  />
+                </div>
+              )}
             </div>
 
             <div className="mt-3 flex justify-end">
-              <button className="text-[10px] font-medium text-muted-foreground flex items-center gap-1 hover:text-primary transition-colors">
+              <span className="text-[10px] font-semibold text-fg-tertiary flex items-center gap-1 group-hover:text-primary transition-colors">
                 View Details <ArrowRight className="w-3 h-3" />
-              </button>
+              </span>
             </div>
           </div>
         ))}
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-2">
-        <div className="col-span-1 lg:col-span-2 bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-primary/10 rounded-lg"><Activity className="w-5 h-5 text-primary" /></div>
+        <div className="col-span-1 lg:col-span-2 bento-card p-5">
+          <div className="flex items-center gap-2.5 mb-5">
+            <Activity className="w-4 h-4 text-fg-tertiary shrink-0" />
             <div>
-              <h2 className="text-lg font-medium tracking-wide text-foreground">Global SAP Consumption Trends</h2>
+              <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-fg-primary">Global SAP Consumption Trends</h2>
               {trendsData?.total_inventory !== undefined && (
                 <p className="text-xs text-muted-foreground mt-1">
                   MB52 Current Total Inventory: <span className="font-semibold text-foreground">{new Intl.NumberFormat('en-IN').format(trendsData.total_inventory)}</span> units
@@ -333,73 +347,81 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
             </div>
           </div>
           <div className="w-full h-[350px]">
-            <ReactECharts option={localSapOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts theme={themeName} option={localSapOption} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
 
-        <div className="col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-primary/10 rounded-lg"><Truck className="w-5 h-5 text-primary" /></div>
-            <h2 className="text-lg font-medium tracking-wide text-foreground">Material Logistics Funnel</h2>
+        <div className="col-span-1 bento-card p-5">
+          <div className="flex items-center gap-2.5 mb-5">
+            <Truck className="w-4 h-4 text-fg-tertiary shrink-0" />
+            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-fg-primary">Material Logistics Funnel</h2>
           </div>
           <div className="w-full h-[250px]">
-            <ReactECharts option={localLogisticsFunnel} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts theme={themeName} option={localLogisticsFunnel} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
 
-        <div className="col-span-1 bg-card border border-border rounded-2xl p-6 shadow-sm">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="p-2 bg-primary/10 rounded-lg"><Users className="w-5 h-5 text-primary" /></div>
-            <h2 className="text-lg font-medium tracking-wide text-foreground">Top Vendors by PO Value</h2>
+        <div className="col-span-1 bento-card p-5">
+          <div className="flex items-center gap-2.5 mb-5">
+            <Users className="w-4 h-4 text-fg-tertiary shrink-0" />
+            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-fg-primary">Top Vendors by PO Value</h2>
           </div>
           <div className="w-full h-[250px]">
-            <ReactECharts option={localVendorOption} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts theme={themeName} option={localVendorOption} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
       </div>
 
-      <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-primary/10 rounded-lg"><List className="w-5 h-5 text-primary" /></div>
-          <h2 className="text-lg font-medium tracking-wide text-foreground">Detailed Procurement Ledger</h2>
+      <div className="bento-card p-5">
+        <div className="flex items-center gap-2.5 mb-5">
+          <List className="w-4 h-4 text-fg-tertiary shrink-0" />
+          <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-fg-primary">Detailed Procurement Ledger</h2>
         </div>
 
-        <div className="overflow-x-auto overflow-y-auto max-h-[450px] relative rounded-lg border border-border/50">
-          <table className="w-full text-sm text-left text-foreground/90 relative">
-            <thead className="text-xs uppercase bg-muted text-muted-foreground/70 border-b border-border sticky top-0 z-10 shadow-sm">
+        <div className="overflow-x-auto overflow-y-auto max-h-[450px] relative rounded-md border border-border-subtle">
+          <table className="w-full text-left relative">
+            <thead className="bg-surface-sunken border-b border-border-subtle sticky top-0 z-10">
               <tr>
-                <th className="px-4 py-3">PO Number</th>
-                <th className="px-4 py-3">Buyer Name</th>
-                <th className="px-4 py-3">Vendor Name</th>
-                <th className="px-4 py-3">Material Code</th>
-                <th className="px-4 py-3">PO Date</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3 text-right">PO Value (₹ Cr)</th>
+                <th className="section-label font-semibold px-3.5 py-2.5">PO Number</th>
+                <th className="section-label font-semibold px-3.5 py-2.5">Buyer Name</th>
+                <th className="section-label font-semibold px-3.5 py-2.5">Vendor Name</th>
+                <th className="section-label font-semibold px-3.5 py-2.5">Material Code</th>
+                <th className="section-label font-semibold px-3.5 py-2.5">PO Date</th>
+                <th className="section-label font-semibold px-3.5 py-2.5">Status</th>
+                <th className="section-label font-semibold px-3.5 py-2.5 text-right">PO Value (₹ Cr)</th>
               </tr>
             </thead>
             <tbody>
               {(filteredFinDetails || []).map((po: any, idx: number) => (
-                <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
-                  <td className="px-4 py-3 font-medium text-foreground">{po.purchasing_document}</td>
-                  <td className="px-4 py-3 text-foreground">{po.buyer_name || '-'}</td>
-                  <td className="px-4 py-3 text-muted-foreground truncate max-w-[200px]">{po.vendor_name || 'Unknown'}</td>
-                  <td className="px-4 py-3 font-mono text-xs text-primary">{po.material_code}</td>
-                  <td className="px-4 py-3 text-muted-foreground">
-                    {po.document_date ? new Date(po.document_date).toLocaleDateString() : '-'}
+                <tr key={idx} className="border-b border-border-subtle last:border-0 hover:bg-surface-sunken transition-colors">
+                  <td className="px-3.5 py-2.5 text-[12.5px] font-semibold text-fg-primary tabular">{po.purchasing_document}</td>
+                  <td className="px-3.5 py-2.5 text-[12.5px] text-fg-primary">{po.buyer_name || '—'}</td>
+                  <td className="px-3.5 py-2.5 text-[12.5px] text-fg-secondary truncate max-w-[200px]">{po.vendor_name || 'Unknown'}</td>
+                  <td className="px-3.5 py-2.5 text-[12px] text-fg-secondary tabular">{po.material_code}</td>
+                  <td className="px-3.5 py-2.5 text-[12.5px] text-fg-secondary tabular">
+                    {po.document_date ? new Date(po.document_date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                   </td>
-                  <td className="px-4 py-3">
+                  <td className="px-3.5 py-2.5">
+                    {/* Status pills read from the status system, so they stay
+                        legible in dark mode and carry a dot as well as colour. */}
                     {po.delivery_completed_flag === 'X' ? (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Delivered</span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[10.5px] font-semibold bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border">
+                        <span className="w-1.5 h-1.5 rounded-full bg-status-healthy" /> Delivered
+                      </span>
                     ) : (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-blue-800">Pending</span>
+                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-sm text-[10.5px] font-semibold bg-status-done-bg text-status-done-fg border border-status-done-border">
+                        <span className="w-1.5 h-1.5 rounded-full bg-status-done" /> Pending
+                      </span>
                     )}
                   </td>
-                  <td className="px-4 py-3 text-right font-medium">{((po.net_order_value_inr || po.net_order_value || 0) / 10000000).toFixed(2)}</td>
+                  <td className="px-3.5 py-2.5 text-right text-[12.5px] font-semibold text-fg-primary tabular">
+                    {((po.net_order_value_inr || po.net_order_value || 0) / 10000000).toFixed(2)}
+                  </td>
                 </tr>
               ))}
               {(!filteredFinDetails || filteredFinDetails.length === 0) && (
                 <tr>
-                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground/70">No detailed records found.</td>
+                  <td colSpan={7} className="px-3.5 py-10 text-center text-[12.5px] text-fg-tertiary">No detailed records found.</td>
                 </tr>
               )}
             </tbody>

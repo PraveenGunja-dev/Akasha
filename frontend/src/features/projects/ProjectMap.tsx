@@ -867,7 +867,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <button
             onClick={() => setShowWeatherSim(!showWeatherSim)}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showWeatherSim
-              ? 'bg-primary/10 dark:bg-primary/100/20 border-indigo-300 dark:border-indigo-500/50 text-indigo-700 dark:text-primary'
+              ? 'bg-primary/10 dark:bg-primary/20 border-indigo-300 dark:border-indigo-500/50 text-indigo-700 dark:text-primary'
               : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
@@ -884,7 +884,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               if (showOIM) setViewportGrid([]); // clear on turn off
             }}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showOIM
-              ? 'bg-success/10 dark:bg-success/100/20 border-emerald-300 dark:border-emerald-500/50 text-success dark:text-success'
+              ? 'bg-success/10 dark:bg-success/20 border-emerald-300 dark:border-emerald-500/50 text-success dark:text-success'
               : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
@@ -912,7 +912,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <button
             onClick={() => setShowTransmission(!showTransmission)}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showTransmission
-              ? 'bg-warning/10 dark:bg-warning/100/20 border-amber-300 dark:border-amber-500/50 text-warning dark:text-warning'
+              ? 'bg-warning/10 dark:bg-warning/20 border-amber-300 dark:border-amber-500/50 text-warning dark:text-warning'
               : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
@@ -926,7 +926,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
           <button
             onClick={() => setShowProjects(!showProjects)}
             className={`flex items-center gap-2 border shadow-lg rounded-lg px-3 py-2 transition-colors ${showProjects
-              ? 'bg-primary/10 dark:bg-primary/100/20 border-blue-300 dark:border-blue-500/50 text-blue-700 dark:text-primary'
+              ? 'bg-primary/10 dark:bg-primary/20 border-blue-300 dark:border-blue-500/50 text-blue-700 dark:text-primary'
               : 'bg-card border-border dark:border-slate-700 hover:bg-muted dark:hover:bg-slate-700 text-foreground dark:text-muted-foreground'
               }`}
           >
@@ -963,7 +963,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                     }}
                     className={`w-full text-left px-3 py-2 text-sm transition-colors flex items-center justify-between
                     ${activeStyle.id === style.id
-                        ? 'bg-primary/10 dark:bg-primary/100/10 text-indigo-700 dark:text-primary font-semibold'
+                        ? 'bg-primary/10 dark:bg-primary/10 text-indigo-700 dark:text-primary font-semibold'
                         : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-slate-700/50'
                       }
                   `}

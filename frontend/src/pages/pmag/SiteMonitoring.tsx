@@ -167,7 +167,7 @@ export default function SiteMonitoring({ data, theme }: any) {
                       <span className={
                         eq.status === 'OPERATIONAL' ? 'risk-badge-low' : 
                         eq.status === 'MAINTENANCE REQ' ? 'risk-badge-high' : 
-                        eq.status === 'DEGRADED' ? 'text-[10px] px-2 py-0.5 rounded bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning font-bold border border-warning/20 dark:border-warning/20' : 
+                        eq.status === 'DEGRADED' ? 'text-[10px] px-2 py-0.5 rounded bg-warning/10 text-warning dark:bg-warning/10 dark:text-warning font-bold border border-warning/20 dark:border-warning/20' : 
                         'text-[10px] px-2 py-0.5 rounded bg-muted text-foreground dark:bg-card dark:text-muted-foreground font-bold border border-border dark:border-slate-700'
                       }>
                         {eq.status}

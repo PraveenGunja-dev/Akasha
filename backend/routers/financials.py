@@ -154,8 +154,16 @@ def get_financials_trends(db: Session = Depends(get_db)):
         func.sum(models.MTPOAmount.order_quantity).label('qty')
     ).filter(models.MTPOAmount.document_date.isnot(None)).group_by('month').all()
 
-    # 3. MB52 Inventory Total
+    # 3. MB52 Inventory — total, plus the movement behind it.
+    # MB52 carries no dates: every row is a point-in-time stock position, so a
+    # history cannot be read from it. MB51 does have dated movements, so the
+    # position is reconstructed BACKWARDS from the known MB52 closing figure.
     inv_total = db.query(func.sum(models.MTInventory.quantity_inv)).scalar() or 0
+
+    mov_by_month = {
+        row.month.strftime('%Y-%m'): float(row.qty or 0)
+        for row in mat_q if row.month is not None
+    }
 
     timeline = {}
     
@@ -181,6 +189,13 @@ def get_financials_trends(db: Session = Depends(get_db)):
     sorted_timeline = [timeline[k] for k in sorted(timeline.keys())]
     # Filter out empty months before 2022 if they exist
     sorted_timeline = [x for x in sorted_timeline if x['month'] >= '2022-01']
+
+    # Walk backwards from the MB52 closing position, undoing each month's net
+    # movement, so the line ends exactly on the figure shown above the chart.
+    running = float(inv_total)
+    for row in reversed(sorted_timeline):
+        row['inventory_qty'] = round(running, 2)
+        running -= mov_by_month.get(row['month'], 0.0)
 
     result = {
         'trends': sorted_timeline,

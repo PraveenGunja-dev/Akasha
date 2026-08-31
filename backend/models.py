@@ -321,6 +321,12 @@ class ProjectMapping(Base):
     source_of_origin = Column(String, nullable=True)
     priority = Column(String, nullable=True)
     is_commissioned = Column(Boolean, default=False)
+
+    # Pulse issues its own UUID per project and stamps it on every NC and RFI
+    # (pulse_nc.project_id / pulse_rfi.project_id). Storing it here turns the
+    # quality join from a free-text name match into an indexed equality join.
+    pulse_project_uuid = Column(String, index=True, nullable=True)
+
     tc_progress = Column(JSON, nullable=True)  # Added for rich transmission data# ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------

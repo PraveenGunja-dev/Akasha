@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, AlertTriangle, CheckCircle, Clock, ShieldAlert, Activity, ArrowRight, User } from 'lucide-react';
+import { Brain, AlertTriangle, CheckCircle, Clock, ShieldAlert, Activity, ArrowRight, User, Radar, CloudRain, Wind, Eye } from 'lucide-react';
 import { motion } from 'framer-motion';
 
 interface Props {
@@ -52,7 +52,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
       <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center animate-pulse">
         <Brain className="w-12 h-12 text-primary/50 mb-4 animate-spin-slow" />
         <h3 className="text-xl font-semibold mb-2">Analyzing Project Telemetry...</h3>
-        <p className="text-muted-foreground max-w-md">The Akasha Intelligence Engine is synthesizing schedule, materials, transmission, quality, and financial data.</p>
+        <p className="text-muted-foreground max-w-md">The Akasha Intelligence Engine is synthesizing schedule, materials, transmission, quality, financial, drone, and weather data.</p>
       </div>
     );
   }
@@ -67,7 +67,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
     );
   }
 
-  const { overall_status, overall_health, primary_bottleneck, total_delay_days, top_insights, next_steps, schedule, predictions } = data;
+  const { overall_status, overall_health, primary_bottleneck, total_delay_days, top_insights, next_steps, schedule, predictions, drone, weather, health_scores, risk } = data;
   const early_warnings = predictions?.early_warnings || [];
 
   // Status Colors
@@ -80,16 +80,10 @@ export default function ProjectIntelligence({ projectId }: Props) {
     <div className="space-y-6">
       
       {/* 1. Health Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <div className={`intelligence-card p-5 border flex flex-col justify-center ${statusColor}`}>
           <div className="text-sm font-medium uppercase tracking-wider opacity-80 mb-1">Overall Status</div>
           <div className="text-3xl font-bold">{overall_status}</div>
-        </div>
-        <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
-          <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Health Score</div>
-          <div className="flex items-end gap-2">
-            <div className="text-3xl font-bold">{overall_health}<span className="text-lg text-muted-foreground font-normal">/100</span></div>
-          </div>
         </div>
         <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
           <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Total Delay</div>
@@ -102,6 +96,33 @@ export default function ProjectIntelligence({ projectId }: Props) {
           <div className="text-xl font-bold text-orange-400 break-words">{primary_bottleneck || "None"}</div>
         </div>
       </div>
+
+      {/* 1b. Domain Health Scores (7 domains) */}
+      {health_scores && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-3">
+          {[
+            { key: 'schedule', label: 'Schedule', icon: Clock },
+            { key: 'material', label: 'Material', icon: Activity },
+            { key: 'transmission', label: 'Transmission', icon: Activity },
+            { key: 'financial', label: 'Financial', icon: Activity },
+            { key: 'quality', label: 'Quality', icon: ShieldAlert },
+            { key: 'drone', label: 'Drone', icon: Radar },
+            { key: 'weather', label: 'Weather', icon: CloudRain },
+          ].map(({ key, label, icon: Icon }) => {
+            const score = health_scores[key];
+            if (score == null) return null;
+            const color = score >= 75 ? 'text-emerald-500' : score >= 50 ? 'text-yellow-500' : score >= 25 ? 'text-orange-500' : 'text-red-500';
+            const bg = score >= 75 ? 'bg-emerald-500/10' : score >= 50 ? 'bg-yellow-500/10' : score >= 25 ? 'bg-orange-500/10' : 'bg-red-500/10';
+            return (
+              <div key={key} className={`rounded-xl p-3 border border-border ${bg} flex flex-col items-center gap-1`}>
+                <Icon className={`w-4 h-4 ${color}`} />
+                <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">{label}</div>
+                <div className={`text-xl font-bold ${color}`}>{score}</div>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         
@@ -216,6 +237,127 @@ export default function ProjectIntelligence({ projectId }: Props) {
 
         </div>
       </div>
+
+      {/* Drone & Weather Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+
+        {/* Drone Verification Panel */}
+        {drone?.has_data && (
+          <div className={`intelligence-card p-6 border ${
+            drone.variance_pct > 10 ? 'border-destructive/30 bg-destructive/5' :
+            drone.variance_pct > 5 ? 'border-orange-500/30 bg-orange-500/5' :
+            'border-emerald-500/30 bg-emerald-500/5'
+          }`}>
+            <div className="flex items-center gap-2 mb-4">
+              <Eye className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-bold">Drone Ground Truth Verification</h3>
+              {drone.target_block && (
+                <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-medium">{drone.target_block}</span>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="text-center">
+                <div className="text-xs text-muted-foreground uppercase">P6/DPR Claims</div>
+                <div className="text-2xl font-bold">{drone.p6_progress_pct}%</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-muted-foreground uppercase">Drone Actual</div>
+                <div className="text-2xl font-bold text-primary">{drone.drone_progress_pct}%</div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-muted-foreground uppercase">Variance</div>
+                <div className={`text-2xl font-bold ${
+                  drone.variance_pct > 5 ? 'text-destructive' : drone.variance_pct < -5 ? 'text-yellow-500' : 'text-emerald-500'
+                }`}>
+                  {drone.variance_pct > 0 ? '+' : ''}{drone.variance_pct}%
+                </div>
+              </div>
+            </div>
+            {drone.activity_summary && Object.keys(drone.activity_summary).length > 0 && (
+              <div className="space-y-2">
+                {Object.entries(drone.activity_summary).slice(0, 5).map(([label, d]: [string, any]) => (
+                  <div key={label} className="flex items-center gap-3 text-sm">
+                    <span className="flex-1 text-muted-foreground truncate" title={label}>{label}</span>
+                    <div className="w-24 h-2 bg-muted rounded-full overflow-hidden">
+                      <div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(100, d.completion_pct)}%` }} />
+                    </div>
+                    <span className="text-xs font-mono w-12 text-right">{d.completion_pct}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Weather Context Panel */}
+        {weather?.has_data && (
+          <div className={`intelligence-card p-6 border ${
+            weather.monsoon_severity === 'Severe' ? 'border-destructive/30 bg-destructive/5' :
+            weather.monsoon_severity === 'Heavy' ? 'border-orange-500/30 bg-orange-500/5' :
+            'border-border bg-card'
+          }`}>
+            <div className="flex items-center gap-2 mb-4">
+              <CloudRain className="w-5 h-5 text-primary" />
+              <h3 className="text-lg font-bold">Live Weather Context</h3>
+              <span className={`text-xs px-2 py-0.5 rounded-full font-bold uppercase ${
+                weather.monsoon_severity === 'Severe' ? 'bg-destructive/20 text-destructive' :
+                weather.monsoon_severity === 'Heavy' ? 'bg-orange-500/20 text-orange-500' :
+                'bg-emerald-500/20 text-emerald-500'
+              }`}>{weather.monsoon_severity}</span>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-4">
+              <div className="text-center">
+                <CloudRain className="w-4 h-4 mx-auto text-blue-400 mb-1" />
+                <div className="text-xs text-muted-foreground">Avg Rain</div>
+                <div className="text-lg font-bold">{weather.avg_rainfall_mm}mm</div>
+              </div>
+              <div className="text-center">
+                <Wind className="w-4 h-4 mx-auto text-teal-400 mb-1" />
+                <div className="text-xs text-muted-foreground">Max Wind</div>
+                <div className="text-lg font-bold">{weather.max_wind_kmh} km/h</div>
+              </div>
+              <div className="text-center">
+                <Clock className="w-4 h-4 mx-auto text-orange-400 mb-1" />
+                <div className="text-xs text-muted-foreground">Lost Days</div>
+                <div className={`text-lg font-bold ${weather.lost_working_days > 3 ? 'text-destructive' : 'text-foreground'}`}>{weather.lost_working_days}/14</div>
+              </div>
+              <div className="text-center">
+                <Activity className="w-4 h-4 mx-auto text-emerald-400 mb-1" />
+                <div className="text-xs text-muted-foreground">Productivity</div>
+                <div className={`text-lg font-bold ${weather.productivity_factor_pct < 70 ? 'text-destructive' : 'text-emerald-500'}`}>{weather.productivity_factor_pct}%</div>
+              </div>
+            </div>
+            <div className="text-xs text-muted-foreground">
+              14-day forecast from Open-Meteo • Site: {weather.site_coords?.lat?.toFixed(2)}°N, {weather.site_coords?.lng?.toFixed(2)}°E
+              {weather.wind_severity !== 'Normal' && (
+                <span className="ml-2 text-orange-500 font-semibold">⚠ Wind Alert: {weather.wind_severity}</span>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Cross-Domain Correlations */}
+      {risk?.correlations?.length > 0 && (
+        <div className="intelligence-card p-6">
+          <h3 className="text-lg font-bold mb-4 flex items-center gap-2">
+            <ArrowRight className="w-5 h-5 text-primary" /> Cross-Domain Correlations
+          </h3>
+          <div className="space-y-3">
+            {risk.correlations.map((corr: any, idx: number) => (
+              <div key={idx} className="p-3 rounded-lg border border-border bg-muted/30">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold uppercase">{corr.from_domain}</span>
+                  <ArrowRight className="w-3 h-3 text-muted-foreground" />
+                  <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full font-bold uppercase">{corr.to_domain}</span>
+                </div>
+                <p className="text-sm font-medium text-foreground">{corr.correlation}</p>
+                <p className="text-xs text-muted-foreground mt-1">{corr.evidence}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* 3. Action Center */}
       {next_steps && next_steps.length > 0 && (

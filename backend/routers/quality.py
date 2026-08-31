@@ -257,6 +257,158 @@ def get_contractor_scorecard(db: Session = Depends(get_db)):
     return result
 
 
+@router.get("/by-project")
+def get_project_scorecard(db: Session = Depends(get_db)):
+    """Quality rolled up per PROJECT, named the way the rest of the platform
+    names projects.
+
+    Pulse stores its own project name ("BESS PSS-11 Project") and its own UUID.
+    Neither is what a user recognises — everywhere else in Akasha a project is
+    the P6 name against a canonical project_id. This resolves Pulse rows onto
+    that mapping so quality can sit beside schedule and cost for the same
+    project.
+
+    Projects whose mapping has no pulse_project_uuid are still returned, with
+    `linked: false` and zeroed counts, so a user can tell "no non-conformances"
+    apart from "this project is not connected to Pulse" — which are otherwise
+    the same empty row.
+    """
+    mappings = db.query(models.ProjectMapping).all()
+
+    # Pulse identifier -> canonical project. UUID first; project name only as a
+    # fallback, for mappings whose UUID has not been filled in yet.
+    by_uuid, by_name, claims = {}, {}, {}
+    for m in mappings:
+        if not m.project_id:
+            continue
+        label = f"{m.project_name_from_p6 or ''} {m.project or ''}"
+        if "demo" in label.lower():
+            continue
+        entry = {
+            "project_id": m.project_id,
+            "p6_project_name": (m.project_name_from_p6 or m.project or m.project_id),
+            "portfolio": m.cluster,
+            "is_commissioned": bool(m.is_commissioned),
+        }
+        uuid = getattr(m, "pulse_project_uuid", None)
+        if uuid:
+            # A Pulse project can be claimed by several mappings — "AGEL
+            # Merchant" is claimed by 7. Collect them all rather than letting
+            # the last one win, which silently dumped every NC onto whichever
+            # mapping happened to be iterated last.
+            claims.setdefault(uuid, []).append(entry)
+        for candidate in (m.project_name_from_p6, m.project):
+            if candidate:
+                by_name.setdefault(str(candidate).strip(), entry)
+
+    shared_uuids = {u: es for u, es in claims.items() if len(es) > 1}
+    for uuid, entries in claims.items():
+        if len(entries) == 1:
+            by_uuid[uuid] = entries[0]
+
+    def blank(entry):
+        return {
+            **entry,
+            "pulse_project_name": None,
+            "linked": False,
+            "total_ncs": 0, "critical": 0, "open": 0, "critical_open": 0,
+            "rejected": 0, "completed": 0,
+            "debit_total": 0, "debit_count": 0,
+            "closure_rate": 0, "avg_resolution_days": None,
+            "_res": [],
+        }
+
+    buckets = {e["project_id"]: blank(e) for e in list(by_uuid.values()) + list(by_name.values())}
+    unmatched = 0
+    orphans = {}
+    shared = {}
+
+    for nc in db.query(models.PulseNC).all():
+        # Claimed by several projects: the NC belongs to the programme, not to
+        # any one project, so it is reported separately instead of being
+        # silently assigned to whichever mapping was iterated last.
+        if nc.project_id in shared_uuids:
+            key = (nc.project_name or "Unnamed Pulse project").strip()
+            sh = shared.setdefault(key, {
+                "pulse_project_name": key,
+                "pulse_project_uuid": nc.project_id,
+                "project_ids": [e["project_id"] for e in shared_uuids[nc.project_id]],
+                "total_ncs": 0, "open": 0, "critical": 0,
+            })
+            sh["total_ncs"] += 1
+            if nc.status != "completed":
+                sh["open"] += 1
+            if nc.category == "Critical":
+                sh["critical"] += 1
+            continue
+
+        entry = by_uuid.get(nc.project_id) or by_name.get((nc.project_name or "").strip())
+        if entry is None:
+            unmatched += 1
+            # Group the strays by Pulse project so the gap is a worklist:
+            # each needs a pulse_project_uuid on the mapping sheet.
+            key = (nc.project_name or "Unnamed Pulse project").strip()
+            o = orphans.setdefault(key, {
+                "pulse_project_name": key,
+                "pulse_project_uuid": nc.project_id,
+                "total_ncs": 0, "open": 0, "critical": 0,
+            })
+            o["total_ncs"] += 1
+            if nc.status != "completed":
+                o["open"] += 1
+            if nc.category == "Critical":
+                o["critical"] += 1
+            continue
+        b = buckets[entry["project_id"]]
+        b["linked"] = True
+        b["pulse_project_name"] = b["pulse_project_name"] or nc.project_name
+        b["total_ncs"] += 1
+        is_open = nc.status != "completed"
+        if nc.category == "Critical":
+            b["critical"] += 1
+            if is_open:
+                b["critical_open"] += 1
+        if is_open:
+            b["open"] += 1
+        if nc.status == "rejected":
+            b["rejected"] += 1
+        if nc.status == "completed":
+            b["completed"] += 1
+        if nc.debit and nc.debit > 0:
+            b["debit_total"] += nc.debit
+            b["debit_count"] += 1
+        if nc.status == "completed" and nc.approved_at and nc.created_at:
+            days = (nc.approved_at - nc.created_at).total_seconds() / 86400
+            if days >= 0:
+                b["_res"].append(days)
+
+    rows = []
+    for b in buckets.values():
+        res = b.pop("_res")
+        if b["total_ncs"]:
+            b["closure_rate"] = round(b["completed"] / b["total_ncs"] * 100, 1)
+            b["avg_resolution_days"] = round(sum(res) / len(res), 1) if res else None
+        b["debit_total"] = round(b["debit_total"], 2)
+        rows.append(b)
+
+    # Worst first: most critical-and-open, then most open.
+    rows.sort(key=lambda r: (-r["critical_open"], -r["open"], r["p6_project_name"]))
+
+    return {
+        "projects": rows,
+        "linked_projects": sum(1 for r in rows if r["linked"]),
+        "total_projects": len(rows),
+        # NCs whose Pulse project matches no mapping at all. Non-zero means the
+        # mapping sheet needs a pulse_project_uuid filling in.
+        "unmatched_ncs": unmatched,
+        "unmatched_projects": sorted(orphans.values(), key=lambda o: -o["total_ncs"]),
+        # One Pulse project spanning several P6 projects — cannot be attributed
+        # to a single one without inventing an answer, so it is surfaced.
+        "shared_ncs": sum(sh["total_ncs"] for sh in shared.values()),
+        "shared_projects": sorted(shared.values(), key=lambda sh: -sh["total_ncs"]),
+    }
+
+
 @router.get("/project/{project_name}")
 def get_project_quality(project_name: str, db: Session = Depends(get_db)):
     """Per-project quality details for the ProjectWorkspace Quality tab."""

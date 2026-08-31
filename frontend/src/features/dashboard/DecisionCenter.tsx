@@ -84,16 +84,16 @@ export default function DecisionCenter({ p6Data, finDetails }: any) {
 
                    <div className="flex-shrink-0 pl-2">
                       {action.type === 'schedule' ? (
-                        <div className="p-3 bg-destructive/100/10 rounded-lg"><Clock className="w-6 h-6 text-destructive" /></div>
+                        <div className="p-3 bg-destructive/10 rounded-lg"><Clock className="w-6 h-6 text-destructive" /></div>
                       ) : (
-                        <div className="p-3 bg-warning/100/10 rounded-lg"><DollarSign className="w-6 h-6 text-warning" /></div>
+                        <div className="p-3 bg-warning/10 rounded-lg"><DollarSign className="w-6 h-6 text-warning" /></div>
                       )}
                    </div>
                    
                    <div className="flex-1">
                      <div className="flex items-start justify-between mb-1">
                        <h4 className="text-base font-medium text-foreground">{action.title}</h4>
-                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${action.priority === 'high' ? 'bg-destructive/100/20 text-destructive' : 'bg-warning/100/20 text-warning'}`}>
+                       <span className={`text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded ${action.priority === 'high' ? 'bg-destructive/20 text-destructive' : 'bg-warning/20 text-warning'}`}>
                          {action.priority}
                        </span>
                      </div>

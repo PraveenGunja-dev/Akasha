@@ -72,7 +72,7 @@ export default function PredictiveAnalytics({ p6Data }: any) {
 
       <div className="bg-card border border-border rounded-2xl p-6 min-h-[400px] shadow-sm">
         <div className="flex items-center gap-3 mb-6">
-          <div className="p-2 bg-warning/100/10 rounded-lg"><TrendingUp className="w-5 h-5 text-warning" /></div>
+          <div className="p-2 bg-warning/10 rounded-lg"><TrendingUp className="w-5 h-5 text-warning" /></div>
           <h2 className="text-lg font-medium tracking-wide text-foreground">Schedule Slippage Forecast (90 Days)</h2>
         </div>
         <p className="text-sm text-muted-foreground mb-4 border-l-2 border-amber-500 pl-3">

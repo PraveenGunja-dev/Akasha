@@ -1,182 +1,66 @@
-import React, { useMemo, useState, useRef, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
-  TrendingUp, Activity, DollarSign, IndianRupee,
-  AlertTriangle, Zap, Clock, Layers, MapPin, Package, RefreshCw, AlertCircle, Bot, CheckCircle2, Shield, Info
+  Activity, IndianRupee, AlertTriangle, Zap, Package, CheckCircle2, Shield, Network, HelpCircle,
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import KPIDetailsModal from '../../components/ui/KPIDetailsModal';
 import { useChartTheme } from '../../lib/chartTheme';
+import {
+  KPITile, Card, CardHeader, ChartFrame, PageHeader,
+  Legend, SourceTag, Metric, MiniMeter,
+  containerVariants, itemVariants,
+} from '../../components/ui/primitives';
 
-const containerVariants: any = {
-  hidden: { opacity: 0 },
-  show: {
-    opacity: 1,
-    transition: { staggerChildren: 0.04 }
-  }
-};
+/* ── Trajectory data ──────────────────────────────────────────────────────
+   /api/metrics/history reconstructs monthly series from the timestamps on the
+   underlying records (PO document dates, NC created/approved dates, P6 start
+   dates). It publishes a key only where a real series exists.
 
-const itemVariants: any = {
-  hidden: { opacity: 0, y: 8 },
-  show: { opacity: 1, y: 0, transition: { duration: 0.3, ease: 'easeOut' } }
-};
+   The guard below is the important part. These series are computed by a
+   different query from the scalars on /dashboard/summary, so they can silently
+   disagree — 4,378 Cr against a tile printing 59,753. A sparkline whose last
+   point contradicts the number above it is worse than no sparkline, so a
+   series is used ONLY if it lands on the displayed value. Anything else keeps
+   its proportion bar, and tiles light up on their own as the backend
+   reconciles. No tile can contradict itself. */
+type HistoryPayload = { series?: Record<string, { series: number[]; period: string }> };
 
-const KPIInfoTooltip = ({ info, align = 'center' }: { info: React.ReactNode, align?: 'left' | 'center' | 'right' }) => {
-  const [isOpen, setIsOpen] = useState(false);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const triggerRef = useRef<HTMLButtonElement>(null);
+function useTrajectory(phase: string, portfolio: string | null) {
+  const [history, setHistory] = useState<HistoryPayload>({});
 
   useEffect(() => {
-    if (!isOpen) return;
-    const handleClickOutside = (e: MouseEvent) => {
-      if (tooltipRef.current && !tooltipRef.current.contains(e.target as Node) &&
-          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
-        setIsOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [isOpen]);
+    const qs = new URLSearchParams({ months: '12' });
+    if (phase) qs.set('phase', phase);
+    if (portfolio) qs.set('portfolio', portfolio);
+    let live = true;
+    fetch(`/akasha/api/metrics/history?${qs}`)
+      .then((r) => (r.ok ? r.json() : { series: {} }))
+      .then((d) => { if (live) setHistory(d || { series: {} }); })
+      .catch(() => { if (live) setHistory({ series: {} }); });
+    return () => { live = false; };
+  }, [phase, portfolio]);
 
-  let alignClasses = "left-1/2 -translate-x-1/2";
-  let arrowClasses = "left-1/2 -translate-x-1/2";
-  
-  if (align === 'right') {
-    alignClasses = "right-0 translate-x-2";
-    arrowClasses = "right-4 translate-x-0";
-  } else if (align === 'left') {
-    alignClasses = "left-0 -translate-x-2";
-    arrowClasses = "left-4 translate-x-0";
-  }
+  /** A series is usable only when its final point agrees with `current`. */
+  const reconciles = (key: string, current: number) => {
+    const entry = history.series?.[key];
+    if (!entry || entry.series.length < 4) return undefined;
+    const last = entry.series[entry.series.length - 1];
+    const scale = Math.max(Math.abs(current), 1);
+    const agrees = Math.abs(last - current) <= 1 || Math.abs(last - current) / scale <= 0.02;
+    return agrees ? entry : undefined;
+  };
 
-  return (
-    <div className="relative" style={{ zIndex: isOpen ? 50 : 1 }}>
-      <button
-        ref={triggerRef}
-        onClick={(e) => { e.stopPropagation(); setIsOpen(!isOpen); }}
-        onMouseEnter={() => setIsOpen(true)}
-        onMouseLeave={() => setIsOpen(false)}
-        className="p-0.5 rounded-full hover:bg-primary/10 transition-colors focus:outline-none"
-        aria-label="More info"
-      >
-        <Info className="w-3 h-3 text-muted-foreground hover:text-primary transition-colors" />
-      </button>
-      <AnimatePresence>
-        {isOpen && (
-          <motion.div
-            ref={tooltipRef}
-            initial={{ opacity: 0, y: -4, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -4, scale: 0.95 }}
-            transition={{ duration: 0.15, ease: 'easeOut' }}
-            className={`absolute top-full mt-2 w-64 p-3 rounded-xl
-              bg-white/95 dark:bg-gray-900/95 backdrop-blur-xl
-              border border-gray-200/60 dark:border-gray-700/60
-              shadow-[0_8px_32px_rgba(0,0,0,0.12)] dark:shadow-[0_8px_32px_rgba(0,0,0,0.4)]
-              pointer-events-auto text-left ${alignClasses}`}
-            style={{ zIndex: 9999 }}
-          >
-            <div className={`absolute -top-1.5 w-3 h-3 rotate-45
-              bg-white/95 dark:bg-gray-900/95
-              border-l border-t border-gray-200/60 dark:border-gray-700/60 ${arrowClasses}`} />
-            <div className="text-[11px] leading-relaxed text-gray-600 dark:text-gray-300 font-medium relative z-10 normal-case tracking-normal">
-              {info}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </div>
-  );
-};
-
-/* Three tile weights. The KPI band uses one hero, two primary and four
-   supporting tiles so the eye lands somewhere first — an equal grid of seven
-   gives the reader no entry point. */
-const KPI_SIZE: Record<string, { metric: string; pad: string }> = {
-  hero:       { metric: 'metric-xl', pad: 'px-5 py-4' },
-  primary:    { metric: 'metric-lg', pad: 'px-4 py-3.5' },
-  supporting: { metric: 'metric-md', pad: 'px-3.5 py-3' },
-};
-
-const KPICard = ({
-  title, value, unit, subtext, stats, trend, trendValue, trendLabel,
-  icon: Icon, color, tone, size = 'primary', onClick, info, infoAlign, className = '',
-}: any) => {
-  const s = KPI_SIZE[size] ?? KPI_SIZE.primary;
-
-  // Legacy `color` prop maps onto the status system.
-  const resolved = tone ?? (
-    color === 'red' ? 'critical' :
-    color === 'amber' ? 'warning' :
-    color === 'emerald' ? 'healthy' : 'neutral'
-  );
-
-  const iconColor =
-    resolved === 'critical' ? 'text-destructive' :
-    resolved === 'warning' ? 'text-warning' :
-    resolved === 'healthy' ? 'text-success' : 'text-primary';
-
-  // Only states that demand attention get an accent rail — colour stays
-  // informational rather than decorative.
-  const accent =
-    resolved === 'critical' ? 'intelligence-card-critical' :
-    resolved === 'warning' ? 'intelligence-card-warning' : '';
-
-  return (
-    <motion.div variants={itemVariants} className={`h-full ${className}`}>
-      <div
-        onClick={onClick}
-        role="button"
-        tabIndex={0}
-        onKeyDown={(e: React.KeyboardEvent) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onClick?.(); }
-        }}
-        className={`bento-card ${accent} h-full ${s.pad} cursor-pointer flex flex-col justify-between group`}
-      >
-        <div className="flex justify-between items-start gap-2 mb-2">
-          <div className="flex items-center gap-1 min-w-0">
-            <h4 className="section-label leading-tight truncate">{title}</h4>
-            {info && <KPIInfoTooltip info={info} align={infoAlign} />}
-          </div>
-          <Icon className={`w-4 h-4 shrink-0 ${iconColor} opacity-70 group-hover:opacity-100 transition-opacity`} />
-        </div>
-
-        <div>
-          <div className={s.metric}>
-            <span>{value}</span>
-            {unit && <span className="metric-unit">{unit}</span>}
-          </div>
-
-          {subtext && <div className="text-[10px] text-fg-tertiary font-medium mt-1.5">{subtext}</div>}
-
-          {/* Supporting figures share the tile rather than each claiming one. */}
-          {stats?.length > 0 && (
-            <div className="flex items-center gap-5 mt-3 pt-2.5 border-t border-border-subtle">
-              {stats.map((st: any) => (
-                <div key={st.label} className="min-w-0">
-                  <div className="text-[9px] uppercase tracking-[0.07em] text-fg-tertiary font-semibold">{st.label}</div>
-                  <div className="metric-sm mt-0.5">
-                    <span>{st.value}</span>
-                    {st.unit && <span className="metric-unit">{st.unit}</span>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {trend && (
-            <div className="flex items-center gap-1.5 mt-2.5">
-              <span className={`delta ${trend === 'up' ? 'delta-up' : trend === 'down' ? 'delta-down' : 'delta-flat'}`}>
-                {trend === 'up' ? '▲' : trend === 'down' ? '▼' : '●'} {trendValue}
-              </span>
-              <span className="text-[10px] text-fg-tertiary font-medium">{trendLabel}</span>
-            </div>
-          )}
-        </div>
-      </div>
-    </motion.div>
-  );
-};
+  /* Sparklines only — no proportion bars. A tile shows a plot when its
+     series reconciles with the figure printed above it, and nothing when it
+     does not. Reconciling today: open NCs, open RFIs, NC closure rate and
+     project count. Still outstanding: PO value (6.4% adrift, probably the WBS
+     double-count in dashboard.py), COD capacity (derived from TC block data,
+     not capacity_mwac) and delayed projects (finish_date_variance is a
+     snapshot with no history). */
+  return reconciles;
+}
 
 export default function ExecutiveOverview({ dashboardData, briefing, briefingLoading, briefingError }: any) {
   const [activeKpiModal, setActiveKpiModal] = useState<string | null>(null);
@@ -186,6 +70,13 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   const { themeName, categorical, status: statusColors, chrome } = useChartTheme();
   const summary = dashboardData?.summary || {};
   const projects = dashboardData?.projects || [];
+
+  /* Same scope the header applies, so the series matches the visible figures. */
+  const [searchParams] = useSearchParams();
+  const trajectoryFor = useTrajectory(
+    searchParams.get('phase') || 'Ongoing',
+    searchParams.get('portfolio')
+  );
 
   const getProjectCapacity = (p: any) => {
     if (p.capacity_mwac && p.capacity_mwac > 0) return p.capacity_mwac;
@@ -237,7 +128,38 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     };
   }, [projects]);
 
-  const remainingPOValue = (totalPOValue / 10000000) - poDeliveredCr;
+  /* Rupees → crore happens once, here, rather than at each call site. */
+  const totalPOCr = totalPOValue / 10000000;
+
+  /* Crore values were the one figure not going through en-IN grouping, so a
+     portfolio total rendered as "59753.0" beside neighbours like "9,832".
+     Past four digits the decimal is noise, so it is dropped. */
+  const fmtCr = (n: number) =>
+    n >= 1000 ? Math.round(n).toLocaleString('en-IN') : n.toFixed(1);
+  const remainingPOValue = totalPOCr - poDeliveredCr;
+
+  /* Pulse quality. `total_ncs` is what gives the KPI tile a real denominator —
+     without it the tile falls back to trajectory mode C. */
+  const totalNCs = summary?.quality?.total_ncs || 0;
+  const openNCs = summary?.quality?.open_ncs || 0;
+  const openRFIs = (summary?.quality?.total_rfis || 0) - (summary?.quality?.completed_rfis || 0);
+  const totalRFIs = summary?.quality?.total_rfis || 0;
+  const closureRate = Math.round(summary?.quality?.closure_rate || 0);
+
+  /* Transmission coverage: how much of the portfolio has grid connectivity
+     mapped at all. Readiness would be the better measure, but TcNetworkEdge
+     .status holds mis-parsed values ('7', '11', 'Mar-30') rather than a state,
+     so it cannot be derived until that sync is fixed. */
+  const tc = useMemo(() => {
+    let mapped = 0;
+    let lines = 0;
+    projects.forEach((p: any) => {
+      if (p.tc?.has_data) mapped++;
+      const d = p.tc?.data || {};
+      lines += (d.khavda?.length || 0) + (d.rajasthan?.length || 0);
+    });
+    return { mapped, lines };
+  }, [projects]);
 
   const progressStages = useMemo(() => {
     let stages = { initiation: 0, early: 0, mid: 0, late: 0, completed: 0 };
@@ -277,8 +199,18 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     return Array.from(map.entries())
       .map(([key, idSet]) => ({ key, count: idSet.size }))
       .sort((a, b) => b.count - a.count)
-      .slice(0, 6);
+      /* 10 rather than 6: the rail now stretches to the height of the plot
+         beside it, and the panel scrolls, so more of the network is visible
+         before the reader has to open the Transmission module. */
+      .slice(0, 10);
   }, [projects]);
+
+  /* Scales each row's bar against the busiest group, so the rail reads as a
+     comparison rather than ten unrelated numbers. */
+  const maxLineCount = useMemo(
+    () => Math.max(1, ...transmissionOverview.map((n) => n.count)),
+    [transmissionOverview]
+  );
 
   const listProjects = useMemo(() => {
     if (activeListTab === 'delayed') return [...projects].filter((p: any) => p.p6?.health === 'Delayed');
@@ -449,13 +381,33 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   }
 
   return (
-    <div className="flex flex-col gap-4 w-full pb-8">
+    <div className="flex w-full flex-col gap-4 pb-8">
+
+      {/* Names the surface and states where its figures come from. On a screen
+          that drives capital decisions, provenance is part of the design. */}
+      <PageHeader
+        title="Portfolio Overview"
+        subtitle={`${totalProjects} mapped projects · ${Math.round(totalMW).toLocaleString('en-IN')} MW planned capacity`}
+        right={
+          <div className="flex flex-wrap items-center gap-1.5">
+            <SourceTag system="P6" />
+            <SourceTag system="SAP" />
+            <SourceTag system="TC" />
+            <SourceTag system="Pulse" />
+          </div>
+        }
+      />
 
       {/* ══ KPI BAND ══
-          Two tiers on a 12-column grid: one hero + two primary tiles carry the
-          "how are we doing" answer, four supporting tiles sit beneath. All
-          seven drill-downs are preserved. At 2560 the extra width flows into
-          the hero tile rather than into dead margin. */}
+          One hero + two primary tiles carry the "how are we doing" answer;
+          three supporting tiles sit beneath. Every drill-down is preserved,
+          and the tile stays visibly selected while its modal is open.
+
+          No KPI here has a measured history yet (see /api/metrics/history in
+          the KPI spec), so every tile resolves to trajectory mode B — the
+          figure against its own total — rather than showing an invented line.
+          When the snapshot endpoint lands, adding `trajectory` to a tile is
+          the only change needed to promote it to a sparkline. */}
       <motion.div
         variants={containerVariants}
         initial="hidden"
@@ -463,19 +415,22 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         className="flex flex-col gap-3"
       >
         {/* Tier 1 — focal */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3">
-          <KPICard
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 items-stretch">
+          <KPITile
             className="lg:col-span-6"
             size="hero"
             tone="neutral"
-            title="Portfolio Capacity"
+            polarity="up-good"
+            label="Portfolio Capacity"
             value={Math.round(codMW).toLocaleString('en-IN')}
             unit="MW at COD"
+            trajectory={trajectoryFor('portfolio_capacity', codMW)}
             stats={[
               { label: 'Trial Run', value: Math.round(trMW).toLocaleString('en-IN'), unit: 'MW' },
               { label: 'Total Planned', value: Math.round(totalMW).toLocaleString('en-IN'), unit: 'MW' },
             ]}
             icon={Zap}
+            selected={activeKpiModal === 'Portfolio Capacity'}
             onClick={() => setActiveKpiModal('Portfolio Capacity')}
             info={
               <div className="space-y-1">
@@ -485,80 +440,122 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
               </div>
             }
           />
-          <KPICard
+
+          <KPITile
             className="lg:col-span-3"
             size="primary"
             tone="neutral"
-            title="Total Projects"
+            polarity="neutral"
+            label="Total Projects"
             value={totalProjects}
-            trend="up"
-            trendValue={onTrackProjects}
-            trendLabel="on track"
+            trajectory={trajectoryFor('total_projects', totalProjects)}
             icon={Activity}
+            selected={activeKpiModal === 'Total Projects'}
             onClick={() => setActiveKpiModal('Total Projects')}
             info="Total number of active projects we are monitoring. 'On Track' means the project is running on schedule without any delays."
           />
-          <KPICard
+
+          <KPITile
             className="lg:col-span-3"
             size="primary"
             tone={delayedProjects > 0 ? 'critical' : 'healthy'}
-            title="Delayed Projects"
+            polarity="down-good"
+            label="Delayed Projects"
             value={delayedProjects}
             subtext="behind P6 baseline finish"
             icon={AlertTriangle}
+            selected={activeKpiModal === 'Delayed Projects'}
             onClick={() => setActiveKpiModal('Delayed Projects')}
             info="Projects that have fallen behind their original planned completion dates in our Primavera P6 schedule."
           />
         </div>
 
-        {/* Tier 2 — supporting */}
-        <div className="grid grid-cols-2 lg:grid-cols-12 gap-3">
-          <KPICard
-            className="lg:col-span-3"
+        {/* Tier 2 — supporting. Six tiles on the 12-col grid, two columns
+            each, so Pulse and TC sit alongside the schedule and cost figures
+            rather than being buried as subtext. */}
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-12 lg:items-stretch">
+          <KPITile
+            className="lg:col-span-2"
             size="supporting"
-            tone="warning"
-            title="Quality (Pulse)"
-            value={summary?.quality?.open_ncs || 0}
-            unit="open NCs"
-            subtext={`${(summary?.quality?.total_rfis || 0) - (summary?.quality?.completed_rfis || 0)} open RFIs`}
+            tone="risk"
+            polarity="down-good"
+            label="Open NCs"
+            value={openNCs}
+            subtext="Pulse non-conformances"
+            trajectory={trajectoryFor('open_ncs', openNCs)}
             icon={Shield}
+            selected={activeKpiModal === 'Quality (Pulse)'}
             onClick={() => setActiveKpiModal('Quality (Pulse)')}
-            info="Live data from the Pulse Quality system. Shows how many Non-Conformance (NC) and Request for Information (RFI) issues are currently open and need attention."
+            info="Live from the Pulse Quality system. Non-Conformances raised on site that are still open and need attention."
           />
-          <KPICard
-            className="lg:col-span-3"
+
+          <KPITile
+            className="lg:col-span-2"
+            size="supporting"
+            tone={openRFIs > 0 ? 'watch' : 'healthy'}
+            polarity="down-good"
+            label="Open RFIs"
+            value={openRFIs.toLocaleString('en-IN')}
+            subtext="awaiting response"
+            trajectory={trajectoryFor('open_rfis', openRFIs)}
+            icon={HelpCircle}
+            info="Requests for Information raised from site and not yet answered. A long queue here usually shows up later as a schedule slip."
+          />
+
+          <KPITile
+            className="lg:col-span-2"
+            size="supporting"
+            tone={closureRate >= 80 ? 'healthy' : closureRate >= 50 ? 'watch' : 'risk'}
+            polarity="up-good"
+            label="NC Closure Rate"
+            value={closureRate}
+            unit="%"
+            subtext="of all NCs raised"
+            trajectory={trajectoryFor('nc_closure_rate', closureRate)}
+            icon={CheckCircle2}
+            info="Share of Non-Conformances that have been resolved and approved. The tick marks the 80% governance target."
+          />
+
+          <KPITile
+            className="lg:col-span-2"
             size="supporting"
             tone="neutral"
-            title="Total PO Value"
-            value={`₹${(totalPOValue / 10000000).toFixed(1)}`}
+            polarity="neutral"
+            label="Total PO Value"
+            value={`₹${fmtCr(totalPOCr)}`}
             unit="Cr"
-            subtext="all purchase orders, SAP"
+            subtext="all purchase orders"
+            trajectory={trajectoryFor('po_value', totalPOCr)}
             icon={IndianRupee}
+            selected={activeKpiModal === 'Total PO Value'}
             onClick={() => setActiveKpiModal('Total PO Value')}
-            info="The total value of all Purchase Orders across every project, pulled directly from SAP. Click this card to see the breakdown by project."
+            info="Total value of all Purchase Orders across every project, from SAP. The bar shows how much has actually been delivered against it."
           />
-          {/*
-          <KPICard
-            className="lg:col-span-3"
+
+          <KPITile
+            className="lg:col-span-2"
             size="supporting"
-            tone="warning"
-            title="Remaining PO Value"
-            value={`₹${Math.max(0, remainingPOValue).toFixed(1)}`}
-            unit="Cr"
-            subtext="pending delivery"
-            icon={IndianRupee}
-            onClick={() => setActiveKpiModal('Remaining PO Value')}
-            info="The value of materials we have ordered from vendors but haven't received yet. Calculated by taking Total PO Value minus materials already delivered."
+            tone="neutral"
+            polarity="up-good"
+            label="Grid Connectivity"
+            value={tc.mapped}
+            denominator={`/${totalProjects}`}
+            subtext={`${tc.lines.toLocaleString('en-IN')} lines mapped`}
+            icon={Network}
+            info="Projects with transmission connectivity mapped in the TC portal. Evacuation readiness is not shown because the TC status field currently holds unparsed values."
           />
-          */}
-          <KPICard
-            className="lg:col-span-3"
+
+          <KPITile
+            className="lg:col-span-2"
             size="supporting"
             tone="healthy"
-            title="Completed Projects"
+            polarity="up-good"
+            label="Completed"
             value={progressStages.completed}
             subtext="100% delivered"
+            trajectory={trajectoryFor('completed_projects', progressStages.completed)}
             icon={CheckCircle2}
+            selected={activeKpiModal === 'Completed Projects'}
             onClick={() => setActiveKpiModal('Completed Projects')}
             info="Projects that are 100% complete and successfully delivered."
             infoAlign="right"
@@ -566,157 +563,110 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         </div>
       </motion.div>
 
-      {/* ROW 2: Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+      {/* ══ ANALYTICAL ROW ══
+          Sized in viewport units rather than a fixed 350px, so at 1920 it
+          fills the fold and at 2560 it grows with the screen instead of
+          leaving a band of dead canvas underneath. The right rail stretches
+          to the same height as the plot beside it — previously it was `h-fit`
+          and left roughly 200px of empty column. */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 items-stretch gap-3 lg:min-h-[46vh] lg:grid-cols-12"
+      >
+        <ChartFrame
+          className="lg:col-span-8"
+          eyebrow="Progress vs capacity"
+          title="Project Execution Queue"
+          icon={Activity}
+          right={
+            /* Reads the same tone tokens the scatter marks do. The previous
+               legend hardcoded #3b82f6 / #10b981 / #ef4444 while the series
+               drew from the chart theme — so no swatch matched its own dots,
+               and On Track / Near Completion were the wrong way round. */
+            <Legend
+              items={[
+                { tone: 'healthy', label: 'On Track (< 90%)' },
+                { tone: 'done', label: 'Near Completion (≥ 90%)' },
+                { tone: 'critical', label: 'Delayed' },
+              ]}
+            />
+          }
+        >
+          <ReactECharts theme={themeName} option={queueScatterOptions} style={{ height: '100%', width: '100%' }} />
+        </ChartFrame>
 
-        {/* Left Col (Span 2) */}
-        <div className="lg:col-span-2 flex flex-col gap-4">
-
-          {/* SECTION: AI EXECUTIVE BRIEF
-          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-4">
-            <div className="flex justify-between items-center mb-4">
-              <div className="flex items-center gap-2">
-                <Bot className="w-4 h-4 text-primary" />
-                <h3 className="text-[14px] font-bold text-foreground dark:text-white">Executive Intelligence Brief</h3>
+        {/* Right rail */}
+        <motion.div variants={itemVariants} className="flex min-h-0 flex-col lg:col-span-4">
+          <Card pad="md" className="flex min-h-0 flex-1 flex-col">
+            <CardHeader
+              eyebrow="Evacuation readiness"
+              title="Transmission Network"
+              icon={Network}
+              right={<SourceTag system="TC" />}
+            />
+            {transmissionOverview.length === 0 ? (
+              <div className="flex flex-1 items-center justify-center px-4 py-8 text-center text-[12px] text-fg-tertiary">
+                No transmission lines mapped for this scope.
               </div>
-              <div className="text-[10px] font-bold text-success bg-success/10 px-2.5 py-0.5 rounded-full flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-success/100 animate-pulse"></span> {briefing?.confidenceScore || 87}%
-              </div>
-            </div>
-
-            <div className="bg-muted dark:bg-gray-900/50 rounded-lg p-4 border border-muted dark:border-border">
-              <div className="flex justify-between items-center mb-3">
-                <div className="flex items-center gap-1.5 text-[10px] font-bold text-muted-foreground uppercase tracking-[0.08em]">
-                  <Zap className="w-3 h-3 text-primary" /> AI-GENERATED SUMMARY
-                </div>
-                <div className="text-[9px] font-medium text-muted-foreground uppercase tracking-[0.08em]">
-                  Generated Live
-                </div>
-              </div>
-
-              <div className="mt-2">
-                {briefingLoading ? (
-                  <div className="flex items-center gap-3 py-6 text-primary text-sm font-medium justify-center">
-                    <RefreshCw className="w-5 h-5 animate-spin" /> Analyzing live SAP & P6 data...
-                  </div>
-                ) : briefingError ? (
-                  <div className="text-sm text-destructive font-medium py-4 flex items-center gap-2">
-                    <AlertTriangle className="w-5 h-5" /> {briefingError}
-                  </div>
-                ) : (
-                  <>
-                    <p className="text-[13px] text-foreground dark:text-muted-foreground leading-relaxed">
-                      {briefing?.toplineSummary || "Insufficient data to generate portfolio summary."}
-                    </p>
-                    <div className="flex items-center gap-2 mt-4 flex-wrap">
-                      {briefing?.keyActions?.map((a: any, i: number) => {
-                        const isRed = a.title.toLowerCase().includes('risk') || a.color === 'red';
-                        const isAmber = a.title.toLowerCase().includes('cost') || a.color === 'amber' || a.title.toLowerCase().includes('monitor');
-                        const colorTheme = isRed ? 'text-destructive bg-destructive/10 border-destructive/20 dark:text-destructive dark:bg-destructive/100/10 dark:border-destructive/20' :
-                          isAmber ? 'text-warning bg-warning/10 border-warning/20 dark:text-warning dark:bg-warning/100/10 dark:border-warning/20' :
-                            'text-success bg-success/10 border-success/20 dark:text-success dark:bg-success/100/10 dark:border-success/20';
-
-                        return (
-                          <span key={i} className={`text-[11px] px-3 py-1.5 flex items-center gap-1.5 border rounded-full font-semibold shadow-sm ${colorTheme}`}>
-                            <AlertCircle className="w-3.5 h-3.5" /> {a.title}
-                          </span>
-                        );
-                      })}
+            ) : (
+              /* A bar per group turns a list of counts into a comparison, and
+                 gives the rail something to do with the height it now has. */
+              <div className="custom-scrollbar -mr-1 min-h-0 flex-1 overflow-y-auto pr-1">
+                {transmissionOverview.map((node) => (
+                  <div
+                    key={node.key}
+                    className="flex items-center gap-3 py-1.5"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-[11.5px] text-fg-primary" title={node.key}>
+                        {node.key}
+                      </div>
                     </div>
-                  </>
-                )}
-              </div>
-            </div>
-          </motion.div>
-          */}
-
-          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bg-card border border-border dark:border-border rounded-xl shadow-sm p-6 flex-1 flex flex-col min-h-[300px]">
-            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
-              <h4 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" /> Project Execution Queue
-              </h4>
-              {/*
-              <div className="flex bg-muted dark:bg-card p-1 border border-border dark:border-gray-700 rounded-lg text-xs font-semibold">
-                <button onClick={() => setActiveListTab('top')} className={`px-4 py-1.5 rounded-md transition-all ${activeListTab === 'top' ? 'bg-white dark:bg-gray-700 text-primary shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}>All</button>
-                <button onClick={() => setActiveListTab('low')} className={`px-4 py-1.5 rounded-md transition-all ${activeListTab === 'low' ? 'bg-white dark:bg-gray-700 text-warning shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}>&lt; 50%</button>
-                <button onClick={() => setActiveListTab('delayed')} className={`px-4 py-1.5 rounded-md transition-all ${activeListTab === 'delayed' ? 'bg-white dark:bg-gray-700 text-destructive shadow-sm' : 'text-muted-foreground hover:text-foreground dark:hover:text-white'}`}>Delayed</button>
-              </div>
-              */}
-              <div className="flex items-center gap-5 text-xs font-medium text-foreground dark:text-muted-foreground">
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#3b82f6] shadow-sm ring-1 ring-white/10"></div> On Track (&lt; 90%)</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#10b981] shadow-sm ring-1 ring-white/10"></div> Near Completion (&ge; 90%)</div>
-                <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-[#ef4444] shadow-sm ring-1 ring-white/10"></div> Delayed</div>
-              </div>
-            </div>
-            <div className="flex-1 w-full min-h-[250px]">
-              <ReactECharts theme={themeName} option={queueScatterOptions} style={{ height: '100%', width: '100%' }} />
-            </div>
-          </motion.div>
-        </div>
-
-        {/* Right Col */}
-        <div className="flex flex-col gap-4">
-          {/*
-          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6 flex-none">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2"><Layers className="w-5 h-5 text-primary" /> Progress Stage</h3>
-              <div className="text-[11px] font-bold text-muted-foreground uppercase bg-muted dark:bg-card px-2 py-1 rounded-md">{totalProjects} total</div>
-            </div>
-            <div className="space-y-5 text-xs font-semibold">
-              {[
-                { phase: 'Initiation (0-25%)', count: progressStages.initiation, color: 'bg-gray-400' },
-                { phase: 'Early (26-50%)', count: progressStages.early, color: 'bg-blue-400' },
-                { phase: 'Mid (51-75%)', count: progressStages.mid, color: 'bg-amber-400' },
-                { phase: 'Late (76-99%)', count: progressStages.late, color: 'bg-primary' },
-                { phase: 'Completed (100%)', count: progressStages.completed, color: 'bg-success/100' }
-              ].map((p, i) => (
-                <div key={i} className="flex items-center justify-between group">
-                  <div className="w-32 text-muted-foreground group-hover:text-foreground dark:group-hover:text-white transition-colors">{p.phase}</div>
-                  <div className="flex-1 h-2.5 bg-muted dark:bg-card rounded-full mx-4 overflow-hidden"><div className={`h-full ${p.color}`} style={{ width: `${(p.count / Math.max(1, totalProjects)) * 100}%` }}></div></div>
-                  <div className="w-6 text-right text-foreground dark:text-white">{p.count}</div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-          */}
-
-          <motion.div variants={itemVariants} initial="hidden" animate="show" className="bento-card p-6 h-fit">
-            <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center justify-between mb-4 shrink-0">
-              <span className="flex items-center gap-2"><Activity className="w-5 h-5 text-primary" /> Transmission Network</span>
-            </h3>
-            <div className="space-y-1 overflow-y-auto custom-scrollbar pr-2">
-              {transmissionOverview.map((node, i) => (
-                <div key={i} className="flex justify-between items-center py-1.5 border-b border-muted dark:border-border last:border-0 text-sm">
-                  <div className="flex items-center gap-2.5 text-foreground dark:text-muted-foreground font-semibold flex-1 pr-2">
-                    <Zap className={`w-4 h-4 text-success shrink-0`} />
-                    <span className="line-clamp-1" title={node.key}>{node.key}</span>
+                    <div className="shrink-0 text-[11.5px] tabular-nums text-fg-primary">
+                      {node.count} <span className="text-[9px] text-fg-tertiary ml-0.5">lines</span>
+                    </div>
                   </div>
-                  <div className="text-[11px] font-bold text-muted-foreground bg-muted dark:bg-gray-900/50 px-2.5 py-1 rounded-md shrink-0 border border-border dark:border-gray-700">{node.count} Lines</div>
-                </div>
-              ))}
-            </div>
-          </motion.div>
-        </div>
-      </div>
-
-      {/* ROW 3: ECharts */}
-      <motion.div variants={itemVariants} initial="hidden" animate="show" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bento-card p-4 flex flex-col h-[350px]">
-          <div className="flex justify-between items-center mb-4">
-            <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2"><Package className="w-5 h-5 text-primary" /> SAP Material Pipeline (Qty)</h3>
-          </div>
-          <div className="flex-1 w-full">
-            <ReactECharts theme={themeName} option={costChartOptions} style={{ height: '100%', width: '100%' }} />
-          </div>
-        </div>
-
-        <div className="bento-card p-4 flex flex-col h-[350px]">
-          <h3 className="text-sm font-bold text-foreground dark:text-white flex items-center gap-2 mb-4"><Activity className="w-5 h-5 text-primary" /> Progress vs Capacity Distribution</h3>
-          <div className="flex-1 w-full">
-            <ReactECharts theme={themeName} option={originalScatterOptions} style={{ height: '100%', width: '100%' }} />
-          </div>
-        </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
       </motion.div>
+
+      {/* ══ SECONDARY ROW ══
+          7/5 rather than 6/6: the stacked pipeline carries four series and
+          long project names on its category axis, so it needs the wider half. */}
+      <motion.div
+        variants={containerVariants}
+        initial="hidden"
+        animate="show"
+        className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-12"
+      >
+        <ChartFrame
+          className="lg:col-span-7"
+          eyebrow="Requirement → PO → In-transit → GRN"
+          title="SAP Material Pipeline"
+          icon={Package}
+          right={<SourceTag system="SAP" />}
+          height={320}
+        >
+          <ReactECharts theme={themeName} option={costChartOptions} style={{ height: '100%', width: '100%' }} />
+        </ChartFrame>
+
+        <ChartFrame
+          className="lg:col-span-5"
+          eyebrow="Every mapped project, unfiltered"
+          title="Progress vs Capacity"
+          icon={Activity}
+          right={<SourceTag system="P6" />}
+          height={320}
+        >
+          <ReactECharts theme={themeName} option={originalScatterOptions} style={{ height: '100%', width: '100%' }} />
+        </ChartFrame>
+      </motion.div>
+
 
       <KPIDetailsModal
         isOpen={!!activeKpiModal}

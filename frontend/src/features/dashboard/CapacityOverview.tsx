@@ -171,8 +171,8 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
                 <div className="flex gap-2 mt-3 flex-wrap">
                   <span className="text-[11px] font-bold text-foreground dark:text-muted-foreground uppercase tracking-wider bg-white/50 dark:bg-gray-900/50 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-border/50 dark:border-gray-700/50">Total Cap: <span className="text-foreground dark:text-white ml-1">{totalCap.toFixed(1)} MW</span></span>
                   <span className="text-[11px] font-bold text-primary uppercase tracking-wider bg-primary/5 dark:bg-primary/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-primary/20">COD: <span className="ml-1 font-black">{totalCod.toFixed(1)} MW</span></span>
-                  <span className="text-[11px] font-bold text-success dark:text-success uppercase tracking-wider bg-success/100/5 dark:bg-success/100/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-success/20">TR Only: <span className="ml-1 font-black">{totalTr.toFixed(1)} MW</span></span>
-                  <span className="text-[11px] font-bold text-warning dark:text-warning uppercase tracking-wider bg-warning/100/5 dark:bg-warning/100/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-warning/20">Remaining: <span className="ml-1 font-black">{totalRemaining.toFixed(1)} MW</span></span>
+                  <span className="text-[11px] font-bold text-success dark:text-success uppercase tracking-wider bg-success/5 dark:bg-success/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-success/20">TR Only: <span className="ml-1 font-black">{totalTr.toFixed(1)} MW</span></span>
+                  <span className="text-[11px] font-bold text-warning dark:text-warning uppercase tracking-wider bg-warning/5 dark:bg-warning/10 px-3 py-1.5 rounded-full shadow-sm backdrop-blur-sm border border-warning/20">Remaining: <span className="ml-1 font-black">{totalRemaining.toFixed(1)} MW</span></span>
                 </div>
               </div>
               <button onClick={onClose} className="p-2.5 bg-muted hover:bg-gray-200 dark:bg-gray-900/80 dark:hover:bg-gray-700 rounded-full transition-colors self-start backdrop-blur-sm group">
@@ -204,7 +204,7 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
                         <tr key={idx} className="bg-white/40 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-card transition-all duration-200 group shadow-sm hover:shadow-md rounded-xl">
                           <td className="px-4 py-3.5 font-bold text-[12px] text-foreground dark:text-white max-w-[200px] truncate rounded-l-xl" title={p.project_name}>{p.project_name}</td>
                           <td className="px-2 py-3.5 text-center">
-                            {p.type === 'Solar' ? <div className="mx-auto w-6 h-6 rounded-full bg-warning/100/10 flex items-center justify-center"><Sun size={12} className="text-warning" /></div> : <div className="mx-auto w-6 h-6 rounded-full bg-primary/100/10 flex items-center justify-center"><Wind size={12} className="text-primary" /></div>}
+                            {p.type === 'Solar' ? <div className="mx-auto w-6 h-6 rounded-full bg-warning/10 flex items-center justify-center"><Sun size={12} className="text-warning" /></div> : <div className="mx-auto w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center"><Wind size={12} className="text-primary" /></div>}
                           </td>
                           <td className="px-2 py-3.5 text-center text-[12px] font-black text-foreground dark:text-muted-foreground">{p.total_capacity.toFixed(1)}</td>
                           <td className="px-2 py-3.5 text-center text-[11px] font-bold text-muted-foreground">{p.total_blocks}</td>
@@ -212,7 +212,7 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
                             {p.cod_mw > 0 ? <span className="text-[11px] font-black text-primary bg-primary/10 px-2.5 py-1 rounded-full">{p.cod_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.cod_blocks})</span></span> : <span className="text-muted-foreground">-</span>}
                           </td>
                           <td className="px-2 py-3.5 text-center">
-                            {p.tr_mw > 0 ? <span className="text-[11px] font-black text-success bg-success/100/10 px-2.5 py-1 rounded-full">{p.tr_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.tr_blocks})</span></span> : <span className="text-muted-foreground">-</span>}
+                            {p.tr_mw > 0 ? <span className="text-[11px] font-black text-success bg-success/10 px-2.5 py-1 rounded-full">{p.tr_mw.toFixed(1)} MW <span className="font-normal opacity-60">({p.tr_blocks})</span></span> : <span className="text-muted-foreground">-</span>}
                           </td>
                           <td className="px-4 py-3.5 text-center rounded-r-xl">
                             <div className="flex flex-col gap-1.5">

@@ -29,10 +29,10 @@ export default function SmartSearch({ onOpenProject }: { onOpenProject?: (id: st
 
   const getIconAndColor = (type: string) => {
     switch(type) {
-      case 'Project': return { icon: Command, color: 'text-destructive', bg: 'bg-destructive/100/10' };
+      case 'Project': return { icon: Command, color: 'text-destructive', bg: 'bg-destructive/10' };
       case 'Purchase Order': return { icon: FileText, color: 'text-primary', bg: 'bg-primary/10' };
-      case 'Material Component': return { icon: Package, color: 'text-success', bg: 'bg-success/100/10' };
-      case 'Vendor': return { icon: Building2, color: 'text-warning', bg: 'bg-warning/100/10' };
+      case 'Material Component': return { icon: Package, color: 'text-success', bg: 'bg-success/10' };
+      case 'Vendor': return { icon: Building2, color: 'text-warning', bg: 'bg-warning/10' };
       default: return { icon: Database, color: 'text-muted-foreground', bg: 'bg-muted' };
     }
   };

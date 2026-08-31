@@ -61,7 +61,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
               <span className="text-[12px] text-muted-foreground font-medium mb-1">Active</span>
             </div>
           </div>
-          <div className="w-10 h-10 rounded-full bg-warning/100/10 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-full bg-warning/10 flex items-center justify-center">
             <Calendar className="w-5 h-5 text-warning" />
           </div>
         </div>
@@ -136,7 +136,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
                       {r.status === 'Ready' ? (
                         <span className="risk-badge-low">Ready</span>
                       ) : (
-                        <span className="text-[10px] px-2 py-0.5 rounded bg-warning/10 text-warning dark:bg-warning/100/10 dark:text-warning font-bold border border-warning/20 dark:border-warning/20 flex items-center gap-1 w-fit">
+                        <span className="text-[10px] px-2 py-0.5 rounded bg-warning/10 text-warning dark:bg-warning/10 dark:text-warning font-bold border border-warning/20 dark:border-warning/20 flex items-center gap-1 w-fit">
                           <Clock className="w-3 h-3" /> Processing
                         </span>
                       )}
