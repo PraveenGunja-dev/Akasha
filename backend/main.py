@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -83,6 +84,30 @@ app.include_router(intelligence.router)
 app.include_router(metrics.router)
 app.include_router(v1.router)
 app.include_router(v1_sources.router)
+
+# Customize OpenAPI to only show /api/v1 endpoints in the Swagger UI
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        openapi_version=app.openapi_version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Filter paths to only include those starting with /api/v1
+    filtered_paths = {}
+    for path, path_item in openapi_schema.get("paths", {}).items():
+        if path.startswith("/api/v1"):
+            filtered_paths[path] = path_item
+            
+    openapi_schema["paths"] = filtered_paths
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 # Mount Frontend static files
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
