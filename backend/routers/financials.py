@@ -73,11 +73,11 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
     res = po_query.first()
     res_slr = slr_query.first()
     
-    total_po_value = res_slr.total_val if res_slr else 0
-    total_pos = res_slr.total_pos if res_slr else 0
-    vendors = res.vendors or 0
-    materials = res.materials or 0
-    volume = res.volume or 0
+    total_po_value = (res_slr.total_val or 0) if res_slr else 0
+    total_pos = (res_slr.total_pos or 0) if res_slr else 0
+    vendors = (res.vendors or 0) if res else 0
+    materials = (res.materials or 0) if res else 0
+    volume = (res.volume or 0) if res else 0
     
     # Convert from raw INR to Crores (1 Cr = 10,000,000)
     total_po_value_cr = round(total_po_value / 10000000, 2)

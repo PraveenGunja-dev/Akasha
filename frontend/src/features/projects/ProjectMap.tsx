@@ -441,18 +441,15 @@ interface ProjectMapProps {
 }
 
 const MAP_STYLES = [
+  { id: 'osm-standard', name: 'OSM Detailed View', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
+  { id: 'osm-hot', name: 'OSM Infrastructure (HOT)', url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' },
+  { id: 'open-topo', name: 'OpenTopo Contours', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png' },
   { id: 'google-standard', name: 'Google Maps Standard', url: 'https://mt1.google.com/vt/lyrs=m&x={x}&y={y}&z={z}' },
   { id: 'google-hybrid', name: 'Google Satellite Hybrid', url: 'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}' },
   { id: 'google-terrain', name: 'Google Terrain', url: 'https://mt1.google.com/vt/lyrs=p&x={x}&y={y}&z={z}' },
   { id: 'esri-street', name: 'ESRI Street Map', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}' },
   { id: 'esri-natgeo', name: 'ESRI National Geographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}' },
   { id: 'esri-light-gray', name: 'ESRI Minimalist Light', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}' },
-  { id: 'carto-voyager', name: 'Carto Voyager (Standard)', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png' },
-  { id: 'carto-positron', name: 'Carto Enterprise Light', url: 'https://{s}.basemaps.cartocdn.com/rastertiles/positron/{z}/{x}/{y}{r}.png' },
-  { id: 'carto-dark', name: 'Carto Minimalist Dark', url: 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png' },
-  { id: 'osm-standard', name: 'OSM Detailed View', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
-  { id: 'osm-hot', name: 'OSM Infrastructure (HOT)', url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' },
-  { id: 'open-topo', name: 'OpenTopo Contours', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png' },
 ];
 
 // Curated Substation Coordinates provided by the user

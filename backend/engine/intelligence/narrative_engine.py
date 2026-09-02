@@ -31,17 +31,24 @@ def generate_executive_briefing(intel: Dict[str, Any]) -> str:
     health = intel.get("health_scores", {})
     bottleneck = intel.get("primary_bottleneck", "None")
     
-    # Extract top insights to feed to the LLM
+    # Extract top insights to feed to the LLM (expanded to ensure we don't miss anything)
+    all_insights = intel.get("top_insights", [])[:10]
     insights_text = "\n".join(
-        f"- [{i.get('severity', 'info').upper()}] {i.get('title')}: {i.get('impact')}"
-        for i in intel.get("top_insights", [])[:5]
+        f"- [{i.get('severity', 'info').upper()}] {i.get('title')}: {i.get('description', '')} -> {i.get('impact')}"
+        for i in all_insights
     )
     
     # Extract next steps
     actions_text = "\n".join(
-        f"- {a.get('action')} (Assigned to: {a.get('assigned_role')})"
-        for a in intel.get("next_steps", [])[:3]
+        f"- {a.get('title', a.get('action'))} (Assigned to: {a.get('assigned_role')}) Reason: {a.get('description', a.get('reason', ''))}"
+        for a in intel.get("next_steps", [])[:4]
     )
+
+    quality = intel.get("quality", {})
+    materials = intel.get("materials", {})
+    
+    q_summary = f"Open Critical NCs: {quality.get('summary', {}).get('critical_open', 0)}. Pending RFIs: {quality.get('summary', {}).get('rfis_pending', 0)}."
+    m_summary = f"Overdue POs: {materials.get('summary', {}).get('overdue_po_count', 0)}. Fulfillment: {materials.get('summary', {}).get('fulfillment_pct', 0)}%."
 
     prompt = f"""You are an Executive AI Assistant for a large renewable energy and transmission portfolio.
 Your task is to write a concise, highly professional 2-3 paragraph executive briefing for project: {project_name}.
@@ -51,19 +58,24 @@ Here is the raw intelligence data computed by the Akasha Engine:
 - Overall Health Score: {health.get('overall', 'N/A')}/100
 - Schedule Delay: {delay} days
 - Primary Bottleneck Domain: {bottleneck}
+- Quality Pulse: {q_summary}
+- Supply Chain Pulse: {m_summary}
 
-Key Insights:
+Key Insights & Root Causes:
 {insights_text}
 
-Recommended Actions:
+Recommended Actions & Accountability:
 {actions_text}
 
 Instructions:
-1. Write a direct, hard-hitting executive summary of the project's current state. No fluff.
-2. Highlight the main reason for any delays or critical issues (the root cause).
-3. Conclude with what needs to happen next based on the recommended actions.
-4. Do NOT use overly flowery language. Use project management and engineering terminology.
-5. Format the output in Markdown with bold text for emphasis where appropriate, but DO NOT use headers (#).
+1. Act as an advanced Intelligence Engine. Provide a highly structured, hard-hitting flash-briefing.
+2. Structure the output using EXACTLY these three bold inline headers:
+   **STATUS:** [1 sentence summary of health & delay. Note: Health Score (0-100) measures overall vitality.]
+   **ROOT CAUSE (WHY):** [2 sentences on exactly why the project is lagging. You MUST explicitly name specific Vendors, Contractors, or exact NC/RFI counts if they are causing delays. Do not be vague.]
+   **ACCOUNTABILITY (WHO):** [1-2 sentences on exactly what must be done next and WHO is assigned to do it (e.g. Site PM, Procurement Head)]
+3. Extreme brevity is required. Keep the entire response under 100 words.
+4. Do NOT use markdown headers (#) or conversational filler.
+5. Use executive terminology. No fluff.
 """
 
     messages = [

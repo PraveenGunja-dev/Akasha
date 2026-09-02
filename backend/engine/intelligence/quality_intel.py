@@ -33,23 +33,49 @@ def analyze_quality(db: Session, ctx: dict) -> dict:
             "insights": [], "next_steps": [],
         }
 
-    # Query NCs for this project (by project name or SPV)
-    nc_query = db.query(models.PulseNC)
-    name_filters = [models.PulseNC.project_name.ilike(f"%{project_name}%")]
-    if mapping.project:
-        name_filters.append(models.PulseNC.project_name.ilike(f"%{mapping.project}%"))
-    if mapping.spv_name:
-        name_filters.append(models.PulseNC.spv_name == mapping.spv_name)
+    project_id = ctx.get("project_id", "")
+    from sqlalchemy import or_, and_, func
 
-    from sqlalchemy import or_
-    ncs = nc_query.filter(or_(*name_filters)).all()
+    search_name = project_name
+    mapping_name = mapping.project if mapping else None
+    
+    query_filter_nc = models.PulseNC.project_name.ilike(f"%{search_name}%")
+    query_filter_rfi = models.PulseRFI.project_name.ilike(f"%{search_name}%")
+    
+    if mapping_name:
+        query_filter_nc = or_(query_filter_nc, models.PulseNC.project_name.ilike(f"%{mapping_name}%"))
+        query_filter_rfi = or_(query_filter_rfi, models.PulseRFI.project_name.ilike(f"%{mapping_name}%"))
 
-    # Query RFIs similarly
-    rfi_query = db.query(models.PulseRFI)
-    rfi_filters = [models.PulseRFI.project_name.ilike(f"%{project_name}%")]
-    if mapping.project:
-        rfi_filters.append(models.PulseRFI.project_name.ilike(f"%{mapping.project}%"))
-    rfis = rfi_query.filter(or_(*rfi_filters)).all()
+    parts = search_name.split('_')
+    if len(parts) > 1:
+        spv_part = parts[0]
+        proj_part = parts[1]
+        nc_proj_clean = func.replace(models.PulseNC.project_name, '-', '')
+        rfi_proj_clean = func.replace(models.PulseRFI.project_name, '-', '')
+        query_filter_nc = or_(query_filter_nc, and_(
+            models.PulseNC.spv_name.ilike(f"%{spv_part}%"),
+            nc_proj_clean.ilike(f"%{proj_part}%")
+        ))
+        query_filter_rfi = or_(query_filter_rfi, and_(
+            models.PulseRFI.spv_name.ilike(f"%{spv_part}%"),
+            rfi_proj_clean.ilike(f"%{proj_part}%")
+        ))
+
+    if "-" in project_id and "_" in project_id:
+        try:
+            site_part = project_id.split('-')[1].split('_')[0]
+            if len(site_part) >= 4:
+                query_filter_nc = or_(query_filter_nc, models.PulseNC.project_name.ilike(f"%{site_part}%"))
+                query_filter_rfi = or_(query_filter_rfi, models.PulseRFI.project_name.ilike(f"%{site_part}%"))
+        except:
+            pass
+
+    if len(project_id) >= 6 and "_" not in project_id:
+        query_filter_nc = or_(query_filter_nc, models.PulseNC.spv_name.ilike(f"%{project_id}%"))
+        query_filter_rfi = or_(query_filter_rfi, models.PulseRFI.spv_name.ilike(f"%{project_id}%"))
+
+    ncs = db.query(models.PulseNC).filter(query_filter_nc).all()
+    rfis = db.query(models.PulseRFI).filter(query_filter_rfi).all()
 
     if not ncs and not rfis:
         return {
@@ -99,7 +125,7 @@ def analyze_quality(db: Session, ctx: dict) -> dict:
     })
 
     for nc in ncs:
-        contractor = nc.contractor_name or nc.vendor_name or "Unknown"
+        contractor = nc.vendor_name or nc.contractor_name or "Unknown"
         cs = contractor_stats[contractor]
         cs["total_ncs"] += 1
         if nc.category == "Critical":
@@ -199,7 +225,7 @@ def analyze_quality(db: Session, ctx: dict) -> dict:
             "domain": "quality",
             "title": f"{len(critical_open)} Critical NCs are open — may be blocking work",
             "description": f"Critical NCs in blocks: {', '.join(set(nc.workarea_name or 'Unknown' for nc in critical_open[:5]))}. "
-                          f"Current handlers: {dict(by_handler)}",
+                          f"Defect types include: {', '.join(set(nc.defect_type for nc in critical_open if nc.defect_type)[:3])}.",
             "impact": "Critical NCs may stop construction activities until resolved",
         })
 

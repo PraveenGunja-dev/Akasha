@@ -11,6 +11,8 @@ import QualityProjectTab from '../quality/QualityProjectTab';
 import ProjectIntelligence from '../intelligence/ProjectIntelligence';
 import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -1084,41 +1086,57 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       {diagnostic.executiveSummary && (
                         <div className="break-inside-avoid mb-6">
                           <h4 className="text-sm font-bold text-foreground mb-1">Executive Summary</h4>
-                          <p>{diagnostic.executiveSummary}</p>
+                          <div className="prose prose-sm max-w-none text-foreground/80 dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{diagnostic.executiveSummary}</ReactMarkdown>
+                          </div>
                         </div>
                       )}
                       {diagnostic.keyFindings && diagnostic.keyFindings.length > 0 && (
                         <div className="break-inside-avoid mb-6">
                           <h4 className="text-sm font-bold text-foreground mb-1">Key Findings</h4>
                           <ul className="list-disc pl-4 space-y-1">
-                            {diagnostic.keyFindings.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                            {diagnostic.keyFindings.map((f: string, i: number) => (
+                              <li key={i}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{f}</ReactMarkdown>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       )}
                       {diagnostic.riskAssessment && (
                         <div className="break-inside-avoid mb-6">
                           <h4 className="text-sm font-bold text-foreground mb-1">Risk Assessment</h4>
-                          <p>{diagnostic.riskAssessment}</p>
+                          <div className="prose prose-sm max-w-none text-foreground/80 dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{diagnostic.riskAssessment}</ReactMarkdown>
+                          </div>
                         </div>
                       )}
                       {diagnostic.rootCauseAnalysis && (
                         <div className="break-inside-avoid mb-6">
                           <h4 className="text-sm font-bold text-foreground mb-1">Root Cause Analysis</h4>
-                          <p>{diagnostic.rootCauseAnalysis}</p>
+                          <div className="prose prose-sm max-w-none text-foreground/80 dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{diagnostic.rootCauseAnalysis}</ReactMarkdown>
+                          </div>
                         </div>
                       )}
                       {diagnostic.recommendedActions && diagnostic.recommendedActions.length > 0 && (
                         <div className="break-inside-avoid mb-6">
                           <h4 className="text-sm font-bold text-foreground mb-1">Recommended Actions</h4>
                           <ul className="list-disc pl-4 space-y-1">
-                            {diagnostic.recommendedActions.map((f: string, i: number) => <li key={i}>{f}</li>)}
+                            {diagnostic.recommendedActions.map((f: string, i: number) => (
+                              <li key={i}>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{f}</ReactMarkdown>
+                              </li>
+                            ))}
                           </ul>
                         </div>
                       )}
                       {diagnostic.expectedOutcome && (
                         <div className="break-inside-avoid mb-6">
                           <h4 className="text-sm font-bold text-foreground mb-1">Expected Outcome</h4>
-                          <p>{diagnostic.expectedOutcome}</p>
+                          <div className="prose prose-sm max-w-none text-foreground/80 dark:prose-invert">
+                            <ReactMarkdown remarkPlugins={[remarkGfm]}>{diagnostic.expectedOutcome}</ReactMarkdown>
+                          </div>
                         </div>
                       )}
                     </div>

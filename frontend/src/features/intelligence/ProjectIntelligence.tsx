@@ -1,6 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Brain, AlertTriangle, CheckCircle, Clock, ShieldAlert, Activity, ArrowRight, User, Radar, CloudRain, Wind, Eye } from 'lucide-react';
+import { Brain, AlertTriangle, CheckCircle, Clock, ShieldAlert, Activity, ArrowRight, User, Radar, CloudRain, Wind, Eye, Target, BarChart2 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import ReactECharts from 'echarts-for-react';
 
 interface Props {
   projectId: string;
@@ -11,6 +14,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
   const [narrative, setNarrative] = useState<string>('');
   const [loading, setLoading] = useState(true);
   const [narrativeLoading, setNarrativeLoading] = useState(true);
+  const [showChart, setShowChart] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -67,7 +71,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
     );
   }
 
-  const { overall_status, overall_health, primary_bottleneck, total_delay_days, top_insights, next_steps, schedule, predictions, drone, weather, health_scores, risk } = data;
+  const { overall_status, overall_health, primary_bottleneck, total_delay_days, top_insights, next_steps, schedule, predictions, drone, weather, health_scores, risk, quality, materials } = data;
   const early_warnings = predictions?.early_warnings || [];
 
   // Status Colors
@@ -75,6 +79,76 @@ export default function ProjectIntelligence({ projectId }: Props) {
   if (overall_status === "AT_RISK") statusColor = "text-yellow-500 bg-yellow-500/10 border-yellow-500/20";
   if (overall_status === "CRITICAL") statusColor = "text-orange-500 bg-orange-500/10 border-orange-500/20";
   if (overall_status === "SEVERE") statusColor = "text-red-500 bg-red-500/10 border-red-500/20";
+
+  const renderCEOExecutiveBriefing = (text: string) => {
+    if (!text) return null;
+    
+    // If it doesn't match our strict format, return default markdown
+    if (!text.includes('STATUS') && !text.includes('ROOT CAUSE (WHY)') && !text.includes('ACCOUNTABILITY (WHO)') && !text.includes('BOTTLENECK') && !text.includes('ACTION')) {
+      return (
+        <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed">
+          <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+        </div>
+      );
+    }
+    
+    // Extract sections robustly
+    const getSection = (keyRegex: string, lookaheadRegex: string) => {
+      const regex = new RegExp(`(?:\\*\\*)?${keyRegex}:?(?:\\*\\*)?\\s*(.*?)(?=(?:\\*\\*)?(?:${lookaheadRegex}):|\\n\\n|$)`, 'is');
+      const match = text.match(regex);
+      return match ? match[1].trim() : '';
+    };
+
+    const statusStr = getSection('STATUS', 'ROOT CAUSE \\(WHY\\)|CRITICAL BOTTLENECK|ACCOUNTABILITY \\(WHO\\)|IMMEDIATE ACTION');
+    const bottleneckStr = getSection('ROOT CAUSE \\(WHY\\)', 'ACCOUNTABILITY \\(WHO\\)|IMMEDIATE ACTION') || getSection('CRITICAL BOTTLENECK', 'ACCOUNTABILITY \\(WHO\\)|IMMEDIATE ACTION');
+    const actionStr = getSection('ACCOUNTABILITY \\(WHO\\)', 'END') || getSection('IMMEDIATE ACTION', 'END');
+
+    return (
+      <div className="flex flex-col gap-4 mt-2">
+        {statusStr && (
+          <div className="group flex items-start gap-3 p-4 rounded-2xl border border-blue-500/20 bg-gradient-to-br from-blue-500/5 to-transparent hover:border-blue-500/40 transition-all shadow-[0_2px_12px_rgba(59,130,246,0.03)] hover:shadow-[0_4px_20px_rgba(59,130,246,0.08)]">
+             <div className="p-2.5 bg-blue-500/10 rounded-xl shrink-0 mt-0.5 shadow-inner border border-blue-500/20">
+                <Activity className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+             </div>
+             <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-blue-600/80 dark:text-blue-400/80 mb-1">Current Status</div>
+                <div className="text-[13.5px] font-medium text-foreground leading-relaxed prose prose-sm dark:prose-invert prose-p:my-0">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{statusStr}</ReactMarkdown>
+                </div>
+             </div>
+          </div>
+        )}
+        
+        {bottleneckStr && (
+          <div className="group flex items-start gap-3 p-4 rounded-2xl border border-orange-500/20 bg-gradient-to-br from-orange-500/5 to-transparent hover:border-orange-500/40 transition-all shadow-[0_2px_12px_rgba(249,115,22,0.03)] hover:shadow-[0_4px_20px_rgba(249,115,22,0.08)]">
+             <div className="p-2.5 bg-orange-500/10 rounded-xl shrink-0 mt-0.5 shadow-inner border border-orange-500/20">
+                <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+             </div>
+             <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-orange-600/80 dark:text-orange-400/80 mb-1">Root Cause (Why)</div>
+                <div className="text-[13.5px] font-medium text-foreground leading-relaxed prose prose-sm dark:prose-invert prose-p:my-0">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{bottleneckStr}</ReactMarkdown>
+                </div>
+             </div>
+          </div>
+        )}
+
+        {actionStr && (
+          <div className="group flex items-start gap-3 p-4 rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/5 to-transparent hover:border-emerald-500/40 transition-all shadow-[0_2px_12px_rgba(16,185,129,0.03)] hover:shadow-[0_4px_20px_rgba(16,185,129,0.08)]">
+             <div className="p-2.5 bg-emerald-500/10 rounded-xl shrink-0 mt-0.5 shadow-inner border border-emerald-500/20">
+                <Target className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+             </div>
+             <div>
+                <div className="text-[10px] font-bold uppercase tracking-widest text-emerald-600/80 dark:text-emerald-400/80 mb-1">Accountability (Who)</div>
+                <div className="text-[13.5px] font-medium text-foreground leading-relaxed prose prose-sm dark:prose-invert prose-p:my-0">
+                   <ReactMarkdown remarkPlugins={[remarkGfm]}>{actionStr}</ReactMarkdown>
+                </div>
+             </div>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -130,22 +204,147 @@ export default function ProjectIntelligence({ projectId }: Props) {
         <div className="space-y-6">
           
           {/* AI Executive Briefing */}
-          <div className="intelligence-card p-6 border-primary/20 bg-primary/[0.02]">
-            <div className="flex items-center gap-2 mb-4">
-              <Brain className="w-5 h-5 text-primary" />
-              <h3 className="text-lg font-bold">AI Executive Briefing</h3>
+          <div className="intelligence-card p-6 border-primary/20 bg-card shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-sm">
+                  <Brain className="w-4 h-4 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-foreground">AI Executive Briefing</h3>
+                  <p className="text-[11px] font-medium text-muted-foreground/60 uppercase tracking-widest mt-0.5">Automated Flash Report</p>
+                </div>
+              </div>
+              
+              <div className="flex items-center gap-1 bg-muted/60 p-1 rounded-lg border border-border/50">
+                <button onClick={() => setShowChart(false)} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${!showChart ? 'bg-background shadow-[0_1px_8px_rgba(0,0,0,0.08)] text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                  <Brain className="w-3 h-3" /> Report
+                </button>
+                <button onClick={() => setShowChart(true)} className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${showChart ? 'bg-background shadow-[0_1px_8px_rgba(0,0,0,0.08)] text-primary' : 'text-muted-foreground hover:text-foreground'}`}>
+                  <BarChart2 className="w-3 h-3" /> Diagram
+                </button>
+              </div>
             </div>
+            
             {narrativeLoading ? (
               <div className="space-y-3 animate-pulse">
-                <div className="h-4 bg-muted rounded w-3/4"></div>
-                <div className="h-4 bg-muted rounded w-full"></div>
-                <div className="h-4 bg-muted rounded w-5/6"></div>
-                <div className="h-4 bg-muted rounded w-1/2 mt-4"></div>
+                <div className="h-20 bg-muted rounded-2xl w-full"></div>
+                <div className="h-20 bg-muted rounded-2xl w-full"></div>
+                <div className="h-20 bg-muted rounded-2xl w-full"></div>
+              </div>
+            ) : showChart ? (
+              <div className="mt-4">
+                <div className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Project Bottleneck & Accountability Mindmap</div>
+                <ReactECharts
+                  notMerge={true}
+                  option={{
+                    tooltip: { 
+                      trigger: 'item', 
+                      triggerOn: 'mousemove',
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                      borderColor: '#e2e8f0',
+                      borderWidth: 1,
+                      textStyle: { color: '#334155' },
+                      extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 8px;',
+                      formatter: (params: any) => {
+                        return `<div style="max-width: 320px; white-space: normal; padding: 4px;">
+                                  <strong style="color: ${params.color || '#0f172a'}">${params.name}</strong>
+                                  ${params.value ? `<div style="margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.4;">${params.value}</div>` : ''}
+                                </div>`;
+                      }
+                    },
+                    series: [
+                      {
+                        type: 'tree',
+                        data: [
+                          {
+                            name: 'Project\nRisks',
+                            itemStyle: { color: '#3B82F6', borderColor: '#2563EB' },
+                            children: [
+                              {
+                                name: 'Primary Bottleneck',
+                                itemStyle: { color: '#EF4444', borderColor: '#DC2626' },
+                                children: [{ name: primary_bottleneck || "None" }]
+                              },
+                              {
+                                name: 'Lagging Phases',
+                                itemStyle: { color: '#F59E0B', borderColor: '#D97706' },
+                                children: schedule?.delay_waterfall?.map((p: any) => ({
+                                  name: `${p.phase} (-${p.avg_drift_days.toFixed(0)}d)`
+                                })) || []
+                              },
+                              {
+                                name: 'Quality (NCs/RFI)',
+                                itemStyle: { color: '#8B5CF6', borderColor: '#7C3AED' },
+                                children: quality?.insights?.length > 0 
+                                  ? quality.insights.map((i: any) => ({
+                                      name: i.title?.length > 50 ? i.title.substring(0, 50) + '...' : (i.title || 'Unknown Issue'),
+                                      value: i.description
+                                    })) 
+                                  : [{ name: 'No Critical Quality Blockers' }]
+                              },
+                              {
+                                name: 'Supply Chain (Vendors)',
+                                itemStyle: { color: '#EC4899', borderColor: '#DB2777' },
+                                children: materials?.insights?.length > 0 
+                                  ? materials.insights.map((i: any) => ({
+                                      name: i.title?.length > 50 ? i.title.substring(0, 50) + '...' : (i.title || 'Unknown Issue'),
+                                      value: i.description
+                                    })) 
+                                  : [{ name: 'No Major Supply Risks' }]
+                              },
+                              {
+                                name: 'Accountability (Actions)',
+                                itemStyle: { color: '#10B981', borderColor: '#059669' },
+                                children: next_steps?.slice(0, 4).map((n: any) => {
+                                  const act = n.title || n.action || 'Action Required';
+                                  const reason = n.description || n.reason || '';
+                                  return {
+                                    name: `${String(n.assigned_role || 'Owner').toUpperCase()}: ${act.length > 40 ? act.substring(0, 40) + '...' : act}`,
+                                    value: reason
+                                  };
+                                }) || []
+                              }
+                            ]
+                          }
+                        ],
+                        top: '10%',
+                        left: '15%',
+                        bottom: '10%',
+                        right: '35%',
+                        symbolSize: 14,
+                        edgeShape: 'curve',
+                        initialTreeDepth: 2,
+                        label: {
+                          position: 'left',
+                          verticalAlign: 'middle',
+                          align: 'right',
+                          fontSize: 12,
+                          fontWeight: 'bold',
+                          color: '#334155',
+                          distance: 10
+                        },
+                        leaves: {
+                          label: {
+                            position: 'right',
+                            verticalAlign: 'middle',
+                            align: 'left',
+                            fontSize: 11,
+                            color: '#475569',
+                            distance: 10
+                          }
+                        },
+                        expandAndCollapse: true,
+                        animationDuration: 550,
+                        animationDurationUpdate: 750
+                      }
+                    ]
+                  }}
+                  style={{ height: '360px' }}
+                />
               </div>
             ) : (
-              <div className="prose prose-sm dark:prose-invert max-w-none text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                {narrative}
-              </div>
+              renderCEOExecutiveBriefing(narrative)
             )}
           </div>
 

@@ -222,14 +222,14 @@ export default function CEODashboard() {
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
     'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
-    'quality', 'einvoice_intelligence', 'portfolio_intelligence'
+    'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr'
   ];
 
   const handleTabChange = (tab: string) => {
     setPreviousTab(activeTab);
     setActiveTab(tab);
     sessionStorage.setItem('ceoActiveTab', tab);
-    if (tab !== 'simulation_lab') {
+    if (tab !== 'simulation_lab' && tab !== 'dpr') {
       setSimulationContext(null);
     }
     if (projectId) {
@@ -268,7 +268,7 @@ export default function CEODashboard() {
         </div>
         
         {/* 3a. Full-bleed AI Copilot or Simulation Lab (no padding, no scroll wrapper) */}
-        {activeTab === 'ai_copilot' || activeTab === 'simulation_lab' ? (
+        {activeTab === 'ai_copilot' || activeTab === 'simulation_lab' || activeTab === 'dpr' ? (
           <div className="flex-1 min-h-0 p-4 overflow-hidden flex flex-col">
             {activeTab === 'ai_copilot' && (
               <AICopilot 
@@ -279,7 +279,7 @@ export default function CEODashboard() {
                 }} 
               />
             )}
-            {activeTab === 'simulation_lab' && (
+            {(activeTab === 'simulation_lab' || activeTab === 'dpr') && (
               <SimulationLab 
                 p6Data={p6Data} 
                 dashboardData={dashboardData} 
