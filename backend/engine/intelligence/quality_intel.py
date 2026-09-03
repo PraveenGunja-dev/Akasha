@@ -225,7 +225,7 @@ def analyze_quality(db: Session, ctx: dict) -> dict:
             "domain": "quality",
             "title": f"{len(critical_open)} Critical NCs are open — may be blocking work",
             "description": f"Critical NCs in blocks: {', '.join(set(nc.workarea_name or 'Unknown' for nc in critical_open[:5]))}. "
-                          f"Defect types include: {', '.join(set(nc.defect_type for nc in critical_open if nc.defect_type)[:3])}.",
+                          f"Defect types include: {', '.join(list(set(nc.defect_type for nc in critical_open if nc.defect_type))[:3])}.",
             "impact": "Critical NCs may stop construction activities until resolved",
         })
 

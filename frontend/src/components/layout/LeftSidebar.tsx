@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
   Home, Command, Network, MessageSquare, FileText, Search, Activity,
   Settings, Zap, X, ChevronLeft, ChevronRight, BarChart2, Share2, Database,
-  Calendar, ClipboardList, Brain
+  Calendar, ClipboardList, Brain, CheckCircle
 } from 'lucide-react';
 
 interface SidebarProps {
@@ -33,8 +33,8 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
         { id: 'einvoice_intelligence', label: 'E-Invoice Intelligence', icon: FileText },
         { id: 'transmission_data', label: 'Transmission', icon: Network },
         { id: 'quality', label: 'Quality', icon: Activity },
-        // { id: 'schedule', label: 'P6', icon: Calendar },
-        { id: 'dpr', label: 'DPR & Simulation', icon: ClipboardList },
+        { id: 'approvals', label: 'Approval', icon: CheckCircle },
+        { id: 'schedule', label: 'P6 & DPR', icon: Calendar },
       ]
     }
   ];
@@ -45,7 +45,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
     // { id: 'smart_search', label: 'Search', icon: Search },
     { id: 'project_map', label: 'Project Map', icon: Network },
     { id: 'knowledge_graph', label: 'Knowledge Graph', icon: Share2 },
-
+    { id: 'simulation_lab', label: 'Simulation Lab', icon: Brain },
   ];
 
   const adminSections = [

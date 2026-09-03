@@ -33,6 +33,7 @@ import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 import QualityCommandCenter from '../features/quality/QualityCommandCenter';
 import EInvoiceIntelligence from '../features/analytics/EInvoiceIntelligence';
 import PortfolioIntelligence from '../features/intelligence/PortfolioIntelligence';
+import ComplianceDashboard from '../features/compliance/ComplianceDashboard';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -222,7 +223,7 @@ export default function CEODashboard() {
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
     'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
-    'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr'
+    'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr', 'approvals'
   ];
 
   const handleTabChange = (tab: string) => {
@@ -330,6 +331,7 @@ export default function CEODashboard() {
                     {activeTab === 'quality' && <QualityCommandCenter />}
                     {activeTab === 'einvoice_intelligence' && <EInvoiceIntelligence />}
                     {activeTab === 'portfolio_intelligence' && <PortfolioIntelligence />}
+                    {activeTab === 'approvals' && <ComplianceDashboard />}
                     
                     {/* Placeholders for unbuilt sections */}
                     {!implementedModules.includes(activeTab) && (

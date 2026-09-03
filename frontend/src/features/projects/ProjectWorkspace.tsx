@@ -13,6 +13,7 @@ import * as ExcelJS from 'exceljs';
 import { saveAs } from 'file-saver';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import ComplianceTab from '../compliance/ComplianceTab';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -236,6 +237,17 @@ const P6SyncEditor = ({ p6 }: { p6: any }) => {
   );
 };
 
+const formatProjectName = (name: string) => {
+  if (!name) return name;
+  const parts = name.split('_');
+  if (parts.length >= 5) {
+    const [spv, plot, type, capacity, category, ...rest] = parts;
+    const newName = `${plot}_${spv}_${capacity}_${category}_${type}`;
+    return rest.length ? `${newName}_${rest.join('_')}` : newName;
+  }
+  return name;
+};
+
 export default function ProjectWorkspace({ projectId: propProjectId, onBack }: { projectId?: string, onBack?: () => void }) {
   const params = useParams();
   const projectId = propProjectId || params.projectId;
@@ -244,7 +256,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'intelligence' | 'schedule' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'intelligence' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality'>('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
@@ -983,7 +995,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <div className="h-5 w-px bg-muted"></div>
           <div className="flex items-center gap-2">
             <div className={dotClass}></div>
-            <span className="text-sm font-semibold text-foreground truncate max-w-[400px]">{p.projectName}</span>
+            <span className="text-sm font-semibold text-foreground truncate max-w-[400px]">{formatProjectName(p.projectName)}</span>
           </div>
           <div className="ml-auto flex items-center gap-4">
             <span className="text-[10px] font-mono text-muted-foreground/40">{p.projectId}</span>
@@ -1183,12 +1195,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         <div className="flex items-center gap-2 border-b border-border bg-slate-100/50 dark:bg-gray-900/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
           <TabBtn active={activeTab === 'overview'} label="Overview" icon={BarChart3} onClick={() => setActiveTab('overview')} />
           <TabBtn active={activeTab === 'intelligence'} label="Intelligence Hub" icon={Brain} onClick={() => setActiveTab('intelligence')} />
-          <TabBtn active={activeTab === 'schedule'} label="Schedule" icon={Calendar} onClick={() => setActiveTab('schedule')} />
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'einvoice'} label="E-Invoice" icon={Receipt} onClick={() => setActiveTab('einvoice')} />
-          <TabBtn active={activeTab === 'p6'} label="P6 Deep Dive" icon={Layers} onClick={() => setActiveTab('p6')} />
+          <TabBtn active={activeTab === 'p6'} label="P6 & Schedule" icon={Layers} onClick={() => setActiveTab('p6')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
           <TabBtn active={activeTab === 'quality'} label="Quality" icon={Shield} onClick={() => setActiveTab('quality')} />
+          <TabBtn active={activeTab === 'approvals'} label="Approval" icon={CheckCircle} onClick={() => setActiveTab('approvals')} />
         </div>
 
         {/* ── Tab Content ── */}
@@ -1278,75 +1290,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             </div>
           )}
 
-          {/* ════════ SCHEDULE TAB ════════ */}
-          {activeTab === 'schedule' && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              {/* Right Column: Timeline & Variance */}
-              <div className="lg:col-span-12 flex flex-col gap-6">
-                <div className="intelligence-card p-6">
-                  <h4 className="text-xs font-bold uppercase tracking-widest text-foreground mb-6 flex items-center gap-2">
-                    <Calendar className="w-4 h-4 text-primary" /> Schedule Timeline
-                  </h4>
-
-                  <div className="relative pl-4 border-l-2 border-border space-y-6">
-                    {[
-                      { icon: Flag, color: 'text-success', bg: 'bg-success/10', border: 'border-success/20', label: 'Project Start', value: p.startDate || '—', desc: 'Official commencement' },
-                      { icon: Activity, color: 'text-primary', bg: 'bg-primary/10', border: 'border-primary/20', label: 'Data Date', value: p6?.dataDate || '—', desc: 'Latest schedule update' },
-                      { icon: Target, color: 'text-warning', bg: 'bg-warning/10', border: 'border-warning/20', label: 'Baseline Finish', value: p.baselineFinishDate || '—', desc: 'Original target' },
-                      { icon: CalendarClock, color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20', label: 'Forecast Finish', value: p.forecastFinish, desc: 'Current projection' },
-                    ].map((item, idx) => (
-                      <div key={idx} className="relative">
-                        <div className={`absolute -left-[23px] top-1 w-3 h-3 rounded-full border-2 border-background ${item.bg.replace('/10', '')}`} />
-                        <div className={`p-4 rounded-xl border ${item.border} ${item.bg} flex items-center justify-between`}>
-                          <div className="flex items-center gap-4">
-                            <item.icon className={`w-5 h-5 ${item.color}`} />
-                            <div>
-                              <span className="block font-semibold text-foreground text-sm">{item.label}</span>
-                              <span className="block text-xs text-muted-foreground mt-0.5">{item.desc}</span>
-                            </div>
-                          </div>
-                          <span className="font-mono font-bold text-foreground bg-background/50 px-3 py-1 rounded-md">{item.value}</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="intelligence-card p-4 flex items-center justify-between bg-muted">
-                    <div>
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Schedule Variance</span>
-                      <span className={`block text-xl font-bold mt-1 ${p.scheduleVariance < 0 ? 'text-destructive' : 'text-success'}`}>
-                        {p.scheduleVariance} days
-                      </span>
-                    </div>
-                    <AlertTriangle className={`w-8 h-8 opacity-20 ${p.scheduleVariance < 0 ? 'text-destructive' : 'text-success'}`} />
-                  </div>
-                  <div className="intelligence-card p-4 flex items-center justify-between bg-muted">
-                    <div>
-                      <span className="block text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Must Finish By</span>
-                      <span className="block text-lg font-mono font-bold text-foreground mt-1">{p6?.mustFinishByDate || 'Not Set'}</span>
-                    </div>
-                    <Target className="w-8 h-8 text-primary opacity-20" />
-                  </div>
-
-                  {p6?.delayedActivities && p6.delayedActivities.length > 0 && (
-                    <div
-                      onClick={() => setShowDelayedModal(true)}
-                      className="intelligence-card p-4 flex items-center justify-between bg-destructive/10 border-destructive/20 cursor-pointer hover:bg-destructive/20 transition-colors"
-                    >
-                      <div>
-                        <span className="block text-[10px] font-bold uppercase tracking-wider text-destructive">Delayed Activities</span>
-                        <span className="block text-2xl font-mono font-bold text-destructive mt-1">{p6.delayedActivities.length}</span>
-                        <span className="block text-xs text-destructive/80 mt-1 underline decoration-red-500/30 underline-offset-2">View details</span>
-                      </div>
-                      <AlertTriangle className="w-10 h-10 text-destructive opacity-80" />
-                    </div>
-                  )}
-                </div>
-              </div>
+          {/* ════════ APPROVALS TAB (NEW) ════════ */}
+          {activeTab === 'approvals' && (
+            <div className="animate-in fade-in duration-300">
+              <ComplianceTab projectId={p.projectId} />
             </div>
           )}
+
+
 
           {/* ════════ SAP INTELLIGENCE TAB (NEW) ════════ */}
           {activeTab === 'sap' && (
@@ -2755,7 +2706,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       </h3>
                       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         {[
-                          ['P6 Project Name', mapping.p6ProjectName],
+                          ['P6 Project Name', formatProjectName(mapping.p6ProjectName)],
                           ['SAP Plant Code', mapping.sapPlantCode || '—'],
                           ['AGEL Code', mapping.agelCode || '—'],
                           ['Module WBS', mapping.moduleWBS || '—'],
@@ -3093,7 +3044,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
                   <Shield className="w-5 h-5 text-primary" /> Pulse Quality Data
                 </h2>
-                <p className="text-sm text-muted-foreground mt-1">Non-conformances and inspections synced from SAP Pulse for {p.projectName}</p>
+                <p className="text-sm text-muted-foreground mt-1">Non-conformances and inspections synced from SAP Pulse for {formatProjectName(p.projectName)}</p>
               </div>
               <QualityProjectTab projectName={p.projectId} />
             </div>

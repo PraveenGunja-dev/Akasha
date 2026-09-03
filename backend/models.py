@@ -728,6 +728,80 @@ class PulseRFI(Base):
     last_synced_at = Column(DateTime, default=datetime.utcnow)
 
 # ==========================================
+# Statutory Compliance Models
+# ==========================================
+
+class StatutoryCompliance(Base):
+    __tablename__ = "statutory_compliance"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(String, index=True, nullable=True)  # FK: P6 mapping key (e.g. "FY26-P12")
+    p6_project_name = Column(String, nullable=True)         # Corresponds to P6 project name
+    project_name = Column(String, index=True)               # Human name: "MSEDCL PPA Ph-1"
+    spv_code = Column(String, index=True)                   # SPV: "ARE55L"
+    plot_location = Column(String)                          # Plot: "S09"
+    epc_partner = Column(String, index=True)                # EPC: "S&W"
+    category = Column(String)                               # PPA / Merchant / Group
+    module_type = Column(String)                            # ALMM / China / SEA
+    capacity_mwac = Column(Float)
+    ol = Column(Float, nullable=True)
+    gst_status = Column(String)                             # Available / Not Available
+    bocw_status = Column(String)
+    clra_status = Column(String)
+    spcb_status = Column(String)
+    sub_lease_status = Column(String)
+    insurance_status = Column(String)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+class EPCStatutoryStatus(Base):
+    __tablename__ = "epc_statutory_status"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(String, index=True, nullable=True)
+    p6_project_name = Column(String, nullable=True)
+    epc_partner = Column(String, index=True)
+    project_name = Column(String, index=True)
+    ppa_merchant = Column(String)
+    spv_code = Column(String, index=True)
+    plot = Column(String)
+    capacity_mw = Column(Float)
+    ftc_date = Column(DateTime, nullable=True)
+    
+    # BOCW details
+    bocw_commencement_date = Column(DateTime, nullable=True)
+    bocw_validity_date = Column(DateTime, nullable=True)
+    bocw_license_entity = Column(String, nullable=True)
+    
+    # CLRA details
+    clra_license_status = Column(String, nullable=True)
+    
+    # GST details
+    gst_obtained = Column(String, nullable=True)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+class InsurancePolicy(Base):
+    __tablename__ = "insurance_policy"
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(String, index=True, nullable=True)
+    p6_project_name = Column(String, nullable=True)
+    project_name = Column(String, index=True)
+    spv_code = Column(String, index=True)
+    plot_location = Column(String)
+    category = Column(String)
+    module_type = Column(String)
+    epc_vendor = Column(String, index=True)
+    capacity_mwac = Column(Float, nullable=True)
+    capacity_mwdc = Column(Float, nullable=True)
+    insurance_company = Column(String, nullable=True)
+    sum_insured = Column(Float, nullable=True)
+    covering_letter = Column(Boolean, default=False)
+    policy_number = Column(String, nullable=True)
+    policy_start = Column(DateTime, nullable=True)
+    policy_expiry = Column(DateTime, nullable=True)
+    premium_incl_gst = Column(Float, nullable=True)
+    remarks = Column(String, nullable=True)
+    renewal_alert = Column(String, nullable=True)  # Live / Renewal / Expired
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+# ==========================================
 # E-Invoice Model
 # ==========================================
 class MTEInvoicePOLookup(Base):

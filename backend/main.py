@@ -9,7 +9,7 @@ import os
 from database import engine
 
 # Import Routers
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -84,6 +84,7 @@ app.include_router(intelligence.router)
 app.include_router(metrics.router)
 app.include_router(v1.router)
 app.include_router(v1_sources.router)
+app.include_router(statutory.router)
 
 # Customize OpenAPI to only show /api/v1 endpoints in the Swagger UI
 def custom_openapi():

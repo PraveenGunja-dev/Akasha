@@ -198,14 +198,9 @@ export default function ProjectIntelligence({ projectId }: Props) {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* Left Column: AI Narrative & Delay Waterfall */}
-        <div className="space-y-6">
-          
-          {/* AI Executive Briefing */}
-          <div className="intelligence-card p-6 border-primary/20 bg-card shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
-            <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
+      {/* Full Width AI Executive Briefing & Mindmap */}
+      <div className="intelligence-card p-6 border-primary/20 bg-card shadow-[0_4px_24px_rgba(0,0,0,0.04)]">
+        <div className="flex items-center justify-between mb-4 pb-4 border-b border-border/50">
               <div className="flex items-center gap-3">
                 <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-primary to-violet-500 flex items-center justify-center shadow-sm">
                   <Brain className="w-4 h-4 text-white" />
@@ -241,15 +236,18 @@ export default function ProjectIntelligence({ projectId }: Props) {
                     tooltip: { 
                       trigger: 'item', 
                       triggerOn: 'mousemove',
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                      borderColor: '#e2e8f0',
+                      backgroundColor: 'rgba(15, 23, 42, 0.95)', // dark background
+                      borderColor: '#334155',
                       borderWidth: 1,
-                      textStyle: { color: '#334155' },
-                      extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border-radius: 8px;',
+                      textStyle: { color: '#f8fafc' },
+                      extraCssText: 'box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); border-radius: 8px;',
                       formatter: (params: any) => {
-                        return `<div style="max-width: 320px; white-space: normal; padding: 4px;">
-                                  <strong style="color: ${params.color || '#0f172a'}">${params.name}</strong>
-                                  ${params.value ? `<div style="margin-top: 8px; font-size: 12px; color: #64748b; line-height: 1.4;">${params.value}</div>` : ''}
+                        // Extract original colors but override for better contrast on dark bg if needed
+                        let titleColor = params.color || '#38bdf8';
+                        if (titleColor === '#0f172a' || titleColor === '#334155') titleColor = '#e2e8f0';
+                        return `<div style="max-width: 350px; white-space: normal; padding: 4px;">
+                                  <strong style="color: ${titleColor}; font-size: 14px; display: block; margin-bottom: 6px;">${params.name}</strong>
+                                  ${params.value ? `<div style="font-size: 12px; color: #cbd5e1; line-height: 1.5;">${params.value}</div>` : ''}
                                 </div>`;
                       }
                     },
@@ -278,7 +276,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
                                 itemStyle: { color: '#8B5CF6', borderColor: '#7C3AED' },
                                 children: quality?.insights?.length > 0 
                                   ? quality.insights.map((i: any) => ({
-                                      name: i.title?.length > 50 ? i.title.substring(0, 50) + '...' : (i.title || 'Unknown Issue'),
+                                      name: i.title || 'Unknown Issue',
                                       value: i.description
                                     })) 
                                   : [{ name: 'No Critical Quality Blockers' }]
@@ -288,7 +286,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
                                 itemStyle: { color: '#EC4899', borderColor: '#DB2777' },
                                 children: materials?.insights?.length > 0 
                                   ? materials.insights.map((i: any) => ({
-                                      name: i.title?.length > 50 ? i.title.substring(0, 50) + '...' : (i.title || 'Unknown Issue'),
+                                      name: i.title || 'Unknown Issue',
                                       value: i.description
                                     })) 
                                   : [{ name: 'No Major Supply Risks' }]
@@ -300,7 +298,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
                                   const act = n.title || n.action || 'Action Required';
                                   const reason = n.description || n.reason || '';
                                   return {
-                                    name: `${String(n.assigned_role || 'Owner').toUpperCase()}: ${act.length > 40 ? act.substring(0, 40) + '...' : act}`,
+                                    name: `${String(n.assigned_role || 'Owner').toUpperCase()}: ${act}`,
                                     value: reason
                                   };
                                 }) || []
@@ -308,9 +306,9 @@ export default function ProjectIntelligence({ projectId }: Props) {
                             ]
                           }
                         ],
-                        top: '10%',
-                        left: '15%',
-                        bottom: '10%',
+                        top: '2%',
+                        left: '10%',
+                        bottom: '2%',
                         right: '35%',
                         symbolSize: 14,
                         edgeShape: 'curve',
@@ -330,8 +328,11 @@ export default function ProjectIntelligence({ projectId }: Props) {
                             verticalAlign: 'middle',
                             align: 'left',
                             fontSize: 11,
+                            lineHeight: 14,
                             color: '#475569',
-                            distance: 10
+                            distance: 12,
+                            width: 380,
+                            overflow: 'break'
                           }
                         },
                         expandAndCollapse: true,
@@ -340,13 +341,17 @@ export default function ProjectIntelligence({ projectId }: Props) {
                       }
                     ]
                   }}
-                  style={{ height: '360px' }}
+                  style={{ height: '550px', width: '100%' }}
                 />
               </div>
             ) : (
               renderCEOExecutiveBriefing(narrative)
             )}
           </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left Column: Delay Waterfall */}
+        <div className="space-y-6">
 
           {/* Delay Waterfall */}
           {schedule?.delay_waterfall?.length > 0 && (

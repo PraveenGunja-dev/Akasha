@@ -85,6 +85,17 @@ const createGeneratorIcon = (type: string) => {
 };
 import ReactECharts from 'echarts-for-react';
 
+const formatProjectName = (name: string) => {
+  if (!name) return name;
+  const parts = name.split('_');
+  if (parts.length >= 5) {
+    const [spv, plot, type, capacity, category, ...rest] = parts;
+    const newName = `${plot}_${spv}_${capacity}_${category}_${type}`;
+    return rest.length ? `${newName}_${rest.join('_')}` : newName;
+  }
+  return name;
+};
+
 // Factory to create standard tear-drop markers
 const createMarkerIcon = (color: string) => new L.DivIcon({
   html: `<div style="display: flex; align-items: center; justify-content: center;">
@@ -1281,7 +1292,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
               >
                 <Popup>
                   <div className="flex flex-col gap-2 min-w-[200px]">
-                    <h3 className="font-bold text-sm">{project.project_name || project.p6_project_name || project.name || project.projectId || 'Unknown Project'}</h3>
+                    <h3 className="font-bold text-sm">{formatProjectName(project.project_name || project.p6_project_name || project.name || project.projectId || 'Unknown Project')}</h3>
                     <div className="text-xs text-foreground">
                       <div>Capacity: {project.capacity_mwac || project.capacity || 0} MW</div>
                       <div>Status: {project.health || 'N/A'}</div>
