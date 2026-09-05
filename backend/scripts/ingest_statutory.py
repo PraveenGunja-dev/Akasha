@@ -9,7 +9,7 @@ sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 from database import SessionLocal
 import models
 
-DATA_DIR = "/home/cognitbotz/Akasha/Data/NEW31"
+DATA_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../Data/NEW31"))
 SAP_MASTER_FILE = os.path.join(DATA_DIR, "AKASHA SAP MASTER FILE (2).xlsx")
 STATUTORY_STATUS_FILE = os.path.join(DATA_DIR, "Statutory Status Khavda.xlsx")
 EPC_BOCW_FILE = os.path.join(DATA_DIR, "EPC Partners- BOCW, CLRA & GST Status.xlsx")

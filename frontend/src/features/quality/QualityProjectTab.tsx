@@ -12,6 +12,14 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
   rejected: { label: 'Rejected', color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
 };
 
+const RFI_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
+  raised: { label: 'Raised', color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20' },
+  submitted: { label: 'Submitted', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
+  approved: { label: 'Approved', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
+  completed: { label: 'Passed', color: 'text-success', bg: 'bg-success/10', border: 'border-success/20' },
+  rejected: { label: 'Rejected', color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+};
+
 const HANDLER_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   contractor: { label: 'Contractor Pending', color: 'text-destructive', bg: 'bg-destructive/5' },
   execution_engineer: { label: 'EE Review Pending', color: 'text-amber-500', bg: 'bg-amber-500/5' },
@@ -29,6 +37,11 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
   const [statusFilter, setStatusFilter] = useState('all');
   const [blockFilter, setBlockFilter] = useState('all');
   const [contractorFilter, setContractorFilter] = useState('all');
+
+  // RFI filters
+  const [rfiSearchQuery, setRfiSearchQuery] = useState('');
+  const [rfiStatusFilter, setRfiStatusFilter] = useState('all');
+  const [rfiBlockFilter, setRfiBlockFilter] = useState('all');
 
   useEffect(() => {
     if (!projectName) return;
@@ -58,12 +71,31 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
     return list;
   }, [data?.ncs, statusFilter, blockFilter, contractorFilter, searchQuery]);
 
+  const filteredRFIs = useMemo(() => {
+    if (!data?.rfis) return [];
+    let list = data.rfis;
+    if (rfiStatusFilter !== 'all') list = list.filter((rfi: any) => rfi.status === rfiStatusFilter);
+    if (rfiBlockFilter !== 'all') list = list.filter((rfi: any) => rfi.workarea_name === rfiBlockFilter);
+    if (rfiSearchQuery) {
+      const q = rfiSearchQuery.toLowerCase();
+      list = list.filter((rfi: any) =>
+        (rfi.rfi_label || '').toLowerCase().includes(q) ||
+        (rfi.inspection_point_name || '').toLowerCase().includes(q) ||
+        (rfi.package_name || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [data?.rfis, rfiStatusFilter, rfiBlockFilter, rfiSearchQuery]);
+
   const blocks = useMemo(() => data?.blocks || [], [data?.blocks]);
   const allBlocks = useMemo(() => (data?.ncs || []).map((nc: any) => nc.workarea_name).filter(Boolean), [data?.ncs]);
   const uniqueBlocks = useMemo(() => [...new Set(allBlocks)].sort(), [allBlocks]);
 
   const allContractors = useMemo(() => (data?.ncs || []).map((nc: any) => nc.vendor_name || nc.contractor_name || 'Unknown').filter(Boolean), [data?.ncs]);
   const uniqueContractors = useMemo(() => [...new Set(allContractors)].sort(), [allContractors]);
+
+  const rfiBlocks = useMemo(() => (data?.rfis || []).map((rfi: any) => rfi.workarea_name).filter(Boolean), [data?.rfis]);
+  const uniqueRfiBlocks = useMemo(() => [...new Set(rfiBlocks)].sort() as string[], [rfiBlocks]);
 
   // Analytics for top contractors
   const topContractors = useMemo(() => {
@@ -352,6 +384,102 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
           </table>
         </div>
       </div>
+
+      {/* ── RFI Details List ── */}
+      {(data.rfis?.length || 0) > 0 && (
+        <div className="bg-card border border-border rounded-xl p-5">
+          <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
+            <h3 className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+              <ClipboardCheck className="w-3.5 h-3.5 text-primary" /> RFI Details
+              <span className="text-foreground font-bold ml-1">{data.rfis.length}</span>
+            </h3>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="relative">
+                <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
+                <input value={rfiSearchQuery} onChange={e => setRfiSearchQuery(e.target.value)} placeholder="Search RFI or inspection..."
+                  className="pl-7 pr-2 py-1.5 bg-muted border border-border rounded-lg text-[11px] w-[200px] focus:outline-none focus:ring-1 focus:ring-primary" />
+              </div>
+              {uniqueRfiBlocks.length > 1 && (
+                <select value={rfiBlockFilter} onChange={e => setRfiBlockFilter(e.target.value)}
+                  className="bg-muted border border-border rounded-lg text-[11px] px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+                  <option value="all">All Blocks</option>
+                  {uniqueRfiBlocks.map((b: string) => <option key={b} value={b}>{b}</option>)}
+                </select>
+              )}
+              <select value={rfiStatusFilter} onChange={e => setRfiStatusFilter(e.target.value)}
+                className="bg-muted border border-border rounded-lg text-[11px] px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer">
+                <option value="all">All Status</option>
+                {Object.entries(RFI_STATUS_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
+              </select>
+            </div>
+          </div>
+
+          <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
+            <table className="intel-table relative w-full">
+              <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+                <tr>
+                  <th className="whitespace-nowrap">RFI ID & Status</th>
+                  <th>Inspection Point</th>
+                  <th>Package</th>
+                  <th>Location</th>
+                  <th>Responsibility</th>
+                  <th>Pending With</th>
+                  <th className="text-right">Age</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRFIs.length === 0 ? (
+                  <tr>
+                    <td colSpan={7} className="text-center py-8 text-sm text-muted-foreground">No RFIs match the current filters.</td>
+                  </tr>
+                ) : filteredRFIs.map((rfi: any, i: number) => {
+                  const sCfg = RFI_STATUS_CONFIG[rfi.status] || { label: rfi.status, color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' };
+                  return (
+                    <tr key={rfi.id || i} className="hover:bg-muted/50 transition-colors group">
+                      <td className="align-top max-w-[200px]">
+                        <div className="font-mono font-bold text-[11px] text-foreground mb-1">{rfi.rfi_label}</div>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${sCfg.bg} ${sCfg.color}`}>{sCfg.label}</span>
+                      </td>
+                      <td className="align-top max-w-[250px]">
+                        <div className="text-[11px] font-semibold text-foreground/90 truncate" title={rfi.inspection_point_name}>{rfi.inspection_point_name || '—'}</div>
+                      </td>
+                      <td className="align-top max-w-[150px]">
+                        <div className="text-[10px] flex items-center gap-1 truncate text-foreground/80">
+                          <Package className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0"/> {rfi.package_name || '—'}
+                        </div>
+                      </td>
+                      <td className="align-top max-w-[120px]">
+                        <div className="text-[10px] flex items-center gap-1 truncate text-foreground/80"><MapPin className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0"/> {rfi.workarea_name || '—'}</div>
+                      </td>
+                      <td className="align-top max-w-[180px]">
+                        <div className="text-[10px] font-medium text-foreground/80 truncate flex items-center gap-1" title={rfi.vendor_name || rfi.contractor_name}><Users className="w-2.5 h-2.5 text-muted-foreground/60 shrink-0"/> {rfi.vendor_name || rfi.contractor_name || '—'}</div>
+                        {(rfi.engineer_name || rfi.quality_name) && (
+                          <div className="flex flex-col gap-0.5 mt-1 pl-3.5 text-[9px] text-muted-foreground">
+                            {rfi.engineer_name && <div className="truncate"><span className="font-semibold">EE:</span> {rfi.engineer_name}</div>}
+                            {rfi.quality_name && <div className="truncate"><span className="font-semibold">QI:</span> {rfi.quality_name}</div>}
+                          </div>
+                        )}
+                      </td>
+                      <td className="align-top">
+                        {rfi.current_handler ? (
+                          <div className="flex items-center gap-1 text-[10px] text-amber-500 font-medium capitalize">
+                            <Clock className="w-2.5 h-2.5 shrink-0" /> {rfi.current_handler.replace(/_/g, ' ')}
+                          </div>
+                        ) : <span className="text-muted-foreground/50 text-[10px]">—</span>}
+                      </td>
+                      <td className="align-top text-right">
+                        <div className={`text-sm font-black ${rfi.age_days > 30 ? 'text-destructive' : rfi.age_days > 14 ? 'text-warning' : 'text-foreground'}`}>
+                          {rfi.age_days}<span className="text-[9px] font-semibold opacity-60 ml-0.5">d</span>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

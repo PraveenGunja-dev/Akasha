@@ -1197,7 +1197,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <TabBtn active={activeTab === 'intelligence'} label="Intelligence Hub" icon={Brain} onClick={() => setActiveTab('intelligence')} />
           <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'einvoice'} label="E-Invoice" icon={Receipt} onClick={() => setActiveTab('einvoice')} />
-          <TabBtn active={activeTab === 'p6'} label="P6 & Schedule" icon={Layers} onClick={() => setActiveTab('p6')} />
+          <TabBtn active={activeTab === 'p6'} label="Schedule Intelligence" icon={Layers} onClick={() => setActiveTab('p6')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
           <TabBtn active={activeTab === 'quality'} label="Quality" icon={Shield} onClick={() => setActiveTab('quality')} />
           <TabBtn active={activeTab === 'approvals'} label="Approval" icon={CheckCircle} onClick={() => setActiveTab('approvals')} />
@@ -2391,113 +2391,141 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* ═══ SECTION 1: SCHEDULE OVERVIEW ═══ */}
+                  <div className="mb-1">
+                    <h2 className="font-heading text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-primary" /> Schedule Overview
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5 ml-7">Key dates, variance, and schedule health at a glance</p>
+                  </div>
 
-                    {/* Full Project Timeline */}
-                    <div className="intelligence-card p-6">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <Calendar className="w-4 h-4 text-primary/70" /> Complete Project Timeline
+                  <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-3">
+                    {[
+                      { label: 'Project Start', value: p.startDate || '—', color: 'text-success', icon: Flag },
+                      { label: 'Data Date', value: p6?.dataDate || '—', color: 'text-primary', icon: Activity },
+                      { label: 'Baseline COD', value: p6?.baselineFinishDate || '—', color: 'text-warning', icon: Target },
+                      { label: 'Forecast COD', value: p.forecastFinish || '—', color: 'text-destructive', icon: CalendarClock },
+                      { label: 'Schedule Variance', value: `${p.scheduleVariance || 0} days`, color: p.scheduleVariance < 0 ? 'text-destructive' : 'text-success', icon: AlertTriangle },
+                      { label: 'Must Finish By', value: p6?.mustFinishByDate || 'Not Set', color: 'text-primary', icon: Target },
+                    ].map((item, i) => (
+                      <div key={i} className="intelligence-card p-3 flex flex-col gap-1">
+                        <div className="flex items-center gap-1.5">
+                          <item.icon className={`w-3 h-3 ${item.color} opacity-60`} />
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">{item.label}</span>
+                        </div>
+                        <span className={`text-sm font-mono font-bold ${item.color}`}>{item.value}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Delayed Activities Alert */}
+                  {p6?.delayedActivities && p6.delayedActivities.length > 0 && (
+                    <div
+                      onClick={() => setShowDelayedModal(true)}
+                      className="intelligence-card px-5 py-3 flex items-center justify-between bg-destructive/5 border-destructive/20 cursor-pointer hover:bg-destructive/10 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        <AlertTriangle className="w-5 h-5 text-destructive" />
+                        <div>
+                          <span className="text-xs font-bold text-destructive">{p6.delayedActivities.length} Delayed Activities</span>
+                          <span className="text-[10px] text-destructive/60 ml-2">Click to view details</span>
+                        </div>
+                      </div>
+                      <ChevronRight className="w-4 h-4 text-destructive/60" />
+                    </div>
+                  )}
+
+                  {/* ═══ SECTION 2: PROJECT TIMELINE & MILESTONES ═══ */}
+                  <div className="mb-1 mt-2">
+                    <h2 className="font-heading text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-primary" /> Project Timeline & Milestones
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5 ml-7">Baseline vs actual dates with start/finish phases and construction milestones</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+
+                    {/* Compact Project Timeline */}
+                    <div className="intelligence-card p-5">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-heading text-sm font-semibold text-foreground flex items-center gap-2">
+                          <Calendar className="w-3.5 h-3.5 text-primary" /> Project Dates
                         </h3>
-                        <a href="https://digitalized-dpr.adani.com" target="_blank" rel="noreferrer" className="flex items-center gap-1.5 text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary px-2.5 py-1.5 rounded-md transition-colors whitespace-nowrap">
-                          <ExternalLink className="w-3.5 h-3.5" />
-                          DPR Application
+                        <a href="https://digitalized-dpr.adani.com" target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[10px] font-semibold bg-primary/10 hover:bg-primary/20 text-primary px-2 py-1 rounded-md transition-colors whitespace-nowrap">
+                          <ExternalLink className="w-3 h-3" /> DPR App
                         </a>
                       </div>
-                      <div className="flex flex-col h-full">
-                        {/* Header Info */}
-                        <div className="flex items-center gap-3 mb-6 bg-muted p-3 rounded-lg border border-border/50">
-                          <div className="flex-1">
-                            <div className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Project ID</div>
-                            <div className="text-sm font-semibold text-foreground">{p6.projectId}</div>
+
+                      {/* Project ID & EPS */}
+                      <div className="flex items-center gap-3 mb-3 bg-muted px-3 py-2 rounded-lg border border-border/50 text-xs">
+                        <div className="flex-1">
+                          <span className="text-[9px] uppercase font-bold text-muted-foreground">Project ID</span>
+                          <div className="font-semibold text-foreground">{p6.projectId}</div>
+                        </div>
+                        <div className="w-px h-6 bg-border"></div>
+                        <div className="flex-1">
+                          <span className="text-[9px] uppercase font-bold text-muted-foreground">Parent EPS</span>
+                          <div className="font-semibold text-foreground truncate">{p6.parentEPSName || '—'}</div>
+                        </div>
+                      </div>
+
+                      {/* Start & Finish Phases - Compact */}
+                      <div className="grid grid-cols-2 gap-3">
+                        {/* Start Phase */}
+                        <div className="bg-card border border-border rounded-lg p-3 relative overflow-hidden">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="w-5 h-5 rounded bg-primary/10 flex items-center justify-center border border-primary/20">
+                              <Activity className="w-3 h-3 text-primary" />
+                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Start</span>
                           </div>
-                          <div className="w-px h-8 bg-border"></div>
-                          <div className="flex-1">
-                            <div className="text-[10px] uppercase font-bold text-muted-foreground mb-0.5">Parent EPS</div>
-                            <div className="text-sm font-semibold text-foreground truncate">{p6.parentEPSName || '—'}</div>
+                          <div className="space-y-2 text-[11px]">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Baseline</span><span className="font-medium font-mono">{p6.baselineStartDate || '—'}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Planned</span><span className="font-medium font-mono">{p6.plannedStartDate || '—'}</span></div>
+                            <div className="flex justify-between bg-primary/5 -mx-1 px-1 py-0.5 rounded"><span className="text-primary font-semibold">Actual</span><span className="font-bold font-mono text-primary">{p6.startDate || 'Pending'}</span></div>
                           </div>
                         </div>
 
-                        {/* Phases Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                          {/* Start Phase */}
-                          <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl pointer-events-none"></div>
-                            <div className="flex items-center gap-2 mb-4 relative z-10">
-                              <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center border border-primary/20">
-                                <Activity className="w-3.5 h-3.5 text-primary" />
-                              </div>
-                              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Start Phase</span>
+                        {/* Finish Phase */}
+                        <div className="bg-card border border-border rounded-lg p-3 relative overflow-hidden">
+                          <div className="flex items-center gap-1.5 mb-2">
+                            <div className="w-5 h-5 rounded bg-success/10 flex items-center justify-center border border-success/20">
+                              <CheckCircle2 className="w-3 h-3 text-success" />
                             </div>
-                            <div className="space-y-4 relative z-10">
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" /> Baseline</span>
-                                <span className="text-sm font-medium">{p6.baselineStartDate || '—'}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Planned</span>
-                                <span className="text-sm font-medium">{p6.plannedStartDate || '—'}</span>
-                              </div>
-                              <div className="flex justify-between items-center bg-primary/5 -mx-2 px-2 py-1.5 rounded border border-blue-500/10">
-                                <span className="text-xs text-primary dark:text-primary font-semibold flex items-center gap-1.5"><Play className="w-3.5 h-3.5" /> Actual</span>
-                                <span className="text-sm font-bold text-blue-700 dark:text-blue-300">{p6.startDate || 'Pending'}</span>
-                              </div>
-                            </div>
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Finish</span>
                           </div>
-
-                          {/* Finish Phase */}
-                          <div className="bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden">
-                            <div className="absolute top-0 right-0 w-24 h-24 bg-success/5 rounded-full blur-2xl pointer-events-none"></div>
-                            <div className="flex items-center gap-2 mb-4 relative z-10">
-                              <div className="w-7 h-7 rounded-lg bg-success/10 flex items-center justify-center border border-success/20">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-success" />
-                              </div>
-                              <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Finish Phase</span>
-                            </div>
-                            <div className="space-y-4 relative z-10">
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><CalendarClock className="w-3.5 h-3.5" /> Baseline</span>
-                                <span className="text-sm font-medium">{p6.baselineFinishDate || '—'}</span>
-                              </div>
-                              <div className="flex justify-between items-center">
-                                <span className="text-xs text-muted-foreground flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Scheduled</span>
-                                <span className="text-sm font-medium">{p6.scheduledFinishDate || p6.finishDate || '—'}</span>
-                              </div>
-                              <div className={`flex justify-between items-center -mx-2 px-2 py-1.5 rounded border ${p6.finishDate ? 'bg-success/5 border-emerald-500/10' : 'bg-warning/5 border-amber-500/10'}`}>
-                                <span className={`text-xs font-semibold flex items-center gap-1.5 ${p6.finishDate ? 'text-success dark:text-success' : 'text-warning dark:text-warning'}`}>
-                                  {p6.finishDate ? <CheckCircle2 className="w-3.5 h-3.5" /> : <Clock className="w-3.5 h-3.5" />}
-                                  {p6.finishDate ? 'Actual Finish' : 'Must Finish By'}
-                                </span>
-                                <span className={`text-sm font-bold ${p6.finishDate ? 'text-success dark:text-emerald-300' : 'text-warning dark:text-amber-300'}`}>
-                                  {p6.finishDate || p6.mustFinishByDate || '—'}
-                                </span>
-                              </div>
+                          <div className="space-y-2 text-[11px]">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Baseline</span><span className="font-medium font-mono">{p6.baselineFinishDate || '—'}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Scheduled</span><span className="font-medium font-mono">{p6.scheduledFinishDate || p6.finishDate || '—'}</span></div>
+                            <div className={`flex justify-between -mx-1 px-1 py-0.5 rounded ${p6.finishDate ? 'bg-success/5' : 'bg-warning/5'}`}>
+                              <span className={`font-semibold ${p6.finishDate ? 'text-success' : 'text-warning'}`}>{p6.finishDate ? 'Actual' : 'Must Finish'}</span>
+                              <span className={`font-bold font-mono ${p6.finishDate ? 'text-success' : 'text-warning'}`}>{p6.finishDate || p6.mustFinishByDate || '—'}</span>
                             </div>
                           </div>
                         </div>
+                      </div>
 
-                        {/* Footer */}
-                        <div className="mt-auto pt-4 border-t border-border flex items-center justify-between text-[11px] text-muted-foreground">
-                          <div className="flex items-center gap-1.5"><Database className="w-3.5 h-3.5 opacity-70" /> Data Date: <span className="font-medium text-foreground/80">{p6.dataDate || '—'}</span></div>
-                          <div className="flex items-center gap-1.5"><RefreshCcw className="w-3.5 h-3.5 opacity-70" /> Last Synced: <span className="font-medium text-foreground/80">{p6.lastSyncedAt || '—'}</span></div>
-                        </div>
+                      {/* Footer */}
+                      <div className="mt-3 pt-2 border-t border-border flex items-center justify-between text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-1"><Database className="w-3 h-3 opacity-60" /> Data: <span className="font-medium text-foreground/80">{p6.dataDate || '—'}</span></div>
+                        <div className="flex items-center gap-1"><RefreshCcw className="w-3 h-3 opacity-60" /> Synced: <span className="font-medium text-foreground/80">{p6.lastSyncedAt || '—'}</span></div>
                       </div>
                     </div>
 
                     {/* Project Milestones */}
-                    <div className="intelligence-card p-6 flex flex-col max-h-[400px]">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                          <Flag className="w-4 h-4 text-primary/70" /> Project Milestones
+                    <div className="intelligence-card p-5 flex flex-col max-h-[380px]">
+                      <div className="flex items-center justify-between mb-3">
+                        <h3 className="font-heading text-sm font-semibold text-foreground flex items-center gap-2">
+                          <Flag className="w-3.5 h-3.5 text-primary" /> Construction Milestones
                         </h3>
                         <button onClick={() => setShowWorkflowModal(true)} className="p-1 hover:bg-primary/10 hover:text-primary rounded text-muted-foreground transition-colors">
-                          <Maximize2 className="w-4 h-4" />
+                          <Maximize2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
 
-                      <div className="flex-1 overflow-x-auto custom-scrollbar pr-2 py-6">
+                      <div className="flex-1 overflow-x-auto custom-scrollbar pr-2 py-4">
                         {p6.milestones && p6.milestones.length > 0 ? (
-                          <div className="flex items-center px-6 min-w-max h-[240px]">
+                          <div className="flex items-center px-4 min-w-max h-[220px]">
                             {p6.milestones.map((m: any, i: number) => {
                               const isLast = i === p6.milestones.length - 1;
                               const isEven = i % 2 === 0;
@@ -2506,96 +2534,62 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               const dateStr = isCompleted ? (m.actualFinishDate || m.actualStartDate || '—') : (m.plannedFinishDate || m.plannedStartDate || '—');
 
                               return (
-                                <div key={i} className={`relative flex items-center shrink-0 w-[260px] mr-16 transition-transform duration-500 hover:z-50 ${isEven ? 'translate-y-[45px]' : '-translate-y-[45px]'}`}>
-
-                                  {/* Input Port */}
+                                <div key={i} className={`relative flex items-center shrink-0 w-[240px] mr-14 transition-transform duration-500 hover:z-50 ${isEven ? 'translate-y-[40px]' : '-translate-y-[40px]'}`}>
                                   {i !== 0 && (
-                                    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' :
-                                      isInProgress ? 'border-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.6)] animate-pulse' :
-                                        'border-border shadow-inner'
-                                      }`}></div>
+                                    <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_8px_rgba(59,130,246,0.5)]' :
+                                      isInProgress ? 'border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse' : 'border-border shadow-inner'}`}></div>
                                   )}
-
-                                  {/* Node Card */}
-                                  <div className={`group w-full rounded-2xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-[0_8px_30px_-4px_rgba(59,130,246,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(59,130,246,0.4)] backdrop-blur-md' :
-                                    isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-[0_8px_30px_-4px_rgba(245,158,11,0.2)] hover:shadow-[0_12px_40px_-4px_rgba(245,158,11,0.4)] backdrop-blur-md ring-1 ring-amber-500/20 ring-inset' :
-                                      'bg-card/40 dark:bg-card/40 border-border shadow-lg hover:shadow-xl backdrop-blur-sm hover:border-border/80'
-                                    }`}>
-                                    {/* Glass reflection overlay */}
-                                    <div className="absolute inset-0 rounded-2xl bg-gradient-to-tr from-white/0 via-white/5 to-white/0 dark:from-white/0 dark:via-white/5 dark:to-white/0 opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-
-                                    {/* Header */}
-                                    <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'border-primary/20 text-primary' :
-                                      isInProgress ? 'border-amber-500/20 text-amber-500' :
-                                        'border-border text-muted-foreground group-hover:text-foreground transition-colors'
-                                      }`}>
-                                      <div className={`w-7 h-7 rounded-xl flex items-center justify-center shadow-inner text-[11px] font-black tracking-tighter ${isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white shadow-primary/40' :
-                                        isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white shadow-amber-500/40 animate-pulse' :
-                                          'bg-muted border border-border text-muted-foreground group-hover:bg-muted/80 transition-colors'
-                                        }`}>
-                                        {isCompleted ? <Check className="w-4 h-4 text-white" /> : i + 1}
+                                  <div className={`group w-full rounded-xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-md' :
+                                    isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-md ring-1 ring-amber-500/20' : 'bg-card/40 dark:bg-card/40 border-border shadow-md'}`}>
+                                    <div className={`px-3 py-2 flex items-center gap-2 border-b ${isCompleted ? 'border-primary/20 text-primary' : isInProgress ? 'border-amber-500/20 text-amber-500' : 'border-border text-muted-foreground'}`}>
+                                      <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white' :
+                                        isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white animate-pulse' : 'bg-muted border border-border text-muted-foreground'}`}>
+                                        {isCompleted ? <Check className="w-3.5 h-3.5 text-white" /> : i + 1}
                                       </div>
-                                      <h4 className="text-[12px] font-bold uppercase tracking-wide truncate flex-1 drop-shadow-sm" title={m.name}>
-                                        {m.name}
-                                      </h4>
+                                      <h4 className="text-[11px] font-bold uppercase tracking-wide truncate flex-1" title={m.name}>{m.name}</h4>
                                     </div>
-
-                                    {/* Body */}
-                                    <div className="px-4 py-3 flex items-center justify-between relative overflow-hidden">
-                                      <div className="flex items-center gap-2">
+                                    <div className="px-3 py-2 flex items-center justify-between">
+                                      <div className="flex items-center gap-1.5">
                                         {isCompleted ? (
-                                          <div className="flex items-center gap-1.5 px-2 py-1 bg-primary/10 text-primary rounded-md text-[10px] font-semibold border border-primary/20">
-                                            <CheckCircle2 className="w-3 h-3" /> Done
+                                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-primary/10 text-primary rounded text-[9px] font-semibold border border-primary/20">
+                                            <CheckCircle2 className="w-2.5 h-2.5" /> Done
                                           </div>
                                         ) : isInProgress ? (
-                                          <div className="flex items-center gap-1.5 px-2 py-1 bg-amber-500/10 text-amber-500 rounded-md text-[10px] font-semibold border border-amber-500/20">
-                                            <Activity className="w-3 h-3 animate-pulse" /> Active
+                                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/10 text-amber-500 rounded text-[9px] font-semibold border border-amber-500/20">
+                                            <Activity className="w-2.5 h-2.5 animate-pulse" /> Active
                                           </div>
                                         ) : (
-                                          <div className="flex items-center gap-1.5 px-2 py-1 bg-muted text-muted-foreground rounded-md text-[10px] font-semibold border border-border">
-                                            <Clock className="w-3 h-3" /> Pending
+                                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-muted text-muted-foreground rounded text-[9px] font-semibold border border-border">
+                                            <Clock className="w-2.5 h-2.5" /> Pending
                                           </div>
                                         )}
                                       </div>
-                                      <div className={`font-mono text-[10px] px-2 py-1 rounded-md border backdrop-blur-sm font-medium ${isCompleted ? 'bg-primary/5 text-primary border-primary/20' :
-                                        isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' :
-                                          'bg-card/50 text-muted-foreground border-border shadow-inner'
-                                        }`}>
+                                      <div className={`font-mono text-[10px] px-1.5 py-0.5 rounded border font-medium ${isCompleted ? 'bg-primary/5 text-primary border-primary/20' :
+                                        isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' : 'bg-card/50 text-muted-foreground border-border'}`}>
                                         {dateStr}
                                       </div>
                                     </div>
                                   </div>
-
-                                  {/* Output Port */}
                                   {!isLast && (
-                                    <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-4 h-4 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_10px_rgba(59,130,246,0.6)]' :
-                                      'border-border shadow-inner'
-                                      }`}></div>
+                                    <div className={`absolute -right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-background border-[3px] rounded-full z-20 ${isCompleted ? 'border-primary' : 'border-border'}`}></div>
                                   )}
-
-                                  {/* Connection Wire (SVG Bezier Fix) */}
                                   {!isLast && (
-                                    <svg width="64" height="90" className="absolute left-[calc(100%-2px)] pointer-events-none drop-shadow-md" style={{ top: isEven ? 'calc(50% - 90px)' : '50%', zIndex: 0 }}>
+                                    <svg width="56" height="80" className="absolute left-[calc(100%-2px)] pointer-events-none" style={{ top: isEven ? 'calc(50% - 80px)' : '50%', zIndex: 0 }}>
                                       <path
-                                        d={isEven ? "M 0 90 C 32 90, 32 0, 64 0" : "M 0 0 C 32 0, 32 90, 64 90"}
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeWidth={isCompleted ? "3" : "2"}
+                                        d={isEven ? "M 0 80 C 28 80, 28 0, 56 0" : "M 0 0 C 28 0, 28 80, 56 80"}
+                                        fill="none" stroke="currentColor"
+                                        strokeWidth={isCompleted ? "2.5" : "1.5"}
                                         strokeDasharray={isInProgress ? "4 4" : "0"}
-                                        className={`transition-all duration-700 ${isCompleted ? 'text-primary' :
-                                          isInProgress ? 'text-amber-500 animate-[dash_2s_linear_infinite]' :
-                                            'text-border dark:text-gray-700'
-                                          }`}
+                                        className={`${isCompleted ? 'text-primary' : isInProgress ? 'text-amber-500' : 'text-border dark:text-gray-700'}`}
                                       />
                                     </svg>
                                   )}
-
                                 </div>
                               )
                             })}
                           </div>
                         ) : (
-                          <div className="text-xs text-muted-foreground italic py-8 text-center bg-muted rounded-xl border border-border">
+                          <div className="text-xs text-muted-foreground italic py-6 text-center bg-muted rounded-lg border border-border">
                             No milestones tracked in P6 for this EPS
                           </div>
                         )}
@@ -2603,10 +2597,18 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                  {/* ═══ SECTION 3: P6 ANALYTICS ═══ */}
+                  <div className="mb-1 mt-2">
+                    <h2 className="font-heading text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-primary" /> P6 Analytics
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5 ml-7">Float analysis, duration breakdown, and baseline comparison from Primavera P6</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                     {/* Float Analysis */}
-                    <div className="intelligence-card p-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <div className="intelligence-card p-5">
+                      <h3 className="font-heading text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                         <Clock className="w-4 h-4 text-primary/70" /> Float & Variance
                       </h3>
                       <div className="space-y-1">
@@ -2624,7 +2626,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           </div>
                         ))}
                         {p6.totalFloat != null && (
-                          <div className="mt-3 p-3 rounded-lg bg-muted border border-border">
+                          <div className="mt-3 p-2.5 rounded-lg bg-muted border border-border">
                             <p className="text-[11px] text-muted-foreground/60 leading-relaxed">
                               {p6.totalFloat <= 0
                                 ? '⚠️ Critical path — zero or negative float. Any delay directly impacts the project finish date.'
@@ -2638,8 +2640,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
 
                     {/* Duration Analysis */}
-                    <div className="intelligence-card p-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <div className="intelligence-card p-5">
+                      <h3 className="font-heading text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                         <Clock className="w-4 h-4 text-primary/70" /> Duration Analysis
                       </h3>
                       <div className="space-y-1">
@@ -2659,8 +2661,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     </div>
 
                     {/* Activity Baseline Comparison */}
-                    <div className="intelligence-card p-6">
-                      <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <div className="intelligence-card p-5">
+                      <h3 className="font-heading text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
                         <BarChart3 className="w-4 h-4 text-primary/70" /> Baseline vs Current
                       </h3>
                       <div className="space-y-3">
@@ -2690,6 +2692,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         ))}
                       </div>
                     </div>
+                  </div>
+
+                  {/* ═══ SECTION 4: ACTIVITIES & CONFIGURATION ═══ */}
+                  <div className="mb-1 mt-2">
+                    <h2 className="font-heading text-lg font-bold text-foreground tracking-tight flex items-center gap-2">
+                      <Layers className="w-5 h-5 text-primary" /> Activities & Configuration
+                    </h2>
+                    <p className="text-xs text-muted-foreground mt-0.5 ml-7">WBS hierarchy, activity breakdown, and P6 sync settings</p>
                   </div>
 
                   {/* ═══ ALL ACTIVITIES HIERARCHY ═══ */}

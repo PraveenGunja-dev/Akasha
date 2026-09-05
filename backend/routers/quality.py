@@ -547,6 +547,27 @@ def get_project_quality(project_name: str, db: Session = Depends(get_db)):
             "created_at": nc.created_at.isoformat() if nc.created_at else None,
         })
 
+    # RFI list (sorted by age, newest first for display)
+    rfi_list = []
+    for rfi in sorted(rfis, key=lambda x: x.created_at or now, reverse=True):
+        age_days = (now - rfi.created_at).days if rfi.created_at else 0
+        rfi_list.append({
+            "id": rfi.pulse_id,
+            "rfi_label": rfi.rfi_label,
+            "status": rfi.status,
+            "status_label": rfi.status_label,
+            "current_handler": rfi.current_handler,
+            "contractor_name": rfi.contractor_name,
+            "vendor_name": rfi.vendor_name,
+            "engineer_name": rfi.engineer_name,
+            "quality_name": rfi.quality_name,
+            "workarea_name": rfi.workarea_name,
+            "package_name": rfi.package_name,
+            "inspection_point_name": rfi.inspection_point_name,
+            "age_days": age_days,
+            "created_at": rfi.created_at.isoformat() if rfi.created_at else None,
+        })
+
     return {
         "project_name": project_name,
         "total_ncs": total_ncs,
@@ -561,6 +582,7 @@ def get_project_quality(project_name: str, db: Session = Depends(get_db)):
         "by_handler": by_handler,
         "blocks": list(blocks.values()),
         "ncs": nc_list,
+        "rfis": rfi_list,
     }
 
 
