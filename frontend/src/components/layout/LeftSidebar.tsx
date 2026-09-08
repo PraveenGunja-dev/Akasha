@@ -40,7 +40,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
   ];
 
   const aiSections = [
-    // { id: 'ai_copilot', label: 'Ask Akasha', icon: MessageSquare },
+    { id: 'ai_copilot', label: 'Ask Akasha', icon: MessageSquare },
     // { id: 'executive_brief', label: 'Briefing', icon: FileText },
     // { id: 'smart_search', label: 'Search', icon: Search },
     { id: 'project_map', label: 'Project Map', icon: Network },
@@ -49,7 +49,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, isMobileOpen = fa
   ];
 
   const adminSections = [
-    // { id: 'reports', label: 'Reports', icon: FileText },
+    { id: 'reports', label: 'Executive Report', icon: FileText },
     { id: 'admin', label: 'Admin', icon: Settings },
   ];
 

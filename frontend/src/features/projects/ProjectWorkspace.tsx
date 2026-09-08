@@ -14,6 +14,7 @@ import { saveAs } from 'file-saver';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ComplianceTab from '../compliance/ComplianceTab';
+import ActivityInvestigationModal from '../intelligence/ActivityInvestigationModal';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -260,6 +261,25 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
+  const [investigatingActivity, setInvestigatingActivity] = useState<any>(null);
+  const [investigatingLoading, setInvestigatingLoading] = useState(false);
+
+  const handleInvestigateActivity = async (actId: string) => {
+    setInvestigatingLoading(true);
+    try {
+      const res = await fetch(`/akasha/api/intelligence/${projectId}/activity/${actId}/investigate`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.found && json.investigation) {
+          setInvestigatingActivity(json.investigation);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to investigate activity:', e);
+    } finally {
+      setInvestigatingLoading(false);
+    }
+  };
   const [showCodModal, setShowCodModal] = useState<'done' | 'pending' | null>(null);
   const [sapFilter, setSapFilter] = useState<'all' | 'spv' | 'agel' | 'age6l'>('all');
   const [inventoryFilter, setInventoryFilter] = useState<'ALL' | 'COMPANY' | 'PROJECT'>('ALL');
@@ -3201,6 +3221,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       <th className="px-4 py-3">Planned Date</th>
                       <th className="px-4 py-3">Delay</th>
                       <th className="px-4 py-3">MW Impact</th>
+                      <th className="px-4 py-3 text-right">Intelligence</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/50">
@@ -3245,6 +3266,17 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             <td className="px-4 py-3">
                               {showMW ? <span className="text-warning font-medium">{act.mwCapacity.toFixed(1)} MW</span> : <span className="text-muted-foreground/40 italic text-[10px]">grouped</span>}
                             </td>
+                            <td className="px-4 py-3 text-right">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleInvestigateActivity(act.activityId);
+                                }}
+                                className="px-2.5 py-1 text-xs font-bold rounded-lg bg-primary/10 hover:bg-primary text-primary hover:text-primary-foreground transition-all inline-flex items-center gap-1"
+                              >
+                                Investigate Why
+                              </button>
+                            </td>
                           </tr>
                         );
                       });
@@ -3256,6 +3288,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Activity Investigation Modal */}
+      {investigatingActivity && (
+        <ActivityInvestigationModal
+          activity={investigatingActivity}
+          onClose={() => setInvestigatingActivity(null)}
+        />
       )}
       {/* Workflow Modal */}
       {showWorkflowModal && (

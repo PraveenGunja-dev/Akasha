@@ -4,6 +4,7 @@ import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ReactECharts from 'echarts-for-react';
+import ProjectStoryView from './ProjectStoryView';
 
 interface Props {
   projectId: string;
@@ -16,6 +17,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
   const [narrativeLoading, setNarrativeLoading] = useState(true);
   const [showChart, setShowChart] = useState(false);
   const [error, setError] = useState('');
+  const [viewMode, setViewMode] = useState<'story' | 'domains'>('story');
 
   useEffect(() => {
     const fetchIntelligence = async () => {
@@ -153,23 +155,62 @@ export default function ProjectIntelligence({ projectId }: Props) {
   return (
     <div className="space-y-6">
       
-      {/* 1. Health Banner */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className={`intelligence-card p-5 border flex flex-col justify-center ${statusColor}`}>
-          <div className="text-sm font-medium uppercase tracking-wider opacity-80 mb-1">Overall Status</div>
-          <div className="text-3xl font-bold">{overall_status}</div>
+      {/* View Mode Toggle: Connected Story vs Domain Telemetry */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-card border border-border/80 p-2 rounded-2xl shadow-sm">
+        <div className="flex items-center gap-2 pl-2">
+          <Brain className="w-5 h-5 text-primary" />
+          <span className="font-bold text-sm text-foreground">Project Intelligence Engine</span>
+          <span className="text-xs text-muted-foreground hidden sm:inline">• Connected Multi-System Synthesis</span>
         </div>
-        <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
-          <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Total Delay</div>
-          <div className="flex items-center gap-2 text-3xl font-bold">
-            {total_delay_days} <span className="text-lg text-muted-foreground font-normal">days</span>
-          </div>
-        </div>
-        <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
-          <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Primary Bottleneck</div>
-          <div className="text-xl font-bold text-orange-400 break-words">{primary_bottleneck || "None"}</div>
+        <div className="flex items-center bg-muted/60 p-1 rounded-xl border border-border/60">
+          <button
+            onClick={() => setViewMode('story')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              viewMode === 'story'
+                ? 'bg-background text-primary shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Activity className="w-3.5 h-3.5" /> Connected Project Story & Gaps
+          </button>
+          <button
+            onClick={() => setViewMode('domains')}
+            className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              viewMode === 'domains'
+                ? 'bg-background text-primary shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+          >
+            <Radar className="w-3.5 h-3.5" /> Domain Deep-Dives & Telemetry
+          </button>
         </div>
       </div>
+
+      {/* 1. PROJECT STORY VIEW */}
+      {viewMode === 'story' && data?.story && (
+        <ProjectStoryView storyData={data.story} projectId={projectId} />
+      )}
+
+      {/* 2. DOMAIN DEEP-DIVES & TELEMETRY (Legacy View) */}
+      {viewMode === 'domains' && (
+        <div className="space-y-6">
+          {/* 1. Health Banner */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className={`intelligence-card p-5 border flex flex-col justify-center ${statusColor}`}>
+              <div className="text-sm font-medium uppercase tracking-wider opacity-80 mb-1">Overall Status</div>
+              <div className="text-3xl font-bold">{overall_status}</div>
+            </div>
+            <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
+              <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Total Delay</div>
+              <div className="flex items-center gap-2 text-3xl font-bold">
+                {total_delay_days} <span className="text-lg text-muted-foreground font-normal">days</span>
+              </div>
+            </div>
+            <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
+              <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Primary Bottleneck</div>
+              <div className="text-xl font-bold text-orange-400 break-words">{primary_bottleneck || "None"}</div>
+            </div>
+          </div>
 
       {/* 1b. Domain Health Scores (7 domains) */}
       {health_scores && (
@@ -616,6 +657,8 @@ export default function ProjectIntelligence({ projectId }: Props) {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
         </div>
       )}
 

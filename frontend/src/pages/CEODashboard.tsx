@@ -320,7 +320,7 @@ export default function CEODashboard() {
                     {activeTab === 'risk' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} />}
                     {activeTab === 'predictive' && <PredictiveAnalytics p6Data={p6Data} />}
                     {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
-                    {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} />}
+                    {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} briefing={briefing} />}
                     
                     {activeTab === 'capacity_overview' && <CapacityOverview />}
                     {/* AI Modules */}

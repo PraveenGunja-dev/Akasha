@@ -186,15 +186,15 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
           </button>
         )}
 
-        {/* Ask Akasha 
+        {/* Ask Akasha */}
         <button 
           onClick={onOpenCopilot} 
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-[12px] font-semibold transition-colors shadow-[0_0_15px_rgba(14,165,233,0.3)] border border-sky-400/50"
+          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-[12px] font-semibold transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] border border-sky-400/50 hover:scale-[1.02] active:scale-[0.98]"
+          title="Ask Akasha — Project Intelligence AI Copilot"
         >
-          <Sparkles className="w-3.5 h-3.5" />
+          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
           <span className="hidden lg:inline text-shadow-sm">Ask Akasha</span>
         </button>
-        */}
 
         {/* User Guide */}
         <a 

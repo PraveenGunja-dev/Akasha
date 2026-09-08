@@ -20,6 +20,7 @@ from engine.intelligence.quality_intel import analyze_quality
 from engine.intelligence.risk_intel import analyze_risk
 from engine.intelligence.action_engine import generate_actions
 from engine.intelligence.prediction_engine import generate_predictions
+from engine.intelligence.project_story import analyze_project_story
 
 logger = logging.getLogger(__name__)
 
@@ -112,6 +113,9 @@ def get_project_intelligence(db: Session, project_id: str) -> dict:
     # Forward-looking predictions
     predictions = generate_predictions(db, ctx, schedule, materials, transmission)
 
+    # Project-Level Intelligence Story & Cross-System Causal Layer
+    story = analyze_project_story(db, ctx)
+
     # Assemble the unified report
     report = {
         "project_id": project_id,
@@ -144,6 +148,9 @@ def get_project_intelligence(db: Session, project_id: str) -> dict:
         "financials": financials,
         "quality": quality,
         "risk": risk,
+
+        # Connected Project-Level Intelligence
+        "story": story,
 
         # Actionable outputs
         "top_insights": _rank_insights(all_insights)[:10],

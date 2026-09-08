@@ -5,7 +5,7 @@ import {
   PanelLeft, MessageSquare, BarChart3, ShieldAlert, TrendingUp,
   Clock, ArrowRight, Trash2, Search, Globe, Cpu, BrainCircuit,
   Activity, ChevronDown, ThumbsUp, ThumbsDown, CheckCircle2, History, X,
-  Square, Loader2
+  Square, Loader2, DollarSign, Download
 } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -371,32 +371,32 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
 
   const insightCards = [
     {
+      icon: FileText,
+      color: '#0B74B1',
+      title: 'Executive Report (PDF & Word)',
+      description: 'Adani executive report with loss & delay attribution charts',
+      prompt: 'Generate an executive Adani intelligence report (PDF and Word) with visual loss and delay attribution charts for project FY26-P08'
+    },
+    {
       icon: ShieldAlert,
       color: '#EF4444',
-      title: 'Risk Analysis',
-      description: 'Identify high-risk projects and material bottlenecks',
-      prompt: 'Analyze all critical-risk projects and identify root causes'
+      title: 'Critical Path Delays',
+      description: 'Identify delayed activities and multi-system root causes',
+      prompt: 'Analyze critical path delays, root causes, and contractor impacts in project FY26-P08'
     },
     {
       icon: BarChart3,
       color: '#3B82F6',
-      title: 'Portfolio Performance',
-      description: 'SPI/CPI breakdown across all active projects',
-      prompt: 'Give me a complete SPI and CPI performance breakdown for all projects'
+      title: 'Schedule Performance',
+      description: 'SPI variance and execution velocity across packages',
+      prompt: 'Give me the schedule performance variance and delayed activities breakdown for project FY26-P08'
     },
     {
-      icon: TrendingUp,
+      icon: DollarSign,
       color: '#10B981',
-      title: 'Schedule Intelligence',
-      description: 'Critical path delays and forecast analysis',
-      prompt: 'Analyze critical path delays in the Solar Portfolio and suggest mitigations'
-    },
-    {
-      icon: Clock,
-      color: '#F59E0B',
-      title: 'Board Report',
-      description: 'Generate an executive summary for leadership',
-      prompt: 'Draft a concise board-level status update covering schedule, cost, and procurement risks'
+      title: 'Commercial Exposure & SLR',
+      description: 'Pending invoice value at risk and contractor holds',
+      prompt: 'What is the commercial invoice exposure and SLR hold status for delayed packages in FY26-P08?'
     },
   ];
 
@@ -702,7 +702,59 @@ export default function AICopilot({ onMinimize }: AICopilotProps = {}) {
                           </div>
 
                           <div className="akasha-response prose max-w-none prose-p:text-[14.5px] prose-p:leading-[1.7] prose-p:text-foreground prose-headings:text-foreground prose-headings:text-[16px] prose-strong:text-foreground prose-strong:font-semibold prose-code:text-primary prose-code:bg-primary/10 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-pre:bg-muted prose-pre:border prose-pre:border-border prose-a:text-primary prose-li:text-[14px] prose-li:text-foreground prose-table:text-[13px]">
-                            <ReactMarkdown remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeRaw]}>
+                            <ReactMarkdown 
+                              remarkPlugins={[remarkGfm]} 
+                              rehypePlugins={[rehypeRaw]}
+                              components={{
+                                a: ({ href = '', children, ...props }) => {
+                                  let targetUrl = href.trim();
+                                  const isDocxOrPdf = /\.(docx|pdf)$/i.test(targetUrl) || targetUrl.includes('/reports/download');
+                                  
+                                  // Normalize any hallucinated .example or relative link
+                                  if (targetUrl.includes('.example') || (!targetUrl.startsWith('http') && !targetUrl.startsWith('/'))) {
+                                    const fnMatch = targetUrl.match(/([A-Za-z0-9_\-]+\.(?:docx|pdf))/i);
+                                    if (fnMatch) {
+                                      targetUrl = `/akasha/api/reports/download/${fnMatch[1]}`;
+                                    }
+                                  } else if (targetUrl.includes('/reports/download/')) {
+                                    if (!targetUrl.startsWith('/akasha/')) {
+                                      targetUrl = targetUrl.startsWith('/') ? `/akasha${targetUrl}` : `/akasha/${targetUrl}`;
+                                    }
+                                  }
+
+                                  if (isDocxOrPdf) {
+                                    return (
+                                      <a
+                                        href={targetUrl}
+                                        download
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-2 my-2 px-3.5 py-1.5 rounded-lg bg-[#0B74B1]/10 hover:bg-[#0B74B1]/20 border border-[#0B74B1]/30 hover:border-[#0B74B1] text-[#0B74B1] dark:text-[#38BDF8] text-xs font-bold transition-all shadow-sm group no-underline cursor-pointer"
+                                        {...props}
+                                      >
+                                        <span className="p-1 rounded bg-[#0B74B1]/15 text-[#0B74B1] dark:text-[#38BDF8]">
+                                          <FileText className="w-3.5 h-3.5" />
+                                        </span>
+                                        <span className="underline decoration-[#0B74B1]/40 group-hover:decoration-[#0B74B1]">{children}</span>
+                                        <Download className="w-3.5 h-3.5 ml-1 opacity-70 group-hover:opacity-100 group-hover:translate-y-0.5 transition-all" />
+                                      </a>
+                                    );
+                                  }
+
+                                  return (
+                                    <a
+                                      href={targetUrl}
+                                      target={targetUrl.startsWith('http') ? "_blank" : undefined}
+                                      rel="noopener noreferrer"
+                                      className="text-primary underline hover:text-primary/80 transition-colors"
+                                      {...props}
+                                    >
+                                      {children}
+                                    </a>
+                                  );
+                                }
+                              }}
+                            >
                               {msg.content}
                             </ReactMarkdown>
                           </div>

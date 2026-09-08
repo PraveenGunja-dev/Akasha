@@ -50,36 +50,35 @@ def generate_executive_briefing(intel: Dict[str, Any]) -> str:
     q_summary = f"Open Critical NCs: {quality.get('summary', {}).get('critical_open', 0)}. Pending RFIs: {quality.get('summary', {}).get('rfis_pending', 0)}."
     m_summary = f"Overdue POs: {materials.get('summary', {}).get('overdue_po_count', 0)}. Fulfillment: {materials.get('summary', {}).get('fulfillment_pct', 0)}%."
 
-    prompt = f"""You are an Executive AI Assistant for a large renewable energy and transmission portfolio.
-Your task is to write a concise, highly professional 2-3 paragraph executive briefing for project: {project_name}.
+    prompt = f"""You are the Executive Project Intelligence Director for Adani Green Energy Limited (PMAG).
+Your task is to write an authoritative, high-impact C-suite flash-briefing for project: {project_name}.
 
-Here is the raw intelligence data computed by the Akasha Engine:
-- Current Status: {status}
-- Overall Health Score: {health.get('overall', 'N/A')}/100
-- Schedule Delay: {delay} days
+Here is the operational intelligence data computed by the Akasha Engine:
+- Critical Path Status: {status}
+- Schedule Slippage: {delay} days delayed
 - Primary Bottleneck Domain: {bottleneck}
 - Quality Pulse: {q_summary}
 - Supply Chain Pulse: {m_summary}
 
-Key Insights & Root Causes:
+Key Root Causes & Field Evidence:
 {insights_text}
 
-Recommended Actions & Accountability:
+Mandatory Directives & Accountability:
 {actions_text}
 
 Instructions:
-1. Act as an advanced Intelligence Engine. Provide a highly structured, hard-hitting flash-briefing.
+1. Act as the Chief Assurance Officer. Provide a decisive, metric-driven executive flash briefing.
 2. Structure the output using EXACTLY these three bold inline headers:
-   **STATUS:** [1 sentence summary of health & delay. Note: Health Score (0-100) measures overall vitality.]
-   **ROOT CAUSE (WHY):** [2 sentences on exactly why the project is lagging. You MUST explicitly name specific Vendors, Contractors, or exact NC/RFI counts if they are causing delays. Do not be vague.]
-   **ACCOUNTABILITY (WHO):** [1-2 sentences on exactly what must be done next and WHO is assigned to do it (e.g. Site PM, Procurement Head)]
+   **STATUS:** [1 sentence summarizing exact schedule delay in days and critical path risk. State hard operational facts; do NOT cite arbitrary synthetic scores.]
+   **ROOT CAUSE (WHY):** [2 sentences identifying the exact operational breakdown. Explicitly name the responsible Contractors, Vendors, or open NC/RFI counts stalling progress.]
+   **ACCOUNTABILITY (WHO):** [1-2 sentences stating the mandatory corrective directive, the designated executive owner (e.g. Head - PMAG, Package Lead, Site PM), and SLA timeline (e.g. 24h/48h).]
 3. Extreme brevity is required. Keep the entire response under 100 words.
 4. Do NOT use markdown headers (#) or conversational filler.
-5. Use executive terminology. No fluff.
+5. Use Adani corporate executive terminology. Zero fluff.
 """
 
     messages = [
-        {"role": "system", "content": "You are a senior project director providing clear, data-driven executive updates."},
+        {"role": "system", "content": "You are a senior Adani PMAG project director providing authoritative, metric-driven executive updates."},
         {"role": "user", "content": prompt}
     ]
 

@@ -14,6 +14,7 @@ import logging
 from database import get_db
 from engine.intelligence.core import get_project_intelligence, get_portfolio_intelligence
 from engine.intelligence.narrative_engine import generate_executive_briefing
+from engine.intelligence.project_story import investigate_single_activity
 
 router = APIRouter(prefix="/api/intelligence", tags=["Intelligence"])
 logger = logging.getLogger(__name__)
@@ -207,6 +208,83 @@ def get_intelligence_narrative(project_id: str, db: Session = Depends(get_db)):
     
     _cache_set(cache_key, result)
     return result
+
+
+@router.get("/{project_id}/story")
+def get_project_story_endpoint(project_id: str, nocache: bool = False, db: Session = Depends(get_db)):
+    """
+    Project-Level Intelligence Story:
+    Returns full connected story, executive health radar (8 dimensions),
+    top 5 active delays with root causes, contractor impacts, commercial exposure,
+    missing interaction gaps (Cases A-E), and pre-filtered answers to the 9 core questions.
+    """
+    intel = get_intelligence(project_id, nocache=nocache, db=db)
+    return intel.get("story", {})
+
+
+@router.get("/{project_id}/activity/{activity_id}/investigate")
+def investigate_activity_endpoint(project_id: str, activity_id: str, db: Session = Depends(get_db)):
+    """
+    'Why is this delayed?' first-class deep investigation for any P6 activity.
+    Returns:
+    DELAY → ACTIVITY → PROJECT/PACKAGE → ISSUE/RFI → ROOT CAUSE → RESPONSIBLE PARTY
+          → RESOLUTION → SCHEDULE IMPACT → INVOICE/SLR → SAP → COST IMPACT
+    Includes multi-tier confidence score and source evidence.
+    """
+    return investigate_single_activity(db, project_id, activity_id)
+
+
+@router.get("/{project_id}/timeline")
+def get_project_timeline_endpoint(project_id: str, db: Session = Depends(get_db)):
+    """
+    Unified project timeline combining chronological events across:
+    P6 Schedule Shifts, Pulse RFI Inspections, Pulse NC Non-Conformances,
+    and E-Invoice commercial submissions/approvals.
+    """
+    intel = get_intelligence(project_id, db=db)
+    story = intel.get("story", {})
+    return {
+        "project_id": project_id,
+        "project_name": intel.get("project_name"),
+        "total_events": len(story.get("timeline", [])),
+        "timeline": story.get("timeline", [])
+    }
+
+
+@router.get("/{project_id}/gaps")
+def get_project_gaps_endpoint(project_id: str, db: Session = Depends(get_db)):
+    """
+    Missing Interaction & Discrepancy Detection:
+    Cases A through E (Unexplained Delays, Dormant RFIs, Inferred Links, Unlinked Commercials, Commercial Drift).
+    """
+    intel = get_intelligence(project_id, db=db)
+    story = intel.get("story", {})
+    return {
+        "project_id": project_id,
+        "project_name": intel.get("project_name"),
+        "gaps": story.get("gaps", [])
+    }
+
+
+@router.get("/{project_id}/report")
+def generate_project_report_endpoint(project_id: str, db: Session = Depends(get_db)):
+    """
+    Generates an executive-ready Adani-branded PDF (.pdf) and Word (.docx) report
+    complete with 4-quadrant visual analytics charts, critical path delayed activities,
+    contractor accountability, and action plan.
+    """
+    from engine.intelligence.report_generator import build_project_intelligence_docx
+    docx_fn, path, size, metrics = build_project_intelligence_docx(db, project_id)
+    pdf_fn = metrics.get("pdf_filename", docx_fn.replace(".docx", ".pdf"))
+    return {
+        "status": "SUCCESS",
+        "docx_url": f"/akasha/api/reports/download/{docx_fn}",
+        "pdf_url": f"/akasha/api/reports/download/{pdf_fn}",
+        "docx_filename": docx_fn,
+        "pdf_filename": pdf_fn,
+        "metrics": metrics
+    }
+
 
 
 # ──────────────────────────────────────────────

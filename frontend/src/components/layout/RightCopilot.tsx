@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { MessageSquare, Send, Mic, X, ChevronRight, AlertCircle, TrendingUp } from 'lucide-react';
+import { MessageSquare, Send, Mic, X, ChevronRight, AlertCircle, TrendingUp, Download, FileText } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
@@ -105,7 +105,55 @@ export default function RightCopilot() {
                     ? 'bg-[#3B82F6] text-white rounded-tr-none border-[#3B82F6]' 
                     : 'bg-[#1F2937] text-muted-foreground rounded-tl-none border-border'
                 }`}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                  <ReactMarkdown 
+                    remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ href = '', children, ...props }) => {
+                        let targetUrl = href.trim();
+                        const isDocxOrPdf = /\.(docx|pdf)$/i.test(targetUrl) || targetUrl.includes('/reports/download');
+                        
+                        if (targetUrl.includes('.example') || (!targetUrl.startsWith('http') && !targetUrl.startsWith('/'))) {
+                          const fnMatch = targetUrl.match(/([A-Za-z0-9_\-]+\.(?:docx|pdf))/i);
+                          if (fnMatch) {
+                            targetUrl = `/akasha/api/reports/download/${fnMatch[1]}`;
+                          }
+                        } else if (targetUrl.includes('/reports/download/')) {
+                          if (!targetUrl.startsWith('/akasha/')) {
+                            targetUrl = targetUrl.startsWith('/') ? `/akasha${targetUrl}` : `/akasha/${targetUrl}`;
+                          }
+                        }
+
+                        if (isDocxOrPdf) {
+                          return (
+                            <a
+                              href={targetUrl}
+                              download
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 my-1.5 px-2.5 py-1 rounded bg-[#3B82F6]/20 hover:bg-[#3B82F6]/30 border border-[#3B82F6]/40 text-[#60A5FA] text-[11px] font-bold transition-all group no-underline cursor-pointer"
+                              {...props}
+                            >
+                              <FileText className="w-3 h-3" />
+                              <span className="underline decoration-[#3B82F6]/40">{children}</span>
+                              <Download className="w-3 h-3 ml-0.5 opacity-80 group-hover:opacity-100" />
+                            </a>
+                          );
+                        }
+
+                        return (
+                          <a
+                            href={targetUrl}
+                            target={targetUrl.startsWith('http') ? "_blank" : undefined}
+                            rel="noopener noreferrer"
+                            className="text-[#60A5FA] underline hover:text-[#93C5FD] transition-colors"
+                            {...props}
+                          >
+                            {children}
+                          </a>
+                        );
+                      }
+                    }}
+                  >
                     {msg.content}
                   </ReactMarkdown>
                 </div>
