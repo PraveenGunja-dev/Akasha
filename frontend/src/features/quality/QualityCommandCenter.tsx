@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { formatProjectName } from '../../lib/projectName';
 import {
   Shield, AlertTriangle, CheckCircle2, Clock, Users, DollarSign,
   RefreshCw, ChevronDown, ChevronRight, XCircle, Activity,
@@ -524,9 +525,9 @@ export default function QualityCommandCenter() {
                   return (
                     <tr key={p.project_id}
                       className={`border-b border-border/50 transition-colors cursor-pointer ${active ? 'bg-primary/5' : 'hover:bg-muted/50'}`}>
-                      <td className="py-2.5 px-3 font-medium truncate max-w-[280px]" title={`${p.p6_project_name} - click to filter the register`}
+                      <td className="py-2.5 px-3 font-medium truncate max-w-[280px]" title={`${formatProjectName(p.p6_project_name)} - click to filter the register`}
                           onClick={() => drillTo('all', null, pf)}>
-                        {p.p6_project_name}
+                        {formatProjectName(p.p6_project_name)}
                         <span className="block text-[10px] text-muted-foreground/70 truncate">Pulse: {p.pulse_project_name}</span>
                       </td>
                       <td className="text-center py-2.5 px-3 font-bold hover:underline" onClick={() => drillTo('all', null, pf)}>{p.total_ncs}</td>
@@ -693,7 +694,7 @@ export default function QualityCommandCenter() {
                     </div>
                     <p className="text-xs text-muted-foreground mt-1 truncate">{nc.defect_type}</p>
                     <div className="flex items-center gap-3 mt-2 text-[10px] text-muted-foreground/70 flex-wrap">
-                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{nc.project_name} — {nc.workarea_name || 'N/A'}</span>
+                      <span className="flex items-center gap-1"><MapPin className="w-3 h-3" />{formatProjectName(nc.project_name)} — {nc.workarea_name || 'N/A'}</span>
                       <span className="flex items-center gap-1"><Package className="w-3 h-3" />{nc.package_name || 'N/A'}</span>
                       <span className="flex items-center gap-1"><Users className="w-3 h-3" />{nc.vendor_name || nc.contractor_name || 'N/A'}</span>
                       {nc.status !== 'completed' && <span className={`flex items-center gap-1 font-bold ${hCfg.color}`}>→ {hCfg.label}</span>}

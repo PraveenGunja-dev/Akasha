@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Send, Save, AlertTriangle, MessageSquarePlus, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
+import { formatProjectName } from '../../lib/projectName';
 
 export default function PMAGThreadPanel({ notification, onClose, onResolved }: any) {
   const [messages, setMessages] = useState<any[]>([]);
@@ -111,7 +112,7 @@ export default function PMAGThreadPanel({ notification, onClose, onResolved }: a
         <div className="h-[73px] shrink-0 border-b border-border dark:border-border flex items-center justify-between px-6 bg-gradient-to-r from-sky-500/10 to-transparent">
           <div>
             <h2 className="font-bold text-foreground dark:text-white text-lg tracking-tight">PMAG Action Center</h2>
-            <p className="text-xs text-muted-foreground truncate max-w-[300px]">{notification.project_name}</p>
+            <p className="text-xs text-muted-foreground truncate max-w-[300px]">{formatProjectName(notification.project_name)}</p>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-muted dark:hover:bg-card rounded-full transition-colors">
             <X className="w-5 h-5 text-muted-foreground" />

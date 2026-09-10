@@ -11,6 +11,7 @@ import {
   type TcEdge, statusMeta, voltageWeight, parseStageProgress, edgeCompletionPct, parseLengthKm,
 } from './transmission/gridHelpers';
 import { findSubstationCoord, SOURCE_LABEL, type SubstationCoord } from './transmission/gridCoords';
+import { formatProjectName } from '../../lib/projectName';
 
 interface NetworkPayload {
   nodes: any[];
@@ -745,7 +746,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                     className="hover:bg-muted transition-colors cursor-pointer"
                     onClick={() => setSelectedProject(proj)}
                   >
-                    <td className="px-6 py-4 font-medium text-foreground">{proj.p6_project_name || proj.project_name || 'Unknown'}</td>
+                    <td className="px-6 py-4 font-medium text-foreground">{formatProjectName(proj.p6_project_name || proj.project_name || 'Unknown')}</td>
                     <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mwac ? `${proj.capacity_mwac} MW` : '—'}</td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
@@ -790,7 +791,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
               <div className="p-5 border-b border-border bg-muted flex items-start justify-between">
                 <div>
                   <h3 className="text-base font-bold text-foreground leading-tight">
-                    {selectedProject.project_name || selectedProject.p6_project_name}
+                    {formatProjectName(selectedProject.project_name || selectedProject.p6_project_name)}
                   </h3>
                   <p className="text-xs text-muted-foreground mt-1">{selectedProject.capacity_mwac ? `${selectedProject.capacity_mwac} MW` : ''}</p>
                 </div>

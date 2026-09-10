@@ -4,6 +4,7 @@ import { X, Layers, BarChart2, Target, AlertTriangle, Activity, Briefcase, Check
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import { useNavigate } from 'react-router-dom';
+import { formatProjectName } from '../../lib/projectName';
 
 interface KPIDetailsModalProps {
   isOpen: boolean;
@@ -147,7 +148,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
         const poValCr = (p.sap?.po_value || 0) / 10000000;
         const deliveredCr = p.sap?.po_delivered_cr || 0;
         const remaining = poValCr - deliveredCr;
-        return { name: p.project_name || p.p6_project_name || 'Unknown', value: parseFloat(remaining.toFixed(1)) };
+        return { name: formatProjectName(p.project_name || p.p6_project_name || 'Unknown'), value: parseFloat(remaining.toFixed(1)) };
       }).filter(p => p.value > 0).sort((a, b) => b.value - a.value).slice(0, 15);
 
       return {
@@ -548,7 +549,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
                                  {item.name.substring(0, 1).toUpperCase()}
                                </div>
                                <div className="flex flex-col gap-1 min-w-0">
-                                 <span className="text-sm font-semibold text-foreground dark:text-muted-foreground truncate group-hover:text-primary dark:group-hover:text-primary transition-colors" title={item.name}>{item.name}</span>
+                                 <span className="text-sm font-semibold text-foreground dark:text-muted-foreground truncate group-hover:text-primary dark:group-hover:text-primary transition-colors" title={formatProjectName(item.name)}>{formatProjectName(item.name)}</span>
                                  <div className="flex items-center gap-2 flex-wrap">
                                    {item.status && activeKpi !== 'Delayed Projects' && (
                                      <span className={`text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${item.statusColor}`}>

@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
+import { formatProjectName } from '../../lib/projectName';
 import {
   Activity, TrendingUp, AlertTriangle, Layers, Wifi, Bell,
   CheckCircle2, Clock, Calendar, XCircle, ArrowUpRight, ArrowDownRight, Minus, Shield, LayoutDashboard, ChevronDown, ChevronRight,
@@ -388,7 +389,7 @@ export default function PMAGOverview({
                       {isExpanded && group.projects.map((p: any, i: number) => (
                         <tr key={`child-${group.eps}-${i}`} className="cursor-pointer hover:bg-slate-100/50 dark:hover:bg-gray-800/50 transition-colors" onClick={() => onOpenProject && onOpenProject(p.project_id)}>
                           <td></td>
-                          <td className="pl-6"><span className="font-semibold text-foreground dark:text-gray-300 truncate max-w-[250px] block" title={p.name}>{p.name}</span></td>
+                          <td className="pl-6"><span className="font-semibold text-foreground dark:text-gray-300 truncate max-w-[250px] block" title={formatProjectName(p.name)}>{formatProjectName(p.name)}</span></td>
                           <td className="font-medium text-muted-foreground text-[11px]">{p.type}</td>
                           <td>
                             <div className="flex items-center gap-2">

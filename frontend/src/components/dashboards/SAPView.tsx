@@ -2,12 +2,14 @@ import React, { useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useChartTheme } from '../../lib/chartTheme';
 import { Database, FileText, Users, Layers, Box, Package, IndianRupee, TrendingUp, PieChart, Truck, Download, ArrowRight, List, Activity } from 'lucide-react';
+import SAPKPIDetailsModal from './SAPKPIDetailsModal';
 
 export default function SAPView({ sapData = [], logisticsData = [], finDetails = [], logDetails = [], loading }: any) {
   // Axis, grid and tooltip chrome come from the shared theme so this screen
   // follows the light/dark toggle instead of pinning slate values.
   const { themeName, chrome } = useChartTheme();
   const [trendsData, setTrendsData] = useState<any>(null);
+  const [activeKpiModal, setActiveKpiModal] = useState<string | null>(null);
 
   useEffect(() => {
     fetch('/akasha/api/financials/trends')
@@ -31,7 +33,13 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
   const allAge6lCodes = mappings.map(m => m.age6l).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
 
   const isMatch = (po: any, codes: string[]) => {
-    return codes.some(c => (po.plant_code || '').includes(c) || (po.wbs_element || '').includes(c));
+    const poPlant = (po.plant_code || '').trim();
+    const poWbs = (po.wbs_element || '').trim();
+    return codes.some(c => {
+      const cleanC = c.replace(/^H-/, '').trim();
+      return (poPlant && (poPlant.includes(c) || poPlant.includes(cleanC))) ||
+             (poWbs && (poWbs.includes(c) || poWbs.includes(cleanC)));
+    });
   };
 
   const filteredFinDetails = companyFilter === 'all' 
@@ -76,6 +84,49 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
   const inTransit = logisticsData?.find((l: any) => l.category === 'In Transit')?.count ?? 0;
 
   const formatNum = (num: number) => new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 }).format(num);
+
+  const downloadSAPReport = () => {
+    const rows: (string | number)[][] = [
+      ['--- SAP Intelligence Global Report ---'],
+      ['Scope:', companyFilter.toUpperCase()],
+      ['Generated Date:', new Date().toLocaleString('en-IN')],
+      ['Total POs:', totalPos],
+      ['Vendors:', vendors],
+      ['Materials:', materials],
+      ['PO Volume:', poVolume],
+      ['Inventory:', inventory],
+      ['PO Amount (Cr):', typeof supplyPoAmount === 'number' ? supplyPoAmount.toFixed(2) : supplyPoAmount],
+      ['Utilized PO Amount (Cr):', typeof utilizedAmount === 'number' ? utilizedAmount.toFixed(2) : utilizedAmount],
+      ['Remaining PO Amount (Cr):', typeof remainingAmount === 'number' ? remainingAmount.toFixed(2) : remainingAmount],
+      ['% Consumed:', typeof percentConsumed === 'number' ? `${percentConsumed.toFixed(1)}%` : `${percentConsumed}%`],
+      [''],
+      ['--- Detailed Procurement Ledger ---'],
+      ['PO Number', 'Buyer Name', 'Vendor Name', 'Material Code', 'PO Date', 'Status', 'PO Value (₹ Cr)', 'Plant Code', 'WBS Element']
+    ];
+
+    (filteredFinDetails || []).forEach((po: any) => {
+      rows.push([
+        po.purchasing_document || '',
+        `"${(po.buyer_name || '').replace(/"/g, '""')}"`,
+        `"${(po.vendor_name || '').replace(/"/g, '""')}"`,
+        po.material_code || '',
+        po.document_date ? new Date(po.document_date).toLocaleDateString('en-IN') : '',
+        po.delivery_completed_flag === 'X' ? 'Delivered' : 'Pending',
+        ((po.net_order_value_inr || po.net_order_value || 0) / 10000000).toFixed(2),
+        po.plant_code || '',
+        po.wbs_element || ''
+      ]);
+    });
+
+    const csvContent = "data:text/csv;charset=utf-8," + rows.map(e => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `SAP_Intelligence_Report_${companyFilter.toUpperCase()}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   // Two tiers. Counts describe the dataset; money describes the position — so
   // money reads at the larger step. Colour is deliberately absent: none of
@@ -289,7 +340,11 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
               </button>
             ))}
           </div>
-          <button className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg text-sm font-medium text-primary hover:bg-muted transition-colors">
+          <button 
+            onClick={downloadSAPReport}
+            className="flex items-center gap-2 px-4 py-2 bg-card border border-border rounded-lg text-sm font-medium text-primary hover:bg-muted transition-colors cursor-pointer"
+            title="Download SAP report as CSV"
+          >
             <Download className="w-4 h-4" /> Export SAP Report
           </button>
         </div>
@@ -298,7 +353,11 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
       {/* KPI Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {kpis.map((kpi, idx) => (
-          <div key={idx} className="bento-card px-4 py-3.5 flex flex-col justify-between group cursor-pointer">
+          <div 
+            key={idx} 
+            onClick={() => setActiveKpiModal(kpi.title)}
+            className="bento-card px-4 py-3.5 flex flex-col justify-between group cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
+          >
             <div className="flex items-start justify-between gap-2">
               <h3 className="section-label leading-tight truncate" title={kpi.title}>
                 {kpi.title}
@@ -325,9 +384,16 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
             </div>
 
             <div className="mt-3 flex justify-end">
-              <span className="text-[10px] font-semibold text-fg-tertiary flex items-center gap-1 group-hover:text-primary transition-colors">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setActiveKpiModal(kpi.title);
+                }}
+                className="text-[10px] font-semibold text-fg-tertiary flex items-center gap-1 group-hover:text-primary transition-colors focus:outline-none cursor-pointer"
+              >
                 View Details <ArrowRight className="w-3 h-3" />
-              </span>
+              </button>
             </div>
           </div>
         ))}
@@ -428,6 +494,28 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           </table>
         </div>
       </div>
+
+      {/* SAP KPI Details Drill-Down Modal */}
+      <SAPKPIDetailsModal
+        isOpen={!!activeKpiModal}
+        onClose={() => setActiveKpiModal(null)}
+        activeKpi={activeKpiModal}
+        finDetails={filteredFinDetails}
+        logDetails={filteredLogDetails}
+        trendsData={trendsData}
+        companyFilter={companyFilter}
+        kpiSummary={{
+          totalPos,
+          vendors,
+          materials,
+          poVolume,
+          inventory,
+          supplyPoAmount,
+          utilizedAmount,
+          remainingAmount,
+          percentConsumed,
+        }}
+      />
     </div>
   );
 }

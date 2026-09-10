@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, FileText, CheckCircle, AlertTriangle, XCircle, Loader2, Calendar } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
+import { formatProjectName } from '../../lib/projectName';
 
 export default function ComplianceDashboard() {
   const [loading, setLoading] = useState(true);
@@ -153,7 +154,7 @@ export default function ComplianceDashboard() {
               <tbody className="divide-y divide-border">
                 {complianceData.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4 font-medium max-w-[200px] truncate" title={row.p6_project_name || row.project_name}>{row.p6_project_name || row.project_name || '—'}</td>
+                    <td className="p-4 font-medium max-w-[200px] truncate" title={formatProjectName(row.p6_project_name || row.project_name)}>{formatProjectName(row.p6_project_name || row.project_name) || '—'}</td>
                     <td className="p-4">{row.spv_code || '—'}</td>
                     <td className="p-4 font-mono text-xs">{row.epc_partner || '—'}</td>
                     <td className="p-4">{renderStatus(row.gst_status)}</td>
@@ -223,7 +224,7 @@ export default function ComplianceDashboard() {
               <tbody className="divide-y divide-border">
                 {epcData.map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4 font-medium max-w-[200px] truncate" title={row.p6_project_name || row.project_name}>{row.p6_project_name || row.project_name || '—'}</td>
+                    <td className="p-4 font-medium max-w-[200px] truncate" title={formatProjectName(row.p6_project_name || row.project_name)}>{formatProjectName(row.p6_project_name || row.project_name) || '—'}</td>
                     <td className="p-4 font-bold text-foreground">{row.epc_partner || '—'}</td>
                     <td className="p-4">{row.plot || '—'}</td>
                     <td className="p-4 text-muted-foreground font-medium">{row.bocw_commencement_date ? new Date(row.bocw_commencement_date).toLocaleDateString('en-GB') : '—'}</td>
@@ -265,7 +266,7 @@ export default function ComplianceDashboard() {
               <tbody className="divide-y divide-border">
                 {insuranceData.map((ins, idx) => (
                   <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4 font-medium max-w-[200px] truncate" title={ins.p6_project_name || ins.project_name}>{ins.p6_project_name || ins.project_name || '—'}</td>
+                    <td className="p-4 font-medium max-w-[200px] truncate" title={formatProjectName(ins.p6_project_name || ins.project_name)}>{formatProjectName(ins.p6_project_name || ins.project_name) || '—'}</td>
                     <td className="p-4 font-bold text-foreground">{ins.insurance_company || 'Pending Insurer'}</td>
                     <td className="p-4">
                       <div className="flex flex-col">

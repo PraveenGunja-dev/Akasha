@@ -15,6 +15,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ComplianceTab from '../compliance/ComplianceTab';
 import ActivityInvestigationModal from '../intelligence/ActivityInvestigationModal';
+import { formatProjectName } from '../../lib/projectName';
 
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
@@ -33,49 +34,142 @@ const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
           {Math.round(value)}
         </text>
       </svg>
-      <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground/50">{label}</span>
+      <span className="text-[12px] font-medium tracking-wide text-fg-tertiary">{label}</span>
     </div>
   );
 };
 
-/* ── Hero Metric Card ── */
-const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, hasBreakdown }: any) => (
-  <div
-    onClick={onClick}
-    className={`bg-card hover:bg-muted transition-all duration-300 border rounded-2xl p-5 flex flex-col gap-3 group relative overflow-hidden shadow-card hover:shadow-card-hover ${active ? 'border-primary/60 ring-2 ring-primary/20 bg-primary/5' : 'border-border hover:border-primary/30'
-      } ${hasBreakdown ? 'cursor-pointer' : ''}`}
-  >
-    <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"></div>
-    <div className="flex items-center justify-between">
-      <span className="text-[11px] font-bold uppercase tracking-widest text-muted-foreground/80 group-hover:text-foreground transition-colors truncate pr-2">{label}</span>
-      <div className={`p-2 rounded-xl bg-muted group-hover:bg-primary/10 transition-colors`}>
-        <Icon className={`w-4 h-4 shrink-0 ${color} transition-transform duration-300 group-hover:scale-110`} />
-      </div>
-    </div>
-    <div className="flex items-baseline gap-1.5 relative z-10 w-full overflow-hidden mt-1">
-      <span title={typeof value === 'string' ? value : undefined} className={`text-2xl md:text-3xl font-light tracking-tight truncate ${color}`}>{value}</span>
-      {unit && <span className="text-xs font-semibold text-muted-foreground/60 shrink-0">{unit}</span>}
-    </div>
-    {hasBreakdown && (
-      <div className={`absolute bottom-2 right-3 text-[10px] font-bold transition-colors ${active ? 'text-primary' : 'text-muted-foreground/40 group-hover:text-primary/70'}`}>View Details &rarr;</div>
-    )}
-  </div>
-);
+/* ── Stat tile ──
+   Colour encodes state, never identity.
 
-/* ── Tab Button ── */
+   `color` reaches this component from ~30 call sites, and most pass a
+   decorative tint that means nothing — teal for Baseline COD, pink for PO
+   Amount, purple for Vendors. Rendered literally that produced a ten-colour
+   wall in which the one genuinely red number carried no more weight than the
+   rest. Only the status triad is honoured below; every other tint resolves to
+   neutral, so a healthy project reads as a quiet screen and a troubled one
+   shows exactly as many coloured tiles as it has problems.
+
+   Label floor is 12px. The old 11px bold-uppercase-widest label was both
+   smaller and louder than the number it labelled. */
+const STATUS_TINT: Record<string, string> = {
+  'text-destructive': 'text-status-critical-fg',
+  'text-warning': 'text-status-risk-fg',
+  'text-success': 'text-status-healthy-fg',
+};
+
+const RAIL_FOR_TINT: Record<string, string> = {
+  'text-status-critical-fg': 'border-l-[3px] border-l-status-critical-solid',
+  'text-status-risk-fg': 'border-l-[3px] border-l-status-risk-solid',
+  'text-status-healthy-fg': 'border-l-[3px] border-l-status-healthy-solid',
+};
+
+const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, hasBreakdown, size = 'primary' }: any) => {
+  const tint = STATUS_TINT[color as string];
+  const interactive = !!onClick;
+  return (
+    <div
+      onClick={onClick}
+      role={interactive ? 'button' : undefined}
+      tabIndex={interactive ? 0 : undefined}
+      onKeyDown={(e: React.KeyboardEvent) => {
+        if (interactive && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); }
+      }}
+      className={`group relative flex flex-col justify-between gap-3 rounded-lg border bg-surface-1 transition-colors
+        ${size === 'primary' ? 'px-4 py-4 min-h-[104px]' : 'px-3.5 py-3 min-h-[84px]'}
+        ${tint ? RAIL_FOR_TINT[tint] : ''}
+        ${active ? 'border-primary ring-1 ring-primary/25' : 'border-border-subtle'}
+        ${interactive ? 'cursor-pointer hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <span className="text-[12px] font-medium leading-snug text-fg-secondary">{label}</span>
+        {Icon && <Icon className="w-4 h-4 shrink-0 text-fg-tertiary" strokeWidth={1.5} />}
+      </div>
+
+      <div className="flex items-baseline gap-1.5 overflow-hidden">
+        <span
+          title={typeof value === 'string' ? value : undefined}
+          className={`truncate tabular-nums tracking-tight leading-none font-medium ${size === 'primary' ? 'text-[30px]' : 'text-[22px]'} ${tint || 'text-fg-primary'}`}
+        >{value}</span>
+        {unit && <span className="shrink-0 text-[13px] font-medium text-fg-tertiary">{unit}</span>}
+      </div>
+
+      {hasBreakdown && (
+        <span className={`text-[12px] font-medium transition-colors ${active ? 'text-primary' : 'text-fg-tertiary group-hover:text-primary'}`}>
+          {active ? 'Hide details' : 'View details'}
+        </span>
+      )}
+    </div>
+  );
+};
+
+/* ── Tab ──
+   Was 13px bold ALL-CAPS with letter-spacing, plus a glow under the active
+   one. Caps destroy word-shape, which is the thing you actually scan a tab
+   row by, and the glow made the selected tab the loudest object on a page
+   whose job is to show data. Sentence case at 14px, one 2px rule to mark
+   position. */
 const TabBtn = ({ active, label, icon: Icon, onClick }: any) => (
-  <button onClick={onClick}
-    className={`relative flex items-center gap-2 px-6 py-4 text-[13px] font-bold uppercase tracking-wider transition-all ${active
-      ? 'text-primary bg-primary/5'
-      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
-      }`}>
-    <Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-muted-foreground/70'}`} />
+  <button
+    onClick={onClick}
+    aria-current={active ? 'page' : undefined}
+    className={`relative flex items-center gap-2 whitespace-nowrap rounded-t px-4 py-3 text-[14px] transition-colors
+      focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring
+      ${active ? 'font-semibold text-fg-primary' : 'font-medium text-fg-tertiary hover:text-fg-primary'}`}>
+    <Icon className={`w-4 h-4 ${active ? 'text-primary' : 'text-fg-tertiary'}`} strokeWidth={1.5} />
     {label}
-    {active && (
-      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-primary rounded-t-full shadow-[0_-2px_12px_rgba(59,130,246,0.5)]" />
-    )}
+    {active && <span className="absolute inset-x-0 -bottom-px h-[2px] bg-primary" />}
   </button>
 );
+
+/* ── Health banner ──
+   The screen opened on ten equal tiles and left the reader to work out the
+   answer from them. This states the answer in a sentence first, then lets the
+   tiles be the evidence for it. */
+const HealthBanner = ({ tier, progressPct, scheduleVariance, pendingCod, unitType, forecast }: any) => {
+  const tone = tier === 'Critical' ? 'critical'
+    : (tier === 'High Risk' || tier === 'Watchlist') ? 'risk'
+    : 'healthy';
+
+  const headline = tone === 'critical' ? 'This project needs attention now'
+    : tone === 'risk' ? 'This project is slipping'
+    : 'This project is on track';
+
+  const facts: string[] = [`${Math.round(progressPct)}% complete`];
+  if (typeof scheduleVariance === 'number' && scheduleVariance !== 0) {
+    facts.push(scheduleVariance < 0
+      ? `${Math.abs(scheduleVariance)} days behind baseline`
+      : `${scheduleVariance} days ahead of baseline`);
+  }
+  if (pendingCod > 0) {
+    /* unitType arrives already plural ("Blocks"), so a blind + "s" gave
+       "12 blockss". Trust the source for >1 and strip for exactly 1. */
+    const raw = String(unitType || 'unit').toLowerCase();
+    const noun = pendingCod === 1
+      ? raw.replace(/s$/, '')
+      : (raw.endsWith('s') ? raw : raw + 's');
+    facts.push(`${pendingCod} ${noun} still to commission`);
+  }
+  if (forecast) facts.push(`forecast COD ${forecast}`);
+
+  const rail = tone === 'critical' ? 'border-l-status-critical-solid'
+    : tone === 'risk' ? 'border-l-status-risk-solid'
+    : 'border-l-status-healthy-solid';
+  const Icon = tone === 'healthy' ? CheckCircle2 : AlertTriangle;
+  const iconTint = tone === 'critical' ? 'text-status-critical-fg'
+    : tone === 'risk' ? 'text-status-risk-fg'
+    : 'text-status-healthy-fg';
+
+  return (
+    <div className={`flex items-start gap-3 rounded-lg border border-l-[3px] border-border-subtle ${rail} bg-surface-1 px-4 py-3.5`}>
+      <Icon className={`mt-0.5 h-[18px] w-[18px] shrink-0 ${iconTint}`} strokeWidth={1.75} />
+      <div className="min-w-0">
+        <p className="text-[15px] font-semibold text-fg-primary">{headline}</p>
+        <p className="mt-0.5 text-[14px] leading-relaxed text-fg-secondary">{facts.join(' · ')}</p>
+      </div>
+    </div>
+  );
+};
 
 const ECODCell = ({ edge }: { edge: any }) => {
   const scod = edge.scd;
@@ -238,16 +332,13 @@ const P6SyncEditor = ({ p6 }: { p6: any }) => {
   );
 };
 
-const formatProjectName = (name: string) => {
-  if (!name) return name;
-  const parts = name.split('_');
-  if (parts.length >= 5) {
-    const [spv, plot, type, capacity, category, ...rest] = parts;
-    const newName = `${plot}_${spv}_${capacity}_${category}_${type}`;
-    return rest.length ? `${newName}_${rest.join('_')}` : newName;
-  }
-  return name;
-};
+
+/* The live Transmission Commissioning Portal is off.
+   It did not work when opened, and the deep link carried a hardcoded account
+   email and password as query parameters — which shipped in the JS bundle to
+   every user. Flip this to true once the portal works AND the link is issued
+   by the backend rather than embedded here. */
+const TRANSMISSION_PORTAL_ENABLED = false;
 
 export default function ProjectWorkspace({ projectId: propProjectId, onBack }: { projectId?: string, onBack?: () => void }) {
   const params = useParams();
@@ -577,11 +668,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center w-full h-full min-h-[500px] bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 text-primary animate-spin" />
-          <span className="text-sm text-muted-foreground/60 font-medium tracking-wider uppercase">Loading Intelligence...</span>
+      <div className="mx-auto w-full max-w-[1600px] px-6 py-6" aria-busy="true" aria-live="polite">
+        <span className="sr-only">Loading project</span>
+        <div className="mb-6 h-[68px] animate-pulse rounded-lg bg-surface-sunken" />
+        <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className="h-[104px] animate-pulse rounded-lg bg-surface-sunken" />
+          ))}
         </div>
+        <div className="h-[76px] animate-pulse rounded-lg bg-surface-sunken" />
       </div>
     );
   }
@@ -589,11 +684,17 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   if (!project) {
     return (
       <div className="flex items-center justify-center w-full h-full min-h-[500px] bg-background">
-        <div className="text-center">
-          <AlertTriangle className="w-12 h-12 text-warning/50 mx-auto mb-4" />
-          <p className="text-muted-foreground">Project not found.</p>
-          <button onClick={() => navigate('/ceo-dashboard')} className="mt-4 text-primary text-sm hover:underline">
-            ← Back to Dashboard
+        <div className="max-w-[380px] text-center">
+          <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-fg-tertiary" strokeWidth={1.5} />
+          <p className="text-[16px] font-semibold text-fg-primary">We could not find this project</p>
+          <p className="mt-1.5 text-[14px] leading-relaxed text-fg-secondary">
+            It may have been renamed or removed from the portfolio. Check the portfolio list for the current name.
+          </p>
+          <button
+            onClick={() => navigate('/ceo-dashboard')}
+            className="mt-5 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            Back to portfolio
           </button>
         </div>
       </div>
@@ -1005,20 +1106,20 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   return (
     <div className="w-full min-h-full bg-background text-foreground pb-12">
       {/* ── Top Bar ── */}
-      <header className="sticky top-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border px-6 py-3">
-        <div className="max-w-[1600px] mx-auto flex items-center gap-4">
+      <header className="sticky top-0 z-50 border-b border-border-subtle bg-surface-1 px-6 py-3">
+        <div className="mx-auto flex max-w-[1600px] items-center gap-4">
           <button onClick={() => onBack ? onBack() : navigate('/ceo-dashboard')}
-            className="flex items-center gap-2 text-sm text-muted-foreground/70 hover:text-foreground transition-colors group">
-            <ArrowLeft className="w-4 h-4 group-hover:-translate-x-0.5 transition-transform" />
-            Back to Portfolio
+            className="flex items-center gap-1.5 rounded-md px-1.5 py-1 -ml-1.5 text-[14px] font-medium text-fg-secondary transition-colors hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
+            Back to portfolio
           </button>
-          <div className="h-5 w-px bg-muted"></div>
-          <div className="flex items-center gap-2">
+          <div className="h-5 w-px bg-border-subtle"></div>
+          <div className="flex min-w-0 items-center gap-2">
             <div className={dotClass}></div>
-            <span className="text-sm font-semibold text-foreground truncate max-w-[400px]">{formatProjectName(p.projectName)}</span>
+            <span className="truncate text-[15px] font-semibold text-fg-primary">{formatProjectName(p.projectName)}</span>
           </div>
           <div className="ml-auto flex items-center gap-4">
-            <span className="text-[10px] font-mono text-muted-foreground/40">{p.projectId}</span>
+            <span className="hidden font-mono text-[12px] text-fg-tertiary md:inline">{p.projectId}</span>
             {detail?.p6?.p6ObjectId && (
               <button
                 onClick={async () => {
@@ -1040,10 +1141,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 }}
                 disabled={syncingP6}
                 title="Pull latest data from P6 and Transmission Portal for this project"
-                className="flex items-center gap-2 text-[11px] font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 px-3 py-1.5 rounded-lg transition-all disabled:opacity-50"
+                className="flex items-center gap-2 rounded-lg border border-border-default px-3 py-2 text-[13px] font-medium text-fg-secondary transition-colors hover:border-border-strong hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
               >
-                {syncingP6 ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCcw className="w-3 h-3" />}
-                Sync P6 & TC
+                {syncingP6 ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCcw className="h-3.5 w-3.5" />}
+                {syncingP6 ? 'Syncing…' : 'Sync P6 & TC'}
               </button>
             )}
           </div>
@@ -1051,8 +1152,21 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
-        {/* ── Hero Section ── */}
-        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-3">
+        {/* ── Hero ──
+            All ten KPIs, in the original 5-wide grid. The tiles keep the
+            quieter treatment — 12px labels, tabular figures, and colour only
+            where a value is actually a problem — but nothing is demoted out
+            of the grid. */}
+        <HealthBanner
+          tier={tier}
+          progressPct={progressPct}
+          scheduleVariance={p.scheduleVariance}
+          pendingCod={detail?.mapping?.pendingCodBlocks || 0}
+          unitType={detail?.mapping?.unitType}
+          forecast={p.forecastFinish || p.forecastMonth}
+        />
+
+        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
           <HeroMetric label="PO Amount" value={slrTopLevelKPIs ? `₹${(slrTopLevelKPIs.totalBudgetINR / 10000000).toFixed(1)}` : (detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0')} unit="Cr" icon={Database} color="text-primary" />
 
@@ -1212,12 +1326,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         )}
 
         {/* ── Tab Navigation ── */}
-        <div className="flex items-center gap-2 border-b border-border bg-slate-100/50 dark:bg-gray-900/50 backdrop-blur-sm px-4 overflow-x-auto scrollbar-hide">
+        <div role="tablist" className="flex items-center gap-1 overflow-x-auto border-b border-border-subtle px-1 scrollbar-hide">
           <TabBtn active={activeTab === 'overview'} label="Overview" icon={BarChart3} onClick={() => setActiveTab('overview')} />
-          <TabBtn active={activeTab === 'intelligence'} label="Intelligence Hub" icon={Brain} onClick={() => setActiveTab('intelligence')} />
-          <TabBtn active={activeTab === 'sap'} label="SAP Intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
+          <TabBtn active={activeTab === 'intelligence'} label="Intelligence hub" icon={Brain} onClick={() => setActiveTab('intelligence')} />
+          <TabBtn active={activeTab === 'sap'} label="SAP intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'einvoice'} label="E-Invoice" icon={Receipt} onClick={() => setActiveTab('einvoice')} />
-          <TabBtn active={activeTab === 'p6'} label="Schedule Intelligence" icon={Layers} onClick={() => setActiveTab('p6')} />
+          <TabBtn active={activeTab === 'p6'} label="Schedule intelligence" icon={Layers} onClick={() => setActiveTab('p6')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
           <TabBtn active={activeTab === 'quality'} label="Quality" icon={Shield} onClick={() => setActiveTab('quality')} />
           <TabBtn active={activeTab === 'approvals'} label="Approval" icon={CheckCircle} onClick={() => setActiveTab('approvals')} />
@@ -2758,7 +2872,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           {/* ════════ TRANSMISSION TAB ════════ */}
           {activeTab === 'transmission' && (
             <div className="space-y-6">
-              {/* Transmission Portal Link Banner */}
+              {/* Transmission Portal Link Banner — see TRANSMISSION_PORTAL_ENABLED */}
+              {TRANSMISSION_PORTAL_ENABLED && (
               <div className="intelligence-card p-6 flex flex-col md:flex-row items-center justify-between gap-6 border-primary/20 bg-primary/[0.02]">
                 <div className="flex items-start gap-4">
                   <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
@@ -2784,6 +2899,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   Open Portal <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </a>
               </div>
+              )}
 
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">

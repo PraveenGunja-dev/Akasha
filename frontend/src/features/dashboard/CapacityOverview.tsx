@@ -4,6 +4,7 @@ import ReactECharts from "echarts-for-react";
 import { useSearchParams } from "react-router-dom";
 import { Activity, Zap, Sun, Wind, Calendar, ServerCrash, RefreshCw, TrendingUp, TrendingDown, Info, Layers } from "lucide-react";
 import { motion, AnimatePresence } from 'framer-motion';
+import { formatProjectName } from '../../lib/projectName';
 
 const containerVariants: any = {
   hidden: { opacity: 0 },
@@ -202,7 +203,7 @@ const KPIBreakdownModal = ({ isOpen, onClose, activeKpi, projects }: { isOpen: b
                       const pct = p.total_capacity > 0 ? ((p.cod_mw + p.tr_mw) / p.total_capacity * 100) : 0;
                       return (
                         <tr key={idx} className="bg-white/40 dark:bg-gray-900/40 hover:bg-white dark:hover:bg-card transition-all duration-200 group shadow-sm hover:shadow-md rounded-xl">
-                          <td className="px-4 py-3.5 font-bold text-[12px] text-foreground dark:text-white max-w-[200px] truncate rounded-l-xl" title={p.project_name}>{p.project_name}</td>
+                          <td className="px-4 py-3.5 font-bold text-[12px] text-foreground dark:text-white max-w-[200px] truncate rounded-l-xl" title={formatProjectName(p.project_name)}>{formatProjectName(p.project_name)}</td>
                           <td className="px-2 py-3.5 text-center">
                             {p.type === 'Solar' ? <div className="mx-auto w-6 h-6 rounded-full bg-warning/10 flex items-center justify-center"><Sun size={12} className="text-warning" /></div> : <div className="mx-auto w-6 h-6 rounded-full bg-primary/10 flex items-center justify-center"><Wind size={12} className="text-primary" /></div>}
                           </td>

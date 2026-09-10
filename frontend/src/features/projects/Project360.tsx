@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { formatProjectName } from '../../lib/projectName';
 import {
   Search, Sparkles, ChevronRight, AlertTriangle, Shield,
   Clock, Package, CheckCircle2, XCircle, Eye,
@@ -173,7 +174,7 @@ const MetricBreakdownModal = ({
               {sorted.map((p) => (
                 <tr key={p.projectId} className="hover:bg-muted transition-colors">
                   <td className="px-6 py-3 w-full max-w-[250px] sm:max-w-xs md:max-w-md">
-                    <div className="font-semibold text-foreground truncate">{p.projectName}</div>
+                    <div className="font-semibold text-foreground truncate">{formatProjectName(p.projectName)}</div>
                     <div className="text-[10px] text-muted-foreground font-mono mt-0.5">{p.projectId}</div>
                   </td>
                   {type === 'schedule' && (
@@ -524,8 +525,8 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
       {/* 1. Project Details (30%) */}
       <div className="flex flex-col gap-1.5 w-[30%] min-w-[200px] pr-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-[14px] font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate">
-            {project.projectName}
+          <h3 className="text-[14px] font-semibold text-foreground/90 group-hover:text-primary transition-colors truncate" title={formatProjectName(project.projectName)}>
+            {formatProjectName(project.projectName)}
           </h3>
           <div className={`w-2 h-2 rounded-full shrink-0 ${statusCfg.bgColor}`} style={{ backgroundColor: accentColor, boxShadow: `0 0 6px ${accentColor}80` }}></div>
         </div>

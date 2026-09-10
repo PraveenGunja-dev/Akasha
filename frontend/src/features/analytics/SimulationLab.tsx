@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Search, ShieldAlert, Activity, AlertTriangle, Zap, CheckCircle2, ChevronRight, BarChart2, Eye, BrainCircuit, PlaySquare, Lightbulb, Sliders, Check, FileText, FastForward, Target, CloudRain, Wind, Bell } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
+import { formatProjectName } from '../../lib/projectName';
 
 // Location coordinates for weather lookup (from ProjectMap)
 const SUBSTATION_COORDS: Record<string, { lat: number, lng: number }> = {
@@ -713,7 +714,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
 
                         <div className="flex items-start justify-between gap-3">
                           <div className="flex flex-col overflow-hidden w-full">
-                            <span className="text-[13px] font-extrabold text-foreground truncate group-hover:text-primary transition-colors mb-0.5" title={p.name}>{p.name}</span>
+                            <span className="text-[13px] font-extrabold text-foreground truncate group-hover:text-primary transition-colors mb-0.5" title={formatProjectName(p.name)}>{formatProjectName(p.name)}</span>
                             <div className="flex items-center gap-2 text-[10px] font-bold text-muted-foreground uppercase tracking-widest">
                               <span className="flex items-center gap-1">
                                 <ShieldAlert className={`w-3 h-3 ${p.critical ? 'text-destructive' : 'text-warning'}`} />

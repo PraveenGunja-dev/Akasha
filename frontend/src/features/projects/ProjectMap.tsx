@@ -3,6 +3,7 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMapEvents
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { MapPin, Layers, ChevronDown, Zap, Search, Thermometer, Wind, Loader2, CloudLightning, CloudRain, X, Activity, Sun, Maximize2, Minimize2, Cloud, Globe, Factory, Target } from 'lucide-react';
+import { formatProjectName } from '../../lib/projectName';
 
 // ─── OIM-style voltage color scale ───
 const getVoltageColor = (voltageTag?: string): string => {
@@ -85,16 +86,6 @@ const createGeneratorIcon = (type: string) => {
 };
 import ReactECharts from 'echarts-for-react';
 
-const formatProjectName = (name: string) => {
-  if (!name) return name;
-  const parts = name.split('_');
-  if (parts.length >= 5) {
-    const [spv, plot, type, capacity, category, ...rest] = parts;
-    const newName = `${plot}_${spv}_${capacity}_${category}_${type}`;
-    return rest.length ? `${newName}_${rest.join('_')}` : newName;
-  }
-  return name;
-};
 
 // Factory to create standard tear-drop markers
 const createMarkerIcon = (color: string) => new L.DivIcon({
@@ -813,7 +804,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
                   onClick={() => handleSearchSelect(item.lat, item.lng)}
                   className="w-full text-left px-4 py-2 text-sm hover:bg-muted dark:hover:bg-slate-700/50 transition-colors flex flex-col"
                 >
-                  <span className="font-semibold text-foreground dark:text-muted-foreground">{item.name}</span>
+                  <span className="font-semibold text-foreground dark:text-muted-foreground">{formatProjectName(item.name)}</span>
                   <span className="text-xs text-muted-foreground dark:text-muted-foreground">{item.type}</span>
                 </button>
               ))}

@@ -1,6 +1,7 @@
 import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { ShieldAlert, AlertTriangle, List, Activity } from 'lucide-react';
+import { formatProjectName } from '../../lib/projectName';
 
 export default function RiskCommandCenter({ p6Data, finDetails }: any) {
   
@@ -94,7 +95,7 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
               <tbody>
                 {scheduleRisks.map((p: any, idx: number) => (
                   <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
-                    <td className="px-4 py-3 font-medium text-foreground">{p.name}</td>
+                    <td className="px-4 py-3 font-medium text-foreground">{formatProjectName(p.name)}</td>
                     <td className="px-4 py-3 text-right font-bold text-destructive">+{p.finishDateVariance}</td>
                   </tr>
                 ))}

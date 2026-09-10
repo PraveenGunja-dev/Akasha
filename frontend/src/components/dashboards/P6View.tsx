@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { Calendar, AlertTriangle, List, Layers, Box, Bell, ChevronRight, X, Activity } from 'lucide-react';
+import { formatProjectName } from '../../lib/projectName';
 
 export default function P6View({ p6Data, loading }: any) {
   const [trackingMode, setTrackingMode] = useState<'activities' | 'materials'>('activities');
@@ -283,7 +284,7 @@ export default function P6View({ p6Data, loading }: any) {
               {(p6Data || []).map((p: any, idx: number) => (
                 <tr key={idx} className="border-b border-border hover:bg-accent transition-colors">
                   <td className="px-4 py-3 font-mono text-xs text-primary">{p.project_id}</td>
-                  <td className="px-4 py-3 font-medium truncate max-w-[200px] text-foreground">{p.name}</td>
+                  <td className="px-4 py-3 font-medium truncate max-w-[200px] text-foreground" title={formatProjectName(p.name)}>{formatProjectName(p.name)}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.start_date ? new Date(p.start_date).toLocaleDateString() : 'N/A'}</td>
                   <td className="px-4 py-3 text-muted-foreground">{p.finish_date ? new Date(p.finish_date).toLocaleDateString() : 'N/A'}</td>
                   <td className="px-4 py-3 text-center">

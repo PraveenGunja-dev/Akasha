@@ -2,6 +2,13 @@ import React, { useEffect, useState, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Network, X, RotateCcw, ChevronDown, ChevronRight, Calendar, Package, Zap, Building2, Truck, Search, Filter } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
+import { formatProjectName } from '../../lib/projectName';
+
+
+/* Off: the portal did not work when opened, and this deep link embedded a
+   hardcoded account email and password as query parameters, which shipped in
+   the JS bundle. Re-enable only once the link is issued by the backend. */
+const TRANSMISSION_PORTAL_ENABLED = false;
 
 interface GNode {
   id: string; project_id?: string; name: string; category: number; value?: string;
@@ -551,7 +558,7 @@ export default function KnowledgeGraph() {
                           {selectedNode.projects_list.map((proj: any) => (
                             <div key={proj.id} className="p-2.5 bg-muted rounded-lg border border-border flex justify-between items-center group hover:bg-muted transition-colors">
                               <div className="flex-1 min-w-0 pr-3">
-                                <div className="text-xs font-semibold text-foreground truncate" title={proj.name}>{proj.name}</div>
+                                <div className="text-xs font-semibold text-foreground truncate" title={formatProjectName(proj.name)}>{formatProjectName(proj.name)}</div>
                                 <div className="text-[10px] text-muted-foreground mt-0.5 font-mono">{proj.capacity} MW</div>
                               </div>
                               <div className={`px-2 py-1 rounded-md text-[10px] font-bold shrink-0 ${proj.health === 'delayed' ? 'bg-destructive/15 text-destructive dark:text-destructive' : 'bg-success/15 text-success dark:text-success'}`}>
@@ -606,10 +613,13 @@ export default function KnowledgeGraph() {
                 {selectedNode.tc && selectedNode.tc.total_lines > 0 && (
                   <DetailSection title="Transmission Linkage" icon={<Network className="w-4 h-4" />} color="#8B5CF6">
                     
-                    {/* Live Transmission Portal Link */}
+                    {/* Live Transmission Portal Link — off: the portal did not
+                        work, and this deep link embedded a hardcoded account
+                        email and password as query parameters. */}
+                    {TRANSMISSION_PORTAL_ENABLED && (
                     <div className="flex justify-end mb-2">
                       <a
-                        href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${encodeURIComponent(selectedNode.project_id || '')}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
+                        href={`https://adani.unada.in/transmission/v1/dashboard/khavda/commissioning-team?project=${encodeURIComponent(selectedNode?.project_id || '')}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[9px] uppercase tracking-wider px-2.5 py-1.5 rounded font-bold transition-all w-fit group"
@@ -617,6 +627,7 @@ export default function KnowledgeGraph() {
                         Open Portal <ChevronRight className="w-3 h-3 group-hover:translate-x-0.5 transition-transform" />
                       </a>
                     </div>
+                    )}
 
                     <div className="grid grid-cols-3 gap-2 my-2 mb-3">
                       <div className="bg-muted border border-border rounded flex flex-col items-center justify-center py-2">

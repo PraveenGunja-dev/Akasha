@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, AlertTriangle, ArrowRight, ShieldAlert, Target, Shield, Clock, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { formatProjectName } from '../../lib/projectName';
 
 export default function PortfolioIntelligence() {
   const [data, setData] = useState<any>(null);
@@ -89,7 +90,7 @@ export default function PortfolioIntelligence() {
               hotspots.map((hotspot: any, idx: number) => (
                 <div key={idx} onClick={() => navigate(`/ceo-dashboard/project/${hotspot.project_id}`)} className="p-4 rounded-lg border border-border bg-card hover:bg-muted/50 cursor-pointer transition-colors flex items-center justify-between">
                   <div>
-                    <h4 className="font-semibold text-foreground mb-1">{hotspot.project_name}</h4>
+                    <h4 className="font-semibold text-foreground mb-1">{formatProjectName(hotspot.project_name)}</h4>
                     <div className="flex items-center gap-4 text-xs">
                       <span className="flex items-center gap-1 text-destructive font-bold"><Activity className="w-3 h-3" /> Health: {hotspot.health}/100</span>
                       <span className="flex items-center gap-1 text-orange-500"><Clock className="w-3 h-3" /> Delay: {hotspot.delay} days</span>

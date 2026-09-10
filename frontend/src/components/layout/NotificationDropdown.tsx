@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, Filter, Play, Sparkles, Loader2, Maximize2, Minimize2, X } from 'lucide-react';
+import { formatProjectName } from '../../lib/projectName';
 
 export default function NotificationDropdown({ notifications, onClose, onMarkAllRead, onSimulate }: any) {
   const [activeTab, setActiveTab] = useState('All');
@@ -182,7 +183,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                   
                   <div className="flex-1 min-w-0 flex flex-col gap-1.5 mt-0.5">
                     <div className="flex justify-between items-start">
-                      <span className="font-bold text-[13px] text-foreground dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors tracking-tight">{projectName}</span>
+                      <span className="font-bold text-[13px] text-foreground dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors tracking-tight">{formatProjectName(projectName)}</span>
                       <span className="text-[9px] font-semibold text-muted-foreground whitespace-nowrap bg-muted dark:bg-card border border-border dark:border-gray-700 px-1.5 py-0.5 rounded shrink-0 shadow-sm mt-0.5">
                         {group.length} {group.length === 1 ? 'Message' : 'Messages'}
                       </span>

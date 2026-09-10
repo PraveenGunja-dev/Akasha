@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { formatProjectName } from '../../lib/projectName';
 import { 
   Network, Database, ArrowRightLeft, 
   Server, Share2, Search,
@@ -373,9 +374,9 @@ export default function DataIntegrationHub() {
                   <tr key={idx} className="hover:bg-muted transition-colors">
                     {/* Master Info */}
                     <td className="px-5 py-3">
-                      <div className="font-medium">{proj.project_name}</div>
-                      <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1" title={proj.p6_project_name}>
-                        {proj.p6_project_name}
+                      <div className="font-medium">{formatProjectName(proj.project_name)}</div>
+                      <div className="text-[11px] text-muted-foreground mt-1 line-clamp-1" title={formatProjectName(proj.p6_project_name)}>
+                        {formatProjectName(proj.p6_project_name)}
                       </div>
                       <div className="text-[11px] font-medium text-muted-foreground mt-0.5">{proj.capacity_mwac || proj.capacity_mw || 0} MW</div>
                     </td>
@@ -447,7 +448,7 @@ export default function DataIntegrationHub() {
             <div className="px-5 py-4 border-b border-border flex justify-between items-center bg-muted">
               <div>
                 <h3 className="font-semibold text-foreground text-lg" style={{ textWrap: 'balance' }}>
-                  {editingProject.p6_project_name || editingProject.project_name}
+                  {formatProjectName(editingProject.p6_project_name || editingProject.project_name)}
                 </h3>
                 <p className="text-[11px] text-muted-foreground mt-1">
                   ID: {editingProject.p6?.id || 'UNMAPPED'} • {editingProject.capacity_mwac || editingProject.capacity_mw || 0} MW
