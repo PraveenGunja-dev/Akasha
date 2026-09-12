@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, LayoutDashboard, RefreshCw, BookOpen } from 'lucide-react';
+import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, RefreshCw, BookOpen } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
@@ -93,12 +93,6 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         >
           <Menu className="w-5 h-5" />
         </button>
-        <div className="hidden md:flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg bg-sky-500/10 flex items-center justify-center border border-sky-500/20 shadow-[0_0_10px_rgba(14,165,233,0.15)]">
-            <LayoutDashboard className="w-4 h-4 text-sky-500" />
-          </div>
-          <span className="font-bold text-foreground text-sm tracking-tight">Akasha Execution Platform</span>
-        </div>
       </div>
 
       {/* Right: project selector + actions */}

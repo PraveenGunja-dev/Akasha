@@ -22,6 +22,7 @@ import logging
 from sqlalchemy.orm import Session
 
 import models
+from services.progress import nonlabor_units_by_project, project_progress
 from engine.tools.p6_tools import (
     p6_get_project_summary,
     p6_get_activity_status_breakdown,
@@ -194,10 +195,13 @@ def _norm_pct(value) -> float:
 
 
 def _raw_completion_pct(db: Session, project_id: str) -> float:
-    """Read raw duration_percent_complete straight from the project row (not the
-    pre-rounded summary) and normalize to 0-100, preserving precision for comparisons."""
+    """Progress = Σ actual non-labour units / Σ planned non-labour units
+    (services/progress.py) — the single definition used everywhere, not
+    duration_percent_complete (schedule time elapsed)."""
     p6 = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
-    return _norm_pct(p6.duration_percent_complete) if p6 else 0.0
+    if not p6:
+        return 0.0
+    return round(project_progress(p6, nonlabor_units_by_project(db, [p6.p6_object_id]))[0] * 100, 1)
 
 
 # ============================================

@@ -40,7 +40,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
       {/* ─── KPI Row ─── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* KPI 1 */}
-        <div className="bento-card p-4 flex items-center justify-between">
+        <div className="kpi-card bento-card p-4 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Generated This Month</p>
             <div className="flex items-end gap-2">
@@ -53,7 +53,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
           </div>
         </div>
         {/* KPI 2 */}
-        <div className="bento-card p-4 flex items-center justify-between">
+        <div className="kpi-card bento-card p-4 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Scheduled Tasks</p>
             <div className="flex items-end gap-2">
@@ -66,7 +66,7 @@ export default function ReportsAnalytics({ data, theme }: any) {
           </div>
         </div>
         {/* KPI 3 */}
-        <div className="bento-card p-4 flex items-center justify-between">
+        <div className="kpi-card bento-card p-4 flex items-center justify-between">
           <div>
             <p className="text-[10px] font-bold text-muted-foreground uppercase tracking-wider mb-1">Storage Used</p>
             <div className="flex items-end gap-2">

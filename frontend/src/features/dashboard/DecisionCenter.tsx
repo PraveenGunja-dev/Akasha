@@ -34,7 +34,7 @@ export default function DecisionCenter({ p6Data, finDetails }: any) {
   const allActions = [...scheduleActions, ...financialActions];
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
       
       <div className="flex items-center gap-3 mb-2">
         <Target className="w-6 h-6 text-primary" />
@@ -48,11 +48,11 @@ export default function DecisionCenter({ p6Data, finDetails }: any) {
         
         {/* KPI Summary Column */}
         <div className="col-span-1 flex flex-col gap-4">
-           <div className="bg-card border border-border rounded-2xl p-6 shadow-sm">
+           <div className="kpi-card bg-card border border-border rounded-2xl p-4 shadow-sm">
              <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Pending Actions</h3>
              <p className="text-4xl font-light text-foreground">{allActions.length}</p>
            </div>
-           <div className="bg-card border border-destructive/20 rounded-2xl p-6 shadow-sm">
+           <div className="kpi-card kpi-card-critical bg-card border border-border rounded-2xl p-4 shadow-sm">
              <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider flex items-center gap-2">
                <AlertTriangle className="w-4 h-4 text-destructive" /> High Priority
              </h3>

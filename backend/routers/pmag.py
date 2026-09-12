@@ -4,6 +4,7 @@ from database import get_db
 from models import P6Project, P6BaselineProject, ProjectMapping, TcProjectEntry, TcNetworkEdge, MTTrialRun
 from datetime import datetime, timedelta
 from services.project_service import calculate_dynamic_evm, build_evm_index
+from services.progress import nonlabor_units_by_project, project_progress
 
 router = APIRouter(prefix="/api/pmag", tags=["PMAG Dashboard"])
 
@@ -80,15 +81,17 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
     # Same fix as /api/summary: fold the SAP tables once rather than issuing
     # three table-scanning queries per project inside the loop below.
     evm_index = build_evm_index(db)
+    nonlabor_units = nonlabor_units_by_project(db)  # one query, every project
 
     for m in mappings:
         p = p6_map.get(m.project_id)
         if not p:
             continue  # Only include mapped projects that actually exist in P6
 
-        pct = _safe_float(p.duration_percent_complete, 0)
-        if pct <= 1.0 and pct > 0:
-            pct = pct * 100
+        # Progress = Σ actual non-labour units / Σ planned non-labour units
+        # (services/progress.py) — the single definition used everywhere,
+        # not duration_percent_complete (schedule time elapsed).
+        pct = project_progress(p, nonlabor_units)[0] * 100
         total_completion += pct
 
         sv_days = _safe_float(p.finish_date_variance, None)
@@ -137,12 +140,11 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
                     planned_pct = 100 if now.date() >= p.start_date.date() else 0
             except:
                 pass
-        elif p.duration_percent_complete is not None:
-            # Fallback if no dates, assume planned is at least the actual to avoid 100% giant bars
-            p6_pct = p.duration_percent_complete
-            if p6_pct <= 1.0 and p6_pct > 0:
-                p6_pct *= 100
-            planned_pct = min(100, p6_pct + 5)
+        else:
+            # Fallback if no dates: assume planned is at least the actual (now
+            # the resource-unit `pct` above, not duration_percent_complete)
+            # to avoid a 100% giant bar or a nonsensical "ahead of plan" read.
+            planned_pct = min(100, pct + 5)
             
         dynamic_spi, _ = calculate_dynamic_evm(db, p, m, index=evm_index)
             

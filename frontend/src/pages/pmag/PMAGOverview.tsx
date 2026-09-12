@@ -258,7 +258,7 @@ export default function PMAGOverview({
             { label: 'At Risk', value: summary.at_risk, icon: AlertTriangle, accent: 'text-warning', border: 'border-warning/20', bg: 'bg-warning/5' },
             { label: 'Delayed', value: summary.delayed, icon: XCircle, accent: 'text-destructive', border: 'border-destructive/20', bg: 'bg-destructive/5' },
           ].map((kpi, i) => (
-            <div key={i} className={`relative p-5 rounded-2xl border ${kpi.border} ${kpi.bg} backdrop-blur-md overflow-hidden group hover:scale-[1.02] transition-transform duration-300`}>
+            <div key={i} className={`kpi-card relative p-4 rounded-2xl border ${kpi.border} ${kpi.bg} backdrop-blur-md overflow-hidden group hover:scale-[1.02] transition-transform duration-300`}>
               <div className="absolute -right-4 -top-4 w-24 h-24 rounded-full bg-background/50 blur-2xl group-hover:bg-background/80 transition-colors"></div>
               <div className="relative z-10 flex flex-col h-full justify-between">
                 <div className="flex items-center justify-between mb-4">

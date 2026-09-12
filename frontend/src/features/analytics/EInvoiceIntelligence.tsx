@@ -415,7 +415,7 @@ export default function EInvoiceIntelligence() {
 
       {/* Top Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center">
               <FileText className="w-4 h-4 text-primary" />
@@ -425,7 +425,7 @@ export default function EInvoiceIntelligence() {
           <div className="text-3xl font-bold font-mono text-foreground">{metrics.totalInvoices}</div>
         </div>
         
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center">
               <TrendingUp className="w-4 h-4 text-blue-500" />
@@ -435,7 +435,7 @@ export default function EInvoiceIntelligence() {
           <div className="text-3xl font-bold font-mono text-blue-500">{formatLacs(metrics.totalAmount)}</div>
         </div>
         
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-lg bg-success/10 flex items-center justify-center">
               <CheckCircle2 className="w-4 h-4 text-success" />
@@ -445,7 +445,7 @@ export default function EInvoiceIntelligence() {
           <div className="text-3xl font-bold font-mono text-success">{formatLacs(metrics.completedAmount)}</div>
         </div>
         
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm">
           <div className="flex items-center gap-3 mb-2">
             <div className="w-8 h-8 rounded-lg bg-warning/10 flex items-center justify-center">
               <Activity className="w-4 h-4 text-warning" />

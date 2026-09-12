@@ -82,7 +82,7 @@ export default function ComplianceDashboard() {
   };
 
   return (
-    <div className="p-6 space-y-6 max-w-[1600px] mx-auto animate-in fade-in duration-300">
+    <div className="w-full p-6 space-y-6 animate-in fade-in duration-300">
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
@@ -94,7 +94,7 @@ export default function ComplianceDashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Tracked Projects</span>
             <div className="p-2 bg-primary/10 rounded-lg text-primary"><FileText className="w-4 h-4" /></div>
@@ -102,7 +102,7 @@ export default function ComplianceDashboard() {
           <div className="text-3xl font-light">{summaryData?.total_projects_tracked || 0}</div>
         </div>
         
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-success/50 transition-colors">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-success/50 transition-colors">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Overall Compliance</span>
             <div className="p-2 bg-success/10 rounded-lg text-success"><CheckCircle className="w-4 h-4" /></div>
@@ -110,7 +110,7 @@ export default function ComplianceDashboard() {
           <div className="text-3xl font-light text-success">{summaryData?.overall_compliance_percent || 0}%</div>
         </div>
         
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-destructive/50 transition-colors">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-destructive/50 transition-colors">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Missing CLRA</span>
             <div className="p-2 bg-destructive/10 rounded-lg text-destructive"><AlertTriangle className="w-4 h-4" /></div>
@@ -119,7 +119,7 @@ export default function ComplianceDashboard() {
           <div className="text-xs text-muted-foreground mt-1">Offline letters submitted</div>
         </div>
         
-        <div className="bg-card border border-border rounded-xl p-5 shadow-sm relative overflow-hidden group hover:border-warning/50 transition-colors">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-warning/50 transition-colors">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Insurance Renewals</span>
             <div className="p-2 bg-warning/10 rounded-lg text-warning"><Calendar className="w-4 h-4" /></div>

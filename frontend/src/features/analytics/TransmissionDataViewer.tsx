@@ -394,9 +394,8 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
             <button
               onClick={() => setLayersOpen(o => !o)}
               title="Layers"
-              className={`shrink-0 p-2 rounded-lg border shadow-lg transition-colors ${
-                layersOpen ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-muted'
-              }`}
+              className={`shrink-0 p-2 rounded-lg border shadow-lg transition-colors ${layersOpen ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-muted-foreground border-border hover:bg-muted'
+                }`}
             >
               <Layers className="w-4 h-4" />
             </button>
@@ -412,11 +411,10 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                   <button
                     key={key}
                     onClick={() => setBaseLayer(key)}
-                    className={`px-2 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${
-                      baseLayer === key
+                    className={`px-2 py-1.5 rounded-lg text-[11px] font-medium border transition-colors ${baseLayer === key
                         ? 'bg-primary text-primary-foreground border-primary'
                         : 'bg-background text-foreground border-border hover:bg-muted'
-                    }`}
+                      }`}
                   >
                     {BASE_LAYERS[key].label}
                   </button>
@@ -553,98 +551,98 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
               // alignment is exactly the wrong thing to put on top.
               .sort((a, b) => (a.edge.path?.length ?? 0) - (b.edge.path?.length ?? 0))
               .map(({ edge, from, to }) => {
-              const meta = statusMeta(edge.normalized_status);
-              const pct = edgeCompletionPct(edge);
-              const weight = zoomWeight(voltageWeight(edge.voltage), zoom);
-              const hovered = hoveredEdgeId === edge.id;
-              // A traced route follows the real alignment; without one we can only draw the
-              // straight chord, so it is rendered fainter to read as an approximation.
-              const traced = (edge.path?.length ?? 0) >= 2;
-              const positions: [number, number][] = traced
-                ? edge.path!
-                : [[from.lat, from.lng], [to.lat, to.lng]];
-              const dashArray = traced ? meta.dash : '2, 8';
-              // A low-confidence trace is a plausible alignment rather than a verified one,
-              // so it sits visually between a confirmed route and a bare straight line.
-              const routeOpacity = !traced ? 0.28 : edge.path_confidence === 'low' ? 0.7 : 0.9;
-              return (
-                <React.Fragment key={edge.id}>
-                  {/* A wide, faint stroke in the line's own colour. On the dark surface this
+                const meta = statusMeta(edge.normalized_status);
+                const pct = edgeCompletionPct(edge);
+                const weight = zoomWeight(voltageWeight(edge.voltage), zoom);
+                const hovered = hoveredEdgeId === edge.id;
+                // A traced route follows the real alignment; without one we can only draw the
+                // straight chord, so it is rendered fainter to read as an approximation.
+                const traced = (edge.path?.length ?? 0) >= 2;
+                const positions: [number, number][] = traced
+                  ? edge.path!
+                  : [[from.lat, from.lng], [to.lat, to.lng]];
+                const dashArray = traced ? meta.dash : '2, 8';
+                // A low-confidence trace is a plausible alignment rather than a verified one,
+                // so it sits visually between a confirmed route and a bare straight line.
+                const routeOpacity = !traced ? 0.28 : edge.path_confidence === 'low' ? 0.7 : 0.9;
+                return (
+                  <React.Fragment key={edge.id}>
+                    {/* A wide, faint stroke in the line's own colour. On the dark surface this
                       reads as the route glowing rather than as an outline drawn around it.
                       Only traced routes earn it: haloing a straight chord gives an
                       approximation the visual weight of a surveyed alignment, and with
                       most edges unmatched that is what turned the map into a spiderweb. */}
-                  {traced && (
-                  <Polyline
-                    positions={positions}
-                    interactive={false}
-                    pathOptions={{
-                      color: isDark ? meta.color : '#ffffff',
-                      weight: weight + (isDark ? 6 : 3.5),
-                      opacity: isDark ? (hovered ? 0.3 : 0.16) : hovered ? 0.9 : 0.55,
-                      lineCap: 'round',
-                      lineJoin: 'round',
-                    }}
-                  />
-                  )}
-                <Polyline
-                  positions={positions}
-                  eventHandlers={{
-                    mouseover: () => setHoveredEdgeId(edge.id),
-                    mouseout: () => setHoveredEdgeId(null),
-                  }}
-                  pathOptions={{
-                    color: meta.color,
-                    weight: hovered ? weight + 1.5 : traced ? weight : Math.max(0.8, weight - 1),
-                    opacity: hovered ? 1 : routeOpacity,
-                    dashArray,
-                    lineCap: 'round',
-                    lineJoin: 'round',
-                    // Drift the dashes only along real alignments. Animating the straight
-                    // chords too sets most of the map moving at once, which reads as
-                    // activity the data does not actually show.
-                    className: dashArray && traced ? 'tc-line-flow' : undefined,
-                  }}
-                >
-                  <Popup>
-                    <div className="min-w-[220px]">
-                      <h3 className="font-bold text-sm text-foreground border-b pb-1 mb-2">
-                        {edge.from_label} &harr; {edge.to_label}
-                      </h3>
-                      <div className="text-xs text-foreground grid grid-cols-2 gap-y-1 gap-x-3 mb-2">
-                        <div><span className="text-muted-foreground">Region</span><br /><span className="font-semibold">{edge.region}</span></div>
-                        <div><span className="text-muted-foreground">Voltage</span><br /><span className="font-semibold">{edge.voltage || '—'}</span></div>
-                        <div><span className="text-muted-foreground">Length</span><br /><span className="font-semibold">{edge.length || '—'} km</span></div>
-                        <div><span className="text-muted-foreground">Expected</span><br /><span className="font-semibold">{edge.expected_date || '—'}</span></div>
-                        {edge.contractor && <div className="col-span-2"><span className="text-muted-foreground">Contractor</span><br /><span className="font-semibold">{edge.contractor}</span></div>}
-                        <div className="col-span-2">
-                          <span className="text-muted-foreground">Route</span><br />
-                          <span className="font-semibold">
-                            {traced
-                              ? `${ROUTE_CONFIDENCE[edge.path_confidence ?? 'high']} · ${edge.path!.length} pts${edge.path_length_km ? ` · ${Math.round(edge.path_length_km)} km` : ''}`
-                              : 'Straight-line approximation'}
-                          </span>
+                    {traced && (
+                      <Polyline
+                        positions={positions}
+                        interactive={false}
+                        pathOptions={{
+                          color: isDark ? meta.color : '#ffffff',
+                          weight: weight + (isDark ? 6 : 3.5),
+                          opacity: isDark ? (hovered ? 0.3 : 0.16) : hovered ? 0.9 : 0.55,
+                          lineCap: 'round',
+                          lineJoin: 'round',
+                        }}
+                      />
+                    )}
+                    <Polyline
+                      positions={positions}
+                      eventHandlers={{
+                        mouseover: () => setHoveredEdgeId(edge.id),
+                        mouseout: () => setHoveredEdgeId(null),
+                      }}
+                      pathOptions={{
+                        color: meta.color,
+                        weight: hovered ? weight + 1.5 : traced ? weight : Math.max(0.8, weight - 1),
+                        opacity: hovered ? 1 : routeOpacity,
+                        dashArray,
+                        lineCap: 'round',
+                        lineJoin: 'round',
+                        // Drift the dashes only along real alignments. Animating the straight
+                        // chords too sets most of the map moving at once, which reads as
+                        // activity the data does not actually show.
+                        className: dashArray && traced ? 'tc-line-flow' : undefined,
+                      }}
+                    >
+                      <Popup>
+                        <div className="min-w-[220px]">
+                          <h3 className="font-bold text-sm text-foreground border-b pb-1 mb-2">
+                            {edge.from_label} &harr; {edge.to_label}
+                          </h3>
+                          <div className="text-xs text-foreground grid grid-cols-2 gap-y-1 gap-x-3 mb-2">
+                            <div><span className="text-muted-foreground">Region</span><br /><span className="font-semibold">{edge.region}</span></div>
+                            <div><span className="text-muted-foreground">Voltage</span><br /><span className="font-semibold">{edge.voltage || '—'}</span></div>
+                            <div><span className="text-muted-foreground">Length</span><br /><span className="font-semibold">{edge.length || '—'} km</span></div>
+                            <div><span className="text-muted-foreground">Expected</span><br /><span className="font-semibold">{edge.expected_date || '—'}</span></div>
+                            {edge.contractor && <div className="col-span-2"><span className="text-muted-foreground">Contractor</span><br /><span className="font-semibold">{edge.contractor}</span></div>}
+                            <div className="col-span-2">
+                              <span className="text-muted-foreground">Route</span><br />
+                              <span className="font-semibold">
+                                {traced
+                                  ? `${ROUTE_CONFIDENCE[edge.path_confidence ?? 'high']} · ${edge.path!.length} pts${edge.path_length_km ? ` · ${Math.round(edge.path_length_km)} km` : ''}`
+                                  : 'Straight-line approximation'}
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: meta.color }}>
+                            <span>{meta.label}</span><span>{pct}%</span>
+                          </div>
+                          <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta.color }} />
+                          </div>
+                          {edge.projects?.length > 0 && (
+                            <div className="mt-2 pt-2 border-t flex flex-wrap gap-1">
+                              {edge.projects.map((p, i) => (
+                                <span key={i} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">{p}</span>
+                              ))}
+                            </div>
+                          )}
                         </div>
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider mb-1" style={{ color: meta.color }}>
-                        <span>{meta.label}</span><span>{pct}%</span>
-                      </div>
-                      <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div className="h-full rounded-full" style={{ width: `${pct}%`, background: meta.color }} />
-                      </div>
-                      {edge.projects?.length > 0 && (
-                        <div className="mt-2 pt-2 border-t flex flex-wrap gap-1">
-                          {edge.projects.map((p, i) => (
-                            <span key={i} className="text-[10px] px-1.5 py-0.5 bg-primary/10 text-primary rounded font-medium">{p}</span>
-                          ))}
-                        </div>
-                      )}
-                    </div>
-                  </Popup>
-                </Polyline>
-                </React.Fragment>
-              );
-            })}
+                      </Popup>
+                    </Polyline>
+                  </React.Fragment>
+                );
+              })}
 
             {(overlays.substations ? substationMarkers : []).map(sub => {
               const sameSite = colocatedBySite.get(sub.name) ?? [];
@@ -749,17 +747,15 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                     <td className="px-6 py-4 font-medium text-foreground">{formatProjectName(proj.p6_project_name || proj.project_name || 'Unknown')}</td>
                     <td className="px-6 py-4 text-muted-foreground">{proj.capacity_mwac ? `${proj.capacity_mwac} MW` : '—'}</td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
-                        proj.p6?.health === 'On Track' ? 'bg-success/10 text-success' :
-                        proj.p6?.health === 'Delayed' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'
-                      }`}>
+                      <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${proj.p6?.health === 'On Track' ? 'bg-success/10 text-success' :
+                          proj.p6?.health === 'Delayed' ? 'bg-destructive/10 text-destructive' : 'bg-muted text-muted-foreground'
+                        }`}>
                         {proj.p6?.health || 'N/A'}
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${
-                        proj.tc?.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
-                      }`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium border ${proj.tc?.has_data ? 'border-purple-500/30 text-purple-600 bg-purple-500/5' : 'border-border text-muted-foreground'
+                        }`}>
                         {proj.tc?.status || '0 Edges'}
                       </span>
                     </td>
@@ -897,7 +893,7 @@ function StatTile({ label, value, icon, tone }: { label: string; value: string |
     muted: 'text-muted-foreground bg-muted',
   };
   return (
-    <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
+    <div className="kpi-card bg-card border border-border rounded-xl p-4 flex flex-col gap-2">
       <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${toneClasses[tone]}`}>{icon}</div>
       <div className="text-xl font-bold text-foreground">{value}</div>
       <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-semibold">{label}</div>
@@ -909,9 +905,8 @@ function FilterChip({ active, onClick, children, dotColor }: { active: boolean; 
   return (
     <button
       onClick={onClick}
-      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm transition-colors ${
-        active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-foreground border-border hover:bg-muted'
-      }`}
+      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold border shadow-sm transition-colors ${active ? 'bg-primary text-primary-foreground border-primary' : 'bg-card text-foreground border-border hover:bg-muted'
+        }`}
     >
       {dotColor && <span className="w-2 h-2 rounded-full" style={{ background: active ? '#fff' : dotColor }} />}
       {children}

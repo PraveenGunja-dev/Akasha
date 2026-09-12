@@ -304,6 +304,150 @@ def update_activity(p6_object_id: int, update_data: ActivityUpdate, db: Session 
         
     return result
 
+@router.get("/p6/construction-units")
+def get_construction_units(
+    project_object_id: Optional[int] = None,
+    project_id: Optional[str] = None,
+    db: Session = Depends(get_db),
+):
+    """Block-wise (solar) or WTG-wise (wind) construction rollup for one project.
+
+    P6 carries no usable unit column — `p6_wbs_node.is_block` was never
+    populated (0 rows of 17,078). The unit identity is in the activity NAME,
+    and both fleets follow one shape:
+
+        solar   "Block-01 -HT Cable Terminations - IDT Side"
+        wind    "WTG72-CW-PCC"
+
+    So the unit is parsed off the front of the name and everything else is
+    grouped under it. Activities that carry no unit prefix (plant-level
+    civil, evacuation, common facilities) are returned separately rather
+    than being spread across units they do not belong to.
+
+    Per unit we report what P6 actually records:
+      progress     share of that unit's activities that are COMPLETE, by
+                   status count. This is the figure the site reports against.
+      weighted     mean percent_complete over the same activities, kept
+                   alongside because it credits part-finished work and so
+                   always reads higher than `progress`.
+      cod          the COD milestone (COD and SCOD are the same thing): done
+                   with its actual date, or not done with the baseline/planned
+                   date it is forecast against
+      trial_run    same, for the "Trial Run" milestone. "Trial Operation"
+                   is a different activity and is deliberately NOT matched.
+    Nothing is inferred. A unit with no COD milestone reports none.
+    """
+    import re
+
+    # Accept either key. The dashboard payload has carried the human-facing
+    # project_id far longer than p6_object_id, so resolving from it here means
+    # this works regardless of which one the caller happens to hold.
+    if project_object_id is None:
+        if not project_id:
+            raise HTTPException(status_code=400, detail="project_object_id or project_id is required")
+        row = db.query(models.P6Project.p6_object_id).filter(
+            models.P6Project.project_id == project_id
+        ).first()
+        if not row:
+            return {"project_object_id": None, "unit_type": None, "unit_count": 0, "units": [], "unassigned": 0}
+        project_object_id = row[0]
+
+    acts = db.query(
+        models.P6Activity.name,
+        models.P6Activity.wbs_name,
+        models.P6Activity.status,
+        models.P6Activity.percent_complete,
+        models.P6Activity.actual_finish_date,
+        models.P6Activity.baseline_finish_date,
+        models.P6Activity.planned_finish_date,
+        models.P6Activity.finish_date,
+    ).filter(models.P6Activity.project_object_id == project_object_id).all()
+
+    if not acts:
+        return {"project_object_id": project_object_id, "unit_type": None, "units": [], "unassigned": 0}
+
+    UNIT_RE = re.compile(r"^\s*(?:(block)\s*-?\s*0*(\d+)|(wtg)\s*-?\s*0*(\d+))", re.I)
+    # COD and SCOD name the same milestone (309 of the 1,534 COD-ish activities
+    # are written SCOD). Matched on a word boundary so a stray substring cannot
+    # qualify; "Project ECOD - Finish" (3 rows, project-level) stays out.
+    COD_RE = re.compile(r"\bs?cod\b", re.I)
+    # "Trial Run" only. "Trial Operation" is a separate activity (883 rows).
+    TRIAL_RE = re.compile(r"\btrial\s+run\b", re.I)
+
+    def unit_of(name):
+        m = UNIT_RE.match(name or "")
+        if not m:
+            return None, None
+        if m.group(1):
+            return "Block", int(m.group(2))
+        return "WTG", int(m.group(4))
+
+    def iso(d):
+        return d.isoformat() if d else None
+
+    buckets = {}
+    unassigned = 0
+    kinds = {}
+
+    for a in acts:
+        kind, num = unit_of(a.name)
+        if kind is None:
+            unassigned += 1
+            continue
+        kinds[kind] = kinds.get(kind, 0) + 1
+        key = (kind, num)
+        b = buckets.setdefault(key, {
+            "kind": kind, "number": num, "label": "%s-%02d" % (kind, num),
+            "total": 0, "completed": 0, "in_progress": 0, "not_started": 0,
+            "pct_sum": 0.0, "pct_n": 0,
+            "cod": None, "trial_run": None,
+        })
+        b["total"] += 1
+        st = (a.status or "").lower()
+        if st.startswith("completed"):
+            b["completed"] += 1
+        elif st.startswith("in progress"):
+            b["in_progress"] += 1
+        else:
+            b["not_started"] += 1
+        # percent_complete is stored as a FRACTION (verified: min 0.0, max
+        # 1.0, nothing above 1 across all 132,761 activities).
+        if a.percent_complete is not None:
+            b["pct_sum"] += float(a.percent_complete) * 100.0
+            b["pct_n"] += 1
+
+        low = (a.name or "").lower()
+        forecast = a.baseline_finish_date or a.planned_finish_date or a.finish_date
+        done = st.startswith("completed")
+        if COD_RE.search(low):
+            b["cod"] = {"activity": a.name, "done": done,
+                        "actual": iso(a.actual_finish_date), "forecast": iso(forecast)}
+        elif TRIAL_RE.search(low):
+            prev = b["trial_run"]
+            if prev is None or (done and not prev["done"]):
+                b["trial_run"] = {"activity": a.name, "done": done,
+                                  "actual": iso(a.actual_finish_date), "forecast": iso(forecast)}
+
+    units = []
+    for b in buckets.values():
+        # Headline progress is completed activities over total activities, so
+        # a block only advances when work actually closes out.
+        b["progress"] = round(b["completed"] * 100.0 / b["total"], 1) if b["total"] else 0.0
+        b["weighted"] = round(b["pct_sum"] / b["pct_n"], 1) if b["pct_n"] else 0.0
+        del b["pct_sum"], b["pct_n"]
+        units.append(b)
+    units.sort(key=lambda u: (u["kind"], u["number"]))
+
+    unit_type = max(kinds, key=kinds.get) if kinds else None
+    return {
+        "project_object_id": project_object_id,
+        "unit_type": unit_type,
+        "unit_count": len(units),
+        "unassigned": unassigned,
+        "units": units,
+    }
+
+
 @router.get("/tc-network/project/{project_id}")
 def get_project_tc_network(project_id: str, db: Session = Depends(get_db)):
     m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()

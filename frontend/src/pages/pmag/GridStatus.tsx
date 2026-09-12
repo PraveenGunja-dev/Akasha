@@ -29,7 +29,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
       {/* ─── KPI Row ─── */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* KPI 1 */}
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">Target ECOD</span>
             <Clock className="w-4 h-4" />
@@ -40,7 +40,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
           </div>
         </div>
         {/* KPI 2 */}
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">Substation Readiness</span>
             <Shield className="w-4 h-4" />
@@ -51,7 +51,7 @@ export default function GridStatus({ connectivity, critical_path, theme }: any) 
           </div>
         </div>
         {/* KPI 3 */}
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">Total Grid Capacity</span>
             <Zap className="w-4 h-4" />

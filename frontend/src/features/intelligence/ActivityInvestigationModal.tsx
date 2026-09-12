@@ -376,7 +376,7 @@ export default function ActivityInvestigationModal({
 
           {/* 3. CORE METRICS TILES */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            <div className="bg-card border border-border rounded-xl p-4 shadow-xs">
+            <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Schedule Delay</span>
               <div className="flex items-baseline gap-1.5">
                 <span className={`text-2xl font-black ${delay_days > 0 ? 'text-destructive' : 'text-emerald-600 dark:text-emerald-400'}`}>
@@ -391,17 +391,17 @@ export default function ActivityInvestigationModal({
                 {validation?.status === 'CORRECTED_ANOMALY' ? 'Sanitized P6 Date' : (validation?.status || 'P6 Validated')}
               </span>
             </div>
-            <div className="bg-card border border-border rounded-xl p-4 shadow-xs">
+            <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Baseline Finish</span>
               <span className="text-sm font-bold text-foreground block font-mono">{baseline_finish || '—'}</span>
               <span className="text-[10px] text-muted-foreground">Approved Baseline</span>
             </div>
-            <div className="bg-card border border-border rounded-xl p-4 shadow-xs">
+            <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Forecast / Actual Finish</span>
               <span className="text-sm font-bold text-foreground block font-mono">{forecast_finish || '—'}</span>
               <span className="text-[10px] text-muted-foreground capitalize">{status || 'In Progress'}</span>
             </div>
-            <div className="bg-card border border-border rounded-xl p-4 shadow-xs">
+            <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-xs">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground block mb-1">Commercial Exposure</span>
               <span className="text-2xl font-black text-foreground">₹{commExposureCr} <span className="text-xs font-normal text-muted-foreground">Cr</span></span>
               <span className="text-[10px] text-muted-foreground">{related_invoices.length} Invoices Linked</span>

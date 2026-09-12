@@ -241,7 +241,7 @@ export default function ReportsInsights({ p6Data, sapData, finDetails, dashboard
         {/* ═══ 2. EXECUTIVE METRIC SUMMARY STRIP ═══ */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 page-break-avoid">
           
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+          <div className="kpi-card bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 mb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider">Active Projects</span>
               <Building2 className="w-3.5 h-3.5 text-[#0B74B1]" />
@@ -256,7 +256,7 @@ export default function ReportsInsights({ p6Data, sapData, finDetails, dashboard
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+          <div className="kpi-card bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 mb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider">Physical Progress</span>
               <Layers className="w-3.5 h-3.5 text-emerald-600" />
@@ -273,7 +273,7 @@ export default function ReportsInsights({ p6Data, sapData, finDetails, dashboard
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+          <div className="kpi-card bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 mb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider">Velocity Index</span>
               <TrendingUp className="w-3.5 h-3.5 text-[#0B74B1]" />
@@ -292,7 +292,7 @@ export default function ReportsInsights({ p6Data, sapData, finDetails, dashboard
             </div>
           </div>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
+          <div className="kpi-card bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex flex-col justify-between">
             <div className="flex items-center justify-between text-slate-500 mb-1">
               <span className="text-[10px] font-bold uppercase tracking-wider">Capex Burn (YTD)</span>
               <DollarSign className="w-3.5 h-3.5 text-[#0B74B1]" />

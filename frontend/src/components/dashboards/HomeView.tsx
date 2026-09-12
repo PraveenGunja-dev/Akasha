@@ -50,14 +50,14 @@ export default function HomeView({ p6Data, logisticsData, sapData, loading }: an
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto pb-10">
+    <div className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
       <div className="col-span-1 md:col-span-2 lg:col-span-3 grid grid-cols-3 gap-6">
-        <div className="bg-card text-card-foreground border border-border rounded-2xl p-6 shadow-sm relative overflow-hidden">
+        <div className="kpi-card bg-card text-card-foreground border border-border rounded-2xl p-4 shadow-sm relative overflow-hidden">
           {loading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center backdrop-blur-sm z-10"><RefreshCw className="w-5 h-5 animate-spin text-[#0B74B0]" /></div>}
           <h3 className="text-muted-foreground text-sm font-medium mb-2 uppercase tracking-wider">Total Active Projects</h3>
           <p className="text-4xl font-light">{totalActiveProjects}</p>
         </div>
-        <div className="bg-card text-card-foreground border border-border rounded-2xl p-6 shadow-sm relative overflow-hidden">
+        <div className="kpi-card bg-card text-card-foreground border border-border rounded-2xl p-4 shadow-sm relative overflow-hidden">
           {loading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center backdrop-blur-sm z-10"><RefreshCw className="w-5 h-5 animate-spin text-[#75479C]" /></div>}
           <h3 className="text-muted-foreground text-sm font-medium mb-2 uppercase tracking-wider">Total SAP PO / CAPEX (₹)</h3>
           <p className="text-4xl font-light">{formattedCapex}</p>

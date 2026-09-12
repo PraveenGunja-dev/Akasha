@@ -49,6 +49,17 @@ def get_quality_overview(
     }
 
     total_rfis = sum(rfi_by_status.values())
+
+    # When these rows last came from Pulse. Surfaced so a screen can say
+    # "as of 7 Sept" instead of presenting a stale count as current.
+    last_synced = max(
+        [d for d in (
+            db.query(func.max(models.PulseNC.last_synced_at)).scalar(),
+            db.query(func.max(models.PulseRFI.last_synced_at)).scalar(),
+        ) if d],
+        default=None,
+    )
+
     rfis_completed = rfi_by_status.get("completed", 0)
     rfis_rejected = rfi_by_status.get("rejected", 0)
     # In-flight: raised/submitted/approved — awaiting someone's sign-off.
@@ -62,6 +73,7 @@ def get_quality_overview(
         "rfi_pass_rate": round((rfis_completed / total_rfis) * 100, 1) if total_rfis else 0,
         "rfi_by_status": rfi_by_status,
         "rfi_by_handler": rfi_by_handler,
+        "last_synced_at": last_synced.isoformat() if last_synced else None,
     }
 
     if total == 0:

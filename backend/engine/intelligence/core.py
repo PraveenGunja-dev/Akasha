@@ -18,6 +18,7 @@ from engine.intelligence.transmission_intel import analyze_transmission
 from engine.intelligence.financial_intel import analyze_financials
 from engine.intelligence.quality_intel import analyze_quality
 from engine.intelligence.risk_intel import analyze_risk
+from services.progress import nonlabor_units_by_project, project_progress
 from engine.intelligence.action_engine import generate_actions
 from engine.intelligence.prediction_engine import generate_predictions
 from engine.intelligence.project_story import analyze_project_story
@@ -182,11 +183,12 @@ def get_portfolio_intelligence(db: Session, portfolio: str = None, phase: str = 
     mappings = [m for m in mappings if m.project_name_from_p6 and 'demo' not in m.project_name_from_p6.lower()]
 
     # Quick health scan for each project (lightweight version)
+    nonlabor_units = nonlabor_units_by_project(db)  # one query, every project
     project_summaries = []
     for m in mappings:
         if not m.project_id:
             continue
-        summary = _quick_project_scan(db, m)
+        summary = _quick_project_scan(db, m, nonlabor_units)
         if summary:
             project_summaries.append(summary)
 
@@ -234,7 +236,7 @@ def get_portfolio_intelligence(db: Session, portfolio: str = None, phase: str = 
     }
 
 
-def _quick_project_scan(db: Session, mapping) -> dict | None:
+def _quick_project_scan(db: Session, mapping, nonlabor_units: dict | None = None) -> dict | None:
     """Lightweight project health scan for portfolio view (no deep analysis)."""
     project_id = mapping.project_id
     if not project_id:
@@ -254,11 +256,11 @@ def _quick_project_scan(db: Session, mapping) -> dict | None:
     if p6_proj.baseline_finish_date and p6_proj.finish_date:
         total_delay_days = max(0, (p6_proj.finish_date - p6_proj.baseline_finish_date).days)
 
-    progress = p6_proj.duration_percent_complete or 0
-    if progress > 1:
-        progress = progress  # already percentage
-    else:
-        progress = progress * 100
+    # Progress = Σ actual non-labour units / Σ planned non-labour units
+    # (services/progress.py) — the single definition used everywhere.
+    if nonlabor_units is None:
+        nonlabor_units = nonlabor_units_by_project(db, [p6_proj.p6_object_id])
+    progress = project_progress(p6_proj, nonlabor_units)[0] * 100
 
     # Simple health heuristic
     if total_delay_days == 0:

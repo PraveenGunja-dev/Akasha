@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
+from services.progress import nonlabor_units_by_project, project_progress
 
 logger = logging.getLogger(__name__)
 
@@ -42,15 +43,28 @@ def _is_complete(a) -> bool:
     return bool(a.status and 'complet' in a.status.lower())
 
 
-def compute_schedule_kpis(p6, activities: list, as_of: datetime = None) -> dict:
-    """Schedule KPIs for one project, computed purely from its activities."""
+def compute_schedule_kpis(p6, activities: list, as_of: datetime = None, nonlabor_units: dict = None) -> dict:
+    """Schedule KPIs for one project, computed purely from its activities —
+    except progress_pct, which is now the actual project-wide progress
+    figure (Σ actual non-labour resource units / Σ planned non-labour units,
+    services/progress.py), the same one used everywhere else. It used to be
+    completed-activities / total-activities here specifically because the
+    stored duration_percent_complete was unreliable; the resource-unit ratio
+    is a real measurement rather than another activity-count proxy, so it
+    replaces both.
+
+    planned_pct stays activity-baseline-derived — "where the schedule says
+    we should be" has no non-labour-unit equivalent (P6 exposes no planned
+    consumption curve by date) — so SPI now reads as actual physical
+    progress against the schedule's plan, which is closer to what SPI is
+    meant to measure than progress-by-activity-count over plan-by-activity-count."""
     as_of = as_of or p6.data_date or p6.last_synced_at or datetime.utcnow()
     total = len(activities)
     if total == 0:
         return {"has_data": False, "reason": "No activities for this project."}
 
     completed = [a for a in activities if _is_complete(a)]
-    progress_pct = round(len(completed) / total * 100, 1)
+    progress_pct = round(project_progress(p6, nonlabor_units or {})[0] * 100, 1)
 
     # Planned progress as-of the data date = share of activities that SHOULD be finished by now
     planned_done = [a for a in activities if a.baseline_finish_date and a.baseline_finish_date <= as_of]
@@ -161,7 +175,8 @@ def compute_health_score(spi, progress_pct, overall_risk_pct) -> dict:
 
 
 def compute_project_kpis(db: Session, project_id: str, activities: list = None,
-                         pos: list = None, tc_total: int = None, tc_delayed: int = None) -> dict:
+                         pos: list = None, tc_total: int = None, tc_delayed: int = None,
+                         nonlabor_units: dict = None) -> dict:
     """Full KPI bundle for one project. Prefetched inputs may be passed for portfolio-scale use;
     otherwise they're queried here."""
     p6 = db.query(models.P6Project).filter(models.P6Project.project_id == project_id).first()
@@ -173,7 +188,10 @@ def compute_project_kpis(db: Session, project_id: str, activities: list = None,
             models.P6Activity.project_object_id == p6.p6_object_id
         ).all()
 
-    sched = compute_schedule_kpis(p6, activities)
+    if nonlabor_units is None:
+        nonlabor_units = nonlabor_units_by_project(db, [p6.p6_object_id])
+
+    sched = compute_schedule_kpis(p6, activities, nonlabor_units=nonlabor_units)
 
     # Procurement (SAP) — resolve via WBS like the SAP tools do
     if pos is None:
@@ -236,6 +254,9 @@ def compute_portfolio_kpis(db: Session) -> list[dict]:
             if e.is_delayed:
                 tc_by_mapping[e.mapping_id]["delayed"] += 1
 
+    # Prefetch non-labour resource units for every project (1 query)
+    nonlabor_units = nonlabor_units_by_project(db)
+
     mappings = db.query(models.ProjectMapping).all()
     p6_by_pid = {p.project_id: p for p in db.query(models.P6Project).all()}
 
@@ -259,7 +280,8 @@ def compute_portfolio_kpis(db: Session) -> list[dict]:
         tc = tc_by_mapping.get(m.id, {"total": 0, "delayed": 0})
 
         kpi = compute_project_kpis(db, m.project_id, activities=activities, pos=pos,
-                                   tc_total=tc["total"], tc_delayed=tc["delayed"])
+                                   tc_total=tc["total"], tc_delayed=tc["delayed"],
+                                   nonlabor_units=nonlabor_units)
         results.append(kpi)
 
     results.sort(key=lambda r: (r.get("overall_risk", {}).get("overall_risk_pct") or -1), reverse=True)

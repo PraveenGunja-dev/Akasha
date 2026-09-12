@@ -142,12 +142,12 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
 
       {/* ── KPI Row ── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Total NCs</span>
           <span className="text-2xl font-bold">{data.total_ncs}</span>
           <span className="text-[10px] text-muted-foreground">{data.by_status?.completed || 0} resolved</span>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">RFI Progress</span>
           <span className="text-2xl font-bold text-success">{data.rfis_completed}<span className="text-sm text-muted-foreground font-normal">/{data.total_rfis}</span></span>
           <span className="text-[10px] text-muted-foreground">
@@ -155,12 +155,12 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
             {(data.rfis_rejected || 0) > 0 && <span className="text-orange-500 font-semibold"> · {data.rfis_rejected} rejected</span>}
           </span>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Closure Rate</span>
           <span className={`text-2xl font-bold ${data.closure_rate >= 70 ? 'text-success' : data.closure_rate >= 40 ? 'text-warning' : 'text-destructive'}`}>{data.closure_rate}%</span>
           <span className="text-[10px] text-muted-foreground">NC resolution rate</span>
         </div>
-        <div className="bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
+        <div className="kpi-card bg-card border border-border rounded-xl p-4 flex flex-col gap-1">
           <span className="text-[9px] font-bold uppercase tracking-widest text-muted-foreground">Quality Score</span>
           <span className={`text-2xl font-bold ${data.quality_score >= 70 ? 'text-success' : data.quality_score >= 40 ? 'text-warning' : 'text-destructive'}`}>{data.quality_score}<span className="text-sm text-muted-foreground font-normal">/100</span></span>
           <span className="text-[10px] text-muted-foreground">Composite quality metric</span>

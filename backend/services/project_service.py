@@ -5,6 +5,7 @@ import logging
 import json
 import re
 import ast
+from services.progress import nonlabor_units_by_project, project_progress
 logger = logging.getLogger(__name__)
 
 def filter_tc_edges_by_kps(edges, project_entries):
@@ -87,6 +88,7 @@ def build_evm_index(db: Session) -> dict:
             for m in db.query(models.ProjectMapping).all()
             if m.project_id
         },
+        "nonlabor_units": nonlabor_units_by_project(db),
     }
 def calculate_dynamic_evm(db: Session, p6_proj, mapping=None, index: dict = None):
     if not p6_proj:
@@ -144,10 +146,13 @@ def calculate_dynamic_evm(db: Session, p6_proj, mapping=None, index: dict = None
             
     total_budget_evm = budget_inr if budget_inr > 0 else (getattr(p6_proj, 'planned_cost', 0) or 0)
     actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (getattr(p6_proj, 'actual_total_cost', 0) or 0)
-    
-    progress_val = getattr(p6_proj, 'duration_percent_complete', 0) or 0
-    pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
-    
+
+    # Actual % complete: Σ actual non-labour units / Σ planned non-labour
+    # units (services/progress.py) — the single definition used everywhere,
+    # not duration_percent_complete (schedule time elapsed).
+    proj_nonlabor_units = index["nonlabor_units"] if index is not None else nonlabor_units_by_project(db, [p6_proj.p6_object_id])
+    pct_complete = project_progress(p6_proj, proj_nonlabor_units)[0]
+
     planned_pct = pct_complete
     import datetime
     today = datetime.datetime.now().date()
@@ -194,6 +199,8 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         func.sum(models.P6Activity.percent_complete)
     ).group_by(models.P6Activity.project_object_id, models.P6Activity.status, models.P6Activity.is_critical).all()
     
+    nonlabor_units = nonlabor_units_by_project(db)
+
     act_stats = {}
     for pid, status, is_critical, count, sum_pct in activity_stats_raw:
         if pid not in act_stats:
@@ -267,6 +274,13 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     nc_by_project = {row[0].lower(): row[1] for row in nc_aggs if row[0]}
     rfi_aggs = db.query(models.PulseRFI.project_name, func.count(models.PulseRFI.id)).group_by(models.PulseRFI.project_name).all()
     rfi_by_project = {row[0].lower(): row[1] for row in rfi_aggs if row[0]}
+
+    # Pulse stamps its own project UUID on ~100% of rows. Keyed on that, the
+    # join is exact; keyed on the free-text name above it depends on the
+    # mapping sheet spelling the Pulse project the same way Pulse does, and
+    # on 2026-09-11 that resolved 349 NCs where the UUID resolves 884.
+    nc_by_uuid = {row[0]: row[1] for row in db.query(models.PulseNC.project_id, func.count(models.PulseNC.id)).group_by(models.PulseNC.project_id).all() if row[0]}
+    rfi_by_uuid = {row[0]: row[1] for row in db.query(models.PulseRFI.project_id, func.count(models.PulseRFI.id)).group_by(models.PulseRFI.project_id).all() if row[0]}
     inv_aggs = db.query(func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6), func.count(func.distinct(models.EInvoiceRecord.id))).join(models.EInvoiceRecord, models.MTEInvoicePOLookup.purchasing_document == models.EInvoiceRecord.workOrderNo).group_by(func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6)).all()
     invoice_by_prefix = {row[0]: row[1] for row in inv_aggs if row[0]}
 
@@ -334,21 +348,10 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         activity_info = act_stats.get(p6_proj.p6_object_id, {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}) if p6_proj else {'Completed': 0, 'CompletedCritical': 0, 'In Progress': 0, 'Not Started': 0, 'Total': 0, 'SumPct': 0.0}
 
         
-        # STRICT user-requested formula:
-        # Progress = SummaryActualNonLaborUnits / SummaryAtCompletionNonLaborUnits
-        if p6_proj and getattr(p6_proj, 'at_completion_non_labor_units', 0) and p6_proj.at_completion_non_labor_units > 0:
-            progress = (getattr(p6_proj, 'actual_non_labor_units', 0) or 0.0) / p6_proj.at_completion_non_labor_units
-        elif p6_proj:
-            # Fallback for projects that don't have labor units tracked yet
-            raw_pct = getattr(p6_proj, 'construction_percent_complete', None)
-            if raw_pct is None:
-                raw_pct = p6_proj.duration_percent_complete or 0.0
-            progress = float(raw_pct) if raw_pct <= 1.0 else float(raw_pct) / 100.0
-        else:
-            progress = 0.0
-            
-        # Cap progress between 0 and 1 to prevent exceeding 100% in UI
-        progress = max(0.0, min(1.0, float(progress)))
+        # Progress = Σ actual non-labour units / Σ planned non-labour units over
+        # every resource assignment of the project. See services/progress.py for
+        # why the project-level summary fields could not be used.
+        progress, progress_basis, progress_detail = project_progress(p6_proj, nonlabor_units)
 
         # 2. SAP Data - WBS Only Mapping
         allocation_ratio = 1.0
@@ -607,8 +610,18 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         p_name = m.project.lower() if m.project else ""
         p_name_p6 = m.project_name_from_p6.lower() if m.project_name_from_p6 else ""
         
-        nc_count = nc_by_project.get(p_name) or nc_by_project.get(p_name_p6) or 0
-        rfi_count = rfi_by_project.get(p_name) or rfi_by_project.get(p_name_p6) or 0
+        # UUID first; name only where the mapping row has no UUID yet
+        # (27 of 64 on 2026-09-11). Either way this is the count for the
+        # Pulse project this P6 project belongs to — several P6 projects
+        # share one Pulse project, so these counts overlap and MUST NOT be
+        # summed across projects. Portfolio totals come from /quality/overview.
+        pulse_uuid = getattr(m, "pulse_project_uuid", None)
+        if pulse_uuid and (pulse_uuid in nc_by_uuid or pulse_uuid in rfi_by_uuid):
+            nc_count = nc_by_uuid.get(pulse_uuid, 0)
+            rfi_count = rfi_by_uuid.get(pulse_uuid, 0)
+        else:
+            nc_count = nc_by_project.get(p_name) or nc_by_project.get(p_name_p6) or 0
+            rfi_count = rfi_by_project.get(p_name) or rfi_by_project.get(p_name_p6) or 0
         prefixes = []
         for val in [m.spv_plant_code, m.agel, m.age6l]:
             if val:
@@ -647,6 +660,8 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "delayDays": delay_days,
             # Underlying Metrics (drill-down only)
             "progress": round(progress, 3),
+            "progressBasis": progress_basis,          # 'nonlabor_units' | 'duration_pct'
+            "progressDetail": progress_detail,
             "spi": round(spi, 2),
             "cpi": round(cpi, 2),
             "scheduleVariance": round(sched_var),
@@ -691,6 +706,10 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             "plannedDuration": p6_proj.planned_duration if p6_proj else 0,
             "actualDuration": (p6_proj.planned_duration * progress) if p6_proj and p6_proj.actual_duration == 0 and progress > 0 else (p6_proj.actual_duration if p6_proj else 0),
             "remainingDuration": (p6_proj.planned_duration * (1.0 - progress)) if p6_proj and p6_proj.actual_duration == 0 and progress > 0 else (p6_proj.remaining_duration if p6_proj else 0),
+            # P6 sometimes carries planned duration but no actual; the two lines above
+            # then pro-rate planned by progress. Say so, rather than showing a
+            # derived figure with the same face as a measured one.
+            "durationEstimated": bool(p6_proj and p6_proj.actual_duration == 0 and progress > 0 and p6_proj.planned_duration),
             "parentEPS": p6_proj.parent_eps_name if p6_proj else "",
         })
     # Add unmapped P6 projects logic removed
@@ -1144,9 +1163,13 @@ def get_project_360_detail(db: Session, project_id: str):
     # ── True EVM Calculation (SPI / CPI) ──
     total_budget_evm = total_budget_inr if total_budget_inr > 0 else (p6_proj.planned_cost if p6_proj and p6_proj.planned_cost else 0)
     actual_cost_evm = expenditure_inr if expenditure_inr > 0 else (p6_proj.actual_total_cost if p6_proj and p6_proj.actual_total_cost else 0)
-    progress_val = p6_proj.duration_percent_complete if p6_proj and p6_proj.duration_percent_complete is not None else 0
-    pct_complete = (progress_val / 100.0) if progress_val > 1.0 else progress_val
-    
+    # Actual % complete: same formula as everywhere else — Σ actual non-labour
+    # units / Σ planned non-labour units (services/progress.py). This used to
+    # be duration_percent_complete (schedule time elapsed), which fed a false
+    # "earned value" into SPI/CPI below.
+    detail_units = nonlabor_units_by_project(db, [p6_proj.p6_object_id]) if p6_proj else {}
+    pct_complete = project_progress(p6_proj, detail_units)[0]
+
     planned_pct = pct_complete
     import datetime
     today = datetime.datetime.now().date()

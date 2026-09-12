@@ -2,12 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Brain, AlertTriangle, ArrowRight, ShieldAlert, Target, Shield, Clock, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { formatProjectName } from '../../lib/projectName';
+import IntelligenceProjectsDrawer, { type IntelProject } from './IntelligenceProjectsDrawer';
+import { cx } from '../../components/ui/primitives/cx';
 
 export default function PortfolioIntelligence() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const [drill, setDrill] = useState<{ title: string; subtitle: string; projects: IntelProject[] } | null>(null);
 
   useEffect(() => {
     const fetchPortfolio = async () => {
@@ -50,33 +53,62 @@ export default function PortfolioIntelligence() {
     portfolio_health, hotspots
   } = data;
 
+  /* The counters used to be figures with nowhere to go. all_projects is
+     already in the payload, so each one can open the projects behind it. */
+  const allProjects: IntelProject[] = data.all_projects || [];
+  const openGroup = (title: string, subtitle: string, projects: IntelProject[]) =>
+    setDrill({ title, subtitle, projects });
+
   return (
     <div className="space-y-6">
+      <IntelligenceProjectsDrawer
+        open={!!drill}
+        onClose={() => setDrill(null)}
+        title={drill?.title || ''}
+        subtitle={drill?.subtitle}
+        projects={drill?.projects || []}
+      />
       
       {/* Portfolio Top Line */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
-        <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
+        <div className="kpi-card intelligence-card p-4 bg-card flex flex-col justify-center">
           <div className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-1">Portfolio Health</div>
           <div className="text-3xl font-bold flex items-baseline gap-2 text-primary">
             {portfolio_health} <span className="text-lg font-normal text-muted-foreground">/100</span>
           </div>
         </div>
-        <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
+        <button
+          onClick={() => openGroup('All projects', 'Every mapped project', allProjects)}
+          className={cx('kpi-card intelligence-card p-4 flex flex-col justify-center text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary', 'bg-card')}
+        >
           <div className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-1">Total Projects</div>
-          <div className="text-3xl font-bold">{total_projects}</div>
-        </div>
-        <div className="intelligence-card p-5 border border-destructive/20 bg-destructive/5 flex flex-col justify-center">
+          <div className="text-3xl font-bold ">{total_projects}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">View projects →</div>
+        </button>
+        <button
+          onClick={() => openGroup('Critical projects', 'Overall status CRITICAL', allProjects.filter((p) => p.overall_status === 'CRITICAL'))}
+          className={cx('kpi-card intelligence-card p-4 flex flex-col justify-center text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary', 'kpi-card-critical')}
+        >
           <div className="text-sm font-medium uppercase tracking-wider text-destructive mb-1">Critical Projects</div>
           <div className="text-3xl font-bold text-destructive">{critical_projects}</div>
-        </div>
-        <div className="intelligence-card p-5 border border-orange-500/20 bg-orange-500/5 flex flex-col justify-center">
+          <div className="mt-1 text-[11px] text-muted-foreground">View projects →</div>
+        </button>
+        <button
+          onClick={() => openGroup('At-risk projects', 'Overall status AT RISK', allProjects.filter((p) => p.overall_status === 'AT_RISK'))}
+          className={cx('kpi-card intelligence-card p-4 flex flex-col justify-center text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary', 'kpi-card-risk')}
+        >
           <div className="text-sm font-medium uppercase tracking-wider text-orange-500 mb-1">At Risk</div>
           <div className="text-3xl font-bold text-orange-500">{at_risk_projects}</div>
-        </div>
-        <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
+          <div className="mt-1 text-[11px] text-muted-foreground">View projects →</div>
+        </button>
+        <button
+          onClick={() => openGroup('Delayed projects', 'Carrying schedule delay against baseline', allProjects.filter((p) => (p.total_delay_days || 0) > 0))}
+          className={cx('kpi-card intelligence-card p-4 flex flex-col justify-center text-left transition-all hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary', 'bg-card')}
+        >
           <div className="text-sm font-medium uppercase tracking-wider text-muted-foreground mb-1">Delayed</div>
-          <div className="text-3xl font-bold">{delayed_projects}</div>
-        </div>
+          <div className="text-3xl font-bold ">{delayed_projects}</div>
+          <div className="mt-1 text-[11px] text-muted-foreground">View projects →</div>
+        </button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

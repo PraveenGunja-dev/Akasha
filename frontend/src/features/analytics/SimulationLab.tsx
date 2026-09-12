@@ -805,15 +805,15 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
               {showResults && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="grid grid-cols-4 gap-4">
-                    <div className="bg-card rounded-xl border border-border shadow-sm p-5">
+                    <div className="kpi-card bg-card rounded-xl border border-border shadow-sm p-4">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><Activity className="w-4 h-4" /> SPI</div>
                       <div className={`text-3xl font-bold ${currentSpi < 0.85 ? 'text-destructive' : 'text-success'}`}>{currentSpi}</div>
                     </div>
-                    <div className="bg-card rounded-xl border border-border shadow-sm p-5">
+                    <div className="kpi-card bg-card rounded-xl border border-border shadow-sm p-4">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><ShieldAlert className="w-4 h-4" /> Risk Score</div>
                       <div className={`text-3xl font-bold ${currentRisk > 70 ? 'text-destructive' : 'text-success'}`}>{currentRisk}</div>
                     </div>
-                    <div className="bg-card rounded-xl border border-border shadow-sm p-5">
+                    <div className="kpi-card bg-card rounded-xl border border-border shadow-sm p-4">
                       <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1 flex items-center gap-1.5"><BarChart2 className="w-4 h-4" /> Completion</div>
                       <div className="text-3xl font-bold text-warning">{currentCompletion}%</div>
                     </div>

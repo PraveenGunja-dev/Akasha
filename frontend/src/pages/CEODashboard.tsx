@@ -10,15 +10,14 @@ import ExecutiveOverview from '../features/dashboard/ExecutiveOverview';
 import Project360 from '../features/projects/Project360';
 import PortfolioHealth from '../features/dashboard/PortfolioHealth';
 import P6View from '../components/dashboards/P6View';
-import SAPView from '../components/dashboards/SAPView';
+import SAPIntelligencePage from '../features/sap-intelligence/SAPIntelligencePage';
 import ProcurementIntelligence from '../features/analytics/ProcurementIntelligence';
 import MaterialIntelligence from '../features/analytics/MaterialIntelligence';
 import RiskCommandCenter from '../features/dashboard/RiskCommandCenter';
 import PredictiveAnalytics from '../features/dashboard/PredictiveAnalytics';
 import DecisionCenter from '../features/dashboard/DecisionCenter';
 import ReportsInsights from '../features/analytics/ReportsInsights';
-import CapacityOverview from '../features/dashboard/CapacityOverview';
-
+import CapacityOverviewPage from '../features/capacity/CapacityOverviewPage';
 // Phase 6 AI Modules
 import AICopilot from '../features/chatbot/AICopilot';
 import ExecutiveBriefing from '../features/dashboard/ExecutiveBriefing';
@@ -112,24 +111,30 @@ export default function CEODashboard() {
       if (phase && phase !== 'ALL') queryParams.append('phase', phase);
       const queryStr = queryParams.toString() ? `?${queryParams.toString()}` : '';
       
-      const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes] = await Promise.all([
+      const [dashRes, p6Res, sapRes, logRes, finDetRes, logDetRes, qualityRes] = await Promise.all([
         fetch(`/akasha/api/dashboard/summary${queryStr}`),
         fetch(`/akasha/api/summary${queryStr}`),
         fetch(`/akasha/api/financials${queryStr}`),
         fetch(`/akasha/api/logistics${queryStr}`),
         fetch(`/akasha/api/financials/details${queryStr}`),
-        fetch(`/akasha/api/logistics/details${queryStr}`)
+        fetch(`/akasha/api/logistics/details${queryStr}`),
+        fetch(`/akasha/api/quality/overview${portfolio ? '?cluster=' + encodeURIComponent(portfolio) : ''}`)
       ]);
 
-      const [dash, p6, sap, log, fDet, lDet] = await Promise.all([
+      const [dash, p6, sap, log, fDet, lDet, qualityData] = await Promise.all([
         dashRes.json(),
         p6Res.json(),
         sapRes.json(),
         logRes.json(),
         finDetRes.json(),
-        logDetRes.json()
+        logDetRes.json(),
+        qualityRes.json()
       ]);
 
+      // Use the true Quality Command Center endpoint data to guarantee consistency
+      if (dash && dash.summary) {
+        dash.summary.quality = qualityData;
+      }
       setDashboardData(dash);
       setP6Data(p6);
       setSapData(sap);
@@ -242,7 +247,7 @@ export default function CEODashboard() {
     <div className={`flex w-full bg-[var(--background)] ${activeTab === 'ai_copilot' ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
       
       {/* 1. Left Navigation Rail */}
-      <div className="sticky top-0 h-screen shrink-0 z-50">
+      <div className="sticky top-0 h-screen shrink-0 z-[80]">
         <LeftSidebar 
           activeTab={activeTab} 
           setActiveTab={handleTabChange} 
@@ -254,12 +259,12 @@ export default function CEODashboard() {
       {/* Middle Area: Header + Scrollable Content */}
       <div className="flex-1 flex flex-col min-w-0">
         
-        {/* 2. Top Global Header */}
+        {/* 2. Top Global Header — carries portfolio/phase filters and actions */}
         <div className="sticky top-0 z-[60]">
-          <TopHeader 
-            selectedProject={selectedProject} 
-            setSelectedProject={setSelectedProject} 
-            masterProjects={dashboardData?.projects || []} 
+          <TopHeader
+            selectedProject={selectedProject}
+            setSelectedProject={setSelectedProject}
+            masterProjects={dashboardData?.projects || []}
             onNavigateToSimulation={handleNavigateToSimulation}
             onOpenCopilot={() => setIsCopilotOpen(!isCopilotOpen)}
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
@@ -267,7 +272,7 @@ export default function CEODashboard() {
             isSyncing={isSyncing}
           />
         </div>
-        
+
         {/* 3a. Full-bleed AI Copilot or Simulation Lab (no padding, no scroll wrapper) */}
         {activeTab === 'ai_copilot' || activeTab === 'simulation_lab' || activeTab === 'dpr' ? (
           <div className="flex-1 min-h-0 p-4 overflow-hidden flex flex-col">
@@ -309,11 +314,11 @@ export default function CEODashboard() {
                     exit={{ opacity: 0, y: -10 }}
                     transition={{ duration: 0.2 }}
                   >
-                    {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} />}
+                    {activeTab === 'overview' && <ExecutiveOverview dashboardData={dashboardData} briefing={briefing} briefingLoading={briefingLoading} briefingError={briefingError} onTabChange={handleTabChange} />}
                     {activeTab === 'project360' && <Project360 onOpenProject={handleOpenProject} />}
                     {activeTab === 'health' && <PortfolioHealth p6Data={p6Data} logisticsData={logisticsData} />}
                     {activeTab === 'schedule' && <P6View p6Data={p6Data} loading={loading} />}
-                    {activeTab === 'financial' && <SAPView sapData={sapData} logisticsData={logisticsData} finDetails={finDetails} logDetails={logDetails} loading={loading} />}
+                    {activeTab === 'financial' && <SAPIntelligencePage />}
                     {activeTab === 'procurement' && <ProcurementIntelligence finDetails={finDetails} />}
                     {activeTab === 'material' && <MaterialIntelligence logDetails={logDetails} logisticsData={logisticsData} />}
                     {activeTab === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
@@ -322,7 +327,7 @@ export default function CEODashboard() {
                     {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
                     {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} briefing={briefing} />}
                     
-                    {activeTab === 'capacity_overview' && <CapacityOverview />}
+                    {activeTab === 'capacity_overview' && <CapacityOverviewPage />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}

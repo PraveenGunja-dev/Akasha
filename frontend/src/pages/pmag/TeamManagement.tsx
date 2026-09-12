@@ -32,7 +32,7 @@ export default function TeamManagement({ data, theme }: any) {
 
       {/* ─── KPI Row ─── */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">Total Personnel</span>
             <Users className="w-4 h-4" />
@@ -44,7 +44,7 @@ export default function TeamManagement({ data, theme }: any) {
             </span>
           </div>
         </div>
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">Active Projects</span>
             <Network className="w-4 h-4" />
@@ -53,7 +53,7 @@ export default function TeamManagement({ data, theme }: any) {
             <span className="text-[24px] font-black text-foreground leading-none">{kpis.active_projects}</span>
           </div>
         </div>
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">Avg Allocation</span>
             <PieChart className="w-4 h-4" />
@@ -63,7 +63,7 @@ export default function TeamManagement({ data, theme }: any) {
             <span className="text-[12px] text-muted-foreground font-medium mb-0.5">Capacity</span>
           </div>
         </div>
-        <div className="bento-card p-4 flex flex-col gap-2">
+        <div className="kpi-card bento-card p-4 flex flex-col gap-2">
           <div className="flex justify-between items-center text-muted-foreground">
             <span className="text-[10px] font-bold uppercase tracking-wider">DPR Submission</span>
             <CheckSquare className="w-4 h-4" />

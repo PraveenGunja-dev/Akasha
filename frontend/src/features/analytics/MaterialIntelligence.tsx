@@ -33,10 +33,10 @@ export default function MaterialIntelligence({ logDetails, logisticsData }: any)
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
+        <div className="kpi-card bg-card border border-border rounded-2xl p-4 relative shadow-sm">
           <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Total Material In-Transit (Qty)</h3>
           <p className="text-4xl font-light text-foreground">{inTransitVolume.toFixed(2)}</p>
         </div>

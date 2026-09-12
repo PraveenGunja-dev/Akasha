@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { useChartTheme } from '../../lib/chartTheme';
 import { Database, FileText, Users, Layers, Box, Package, IndianRupee, TrendingUp, PieChart, Truck, Download, ArrowRight, List, Activity } from 'lucide-react';
 import SAPKPIDetailsModal from './SAPKPIDetailsModal';
+import TransmissionMiniMap from '../../features/dashboard/TransmissionMiniMap';
+import { ChartFrame, SourceTag } from '../ui/primitives';
 
 export default function SAPView({ sapData = [], logisticsData = [], finDetails = [], logDetails = [], loading }: any) {
   // Axis, grid and tooltip chrome come from the shared theme so this screen
   // follows the light/dark toggle instead of pinning slate values.
-  const { themeName, chrome } = useChartTheme();
+  const { themeName, chrome, categorical, sequential } = useChartTheme();
   const [trendsData, setTrendsData] = useState<any>(null);
   const [activeKpiModal, setActiveKpiModal] = useState<string | null>(null);
 
@@ -31,6 +33,46 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
   const allSpvCodes = mappings.map(m => m.spv_plant_code).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
   const allAgelCodes = mappings.map(m => m.agel).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
   const allAge6lCodes = mappings.map(m => m.age6l).filter(Boolean).flatMap(c => c.split(/[\s,]+/)).filter(Boolean);
+
+  /* Supply position by vendor — delivered vs still-to-deliver, in ₹ Cr, from
+     the whole of ZSPS. Replaces two panels:
+
+       · a "logistics funnel" of Delivered 38.8M vs In Transit 380.9M — raw
+         quantity columns that mix units of measure and do not reconcile
+         (CLAUDE.md: chart value, not quantity), drawn as a funnel, which
+         implies stages narrowing when these are two parts of one whole;
+       · "top vendors by PO value" rolled up client-side from finDetails,
+         which the backend caps at 1,000 of 87,899 lines — so the ranking
+         was of a sample and presented as the population.
+
+     /financials/material-breakdown?by=supplier does the honest version in
+     SQL: value, partitioned, full table, filterable to the company toggle. */
+  const [vendorPosition, setVendorPosition] = useState<{ groups: any[]; group_count: number } | null>(null);
+  useEffect(() => {
+    const codes = companyFilter === 'spv' ? allSpvCodes : companyFilter === 'agel' ? allAgelCodes : companyFilter === 'age6l' ? allAge6lCodes : [];
+    if (companyFilter !== 'all' && codes.length === 0) return; // mappings not loaded yet
+    const qs = new URLSearchParams({ by: 'supplier', limit: '8' });
+    if (codes.length) qs.set('codes', codes.join(','));
+    let cancelled = false;
+    fetch(`/akasha/api/financials/material-breakdown?${qs}`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (!cancelled && j) setVendorPosition(j); })
+      .catch(() => { /* frame shows its empty state */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [companyFilter, mappings.length]);
+
+  /* echarts-for-react measures once at mount and then only on window resize;
+     inside a grid the card can change width without the window doing so. */
+  const vendorChartRef = useRef<ReactECharts>(null);
+  const vendorHostRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const host = vendorHostRef.current;
+    if (!host) return;
+    const ro = new ResizeObserver(() => vendorChartRef.current?.getEchartsInstance().resize());
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, []);
 
   const isMatch = (po: any, codes: string[]) => {
     const poPlant = (po.plant_code || '').trim();
@@ -73,8 +115,11 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
   // Financial metrics (The true global sum is actualCapex)
   const supplyPoAmount = (companyFilter === 'all' && globalSap.actualCapex !== undefined) ? globalSap.actualCapex : filteredFinDetails.reduce((acc:any, curr:any) => acc + ((curr.net_order_value_inr || curr.net_order_value || 0) / 10000000), 0);
 
-  // Utilized Amount
-  const utilizedAmount = (supplyPoAmount || 0) * 0.85;
+  // Utilized Amount - the delivered value ZSPS actually records. This was
+  // supplyPoAmount * 0.85, i.e. a flat 85% assumption presented as measured data.
+  const utilizedAmount = (companyFilter === 'all' && globalSap.deliveredCapex !== undefined)
+    ? globalSap.deliveredCapex
+    : filteredFinDetails.reduce((acc: any, curr: any) => acc + (curr.delivered_value_inr_cr || 0), 0);
 
   const remainingAmount = Math.max(0, supplyPoAmount - utilizedAmount);
 
@@ -260,57 +305,89 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
     ]
   };
 
-  // Build local logistics data based on filtered logs
-  const atPortCount = logisticsData.find((l: any) => l.category === 'At Port')?.count || 580;
-  const inTransitCount = logisticsData.find((l: any) => l.category === 'In Transit')?.count || 0;
-  const deliveredCount = logisticsData.find((l: any) => l.category === 'Delivered')?.count || 0;
-
-  const localLogisticsFunnel = {
-    tooltip: { trigger: 'item', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
-    series: [
-      {
-        name: 'Material Flow',
-        type: 'funnel',
-        left: '10%',
-        top: 20,
-        bottom: 20,
-        width: '80%',
-        min: 0,
-        max: Math.max(10000, poVolume),
-        minSize: '0%',
-        maxSize: '100%',
-        sort: 'descending',
-        gap: 2,
-        label: { show: true, position: 'inside', formatter: '{b}: {c}' },
-        itemStyle: { borderColor: 'var(--background)', borderWidth: 1 },
-        data: [
-          { value: atPortCount, name: 'At Port', itemStyle: { color: '#f59e0b' } },
-          { value: inTransitCount, name: 'In Transit', itemStyle: { color: '#75479C' } },
-          { value: deliveredCount, name: 'Delivered', itemStyle: { color: '#0B74B0' } },
-        ]
-      }
-    ]
-  };
-
-  const vendorMap: any = {};
-  filteredFinDetails.forEach((po: any) => {
-    const v = po.vendor_name || 'Unknown Vendor';
-    vendorMap[v] = (vendorMap[v] || 0) + ((po.net_order_value_inr || po.net_order_value || 0) / 10000000);
-  });
-  const topVendors = Object.keys(vendorMap).map(k => ({ name: k.substring(0, 25), value: parseFloat(vendorMap[k].toFixed(2)) })).sort((a, b) => b.value - a.value).slice(0, 5);
+  const vendorRows = (vendorPosition?.groups || []).slice().reverse(); // echarts draws category[0] at the bottom
+  const fmtCr = (v: number) => `₹${new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 }).format(v)} Cr`;
+  const vendorMax = Math.max(0, ...vendorRows.map((g: any) => g.ordered_cr));
+  /* Round axis max + interval, or ticks land at 24,112 / 20,000 / 15,000. */
+  const vendorStep = vendorMax > 20000 ? 5000 : vendorMax > 8000 ? 2000 : vendorMax > 3000 ? 1000 : vendorMax > 1000 ? 500 : 100;
+  const vendorAxisMax = Math.ceil((vendorMax * 1.12) / vendorStep) * vendorStep;
 
   const localVendorOption = {
-    tooltip: { trigger: 'axis', backgroundColor: 'rgba(0,0,0,0.8)', textStyle: { color: '#fff' } },
-    grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'value', axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' }, splitLine: { lineStyle: { color: 'var(--border)', opacity: 0.2 } } },
-    yAxis: { type: 'category', data: topVendors.map(v => v.name).reverse(), axisLine: { lineStyle: { color: 'var(--border)' } }, axisLabel: { color: 'var(--foreground)' } },
+    tooltip: {
+      trigger: 'axis',
+      axisPointer: { type: 'shadow' },
+      backgroundColor: chrome.surface2,
+      borderColor: chrome.borderSubtle,
+      borderWidth: 1,
+      padding: [10, 14],
+      textStyle: { color: chrome.fgPrimary, fontSize: 12 },
+      formatter: (params: any) => {
+        const g = vendorRows[params[0].dataIndex];
+        if (!g) return '';
+        const row = (label: string, v: string, strong = false) =>
+          `<div style="display:flex;justify-content:space-between;gap:24px;${strong ? 'font-weight:600' : ''}"><span style="color:${chrome.fgSecondary}">${label}</span><span style="font-variant-numeric:tabular-nums">${v}</span></div>`;
+        return `<div style="font-weight:600;margin-bottom:6px">${g.name}</div>`
+          + row('Ordered', fmtCr(g.ordered_cr), true)
+          + row('Delivered', fmtCr(g.delivered_cr))
+          + row('Still to deliver', fmtCr(g.in_transit_cr))
+          + row('Purchase orders', String(g.pos))
+          + `<div style="margin-top:6px;padding-top:6px;border-top:1px solid ${chrome.borderSubtle};color:${chrome.fgSecondary}">${g.delivered_pct}% delivered by value</div>`;
+      },
+    },
+    legend: {
+      top: 0, right: 0, itemWidth: 10, itemHeight: 10, itemGap: 16,
+      textStyle: { color: chrome.fgSecondary, fontSize: 12 },
+    },
+    grid: { left: 0, right: 56, top: 28, bottom: 0, containLabel: true },
+    xAxis: {
+      type: 'value',
+      max: vendorAxisMax,
+      interval: vendorStep,
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: chrome.fgTertiary, fontSize: 11, formatter: (v: number) => (v === 0 ? '0' : `${(v / 1000).toFixed(v % 1000 ? 1 : 0)}k`) },
+      splitLine: { lineStyle: { color: chrome.gridLine } },
+    },
+    yAxis: {
+      type: 'category',
+      data: vendorRows.map((g: any) => g.name),
+      axisLine: { show: false },
+      axisTick: { show: false },
+      axisLabel: { color: chrome.fgPrimary, fontSize: 12, width: 190, overflow: 'truncate' },
+    },
     series: [
-      { name: 'PO Value (₹ Cr)', type: 'bar', data: topVendors.map(v => v.value).reverse(), itemStyle: { color: '#0B74B0', borderRadius: [0, 4, 4, 0] } }
-    ]
+      {
+        name: 'Delivered',
+        type: 'bar',
+        stack: 'value',
+        barWidth: 18,
+        data: vendorRows.map((g: any) => g.delivered_cr),
+        itemStyle: { color: categorical[0] },
+      },
+      {
+        /* Same hue, lighter step — one quantity in two parts, not two
+           categories. The status palette is not used: "still to deliver" is
+           a stage, not a problem. */
+        name: 'Still to deliver',
+        type: 'bar',
+        stack: 'value',
+        barWidth: 18,
+        data: vendorRows.map((g: any) => g.in_transit_cr),
+        itemStyle: { color: themeName.includes('dark') ? sequential[4] : sequential[2] },
+        label: {
+          show: true,
+          position: 'right',
+          distance: 8,
+          color: chrome.fgSecondary,
+          fontSize: 11,
+          formatter: (p: any) => `${vendorRows[p.dataIndex]?.delivered_pct ?? 0}%`,
+        },
+      },
+    ],
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
 
       {/* Header section */}
       <div className="flex flex-col md:flex-row items-center justify-between gap-4 mt-2">
@@ -356,7 +433,7 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           <div 
             key={idx} 
             onClick={() => setActiveKpiModal(kpi.title)}
-            className="bento-card px-4 py-3.5 flex flex-col justify-between group cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
+            className="kpi-card bento-card px-4 py-3.5 flex flex-col justify-between group cursor-pointer hover:border-primary/50 transition-all shadow-sm hover:shadow-md"
           >
             <div className="flex items-start justify-between gap-2">
               <h3 className="section-label leading-tight truncate" title={kpi.title}>
@@ -417,24 +494,37 @@ export default function SAPView({ sapData = [], logisticsData = [], finDetails =
           </div>
         </div>
 
-        <div className="col-span-1 bento-card p-5">
-          <div className="flex items-center gap-2.5 mb-5">
-            <Truck className="w-4 h-4 text-fg-tertiary shrink-0" />
-            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-fg-primary">Material Logistics Funnel</h2>
+        <ChartFrame
+          className="col-span-1 lg:col-span-2"
+          icon={Truck}
+          eyebrow="Supply position"
+          title="Where the outstanding PO value sits, by vendor"
+          right={
+            <>
+              {vendorPosition && (
+                <span className="text-[12px] text-fg-tertiary">
+                  top {vendorPosition.groups.length} of {new Intl.NumberFormat('en-IN').format(vendorPosition.group_count)} vendors · ₹ Cr
+                </span>
+              )}
+              <SourceTag system="SAP" stamp="ZSPS" />
+            </>
+          }
+          height={Math.max(220, 28 + vendorRows.length * 34)}
+        >
+          <div ref={vendorHostRef} className="h-full w-full">
+            {vendorRows.length > 0 ? (
+              <ReactECharts ref={vendorChartRef} theme={themeName} option={localVendorOption} notMerge style={{ height: '100%', width: '100%' }} />
+            ) : (
+              <div className="flex h-full items-center justify-center text-[13px] text-fg-tertiary">
+                {vendorPosition ? 'No purchase orders in this scope.' : 'Loading vendor positions…'}
+              </div>
+            )}
           </div>
-          <div className="w-full h-[250px]">
-            <ReactECharts theme={themeName} option={localLogisticsFunnel} style={{ height: '100%', width: '100%' }} />
-          </div>
-        </div>
+        </ChartFrame>
 
-        <div className="col-span-1 bento-card p-5">
-          <div className="flex items-center gap-2.5 mb-5">
-            <Users className="w-4 h-4 text-fg-tertiary shrink-0" />
-            <h2 className="text-[15px] font-semibold tracking-[-0.02em] text-fg-primary">Top Vendors by PO Value</h2>
-          </div>
-          <div className="w-full h-[250px]">
-            <ReactECharts theme={themeName} option={localVendorOption} style={{ height: '100%', width: '100%' }} />
-          </div>
+        {/* Transmission Mini Map / Network Overview */}
+        <div className="col-span-1 lg:col-span-2 bento-card p-0 flex flex-col relative h-[450px] overflow-hidden">
+          <TransmissionMiniMap />
         </div>
       </div>
 

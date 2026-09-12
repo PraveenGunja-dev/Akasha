@@ -18,6 +18,24 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+
+class PulseFetchError(RuntimeError):
+    """Raised when any page of a Pulse fetch fails.
+
+    On 2026-09-11 Pulse's Cloud Foundry route stopped resolving (404 on every
+    request). `_fetch_paginated` swallowed the error and returned [], which is
+    indistinguishable from "Pulse holds no records", and `full_sync` then
+    deleted all 1,227 NCs and 51,274 RFIs as stale. A partial failure is just
+    as dangerous: page 5 of 250 failing would keep 1,000 rows and delete the
+    other 50,000. So any page failure aborts the whole sync before a single
+    write happens."""
+
+
+# Refuse the stale-row cleanup if Pulse reports fewer than this share of what
+# we already hold. A sync that returns 0 records from an API that held 51k
+# yesterday is a broken API, not a mass deletion in Pulse.
+STALE_DELETE_MIN_RATIO = 0.5
+
 # OData $expand queries from the Postman collection
 NC_EXPAND = (
     "WORKAREA($expand=PROJECT($expand=SPV)),"
@@ -97,7 +115,10 @@ class PulseService:
                     break
             except Exception as e:
                 logger.error(f"Error fetching {endpoint} at skip={skip}: {e}")
-                break
+                raise PulseFetchError(
+                    f"Pulse fetch failed for {endpoint} at skip={skip} "
+                    f"({len(all_records)} records received before failure): {e}"
+                ) from e
         return all_records
 
     def fetch_all_ncs(self) -> List[Dict]:
@@ -220,14 +241,36 @@ class PulseService:
     # ──────────────────────────────────────────
     # Sync (Upsert)
     # ──────────────────────────────────────────
+    @staticmethod
+    def _cleanup_is_safe(label: str, fetched: int, existing: int) -> bool:
+        if existing == 0:
+            return True                      # nothing to lose
+        if fetched == 0:
+            logger.error(f"Pulse returned 0 {label}s but the database holds {existing}; refusing stale cleanup.")
+            return False
+        if fetched < existing * STALE_DELETE_MIN_RATIO:
+            logger.error(
+                f"Pulse returned {fetched} {label}s against {existing} held "
+                f"(< {STALE_DELETE_MIN_RATIO:.0%}); refusing stale cleanup."
+            )
+            return False
+        return True
+
     def full_sync(self, db: Session) -> Dict[str, int]:
         """Full sync: fetch all NCs and RFIs, upsert into database."""
         import models
 
         now = datetime.now(timezone.utc).replace(tzinfo=None)
 
-        # ── Sync NCs ──
+        # Both fetches complete before any write. If either raises, the
+        # database is untouched — no partial upsert, no stale-row cleanup.
         raw_ncs = self.fetch_all_ncs()
+        raw_rfis = self.fetch_all_rfis()
+
+        existing_nc_count = db.query(models.PulseNC).count()
+        existing_rfi_count = db.query(models.PulseRFI).count()
+
+        # ── Sync NCs ──
         nc_count = 0
         seen_nc_ids = set()
         for raw in raw_ncs:
@@ -254,7 +297,6 @@ class PulseService:
         logger.info(f"Synced {nc_count} NCs to database.")
 
         # ── Sync RFIs ──
-        raw_rfis = self.fetch_all_rfis()
         rfi_count = 0
         batch_size = 500
         seen_rfi_ids = set()
@@ -284,6 +326,19 @@ class PulseService:
 
         db.commit()
         logger.info(f"Synced {rfi_count} RFIs to database.")
+
+        # ── Cleanup Stale Records ──
+        # A record not refreshed in this run is presumed deleted in Pulse. That
+        # presumption only holds if this run actually saw roughly everything
+        # Pulse has; see PulseFetchError for what happens otherwise.
+        deleted_ncs = deleted_rfis = 0
+        if self._cleanup_is_safe("NC", nc_count, existing_nc_count):
+            deleted_ncs = db.query(models.PulseNC).filter(models.PulseNC.last_synced_at < now).delete()
+        if self._cleanup_is_safe("RFI", rfi_count, existing_rfi_count):
+            deleted_rfis = db.query(models.PulseRFI).filter(models.PulseRFI.last_synced_at < now).delete()
+        db.commit()
+        if deleted_ncs or deleted_rfis:
+            logger.info(f"Cleaned up {deleted_ncs} stale NCs and {deleted_rfis} stale RFIs.")
 
         # ── Map Pulse Projects to ProjectMapping ──
         pulse_projects_dict = {}

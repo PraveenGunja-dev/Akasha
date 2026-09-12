@@ -51,14 +51,14 @@ export default function PredictiveAnalytics({ p6Data }: any) {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
+         <div className="kpi-card bg-card border border-border rounded-2xl p-4 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">Current Avg Delay</h3>
            <p className="text-4xl font-light text-foreground">{Math.round(avgVariance)} Days</p>
          </div>
-         <div className="bg-card border border-border rounded-2xl p-6 relative shadow-sm">
+         <div className="kpi-card bg-card border border-border rounded-2xl p-4 relative shadow-sm">
            <h3 className="text-muted-foreground text-xs font-medium mb-2 uppercase tracking-wider">90-Day Forecast</h3>
            <p className="text-4xl font-light text-destructive">{Math.round(avgVariance * 1.9)} Days</p>
          </div>

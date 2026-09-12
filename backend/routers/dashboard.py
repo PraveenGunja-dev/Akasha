@@ -10,6 +10,7 @@ from database import get_db
 import models
 from slr_rules import exclude_overhead_lines, po_lines_only
 from services.project_service import filter_tc_edges_by_kps
+from services.progress import nonlabor_units_by_project, project_progress
 
 def _safe_parse_phase(projects_json):
     if not projects_json:
@@ -148,6 +149,20 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
     po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
 
+    # ZSPS (mt_poamount) is the book of record for purchase orders, so the
+    # PORTFOLIO figure is read straight off it. Summing the per-project values
+    # below instead silently drops every PO whose WBS element matches no
+    # project prefix - measured at 59,753 Cr against a ZSPS total of 66,691 Cr,
+    # i.e. ~6,938 Cr (10.4%) of committed spend missing from the headline.
+    po_grand = db.query(
+        func.sum(models.MTPOAmount.net_order_value_inr),
+        func.sum(models.MTPOAmount.delivered_value_inr_cr),
+        func.count(func.distinct(models.MTPOAmount.purchasing_document)),
+    ).one()
+    portfolio_summary["total_po_value"] = round(po_grand[0] or 0, 2)
+    portfolio_summary["total_po_delivered_cr"] = round(po_grand[1] or 0, 2)
+    portfolio_summary["total_po_count"] = po_grand[2] or 0
+
     all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
     all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
     # PO aggregates grouped by WBS element. The plant_code join below is unreliable — a
@@ -175,6 +190,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
     
     portfolio_summary["achieved_mw"] = sum(cap_data.get("totals", {}).values())
 
+    _nl_units = nonlabor_units_by_project(db)  # one query, every project
     for m in mappings:
         pm_cap = proj_cap_dict.get(m.project_id, {})
         
@@ -207,16 +223,9 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
         
         if p6_data:
             mapped_p6_ids.add(p6_data.project_id)
-            if getattr(p6_data, 'at_completion_non_labor_units', 0) and p6_data.at_completion_non_labor_units > 0:
-                calc_val = (getattr(p6_data, 'actual_non_labor_units', 0) or 0) / p6_data.at_completion_non_labor_units
-                p6_pct = calc_val * 100
-            else:
-                p6_pct = getattr(p6_data, 'construction_percent_complete', None)
-                if p6_pct is None:
-                    p6_pct = p6_data.duration_percent_complete or 0
-                if p6_pct <= 1.0 and p6_pct > 0:
-                    p6_pct *= 100
-                    
+            # Progress = Σ actual non-labour units / Σ planned non-labour units
+            # over every resource assignment (see services/progress.py).
+            p6_pct = project_progress(p6_data, _nl_units)[0] * 100
             progress = p6_pct
             is_delayed_proj = False
             
@@ -297,6 +306,9 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
             "is_commissioned": m.is_commissioned,
             "p6": {
                 "id": p6_data.project_id if p6_data else None,
+                # Activities key off p6_object_id, so the block/WTG rollup
+                # needs it alongside the human-facing project_id.
+                "object_id": p6_data.p6_object_id if p6_data else None,
                 "health": schedule_health,
                 "progress": progress,
                 "construction_progress": getattr(p6_data, 'construction_percent_complete', None),
@@ -658,7 +670,8 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
                     parsed_edge_phases[edge.id] = set()
             except:
                 pass
-    
+
+    _nl_units = nonlabor_units_by_project(db)
     for m in all_mappings:
         p6 = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).first()
         eps = (p6.parent_eps_name if p6 else None) or "Unassigned"
@@ -682,13 +695,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         progress = 0
         p6_data = None
         if p6:
-            if getattr(p6, 'at_completion_non_labor_units', 0) and p6.at_completion_non_labor_units > 0:
-                raw_progress = (getattr(p6, 'actual_non_labor_units', 0) or 0) / p6.at_completion_non_labor_units
-            else:
-                raw_progress = getattr(p6, 'construction_percent_complete', None)
-                if raw_progress is None:
-                    raw_progress = p6.duration_percent_complete or 0
-            progress = round(raw_progress * 100)
+            progress = round(project_progress(p6, _nl_units)[0] * 100)
             # Multi-signal delay detection:
             # 1. finish_date_variance < 0 (if available)
             # 2. scheduled finish date has passed and project is not complete
@@ -696,7 +703,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             is_delayed = False
             if p6.finish_date_variance and p6.finish_date_variance < 0:
                 is_delayed = True
-            elif p6.scheduled_finish_date and p6.scheduled_finish_date < datetime.now() and (p6.duration_percent_complete or 0) < 1.0:
+            elif p6.scheduled_finish_date and p6.scheduled_finish_date < datetime.now() and progress < 100:
                 is_delayed = True
             else:
                 # Check for delayed activities (in progress past planned finish)

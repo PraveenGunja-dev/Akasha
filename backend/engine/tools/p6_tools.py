@@ -13,15 +13,22 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 
 import models
+from services.progress import nonlabor_units_by_project, project_progress
 
 logger = logging.getLogger(__name__)
 
 
 def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
     """Get high-level project summary: dates, progress, SPI, CPI, activity counts.
-    
+
     Use when: user asks about a specific project's overall status.
     Returns: dict with schedule, cost, and progress metrics, or None if not found.
+
+    `progress_pct` is the project's actual progress — Σ actual non-labour
+    resource units / Σ planned non-labour units (services/progress.py). Use
+    this, not `duration_percent_complete`, when asked "what is the progress"
+    or "how much is done" — that field is schedule time elapsed, a different
+    question, kept here under its honest name for schedule-specific answers.
     """
     p6 = db.query(models.P6Project).filter(
         models.P6Project.project_id == project_id
@@ -53,6 +60,7 @@ def p6_get_project_summary(db: Session, project_id: str) -> dict | None:
         "scheduled_finish": p6.scheduled_finish_date.isoformat() if p6.scheduled_finish_date else None,
         "must_finish_by": p6.must_finish_by_date.isoformat() if p6.must_finish_by_date else None,
         "data_date": p6.data_date.isoformat() if p6.data_date else None,
+        "progress_pct": round(project_progress(p6, nonlabor_units_by_project(db, [p6.p6_object_id]))[0] * 100, 1),
         "duration_percent_complete": round(p6.duration_percent_complete, 1) if p6.duration_percent_complete else None,
         "planned_duration": int(p6.planned_duration) if p6.planned_duration else None,
         "actual_duration": int(p6.actual_duration) if p6.actual_duration else None,
@@ -187,11 +195,12 @@ def p6_list_all_projects(db: Session) -> dict:
     Use when: user asks about portfolio overview, all projects, or doesn't specify a project.
     """
     projects = db.query(models.P6Project).all()
-    
+
     # Build a mapping lookup for project names
     all_mappings = db.query(models.ProjectMapping).all()
     mapping_by_pid = {m.project_id: m for m in all_mappings}
-    
+    nonlabor_units = nonlabor_units_by_project(db)  # one query, every project
+
     result = []
     for p in projects:
         m = mapping_by_pid.get(p.project_id)
@@ -205,6 +214,10 @@ def p6_list_all_projects(db: Session) -> dict:
             "status": p.status,
             "spi": round(p.schedule_performance_index, 2) if p.schedule_performance_index else None,
             "cpi": round(p.cost_performance_index, 2) if p.cost_performance_index else None,
+            # Actual progress: Σ actual / Σ planned non-labour units
+            # (services/progress.py) — use this, not duration_pct_complete
+            # (schedule time elapsed), when asked how much is done.
+            "progress_pct": round(project_progress(p, nonlabor_units)[0] * 100, 1),
             "duration_pct_complete": round(p.duration_percent_complete, 1) if p.duration_percent_complete else None,
             "finish_date": p.finish_date.isoformat() if p.finish_date else None,
             "total_float_hours": int(p.total_float) if p.total_float is not None else None,

@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 
 import models
 from database import get_db
+from services.progress import nonlabor_units_by_project, project_progress
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
@@ -310,13 +311,14 @@ def get_metric_history(
             pass
 
         # -- Completed projects, cumulative finishes -----------------------
-        # Progress is derived the same way dashboard.py derives it: the
-        # non-labour-units ratio when available, otherwise the percent-complete
-        # field normalised out of 0-1. Filtering on duration_percent_complete
-        # alone matched nothing.
+        # Progress comes from services.progress.project_progress: the sum of
+        # actual non-labour resource-assignment units over the sum of planned
+        # (budgeted) units, activity by activity, project-wide. Filtering on
+        # duration_percent_complete alone matched nothing.
         try:
             per_month: Dict[str, float] = {}
             opening = 0.0
+            _nl_units = nonlabor_units_by_project(db)
             for proj in (
                 db.query(models.P6Project)
                 .filter(
@@ -325,15 +327,7 @@ def get_metric_history(
                 )
                 .all()
             ):
-                at_completion = getattr(proj, "at_completion_non_labor_units", 0) or 0
-                if at_completion > 0:
-                    pct = ((getattr(proj, "actual_non_labor_units", 0) or 0) / at_completion) * 100
-                else:
-                    pct = getattr(proj, "construction_percent_complete", None)
-                    if pct is None:
-                        pct = proj.duration_percent_complete or 0
-                    if 0 < pct <= 1.0:
-                        pct *= 100
+                pct = project_progress(proj, _nl_units)[0] * 100
                 if pct < 99.9 or proj.finish_date > datetime.utcnow():
                     continue
                 if proj.finish_date < floor:

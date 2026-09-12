@@ -32,7 +32,7 @@ export default function PortfolioHealth({ p6Data, logisticsData }: any) {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500">
       <div className="flex items-center gap-2 mb-2">
         <PieChart className="w-5 h-5 text-primary" />
         <h2 className="text-lg font-semibold text-foreground tracking-wide">Portfolio Health Center</h2>

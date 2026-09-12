@@ -1,17 +1,20 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import ExecutionIntelligence from './ExecutionIntelligence';
+import MaterialValuePanel from './MaterialValuePanel';
+import MaterialPipelinePanel from './MaterialPipelinePanel';
 import {
-  Activity, IndianRupee, AlertTriangle, Zap, Package, CheckCircle2, Shield, Network, HelpCircle,
+  Activity, IndianRupee, AlertTriangle, Zap, Package, CheckCircle2, Shield, Network, HelpCircle, MapPin
 } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { motion } from 'framer-motion';
 import KPIDetailsModal from '../../components/ui/KPIDetailsModal';
 import { useChartTheme } from '../../lib/chartTheme';
 import {
-  KPITile, Card, CardHeader, ChartFrame, PageHeader,
-  Legend, SourceTag, Metric, MiniMeter,
+  KPITile, Card, CardHeader, ChartFrame, PageHeader, SourceTag, Metric, MiniMeter,
   containerVariants, itemVariants,
 } from '../../components/ui/primitives';
+import NetworkOverviewMap from './NetworkOverviewMap';
 
 /* ── Trajectory data ──────────────────────────────────────────────────────
    /api/metrics/history reconstructs monthly series from the timestamps on the
@@ -55,14 +58,15 @@ function useTrajectory(phase: string, portfolio: string | null) {
   /* Sparklines only — no proportion bars. A tile shows a plot when its
      series reconciles with the figure printed above it, and nothing when it
      does not. Reconciling today: open NCs, open RFIs, NC closure rate and
-     project count. Still outstanding: PO value (6.4% adrift, probably the WBS
-     double-count in dashboard.py), COD capacity (derived from TC block data,
-     not capacity_mwac) and delayed projects (finish_date_variance is a
-     snapshot with no history). */
+     project count. PO value was 10.4% adrift because the headline summed
+     per-project WBS matches and dropped unmatched POs; it now reads the ZSPS
+     grand total from the API. Still outstanding: COD capacity (derived from
+     TC block data, not capacity_mwac) and delayed projects
+     (finish_date_variance is a snapshot with no history). */
   return reconciles;
 }
 
-export default function ExecutiveOverview({ dashboardData, briefing, briefingLoading, briefingError }: any) {
+export default function ExecutiveOverview({ dashboardData, briefing, briefingLoading, briefingError, onTabChange }: any) {
   const [activeKpiModal, setActiveKpiModal] = useState<string | null>(null);
   const [activeListTab, setActiveListTab] = useState<'top' | 'low' | 'delayed'>('top');
   // Axis/grid/tooltip chrome and the series palette all come from the shared
@@ -128,21 +132,25 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     };
   }, [projects]);
 
-  /* Rupees → crore happens once, here, rather than at each call site. */
-  const totalPOCr = totalPOValue / 10000000;
+  /* Rupees → crore happens once, here, rather than at each call site.
+     The portfolio PO figure comes from the ZSPS grand total the API now
+     returns; totalPOValue (summed from per-project WBS matches) is only a
+     fallback, and it undercounts by every PO with no project prefix. */
+  const totalPOCr = (summary.total_po_value ?? totalPOValue) / 10000000;
 
   /* Crore values were the one figure not going through en-IN grouping, so a
      portfolio total rendered as "59753.0" beside neighbours like "9,832".
      Past four digits the decimal is noise, so it is dropped. */
   const fmtCr = (n: number) =>
     n >= 1000 ? Math.round(n).toLocaleString('en-IN') : n.toFixed(1);
-  const remainingPOValue = totalPOCr - poDeliveredCr;
+  const poDeliveredTotalCr = summary.total_po_delivered_cr ?? poDeliveredCr;
+  const remainingPOValue = totalPOCr - poDeliveredTotalCr;
 
   /* Pulse quality. `total_ncs` is what gives the KPI tile a real denominator —
      without it the tile falls back to trajectory mode C. */
   const totalNCs = summary?.quality?.total_ncs || 0;
   const openNCs = summary?.quality?.open_ncs || 0;
-  const openRFIs = (summary?.quality?.total_rfis || 0) - (summary?.quality?.completed_rfis || 0);
+  const openRFIs = summary?.quality?.rfis_in_flight || 0;
   const totalRFIs = summary?.quality?.total_rfis || 0;
   const closureRate = Math.round(summary?.quality?.closure_rate || 0);
 
@@ -218,89 +226,8 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
     return projects;
   }, [projects, activeListTab]);
 
-  const topSapProjects = useMemo(() => {
-    return [...projects]
-      .filter((p: any) => (p.sap?.req_qty || p.sap?.po_qty || p.sap?.inventory_qty) > 0)
-      .sort((a, b) => (b.sap?.req_qty || b.sap?.po_qty || 0) - (a.sap?.req_qty || a.sap?.po_qty || 0))
-      .slice(0, 5);
-  }, [projects]);
-
   // Material pipeline is an ordered progression (Requirement → PO → Transit →
   // GRN), so it reads as one sequential ramp rather than four unrelated hues.
-  const costChartOptions = {
-    tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-    legend: { top: 0, right: 0 },
-    grid: { left: 8, right: 16, bottom: 4, top: 32, containLabel: true },
-    xAxis: { type: 'value', name: 'Qty', nameLocation: 'end' },
-    yAxis: {
-      type: 'category',
-      data: topSapProjects.map(p => p.p6_project_name || p.project_name),
-      axisLabel: { fontWeight: 600, fontSize: 11 }
-    },
-    series: [
-      { name: 'Requirement', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.req_qty || 0) },
-      { name: 'PO Raised', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.po_qty || 0) },
-      { name: 'In-Transit', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.in_transit_qty || 0) },
-      { name: 'Inventory/GRN', type: 'bar', stack: 'sap', data: topSapProjects.map(p => p.sap?.inventory_qty || 0) }
-    ].map((s, i) => ({
-      ...s,
-      itemStyle: { color: [chrome.gridLine, categorical[0], categorical[3], categorical[1]][i] }
-    }))
-  };
-
-  const originalScatterOptions = {
-    tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${p.data[0]}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>COD: ${p.data[3]}` },
-    grid: { left: 8, right: 24, bottom: 4, top: 32, containLabel: true },
-    xAxis: { type: 'value', name: 'Progress (%)', nameTextStyle: { padding: [0, 0, 10, 0] } },
-    yAxis: { type: 'value', name: 'Capacity (MW)' },
-    series: [{
-      name: 'Projects', type: 'scatter',
-      symbolSize: (data: any) => Math.max(10, Math.min(data[1] / 10, 40)),
-      itemStyle: { color: categorical[0], opacity: 0.7, borderColor: chrome.surface1, borderWidth: 1 },
-      data: projects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => {
-        const codDateStr = p.p6?.planned_finish_date || p.p6?.scheduled_finish_date || p.p6?.finish_date;
-        const cod = codDateStr ? new Date(codDateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
-        return [Math.round(p.p6?.progress || 0), parseFloat(p.extractedCap.toFixed(1)), p.p6_project_name || p.project_name, cod];
-      })
-    }]
-  };
-
-  // Here colour DOES encode state (complete / delayed / running), so this is
-  // the one series on the screen allowed to use the reserved status palette.
-  const queueScatterOptions = {
-    tooltip: { trigger: 'item', formatter: (p: any) => `<strong>${p.data[2]}</strong><br/>Progress: ${Number(p.data[0]).toFixed(1)}%<br/>Capacity: ${Number(p.data[1]).toFixed(1)} MW<br/>COD: ${p.data[5]}<br/>Status: ${p.data[3]}${p.data[4] > 0 ? ' (' + p.data[4] + ' days delayed)' : ''}` },
-    grid: { left: 8, right: 16, bottom: 0, top: 24, containLabel: true },
-    xAxis: { type: 'value', name: 'Progress (%)' },
-    yAxis: { type: 'value', name: 'Capacity (MW)' },
-    series: [{
-      name: 'Projects', type: 'scatter',
-      symbolSize: (data: any) => Math.max(8, Math.min(data[1] / 15, 30)),
-      itemStyle: {
-        color: (params: any) =>
-          params.data[0] >= 90 ? statusColors.done
-            : params.data[3] === 'Delayed' ? statusColors.critical
-            : statusColors.healthy,
-        opacity: 0.85, borderColor: chrome.surface1, borderWidth: 1
-      },
-      data: listProjects.map((p: any) => ({ ...p, extractedCap: getProjectCapacity(p) })).filter((p: any) => p.extractedCap > 0).map((p: any) => {
-        let delayDays = 0;
-        const codDateStr = p.p6?.planned_finish_date || p.p6?.scheduled_finish_date || p.p6?.finish_date;
-        const cod = codDateStr ? new Date(codDateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
-        if (p.p6?.baseline_finish_date) {
-          const finishStr = p.p6?.scheduled_finish_date || p.p6?.finish_date;
-          if (finishStr) {
-            const finish = new Date(finishStr);
-            const baseline = new Date(p.p6.baseline_finish_date);
-            if (!isNaN(finish.getTime()) && !isNaN(baseline.getTime())) {
-              delayDays = Math.max(0, Math.ceil((finish.getTime() - baseline.getTime()) / (1000 * 60 * 60 * 24)));
-            }
-          }
-        }
-        return [p.p6?.progress || 0, parseFloat(p.extractedCap.toFixed(1)), p.p6_project_name || p.project_name, p.p6?.health || 'On Track', delayDays, cod];
-      })
-    }]
-  };
-
   const isLoading = !dashboardData || !dashboardData.summary || Object.keys(dashboardData.summary).length === 0;
 
   if (isLoading) {
@@ -414,21 +341,21 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         animate="show"
         className="flex flex-col gap-3"
       >
-        {/* Tier 1 — focal */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-12 gap-3 items-stretch">
+        {/* One weight for every KPI. A CSS grid with auto-rows-fr rather than
+            flex-wrap: KPITile sets h-full on its wrapper, and a percentage
+            height on a flex item in an auto-height row resolves to auto, which
+            is what left the cards ragged. Grid rows have a definite height. */}
+        <div className="grid auto-rows-fr grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
           <KPITile
-            className="lg:col-span-6"
-            size="hero"
+            className="min-w-0"
+            size="primary"
             tone="neutral"
             polarity="up-good"
             label="Portfolio Capacity"
             value={Math.round(codMW).toLocaleString('en-IN')}
             unit="MW at COD"
+            subtext={`of ${Math.round(totalMW).toLocaleString('en-IN')} MW planned`}
             trajectory={trajectoryFor('portfolio_capacity', codMW)}
-            stats={[
-              { label: 'Trial Run', value: Math.round(trMW).toLocaleString('en-IN'), unit: 'MW' },
-              { label: 'Total Planned', value: Math.round(totalMW).toLocaleString('en-IN'), unit: 'MW' },
-            ]}
             icon={Zap}
             selected={activeKpiModal === 'Portfolio Capacity'}
             onClick={() => setActiveKpiModal('Portfolio Capacity')}
@@ -441,100 +368,66 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
             }
           />
 
+          {/* Total + Delayed + Completed folded into one tile: the portfolio
+              count leads, and its two states sit beneath as the breakdown. */}
           <KPITile
-            className="lg:col-span-3"
+            className="min-w-0"
             size="primary"
-            tone="neutral"
-            polarity="neutral"
-            label="Total Projects"
+            tone={delayedProjects > 0 ? 'critical' : 'healthy'}
+            polarity="down-good"
+            label="Project Delivery"
             value={totalProjects}
+            stats={[
+              { label: 'Delayed', value: delayedProjects },
+              { label: 'Completed', value: progressStages.completed },
+            ]}
             trajectory={trajectoryFor('total_projects', totalProjects)}
             icon={Activity}
             selected={activeKpiModal === 'Total Projects'}
             onClick={() => setActiveKpiModal('Total Projects')}
-            info="Total number of active projects we are monitoring. 'On Track' means the project is running on schedule without any delays."
+            info="Every project we monitor, split by state. Delayed means behind the Primavera P6 baseline finish; Completed means 100% delivered. The remainder are on track."
           />
 
           <KPITile
-            className="lg:col-span-3"
+            className="min-w-0"
             size="primary"
-            tone={delayedProjects > 0 ? 'critical' : 'healthy'}
-            polarity="down-good"
-            label="Delayed Projects"
-            value={delayedProjects}
-            subtext="behind P6 baseline finish"
-            icon={AlertTriangle}
-            selected={activeKpiModal === 'Delayed Projects'}
-            onClick={() => setActiveKpiModal('Delayed Projects')}
-            info="Projects that have fallen behind their original planned completion dates in our Primavera P6 schedule."
-          />
-        </div>
-
-        {/* Tier 2 — supporting. Six tiles on the 12-col grid, two columns
-            each, so Pulse and TC sit alongside the schedule and cost figures
-            rather than being buried as subtext. */}
-        <div className="grid grid-cols-2 gap-3 lg:grid-cols-12 lg:items-stretch">
-          <KPITile
-            className="lg:col-span-2"
-            size="supporting"
-            tone="risk"
-            polarity="down-good"
-            label="Open NCs"
-            value={openNCs}
-            subtext="Pulse non-conformances"
-            trajectory={trajectoryFor('open_ncs', openNCs)}
-            icon={Shield}
-            selected={activeKpiModal === 'Quality (Pulse)'}
-            onClick={() => setActiveKpiModal('Quality (Pulse)')}
-            info="Live from the Pulse Quality system. Non-Conformances raised on site that are still open and need attention."
-          />
-
-          <KPITile
-            className="lg:col-span-2"
-            size="supporting"
-            tone={openRFIs > 0 ? 'watch' : 'healthy'}
-            polarity="down-good"
-            label="Open RFIs"
-            value={openRFIs.toLocaleString('en-IN')}
-            subtext="awaiting response"
-            trajectory={trajectoryFor('open_rfis', openRFIs)}
-            icon={HelpCircle}
-            info="Requests for Information raised from site and not yet answered. A long queue here usually shows up later as a schedule slip."
-          />
-
-          <KPITile
-            className="lg:col-span-2"
-            size="supporting"
-            tone={closureRate >= 80 ? 'healthy' : closureRate >= 50 ? 'watch' : 'risk'}
-            polarity="up-good"
-            label="NC Closure Rate"
-            value={closureRate}
-            unit="%"
-            subtext="of all NCs raised"
-            trajectory={trajectoryFor('nc_closure_rate', closureRate)}
-            icon={CheckCircle2}
-            info="Share of Non-Conformances that have been resolved and approved. The tick marks the 80% governance target."
-          />
-
-          <KPITile
-            className="lg:col-span-2"
-            size="supporting"
             tone="neutral"
             polarity="neutral"
             label="Total PO Value"
             value={`₹${fmtCr(totalPOCr)}`}
             unit="Cr"
-            subtext="all purchase orders"
+            subtext={`${fmtCr(poDeliveredTotalCr)} Cr delivered`}
             trajectory={trajectoryFor('po_value', totalPOCr)}
             icon={IndianRupee}
             selected={activeKpiModal === 'Total PO Value'}
             onClick={() => setActiveKpiModal('Total PO Value')}
-            info="Total value of all Purchase Orders across every project, from SAP. The bar shows how much has actually been delivered against it."
+            info="Every purchase order in ZSPS, ordered value against delivered value. Read from the ZSPS grand total rather than summed per project, so POs whose WBS maps to no project are still counted."
+          />
+
+          {/* Open NCs, closure rate and open RFIs on one tile: the open count
+              leads, the other two ride beneath it as the breakdown. */}
+          <KPITile
+            className="min-w-0"
+            size="primary"
+            tone={closureRate >= 80 ? 'healthy' : closureRate >= 50 ? 'watch' : 'risk'}
+            polarity="down-good"
+            label="Quality"
+            value={openNCs}
+            unit="open NCs"
+            stats={[
+              { label: 'Closure', value: `${closureRate}%` },
+              { label: 'Open RFIs', value: openRFIs.toLocaleString('en-IN') },
+            ]}
+            trajectory={trajectoryFor('open_ncs', openNCs)}
+            icon={Shield}
+            selected={activeKpiModal === 'Quality (Pulse)'}
+            onClick={() => setActiveKpiModal('Quality (Pulse)')}
+            info="Live from Pulse. The figure is open Non-Conformances; Closure is the share of all NCs resolved and approved, and Open RFIs are site questions still awaiting an answer."
           />
 
           <KPITile
-            className="lg:col-span-2"
-            size="supporting"
+            className="min-w-0"
+            size="primary"
             tone="neutral"
             polarity="up-good"
             label="Grid Connectivity"
@@ -543,21 +436,6 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
             subtext={`${tc.lines.toLocaleString('en-IN')} lines mapped`}
             icon={Network}
             info="Projects with transmission connectivity mapped in the TC portal. Evacuation readiness is not shown because the TC status field currently holds unparsed values."
-          />
-
-          <KPITile
-            className="lg:col-span-2"
-            size="supporting"
-            tone="healthy"
-            polarity="up-good"
-            label="Completed"
-            value={progressStages.completed}
-            subtext="100% delivered"
-            trajectory={trajectoryFor('completed_projects', progressStages.completed)}
-            icon={CheckCircle2}
-            selected={activeKpiModal === 'Completed Projects'}
-            onClick={() => setActiveKpiModal('Completed Projects')}
-            info="Projects that are 100% complete and successfully delivered."
             infoAlign="right"
           />
         </div>
@@ -573,65 +451,31 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
         variants={containerVariants}
         initial="hidden"
         animate="show"
-        className="grid grid-cols-1 items-stretch gap-3 lg:min-h-[46vh] lg:grid-cols-12"
+        className="grid grid-cols-1 items-stretch gap-3 lg:min-h-[540px] lg:grid-cols-12"
       >
-        <ChartFrame
-          className="lg:col-span-8"
-          eyebrow="Progress vs capacity"
-          title="Project Execution Queue"
-          icon={Activity}
-          right={
-            /* Reads the same tone tokens the scatter marks do. The previous
-               legend hardcoded #3b82f6 / #10b981 / #ef4444 while the series
-               drew from the chart theme — so no swatch matched its own dots,
-               and On Track / Near Completion were the wrong way round. */
-            <Legend
-              items={[
-                { tone: 'healthy', label: 'On Track (< 90%)' },
-                { tone: 'done', label: 'Near Completion (≥ 90%)' },
-                { tone: 'critical', label: 'Delayed' },
-              ]}
-            />
-          }
-        >
-          <ReactECharts theme={themeName} option={queueScatterOptions} style={{ height: '100%', width: '100%' }} />
-        </ChartFrame>
+        <motion.div variants={itemVariants} className="flex min-h-0 lg:col-span-8">
+          <ExecutionIntelligence projects={listProjects} />
+        </motion.div>
 
         {/* Right rail */}
-        <motion.div variants={itemVariants} className="flex min-h-0 flex-col lg:col-span-4">
-          <Card pad="md" className="flex min-h-0 flex-1 flex-col">
-            <CardHeader
-              eyebrow="Evacuation readiness"
-              title="Transmission Network"
-              icon={Network}
-              right={<SourceTag system="TC" />}
-            />
-            {transmissionOverview.length === 0 ? (
+        <motion.div variants={itemVariants} className="flex min-h-0 flex-col lg:col-span-4 h-full">
+          {transmissionOverview.length === 0 ? (
+            <Card pad="md" className="flex min-h-0 flex-1 flex-col">
+              <CardHeader
+                eyebrow="Evacuation readiness"
+                title="Transmission Network"
+                icon={Network}
+                right={<SourceTag system="TC" />}
+              />
               <div className="flex flex-1 items-center justify-center px-4 py-8 text-center text-[12px] text-fg-tertiary">
                 No transmission lines mapped for this scope.
               </div>
-            ) : (
-              /* A bar per group turns a list of counts into a comparison, and
-                 gives the rail something to do with the height it now has. */
-              <div className="custom-scrollbar -mr-1 min-h-0 flex-1 overflow-y-auto pr-1">
-                {transmissionOverview.map((node) => (
-                  <div
-                    key={node.key}
-                    className="flex items-center gap-3 py-1.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[11.5px] text-fg-primary" title={node.key}>
-                        {node.key}
-                      </div>
-                    </div>
-                    <div className="shrink-0 text-[11.5px] tabular-nums text-fg-primary">
-                      {node.count} <span className="text-[9px] text-fg-tertiary ml-0.5">lines</span>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
+            </Card>
+          ) : (
+            <div className="flex-1 w-full h-full min-h-[400px]">
+              <NetworkOverviewMap onTabChange={onTabChange} />
+            </div>
+          )}
         </motion.div>
       </motion.div>
 
@@ -646,25 +490,26 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
       >
         <ChartFrame
           className="lg:col-span-7"
-          eyebrow="Requirement → PO → In-transit → GRN"
+          eyebrow="Delivered + in transit = ordered"
           title="SAP Material Pipeline"
           icon={Package}
           right={<SourceTag system="SAP" />}
-          height={320}
+          height={360}
         >
-          <ReactECharts theme={themeName} option={costChartOptions} style={{ height: '100%', width: '100%' }} />
+          <MaterialPipelinePanel projects={projects} />
         </ChartFrame>
 
         <ChartFrame
           className="lg:col-span-5"
-          eyebrow="Every mapped project, unfiltered"
-          title="Progress vs Capacity"
-          icon={Activity}
-          right={<SourceTag system="P6" />}
-          height={320}
+          eyebrow="Ordered · delivered · in transit"
+          title="Material Value"
+          icon={Package}
+          right={<SourceTag system="SAP" />}
+          height={360}
         >
-          <ReactECharts theme={themeName} option={originalScatterOptions} style={{ height: '100%', width: '100%' }} />
+          <MaterialValuePanel />
         </ChartFrame>
+
       </motion.div>
 
 

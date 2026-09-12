@@ -248,7 +248,7 @@ export default function DataIntegrationHub() {
     });
 
   return (
-    <div className="flex flex-col h-full w-full max-w-[1600px] mx-auto transition-opacity duration-300 pb-8 px-4">
+    <div className="flex flex-col h-full w-full transition-opacity duration-300 pb-8 px-4">
       
       {/* ── Page Header ── */}
       <div className="flex items-end justify-between gap-4 mb-6 pt-4">

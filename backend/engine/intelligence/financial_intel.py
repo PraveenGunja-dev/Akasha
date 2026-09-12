@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 
 import models
+from services.progress import nonlabor_units_by_project, project_progress
 
 logger = logging.getLogger(__name__)
 
@@ -74,11 +75,12 @@ def analyze_financials(db: Session, ctx: dict) -> dict:
     # ═══════════════════════════════════════════════════════
     # 2. BURN RATE & COST-TO-COMPLETE
     # ═══════════════════════════════════════════════════════
+    # Progress = Σ actual non-labour units / Σ planned non-labour units
+    # (services/progress.py) — the single definition used everywhere, not
+    # duration_percent_complete (schedule time elapsed).
     progress_pct = 0
     if p6_proj:
-        progress_pct = p6_proj.duration_percent_complete or 0
-        if progress_pct > 1:
-            progress_pct = progress_pct / 100  # normalize to 0-1
+        progress_pct = project_progress(p6_proj, nonlabor_units_by_project(db, [p6_proj.p6_object_id]))[0]
 
     burn_pct = round(expenditure_inr / max(budget_inr, 1) * 100, 1) if budget_inr > 0 else 0
 

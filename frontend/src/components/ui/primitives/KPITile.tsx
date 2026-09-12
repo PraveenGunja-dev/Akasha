@@ -2,7 +2,7 @@ import React from 'react';
 import { motion } from 'framer-motion';
 import { Card, type Tone } from './Card';
 import {
-  Metric, StatRow, Delta,
+  Metric, Delta,
   type MetricSize, type StatItem, type DeltaDirection, type Polarity,
 } from './Metric';
 import { Sparkline, MIN_SERIES_POINTS } from './Sparkline';
@@ -52,20 +52,29 @@ const WEIGHT: Record<KPISize, {
   /** viewBox reference height, and the floor the plot may not shrink below. */
   plot: number;
 }> = {
-  hero:       { metric: 'xl', body: 'px-4 pt-3',   bodyOnly: 'pb-3.5', plot: 34 },
-  primary:    { metric: 'lg', body: 'px-3.5 pt-3', bodyOnly: 'pb-3.5', plot: 30 },
-  supporting: { metric: 'md', body: 'px-3 pt-2.5', bodyOnly: 'pb-3',   plot: 26 },
+  hero:       { metric: 'xl', body: 'px-4 pt-2.5',   bodyOnly: 'pb-3',   plot: 30 },
+  primary:    { metric: 'lg', body: 'px-3.5 pt-2.5', bodyOnly: 'pb-2.5', plot: 26 },
+  supporting: { metric: 'md', body: 'px-3 pt-2',     bodyOnly: 'pb-2.5', plot: 24 },
 };
 
 /** Slot padding, matched to the body so meter captions line up with the label. */
 const SLOT_PAD: Record<KPISize, string> = {
-  hero: 'px-4 pb-3',
-  primary: 'px-3.5 pb-3',
-  supporting: 'px-3 pb-2.5',
+  hero: 'px-4 pb-2.5',
+  primary: 'px-3.5 pb-2.5',
+  supporting: 'px-3 pb-2',
 };
 
-/** Attention states get an edge; settled states do not. */
-const RAIL_TONES: Tone[] = ['critical', 'risk'];
+/** Tone now colours the whole card surface through --kpi-accent, so the 3px
+    left rail is gone: a red rail over a blue wash was two signals disagreeing. */
+const KPI_TONE_CLASS: Record<Tone, string> = {
+  neutral: '',
+  critical: 'kpi-card-critical',
+  risk: 'kpi-card-risk',
+  watch: 'kpi-card-watch',
+  healthy: 'kpi-card-healthy',
+  done: 'kpi-card-done',
+  ai: '',
+};
 
 const ICON_TINT: Record<Tone, string> = {
   neutral: 'text-fg-tertiary',
@@ -168,7 +177,7 @@ export const KPITile = ({
         /* rounded-b-[7px] sits 1px inside the card's 8px radius, so the plot
            meets the corner cleanly with no sliver of fill outside the border. */
         <div
-          className="relative mt-2 flex-1 overflow-hidden rounded-b-[7px]"
+          className="relative mt-2 flex-1 overflow-hidden rounded-b-[11px]"
           style={{ minHeight: w.plot }}
         >
           <Sparkline
@@ -211,7 +220,7 @@ export const KPITile = ({
   return (
     <motion.div variants={itemVariants} className={cx('h-full', className)}>
       <Card
-        tone={RAIL_TONES.includes(tone) ? tone : 'neutral'}
+        tone="neutral"
         pad="none"
         interactive={!!onClick}
         onClick={onClick}
@@ -221,13 +230,24 @@ export const KPITile = ({
            tile, cutting the explanation off mid-word. Only the sparkline needs
            clipping, so that is done on the slot itself. */
         className={cx(
-          'flex h-full flex-col',
+          /* kpi-card carries the shared surface: wash, top sheen, lit bottom
+             edge, 12px radius. Defined once in index.css so the dashboards
+             cannot drift apart. */
+          'kpi-card flex h-full flex-col',
+          KPI_TONE_CLASS[tone],
           selected && 'border-primary ring-[3px] ring-primary/15'
         )}
       >
+        {/* The lit bottom edge that gives the card its floating read. */}
+        <span
+          aria-hidden
+          className="pointer-events-none absolute inset-x-4 bottom-0 h-px bg-gradient-to-r
+                     from-transparent via-brand-blue/45 to-transparent
+                     dark:via-brand-blue/70"
+        />
         {/* Body: content-sized. See the density note on WEIGHT. */}
-        <div className={cx(w.body, !slot && w.bodyOnly)}>
-          <div className="mb-2 flex items-start justify-between gap-2.5">
+        <div className={cx('relative', w.body, !slot && w.bodyOnly)}>
+          <div className="mb-1.5 flex items-start justify-between gap-2.5">
             <div className="flex min-w-0 items-center gap-1">
               <h4 className="section-label truncate leading-tight">{label}</h4>
               {info && <InfoTip info={info} align={infoAlign} />}
@@ -326,7 +346,19 @@ export const KPITile = ({
                 )}
 
                 {stats && stats.length > 0 && !hasInlineStats && (
-                  <StatRow stats={stats.slice(0, 2)} />
+                  <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                    {stats.slice(0, 2).map((s, i) => (
+                      <span key={i} className="flex items-baseline gap-1.5">
+                        <span className="section-label">{s.label}</span>
+                        <span className="text-[13px] font-semibold leading-none text-fg-primary">
+                          {s.value}
+                          {s.unit && (
+                            <span className="ml-0.5 text-[10px] font-medium text-fg-tertiary">{s.unit}</span>
+                          )}
+                        </span>
+                      </span>
+                    ))}
+                  </div>
                 )}
               </>
             )}

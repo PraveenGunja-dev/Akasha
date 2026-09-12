@@ -58,10 +58,13 @@ const STATUS_TINT: Record<string, string> = {
   'text-success': 'text-status-healthy-fg',
 };
 
-const RAIL_FOR_TINT: Record<string, string> = {
-  'text-status-critical-fg': 'border-l-[3px] border-l-status-critical-solid',
-  'text-status-risk-fg': 'border-l-[3px] border-l-status-risk-solid',
-  'text-status-healthy-fg': 'border-l-[3px] border-l-status-healthy-solid',
+/* The shared KPI surface. One --kpi-accent drives border, wash and lit edge,
+   so a status tile is the same card tinted rather than a different card with a
+   rail bolted to its left. Neutral tiles get the plain kpi-card wash. */
+const TONE_FOR_TINT: Record<string, string> = {
+  'text-status-critical-fg': 'kpi-card-critical',
+  'text-status-risk-fg': 'kpi-card-risk',
+  'text-status-healthy-fg': 'kpi-card-healthy',
 };
 
 const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, hasBreakdown, size = 'primary' }: any) => {
@@ -75,9 +78,9 @@ const HeroMetric = ({ label, value, unit, color, icon: Icon, onClick, active, ha
       onKeyDown={(e: React.KeyboardEvent) => {
         if (interactive && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); }
       }}
-      className={`group relative flex flex-col justify-between gap-3 rounded-lg border bg-surface-1 transition-colors
+      className={`kpi-card group relative flex flex-col justify-between gap-3 border bg-surface-1 transition-colors
         ${size === 'primary' ? 'px-4 py-4 min-h-[104px]' : 'px-3.5 py-3 min-h-[84px]'}
-        ${tint ? RAIL_FOR_TINT[tint] : ''}
+        ${tint ? TONE_FOR_TINT[tint] : ''}
         ${active ? 'border-primary ring-1 ring-primary/25' : 'border-border-subtle'}
         ${interactive ? 'cursor-pointer hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring' : ''}`}
     >
@@ -399,14 +402,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [slrLoading, setSlrLoading] = useState(false);
   const [slrTypeFilter, setSlrTypeFilter] = useState<string>('POrd');
   const [slrStatusFilter, setSlrStatusFilter] = useState<'ALL' | 'Open' | 'Closed'>('ALL');
-  const slrTopLevelKPIs = useMemo(() => {
-    if (!slrData || !slrData.data) return null;
-    const pords = slrData.data.filter((r: any) => r.type === 'POrd');
-    return {
-      totalPOs: new Set(pords.map((r: any) => r.po_document)).size,
-      totalBudgetINR: pords.reduce((sum: number, r: any) => sum + (r.total || 0), 0)
-    };
-  }, [slrData]);
   const handleSlrTileClick = (status: 'ALL' | 'Open' | 'Closed') => {
     if (expandedMetric === 'slr' && slrStatusFilter === status) {
       setExpandedMetric(null);
@@ -650,7 +645,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
     const result = Object.values(matMap).map((m: any) => {
       m.remainingQty = m.orderedQty - m.consumedQty;
-      m.remainingBalanceINR = m.budgetINR - m.consumedAmountINR;
+      /* ZSPS minus ZSPS. Was budget minus MB51 consumption — two systems,
+         and it went negative on projects where site issues outran the PO
+         book the SLR extract happened to hold. */
+      m.remainingBalanceINR = m.budgetINR - m.deliveredINR;
       m.wbsList = Array.from(m.wbsElements).filter(Boolean);
       return m;
     });
@@ -668,7 +666,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-[1600px] px-6 py-6" aria-busy="true" aria-live="polite">
+      <div className="w-full px-6 py-6" aria-busy="true" aria-live="polite">
         <span className="sr-only">Loading project</span>
         <div className="mb-6 h-[68px] animate-pulse rounded-lg bg-surface-sunken" />
         <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -1107,7 +1105,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     <div className="w-full min-h-full bg-background text-foreground pb-12">
       {/* ── Top Bar ── */}
       <header className="sticky top-0 z-50 border-b border-border-subtle bg-surface-1 px-6 py-3">
-        <div className="mx-auto flex max-w-[1600px] items-center gap-4">
+        <div className="flex w-full items-center gap-4">
           <button onClick={() => onBack ? onBack() : navigate('/ceo-dashboard')}
             className="flex items-center gap-1.5 rounded-md px-1.5 py-1 -ml-1.5 text-[14px] font-medium text-fg-secondary transition-colors hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
@@ -1151,7 +1149,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+      <main className="w-full px-6 py-6 space-y-6">
         {/* ── Hero ──
             All ten KPIs, in the original 5-wide grid. The tiles keep the
             quieter treatment — 12px labels, tabular figures, and colour only
@@ -1166,9 +1164,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           forecast={p.forecastFinish || p.forecastMonth}
         />
 
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5">
+        <div className="flex flex-wrap gap-3 [&>*]:min-w-[180px] [&>*]:flex-1 [&>*]:basis-[calc(20%-0.6rem)]">
           <HeroMetric label="Progress" value={`${Math.round(progressPct)}%`} icon={Activity} color={healthColor} />
-          <HeroMetric label="PO Amount" value={slrTopLevelKPIs ? `₹${(slrTopLevelKPIs.totalBudgetINR / 10000000).toFixed(1)}` : (detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0')} unit="Cr" icon={Database} color="text-primary" />
+          {/* ZSPS, same as the SAP tab below — one label, one number on the page. */}
+          <HeroMetric label="PO Amount" value={detail?.sap?.summary?.totalBudgetINR ? `₹${(detail.sap.summary.totalBudgetINR / 10000000).toFixed(1)}` : '₹0'} unit="Cr" icon={Database} color="text-primary" />
 
           <HeroMetric
             label={`COD Done (${detail?.mapping?.unitType || 'Units'})`}
@@ -1506,9 +1505,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                         </div>
                       ) : (
                         <>
-                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
                             {/* Total POs — shown in all tabs (POrd count only, pulled from SLR data) */}
-                            <HeroMetric label="Total POs" value={slrTopLevelKPIs ? slrTopLevelKPIs.totalPOs : sap.summary.totalPOs} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
+                            <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
                             {/* Vendors — shown in all tabs */}
                             <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
                             {/* Materials — commented out for ALL, SPV, AGEL, AGE6L */}
@@ -1520,15 +1519,20 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <HeroMetric label="Inventory" value={fmtMW(sap.summary.totalInventoryQty)} unit="No" icon={Box} color="text-success dark:text-success" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'inventory' ? null : 'inventory')} active={expandedMetric === 'inventory'} />
                             )}
 
-                            {/* PO Amount (renamed from Supply PO Amount) — shown in all tabs, uses IndianRupee icon, pulled from SLR data */}
-                            <HeroMetric label="PO Amount" value={fmtCost(slrTopLevelKPIs ? slrTopLevelKPIs.totalBudgetINR : sap.summary.totalBudgetINR)} icon={IndianRupee} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
-                            {/* Utilized PO Amount (renamed from Utilized Supply PO Amount) — shown in all tabs */}
-                            <HeroMetric label="Utilized PO Amount" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} color="text-warning dark:text-warning" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
-                            {/* Remaining PO Amount (renamed from Remaining Supply PO Amount) — shown in all tabs */}
-                            <HeroMetric label="Remaining PO Amount" value={fmtCost((slrTopLevelKPIs ? slrTopLevelKPIs.totalBudgetINR : sap.summary.totalBudgetINR || 0) - (sap.summary.totalExpenditureINR || 0))} icon={Target} color="text-teal-500 dark:text-teal-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
-                            {/* % Consumed — commented out for ALL, SPV; shown for AGEL, AGE6L */}
+                            {/* The PO row reads ZSPS end to end. It used to take the PO amount
+                                from SLR (a narrower extract — ₹743 Cr here) and "utilised" from
+                                MB51 site consumption (₹1,126 Cr), then subtract one from the
+                                other and call it "remaining". Three systems, one arithmetic,
+                                and a negative balance. Against ZSPS alone this project is
+                                ₹2,382 Cr ordered, ₹2,209 Cr delivered, ₹173 Cr still to come. */}
+                            <HeroMetric label="PO Amount" value={fmtCost(sap.summary.totalBudgetINR)} icon={IndianRupee} hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'budget' ? null : 'budget')} active={expandedMetric === 'budget'} />
+                            <HeroMetric label="Delivered" value={fmtCost(sap.summary.totalDeliveredINR)} icon={CheckCircle2} />
+                            <HeroMetric label="Still to deliver" value={fmtCost((sap.summary.totalBudgetINR || 0) - (sap.summary.totalDeliveredINR || 0))} icon={Truck} hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'remaining' ? null : 'remaining')} active={expandedMetric === 'remaining'} />
+                            {/* MB51 goods issued to site. A different system from the PO
+                                book; shown alongside it, never subtracted from it. */}
+                            <HeroMetric label="Consumed on site" value={fmtCost(sap.summary.totalExpenditureINR)} icon={Activity} hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'utilized' ? null : 'utilized')} active={expandedMetric === 'utilized'} />
                             {(sapFilter === 'agel' || sapFilter === 'age6l') && (
-                              <HeroMetric label="% Consumed" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} color={sap.summary.totalBudgetINR && (sap.summary.totalExpenditureINR / sap.summary.totalBudgetINR) > 0.9 ? 'text-destructive dark:text-destructive' : 'text-success dark:text-success'} />
+                              <HeroMetric label="% Delivered" value={`${sap.summary.totalBudgetINR ? ((sap.summary.totalDeliveredINR / sap.summary.totalBudgetINR) * 100).toFixed(1) : '0'}%`} icon={BarChart3} />
                             )}
                             {/* In Transit — commented out for ALL, SPV, AGE6L; shown for AGEL */}
                             {(sapFilter === 'agel') && (
@@ -1587,9 +1591,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   {expandedMetric === 'materials' && 'Material Type Breakdown'}
                                   {expandedMetric === 'volume' && 'PO Volume by Material'}
                                   {expandedMetric === 'inventory' && 'Inventory Breakdown (Qty & Value)'}
-                                  {expandedMetric === 'budget' && 'Budget Allocation by Material'}
-                                  {expandedMetric === 'utilized' && 'Utilization by Material'}
-                                  {expandedMetric === 'remaining' && 'Remaining Balance by Material'}
+                                  {expandedMetric === 'budget' && 'PO amount by material'}
+                                  {expandedMetric === 'utilized' && 'Consumed on site by material'}
+                                  {expandedMetric === 'remaining' && 'Still to deliver by material'}
                                   {expandedMetric === 'transit' && 'In-Transit Breakdown'}
                                   {expandedMetric === 'slr' && 'Purchase Orders Breakdown'}
                                 </h4>
@@ -1676,10 +1680,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         <tr>
                                           <th className="text-left">Material Code</th>
                                           <th className="text-left">Material Description</th>
-                                          <th className="text-right">Supply PO Amount</th>
-                                          <th className="text-right">Consumed Amt</th>
-                                          <th className="text-right">Remaining</th>
-                                          <th className="text-left">Utilization</th>
+                                          <th className="text-right">PO amount</th>
+                                          <th className="text-right">Delivered</th>
+                                          <th className="text-right">Still to deliver</th>
+                                          <th className="text-right">Consumed on site</th>
+                                          <th className="text-left">% delivered</th>
                                         </tr>
                                       )}
                                       {/* ── Transit Breakdown ── */}
@@ -1800,18 +1805,19 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         if (expandedMetric === 'remaining') return b.remainingBalanceINR - a.remainingBalanceINR;
                                         return b.budgetINR - a.budgetINR;
                                       }).slice(0, 50).map((mat: any, i: number) => {
-                                        const utilPct = mat.budgetINR ? (mat.consumedAmountINR / mat.budgetINR) * 100 : 0;
+                                        const delivPct = mat.budgetINR ? (mat.deliveredINR / mat.budgetINR) * 100 : 0;
                                         return (
                                           <tr key={i} className="hover:bg-muted transition-colors">
                                             <td className="text-left font-mono text-primary/80">{mat.materialCode}</td>
                                             <td className="text-left text-foreground/70 max-w-[150px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
-                                            <td className="text-right font-mono text-pink-400">{fmtCost(mat.budgetINR)}</td>
-                                            <td className="text-right font-mono text-warning">{fmtCost(mat.consumedAmountINR)}</td>
-                                            <td className="text-right font-mono text-teal-400">{fmtCost(mat.remainingBalanceINR)}</td>
+                                            <td className="text-right font-mono tabular-nums text-foreground/80">{fmtCost(mat.budgetINR)}</td>
+                                            <td className="text-right font-mono tabular-nums text-foreground/80">{fmtCost(mat.deliveredINR)}</td>
+                                            <td className="text-right font-mono tabular-nums text-foreground/80">{fmtCost(mat.remainingBalanceINR)}</td>
+                                            <td className="text-right font-mono tabular-nums text-fg-tertiary">{fmtCost(mat.consumedAmountINR)}</td>
                                             <td className="text-left">
                                               <div className="flex items-center gap-2">
-                                                <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${utilPct > 90 ? 'bg-destructive/100' : utilPct > 60 ? 'bg-warning/100' : 'bg-success/100'}`} style={{ width: `${Math.min(utilPct, 100)}%` }}></div></div>
-                                                <span className={`text-[10px] font-mono font-bold ${utilPct > 90 ? 'text-destructive' : utilPct > 60 ? 'text-warning' : 'text-success'}`}>{utilPct.toFixed(0)}%</span>
+                                                <div className="w-16 h-2 bg-muted rounded-full overflow-hidden"><div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(delivPct, 100)}%` }}></div></div>
+                                                <span className="text-[12px] font-mono tabular-nums text-fg-secondary">{delivPct.toFixed(0)}%</span>
                                               </div>
                                             </td>
                                           </tr>

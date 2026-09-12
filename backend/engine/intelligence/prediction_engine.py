@@ -15,10 +15,10 @@ import logging
 from datetime import datetime, timedelta
 from collections import defaultdict
 from sqlalchemy.orm import Session
-from sqlalchemy import func
 
 import models
 from engine.variance import _classify_phase
+from services.progress import nonlabor_units_by_project, project_progress
 
 logger = logging.getLogger(__name__)
 
@@ -135,21 +135,25 @@ def generate_predictions(db: Session, ctx: dict,
     # 4. PORTFOLIO BENCHMARK (compare to peers)
     # ═══════════════════════════════════════════════════════
     if p6_proj and activities:
-        # Get average progress of all projects in same category
+        # Get average progress of all projects in same category. Progress is
+        # Σ actual non-labour units / Σ planned non-labour units per project
+        # (services/progress.py), not duration_percent_complete (schedule
+        # time elapsed) — averaged in Python since it is not a column.
         category = ctx.get("category")
         if category:
-            peer_projects = db.query(
-                func.avg(models.P6Project.duration_percent_complete)
-            ).join(
+            peers = db.query(models.P6Project).join(
                 models.ProjectMapping,
                 models.ProjectMapping.project_id == models.P6Project.project_id
             ).filter(
                 models.ProjectMapping.category == category,
                 models.P6Project.project_id != ctx["project_id"],
-            ).scalar()
+            ).all()
+            peer_units = nonlabor_units_by_project(db, [p.p6_object_id for p in peers] + [p6_proj.p6_object_id])
+            peer_pcts = [project_progress(p, peer_units)[0] * 100 for p in peers]
+            peer_projects = (sum(peer_pcts) / len(peer_pcts)) if peer_pcts else 0
 
             if peer_projects and peer_projects > 0:
-                my_progress = p6_proj.duration_percent_complete or 0
+                my_progress = project_progress(p6_proj, peer_units)[0] * 100
                 peer_avg = round(float(peer_projects), 1)
                 gap = round(my_progress - peer_avg, 1)
 

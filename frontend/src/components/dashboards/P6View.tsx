@@ -211,7 +211,7 @@ export default function P6View({ p6Data, loading }: any) {
 
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
       
       <div className="flex flex-wrap gap-4">
          <div className="bg-card border border-border rounded-xl px-5 py-4 min-w-[220px] shadow-sm">

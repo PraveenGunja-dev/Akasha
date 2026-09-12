@@ -246,6 +246,23 @@ const MetricBreakdownModal = ({
 const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const [activeModal, setActiveModal] = useState<string | null>(null);
 
+  /* Portfolio quality totals come from /quality/overview, which counts rows
+     in the Pulse tables. They used to be the sum of every project's
+     ncCount/rfiCount — but several P6 projects share one Pulse project and
+     each carries the full count, so the sum counted MSEDCL PPA Ph-1 four
+     times and AGEL Merchant seven, while every Pulse project the mapping
+     sheet spelled differently was dropped. It showed 982 / 25.5K against a
+     true 1,227 / 51,274. */
+  const [quality, setQuality] = useState<{ ncs: number; rfis: number; syncedAt: string | null } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetch('/akasha/api/quality/overview')
+      .then(r => (r.ok ? r.json() : null))
+      .then(j => { if (!cancelled && j) setQuality({ ncs: j.total_ncs ?? 0, rfis: j.total_rfis ?? 0, syncedAt: j.last_synced_at ?? null }); })
+      .catch(() => { /* leave null: the tile shows "—" rather than a wrong sum */ });
+    return () => { cancelled = true; };
+  }, []);
+
   if (!data || data.length === 0) return null;
 
   // ── P6 Schedule Metrics ──
@@ -255,8 +272,9 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const avgDelayDays = delayedProjects.length > 0 ? Math.round(delayedProjects.reduce((s, d) => s + d.delayDays, 0) / delayedProjects.length) : 0;
   const totalInProgressAct = data.reduce((s, d) => s + (d.inProgressActivities || 0), 0);
   const completedProjects = data.filter(d => { const p = d.progress || 0; return (p >= 0.99) || (p >= 99); }).length;
-  const totalNCs = data.reduce((s, d) => s + (d.ncCount || 0), 0);
-  const totalRFIs = data.reduce((s, d) => s + (d.rfiCount || 0), 0);
+  const qualitySyncedLabel = quality?.syncedAt
+    ? new Date(quality.syncedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    : null;
   
   // ── Monthly Completion Forecast ──
   const now = new Date();
@@ -361,23 +379,33 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
               </button>
             </div>
             
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-2 gap-2">
               <div>
                 <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Avg Progress</div>
                 <div className="text-2xl tracking-tight text-primary">{avgProgress}%</div>
               </div>
               <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Total NCs</div>
-                <div className="text-2xl tracking-tight text-warning">{fmtNum(totalNCs)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Total RFIs</div>
-                <div className="text-2xl tracking-tight text-primary">{fmtNum(totalRFIs)}</div>
+                <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">In-Progress</div>
+                <div className="text-2xl tracking-tight text-foreground">{fmtNum(totalInProgressAct)}</div>
               </div>
             </div>
-            <div className="pt-6 border-t border-border/50 flex justify-between items-end">
-              <span className="text-[10px] uppercase tracking-widest text-muted-foreground">In-Progress Activities</span>
-              <span className="text-lg font-medium text-foreground">{fmtNum(totalInProgressAct)}</span>
+
+            {/* Quality section — separate from P6 Schedule */}
+            <div className="pt-5 border-t border-border/50 space-y-3">
+              <div className="text-[11px] uppercase tracking-[0.15em] text-muted-foreground flex items-center justify-between gap-2">
+                <span className="flex items-center gap-2"><span className="w-1.5 h-1.5 rounded-full bg-warning" /> Quality (Pulse)</span>
+                {qualitySyncedLabel && <span className="normal-case tracking-normal text-fg-tertiary">as of {qualitySyncedLabel}</span>}
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Total NCs</div>
+                  <div className="text-2xl tracking-tight text-warning tabular-nums">{quality ? fmtNum(quality.ncs) : '—'}</div>
+                </div>
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground mb-1.5">Total RFIs</div>
+                  <div className="text-2xl tracking-tight text-primary tabular-nums">{quality ? fmtNum(quality.rfis) : '—'}</div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -551,10 +579,13 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
             <div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.round(progressPct))}%` }}></div>
           </div>
         </div>
-        <div className="flex items-center gap-2 text-[9px] mt-0.5 text-muted-foreground font-mono">
-           <span>P:{Math.round((project.plannedDuration || 0) / 8)}d</span>
-           <span>A:{Math.round((project.actualDuration || 0) / 8)}d</span>
-           <span>R:{Math.round((project.remainingDuration || 0) / 8)}d</span>
+        {/* P6 durations in working days (hours ÷ 8). Was "P: A: R:" at 9px,
+            which nobody could read or decode. */}
+        <div className="mt-0.5 flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground" title={project.durationEstimated ? 'P6 has no actual duration for this project; actual and remaining are planned × progress.' : 'Planned, actual and remaining duration from P6, in working days.'}>
+           <span><span className="text-fg-tertiary">Planned</span> {Math.round((project.plannedDuration || 0) / 8)}d</span>
+           <span><span className="text-fg-tertiary">Actual</span> {Math.round((project.actualDuration || 0) / 8)}d</span>
+           <span><span className="text-fg-tertiary">Left</span> {Math.round((project.remainingDuration || 0) / 8)}d</span>
+           {project.durationEstimated && <span className="rounded bg-surface-sunken px-1 text-[10px] text-fg-tertiary">est.</span>}
         </div>
       </div>
 
@@ -718,7 +749,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   };
 
   return (
-    <div className="flex flex-col h-full w-full max-w-[1800px] mx-auto animate-in fade-in duration-500 pb-8">
+    <div className="flex flex-col h-full w-full animate-in fade-in duration-500 pb-8">
 
       {/* ── Page Header ── */}
       <div className="flex items-end justify-between gap-4 mb-6">

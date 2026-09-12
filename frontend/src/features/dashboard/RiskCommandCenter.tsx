@@ -43,16 +43,16 @@ export default function RiskCommandCenter({ p6Data, finDetails }: any) {
   };
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
       
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         <div className="bg-card border border-red-500/50 rounded-2xl p-6 relative shadow-[0_0_15px_theme(colors.red.500/0.1)]">
+         <div className="kpi-card kpi-card-critical bg-card border border-border rounded-2xl p-4 relative">
            <h3 className="text-destructive text-xs font-semibold mb-2 uppercase tracking-wider flex items-center gap-2">
              <AlertTriangle className="w-4 h-4" /> Schedule Risks
            </h3>
            <p className="text-4xl font-light text-foreground">{scheduleRisks.length}</p>
          </div>
-         <div className="bg-card border border-amber-500/50 rounded-2xl p-6 relative shadow-[0_0_15px_theme(colors.amber.500/0.1)]">
+         <div className="kpi-card kpi-card-watch bg-card border border-border rounded-2xl p-4 relative">
            <h3 className="text-warning text-xs font-semibold mb-2 uppercase tracking-wider flex items-center gap-2">
              <Activity className="w-4 h-4" /> Financial Risks (High Val POs)
            </h3>

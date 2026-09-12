@@ -45,9 +45,10 @@ const KPI = ({ label, value, sub, icon: Icon, color, alert, onClick, active }: a
     onKeyDown={(e: React.KeyboardEvent) => {
       if (onClick && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onClick(); }
     }}
-    className={`bg-card border rounded-2xl p-5 flex flex-col gap-2 group transition-all relative overflow-hidden
-      ${onClick ? 'cursor-pointer hover:shadow-card-hover hover:border-primary/40' : ''}
-      ${active ? 'border-primary ring-2 ring-primary/20' : alert ? 'border-destructive/30' : 'border-border'}`}>
+    className={`kpi-card bg-card border rounded-2xl p-4 flex flex-col gap-2 group transition-all relative overflow-hidden
+      ${alert ? 'kpi-card-critical' : ''}
+      ${onClick ? 'cursor-pointer hover:shadow-card-hover' : ''}
+      ${active ? 'border-primary ring-2 ring-primary/20' : 'border-border'}`}>
     <div className="flex items-center justify-between">
       <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-muted-foreground">{label}</span>
       <div className={`p-1.5 rounded-lg ${alert ? 'bg-destructive/10' : 'bg-muted'}`}>
@@ -291,7 +292,7 @@ export default function QualityCommandCenter() {
   }
 
   return (
-    <div className="flex flex-col gap-6 max-w-[1600px] mx-auto animate-in fade-in duration-500 pb-10">
+    <div className="flex w-full flex-col gap-6 animate-in fade-in duration-500 pb-10">
 
       {/* ── Header ── */}
       <div className="flex items-center justify-between">

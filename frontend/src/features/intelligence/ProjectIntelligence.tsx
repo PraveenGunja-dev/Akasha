@@ -196,11 +196,11 @@ export default function ProjectIntelligence({ projectId }: Props) {
         <div className="space-y-6">
           {/* 1. Health Banner */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className={`intelligence-card p-5 border flex flex-col justify-center ${statusColor}`}>
+            <div className={`kpi-card intelligence-card p-4 border flex flex-col justify-center ${statusColor}`}>
               <div className="text-sm font-medium uppercase tracking-wider opacity-80 mb-1">Overall Status</div>
               <div className="text-3xl font-bold">{overall_status}</div>
             </div>
-            <div className="intelligence-card p-5 bg-card flex flex-col justify-center">
+            <div className="kpi-card intelligence-card p-4 bg-card flex flex-col justify-center">
               <div className="text-sm text-muted-foreground font-medium uppercase tracking-wider mb-1">Total Delay</div>
               <div className="flex items-center gap-2 text-3xl font-bold">
                 {total_delay_days} <span className="text-lg text-muted-foreground font-normal">days</span>

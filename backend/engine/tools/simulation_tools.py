@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, extract
 import models
 from datetime import datetime, timedelta
+from services.progress import nonlabor_units_by_project, project_progress
 
 logger = logging.getLogger(__name__)
 
@@ -285,7 +286,13 @@ def sim_forecast_completion(db: Session, project_id: str) -> dict:
         return {"project_id": project_id, "error": "Project not found"}
 
     name = _lazy_display_name(db, project_id)
-    pct = _norm_pct(p6.duration_percent_complete)
+    # Progress = Σ actual non-labour units / Σ planned non-labour units
+    # (services/progress.py) — the single definition used everywhere. This
+    # was duration_percent_complete (days elapsed / total planned days),
+    # which made the pace-based forecast below nearly circular: dividing
+    # elapsed days by elapsed-days-as-a-fraction returns close to the
+    # planned duration itself, telling you nothing new versus Method 1.
+    pct = project_progress(p6, nonlabor_units_by_project(db, [p6.p6_object_id]))[0] * 100
 
     activities = db.query(models.P6Activity).filter(
         models.P6Activity.project_object_id == p6.p6_object_id

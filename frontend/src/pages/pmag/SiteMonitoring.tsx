@@ -83,7 +83,7 @@ export default function SiteMonitoring({ data, theme }: any) {
         {/* Telemetry Feeds Widget (Col 4) */}
         <div className="md:col-span-4 grid grid-cols-2 gap-4">
           {/* KPI 1 */}
-          <div className="bento-card p-4 flex flex-col justify-between hover:border-primary/30 transition-colors">
+          <div className="kpi-card bento-card p-4 flex flex-col justify-between hover:border-primary/30 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Total Output</span>
               <Zap className="w-4 h-4 text-primary" />
@@ -96,7 +96,7 @@ export default function SiteMonitoring({ data, theme }: any) {
             </div>
           </div>
           {/* KPI 2 */}
-          <div className="bento-card p-4 flex flex-col justify-between hover:border-warning/20 transition-colors">
+          <div className="kpi-card bento-card p-4 flex flex-col justify-between hover:border-warning/20 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Avg Irradiance</span>
               <Sun className="w-4 h-4 text-warning" />
@@ -107,7 +107,7 @@ export default function SiteMonitoring({ data, theme }: any) {
             </div>
           </div>
           {/* KPI 3 */}
-          <div className="bento-card p-4 flex flex-col justify-between hover:border-blue-500/30 transition-colors">
+          <div className="kpi-card bento-card p-4 flex flex-col justify-between hover:border-blue-500/30 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Wind Speed</span>
               <Wind className="w-4 h-4 text-primary" />
@@ -120,7 +120,7 @@ export default function SiteMonitoring({ data, theme }: any) {
             </div>
           </div>
           {/* KPI 4 */}
-          <div className="bento-card p-4 flex flex-col justify-between hover:border-success/20 transition-colors">
+          <div className="kpi-card bento-card p-4 flex flex-col justify-between hover:border-success/20 transition-colors">
             <div className="flex justify-between items-start mb-2">
               <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Grid Sync</span>
               <Activity className="w-4 h-4 text-success" />
