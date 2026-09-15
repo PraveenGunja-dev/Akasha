@@ -43,15 +43,17 @@ NC_EXPAND = (
     "CONTRACTOR($expand=VENDOR),ENGINEER,QUALITY,"
     "SUBACTIVITY($expand=ACTIVITY($expand=SUBPACKAGE($expand=PACKAGE))),"
     "PACKAGE,UNIT_OF_MEASUREMENT_DATA,"
-    "SCOPES($expand=DESIGNELEMENT,DESIGNELEMENTLOOKUP)"
+    "SCOPES($expand=DESIGNELEMENT,DESIGNELEMENTLOOKUP),"
+    "NC_ATTACHMENTS($expand=FILES),RESPONSES($expand=NC_RESPONSE_ATTACHMENTS($expand=FILES))"
 )
 
 RFI_EXPAND = (
     "WORKAREA,WORKLOCATION,SERVICE_ORDER,"
     "CONTRACTOR($expand=VENDOR),ENGINEER,QUALITY,"
     "INSPECTION_POINT($expand=SUBACTIVITY($expand=ACTIVITY($expand=SUBPACKAGE))),"
-    "PACKAGE,UNIT_OF_MEASUREMENT_DATA,"
-    "PROJECT($expand=SPV)"
+    "PACKAGE,UNIT_OF_MEASUREMENT_DATA,CHECKLIST,"
+    "PROJECT($expand=SPV),SCOPES($expand=DESIGNELEMENT,DESIGNELEMENTLOOKUP),"
+    "RFI_ATTACHMENTS($expand=FILES),RESPONSES($expand=CHECKLISTRESPONSEATTACHMENT($expand=FILES))"
 )
 
 # Lighter expand for RFI bulk sync (skip attachments/responses for speed)
@@ -87,36 +89,50 @@ class PulseService:
     def __init__(self):
         self.base_url = os.getenv(
             "PULSE_BASE_URL",
-            "https://pulse.cfapps.ap11.hana.ondemand.com"
+            "https://pulse.cfapps.in30.hana.ondemand.com"
         )
         self.nc_endpoint = os.getenv("PULSE_NC_ENDPOINT", "/pulse-api/Ncs")
         self.rfi_endpoint = os.getenv("PULSE_RFI_ENDPOINT", "/pulse-api/Rfis")
+        
         self.headers = {"Accept": "application/json"}
 
     # ──────────────────────────────────────────
     # Fetch helpers
     # ──────────────────────────────────────────
-    def _fetch_paginated(self, endpoint: str, expand: str, page_size: int = 200) -> List[Dict]:
-        """Fetch all records from an OData endpoint with pagination."""
+    def _fetch_paginated(self, endpoint: str, expand: str) -> List[Dict]:
+        """Fetch all records from an OData v4 endpoint with @odata.nextLink pagination."""
         all_records = []
-        skip = 0
-        while True:
-            url = f"{self.base_url}{endpoint}?$top={page_size}&$skip={skip}&$expand={expand}"
+        url = f"{self.base_url}{endpoint}?$expand={expand}"
+        
+        headers = dict(self.headers)
+            
+        while url:
             try:
-                resp = requests.get(url, headers=self.headers, timeout=60, verify=False)
+                resp = requests.get(url, headers=headers, timeout=60, verify=False)
                 resp.raise_for_status()
                 data = resp.json()
+                
                 records = data.get("value", [])
                 if not records:
                     break
+                    
                 all_records.extend(records)
-                skip += page_size
-                if len(records) < page_size:
+                
+                next_link = data.get("@odata.nextLink")
+                if next_link:
+                    # Resolve relative URL if necessary
+                    if next_link.startswith("http"):
+                        url = next_link
+                    else:
+                        from urllib.parse import urljoin
+                        url = urljoin(f"{self.base_url}/pulse-api/", next_link)
+                else:
                     break
+                    
             except Exception as e:
-                logger.error(f"Error fetching {endpoint} at skip={skip}: {e}")
+                logger.error(f"Error fetching Pulse API at {url}: {e}")
                 raise PulseFetchError(
-                    f"Pulse fetch failed for {endpoint} at skip={skip} "
+                    f"Pulse fetch failed for {url} "
                     f"({len(all_records)} records received before failure): {e}"
                 ) from e
         return all_records
@@ -195,6 +211,9 @@ class PulseService:
             "created_at": _parse_datetime(raw.get("CREATED_AT")),
             "updated_at": _parse_datetime(raw.get("UPDATED_AT")),
             "approved_at": _parse_datetime(raw.get("APPROVED_AT")),
+            # Expanded data
+            "raw_attachments": raw.get("NC_ATTACHMENTS", []),
+            "raw_responses": raw.get("RESPONSES", []),
         }
 
     def _map_rfi(self, raw: Dict) -> Dict:
@@ -236,6 +255,9 @@ class PulseService:
             # Timestamps
             "created_at": _parse_datetime(raw.get("CREATED_AT")),
             "updated_at": _parse_datetime(raw.get("UPDATED_AT")),
+            # Expanded data
+            "raw_attachments": raw.get("RFI_ATTACHMENTS", []),
+            "raw_responses": raw.get("RESPONSES", []),
         }
 
     # ──────────────────────────────────────────

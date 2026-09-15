@@ -686,6 +686,10 @@ class PulseNC(Base):
 
     # Sync metadata
     last_synced_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Expanded data
+    raw_attachments = Column(JSON, nullable=True)
+    raw_responses = Column(JSON, nullable=True)
 
 
 class PulseRFI(Base):
@@ -726,6 +730,10 @@ class PulseRFI(Base):
 
     # Sync metadata
     last_synced_at = Column(DateTime, default=datetime.utcnow)
+
+    # Expanded data
+    raw_attachments = Column(JSON, nullable=True)
+    raw_responses = Column(JSON, nullable=True)
 
 # ==========================================
 # Statutory Compliance Models

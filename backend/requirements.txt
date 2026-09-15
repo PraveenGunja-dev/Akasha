@@ -18,3 +18,4 @@ openpyxl
 alembic
 
 PyMuPDF
+matplotlib
