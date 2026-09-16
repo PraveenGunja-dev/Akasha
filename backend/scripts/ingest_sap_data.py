@@ -489,4 +489,16 @@ def ingest_data():
     print("Ingestion complete!")
 
 if __name__ == "__main__":
-    ingest_data()
+    import argparse
+    ap = argparse.ArgumentParser(description="Refresh SAP data. Default: pull today's extracts from SharePoint, then ingest.")
+    ap.add_argument("--local", action="store_true", help="skip SharePoint; ingest whatever is already in Data/NEW31")
+    args = ap.parse_args()
+    if args.local:
+        ingest_data()
+    else:
+        from database import SessionLocal
+        from services.sap_sync import sync_sap_from_sharepoint
+        r = sync_sap_from_sharepoint(SessionLocal())
+        print()
+        print(r['message'])
+        print(f"Data as on {r['data_as_on']}  |  files: {', '.join(f['name'] for f in r['files'])}")
