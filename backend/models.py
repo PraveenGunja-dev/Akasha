@@ -224,6 +224,9 @@ class MTPOAmount(Base):
     block_plot_name = Column(String, nullable=True)
     currency = Column(String, nullable=True)
     buyer_name = Column(String, nullable=True)
+    # ZSPS 'Type': POrd (purchase order) or PReq (requisition). Constant per
+    # document. PO-value metrics count POrd only — see slr_rules.zsps_po_lines_only.
+    doc_type = Column(String, nullable=True, index=True)
     
     upload_time = Column(DateTime, default=datetime.utcnow)
 
@@ -550,6 +553,23 @@ class NotificationThread(Base):
 # ==========================================
 # Intelligent Chatbot Models
 # ==========================================
+
+class SyncLog(Base):
+    """One row per ingest run from an external feed. `data_as_on` is the
+    source's own timestamp (for SharePoint, the newest extract's modified
+    time) — what the user should read as the data date. `finished_at` is only
+    when we pulled it."""
+    __tablename__ = "sync_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    source = Column(String, nullable=False, index=True)   # 'sharepoint' | 'p6' | ...
+    status = Column(String, nullable=False)               # 'running' | 'success' | 'failed'
+    started_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    finished_at = Column(DateTime, nullable=True)
+    data_as_on = Column(DateTime, nullable=True)
+    files = Column(JSON, nullable=True)                   # [{name, modified, size_mb}]
+    message = Column(Text, nullable=True)
+
 
 class MetricsCache(Base):
     """Per-project computed metrics cache with freshness tracking.

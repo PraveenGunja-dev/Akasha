@@ -14,7 +14,7 @@ import { Drawer, Stat, Btn } from './components/Drawer';
 import { useSAPStore, filtersToParams, paramsToFilters, drawerToParam, paramToDrawer, DRAWER_KEY } from './store';
 import { exportCSV, exportName, fetchAllLines } from './export';
 import { fmtCr, fmtNum } from './format';
-import type { TrendBucket, TrendEvent } from './types';
+import type { SAPFilters as FilterSet, TrendBucket, TrendEvent } from './types';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    SAP INTELLIGENCE
@@ -30,17 +30,26 @@ import type { TrendBucket, TrendEvent } from './types';
    shared and the browser back button behaves.
    ═══════════════════════════════════════════════════════════════════════════ */
 
+// Key-order-independent identity for a filter set.
+const sig = (f: FilterSet) => JSON.stringify(f, Object.keys(f).sort());
+
 const useUrlSync = () => {
   const [params, setParams] = useSearchParams();
   const filters = useSAPStore(s => s.filters); const setFilters = useSAPStore(s => s.setFilters);
   const drawers = useSAPStore(s => s.drawers); const openDrawer = useSAPStore(s => s.openDrawer); const closeAll = useSAPStore(s => s.closeAllDrawers);
   const hydrated = useRef(false);
+  // Filters last pushed into the store *from* the URL. The store→URL effect
+  // fires in the same commit with the pre-update filters in its closure; if it
+  // wrote those back it would strip the header's portfolio/phase from the URL,
+  // the URL effect would then clear the store, and the two would ping-pong.
+  // While the store still lags that push, the write-back is skipped.
+  const pendingFromUrl = useRef<string | null>(null);
 
   // URL → store, on mount and on back/forward.
   useEffect(() => {
     const f = paramsToFilters(params);
-    const same = JSON.stringify(f) === JSON.stringify(filters);
-    if (!same) setFilters(f);
+    const same = sig(f) === sig(filters);
+    if (!same) { pendingFromUrl.current = sig(f); setFilters(f); }
     const d = paramToDrawer(params.get(DRAWER_KEY));
     const top = drawers[drawers.length - 1];
     if (d && (!top || drawerToParam(top) !== drawerToParam(d))) openDrawer(d);
@@ -52,6 +61,10 @@ const useUrlSync = () => {
   // store → URL, replace (filters) or push (drawer open) so back closes a drawer.
   useEffect(() => {
     if (!hydrated.current) return;
+    if (pendingFromUrl.current !== null) {
+      if (sig(filters) !== pendingFromUrl.current) return;   // store has not caught up with the URL yet
+      pendingFromUrl.current = null;
+    }
     const next = filtersToParams(filters, params);
     const dp = drawerToParam(drawers[drawers.length - 1]);
     if (dp) next.set(DRAWER_KEY, dp); else next.delete(DRAWER_KEY);

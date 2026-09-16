@@ -125,14 +125,39 @@ def call_groq(messages, temperature=0.7, max_tokens=2048, json_response=False, s
         return chat_completion
     return chat_completion.choices[0].message.content
 
+_OLLAMA_MODEL_CACHE: dict = {}
+
+def _resolve_ollama_model(endpoint: str, want: str) -> str:
+    """Ollama resolves a bare name to `<name>:latest`, so OLLAMA_MODEL=llama3.1
+    404s when only llama3.1:8b is pulled. Match on family, else fall back to
+    the first installed model; mirrors sap.py so every AI route behaves alike."""
+    hit = _OLLAMA_MODEL_CACHE.get(want)
+    if hit and time.time() - hit[0] < 60:
+        return hit[1]
+    base = endpoint.rstrip("/")
+    if base.endswith("/v1"):
+        base = base[:-3]
+    pick = want
+    try:
+        import httpx
+        names = [m.get("name", "") for m in httpx.get(f"{base}/api/tags", timeout=3).json().get("models", [])]
+        if names and want not in names:
+            pick = next((n for n in names if n.split(":")[0] == want.split(":")[0]), names[0])
+            logger.warning(f"OLLAMA_MODEL={want!r} is not pulled; using {pick!r}")
+    except Exception as e:  # noqa: BLE001
+        logger.warning(f"Could not list Ollama models ({e}); using {want!r} as-is")
+    _OLLAMA_MODEL_CACHE[want] = (time.time(), pick)
+    return pick
+
+
 def call_ollama(messages, temperature, max_tokens, json_response=False, stream=False):
     import openai
     import httpx
     import os
-    
+
     endpoint = os.environ.get("OLLAMA_ENDPOINT", "http://192.168.0.61:11434/v1")
-    model_name = os.environ.get("OLLAMA_MODEL", "qwen3:30b-a3b")
-    
+    model_name = _resolve_ollama_model(endpoint, os.environ.get("OLLAMA_MODEL", "qwen3:30b-a3b"))
+
     client = openai.OpenAI(
         base_url=endpoint,
         api_key="ollama",

@@ -11,6 +11,31 @@ sys.path.append(backend_dir)
 import models
 from database import SessionLocal
 
+# The SAP extracts land here — both the local Data/NEW31 drop and the SharePoint
+# sync write into it. Names carry copy suffixes ("ZPSPS0071", "ME2J 2") depending
+# on who exported them, so each extract is matched by pattern and the newest
+# file wins rather than a single hardcoded name.
+import re
+import glob
+SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "NEW31")
+SAP_FILE_PATTERNS = {
+    "zsps": re.compile(r"^ZPSPS007.*\.xlsx?$", re.I),
+    "me2j": re.compile(r"^ME2J.*\.xlsx?$", re.I),
+    "mb52": re.compile(r"^MB52_Khavda_Live_Inventry.*\.xlsx?$", re.I),
+    "mb51": re.compile(r"^MB51_Khavda_Mat_Consumption.*\.xlsx?$", re.I),
+}
+
+def find_sap_file(key: str, data_dir: str = SAP_DATA_DIR):
+    """Newest file in data_dir matching the extract's pattern, or None."""
+    pat = SAP_FILE_PATTERNS[key]
+    hits = [f for f in glob.glob(os.path.join(data_dir, "*")) if pat.match(os.path.basename(f))]
+    if not hits:
+        return None
+    best = max(hits, key=os.path.getmtime)
+    if len(hits) > 1:
+        print(f"  {key}: {len(hits)} candidates, using newest {os.path.basename(best)}")
+    return best
+
 def safe_float(val):
     if pd.isna(val):
         return 0.0
@@ -158,8 +183,8 @@ def ingest_data():
     # ================================================================
     # Process MB52 (Inventory) — unchanged
     # ================================================================
-    mb52_path = os.path.join(data_dir, "MB52_Khavda_Live_Inventry 2.xlsx")
-    if os.path.exists(mb52_path):
+    mb52_path = find_sap_file("mb52", data_dir)
+    if mb52_path and os.path.exists(mb52_path):
         try:
             print(f"Processing {os.path.basename(mb52_path)}...")
             df = pd.read_excel(mb52_path)
@@ -206,10 +231,10 @@ def ingest_data():
 
     # ================================================================
     # Process ZSPS (PO Amount) — Replacing ME2J, merging with ME2J metadata
-    zsps_path = os.path.join(data_dir, "ZPSPS0071.xlsx")
-    me2j_path = os.path.join(data_dir, "ME2J 2.xlsx")
+    zsps_path = find_sap_file("zsps", data_dir)
+    me2j_path = find_sap_file("me2j", data_dir)
     
-    if os.path.exists(zsps_path):
+    if zsps_path and os.path.exists(zsps_path):
         try:
             print(f"Processing {os.path.basename(zsps_path)}...")
             df = pd.read_excel(zsps_path)
@@ -223,9 +248,11 @@ def ingest_data():
             if 'Summary' in df.columns:
                 df = df[df['Summary'].isna() | (df['Summary'].astype(str).str.strip() == '') | (df['Summary'].astype(str).str.lower() == 'nan')]
             
-            # 2. Type column should not be blank
+            # 2. Purchase orders only. mt_poamount is the PO table; a PReq is a
+            #    requisition, not an order, and counting it overstated PO value
+            #    by Rs 3,769 Cr. Requisitions stay available in mt_slr_data.
             if 'Type' in df.columns:
-                df = df[df['Type'].notna() & (df['Type'].astype(str).str.strip() != '') & (df['Type'].astype(str).str.lower() != 'nan')]
+                df = df[df['Type'].astype(str).str.strip() == 'POrd']
                 
             # 3. Skip if both Commitment Amt and Actual Amount are 0
             comm_amt = pd.to_numeric(df['Commitment Amt'], errors='coerce').fillna(0.0)
@@ -242,7 +269,7 @@ def ingest_data():
             # --- Load ME2J for lookup mapping ---
             po_lookup = {}
             df_me2j = None
-            if os.path.exists(me2j_path):
+            if me2j_path and os.path.exists(me2j_path):
                 print("  Loading ME2J for supplementary PO data (Buyer Name, Date, etc.)...")
                 df_me2j = pd.read_excel(me2j_path, usecols=lambda c: c in [
                     'Purchasing Document', 'Buyer Name', 'Document Date', 
@@ -323,6 +350,7 @@ def ingest_data():
                     buyer_name=safe_str(me2j_data.get('Buyer Name', '')),
                     delivery_completed_flag=safe_str(me2j_data.get('Delivery Completed', '')),
                     document_date=safe_date(me2j_data.get('Document Date')),
+                    doc_type=safe_str(row.get('Type', '')) or None,
                 )
                 po_amounts.append(po)
             
@@ -391,8 +419,8 @@ def ingest_data():
     # ================================================================
     # Process MB51 (Material Documents/Consumption) — unchanged
     # ================================================================
-    mb51_path = os.path.join(data_dir, "MB51_Khavda_Mat_Consumption_221_222 4.XLSX")
-    if os.path.exists(mb51_path):
+    mb51_path = find_sap_file("mb51", data_dir)
+    if mb51_path and os.path.exists(mb51_path):
         try:
             print(f"Processing {os.path.basename(mb51_path)}...")
             df = pd.read_excel(mb51_path)

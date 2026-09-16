@@ -6,7 +6,10 @@ export type Severity = 'info' | 'success' | 'warning' | 'critical';
 export type InsightCategory = 'procurement' | 'inventory' | 'vendor' | 'material' | 'financial' | 'risk' | 'data-quality';
 
 export interface SAPFilters {
+  /* portfolio and phase are the top bar's global scope, shared via the URL
+     (`portfolio`, `phase`); the SAP page reads them but never owns them. */
   portfolio: string | null;
+  phase: string | null; // null = Ongoing (top bar default) | 'Commissioned' | 'ALL'
   project: string | null;
   state: string | null;
   cluster: string | null;
@@ -34,6 +37,14 @@ export interface Overview {
   };
   status_mix: Partial<Record<POStatus, number>>;
   synced_at: string | null;
+  /* The extracts' own timestamp from SharePoint — the date users should read
+     the numbers "as on". synced_at is merely when we pulled them. */
+  data_as_on: string | null;
+  sync: {
+    feed: string; synced_at: string | null; data_as_on: string | null;
+    files: { name: string; modified: string | null; size_mb: number }[];
+    last_status: 'running' | 'success' | 'failed' | null; last_message: string | null; last_attempt_at: string | null;
+  };
   source: Record<string, string>;
 }
 
@@ -107,7 +118,7 @@ export interface Insight {
 export interface SearchResult { type: 'po' | 'vendor' | 'material' | 'buyer' | 'project'; id: string; label: string }
 
 export interface FilterOptions {
-  portfolios: string[]; states: string[]; projects: { id: string; name: string }[]; vendors: string[];
+  portfolios: string[]; states: string[]; projects: { id: string; name: string; cluster?: string | null; is_commissioned?: boolean }[]; vendors: string[];
   statuses: POStatus[]; date_min: string | null; date_max: string | null;
 }
 

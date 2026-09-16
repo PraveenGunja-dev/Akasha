@@ -204,11 +204,17 @@ cd backend && ./venv/Scripts/python.exe -c "..."   # uses DATABASE_URL from back
 
 Hard-won; do not re-derive or contradict without checking.
 
-**SAP / ZSPS** (`mt_poamount`, 87,899 lines, 6,413 POs)
-- ZSPS is the **book of record for purchase orders**: ₹66,691.4 Cr ordered =
-  ₹35,740.7 Cr delivered + ₹30,950.7 Cr still to deliver. Reconciles exactly.
-- SLR (`mt_slr_data`) is a **narrower population** — 38,583.85 Cr over 5,408 POs.
-  Do not mix the two in one figure.
+**SAP / ZSPS** (`mt_poamount`, from the ZPSPS007 extract on SharePoint)
+- **PO value = `POrd` documents only** (the SLR definition; decided 2026-09-16).
+  A `PReq` is a requisition, not an order. ZSPS extract total ₹66,691.4 Cr =
+  **₹62,922.2 Cr PO (5,501 POs)** + ₹3,769.1 Cr PReq. Delivered ₹35,740.7 Cr is
+  all POrd. Enforce with `slr_rules.zsps_po_lines_only()` on every
+  `mt_poamount` aggregate; the ingest also drops PReq lines at source.
+- Type is constant per document (0 mixed in 15,257), but the first digit is
+  not a discriminator (PReq includes 4xxx) — use the extract's `Type` column.
+- SLR (`mt_slr_data`) is the **same ZPSPS007** through `ingest_slr_data.py`; it
+  reconciles to the POrd figure. The old 38,583.85 Cr came from a
+  period-restricted manual extract that no longer exists.
 - `material_type` is **null on every row**. Category grouping must use
   `material_name` (414 distinct).
 - `delivery_date` is **null on every row** → no overdue, ageing or lateness signal

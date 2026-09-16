@@ -14,7 +14,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import type { DrawerState, KpiId, LedgerColumn, POStatus, SAPFilters, WatchItem, WatchKind } from './types';
 
 export const EMPTY_FILTERS: SAPFilters = {
-  portfolio: null, project: null, state: null, cluster: null, dateFrom: null, dateTo: null,
+  portfolio: null, phase: null, project: null, state: null, cluster: null, dateFrom: null, dateTo: null,
   vendor: null, material: null, status: null, search: '', codes: [],
 };
 
@@ -68,10 +68,10 @@ export const useSAPStore = create<SAPStore>()(
       filters: EMPTY_FILTERS,
       setFilter: (k, v) => set(s => ({ filters: { ...s.filters, [k]: v }, ledger: { ...s.ledger, page: 1, selected: new Set() } })),
       setFilters: (patch) => set(s => ({ filters: { ...s.filters, ...patch }, ledger: { ...s.ledger, page: 1, selected: new Set() } })),
-      clearFilters: () => set(s => ({ filters: EMPTY_FILTERS, ledger: { ...s.ledger, page: 1, selected: new Set() } })),
+      clearFilters: () => set(s => ({ filters: { ...EMPTY_FILTERS, portfolio: s.filters.portfolio, phase: s.filters.phase }, ledger: { ...s.ledger, page: 1, selected: new Set() } })),
       activeFilterCount: () => {
         const f = get().filters;
-        return (['portfolio', 'project', 'state', 'cluster', 'vendor', 'material', 'status'] as const).filter(k => f[k]).length
+        return (['project', 'state', 'cluster', 'vendor', 'material', 'status'] as const).filter(k => f[k]).length
           + (f.dateFrom || f.dateTo ? 1 : 0) + (f.search ? 1 : 0) + (f.codes.length ? 1 : 0);
       },
 
@@ -118,9 +118,10 @@ export const useSAPStore = create<SAPStore>()(
 );
 
 /* ── URL ⇄ filters ──
-   Keys are prefixed so they coexist with CEODashboard's own `portfolio`/`phase`. */
+   `portfolio` and `phase` are the top bar's own keys, shared on purpose so the
+   header drives this page. Everything else is prefixed to stay out of its way. */
 const URL_KEYS: Record<keyof SAPFilters, string> = {
-  portfolio: 'sp', project: 'spr', state: 'sst', cluster: 'scl', dateFrom: 'sdf', dateTo: 'sdt',
+  portfolio: 'portfolio', phase: 'phase', project: 'spr', state: 'sst', cluster: 'scl', dateFrom: 'sdf', dateTo: 'sdt',
   vendor: 'sv', material: 'sm', status: 'sss', search: 'sq', codes: 'sc',
 };
 
@@ -137,7 +138,7 @@ export function filtersToParams(f: SAPFilters, base: URLSearchParams): URLSearch
 export function paramsToFilters(p: URLSearchParams): SAPFilters {
   const g = (k: keyof SAPFilters) => p.get(URL_KEYS[k]);
   return {
-    portfolio: g('portfolio'), project: g('project'), state: g('state'), cluster: g('cluster'),
+    portfolio: g('portfolio'), phase: g('phase'), project: g('project'), state: g('state'), cluster: g('cluster'),
     dateFrom: g('dateFrom'), dateTo: g('dateTo'), vendor: g('vendor'), material: g('material'),
     status: (g('status') as POStatus | null) ?? null, search: g('search') ?? '',
     codes: (g('codes') ?? '').split(',').filter(Boolean),

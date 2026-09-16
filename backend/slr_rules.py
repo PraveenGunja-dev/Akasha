@@ -52,3 +52,17 @@ def only_po_document_types():
 def po_lines_only():
     """Both rules together — the filter every PO-derived metric should use."""
     return and_(only_po_document_types(), exclude_overhead_lines())
+
+
+# ── The same definition on the ZSPS line table (mt_poamount) ──
+# The ZSPS ingest already drops Summary rows, zero-amount rows, unmapped WBS
+# and every PO with an SPGS/PMC/ISA line, so the only rule left to apply at
+# query time is the document type. A purchase requisition is not a purchase
+# order: with PReq included the ZSPS total (Rs 66,691 Cr) overstates the SLR
+# PO figure (Rs 62,922 Cr) by exactly the PReq commitments (Rs 3,769 Cr).
+PO_ORDER_TYPE = "POrd"
+
+
+def zsps_po_lines_only():
+    """Criterion every PO-value metric on mt_poamount must use."""
+    return models.MTPOAmount.doc_type == PO_ORDER_TYPE

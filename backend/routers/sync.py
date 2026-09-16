@@ -10,35 +10,55 @@ router = APIRouter(prefix="/api")
 logger = logging.getLogger(__name__)
 
 @router.post("/sharepoint/sync")
-def sync_sharepoint_data():
-    sp_service = SharePointService()
+def sync_sharepoint_data(db: Session = Depends(get_db)):
+    """SharePoint is the only SAP feed. Every run is written to sync_log so the
+    SAP page can show the data's own date, and a failed pull is visible
+    instead of leaving yesterday's numbers up with no warning."""
+    from datetime import datetime
+    from scripts.ingest_sap_data import SAP_DATA_DIR, SAP_FILE_PATTERNS, ingest_data
+    import models
+
+    log = models.SyncLog(source="sharepoint", status="running")
+    db.add(log); db.commit()
+
+    def finish(status, message, **fields):
+        for k, v in fields.items():
+            setattr(log, k, v)
+        log.status, log.message, log.finished_at = status, message, datetime.utcnow()
+        db.commit()
+
     try:
+        sp_service = SharePointService()
         files = sp_service.list_files_in_target_folder()
-        if not files:
-            return {"status": "success", "message": "No files found to sync today.", "files": []}
-            
-        download_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "downloads")
-        os.makedirs(download_dir, exist_ok=True)
-        
-        downloaded_files = []
-        for f in files:
-            if f.get("download_url"):
-                save_path = os.path.join(download_dir, f["name"])
-                sp_service.download_file(f["download_url"], save_path)
-                downloaded_files.append(f["name"])
-                
-        from scripts.ingest_sap_data import ingest_data
-        
-        # Run database ingestion
+        # Only the extracts the ingest consumes; the folder also carries CJI3/ZPS021 etc.
+        wanted = [f for f in files if f.get("download_url")
+                  and any(p.match(f["name"]) for p in SAP_FILE_PATTERNS.values())]
+        if not any(SAP_FILE_PATTERNS["zsps"].match(f["name"]) for f in wanted):
+            raise RuntimeError(f"ZPSPS007 (PO book of record) not found in {sp_service.target_folder}")
+
+        downloaded = []
+        for f in wanted:
+            sp_service.download_file(f["download_url"], os.path.join(SAP_DATA_DIR, f["name"]))
+            downloaded.append({"name": f["name"], "modified": f.get("modified"), "size_mb": round((f.get("size") or 0) / 1e6, 1)})
+
         ingest_data()
-                
-        return {
-            "status": "success",
-            "message": f"Downloaded and ingested {len(downloaded_files)} files from SharePoint into the Database",
-            "files": downloaded_files
-        }
+        # SLR is the same ZPSPS007 extract through its own filters, so it refreshes with it.
+        from scripts.ingest_slr_data import ingest_slr
+        slr_rows = ingest_slr()
+        # Prefix index, filter facets and insights were built on the old tables.
+        from routers.sap import _CACHE as sap_cache
+        sap_cache.clear()
+
+        # The data date is the newest extract's own modified time, not our clock.
+        as_on = max(datetime.fromisoformat(f["modified"].replace("Z", "+00:00")).replace(tzinfo=None)
+                    for f in downloaded if f.get("modified"))
+        msg = f"Ingested {len(downloaded)} SAP extracts from SharePoint; SLR rebuilt ({slr_rows} rows)"
+        finish("success", msg, files=downloaded, data_as_on=as_on)
+        return {"status": "success", "message": msg, "folder": sp_service.target_folder,
+                "files": downloaded, "data_as_on": as_on.isoformat(), "ingested": True, "slr_rows": slr_rows}
     except Exception as e:
         logger.error(f"SharePoint sync failed: {e}")
+        finish("failed", str(e)[:1000])
         raise HTTPException(status_code=500, detail=f"SharePoint sync failed: {str(e)}")
 
 @router.post("/p6/sync")

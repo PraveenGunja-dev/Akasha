@@ -19,7 +19,7 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
         if time.time() - entry["timestamp"] < _FIN_TTL:
             return entry["data"]
 
-    from slr_rules import po_lines_only
+    from slr_rules import po_lines_only, zsps_po_lines_only
     # ZSPS (mt_poamount) is the book of record for purchase orders, so PO value,
     # PO count and delivered value all come off it. These previously came from
     # SLR (type='POrd' plus the po_lines_only filter), a narrower population
@@ -32,7 +32,7 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
         func.sum(models.MTPOAmount.net_order_value_inr).label("po_value"),
         func.sum(models.MTPOAmount.delivered_value_inr_cr).label("po_delivered_cr"),
         func.count(func.distinct(models.MTPOAmount.purchasing_document)).label("total_pos")
-    )
+    ).filter(zsps_po_lines_only())
     
     slr_query = db.query(
         func.sum(func.coalesce(models.MTSLRData.actual_amount, 0) + func.coalesce(models.MTSLRData.commitment_amount, 0)).label("total_val"),
@@ -64,7 +64,7 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
             po_query = po_query.filter(or_(*wbs_conditions))
             
             # SLR data stores plant code without H- prefix. We can use the prefixes for SLR
-            from dashboard import _extract_wbs_prefixes
+            from routers.dashboard import _extract_wbs_prefixes
             wbs_prefixes = []
             for m in mappings:
                 for val in [m.spv_plant_code, m.agel, m.age6l]:

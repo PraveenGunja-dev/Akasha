@@ -69,48 +69,28 @@ def match_wbs_to_master(wbs_val, wbs_map):
             return wbs_map[prefix]
     return None
 
-def ingest_slr():
-    data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
-    file_path = os.path.join(data_dir, "ZPSPS007_merged.xlsx")
-    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
-    
-    if not os.path.exists(file_path):
-        print(f"File not found: {file_path}")
-        return
-        
+def prepare_slr_frame(file_path, master_path):
+    """ZPSPS007 → the SLR population, aggregated per (PO, plant prefix, type).
+    Pure: reads the two workbooks and returns a DataFrame, writes nothing."""
     print("Building WBS mapping from SAP Master...")
     wbs_map = build_wbs_mapping(master_path)
     print(f"  Loaded {len(wbs_map)} WBS codes from master.")
-        
+
     print(f"Reading {file_path}...")
-    try:
-        df = pd.read_excel(file_path)
-    except Exception as e:
-        print(f"Error reading excel: {e}")
-        return
-        
-    # Ensure table exists
-    models.MTSLRData.__table__.create(bind=engine, checkfirst=True)
-    
-    db = SessionLocal()
-    
-    # Wipe old data
-    print("Deleting old SLR data...")
-    db.query(models.MTSLRData).delete()
-    db.commit()
-    
+    df = pd.read_excel(file_path)
+
     print("Applying business logic filters & aggregations...")
     # 1. Filter out 'Summary' == 'X'
     if 'Summary' in df.columns:
         df = df[df['Summary'].isna() | (df['Summary'].astype(str).str.strip() == '') | (df['Summary'].astype(str).str.lower() == 'nan')]
-    
+
     # 2. Extract types and ensure numeric amounts
     df['Commitment Amt'] = pd.to_numeric(df['Commitment Amt'], errors='coerce').fillna(0.0)
     df['Actual Amount'] = pd.to_numeric(df['Actual Amount'], errors='coerce').fillna(0.0)
-    
+
     # 3. Filter out both zero
     df = df[(df['Commitment Amt'] != 0) | (df['Actual Amount'] != 0)]
-    
+
     # Fix .0 issue in C.Document
     def clean_po(val):
         if pd.isna(val): return ''
@@ -118,20 +98,19 @@ def ingest_slr():
         if val_str.endswith('.0'):
             return val_str[:-2]
         return val_str
-        
+
     df['C.Document'] = df['C.Document'].apply(clean_po)
     df['WBS Element'] = df['WBS Element'].fillna('').astype(str).str.strip()
     df['Type'] = df['Type'].fillna('').astype(str).str.strip()
     df['Description'] = df['Description'].fillna('').astype(str).str.strip()
-    
+
     # 4. Filter out entire POs if ANY of their lines contain SPGS, PMC, ISA
     excluded_pos = df[df['Description'].str.contains('SPGS|PMC|ISA', case=False, na=False)]['C.Document'].unique()
     df = df[~df['C.Document'].isin(excluded_pos)]
-    
-    
+
     # Don't fillna('') yet for Vendor Name so that .agg('first') skips NaNs
     df['Vendor Name'] = df['Vendor Name'].replace(r'^\s*$', pd.NA, regex=True)
-    
+
     print("Mapping WBS to SAP Master before aggregating...")
     def get_master_prefix(wbs_val):
         if not wbs_val or wbs_val.lower() == 'nan':
@@ -142,7 +121,7 @@ def ingest_slr():
             code_part = wbs_str[1:]
         else:
             code_part = wbs_str
-        
+
         for length in range(min(len(code_part), 10), 2, -1):
             prefix = code_part[:length]
             if prefix in wbs_map:
@@ -150,12 +129,12 @@ def ingest_slr():
         return None
 
     df['Matched_Prefix'] = df['WBS Element'].apply(get_master_prefix)
-    
+
     # Drop rows that didn't match the master
-    skipped_count = df['Matched_Prefix'].isna().sum()
+    skipped_count = int(df['Matched_Prefix'].isna().sum())
     df = df.dropna(subset=['Matched_Prefix'])
-    
-    # 4. Group by C.Document, Matched_Prefix, Type to sum amounts
+
+    # 5. Group by C.Document, Matched_Prefix, Type to sum amounts
     agg_df = df.groupby(['C.Document', 'Matched_Prefix', 'Type'], as_index=False).agg({
         'Description': 'first',
         'Vendor Name': 'first',
@@ -163,49 +142,60 @@ def ingest_slr():
         'Commitment Amt': 'sum',
         'Actual Amount': 'sum'
     })
-    
+    print(f"Parsed {len(agg_df)} distinct aggregated records (skipped {skipped_count} raw rows with no WBS match)")
+    return agg_df
+
+
+def ingest_slr(file_path=None):
+    """Replace mt_slr_data from the newest ZPSPS007 extract — the same file the
+    SharePoint sync delivers for the PO book of record. The table is cleared
+    only after the new frame has been built, so a bad file cannot empty it."""
+    from scripts.ingest_sap_data import SAP_DATA_DIR, find_sap_file
+    data_dir = SAP_DATA_DIR
+    file_path = file_path or find_sap_file("zsps", data_dir)
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
+
+    if not file_path or not os.path.exists(file_path):
+        raise FileNotFoundError(f"No ZPSPS007 extract found in {data_dir}")
+    if not os.path.exists(master_path):
+        raise FileNotFoundError(f"SAP master not found: {master_path}")
+
+    agg_df = prepare_slr_frame(file_path, master_path)
+    if agg_df.empty:
+        raise ValueError(f"SLR transform of {os.path.basename(file_path)} produced no rows; leaving existing data in place")
+
     slr_records = []
-    
-    print(f"Parsing {len(agg_df)} distinct aggregated records... (Skipped {skipped_count} raw rows due to no WBS match)")
     for _, row in agg_df.iterrows():
         po_doc = row['C.Document']
         if po_doc.lower() == 'nan': po_doc = ""
-            
         desc = row['Description']
         if desc.lower() == 'nan': desc = ""
-            
         vendor = row['Vendor Name']
         if pd.isna(vendor) or str(vendor).lower() == 'nan': vendor = ""
-            
         type_val = row['Type']
         if type_val.lower() == 'nan': type_val = ""
-        
-        actual = row['Actual Amount']
-        comm = row['Commitment Amt']
-            
-        record = models.MTSLRData(
-            po_document=po_doc,
-            description=desc,
-            vendor_name=vendor,
-            actual_amount=actual,
-            commitment_amount=comm,
-            wbs_element=row['WBS Element'],
-            type=type_val,
-            plant_code=row['Matched_Prefix']
-        )
-        slr_records.append(record)
-        
-    print(f"Bulk inserting {len(slr_records)} records...")
-    
-    BATCH_SIZE = 5000
-    for i in range(0, len(slr_records), BATCH_SIZE):
-        batch = slr_records[i:i + BATCH_SIZE]
-        db.bulk_save_objects(batch)
+        slr_records.append(models.MTSLRData(
+            po_document=po_doc, description=desc, vendor_name=vendor,
+            actual_amount=row['Actual Amount'], commitment_amount=row['Commitment Amt'],
+            wbs_element=row['WBS Element'], type=type_val, plant_code=row['Matched_Prefix'],
+        ))
+
+    models.MTSLRData.__table__.create(bind=engine, checkfirst=True)
+    db = SessionLocal()
+    try:
+        print(f"Replacing SLR data with {len(slr_records)} records from {os.path.basename(file_path)}...")
+        db.query(models.MTSLRData).delete()
+        BATCH_SIZE = 5000
+        for i in range(0, len(slr_records), BATCH_SIZE):
+            db.bulk_save_objects(slr_records[i:i + BATCH_SIZE])
         db.commit()
-        
-    db.close()
-    
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
     print("Done!")
+    return len(slr_records)
 
 if __name__ == "__main__":
     ingest_slr()

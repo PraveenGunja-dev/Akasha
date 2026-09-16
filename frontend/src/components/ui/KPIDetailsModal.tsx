@@ -47,6 +47,9 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
     }
   }, [isOpen]);
 
+  /* Chart categories and filter keys must agree, so both derive from here. */
+  const displayName = (p: any) => formatProjectName(p.p6_project_name || p.project_name || 'Unknown');
+
   const getDelayDays = (p: any) => {
     if (!p.p6?.baseline_finish_date) return 0;
     const finishStr = p.p6?.scheduled_finish_date || p.p6?.finish_date;
@@ -86,9 +89,9 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
         title: 'Most Delayed Projects (Variance Days)',
         type: 'barh',
         data: delayed.map(p => ({
-          name: (p.p6_project_name || p.project_name || '').substring(0, 20) + '...',
+          name: displayName(p),
           value: getDelayDays(p)
-        })).reverse()
+        }))
       };
     }
 
@@ -96,9 +99,9 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
       const topProgress = [...projects].filter(p => p.p6?.progress > 0).sort((a, b) => b.p6.progress - a.p6.progress).slice(0, 15);
       return {
         title: 'Top Projects by Progress (%)',
-        type: 'bar',
+        type: 'barh',
         data: topProgress.map(p => ({
-          name: p.p6_project_name?.substring(0, 20) + '...',
+          name: displayName(p),
           value: Math.round(p.p6.progress)
         }))
       };
@@ -108,10 +111,10 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
       const topPO = [...projects].filter(p => p.sap?.po_value > 0).sort((a, b) => b.sap.po_value - a.sap.po_value).slice(0, 15);
       return {
         title: 'Top Projects by PO Value (Cr)',
-        type: 'bar',
+        type: 'barh',
         data: topPO.map(p => ({
-          name: p.project_name?.substring(0, 20) + '...',
-          value: parseFloat((p.sap.po_value / 10000000).toFixed(2))
+          name: displayName(p),
+          value: parseFloat((p.sap.po_value / 10000000).toFixed(1))
         }))
       };
     }
@@ -148,7 +151,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
         const poValCr = (p.sap?.po_value || 0) / 10000000;
         const deliveredCr = p.sap?.po_delivered_cr || 0;
         const remaining = poValCr - deliveredCr;
-        return { name: formatProjectName(p.project_name || p.p6_project_name || 'Unknown'), value: parseFloat(remaining.toFixed(1)) };
+        return { name: displayName(p), value: parseFloat(remaining.toFixed(1)) };
       }).filter(p => p.value > 0).sort((a, b) => b.value - a.value).slice(0, 15);
 
       return {
@@ -253,19 +256,19 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
 
     if (activeKpi === 'Delayed Projects') {
       list = list.filter(p => p.p6?.health === 'Delayed');
-      if (filterCategory) list = list.filter(p => ((p.p6_project_name || p.project_name || '').substring(0, 20) + '...') === filterCategory);
+      if (filterCategory) list = list.filter(p => displayName(p) === filterCategory);
       return list.map(p => mapItem(p, `${getDelayDays(p)}d`, 'Delayed')).sort((a: any, b: any) => parseInt(b.value) - parseInt(a.value));
     }
 
     if (activeKpi === 'Average Progress') {
       list = list.filter(p => p.p6?.progress > 0).sort((a, b) => b.p6.progress - a.p6.progress);
-      if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
+      if (filterCategory) list = list.filter(p => displayName(p) === filterCategory);
       return list.map(p => mapItem(p, `${Math.round(p.p6.progress)}%`, 'Progress'));
     }
 
     if (activeKpi === 'Total PO Value') {
       list = list.filter(p => p.sap?.po_value > 0).sort((a, b) => b.sap.po_value - a.sap.po_value);
-      if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
+      if (filterCategory) list = list.filter(p => displayName(p) === filterCategory);
       return list.map(p => mapItem(p, `₹${(p.sap.po_value / 10000000).toFixed(1)}`, 'Cr'));
     }
 
@@ -288,7 +291,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
         const bVal = ((b.sap?.po_value || 0) / 10000000) - (b.sap?.po_delivered_cr || 0);
         return bVal - aVal;
       });
-      if (filterCategory) list = list.filter(p => (p.p6_project_name?.substring(0, 20) + '...') === filterCategory || (p.project_name?.substring(0, 20) + '...') === filterCategory);
+      if (filterCategory) list = list.filter(p => displayName(p) === filterCategory);
       return list.map(p => {
         const poValCr = (p.sap?.po_value || 0) / 10000000;
         const deliveredCr = p.sap?.po_delivered_cr || 0;
@@ -391,18 +394,24 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
       if (activeKpi === 'Delayed Projects') barColor = '#ef4444';
       else if (activeKpi === 'Quality (Pulse)') barColor = '#f59e0b';
       else if (activeKpi === 'Remaining PO Value') barColor = '#3b82f6';
+      else if (activeKpi === 'Total PO Value') barColor = '#8b5cf6';
+
+      const suffix = activeKpi === 'Average Progress' ? '%' : activeKpi === 'Delayed Projects' ? 'd' : '';
+      const fmt = (v: number) => `${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 1 })}${suffix}`;
 
       options = {
         ...options,
-        grid: { left: '1%', right: '10%', bottom: '2%', top: '5%', containLabel: true },
-        xAxis: { type: 'value', axisLabel: { color: axisLabelColor, fontFamily: 'Adani' }, splitLine: { lineStyle: { color: splitLineColor, type: 'dashed', opacity: 0.6 } } },
-        yAxis: { type: 'category', inverse: true, data: (chartData.data || []).map((d: any) => d.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textMainColor, fontFamily: 'Adani', fontWeight: 'bold', width: 140, overflow: 'truncate' } },
-        series: [{ 
-          type: 'bar', 
-          data: (chartData.data || []).map((d: any) => d.value), 
-          itemStyle: { color: barColor, borderRadius: [0, 6, 6, 0] },
-          label: { show: true, position: 'right', fontFamily: 'Adani', fontWeight: 'bold', color: textMainColor },
-          barMaxWidth: 30
+        tooltip: { ...options.tooltip, formatter: (p: any) => `${p.name}<br/><b>${fmt(p.value)}</b>` },
+        grid: { left: 8, right: 64, bottom: 8, top: 8, containLabel: true },
+        xAxis: { type: 'value', axisLabel: { color: axisLabelColor, fontFamily: 'Adani', formatter: (v: number) => v.toLocaleString('en-IN') }, splitLine: { lineStyle: { color: splitLineColor, type: 'dashed', opacity: 0.6 } } },
+        yAxis: { type: 'category', inverse: true, data: (chartData.data || []).map((d: any) => d.name), axisLine: { show: false }, axisTick: { show: false }, axisLabel: { color: textMainColor, fontFamily: 'Adani', fontSize: 12, width: 230, overflow: 'truncate' } },
+        series: [{
+          type: 'bar',
+          data: (chartData.data || []).map((d: any) => d.value),
+          itemStyle: { color: barColor, borderRadius: [0, 4, 4, 0] },
+          label: { show: true, position: 'right', fontFamily: 'Adani', fontWeight: 'bold', color: textMainColor, formatter: (p: any) => fmt(p.value) },
+          barMaxWidth: 22,
+          barCategoryGap: '35%'
         }]
       };
     } else if (chartData.type === 'bar') {
@@ -427,7 +436,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
 
     return (
       <div className="w-full h-full min-h-[400px]">
-        <ReactECharts option={options} style={{ height: '100%', width: '100%' }} onEvents={{ click: onChartClick }} />
+        <ReactECharts option={options} notMerge style={{ height: '100%', width: '100%' }} onEvents={{ click: onChartClick }} />
       </div>
     );
   };

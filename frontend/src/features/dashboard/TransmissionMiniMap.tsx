@@ -215,7 +215,7 @@ export default function TransmissionMiniMap({ onTabChange }: { onTabChange?: (ta
 
 
       {/* MAP */}
-      <div className="relative m-4 mt-0 flex-1 overflow-hidden rounded-xl border border-border/50 bg-[#f8f9fa] dark:bg-[#1a1b1e]">
+      <div className="relative isolate m-4 mt-0 flex-1 overflow-hidden rounded-xl border border-border/50 bg-[#f8f9fa] dark:bg-[#1a1b1e]">
         <div className={`map-clean absolute inset-0 [&_.leaflet-container]:!bg-transparent [&_.leaflet-container]:!font-sans`}>
           <MapContainer
             center={[23.5, 78]}

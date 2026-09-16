@@ -8,9 +8,34 @@ from datetime import datetime
 
 from database import get_db
 import models
-from slr_rules import exclude_overhead_lines, po_lines_only
+from slr_rules import exclude_overhead_lines, po_lines_only, zsps_po_lines_only
 from services.project_service import filter_tc_edges_by_kps
 from services.progress import nonlabor_units_by_project, project_progress
+
+def _tc_line(t, m):
+    """One transmission line as the project drawer shows it. `status` is the raw
+    sheet value and is polluted with serial numbers ('8', '16'); consumers must
+    read `normalized_status`. Stage fields are 'done/total' strings."""
+    return {
+        "id": t.id,
+        "project": m.project or m.project_name_from_p6,
+        "phase": _safe_parse_phase(t.projects),
+        "voltage": t.voltage,
+        "status": t.status,
+        "normalized_status": t.normalized_status,
+        "from_label": t.from_label,
+        "to_label": t.to_label,
+        "length": t.length,
+        "foundation": t.foundation,
+        "erection": t.erection,
+        "stringing": t.stringing,
+        "expected_date": t.expected_date,
+        "scd": t.scd,
+        "charged_date": t.charged_date,
+        "contractor": t.contractor,
+        "is_delayed": t.is_delayed,
+    }
+
 
 def _safe_parse_phase(projects_json):
     if not projects_json:
@@ -143,35 +168,37 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
     inv_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTInventory.plant_code, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.plant_code).all() if r[0]}
 
     # We will compute in-transit QTY inline
-    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    it_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.still_to_deliver_qty)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.plant_code).all() if r[0]}
     
-    po_qty_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
-    po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    po_qty_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.order_quantity)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    po_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.net_order_value_inr)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.plant_code).all() if r[0]}
+    po_delivered_val_by_plant = {str(r[0]).strip(): r[1] for r in db.query(models.MTPOAmount.plant_code, func.sum(models.MTPOAmount.delivered_value_inr_cr)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.plant_code).all() if r[0]}
 
     # ZSPS (mt_poamount) is the book of record for purchase orders, so the
     # PORTFOLIO figure is read straight off it. Summing the per-project values
     # below instead silently drops every PO whose WBS element matches no
     # project prefix - measured at 59,753 Cr against a ZSPS total of 66,691 Cr,
     # i.e. ~6,938 Cr (10.4%) of committed spend missing from the headline.
+    # PO value counts POrd documents only (the SLR definition); PReq
+    # requisitions are not orders.
     po_grand = db.query(
         func.sum(models.MTPOAmount.net_order_value_inr),
         func.sum(models.MTPOAmount.delivered_value_inr_cr),
         func.count(func.distinct(models.MTPOAmount.purchasing_document)),
-    ).one()
+    ).filter(zsps_po_lines_only()).one()
     portfolio_summary["total_po_value"] = round(po_grand[0] or 0, 2)
     portfolio_summary["total_po_delivered_cr"] = round(po_grand[1] or 0, 2)
     portfolio_summary["total_po_count"] = po_grand[2] or 0
 
     all_inv_wbs = db.query(models.MTInventory.wbs_element, func.sum(models.MTInventory.quantity_inv)).group_by(models.MTInventory.wbs_element).all()
-    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).group_by(models.MTPOAmount.wbs_element).all()
+    all_it_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.still_to_deliver_qty)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.wbs_element).all()
     # PO aggregates grouped by WBS element. The plant_code join below is unreliable — a
     # project's spv_plant_code (e.g. 'H-51PA') is NOT the SAP plant_code (e.g. '51Y1'), so
     # plant lookups returned 0 for every project (PO value tiles showed ₹0). WBS element
     # matches on both sides (mapping.module_wbs 'H-51Y1-01-01' == mt_poamount.wbs_element).
-    all_po_qty_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.order_quantity)).group_by(models.MTPOAmount.wbs_element).all()
-    all_po_val_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.net_order_value_inr)).group_by(models.MTPOAmount.wbs_element).all()
-    all_po_delivered_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.delivered_value_inr_cr)).group_by(models.MTPOAmount.wbs_element).all()
+    all_po_qty_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.order_quantity)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.wbs_element).all()
+    all_po_val_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.net_order_value_inr)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.wbs_element).all()
+    all_po_delivered_wbs = db.query(models.MTPOAmount.wbs_element, func.sum(models.MTPOAmount.delivered_value_inr_cr)).filter(zsps_po_lines_only()).group_by(models.MTPOAmount.wbs_element).all()
     all_consumed_wbs = db.query(models.MTMaterialDocument.wbs_element, func.sum(models.MTMaterialDocument.quantity)).group_by(models.MTMaterialDocument.wbs_element).all()
 
     all_tc_entries = db.query(models.TcProjectEntry).all()
@@ -340,8 +367,8 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
                 "status": tc_summary,
                 "has_data": bool(tc_khavda or tc_rajasthan),
                 "data": {
-                    "khavda": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_khavda],
-                    "rajasthan": [{"id": t.id, "project": m.project or m.project_name_from_p6, "phase": _safe_parse_phase(t.projects), "voltage": t.voltage, "status": t.status} for t in tc_rajasthan]
+                    "khavda": [_tc_line(t, m) for t in tc_khavda],
+                    "rajasthan": [_tc_line(t, m) for t in tc_rajasthan]
                 }
             }
         })
@@ -735,14 +762,15 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
         sap_data = None
         
         if wbs_prefixes:
-            from sqlalchemy import or_
+            from sqlalchemy import or_, and_
             wbs_filters_po = [models.MTPOAmount.wbs_element.startswith(p) for p in wbs_prefixes]
             wbs_filters_inv = [models.MTInventory.wbs_element.startswith(p) for p in wbs_prefixes]
+            po_scope = and_(or_(*wbs_filters_po), zsps_po_lines_only())
             
-            po_count = db.query(models.MTPOAmount.purchasing_document).filter(or_(*wbs_filters_po)).distinct().count()
-            po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(or_(*wbs_filters_po)).scalar() or 0
+            po_count = db.query(models.MTPOAmount.purchasing_document).filter(po_scope).distinct().count()
+            po_total = db.query(func.sum(models.MTPOAmount.net_order_value)).filter(po_scope).scalar() or 0
             # Delivered value is already stored in crores by the ZSPS ingest.
-            po_delivered_cr = db.query(func.sum(models.MTPOAmount.delivered_value_inr_cr)).filter(or_(*wbs_filters_po)).scalar() or 0
+            po_delivered_cr = db.query(func.sum(models.MTPOAmount.delivered_value_inr_cr)).filter(po_scope).scalar() or 0
 
             inv_count = db.query(models.MTInventory).filter(or_(*wbs_filters_inv)).count()
             inv_value = db.query(func.sum(models.MTInventory.value_unrestricted)).filter(or_(*wbs_filters_inv)).scalar() or 0
@@ -753,7 +781,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             ).count()
             
             transit_value = db.query(func.sum(models.MTPOAmount.still_to_deliver_inr)).filter(
-                or_(*wbs_filters_po),
+                po_scope,
                 models.MTPOAmount.still_to_deliver_qty > 0
             ).scalar() or 0
 
@@ -772,7 +800,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
 
             top_vendors = db.query(
                 models.MTPOAmount.vendor_name, func.sum(models.MTPOAmount.net_order_value).label("total")
-            ).filter(or_(*wbs_filters_po)).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
+            ).filter(po_scope).group_by(models.MTPOAmount.vendor_name).order_by(func.sum(models.MTPOAmount.net_order_value).desc()).limit(3).all()
             
             top_vendors_list = []
             for v in top_vendors:

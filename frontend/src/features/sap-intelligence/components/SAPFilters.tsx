@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, SlidersHorizontal, X, ChevronDown, Package, Building2, FileText, User, FolderKanban } from 'lucide-react';
 import { useDebounced, useFilterOptions, useMirroredInput } from '../hooks';
 import { useSAPStore } from '../store';
@@ -9,9 +9,10 @@ import { cx } from '../../../components/ui/primitives';
 import { formatProjectName } from '../../../lib/projectName';
 import type { POStatus, SearchResult } from '../types';
 
-/* One filter bar, one store. Primary scope (portfolio, project, dates) is
-   always visible; the long tail lives behind "Filters". Search is global and
-   actionable: a result opens its record rather than only filtering. */
+/* One filter bar, one store. Portfolio and phase belong to the top bar and
+   arrive through the URL; this bar never duplicates them. Project and dates
+   are always visible; the long tail lives behind "Filters". Search is global
+   and actionable: a result opens its record rather than only filtering. */
 
 const Select = ({ label, value, onChange, options, placeholder }: {
   label: string; value: string | null; onChange: (v: string | null) => void;
@@ -42,6 +43,19 @@ export const SAPFilters = () => {
   const count = useSAPStore(s => s.activeFilterCount());
   const openDrawer = useSAPStore(s => s.openDrawer);
   const { data: opts } = useFilterOptions();
+
+  // Projects narrowed to the header's scope, using the backend's own matching:
+  // portfolio is a substring of cluster; phase absent means Ongoing.
+  const scopedProjects = useMemo(() => {
+    const pf = filters.portfolio?.toLowerCase();
+    const wantComm = filters.phase === 'ALL' ? null : filters.phase === 'Commissioned';
+    return (opts?.projects ?? []).filter(p =>
+      (!pf || (p.cluster ?? '').toLowerCase().includes(pf)) &&
+      (wantComm === null || !!p.is_commissioned === wantComm));
+  }, [opts, filters.portfolio, filters.phase]);
+  useEffect(() => {
+    if (filters.project && opts && !scopedProjects.some(p => p.id === filters.project)) setFilter('project', null);
+  }, [scopedProjects, filters.project, opts, setFilter]);
 
   // Global search: type-ahead against /search, Enter applies as a text filter.
   const [q, setQ] = useMirroredInput(filters.search);
@@ -117,10 +131,8 @@ export const SAPFilters = () => {
           )}
         </div>
 
-        <Select label="Portfolio" value={filters.portfolio} onChange={v => setFilters({ portfolio: v, project: null })} placeholder="All portfolios"
-          options={(opts?.portfolios ?? []).map(p => ({ value: p, label: p }))} />
         <Select label="Project" value={filters.project} onChange={v => setFilter('project', v)} placeholder="All projects"
-          options={(opts?.projects ?? []).map(p => ({ value: p.id, label: formatProjectName(p.name) }))} />
+          options={scopedProjects.map(p => ({ value: p.id, label: formatProjectName(p.name) }))} />
 
         <div className="inline-flex items-center gap-1 rounded-md border border-border-default bg-surface-1 px-2 text-[13px]" role="group" aria-label="PO date range">
           <input type="date" aria-label="From" value={filters.dateFrom ?? ''} min={opts?.date_min ?? undefined} max={filters.dateTo ?? opts?.date_max ?? undefined}

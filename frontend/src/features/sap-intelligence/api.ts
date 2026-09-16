@@ -15,6 +15,8 @@ export class SAPApiError extends Error {
 export function filterParams(f: SAPFilters): URLSearchParams {
   const p = new URLSearchParams();
   if (f.portfolio) p.set('portfolio', f.portfolio);
+  // Mirrors CEODashboard: an absent phase means Ongoing, and only ALL lifts the scope.
+  p.set('phase', f.phase ?? 'Ongoing');
   if (f.project) p.set('project', f.project);
   if (f.state) p.set('state', f.state);
   if (f.cluster) p.set('cluster', f.cluster);

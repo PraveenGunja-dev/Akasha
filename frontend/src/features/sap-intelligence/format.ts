@@ -50,12 +50,12 @@ export const SEVERITY_TONE: Record<Severity, 'neutral' | 'risk' | 'critical' | '
   info: 'neutral', warning: 'risk', critical: 'critical', success: 'healthy',
 };
 
-export const relativeAge = (iso: string | null | undefined): { label: string; stale: boolean } => {
+export const relativeAge = (iso: string | null | undefined, staleAfterHours = 48): { label: string; stale: boolean } => {
   if (!iso) return { label: 'never', stale: true };
   const ms = Date.now() - new Date(iso).getTime();
   const h = ms / 36e5;
-  if (h < 1) return { label: 'just now', stale: false };
-  if (h < 24) return { label: `${Math.round(h)}h ago`, stale: false };
-  const d = Math.round(h / 24);
-  return { label: `${d}d ago`, stale: d > 2 };
+  const stale = h > staleAfterHours;
+  if (h < 1) return { label: 'just now', stale };
+  if (h < 24) return { label: `${Math.round(h)}h ago`, stale };
+  return { label: `${Math.round(h / 24)}d ago`, stale };
 };

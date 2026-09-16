@@ -100,6 +100,7 @@ def _prefix_index(db: Session) -> Dict[str, List[dict]]:
                 "project": m.project_name_from_p6,
                 "project_id": m.project_id,
                 "category": m.category,
+                "is_commissioned": bool(m.is_commissioned),
             }
             for val in (m.spv_plant_code, m.agel, m.age6l, m.module_wbs):
                 if not val:
@@ -110,8 +111,34 @@ def _prefix_index(db: Session) -> Dict[str, List[dict]]:
     return _cached("prefix_index", build)
 
 
+def _last_sync(db: Session) -> dict:
+    """Freshness from sync_log: the last successful SharePoint pull gives the
+    data date (the extract's own modified time) and the pull time; the latest
+    row, successful or not, gives the status the header should show. Before
+    the first logged run, fall back to the newest ZSPS upload_time."""
+    SL = models.SyncLog
+    ok = db.query(SL).filter(SL.source == "sharepoint", SL.status == "success").order_by(SL.finished_at.desc()).first()
+    latest = db.query(SL).filter(SL.source == "sharepoint").order_by(SL.started_at.desc()).first()
+    iso = lambda d: d.isoformat() if d else None
+    if not ok:
+        upl = db.query(func.max(PO.upload_time)).scalar()
+        return {"feed": "SharePoint", "synced_at": iso(upl), "data_as_on": None, "files": [],
+                "last_status": latest.status if latest else None, "last_message": latest.message if latest else None,
+                "last_attempt_at": iso(latest.started_at) if latest else None}
+    return {"feed": "SharePoint", "synced_at": iso(ok.finished_at), "data_as_on": iso(ok.data_as_on), "files": ok.files or [],
+            "last_status": latest.status, "last_message": latest.message, "last_attempt_at": iso(latest.started_at)}
+
+
 def _prefixes_where(index: Dict[str, List[dict]], pred) -> List[str]:
     return [p for p, rows in index.items() if any(pred(r) for r in rows)]
+
+
+def _phase_prefixes(index: Dict[str, List[dict]], phase: str) -> set:
+    """A prefix is Commissioned only when every project on it is; any live
+    project keeps it Ongoing. Any-match semantics put a shared prefix in both
+    phases and Ongoing + Commissioned overshot ALL by ~4k POs. This partitions."""
+    want = phase.lower() == "commissioned"
+    return {p for p, rows in index.items() if all(r["is_commissioned"] for r in rows) == want}
 
 
 WBS_PREFIX = func.substr(func.upper(PO.wbs_element), 3, 4)
@@ -124,6 +151,7 @@ WBS_PREFIX = func.substr(func.upper(PO.wbs_element), 3, 4)
 @dataclass
 class SAPFilters:
     portfolio: Optional[str] = None
+    phase: Optional[str] = None      # Ongoing | Commissioned; None/ALL = no phase scope
     project: Optional[str] = None
     state: Optional[str] = None
     cluster: Optional[str] = None
@@ -137,13 +165,14 @@ class SAPFilters:
 
     @property
     def scoped(self) -> bool:
-        return any([self.portfolio, self.project, self.state, self.cluster, self.vendor,
+        return any([self.portfolio, self.phase, self.project, self.state, self.cluster, self.vendor,
                     self.material, self.status, self.q, self.codes, self.date_from, self.date_to])
 
 
 def parse_filters(
     portfolio: Optional[str] = None,
     project: Optional[str] = None,
+    phase: Optional[str] = None,
     state: Optional[str] = None,
     cluster: Optional[str] = None,
     date_from: Optional[str] = None,
@@ -162,9 +191,9 @@ def parse_filters(
         except ValueError:
             raise HTTPException(400, f"bad date {s!r}; expected YYYY-MM-DD")
 
-    norm = lambda v: None if not v or v.lower() in ("all", "all portfolios", "all projects", "all vendors", "all materials") else v
+    norm = lambda v: None if not v or v.lower() in ("all", "all portfolios", "all projects", "all vendors", "all materials", "all phases") else v
     return SAPFilters(
-        portfolio=norm(portfolio), project=norm(project), state=norm(state), cluster=norm(cluster),
+        portfolio=norm(portfolio), phase=norm(phase), project=norm(project), state=norm(state), cluster=norm(cluster),
         date_from=d(date_from), date_to=d(date_to),
         vendor=norm(vendor), material=norm(material), status=norm(status), q=(q or "").strip() or None,
         codes=[c.strip() for c in (codes or "").split(",") if c.strip()],
@@ -180,6 +209,8 @@ LINE_STATUS = case(
 
 
 def apply_filters(query, f: SAPFilters, db: Session, *, dates: bool = True):
+    from slr_rules import zsps_po_lines_only
+    query = query.filter(zsps_po_lines_only())   # PO = POrd documents only (SLR definition)
     idx = _prefix_index(db)
 
     if f.portfolio:
@@ -189,6 +220,8 @@ def apply_filters(query, f: SAPFilters, db: Session, *, dates: bool = True):
     if f.project:
         prefixes = _prefixes_where(idx, lambda r: r["project"] == f.project or r["project_id"] == f.project)
         query = query.filter(WBS_PREFIX.in_(prefixes or ["__none__"]))
+    if f.phase:
+        query = query.filter(WBS_PREFIX.in_(list(_phase_prefixes(idx, f.phase)) or ["__none__"]))
     if f.state:
         prefixes = _prefixes_where(idx, lambda r: r["state"] == f.state)
         query = query.filter(WBS_PREFIX.in_(prefixes or ["__none__"]))
@@ -222,12 +255,12 @@ def apply_filters(query, f: SAPFilters, db: Session, *, dates: bool = True):
 
 
 def _filter_dep(
-    portfolio: Optional[str] = None, project: Optional[str] = None, state: Optional[str] = None,
+    portfolio: Optional[str] = None, project: Optional[str] = None, phase: Optional[str] = None, state: Optional[str] = None,
     cluster: Optional[str] = None, date_from: Optional[str] = None, date_to: Optional[str] = None,
     vendor: Optional[str] = None, material: Optional[str] = None, status: Optional[str] = None,
     q: Optional[str] = None, codes: Optional[str] = None,
 ) -> SAPFilters:
-    return parse_filters(portfolio, project, state, cluster, date_from, date_to, vendor, material, status, q, codes)
+    return parse_filters(portfolio, project, phase, state, cluster, date_from, date_to, vendor, material, status, q, codes)
 
 
 def _cr(v) -> float:
@@ -291,7 +324,7 @@ def sap_overview(f: SAPFilters = Depends(_filter_dep), db: Session = Depends(get
 
     # Inventory: MB52 snapshot, scoped by the same WBS prefixes when a scope is set
     inv_q = db.query(func.sum(MB52.quantity_inv), func.sum(MB52.value_unrestricted))
-    if f.portfolio or f.project or f.state or f.cluster:
+    if f.portfolio or f.project or f.state or f.cluster or f.phase:
         idx = _prefix_index(db)
         pred = (lambda r: True)
         if f.state:
@@ -302,7 +335,10 @@ def sap_overview(f: SAPFilters = Depends(_filter_dep), db: Session = Depends(get
             pred = lambda r, p=f.project: r["project"] == p or r["project_id"] == p
         elif f.portfolio:
             pf = f.portfolio.lower(); pred = lambda r, pf=pf: (r["cluster"] or "").lower().find(pf) >= 0
-        prefixes = _prefixes_where(idx, pred) or ["__none__"]
+        prefixes = _prefixes_where(idx, pred)
+        if f.phase:
+            keep = _phase_prefixes(idx, f.phase); prefixes = [p for p in prefixes if p in keep]
+        prefixes = prefixes or ["__none__"]
         inv_q = inv_q.filter(func.substr(func.upper(MB52.wbs_element), 3, 4).in_(prefixes))
     inv_qty, inv_val = inv_q.first()
 
@@ -314,7 +350,7 @@ def sap_overview(f: SAPFilters = Depends(_filter_dep), db: Session = Depends(get
         con_q = con_q.filter(MB51.posting_date < f.date_to + timedelta(days=1))
     con_val, con_qty = con_q.first()
 
-    synced = db.query(func.max(PO.upload_time)).scalar()
+    sync = _last_sync(db)
 
     return {
         "kpis": {
@@ -332,7 +368,9 @@ def sap_overview(f: SAPFilters = Depends(_filter_dep), db: Session = Depends(get
             "pos": delta("pos"), "ordered_cr": delta("ordered_cr"), "vendors": delta("vendors"),
         },
         "status_mix": {s: n for s, n in status_rows},
-        "synced_at": synced.isoformat() if synced else None,
+        "synced_at": sync["synced_at"],
+        "data_as_on": sync["data_as_on"],
+        "sync": sync,
         "source": {"pos": "ZSPS (mt_poamount)", "inventory": "MB52 (mt_inventory)", "consumption": "MB51 (mt_materialdocument)"},
     }
 
@@ -679,7 +717,9 @@ def sap_search(q: str = Query(..., min_length=2), limit: int = 8, db: Session = 
 def sap_filter_options(db: Session = Depends(get_db)):
     def build():
         clusters = [c for c, in db.query(MAP.cluster).filter(MAP.cluster.isnot(None), MAP.cluster != "").distinct().order_by(MAP.cluster)]
-        projects = [{"id": pid, "name": n} for pid, n in db.query(MAP.project_id, MAP.project_name_from_p6).filter(MAP.project_name_from_p6.isnot(None)).order_by(MAP.project_name_from_p6)]
+        projects = [{"id": pid, "name": n, "cluster": c, "is_commissioned": bool(ic)}
+                    for pid, n, c, ic in db.query(MAP.project_id, MAP.project_name_from_p6, MAP.cluster, MAP.is_commissioned)
+                    .filter(MAP.project_name_from_p6.isnot(None)).order_by(MAP.project_name_from_p6)]
         vendors = [v for v, in db.query(VENDOR_NAME).group_by(VENDOR_NAME).order_by(func.sum(PO.net_order_value_inr).desc()).limit(200)]
         dmin, dmax = db.query(func.min(PO.document_date), func.max(PO.document_date)).first()
         return {"portfolios": clusters, "states": sorted({s for s in CLUSTER_STATE.values()}), "projects": projects, "vendors": vendors,

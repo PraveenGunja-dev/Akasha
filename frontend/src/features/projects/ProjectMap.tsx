@@ -771,7 +771,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
   ];
 
   return (
-    <div className="w-full h-full min-h-[calc(100vh-120px)] overflow-hidden relative">
+    <div className="w-full h-full min-h-[calc(100vh-120px)] overflow-hidden relative isolate">
 
       {/* Floating Overlay Controls */}
       <div className="absolute top-4 right-4 z-[1000] flex gap-4 items-start">

@@ -11,6 +11,7 @@ import {
   type TcEdge, statusMeta, voltageWeight, parseStageProgress, edgeCompletionPct, parseLengthKm,
 } from './transmission/gridHelpers';
 import { findSubstationCoord, SOURCE_LABEL, type SubstationCoord } from './transmission/gridCoords';
+import { MiniMeter } from '../../components/ui/primitives/Meter';
 import { formatProjectName } from '../../lib/projectName';
 
 interface NetworkPayload {
@@ -364,7 +365,9 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
       </div>
 
       {/* Map */}
-      <div className="glass-panel rounded-2xl overflow-hidden shadow-lg border border-border relative">
+      {/* isolate: Leaflet panes (z 400) and the z-[1000] overlays must not escape
+          and paint over the hover-expanded sidebar or the sticky header. */}
+      <div className="glass-panel rounded-2xl overflow-hidden shadow-lg border border-border relative isolate">
         <div className="absolute top-4 left-4 z-[1000] flex flex-wrap gap-2">
           {REGION_FILTERS.map(r => (
             <FilterChip key={r} active={regionFilter === r} onClick={() => setRegionFilter(r)}>
@@ -537,7 +540,10 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
             style={{ height: '100%', width: '100%' }}
             attributionControl={false}
           >
-            <TileLayer key={baseLayer} url={base.url} subdomains={base.subdomains || undefined} />
+            {/* Leaflet resolves {s} for every tile even when the template has none, so an
+                explicit `subdomains: undefined` overrides its default and crashes. Omit the
+                prop entirely when the layer has no subdomains. */}
+            <TileLayer key={baseLayer} url={base.url} {...(base.subdomains ? { subdomains: base.subdomains } : {})} />
             <FitToPoints points={fitPoints} fitKey={`${regionFilter}|${statusFilter}`} />
             <MapWatcher onChange={setView} />
             {overlays.towers && view.bounds && zoom >= ZOOM_VERTICES && (
@@ -785,11 +791,17 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
               className="fixed right-4 top-4 bottom-4 w-[26rem] max-w-[90vw] bg-background border border-border rounded-2xl shadow-2xl flex flex-col z-[2001] overflow-hidden"
             >
               <div className="p-5 border-b border-border bg-muted flex items-start justify-between">
-                <div>
+                <div className="min-w-0">
                   <h3 className="text-base font-bold text-foreground leading-tight">
-                    {formatProjectName(selectedProject.project_name || selectedProject.p6_project_name)}
+                    {formatProjectName(selectedProject.p6_project_name || selectedProject.project_name)}
                   </h3>
-                  <p className="text-xs text-muted-foreground mt-1">{selectedProject.capacity_mwac ? `${selectedProject.capacity_mwac} MW` : ''}</p>
+                  <p className="text-xs text-muted-foreground mt-1 truncate">
+                    {[
+                      selectedProject.capacity_mwac ? `${selectedProject.capacity_mwac} MW` : null,
+                      selectedProject.project_name && selectedProject.project_name !== selectedProject.p6_project_name
+                        ? `SAP: ${selectedProject.project_name}` : null,
+                    ].filter(Boolean).join(' · ')}
+                  </p>
                 </div>
                 <button onClick={() => setSelectedProject(null)} className="p-1.5 rounded-md hover:bg-muted text-muted-foreground transition-colors">
                   <X className="w-4 h-4" />
@@ -806,47 +818,54 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                   </DetailSection>
                 )}
 
-                {selectedProject.sap && (
-                  <DetailSection icon={<Package className="w-4 h-4" />} title="SAP Material" color="#F59E0B">
-                    <div className="grid grid-cols-2 gap-2">
-                      <MiniStat label="Required" value={selectedProject.sap.req_qty ?? 0} />
-                      <MiniStat label="Inventory" value={selectedProject.sap.inv_qty ?? 0} />
-                      <MiniStat label="In Transit" value={selectedProject.sap.it_qty ?? 0} />
-                      <MiniStat label="PO Qty" value={selectedProject.sap.po_qty ?? 0} />
-                    </div>
-                  </DetailSection>
-                )}
+                {/* Value, not quantity: SAP quantities mix units and do not reconcile, and
+                    req_qty has no source. PO value is the book of record (ZSPS). */}
+                {selectedProject.sap && (() => {
+                  const poCr = (selectedProject.sap.po_value || 0) / 1e7;
+                  const deliveredCr = selectedProject.sap.po_delivered_cr || 0;
+                  const cr = (v: number) => `₹${v.toLocaleString('en-IN', { maximumFractionDigits: 1 })} Cr`;
+                  return (
+                    <DetailSection icon={<Package className="w-4 h-4" />} title="SAP Purchase Orders" color="#F59E0B">
+                      {poCr > 0 ? (
+                        <div className="grid grid-cols-3 gap-2">
+                          <MiniStat label="Ordered" value={cr(poCr)} />
+                          <MiniStat label="Delivered" value={cr(deliveredCr)} />
+                          <MiniStat label="To deliver" value={cr(Math.max(0, poCr - deliveredCr))} />
+                        </div>
+                      ) : (
+                        <p className="text-xs text-muted-foreground italic">No purchase orders attributed to this project.</p>
+                      )}
+                    </DetailSection>
+                  );
+                })()}
 
                 <DetailSection icon={<Zap className="w-4 h-4" />} title="Transmission Linkage" color="#8B5CF6">
                   {!selectedProject.tc?.has_data ? (
                     <p className="text-xs text-muted-foreground italic">No transmission lines linked to this project yet.</p>
                   ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                       {['khavda', 'rajasthan'].map(region => {
-                        const lines = selectedProject.tc.data?.[region] || [];
-                        if (lines.length === 0) return null;
+                        const raw: any[] = selectedProject.tc.data?.[region] || [];
+                        if (raw.length === 0) return null;
+                        // Lines still in build first, least complete at the top; charged last.
+                        const ORDER: Record<string, number> = { in_progress: 0, under_bidding: 1, charged: 2 };
+                        const lines = [...raw].sort((a, b) =>
+                          (ORDER[a.normalized_status] ?? 1) - (ORDER[b.normalized_status] ?? 1)
+                          || edgeCompletionPct(a) - edgeCompletionPct(b));
+                        const charged = raw.filter(l => l.normalized_status === 'charged').length;
+                        const km = raw.reduce((s, l) => s + parseLengthKm(l.length), 0);
                         return (
                           <div key={region}>
-                            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-1.5">
-                              {region} ({lines.length})
+                            <div className="flex items-baseline justify-between mb-2">
+                              <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                                {region} · {raw.length} {raw.length === 1 ? 'line' : 'lines'}
+                              </span>
+                              <span className="text-[10px] font-mono text-muted-foreground">
+                                {charged}/{raw.length} charged · {Math.round(km).toLocaleString('en-IN')} km
+                              </span>
                             </div>
                             <div className="space-y-1.5">
-                              {Object.values(lines.reduce((acc: any, line: any) => {
-                                const key = `${line.voltage || 'Line'}_${line.status || 'Unknown'}`;
-                                if (!acc[key]) acc[key] = { voltage: line.voltage || 'Line', status: line.status || 'Unknown', count: 0 };
-                                acc[key].count++;
-                                return acc;
-                              }, {})).map((group: any, i: number) => {
-                                const meta = statusMeta((group.status || '').toLowerCase().includes('charg') ? 'charged' : undefined);
-                                return (
-                                  <div key={i} className="flex items-center justify-between px-2.5 py-1.5 bg-muted rounded-lg border border-border text-xs">
-                                    <span className="text-foreground truncate pr-2">
-                                      {group.count > 1 ? <span className="font-bold text-primary mr-1">{group.count}x</span> : ''}{group.voltage}
-                                    </span>
-                                    <span className="text-[10px] font-bold uppercase" style={{ color: meta.color }}>{group.status}</span>
-                                  </div>
-                                );
-                              })}
+                              {lines.map((line: any) => <LineCard key={line.id} line={line} />)}
                             </div>
                           </div>
                         );
@@ -924,6 +943,61 @@ function DetailSection({ icon, title, color, children }: { icon: React.ReactNode
         <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && <div className="px-5 pb-4 space-y-1.5">{children}</div>}
+    </div>
+  );
+}
+
+/* One transmission line in the project drawer. Status comes from
+   `normalized_status` only — the raw `status` column carries sheet serial
+   numbers. Stage meters are shown only while the line is still in build;
+   a charged line is complete by definition. */
+function LineCard({ line }: { line: any }) {
+  const meta = statusMeta(line.normalized_status);
+  const inBuild = line.normalized_status === 'in_progress';
+  const km = parseLengthKm(line.length);
+  const stages = [
+    { label: 'Foundation', v: parseStageProgress(line.foundation), unit: '' },
+    { label: 'Erection', v: parseStageProgress(line.erection), unit: '' },
+    { label: 'Stringing', v: parseStageProgress(line.stringing), unit: ' km' },
+  ];
+  const date = line.normalized_status === 'charged'
+    ? (line.charged_date ? `Charged ${line.charged_date}` : null)
+    : line.expected_date ? `Exp. ${line.expected_date}` : line.scd ? `SCD ${line.scd}` : null;
+
+  return (
+    <div className="rounded-lg border border-border bg-muted px-3 py-2.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-foreground truncate">
+            {line.from_label || '—'} <span className="text-muted-foreground font-normal">→</span> {line.to_label || '—'}
+          </div>
+          <div className="mt-0.5 text-[10.5px] text-muted-foreground truncate">
+            {[line.voltage, km ? `${km.toLocaleString('en-IN', { maximumFractionDigits: 1 })} km` : null, line.contractor]
+              .filter(Boolean).join(' · ')}
+          </div>
+        </div>
+        <div className="shrink-0 text-right">
+          <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide" style={{ color: meta.color }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: meta.color }} />
+            {meta.label}
+          </span>
+          {date && <div className="mt-0.5 text-[10px] font-mono text-muted-foreground">{date}</div>}
+        </div>
+      </div>
+
+      {inBuild && (
+        <div className="mt-2 space-y-1">
+          {stages.map(({ label, v, unit }) => (
+            <div key={label} className="grid grid-cols-[64px_1fr_auto] items-center gap-2">
+              <span className="text-[10px] text-muted-foreground">{label}</span>
+              <MiniMeter pct={v.pct} />
+              <span className="text-[10px] font-mono text-foreground tabular-nums">
+                {v.total > 0 ? `${v.done}/${v.total}${unit}` : '—'}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

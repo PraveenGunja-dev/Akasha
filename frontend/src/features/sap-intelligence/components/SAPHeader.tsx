@@ -14,12 +14,18 @@ export const SAPHeader = ({ onExport }: { onExport: () => void }) => {
   const openDrawer = useSAPStore(s => s.openDrawer);
   const watchCount = useSAPStore(s => s.watchlist.length);
 
-  const age = relativeAge(data?.synced_at);
+  // A daily feed: judge freshness on the data's own date, and call it delayed
+  // once a day has clearly been missed. Falls back to pull time before the
+  // first logged sync.
+  const asOn = data?.data_as_on ?? data?.synced_at;
+  const age = relativeAge(asOn, 36);
+  const failed = data?.sync?.last_status === 'failed';
   const state: { tone: 'healthy' | 'watch' | 'critical' | 'neutral'; label: string } =
     error ? { tone: 'critical', label: 'SAP unavailable' }
       : loading && !data ? { tone: 'neutral', label: 'Connecting…' }
-        : age.stale ? { tone: 'watch', label: 'SAP data delayed' }
-          : { tone: 'healthy', label: 'SAP connected' };
+        : failed ? { tone: 'critical', label: 'Last SharePoint sync failed' }
+          : age.stale ? { tone: 'watch', label: 'SAP data delayed' }
+            : { tone: 'healthy', label: 'SAP current' };
 
   return (
     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -32,7 +38,17 @@ export const SAPHeader = ({ onExport }: { onExport: () => void }) => {
           <p className="mt-0.5 text-[13px] text-fg-secondary">End-to-end visibility of procurement, materials and inventory from SAP</p>
           <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-fg-tertiary" aria-live="polite">
             <span className="inline-flex items-center gap-1.5"><StatusDot tone={state.tone} /> <span className="text-fg-secondary">{state.label}</span></span>
-            {data?.synced_at && <span>Last synced {fmtDateTime(data.synced_at)} <span className="opacity-70">({age.label})</span></span>}
+            {asOn && (
+              <span title={data?.sync?.files?.length ? data.sync.files.map(f => `${f.name} · ${fmtDateTime(f.modified)}`).join(' | ') : undefined}>
+                Data as on <span className="font-medium text-fg-secondary">{fmtDateTime(asOn)}</span> <span className="opacity-70">({age.label})</span>
+                {data?.data_as_on && data.synced_at && <span className="opacity-70"> · pulled from SharePoint {fmtDateTime(data.synced_at)}</span>}
+              </span>
+            )}
+            {failed && data?.sync?.last_message && (
+              <span className="text-status-critical-fg" title={data.sync.last_message}>
+                {fmtDateTime(data.sync.last_attempt_at)}: {data.sync.last_message.length > 90 ? data.sync.last_message.slice(0, 90) + '…' : data.sync.last_message}
+              </span>
+            )}
             {error && <span className="text-status-critical-fg">Showing last successful data where available.</span>}
           </div>
         </div>

@@ -579,14 +579,7 @@ const ProjectRow = ({ project, onOpen }: { project: any; onOpen: (id: string) =>
             <div className="h-full bg-primary" style={{ width: `${Math.min(100, Math.round(progressPct))}%` }}></div>
           </div>
         </div>
-        {/* P6 durations in working days (hours ÷ 8). Was "P: A: R:" at 9px,
-            which nobody could read or decode. */}
-        <div className="mt-0.5 flex items-center gap-2 text-[11px] tabular-nums text-muted-foreground" title={project.durationEstimated ? 'P6 has no actual duration for this project; actual and remaining are planned × progress.' : 'Planned, actual and remaining duration from P6, in working days.'}>
-           <span><span className="text-fg-tertiary">Planned</span> {Math.round((project.plannedDuration || 0) / 8)}d</span>
-           <span><span className="text-fg-tertiary">Actual</span> {Math.round((project.actualDuration || 0) / 8)}d</span>
-           <span><span className="text-fg-tertiary">Left</span> {Math.round((project.remainingDuration || 0) / 8)}d</span>
-           {project.durationEstimated && <span className="rounded bg-surface-sunken px-1 text-[10px] text-fg-tertiary">est.</span>}
-        </div>
+
       </div>
 
       {/* 3. Supply Funnel (20%) */}
