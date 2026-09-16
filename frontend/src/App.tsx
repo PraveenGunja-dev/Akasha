@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import LandingPage from './pages/LandingPage';
+import LoginPage from './pages/LoginPage';
 import CEODashboard from './pages/CEODashboard';
 import ProjectWorkspace from './features/projects/ProjectWorkspace';
 import FloatingCopilot from './components/ui/FloatingCopilot';
@@ -17,6 +18,7 @@ function App() {
         <div className="min-h-screen bg-background antialiased text-foreground flex flex-col">
           <Routes>
             <Route path="/" element={<LandingPage />} />
+            <Route path="/login" element={<LoginPage />} />
             {/* Executive / CEO Dashboard */}
             <Route path="/ceo-dashboard" element={<CEODashboard />} />
             <Route path="/ceo-dashboard/project/:projectId" element={<CEODashboard />} />

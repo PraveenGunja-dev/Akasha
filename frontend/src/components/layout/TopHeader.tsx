@@ -1,12 +1,88 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, RefreshCw, BookOpen } from 'lucide-react';
+import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, RefreshCw, BookOpen, Layers, GitBranch } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { toast } from 'sonner';
 import NotificationDropdown from './NotificationDropdown';
 import PMAGThreadPanel from './PMAGThreadPanel';
+import { cx } from '../ui/primitives/cx';
 
-export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing, onNavigateToSimulation }: any) {
+/* One button scale for the whole header. Anything that is not the single AI
+   action is quiet — the toolbar should read as chrome, not compete with the
+   page beneath it. */
+const BTN_SECONDARY =
+  'flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 text-[12px] font-semibold text-fg-secondary transition-colors hover:border-brand-blue/40 hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary disabled:opacity-50';
+const BTN_ICON =
+  'rounded-lg p-1.5 text-fg-tertiary transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+
+/** Scope menus: keyboard reachable, Escape to close, click-outside to dismiss. */
+function ScopeMenu({
+  label, icon: Icon, value, options, labels, onChange, width = 'min-w-[170px]',
+}: {
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  value: string;
+  options: string[];
+  labels?: Record<string, string>;
+  onChange: (v: string) => void;
+  width?: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen((o) => !o)}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`${label}: ${labels?.[value] ?? value}`}
+        className={BTN_SECONDARY}
+      >
+        <Icon className="h-3.5 w-3.5 text-fg-tertiary" />
+        <span className="max-w-[140px] truncate">{labels?.[value] ?? value}</span>
+        <ChevronDown className={cx('h-3.5 w-3.5 shrink-0 transition-transform', open && 'rotate-180')} />
+      </button>
+
+      {open && (
+        <ul
+          role="listbox"
+          aria-label={label}
+          className={cx('surface-raised absolute left-0 top-full z-50 mt-1 overflow-hidden py-1', width)}
+        >
+          {options.map((o) => (
+            <li key={o} role="option" aria-selected={o === value}>
+              <button
+                onClick={() => { onChange(o); setOpen(false); }}
+                className={cx(
+                  'block w-full px-3 py-1.5 text-left text-[12px] transition-colors hover:bg-brand-blue/10 focus:outline-none focus-visible:bg-brand-blue/10',
+                  o === value ? 'font-bold text-brand-blue' : 'text-fg-secondary',
+                )}
+              >
+                {labels?.[o] ?? o}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+export default function TopHeader({ onOpenCopilot, onToggleSidebar, onSyncData, isSyncing, onNavigateToSimulation }: any) {
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const navigate = useNavigate();
   const { projectId } = useParams();
@@ -14,16 +90,14 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPortfolio = searchParams.get('portfolio') || 'All Portfolios';
   const currentPhase = searchParams.get('phase') || 'Ongoing';
-  const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
-  const [isPhaseOpen, setIsPhaseOpen] = useState(false);
 
   const [notifications, setNotifications] = useState<any[]>([]);
   const [hasMoreNotifs, setHasMoreNotifs] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [selectedNotification, setSelectedNotification] = useState<any | null>(null);
   const notificationRef = useRef<HTMLDivElement>(null);
-  const portfolioRef = useRef<HTMLDivElement>(null);
-  const phaseRef = useRef<HTMLDivElement>(null);
+  const userMenuRef = useRef<HTMLDivElement>(null);
   const LIMIT = 50;
 
   useEffect(() => {
@@ -31,15 +105,19 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
       if (notificationRef.current && !notificationRef.current.contains(event.target as Node)) {
         setShowNotifications(false);
       }
-      if (portfolioRef.current && !portfolioRef.current.contains(event.target as Node)) {
-        setIsPortfolioOpen(false);
-      }
-      if (phaseRef.current && !phaseRef.current.contains(event.target as Node)) {
-        setIsPhaseOpen(false);
+      if (userMenuRef.current && !userMenuRef.current.contains(event.target as Node)) {
+        setShowUserMenu(false);
       }
     };
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { setShowNotifications(false); setShowUserMenu(false); }
+    };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleKey);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleKey);
+    };
   }, []);
   const unreadCount = notifications.filter(n => n.action_status === 'Pending').length;
 
@@ -82,169 +160,145 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
 
   return (
     <>
-    <header className="h-[73px] bg-card border-b border-border dark:border-border shadow-sm flex items-center justify-between px-4 shrink-0 z-40">
-      
-      {/* Left: hamburger (mobile) & Title */}
-      <div className="flex items-center gap-3 flex-1">
-        <button 
+    <header className="flex h-[73px] shrink-0 items-center justify-between gap-3 border-b border-border bg-card px-4 z-40">
+
+      {/* Left: scope — what the whole screen is filtered to */}
+      <div className="flex min-w-0 items-center gap-2">
+        <button
           onClick={onToggleSidebar}
-          className="md:hidden p-2 -ml-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-          aria-label="Menu"
+          className={`md:hidden -ml-1 ${BTN_ICON}`}
+          aria-label="Open navigation"
         >
-          <Menu className="w-5 h-5" />
+          <Menu className="h-5 w-5" />
         </button>
+
+        <ScopeMenu
+          label="Phase"
+          icon={GitBranch}
+          value={currentPhase}
+          options={['Ongoing', 'Commissioned', 'ALL']}
+          labels={{ ALL: 'All phases' }}
+          width="min-w-[150px]"
+          onChange={(p) => setSearchParams(prev => {
+            if (p === 'Ongoing') prev.delete('phase'); else prev.set('phase', p);
+            return prev;
+          })}
+        />
+
+        <ScopeMenu
+          label="Portfolio"
+          icon={Layers}
+          value={currentPortfolio}
+          options={['All Portfolios', 'Solar Khavda', 'Solar Rajasthan', 'Wind', 'BESS']}
+          width="min-w-[190px]"
+          onChange={(p) => setSearchParams(prev => {
+            if (p === 'All Portfolios') prev.delete('portfolio'); else prev.set('portfolio', p);
+            return prev;
+          })}
+        />
       </div>
 
-      {/* Right: project selector + actions */}
-      <div className="flex items-center gap-1 sm:gap-2">
-        
-        {/* Phase Dropdown */}
-        <div 
-          className="relative mr-1"
-          ref={phaseRef}
-        >
-          <button 
-            onClick={() => setIsPhaseOpen(!isPhaseOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
-          >
-            <span>{currentPhase === 'ALL' ? 'All Phases' : currentPhase}</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPhaseOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <div className={`absolute top-full right-0 mt-1 w-36 py-1 bg-card rounded-lg shadow-lg border border-muted dark:border-gray-700 transition-all z-50 ${isPhaseOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
-            {['Ongoing', 'Commissioned', 'ALL'].map(p => (
-              <button
-                key={p}
-                onClick={() => {
-                  setSearchParams(prev => {
-                    if (p === 'Ongoing') {
-                      prev.delete('phase'); // Ongoing is default
-                    } else {
-                      prev.set('phase', p);
-                    }
-                    return prev;
-                  });
-                  setIsPhaseOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPhase === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-gray-700/50'}`}
-              >
-                {p === 'ALL' ? 'All Phases' : p}
-              </button>
-            ))}
-          </div>
-        </div>
+      {/* Right: actions */}
+      <div className="flex shrink-0 items-center gap-2">
 
-        {/* Portfolio Dropdown */}
-        <div 
-          className="relative mr-2"
-          ref={portfolioRef}
-        >
-          <button 
-            onClick={() => setIsPortfolioOpen(!isPortfolioOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
-          >
-            <span>{currentPortfolio === 'All Portfolios' ? 'All Portfolios' : currentPortfolio}</span>
-            <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPortfolioOpen ? 'rotate-180' : ''}`} />
-          </button>
-          <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-card rounded-lg shadow-lg border border-muted dark:border-gray-700 transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
-            {['All Portfolios', 'Solar Khavda', 'Solar Rajasthan', 'Wind', 'BESS'].map(p => (
-              <button
-                key={p}
-                onClick={() => {
-                  setSearchParams(prev => {
-                    if (p === 'All Portfolios') {
-                      prev.delete('portfolio');
-                    } else {
-                      prev.set('portfolio', p);
-                    }
-                    return prev;
-                  });
-                  setIsPortfolioOpen(false);
-                }}
-                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPortfolio === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-gray-700/50'}`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Sync Data Button */}
         {onSyncData && (
-          <button 
-            onClick={onSyncData}
-            disabled={isSyncing}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-500/20 bg-background hover:bg-sky-500/5 text-foreground text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-500' : ''}`} />
-            <span className="hidden lg:inline">{isSyncing ? 'Syncing...' : 'Sync All Data'}</span>
+          <button onClick={onSyncData} disabled={isSyncing} className={BTN_SECONDARY}>
+            <RefreshCw className={cx('h-3.5 w-3.5 text-fg-tertiary', isSyncing && 'animate-spin')} />
+            <span className="hidden lg:inline">{isSyncing ? 'Syncing…' : 'Sync data'}</span>
           </button>
         )}
 
-        {/* Ask Akasha */}
-        <button 
-          onClick={onOpenCopilot} 
-          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-[12px] font-semibold transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] border border-sky-400/50 hover:scale-[1.02] active:scale-[0.98]"
-          title="Ask Akasha — Project Intelligence AI Copilot"
+        {/* The one emphasised action in the toolbar. */}
+        <button
+          onClick={onOpenCopilot}
+          className="flex items-center gap-1.5 rounded-lg bg-gradient-to-r from-brand-blue to-brand-purple px-3 py-1.5 text-[12px] font-semibold text-white transition-opacity hover:opacity-90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          title="Ask Akasha — project intelligence copilot"
         >
-          <Sparkles className="w-3.5 h-3.5 animate-pulse" />
-          <span className="hidden lg:inline text-shadow-sm">Ask Akasha</span>
+          <Sparkles className="h-3.5 w-3.5" />
+          <span className="hidden lg:inline">Ask Akasha</span>
         </button>
 
-        {/* User Guide */}
-        <a 
-          href="/AKASHA_USER_GUIDE.docx" 
+        <div className="mx-0.5 hidden h-5 w-px bg-border sm:block" />
+
+        <a
+          href="/AKASHA_USER_GUIDE.docx"
           download
-          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-[12px] font-semibold transition-colors shadow-sm"
+          className={`hidden sm:block ${BTN_ICON}`}
+          title="Download user guide"
+          aria-label="Download user guide"
         >
-          <BookOpen className="w-3.5 h-3.5" />
-          <span className="hidden lg:inline text-shadow-sm">User Guide</span>
+          <BookOpen className="h-4 w-4" />
         </a>
 
-        <button 
-          onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} 
-          className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+        <button
+          onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')}
+          className={`hidden sm:block ${BTN_ICON}`}
+          title={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
+          aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
         >
-          {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
         </button>
 
-        {/* Bell */}
+        {/* Notifications */}
         <div className="relative" ref={notificationRef}>
-            <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
-            <Bell className="w-4 h-4" />
-            {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-[1.5px] ring-background" />}
-            </button>
-            
-            {showNotifications && (
-                <NotificationDropdown 
-                    notifications={notifications}
-                    onClose={() => setShowNotifications(false)}
-                    onLoadMore={loadMoreNotifications}
-                    hasMore={hasMoreNotifs}
-                    onSimulate={(projId: string, context?: any) => {
-                        setShowNotifications(false);
-                        if (onNavigateToSimulation) onNavigateToSimulation(projId, context);
-                    }}
-                />
+          <button
+            onClick={() => setShowNotifications(!showNotifications)}
+            aria-haspopup="menu"
+            aria-expanded={showNotifications}
+            aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} pending` : 'Notifications'}
+            className={`relative ${BTN_ICON}`}
+          >
+            <Bell className="h-4 w-4" />
+            {unreadCount > 0 && (
+              <span className="absolute right-1 top-1 h-2 w-2 rounded-full bg-status-critical-solid ring-2 ring-card" />
             )}
+          </button>
+
+          {showNotifications && (
+            <NotificationDropdown
+              notifications={notifications}
+              onClose={() => setShowNotifications(false)}
+              onLoadMore={loadMoreNotifications}
+              hasMore={hasMoreNotifs}
+              onSimulate={(projId: string, context?: any) => {
+                setShowNotifications(false);
+                if (onNavigateToSimulation) onNavigateToSimulation(projId, context);
+              }}
+            />
+          )}
         </div>
-        
-        {/* Avatar */}
-        <div className="relative group ml-0.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-purple-500 p-[1.5px] cursor-pointer shadow-[0_0_10px_rgba(14,165,233,0.2)]">
-            <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
-               <User className="w-3.5 h-3.5 text-muted-foreground" />
+
+        {/* Identity */}
+        <div className="relative" ref={userMenuRef}>
+          <button
+            onClick={() => setShowUserMenu(o => !o)}
+            aria-haspopup="menu"
+            aria-expanded={showUserMenu}
+            aria-label="Account menu"
+            className="flex items-center gap-1.5 rounded-lg p-1 transition-colors hover:bg-muted focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-full border border-border bg-surface-sunken">
+              <User className="h-3.5 w-3.5 text-fg-secondary" />
+            </span>
+            <ChevronDown className={cx('hidden h-3.5 w-3.5 text-fg-tertiary transition-transform sm:block', showUserMenu && 'rotate-180')} />
+          </button>
+
+          {showUserMenu && (
+            <div role="menu" className="surface-raised absolute right-0 top-full z-50 mt-1 w-48 overflow-hidden py-1">
+              <div className="border-b border-border px-3 py-2">
+                <p className="truncate text-[12px] font-semibold text-foreground">{user?.display_name || 'User'}</p>
+                <p className="truncate text-[11px] capitalize text-fg-tertiary">{user?.role || 'executive'}</p>
+              </div>
+              <button
+                role="menuitem"
+                onClick={handleSignOut}
+                className="flex w-full items-center gap-1.5 px-3 py-2 text-left text-[12px] text-status-critical-fg transition-colors hover:bg-status-critical-bg focus:outline-none focus-visible:bg-status-critical-bg"
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Sign out
+              </button>
             </div>
-          </div>
-          <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border dark:border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
-             <div className="px-3 py-2 border-b border-muted dark:border-border">
-               <p className="text-[12px] font-semibold text-foreground dark:text-white">{user?.display_name || 'User'}</p>
-               <p className="text-[11px] text-muted-foreground truncate">{user?.role || 'executive'}</p>
-             </div>
-             <button onClick={handleSignOut} className="w-full text-left px-3 py-1.5 text-[12px] text-destructive hover:bg-destructive/10 dark:hover:bg-red-900/10 transition-colors flex items-center gap-1.5">
-               <LogOut className="w-3.5 h-3.5" />
-               Sign Out
-             </button>
-          </div>
+          )}
         </div>
       </div>
     </header>
