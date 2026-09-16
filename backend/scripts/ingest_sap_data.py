@@ -152,6 +152,8 @@ def match_wbs_to_master(wbs_val, wbs_map):
 
 
 def ingest_data():
+    from auto_migrate import auto_upgrade_schema
+    auto_upgrade_schema()
     db = SessionLocal()
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
     master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")

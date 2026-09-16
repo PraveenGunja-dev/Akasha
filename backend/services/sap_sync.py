@@ -11,6 +11,11 @@ logger = logging.getLogger(__name__)
 
 
 def sync_sap_from_sharepoint(db: Session) -> dict:
+    # The script path never goes through run.py, so a checkout that gained a
+    # column or table (doc_type, sync_log) must upgrade its own schema first.
+    from auto_migrate import auto_upgrade_schema
+    auto_upgrade_schema()
+
     import models
     from services.sharepoint_service import SharePointService
     from scripts.ingest_sap_data import SAP_DATA_DIR, SAP_FILE_PATTERNS, ingest_data
