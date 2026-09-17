@@ -151,7 +151,11 @@ def match_wbs_to_master(wbs_val, wbs_map):
     return None
 
 
-def ingest_data():
+def ingest_data(files=None):
+    """files: optional {key: path} overriding the newest-file lookup, e.g.
+    {'zsps': '.../ZPSPS0071.xlsx'} to load a specific extract."""
+    files = files or {}
+    pick = lambda key, d: files.get(key) or find_sap_file(key, d)
     from auto_migrate import auto_upgrade_schema
     auto_upgrade_schema()
     db = SessionLocal()
@@ -185,7 +189,7 @@ def ingest_data():
     # ================================================================
     # Process MB52 (Inventory) — unchanged
     # ================================================================
-    mb52_path = find_sap_file("mb52", data_dir)
+    mb52_path = pick("mb52", data_dir)
     if mb52_path and os.path.exists(mb52_path):
         try:
             print(f"Processing {os.path.basename(mb52_path)}...")
@@ -233,8 +237,8 @@ def ingest_data():
 
     # ================================================================
     # Process ZSPS (PO Amount) — Replacing ME2J, merging with ME2J metadata
-    zsps_path = find_sap_file("zsps", data_dir)
-    me2j_path = find_sap_file("me2j", data_dir)
+    zsps_path = pick("zsps", data_dir)
+    me2j_path = pick("me2j", data_dir)
     
     if zsps_path and os.path.exists(zsps_path):
         try:
@@ -421,7 +425,7 @@ def ingest_data():
     # ================================================================
     # Process MB51 (Material Documents/Consumption) — unchanged
     # ================================================================
-    mb51_path = find_sap_file("mb51", data_dir)
+    mb51_path = pick("mb51", data_dir)
     if mb51_path and os.path.exists(mb51_path):
         try:
             print(f"Processing {os.path.basename(mb51_path)}...")
@@ -494,9 +498,15 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="Refresh SAP data. Default: pull today's extracts from SharePoint, then ingest.")
     ap.add_argument("--local", action="store_true", help="skip SharePoint; ingest whatever is already in Data/NEW31")
+    ap.add_argument("--zsps", metavar="PATH", help="with --local: use this ZPSPS007 file instead of the newest one")
     args = ap.parse_args()
     if args.local:
-        ingest_data()
+        from database import SessionLocal
+        from services.sap_sync import sync_sap_from_local
+        r = sync_sap_from_local(SessionLocal(), zsps_path=args.zsps)
+        print()
+        print(r['message'])
+        print(f"Data as on {r['data_as_on']}  |  files: {', '.join(f['name'] for f in r['files'])}")
     else:
         from database import SessionLocal
         from services.sap_sync import sync_sap_from_sharepoint

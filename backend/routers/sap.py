@@ -117,15 +117,17 @@ def _last_sync(db: Session) -> dict:
     row, successful or not, gives the status the header should show. Before
     the first logged run, fall back to the newest ZSPS upload_time."""
     SL = models.SyncLog
-    ok = db.query(SL).filter(SL.source == "sharepoint", SL.status == "success").order_by(SL.finished_at.desc()).first()
-    latest = db.query(SL).filter(SL.source == "sharepoint").order_by(SL.started_at.desc()).first()
+    FEED = {"sharepoint": "SharePoint", "local": "Local file"}
+    sap_sources = SL.source.in_(list(FEED))
+    ok = db.query(SL).filter(sap_sources, SL.status == "success").order_by(SL.finished_at.desc()).first()
+    latest = db.query(SL).filter(sap_sources).order_by(SL.started_at.desc()).first()
     iso = lambda d: d.isoformat() if d else None
     if not ok:
         upl = db.query(func.max(PO.upload_time)).scalar()
         return {"feed": "SharePoint", "synced_at": iso(upl), "data_as_on": None, "files": [],
                 "last_status": latest.status if latest else None, "last_message": latest.message if latest else None,
                 "last_attempt_at": iso(latest.started_at) if latest else None}
-    return {"feed": "SharePoint", "synced_at": iso(ok.finished_at), "data_as_on": iso(ok.data_as_on), "files": ok.files or [],
+    return {"feed": FEED.get(ok.source, ok.source), "synced_at": iso(ok.finished_at), "data_as_on": iso(ok.data_as_on), "files": ok.files or [],
             "last_status": latest.status, "last_message": latest.message, "last_attempt_at": iso(latest.started_at)}
 
 

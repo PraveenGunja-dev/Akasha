@@ -10,6 +10,53 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
+def sync_sap_from_local(db: Session, zsps_path: str | None = None) -> dict:
+    """Ingest from files already in Data/NEW31 — the newest of each, or a
+    specific ZPSPS007 via zsps_path. Logged as source='local' so the SAP
+    header shows the real file date and never claims a SharePoint pull."""
+    from auto_migrate import auto_upgrade_schema
+    auto_upgrade_schema()
+
+    import models
+    from scripts.ingest_sap_data import SAP_DATA_DIR, find_sap_file, ingest_data
+    from scripts.ingest_slr_data import ingest_slr
+
+    if zsps_path and not os.path.isabs(zsps_path):
+        zsps_path = os.path.abspath(zsps_path)
+    if zsps_path and not os.path.exists(zsps_path):
+        raise FileNotFoundError(zsps_path)
+    paths = {k: (zsps_path if k == "zsps" and zsps_path else find_sap_file(k, SAP_DATA_DIR)) for k in ("zsps", "me2j", "mb52", "mb51")}
+    if not paths["zsps"]:
+        raise FileNotFoundError(f"No ZPSPS007 extract in {SAP_DATA_DIR}")
+
+    log = models.SyncLog(source="local", status="running")
+    db.add(log); db.commit()
+
+    def finish(status, message, **fields):
+        for k, v in fields.items():
+            setattr(log, k, v)
+        log.status, log.message, log.finished_at = status, message, datetime.utcnow()
+        db.commit()
+
+    try:
+        ingest_data(files={"zsps": paths["zsps"]})
+        slr_rows = ingest_slr(file_path=paths["zsps"])
+        from routers.sap import _CACHE as sap_cache
+        sap_cache.clear()
+
+        used = [{"name": os.path.basename(p), "modified": datetime.utcfromtimestamp(os.path.getmtime(p)).isoformat(),
+                 "size_mb": round(os.path.getsize(p) / 1e6, 1)} for p in paths.values() if p]
+        as_on = datetime.utcfromtimestamp(os.path.getmtime(paths["zsps"]))
+        msg = f"Ingested local files (ZSPS: {os.path.basename(paths['zsps'])}); SLR rebuilt ({slr_rows} rows)"
+        finish("success", msg, files=used, data_as_on=as_on)
+        return {"status": "success", "message": msg, "files": used, "data_as_on": as_on.isoformat(),
+                "ingested": True, "slr_rows": slr_rows}
+    except Exception as e:
+        logger.error(f"Local SAP ingest failed: {e}")
+        finish("failed", str(e)[:1000])
+        raise
+
+
 def sync_sap_from_sharepoint(db: Session) -> dict:
     # The script path never goes through run.py, so a checkout that gained a
     # column or table (doc_type, sync_log) must upgrade its own schema first.
