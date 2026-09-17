@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { formatDate } from '../../lib/utils';
 import { useParams, useNavigate } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import {
@@ -1725,7 +1726,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                 {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
                                                 {poNum}
                                               </td>
-                                              <td className="text-left text-foreground/70">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB') : '—'}</td>
+                                              <td className="text-left text-foreground/70">{items[0]?.documentDate ? formatDate(items[0].documentDate) : '—'}</td>
                                               <td className="text-left text-foreground/70 max-w-[150px] truncate" title="Multiple Materials">
                                                 {items.length === 1 ? (items[0].materialName || items[0].materialCode) : `${items.length} items`}
                                               </td>
@@ -1742,7 +1743,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                             {isExpanded && items.map((po: any, j: number) => (
                                               <tr key={`sap-pos-${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
                                                 <td className="text-left font-mono font-medium text-muted-foreground pl-10 text-[10px]">Line Item {j + 1}</td>
-                                                <td className="text-left text-muted-foreground">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                <td className="text-left text-muted-foreground">{po.documentDate ? formatDate(po.documentDate) : '—'}</td>
                                                 <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.materialName}>{po.materialName || po.materialCode}</td>
                                                 <td className="text-left text-muted-foreground max-w-[150px] truncate" title={po.vendorName}>{po.vendorName || '—'}</td>
                                                 <td className="text-right font-mono text-muted-foreground">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
@@ -2110,7 +2111,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                       },
                                       legend: { data: ['Consumed Qty', 'Reversals', 'Value INR'], textStyle: { color: '#a1a1aa' }, top: 0, right: 0 },
                                       grid: { top: 30, right: 10, bottom: 40, left: 40 },
-                                      xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? new Date(c.postingDate).toLocaleDateString() : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
+                                      xAxis: { type: 'category', data: sap.consumption.map((c: any) => c.postingDate ? formatDate(c.postingDate) : (c.wbsElement || 'Unknown')).slice(0, 40), axisLabel: { color: '#71717a', fontSize: 10, rotate: 45, interval: 0 } },
                                       yAxis: [
                                         { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { lineStyle: { color: '#27272a' } } },
                                         { type: 'value', axisLabel: { color: '#71717a', fontSize: 10 }, splitLine: { show: false }, position: 'right' }
@@ -2250,7 +2251,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                       {isExpanded ? <ChevronUp className="w-3 h-3 text-muted-foreground" /> : <ChevronDown className="w-3 h-3 text-muted-foreground" />}
                                                                       {poNum}
                                                                     </td>
-                                                                    <td className="text-left font-mono text-muted-foreground py-2 px-4">{items[0]?.documentDate ? new Date(items[0].documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                                                    <td className="text-left font-mono text-muted-foreground py-2 px-4">{items[0]?.documentDate ? formatDate(items[0].documentDate) : '—'}</td>
                                                                     <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{sumQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Unit</td>
                                                                     <td className="text-center py-2 px-4">
                                                                       {storages.length > 0 ? storages.map((s: any, idx) => (
@@ -2261,7 +2262,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                   {isExpanded && items.map((po: any, j: number) => (
                                                                     <tr key={`${poNum}-item-${j}`} className="bg-background/40 hover:bg-muted transition-colors">
                                                                       <td className="text-left font-mono font-medium text-muted-foreground py-2 px-4 pl-10 text-[10px]">Line Item {j + 1}</td>
-                                                                      <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? new Date(po.documentDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                                                                      <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? formatDate(po.documentDate) : '—'}</td>
                                                                       <td className="text-right font-mono text-muted-foreground py-2 px-4">{po.orderedQty} Unit</td>
                                                                       <td className="text-center py-2 px-4">
                                                                         <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
@@ -2302,7 +2303,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                     <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${String(c.movementType) === '221' ? 'bg-success/10 text-success dark:text-success' : 'bg-destructive/10 text-destructive dark:text-destructive'}`}>{c.movementType}</span>
                                                                   </td>
                                                                   <td className="text-left font-mono text-foreground/80 font-medium py-2 px-4">{c.wbsElement || '—'}</td>
-                                                                  <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{c.postingDate ? new Date(c.postingDate).toLocaleDateString('en-GB') : '—'}</td>
+                                                                  <td className="text-left text-muted-foreground py-2 px-4 whitespace-nowrap">{c.postingDate ? formatDate(c.postingDate) : '—'}</td>
                                                                   <td className="text-left text-foreground/80 py-2 px-4 max-w-[150px] truncate" title={vendor}>{vendor}</td>
                                                                   <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{c.quantity}</td>
                                                                 </tr>
@@ -2334,7 +2335,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                             {mat.inventories.map((inv: any, j: number) => {
                                                               const matchingPo = mat.pos.find((p: any) => p.wbsElement === inv.wbsElement || p.poNumber === inv.purchaseOrder) || mat.pos[0];
                                                               const vendor = matchingPo?.vendorName || '—';
-                                                              const dateStr = matchingPo?.documentDate ? new Date(matchingPo.documentDate).toLocaleDateString('en-GB') : '—';
+                                                              const dateStr = matchingPo?.documentDate ? formatDate(matchingPo.documentDate) : '—';
                                                               return (
                                                                 <tr key={j} className="hover:bg-muted transition-colors">
                                                                   <td className="text-left font-mono font-medium text-foreground py-2 px-4">{inv.wbsElement || 'Stock'}</td>
@@ -2435,7 +2436,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   <td className="text-left font-mono text-muted-foreground py-3 px-4">{wo}</td>
                                   <td className="text-left text-foreground/80 py-3 px-4 max-w-[120px] truncate" title={inv.workLocation}>{inv.workLocation || '—'}</td>
                                   <td className="text-left text-foreground/80 py-3 px-4 max-w-[120px] truncate" title={inv.packageName}>{inv.packageName || '—'}</td>
-                                  <td className="text-left text-foreground/80 py-3 px-4">{inv.invoiceDate ? new Date(parseInt(inv.invoiceDate.replace('/Date(', '').replace(')/', ''), 10)).toLocaleDateString('en-GB') : '—'}</td>
+                                  <td className="text-left text-foreground/80 py-3 px-4">{inv.invoiceDate ? formatDate(parseInt(inv.invoiceDate.replace('/Date(', '').replace(')/', ''), 10)) : '—'}</td>
                                   <td className="text-left py-3 px-4">
                                     <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${(inv.statusDesc || '').toLowerCase() === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
                                       {inv.statusDesc || 'Pending'}
@@ -2491,7 +2492,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                     <td className="text-left font-mono text-muted-foreground/60 py-2.5 px-4 text-[11px]">—</td>
                                     <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px] max-w-[120px] truncate" title={inv.workLocation}>{inv.workLocation || '—'}</td>
                                     <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px] max-w-[120px] truncate" title={inv.packageName}>{inv.packageName || '—'}</td>
-                                    <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px]">{inv.invoiceDate ? new Date(parseInt(inv.invoiceDate.replace('/Date(', '').replace(')/', ''), 10)).toLocaleDateString('en-GB') : '—'}</td>
+                                    <td className="text-left text-muted-foreground py-2.5 px-4 text-[11px]">{inv.invoiceDate ? formatDate(parseInt(inv.invoiceDate.replace('/Date(', '').replace(')/', ''), 10)) : '—'}</td>
                                     <td className="text-left py-2.5 px-4">
                                       <span className={`px-2 py-0.5 rounded text-[9px] font-medium ${(inv.statusDesc || '').toLowerCase() === 'completed' ? 'bg-success/10 text-success' : 'bg-warning/10 text-warning'}`}>
                                         {inv.statusDesc || 'Pending'}

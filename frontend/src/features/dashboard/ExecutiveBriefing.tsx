@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import { FileText, AlertTriangle, TrendingDown, Clock, ShieldAlert, CheckCircle2, ChevronRight, Play, ServerCrash } from 'lucide-react';
 
 export default function ExecutiveBriefing() {
   const [loading, setLoading] = useState(true);
   const [briefing, setBriefing] = useState<any>(null);
   const [error, setError] = useState('');
-  const [date] = useState(new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }));
+  const [date] = useState(formatDate(new Date()));
 
   useEffect(() => {
     const fetchBriefing = async () => {

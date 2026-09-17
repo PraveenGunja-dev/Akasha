@@ -56,9 +56,9 @@ def safe_date(val):
         return val
     return None
 
-def ingest_statutory_compliance(db, sap_map):
+def ingest_statutory_compliance(db, sap_map, filepath=None):
     print("Ingesting Statutory Compliance...")
-    wb = openpyxl.load_workbook(STATUTORY_STATUS_FILE, data_only=True)
+    wb = openpyxl.load_workbook(filepath or STATUTORY_STATUS_FILE, data_only=True)
     ws = wb['Statutory']
     
     count = 0
@@ -106,10 +106,11 @@ def ingest_statutory_compliance(db, sap_map):
     
     db.commit()
     print(f"Added {count} records to StatutoryCompliance.")
+    return count
 
-def ingest_epc_bocw(db, sap_map):
+def ingest_epc_bocw(db, sap_map, filepath=None):
     print("Ingesting EPC BOCW & CLRA...")
-    wb = openpyxl.load_workbook(EPC_BOCW_FILE, data_only=True)
+    wb = openpyxl.load_workbook(filepath or EPC_BOCW_FILE, data_only=True)
     ws = wb['BOCW']
     
     count = 0
@@ -128,8 +129,6 @@ def ingest_epc_bocw(db, sap_map):
         
         project_id, p6_project_name = find_mapping(spv, plot, sap_map)
         
-        # We assume CLRA and GST will be updated or joined.
-        # This is a simplified ingestion for demo purposes.
         record = models.EPCStatutoryStatus(
             project_id=project_id,
             p6_project_name=p6_project_name,
@@ -149,10 +148,11 @@ def ingest_epc_bocw(db, sap_map):
         
     db.commit()
     print(f"Added {count} records to EPCStatutoryStatus.")
+    return count
 
-def ingest_insurance(db, sap_map):
+def ingest_insurance(db, sap_map, filepath=None):
     print("Ingesting Insurance Data...")
-    wb = openpyxl.load_workbook(INSURANCE_MASTER_FILE, data_only=True)
+    wb = openpyxl.load_workbook(filepath or INSURANCE_MASTER_FILE, data_only=True)
     ws = wb['Master Sheet']
     
     count = 0
@@ -206,6 +206,7 @@ def ingest_insurance(db, sap_map):
         
     db.commit()
     print(f"Added {count} records to InsurancePolicy.")
+    return count
 
 def main():
     db = SessionLocal()

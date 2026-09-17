@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import { Brain, AlertTriangle, CheckCircle, Clock, ShieldAlert, Activity, ArrowRight, User, Radar, CloudRain, Wind, Eye, Target, BarChart2 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import ReactMarkdown from 'react-markdown';
@@ -649,7 +650,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 text-muted-foreground">
                         <Clock className="w-3.5 h-3.5" />
-                        {action.due_date ? new Date(action.due_date).toLocaleDateString() : 'TBD'}
+                        {action.due_date ? formatDate(action.due_date) : 'TBD'}
                       </div>
                     </td>
                   </tr>

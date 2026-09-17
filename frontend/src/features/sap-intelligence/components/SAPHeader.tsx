@@ -41,7 +41,6 @@ export const SAPHeader = ({ onExport }: { onExport: () => void }) => {
             {asOn && (
               <span title={data?.sync?.files?.length ? data.sync.files.map(f => `${f.name} · ${fmtDateTime(f.modified)}`).join(' | ') : undefined}>
                 Data as on <span className="font-medium text-fg-secondary">{fmtDateTime(asOn)}</span> <span className="opacity-70">({age.label})</span>
-                {data?.data_as_on && data.synced_at && <span className="opacity-70"> · pulled from SharePoint {fmtDateTime(data.synced_at)}</span>}
               </span>
             )}
             {failed && data?.sync?.last_message && (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { formatProjectName } from '../../lib/projectName';
 import {
@@ -273,7 +274,7 @@ const PortfolioBriefingCard = ({ data }: { data: any[] }) => {
   const totalInProgressAct = data.reduce((s, d) => s + (d.inProgressActivities || 0), 0);
   const completedProjects = data.filter(d => { const p = d.progress || 0; return (p >= 0.99) || (p >= 99); }).length;
   const qualitySyncedLabel = quality?.syncedAt
-    ? new Date(quality.syncedAt).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })
+    ? formatDate(quality.syncedAt)
     : null;
   
   // ── Monthly Completion Forecast ──

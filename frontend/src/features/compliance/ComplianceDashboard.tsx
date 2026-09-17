@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { Shield, FileText, CheckCircle, AlertTriangle, XCircle, Loader2, Calendar } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { formatDate } from '../../lib/utils';
+import { Shield, FileText, CheckCircle, AlertTriangle, XCircle, Loader2, Calendar, Upload, X, HardHat, Factory } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { formatProjectName } from '../../lib/projectName';
 
@@ -9,30 +10,80 @@ export default function ComplianceDashboard() {
   const [complianceData, setComplianceData] = useState<any[]>([]);
   const [epcData, setEpcData] = useState<any[]>([]);
   const [insuranceData, setInsuranceData] = useState<any[]>([]);
+  const [activeSection, setActiveSection] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMsg, setUploadMsg] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const statutoryRef = useRef<HTMLDivElement>(null);
+  const insuranceRef = useRef<HTMLDivElement>(null);
 
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [sumRes, compRes, epcRes, insRes] = await Promise.all([
+        fetch('/akasha/api/statutory/dashboard-summary'),
+        fetch('/akasha/api/statutory/compliance'),
+        fetch('/akasha/api/statutory/epc-status'),
+        fetch('/akasha/api/statutory/insurance')
+      ]);
+      
+      if (sumRes.ok) setSummaryData(await sumRes.json());
+      if (compRes.ok) setComplianceData(await compRes.json());
+      if (epcRes.ok) setEpcData(await epcRes.json());
+      if (insRes.ok) setInsuranceData(await insRes.json());
+    } catch (err) {
+      console.error("Error fetching global compliance:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchData(); }, []);
+
+  // Auto-dismiss upload message after 5s
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const [sumRes, compRes, epcRes, insRes] = await Promise.all([
-          fetch('/akasha/api/statutory/dashboard-summary'),
-          fetch('/akasha/api/statutory/compliance'),
-          fetch('/akasha/api/statutory/epc-status'),
-          fetch('/akasha/api/statutory/insurance')
-        ]);
-        
-        if (sumRes.ok) setSummaryData(await sumRes.json());
-        if (compRes.ok) setComplianceData(await compRes.json());
-        if (epcRes.ok) setEpcData(await epcRes.json());
-        if (insRes.ok) setInsuranceData(await insRes.json());
-      } catch (err) {
-        console.error("Error fetching global compliance:", err);
-      } finally {
-        setLoading(false);
+    if (uploadMsg) {
+      const t = setTimeout(() => setUploadMsg(null), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [uploadMsg]);
+
+  const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setUploading(true);
+    setUploadMsg(null);
+    const formData = new FormData();
+    formData.append('file', file);
+
+    try {
+      const res = await fetch('/akasha/api/statutory/upload', { method: 'POST', body: formData });
+      if (res.ok) {
+        const data = await res.json();
+        setUploadMsg({ type: 'success', text: `✓ Imported ${data.records_imported} records from "${data.filename}"` });
+        await fetchData(); // Refresh all data
+      } else {
+        const err = await res.json().catch(() => ({ detail: 'Upload failed' }));
+        setUploadMsg({ type: 'error', text: `✗ ${err.detail}` });
       }
-    };
-    fetchData();
-  }, []);
+    } catch {
+      setUploadMsg({ type: 'error', text: '✗ Network error during upload' });
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
+  const scrollToSection = (section: string) => {
+    const next = activeSection === section ? null : section;
+    setActiveSection(next);
+    if (!next) return;
+    const ref = section === 'insurance' ? insuranceRef : statutoryRef;
+    if (ref.current) {
+      setTimeout(() => ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    }
+  };
 
   if (loading) {
     return (
@@ -91,9 +142,37 @@ export default function ComplianceDashboard() {
           </h1>
           <p className="text-muted-foreground mt-1">Portfolio-wide statutory, compliance, and insurance tracking</p>
         </div>
+        {/* Upload Excel Button */}
+        <div className="flex items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".xlsx,.xls"
+            className="hidden"
+            onChange={handleUpload}
+          />
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 shadow-sm"
+          >
+            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+            {uploading ? 'Uploading...' : 'Upload Excel'}
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* Upload feedback toast */}
+      {uploadMsg && (
+        <div className={`flex items-center justify-between px-4 py-3 rounded-lg text-sm font-medium border animate-in slide-in-from-top-2 duration-300 ${uploadMsg.type === 'success' ? 'bg-emerald-500/10 text-emerald-600 border-emerald-500/20' : 'bg-destructive/10 text-destructive border-destructive/20'}`}>
+          <span>{uploadMsg.text}</span>
+          <button onClick={() => setUploadMsg(null)} className="ml-4 opacity-60 hover:opacity-100"><X className="w-4 h-4" /></button>
+        </div>
+      )}
+
+      {/* 6 KPI Cards — 3 per row */}
+      <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* Tracked Projects */}
         <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-primary/50 transition-colors">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Tracked Projects</span>
@@ -102,6 +181,7 @@ export default function ComplianceDashboard() {
           <div className="text-3xl font-light">{summaryData?.total_projects_tracked || 0}</div>
         </div>
         
+        {/* Overall Compliance */}
         <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-success/50 transition-colors">
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Overall Compliance</span>
@@ -110,32 +190,88 @@ export default function ComplianceDashboard() {
           <div className="text-3xl font-light text-success">{summaryData?.overall_compliance_percent || 0}%</div>
         </div>
         
-        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-destructive/50 transition-colors">
+        {/* Missing CLRA */}
+        <div
+          onClick={() => scrollToSection('clra')}
+          className={`kpi-card bg-card border rounded-xl p-4 shadow-sm relative overflow-hidden group transition-all cursor-pointer ${activeSection === 'clra' ? 'border-destructive ring-2 ring-destructive/30 shadow-md' : 'border-border hover:border-destructive/50'}`}
+        >
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Missing CLRA</span>
             <div className="p-2 bg-destructive/10 rounded-lg text-destructive"><AlertTriangle className="w-4 h-4" /></div>
           </div>
           <div className="text-3xl font-light text-destructive">{summaryData?.clra_missing_count || 0}</div>
-          <div className="text-xs text-muted-foreground mt-1">Offline letters submitted</div>
+          <div className="text-xs text-muted-foreground mt-1">Click to view</div>
         </div>
         
-        <div className="kpi-card bg-card border border-border rounded-xl p-4 shadow-sm relative overflow-hidden group hover:border-warning/50 transition-colors">
+        {/* Missing BOCW */}
+        <div
+          onClick={() => scrollToSection('bocw')}
+          className={`kpi-card bg-card border rounded-xl p-4 shadow-sm relative overflow-hidden group transition-all cursor-pointer ${activeSection === 'bocw' ? 'border-orange-500 ring-2 ring-orange-500/30 shadow-md' : 'border-border hover:border-orange-500/50'}`}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Missing BOCW</span>
+            <div className="p-2 bg-orange-500/10 rounded-lg text-orange-500"><HardHat className="w-4 h-4" /></div>
+          </div>
+          <div className="text-3xl font-light text-orange-500">{summaryData?.bocw_missing_count || 0}</div>
+          <div className="text-xs text-muted-foreground mt-1">Click to view</div>
+        </div>
+
+        {/* Missing SPCB */}
+        <div
+          onClick={() => scrollToSection('spcb')}
+          className={`kpi-card bg-card border rounded-xl p-4 shadow-sm relative overflow-hidden group transition-all cursor-pointer ${activeSection === 'spcb' ? 'border-purple-500 ring-2 ring-purple-500/30 shadow-md' : 'border-border hover:border-purple-500/50'}`}
+        >
+          <div className="flex items-center justify-between mb-4">
+            <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Missing SPCB</span>
+            <div className="p-2 bg-purple-500/10 rounded-lg text-purple-500"><Factory className="w-4 h-4" /></div>
+          </div>
+          <div className="text-3xl font-light text-purple-500">{summaryData?.spcb_missing_count || 0}</div>
+          <div className="text-xs text-muted-foreground mt-1">Click to view</div>
+        </div>
+
+        {/* Insurance Renewals */}
+        <div
+          onClick={() => scrollToSection('insurance')}
+          className={`kpi-card bg-card border rounded-xl p-4 shadow-sm relative overflow-hidden group transition-all cursor-pointer ${activeSection === 'insurance' ? 'border-warning ring-2 ring-warning/30 shadow-md' : 'border-border hover:border-warning/50'}`}
+        >
           <div className="flex items-center justify-between mb-4">
             <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground group-hover:text-foreground transition-colors">Insurance Renewals</span>
             <div className="p-2 bg-warning/10 rounded-lg text-warning"><Calendar className="w-4 h-4" /></div>
           </div>
           <div className="text-3xl font-light text-warning">{summaryData?.insurance_renewals_pending || 0}</div>
-          <div className="text-xs text-muted-foreground mt-1">Pending action</div>
+          <div className="text-xs text-muted-foreground mt-1">Click to view</div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="px-5 py-4 border-b border-border bg-muted/30">
+        <div
+          ref={statutoryRef}
+          className={`lg:col-span-2 bg-card border rounded-xl shadow-sm overflow-hidden transition-all duration-300 ${
+            activeSection && ['clra', 'bocw', 'spcb'].includes(activeSection)
+              ? activeSection === 'clra' ? 'border-destructive ring-2 ring-destructive/20'
+              : activeSection === 'bocw' ? 'border-orange-500 ring-2 ring-orange-500/20'
+              : 'border-purple-500 ring-2 ring-purple-500/20'
+            : 'border-border'
+          }`}
+        >
+          <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between">
             <h3 className="font-semibold flex items-center gap-2">
               <FileText className="w-4 h-4 text-primary" />
               Statutory Checklist (Portfolio View)
+              {activeSection && ['clra', 'bocw', 'spcb'].includes(activeSection) && (
+                <span className="ml-2 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-muted text-foreground border border-border">
+                  Showing: {activeSection.toUpperCase()} Missing
+                </span>
+              )}
             </h3>
+            {activeSection && ['clra', 'bocw', 'spcb'].includes(activeSection) && (
+              <button
+                onClick={() => setActiveSection(null)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted transition-colors"
+              >
+                <X className="w-3 h-3" /> Clear Filter
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto max-h-[500px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -152,7 +288,14 @@ export default function ComplianceDashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-border">
-                {complianceData.map((row, idx) => (
+                {(activeSection === 'clra'
+                  ? complianceData.filter(r => r.clra_status?.toLowerCase().includes('not available'))
+                  : activeSection === 'bocw'
+                  ? complianceData.filter(r => r.bocw_status?.toLowerCase().includes('not available'))
+                  : activeSection === 'spcb'
+                  ? complianceData.filter(r => r.spcb_status?.toLowerCase().includes('not available'))
+                  : complianceData
+                ).map((row, idx) => (
                   <tr key={idx} className="hover:bg-muted/30 transition-colors">
                     <td className="p-4 font-medium max-w-[200px] truncate" title={formatProjectName(row.p6_project_name || row.project_name)}>{formatProjectName(row.p6_project_name || row.project_name) || '—'}</td>
                     <td className="p-4">{row.spv_code || '—'}</td>
@@ -198,56 +341,25 @@ export default function ComplianceDashboard() {
         </div>
       </div>
 
-      {/* EPC Detailed Dates (Global View) */}
-      {epcData.length > 0 && (
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden mt-6">
-          <div className="px-5 py-4 border-b border-border bg-muted/30">
-            <h3 className="font-semibold flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-primary" />
-              EPC Partner Dates & Licensing (Portfolio View)
-            </h3>
-          </div>
-          <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
-            <table className="w-full text-left text-sm whitespace-nowrap">
-              <thead className="sticky top-0 bg-muted/95 backdrop-blur-sm z-10 shadow-sm">
-                <tr className="text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="p-4 font-semibold">P6 Project</th>
-                  <th className="p-4 font-semibold">EPC Partner</th>
-                  <th className="p-4 font-semibold">Plot</th>
-                  <th className="p-4 font-semibold">BOCW Commencement</th>
-                  <th className="p-4 font-semibold">BOCW Validity</th>
-                  <th className="p-4 font-semibold">FTC Date</th>
-                  <th className="p-4 font-semibold">CLRA Details</th>
-                  <th className="p-4 font-semibold">GST Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {epcData.map((row, idx) => (
-                  <tr key={idx} className="hover:bg-muted/30 transition-colors">
-                    <td className="p-4 font-medium max-w-[200px] truncate" title={formatProjectName(row.p6_project_name || row.project_name)}>{formatProjectName(row.p6_project_name || row.project_name) || '—'}</td>
-                    <td className="p-4 font-bold text-foreground">{row.epc_partner || '—'}</td>
-                    <td className="p-4">{row.plot || '—'}</td>
-                    <td className="p-4 text-muted-foreground font-medium">{row.bocw_commencement_date ? new Date(row.bocw_commencement_date).toLocaleDateString('en-GB') : '—'}</td>
-                    <td className="p-4 text-foreground font-semibold">{row.bocw_validity_date ? new Date(row.bocw_validity_date).toLocaleDateString('en-GB') : '—'}</td>
-                    <td className="p-4 text-primary font-semibold">{row.ftc_date ? new Date(row.ftc_date).toLocaleDateString('en-GB') : '—'}</td>
-                    <td className="p-4 max-w-[200px] truncate" title={row.clra_license_status}>{row.clra_license_status || '—'}</td>
-                    <td className="p-4 max-w-[200px] truncate" title={row.gst_obtained}>{row.gst_obtained || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
       {/* Insurance Tracking (Global View) */}
       {insuranceData.length > 0 && (
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden mt-6">
+        <div
+          ref={insuranceRef}
+          className={`bg-card border rounded-xl shadow-sm overflow-hidden mt-6 transition-all duration-300 ${activeSection === 'insurance' ? 'border-warning ring-2 ring-warning/20' : 'border-border'}`}
+        >
           <div className="px-5 py-4 border-b border-border bg-muted/30 flex items-center justify-between">
             <h3 className="font-semibold flex items-center gap-2">
               <Shield className="w-4 h-4 text-primary" />
               Insurance Policies (Portfolio View)
             </h3>
+            {activeSection === 'insurance' && (
+              <button
+                onClick={() => setActiveSection(null)}
+                className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted transition-colors"
+              >
+                <X className="w-3 h-3" /> Clear Highlight
+              </button>
+            )}
           </div>
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-left text-sm whitespace-nowrap">
@@ -277,7 +389,7 @@ export default function ComplianceDashboard() {
                     <td className="p-4 font-mono text-xs text-muted-foreground">{ins.policy_number || 'TBA'}</td>
                     <td className="p-4 font-mono text-primary font-medium">{ins.sum_insured ? `₹${ins.sum_insured} Cr` : '—'}</td>
                     <td className="p-4 font-mono text-pink-500 font-medium">{ins.premium_incl_gst ? `₹${(ins.premium_incl_gst / 10000000).toFixed(2)} Cr` : '—'}</td>
-                    <td className="p-4">{ins.policy_expiry ? new Date(ins.policy_expiry).toLocaleDateString('en-GB') : '—'}</td>
+                    <td className="p-4">{ins.policy_expiry ? formatDate(ins.policy_expiry) : '—'}</td>
                     <td className="p-4 text-center">
                       {ins.renewal_alert === 'Live' ? (
                         <span className="px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/10 text-emerald-500 border border-emerald-500/20">Live</span>

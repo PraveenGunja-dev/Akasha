@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import { Search, ShieldAlert, Activity, AlertTriangle, Zap, CheckCircle2, ChevronRight, BarChart2, Eye, BrainCircuit, PlaySquare, Lightbulb, Sliders, Check, FileText, FastForward, Target, CloudRain, Wind, Bell } from 'lucide-react';
 import ReactECharts from 'echarts-for-react';
 import { formatProjectName } from '../../lib/projectName';
@@ -875,7 +876,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                                   {notifs.map((notif: any, i: number) => (
                                     <div key={notif.id || i} className="p-2.5 bg-muted border border-border rounded flex flex-col gap-1.5 shadow-sm">
                                       <div className="flex items-center justify-between">
-                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{new Date(notif.created_at).toLocaleDateString()}</span>
+                                        <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">{formatDate(notif.created_at)}</span>
                                         <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full ${notif.change_type?.includes('Delay') || notif.change_type?.includes('Slip') ? 'bg-destructive/10 text-destructive' : 'bg-primary/10 text-primary'}`}>
                                           {notif.change_type || notif.category}
                                         </span>
@@ -1210,7 +1211,7 @@ export default function SimulationLab({ p6Data = [], dashboardData = {}, initial
                 <div className="text-right">
                   <div className="text-xs font-bold text-muted-foreground uppercase tracking-widest mb-1">Project</div>
                   <div className="font-bold text-primary text-lg">{selectedProject}</div>
-                  <div className="text-xs text-muted-foreground">{new Date().toLocaleDateString()}</div>
+                  <div className="text-xs text-muted-foreground">{formatDate(new Date())}</div>
                 </div>
               </div>
 

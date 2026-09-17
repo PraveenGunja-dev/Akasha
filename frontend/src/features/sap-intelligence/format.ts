@@ -1,6 +1,7 @@
 /* SAP Intelligence — formatters. Indian grouping throughout; crore is the unit
    of the book, so values arrive in Cr and are never re-divided here. */
 import type { POStatus, Severity } from './types';
+import { formatDate, formatDateTime } from '../../lib/utils';
 
 const inr = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 0 });
 const inr2 = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 2 });
@@ -25,17 +26,9 @@ export const fmtCompact = (v: number | null | undefined): string => {
 
 export const fmtPct = (v: number | null | undefined, decimals = 1): string => (v == null ? '—' : `${v.toFixed(decimals)}%`);
 
-export const fmtDate = (iso: string | null | undefined): string => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
-};
-
-export const fmtDateTime = (iso: string | null | undefined): string => {
-  if (!iso) return '—';
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
-};
+/* dd-mm-yy — the platform-wide format, defined once in lib/utils. */
+export const fmtDate = formatDate;
+export const fmtDateTime = formatDateTime;
 
 export const STATUS_LABEL: Record<POStatus, string> = {
   pending: 'Pending', partial: 'Partially delivered', delivered: 'Delivered', cancelled: 'Cancelled',

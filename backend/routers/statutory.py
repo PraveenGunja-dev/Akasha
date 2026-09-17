@@ -1,7 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List, Dict, Any
+import os, shutil, tempfile
+from datetime import datetime
 
 from database import get_db
 import models
@@ -72,12 +74,24 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     clra_pending = db.query(func.count(models.StatutoryCompliance.id)).filter(
         models.StatutoryCompliance.clra_status == "Not Available"
     ).scalar()
-    
+
+    # BOCW missing count
+    bocw_pending = db.query(func.count(models.StatutoryCompliance.id)).filter(
+        models.StatutoryCompliance.bocw_status == "Not Available"
+    ).scalar()
+
+    # SPCB missing count
+    spcb_pending = db.query(func.count(models.StatutoryCompliance.id)).filter(
+        models.StatutoryCompliance.spcb_status == "Not Available"
+    ).scalar()
+
     return {
         "total_projects_tracked": total_compliance,
         "overall_compliance_percent": round(completion_rate, 1),
         "insurance_renewals_pending": renewals_pending,
-        "clra_missing_count": clra_pending
+        "clra_missing_count": clra_pending,
+        "bocw_missing_count": bocw_pending,
+        "spcb_missing_count": spcb_pending,
     }
 
 @router.get("/p6-approvals/{project_id}")
@@ -107,3 +121,66 @@ def get_p6_approvals(project_id: str, db: Session = Depends(get_db)):
                 break
                 
     return filtered_activities
+
+
+UPLOAD_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../Data/uploads"))
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+
+
+@router.post("/upload")
+async def upload_statutory_excel(file: UploadFile = File(...), db: Session = Depends(get_db)):
+    """Upload an Excel file to refresh statutory / EPC / insurance data.
+
+    The endpoint inspects the filename to decide which tables to refresh:
+      - Contains 'statutory' or 'status' → statutory_compliance
+      - Contains 'bocw' or 'epc'         → epc_statutory_status
+      - Contains 'insurance'             → insurance_policy
+      - Otherwise                        → all three tables
+    """
+    if not file.filename.endswith((".xlsx", ".xls")):
+        raise HTTPException(status_code=400, detail="Only .xlsx / .xls files are accepted.")
+
+    # Save uploaded file
+    dest = os.path.join(UPLOAD_DIR, file.filename)
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    fname_lower = file.filename.lower()
+    total = 0
+
+    try:
+        from scripts.ingest_statutory import (
+            load_sap_mapping,
+            ingest_statutory_compliance,
+            ingest_epc_bocw,
+            ingest_insurance,
+        )
+
+        sap_map = load_sap_mapping()
+
+        if "statutory" in fname_lower or "status" in fname_lower:
+            db.query(models.StatutoryCompliance).delete()
+            db.commit()
+            total += ingest_statutory_compliance(db, sap_map, filepath=dest)
+        elif "bocw" in fname_lower or "epc" in fname_lower:
+            db.query(models.EPCStatutoryStatus).delete()
+            db.commit()
+            total += ingest_epc_bocw(db, sap_map, filepath=dest)
+        elif "insurance" in fname_lower:
+            db.query(models.InsurancePolicy).delete()
+            db.commit()
+            total += ingest_insurance(db, sap_map, filepath=dest)
+        else:
+            # Ambiguous — refresh all three
+            db.query(models.StatutoryCompliance).delete()
+            db.query(models.EPCStatutoryStatus).delete()
+            db.query(models.InsurancePolicy).delete()
+            db.commit()
+            total += ingest_statutory_compliance(db, sap_map, filepath=dest)
+            total += ingest_epc_bocw(db, sap_map, filepath=dest)
+            total += ingest_insurance(db, sap_map, filepath=dest)
+    except Exception as e:
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"Ingestion failed: {e}")
+
+    return {"status": "ok", "records_imported": total, "filename": file.filename}

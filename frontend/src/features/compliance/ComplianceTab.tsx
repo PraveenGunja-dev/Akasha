@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import { Shield, FileText, CheckCircle, AlertTriangle, XCircle, Loader2, Calendar, Clock } from 'lucide-react';
 
 interface ComplianceTabProps {
@@ -175,19 +176,19 @@ export default function ComplianceTab({ projectId }: ComplianceTabProps) {
                     <tr key={idx} className="hover:bg-muted/30 transition-colors">
                       <td className="p-4 font-bold text-foreground">{row.epc_partner || '—'}</td>
                       <td className="p-4">{row.plot || '—'}</td>
-                      <td className="p-4 text-muted-foreground font-medium">{row.bocw_commencement_date ? new Date(row.bocw_commencement_date).toLocaleDateString('en-GB') : '—'}</td>
+                      <td className="p-4 text-muted-foreground font-medium">{row.bocw_commencement_date ? formatDate(row.bocw_commencement_date) : '—'}</td>
                       <td className="p-4">
                         {row.bocw_validity_date ? (
                           <div className="flex items-center gap-2">
                             <span className={`font-semibold ${bocwStatus === 'expired' ? 'text-destructive' : bocwStatus === 'expiring_soon' ? 'text-orange-500' : 'text-foreground'}`}>
-                              {new Date(row.bocw_validity_date).toLocaleDateString('en-GB')}
+                              {formatDate(row.bocw_validity_date)}
                             </span>
                             {bocwStatus === 'expired' && <span title="Expired"><AlertTriangle className="w-3.5 h-3.5 text-destructive" /></span>}
                             {bocwStatus === 'expiring_soon' && <span title="Expiring Soon"><Clock className="w-3.5 h-3.5 text-orange-500" /></span>}
                           </div>
                         ) : '—'}
                       </td>
-                      <td className="p-4 text-primary font-semibold">{row.ftc_date ? new Date(row.ftc_date).toLocaleDateString('en-GB') : '—'}</td>
+                      <td className="p-4 text-primary font-semibold">{row.ftc_date ? formatDate(row.ftc_date) : '—'}</td>
                       <td className="p-4 max-w-[200px] truncate" title={row.clra_license_status}>{row.clra_license_status || '—'}</td>
                       <td className="p-4 max-w-[200px] truncate" title={row.gst_obtained}>{row.gst_obtained || '—'}</td>
                     </tr>
@@ -244,7 +245,7 @@ export default function ComplianceTab({ projectId }: ComplianceTabProps) {
                     </div>
                     <div>
                       <div className={`text-xs uppercase tracking-wider mb-1 ${isExpired ? 'text-destructive/70' : isExpiringSoon ? 'text-orange-500/70' : 'text-muted-foreground'}`}>Expiry Date</div>
-                      <div className={`font-medium ${isExpired ? 'text-destructive font-bold' : isExpiringSoon ? 'text-orange-500 font-bold' : 'text-foreground'}`}>{ins.policy_expiry ? new Date(ins.policy_expiry).toLocaleDateString('en-GB') : '—'}</div>
+                      <div className={`font-medium ${isExpired ? 'text-destructive font-bold' : isExpiringSoon ? 'text-orange-500 font-bold' : 'text-foreground'}`}>{ins.policy_expiry ? formatDate(ins.policy_expiry) : '—'}</div>
                     </div>
                     <div>
                       <div className={`text-xs uppercase tracking-wider mb-1 ${isExpired ? 'text-destructive/70' : isExpiringSoon ? 'text-orange-500/70' : 'text-muted-foreground'}`}>Premium</div>
@@ -297,13 +298,13 @@ export default function ComplianceTab({ projectId }: ComplianceTabProps) {
                         <div className="text-xs font-mono text-muted-foreground mt-0.5">{act.activity_id}</div>
                       </td>
                       <td className="p-4 text-muted-foreground font-medium">
-                        {baselineDate ? new Date(baselineDate).toLocaleDateString('en-GB') : '—'}
+                        {baselineDate ? formatDate(baselineDate) : '—'}
                       </td>
                       <td className="p-4 text-primary font-semibold">
-                        {forecastDate ? new Date(forecastDate).toLocaleDateString('en-GB') : '—'}
+                        {forecastDate ? formatDate(forecastDate) : '—'}
                       </td>
                       <td className="p-4 text-emerald-600 font-semibold">
-                        {actualDate ? new Date(actualDate).toLocaleDateString('en-GB') : (isComplete ? new Date(forecastDate).toLocaleDateString('en-GB') : '—')}
+                        {actualDate ? formatDate(actualDate) : (isComplete ? formatDate(forecastDate) : '—')}
                       </td>
                     </tr>
                   )

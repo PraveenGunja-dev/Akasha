@@ -1,4 +1,5 @@
 import React, { useMemo, useState, useRef, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import ReactECharts from 'echarts-for-react';
 import {
   Activity, Maximize2, Minimize2, ChevronDown, Search, BarChart3,
@@ -57,7 +58,7 @@ export interface ExecProject {
 }
 
 const fmtDate = (d: Date | null) =>
-  d ? d.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+  d ? formatDate(d) : 'N/A';
 const fmtMonth = (d: Date | null) =>
   d ? d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : 'N/A';
 

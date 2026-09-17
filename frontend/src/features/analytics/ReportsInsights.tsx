@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { formatDate } from '../../lib/utils';
 import { 
   FileText, Printer, Download, Share2, Shield, CheckCircle2, 
   AlertTriangle, Clock, TrendingUp, TrendingDown, DollarSign, 
@@ -224,7 +225,7 @@ export default function ReportsInsights({ p6Data, sapData, finDetails, dashboard
           <div className="bg-slate-50 border-t border-slate-200 px-6 py-2.5 flex flex-wrap items-center justify-between text-xs text-slate-600 gap-2">
             <div className="flex items-center gap-4">
               <span className="font-semibold text-slate-800">
-                DATE: <span className="font-mono text-slate-900">{new Date().toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                DATE: <span className="font-mono text-slate-900">{formatDate(new Date())}</span>
               </span>
               <span className="text-slate-300">|</span>
               <span>

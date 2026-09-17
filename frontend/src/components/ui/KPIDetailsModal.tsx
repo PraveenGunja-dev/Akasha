@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
+import { formatDate } from '../../lib/utils';
 import ReactDOM from 'react-dom';
 import { X, Layers, BarChart2, Target, AlertTriangle, Activity, Briefcase, CheckCircle2, ChevronRight, Hash, Shield } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -180,7 +181,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
 
     const mapItem = (p: any, value: string, sub: string) => {
       const codDateStr = p.p6?.planned_finish_date || p.p6?.scheduled_finish_date || p.p6?.finish_date;
-      const cod = codDateStr ? new Date(codDateStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+      const cod = codDateStr ? formatDate(codDateStr) : 'N/A';
       let progress = 0;
       if (typeof p.p6?.progress === 'string' && p.p6.progress.includes('%')) {
         progress = parseFloat(p.p6.progress.replace('%', ''));
@@ -229,7 +230,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
       }
 
       const baselineStr = p.p6?.baseline_finish_date;
-      const baseline = baselineStr ? new Date(baselineStr).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : 'N/A';
+      const baseline = baselineStr ? formatDate(baselineStr) : 'N/A';
 
       return {
         id: p.p6?.id || p.project_name,

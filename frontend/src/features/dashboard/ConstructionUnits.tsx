@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { formatDate } from '../../lib/utils';
 import ReactECharts from 'echarts-for-react';
 import { CheckCircle2, CircleDot, Circle, Zap, AlertTriangle, Sparkles } from 'lucide-react';
 import { cx } from '../../components/ui/primitives/cx';
@@ -90,7 +91,7 @@ const stageOf = (u: Unit): StageKey => {
 };
 
 const fmt = (iso: string | null | undefined) =>
-  iso ? new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: '2-digit' }) : '—';
+  iso ? formatDate(iso) : '—';
 const fmtMonth = (iso: string | null | undefined) =>
   iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : '—';
 

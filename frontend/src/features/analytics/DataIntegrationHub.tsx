@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { formatDate } from '../../lib/utils';
 import { createPortal } from 'react-dom';
 import { formatProjectName } from '../../lib/projectName';
 import { 
@@ -550,19 +551,19 @@ export default function DataIntegrationHub() {
                         </div>
                         <div className="flex justify-between py-1 border-b border-border/40">
                           <span className="text-muted-foreground">Start Date</span>
-                          <span>{editingProject.p6.start_date ? new Date(editingProject.p6.start_date).toLocaleDateString() : 'N/A'}</span>
+                          <span>{editingProject.p6.start_date ? formatDate(editingProject.p6.start_date) : 'N/A'}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-border/40">
                           <span className="text-muted-foreground">Finish Date</span>
-                          <span>{editingProject.p6.finish_date ? new Date(editingProject.p6.finish_date).toLocaleDateString() : 'N/A'}</span>
+                          <span>{editingProject.p6.finish_date ? formatDate(editingProject.p6.finish_date) : 'N/A'}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-border/40">
                           <span className="text-muted-foreground">Planned Start</span>
-                          <span>{editingProject.p6.planned_start_date ? new Date(editingProject.p6.planned_start_date).toLocaleDateString() : 'N/A'}</span>
+                          <span>{editingProject.p6.planned_start_date ? formatDate(editingProject.p6.planned_start_date) : 'N/A'}</span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-border/40">
                           <span className="text-muted-foreground">Scheduled Finish</span>
-                          <span>{editingProject.p6.scheduled_finish_date ? new Date(editingProject.p6.scheduled_finish_date).toLocaleDateString() : 'N/A'}</span>
+                          <span>{editingProject.p6.scheduled_finish_date ? formatDate(editingProject.p6.scheduled_finish_date) : 'N/A'}</span>
                         </div>
                       </div>
                     )}
