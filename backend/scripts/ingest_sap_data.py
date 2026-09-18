@@ -10,6 +10,7 @@ sys.path.append(backend_dir)
 
 import models
 from database import SessionLocal
+from sqlalchemy import func
 
 # The SAP extracts land here — both the local Data/NEW31 drop and the SharePoint
 # sync write into it. Names carry copy suffixes ("ZPSPS0071", "ME2J 2") depending
@@ -24,6 +25,57 @@ SAP_FILE_PATTERNS = {
     "mb52": re.compile(r"^MB52_Khavda_Live_Inventry.*\.xlsx?$", re.I),
     "mb51": re.compile(r"^MB51_Khavda_Mat_Consumption.*\.xlsx?$", re.I),
 }
+
+# Everything the ingest reads from ME2J. The first line is what mt_poamount
+# borrows per PO; the rest feeds mt_me2j_po (ownership and lifecycle).
+ME2J_COLUMNS = [
+    'Purchasing Document', 'Buyer Name', 'Document Date', 'Storage Location', 'Material', 'Plant', 'Currency', 'Delivery Completed', 'WBS Element',
+    'Name of Vendor', 'Buyer Email ID', 'PR Creator Name', 'PR First Release Date', 'PO First Time Full Release Date',
+    'PO Latest Full Release Date', 'Release indicator', 'Release status', 'Validity Period End', 'Amendment Number',
+    'Amendment Date', 'Purchasing Doc. Type', 'Incoterms', 'Reason Description',
+]
+
+
+def ingest_me2j_po(db, df_me2j):
+    """Replace mt_me2j_po from a PO-deduplicated ME2J frame. Same transaction
+    pattern as the PO table: delete and insert together, commit once."""
+    from auto_migrate import auto_upgrade_schema
+    auto_upgrade_schema()
+    rows = []
+    for _, r in df_me2j.iterrows():
+        po = safe_sap_id(r.get('Purchasing Document', ''))
+        if not po or po.lower() == 'nan':
+            continue
+        amend = pd.to_numeric(r.get('Amendment Number'), errors='coerce')
+        rows.append(models.MTME2JPO(
+            purchasing_document=po,
+            vendor_name=safe_str(r.get('Name of Vendor', '')) or None,
+            buyer_name=safe_str(r.get('Buyer Name', '')) or None,
+            buyer_email=safe_str(r.get('Buyer Email ID', '')) or None,
+            pr_creator=safe_str(r.get('PR Creator Name', '')) or None,
+            pr_first_release=safe_date(r.get('PR First Release Date')),
+            po_first_release=safe_date(r.get('PO First Time Full Release Date')),
+            po_latest_release=safe_date(r.get('PO Latest Full Release Date')),
+            release_indicator=safe_str(r.get('Release indicator', '')) or None,
+            release_status=safe_str(r.get('Release status', '')) or None,
+            validity_end=safe_date(r.get('Validity Period End')),
+            amendment_no=int(amend) if pd.notna(amend) else None,
+            amendment_date=safe_date(r.get('Amendment Date')),
+            doc_type=safe_str(r.get('Purchasing Doc. Type', '')) or None,
+            incoterms=safe_str(r.get('Incoterms', '')) or None,
+            reason=safe_str(r.get('Reason Description', '')) or None,
+            document_date=safe_date(r.get('Document Date')),
+        ))
+    try:
+        db.query(models.MTME2JPO).delete()
+        for i in range(0, len(rows), 5000):
+            db.add_all(rows[i:i + 5000])
+        db.commit()
+        print(f"  Inserted {len(rows)} ME2J PO ownership rows.")
+    except Exception:
+        db.rollback()
+        raise
+
 
 def find_sap_file(key: str, data_dir: str = SAP_DATA_DIR):
     """Newest file in data_dir matching the extract's pattern, or None."""
@@ -151,13 +203,19 @@ def match_wbs_to_master(wbs_val, wbs_map):
     return None
 
 
-def ingest_data(files=None):
+def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
     """files: optional {key: path} overriding the newest-file lookup, e.g.
-    {'zsps': '.../ZPSPS0071.xlsx'} to load a specific extract."""
+    {'zsps': '.../ZPSPS0071.xlsx'} to load a specific extract.
+
+    max_drop_pct / allow_drop guard the PO table: see services/sync_guard.py.
+    A collapsed extract raises before anything is deleted, so the previous
+    (good) data stays live and the sync is logged as failed, not silently
+    accepted."""
     files = files or {}
     pick = lambda key, d: files.get(key) or find_sap_file(key, d)
     from auto_migrate import auto_upgrade_schema
     auto_upgrade_schema()
+    from services.sync_guard import check_snapshot
     db = SessionLocal()
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
     master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
@@ -175,13 +233,15 @@ def ingest_data(files=None):
     
     data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "Data", "NEW31")
     
-    # Pre-clear existing data
-    print("Clearing old SAP data...")
+    # MTPOAmount / MTEInvoicePOLookup are no longer pre-cleared here: their
+    # delete now happens inside the ZSPS block's own transaction, guarded and
+    # atomic with the insert. MTInventory / MTMaterialDocument keep the
+    # simple clear-then-load pattern for now (see services/sync_guard.py for
+    # why a guard was added to the PO table specifically).
+    print("Clearing old inventory/consumption data...")
     try:
         db.query(models.MTInventory).delete()
-        db.query(models.MTPOAmount).delete()
         db.query(models.MTMaterialDocument).delete()
-        db.query(models.MTEInvoicePOLookup).delete()
         db.commit()
     except Exception as e:
         db.rollback()
@@ -277,12 +337,9 @@ def ingest_data(files=None):
             df_me2j = None
             if me2j_path and os.path.exists(me2j_path):
                 print("  Loading ME2J for supplementary PO data (Buyer Name, Date, etc.)...")
-                df_me2j = pd.read_excel(me2j_path, usecols=lambda c: c in [
-                    'Purchasing Document', 'Buyer Name', 'Document Date', 
-                    'Storage Location', 'Material', 'Plant', 'Currency', 'Delivery Completed',
-                    'WBS Element'
-                ])
+                df_me2j = pd.read_excel(me2j_path, usecols=lambda c: c in ME2J_COLUMNS)
                 df_me2j = df_me2j.drop_duplicates(subset=['Purchasing Document'])
+                ingest_me2j_po(db, df_me2j)
                 # Convert to dict for fast lookup
                 po_lookup = df_me2j.set_index('Purchasing Document').to_dict('index')
                 print(f"  Loaded {len(po_lookup)} unique POs from ME2J.")
@@ -359,17 +416,42 @@ def ingest_data(files=None):
                     doc_type=safe_str(row.get('Type', '')) or None,
                 )
                 po_amounts.append(po)
-            
-            # Batch insert
+
+            # --- Guard: is this a plausible successor to what is live now? ---
+            # The 20 Aug -> 16 Sep incident (BESS cluster silently dropped,
+            # Rs 11,850 Cr / 307 POs) is exactly what this catches. Checked
+            # before any delete, so a collapsed extract leaves old data intact.
+            new_count = len({po.purchasing_document for po in po_amounts})
+            new_value_cr = sum(po.net_order_value_inr or 0 for po in po_amounts) / 10000000
+            old_row = db.query(
+                func.count(func.distinct(models.MTPOAmount.purchasing_document)),
+                func.sum(models.MTPOAmount.net_order_value_inr),
+            ).filter(models.MTPOAmount.doc_type == 'POrd').first()
+            old_count = old_row[0] or 0
+            old_value_cr = (old_row[1] or 0) / 10000000
+            guard = check_snapshot("ZSPS PO", old_count, new_count, old_value_cr, new_value_cr, max_drop_pct)
+            print(f"  Snapshot check: live {old_count} POs / Rs {old_value_cr:,.0f} Cr -> "
+                  f"new {new_count} POs / Rs {new_value_cr:,.0f} Cr")
+            if not guard.ok and not allow_drop:
+                raise RuntimeError(guard.reason)
+            if not guard.ok and allow_drop:
+                print(f"  WARNING: {guard.reason}")
+                print("  Proceeding anyway (allow_drop=True).")
+
+            # Delete + insert in the SAME transaction: if anything below
+            # raises, the rollback restores the pre-existing PO data instead
+            # of leaving the table cleared.
+            db.query(models.MTPOAmount).delete()
+
             BATCH_SIZE = 5000
             total_inserted = 0
             for i in range(0, len(po_amounts), BATCH_SIZE):
                 batch = po_amounts[i:i + BATCH_SIZE]
                 db.add_all(batch)
-                db.commit()
                 total_inserted += len(batch)
-                print(f"  Inserted batch {i // BATCH_SIZE + 1}: {len(batch)} records (total: {total_inserted})")
-            
+            db.commit()
+            print(f"  Inserted {total_inserted} ZSPS PO records (single transaction).")
+
             print(f"  ZSPS Summary:")
             print(f"    Inserted: {total_inserted}")
             print(f"    Skipped (no WBS): {skipped_no_wbs}")
@@ -380,6 +462,7 @@ def ingest_data(files=None):
             print(f"Error processing ZSPS: {e}")
             import traceback
             traceback.print_exc()
+            raise
             
         # ================================================================
         # Populate MTEInvoicePOLookup from BOTH ZSPS and ME2J
@@ -407,12 +490,13 @@ def ingest_data(files=None):
                 models.MTEInvoicePOLookup(purchasing_document=po, wbs_element=wbs)
                 for po, wbs in lookup_records.items()
             ]
-            
-            # Batch insert
+
+            # Same transaction as the delete, same reasoning as the PO table above.
+            db.query(models.MTEInvoicePOLookup).delete()
             for i in range(0, len(lookup_inserts), BATCH_SIZE):
                 batch = lookup_inserts[i:i + BATCH_SIZE]
                 db.add_all(batch)
-                db.commit()
+            db.commit()
                 
             print(f"  Inserted {len(lookup_records)} unique PO -> WBS lookups for E-Invoice Mapping.")
         except Exception as e:
@@ -499,18 +583,23 @@ if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="Refresh SAP data. Default: pull today's extracts from SharePoint, then ingest.")
     ap.add_argument("--local", action="store_true", help="skip SharePoint; ingest whatever is already in Data/NEW31")
     ap.add_argument("--zsps", metavar="PATH", help="with --local: use this ZPSPS007 file instead of the newest one")
+    ap.add_argument("--max-drop-pct", type=float, default=15.0, metavar="PCT",
+                     help="refuse the replace if PO count or value falls more than this vs. what is live now (default 15)")
+    ap.add_argument("--allow-drop", action="store_true",
+                     help="proceed even if the new extract collapses vs. current data (use when the drop is real, e.g. a portfolio closed out)")
     args = ap.parse_args()
     if args.local:
         from database import SessionLocal
         from services.sap_sync import sync_sap_from_local
-        r = sync_sap_from_local(SessionLocal(), zsps_path=args.zsps)
+        r = sync_sap_from_local(SessionLocal(), zsps_path=args.zsps,
+                                 max_drop_pct=args.max_drop_pct, allow_drop=args.allow_drop)
         print()
         print(r['message'])
         print(f"Data as on {r['data_as_on']}  |  files: {', '.join(f['name'] for f in r['files'])}")
     else:
         from database import SessionLocal
         from services.sap_sync import sync_sap_from_sharepoint
-        r = sync_sap_from_sharepoint(SessionLocal())
+        r = sync_sap_from_sharepoint(SessionLocal(), max_drop_pct=args.max_drop_pct, allow_drop=args.allow_drop)
         print()
         print(r['message'])
         print(f"Data as on {r['data_as_on']}  |  files: {', '.join(f['name'] for f in r['files'])}")

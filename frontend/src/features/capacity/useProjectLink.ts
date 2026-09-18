@@ -13,7 +13,7 @@ import { useNavigate } from 'react-router-dom';
    prompted the click, e.g. the SAP tab from a PO figure.
    ═══════════════════════════════════════════════════════════════════════════ */
 
-export type ProjectTab = 'overview' | 'intelligence' | 'sap' | 'schedule' | 'quality' | 'transmission';
+export type ProjectTab = 'overview' | 'intelligence' | 'sap' | 'schedule' | 'quality' | 'transmission' | 'installation';
 
 export function useProjectLink() {
   const navigate = useNavigate();

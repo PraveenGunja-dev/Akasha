@@ -9,7 +9,7 @@ import os
 from database import engine
 
 # Import Routers
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -86,6 +86,12 @@ app.include_router(v1.router)
 app.include_router(v1_sources.router)
 app.include_router(statutory.router)
 app.include_router(sap.router)
+app.include_router(integrations.router)
+
+# Background sync scheduler — feeds refresh themselves on their own interval.
+# Starts once per worker process; AKASHA_SCHEDULER=0 disables it.
+from services import scheduler as _scheduler
+_scheduler.start()
 
 # Customize OpenAPI to only show /api/v1 endpoints in the Swagger UI
 def custom_openapi():

@@ -2,8 +2,7 @@ import React, { useState } from 'react';
 import {
   Home, Command, Network, MessageSquare, FileText, Activity,
   Settings, Zap, BarChart2, Share2, Database,
-  Calendar, Brain, CheckCircle
-} from 'lucide-react';
+  Calendar, Brain, CheckCircle, HardHat } from 'lucide-react';
 import { Sidebar, SidebarBody, SidebarLink, SIDEBAR_TRANSITION } from '../ui/sidebar';
 import { motion } from 'framer-motion';
 
@@ -23,6 +22,7 @@ export default function LeftSidebar({ activeTab, setActiveTab, onCloseMobile }: 
       items: [
         { id: 'overview', label: 'Overview', icon: <Home /> },
         { id: 'capacity_overview', label: 'Capacity Overview', icon: <BarChart2 /> },
+        { id: 'installation_planner', label: 'Installation Planner', icon: <HardHat /> },
         { id: 'project360', label: 'Project 360', icon: <Command /> },
       ]
     },

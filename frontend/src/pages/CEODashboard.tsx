@@ -16,8 +16,10 @@ import MaterialIntelligence from '../features/analytics/MaterialIntelligence';
 import RiskCommandCenter from '../features/dashboard/RiskCommandCenter';
 import PredictiveAnalytics from '../features/dashboard/PredictiveAnalytics';
 import DecisionCenter from '../features/dashboard/DecisionCenter';
+import IntegrationsStatus from '../features/admin/IntegrationsStatus';
 import ReportsInsights from '../features/analytics/ReportsInsights';
 import CapacityOverviewPage from '../features/capacity/CapacityOverviewPage';
+import InstallationPlannerPage from '../features/planner/InstallationPlannerPage';
 // Phase 6 AI Modules
 import AICopilot from '../features/chatbot/AICopilot';
 import ExecutiveBriefing from '../features/dashboard/ExecutiveBriefing';
@@ -226,7 +228,7 @@ export default function CEODashboard() {
   // To cleanly track which modules are implemented
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
-    'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview',
+    'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview', 'installation_planner',
     'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
     'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr', 'approvals'
   ];
@@ -324,10 +326,16 @@ export default function CEODashboard() {
                     {activeTab === 'transmission_data' && <TransmissionDataViewer dashboardData={dashboardData} />}
                     {activeTab === 'risk' && <RiskCommandCenter p6Data={p6Data} finDetails={finDetails} />}
                     {activeTab === 'predictive' && <PredictiveAnalytics p6Data={p6Data} />}
-                    {activeTab === 'admin' && <DecisionCenter p6Data={p6Data} finDetails={finDetails} />}
+                    {activeTab === 'admin' && (
+                      <div className="flex w-full flex-col gap-6">
+                        <IntegrationsStatus />
+                        <DecisionCenter p6Data={p6Data} finDetails={finDetails} />
+                      </div>
+                    )}
                     {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} briefing={briefing} />}
                     
                     {activeTab === 'capacity_overview' && <CapacityOverviewPage />}
+                    {activeTab === 'installation_planner' && <InstallationPlannerPage />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}

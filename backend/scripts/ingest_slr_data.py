@@ -8,6 +8,7 @@ backend_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(backend_dir)
 
 from database import SessionLocal, engine
+from sqlalchemy import func
 import models
 
 def build_wbs_mapping(master_path):
@@ -146,11 +147,13 @@ def prepare_slr_frame(file_path, master_path):
     return agg_df
 
 
-def ingest_slr(file_path=None):
+def ingest_slr(file_path=None, max_drop_pct=15.0, allow_drop=False):
     """Replace mt_slr_data from the newest ZPSPS007 extract — the same file the
     SharePoint sync delivers for the PO book of record. The table is cleared
-    only after the new frame has been built, so a bad file cannot empty it."""
+    only after the new frame has been built and passed the collapse guard
+    (services/sync_guard.py), so a bad or scope-narrowed file cannot empty it."""
     from scripts.ingest_sap_data import SAP_DATA_DIR, find_sap_file
+    from services.sync_guard import check_snapshot
     data_dir = SAP_DATA_DIR
     file_path = file_path or find_sap_file("zsps", data_dir)
     master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
@@ -183,6 +186,22 @@ def ingest_slr(file_path=None):
     models.MTSLRData.__table__.create(bind=engine, checkfirst=True)
     db = SessionLocal()
     try:
+        new_count = len({r.po_document for r in slr_records if r.type == 'POrd'})
+        new_value_cr = sum((r.actual_amount or 0) + (r.commitment_amount or 0)
+                            for r in slr_records if r.type == 'POrd') / 10000000
+        old_row = db.query(func.count(func.distinct(models.MTSLRData.po_document)),
+                            func.sum(models.MTSLRData.actual_amount + models.MTSLRData.commitment_amount)) \
+            .filter(models.MTSLRData.type == 'POrd').first()
+        old_count = old_row[0] or 0
+        old_value_cr = (old_row[1] or 0) / 10000000
+        guard = check_snapshot("SLR POrd", old_count, new_count, old_value_cr, new_value_cr, max_drop_pct)
+        print(f"  Snapshot check: live {old_count} POs / Rs {old_value_cr:,.0f} Cr -> "
+              f"new {new_count} POs / Rs {new_value_cr:,.0f} Cr")
+        if not guard.ok and not allow_drop:
+            raise RuntimeError(guard.reason)
+        if not guard.ok and allow_drop:
+            print(f"  WARNING: {guard.reason}\n  Proceeding anyway (allow_drop=True).")
+
         print(f"Replacing SLR data with {len(slr_records)} records from {os.path.basename(file_path)}...")
         db.query(models.MTSLRData).delete()
         BATCH_SIZE = 5000

@@ -20,14 +20,17 @@ def sync_sharepoint_data(db: Session = Depends(get_db)):
 
 @router.post("/p6/sync")
 def sync_p6_data(db: Session = Depends(get_db)):
+    from services.sync_log_util import run_logged
     p6 = P6Service()
-    try:
+    def _do():
         result = p6.full_sync(db)
         return {
             "status": "success",
             "message": f"Synced {result['projects_synced']} projects and {result['baselines_synced']} baselines",
             **result
         }
+    try:
+        return run_logged(db, "p6", _do)
     except Exception as e:
         logger.error(f"P6 sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"P6 sync failed: {str(e)}")
@@ -66,21 +69,21 @@ def sync_tc_project(project_id: str):
         raise HTTPException(status_code=500, detail=f"Transmission sync failed: {str(e)}")
 
 @router.post("/mapping/sync")
-def sync_mapping_data():
+def sync_mapping_data(db: Session = Depends(get_db)):
     from scripts.ingest_mapping import ingest_mapping
+    from services.sync_log_util import run_logged
     try:
-        ingest_mapping()
-        return {"status": "success", "message": "Synced Mappings"}
+        return run_logged(db, "mapping", lambda: (ingest_mapping(), {"status": "success", "message": "Synced Mappings"})[1])
     except Exception as e:
         logger.error(f"Mapping sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Mapping sync failed: {str(e)}")
 
 @router.post("/capacity/sync")
-def sync_capacity_data():
+def sync_capacity_data(db: Session = Depends(get_db)):
     from scripts.sync_capacity_milestones import fetch_capacity_milestones
+    from services.sync_log_util import run_logged
     try:
-        fetch_capacity_milestones()
-        return {"status": "success", "message": "Synced Capacity Milestones"}
+        return run_logged(db, "capacity", lambda: (fetch_capacity_milestones(), {"status": "success", "message": "Synced Capacity Milestones"})[1])
     except Exception as e:
         logger.error(f"Capacity sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Capacity sync failed: {str(e)}")
@@ -89,24 +92,27 @@ def sync_capacity_data():
 def sync_pulse_data(db: Session = Depends(get_db)):
     """Sync Non-Conformances and RFIs from Pulse quality system."""
     from services.pulse_service import PulseService
-    try:
-        service = PulseService()
+    from services.sync_log_util import run_logged
+    service = PulseService()
+    def _do():
         result = service.full_sync(db)
         return {
             "status": "success",
             "message": f"Synced {result['ncs']} NCs and {result['rfis']} RFIs from Pulse",
             **result
         }
+    try:
+        return run_logged(db, "pulse", _do)
     except Exception as e:
         logger.error(f"Pulse sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Pulse sync failed: {str(e)}")
 
 @router.post("/einvoice/sync")
-def sync_einvoice_data():
+def sync_einvoice_data(db: Session = Depends(get_db)):
     from scripts.sync_einvoice_live import sync_einvoice_live
+    from services.sync_log_util import run_logged
     try:
-        sync_einvoice_live()
-        return {"status": "success", "message": "Synced E-Invoice Data"}
+        return run_logged(db, "einvoice", lambda: (sync_einvoice_live(), {"status": "success", "message": "Synced E-Invoice Data"})[1])
     except Exception as e:
         logger.error(f"E-Invoice sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"E-Invoice sync failed: {str(e)}")

@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { formatDate } from '../../lib/utils';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
   Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, IndianRupee, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
-  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt
+  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt, HardHat
 } from 'lucide-react';
+import InstallationProcurementTab from './InstallationProcurementTab';
 import { ProjectWBS } from './ProjectWBS';
 import QualityProjectTab from '../quality/QualityProjectTab';
 import ProjectIntelligence from '../intelligence/ProjectIntelligence';
@@ -352,7 +353,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [detail, setDetail] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'intelligence' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality' | 'approvals'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'intelligence' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality' | 'approvals' | 'installation'>('overview');
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
@@ -423,8 +424,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       .finally(() => setSlrLoading(false));
   }, [projectId, sapFilter]);
 
+  const [searchParams] = useSearchParams();
   useEffect(() => {
-    setActiveTab('overview');
+    // Deep link: /project/:id?tab=installation lands on that tab. 'schedule' is
+    // the public name the rest of the app uses for the P6 tab.
+    const t = searchParams.get('tab');
+    const map: Record<string, typeof activeTab> = { schedule: 'p6', p6: 'p6', sap: 'sap', overview: 'overview', intelligence: 'intelligence',
+      einvoice: 'einvoice', transmission: 'transmission', quality: 'quality', approvals: 'approvals', installation: 'installation' };
+    setActiveTab((t && map[t]) || 'overview');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [projectId]);
 
   useEffect(() => {
@@ -1332,6 +1340,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <TabBtn active={activeTab === 'sap'} label="SAP intelligence" icon={Database} onClick={() => setActiveTab('sap')} />
           <TabBtn active={activeTab === 'einvoice'} label="E-Invoice" icon={Receipt} onClick={() => setActiveTab('einvoice')} />
           <TabBtn active={activeTab === 'p6'} label="Schedule intelligence" icon={Layers} onClick={() => setActiveTab('p6')} />
+          <TabBtn active={activeTab === 'installation'} label="Installation & procurement" icon={HardHat} onClick={() => setActiveTab('installation')} />
           <TabBtn active={activeTab === 'transmission'} label="Transmission" icon={Network} onClick={() => setActiveTab('transmission')} />
           <TabBtn active={activeTab === 'quality'} label="Quality" icon={Shield} onClick={() => setActiveTab('quality')} />
           <TabBtn active={activeTab === 'approvals'} label="Approval" icon={CheckCircle} onClick={() => setActiveTab('approvals')} />
@@ -1428,6 +1437,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           {activeTab === 'approvals' && (
             <div className="animate-in fade-in duration-300">
               <ComplianceTab projectId={p.projectId} />
+            </div>
+          )}
+
+          {activeTab === 'installation' && (
+            <div className="animate-in fade-in duration-300">
+              <InstallationProcurementTab projectId={p.projectId} detail={detail} />
             </div>
           )}
 

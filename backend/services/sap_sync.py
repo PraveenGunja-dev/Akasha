@@ -10,10 +10,15 @@ from sqlalchemy.orm import Session
 logger = logging.getLogger(__name__)
 
 
-def sync_sap_from_local(db: Session, zsps_path: str | None = None) -> dict:
+def sync_sap_from_local(db: Session, zsps_path: str | None = None,
+                         max_drop_pct: float = 15.0, allow_drop: bool = False) -> dict:
     """Ingest from files already in Data/NEW31 — the newest of each, or a
     specific ZPSPS007 via zsps_path. Logged as source='local' so the SAP
-    header shows the real file date and never claims a SharePoint pull."""
+    header shows the real file date and never claims a SharePoint pull.
+
+    max_drop_pct / allow_drop: see services/sync_guard.py. A collapsed
+    extract raises here and is logged as a failed run, never partially
+    applied."""
     from auto_migrate import auto_upgrade_schema
     auto_upgrade_schema()
 
@@ -39,8 +44,8 @@ def sync_sap_from_local(db: Session, zsps_path: str | None = None) -> dict:
         db.commit()
 
     try:
-        ingest_data(files={"zsps": paths["zsps"]})
-        slr_rows = ingest_slr(file_path=paths["zsps"])
+        ingest_data(files={"zsps": paths["zsps"]}, max_drop_pct=max_drop_pct, allow_drop=allow_drop)
+        slr_rows = ingest_slr(file_path=paths["zsps"], max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         from routers.sap import _CACHE as sap_cache
         sap_cache.clear()
 
@@ -57,7 +62,11 @@ def sync_sap_from_local(db: Session, zsps_path: str | None = None) -> dict:
         raise
 
 
-def sync_sap_from_sharepoint(db: Session) -> dict:
+def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop: bool = False) -> dict:
+    """max_drop_pct / allow_drop: see services/sync_guard.py. If the bot's
+    export narrows in scope again, this refuses the replace and logs a
+    failed run with the before/after numbers, instead of quietly serving
+    the smaller figure — the exact gap the BESS-drop incident exposed."""
     # The script path never goes through run.py, so a checkout that gained a
     # column or table (doc_type, sync_log) must upgrade its own schema first.
     from auto_migrate import auto_upgrade_schema
@@ -92,9 +101,9 @@ def sync_sap_from_sharepoint(db: Session) -> dict:
             sp.download_file(f["download_url"], os.path.join(SAP_DATA_DIR, f["name"]))
             downloaded.append({"name": f["name"], "modified": f.get("modified"), "size_mb": round((f.get("size") or 0) / 1e6, 1)})
 
-        ingest_data()
+        ingest_data(max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         # SLR is the same ZPSPS007 extract through its own filters, so it refreshes with it.
-        slr_rows = ingest_slr()
+        slr_rows = ingest_slr(max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         # Prefix index, filter facets and insights were built on the old tables.
         from routers.sap import _CACHE as sap_cache
         sap_cache.clear()

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from typing import List, Dict, Any, Optional
 import json
 import time
@@ -1443,3 +1443,365 @@ def get_project_slr_data(
         "data": result_data
     }
 
+
+
+@router.get("/api/projects/{mapping_id}/installation-progress")
+def get_project_installation_progress(mapping_id: str, db: Session = Depends(get_db)):
+    """Module installation for one project, planned vs completed, by month.
+
+    Everything here is a direct read of P6, not a calculation:
+      - status comes from p6_activity.status (Completed / In Progress / Not
+        Started), which P6 itself maintains;
+      - the plan line buckets planned_finish_date, the actual line buckets
+        actual_finish_date of Completed activities — both real P6 dates.
+    Block identity lives in the activity name ("Block-04 - Module
+    Installation"), not in wbs_code (which is '1' on every row), so the
+    activity is matched on its name, the same convention the rest of the P6
+    code in this app relies on.
+
+    Wind / BESS / transmission-only projects have no module-installation
+    activities at all; they get not_applicable=True rather than an empty
+    chart that would read as "nothing installed yet".
+    """
+    m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == mapping_id).first()
+    if not m:
+        return {"error": "Project not found"}
+    p6_rows = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).all()
+    if not p6_rows:
+        return {"not_applicable": True, "reason": "No P6 project mapped to this project."}
+    p6_proj = p6_rows[0]
+
+    A = models.P6Activity
+    # All P6 objects that share this project id (a re-sync can create a second one).
+    scope = [A.project_object_id.in_([r.p6_object_id for r in p6_rows]), A.name.ilike("%module installation%")]
+
+    by_status = dict(db.query(A.status, func.count(A.id)).filter(*scope).group_by(A.status).all())
+    planned = sum(by_status.values())
+    if planned == 0:
+        return {"not_applicable": True,
+                "reason": "This project has no module-installation activities in P6 (wind, BESS or transmission scope)."}
+    completed = by_status.get("Completed", 0)
+    in_progress = by_status.get("In Progress", 0)
+    not_started = by_status.get("Not Started", 0)
+
+    month = lambda col: func.to_char(func.date_trunc("month", col), "YYYY-MM")
+    plan_rows = db.query(month(A.planned_finish_date), func.count(A.id)) \
+        .filter(*scope, A.planned_finish_date.isnot(None)).group_by(month(A.planned_finish_date)).all()
+    baseline_rows = db.query(month(A.baseline_finish_date), func.count(A.id)) \
+        .filter(*scope, A.baseline_finish_date.isnot(None)).group_by(month(A.baseline_finish_date)).all()
+    actual_rows = db.query(month(A.actual_finish_date), func.count(A.id)) \
+        .filter(*scope, A.status == "Completed", A.actual_finish_date.isnot(None)) \
+        .group_by(month(A.actual_finish_date)).all()
+
+    buckets: Dict[str, dict] = {}
+    def get(k):
+        return buckets.setdefault(k, {"month": k, "planned": 0, "baseline": 0, "completed": 0})
+    for k, n in plan_rows: get(k)["planned"] = n
+    for k, n in baseline_rows: get(k)["baseline"] = n
+    for k, n in actual_rows: get(k)["completed"] = n
+    series = [buckets[k] for k in sorted(buckets)]
+
+    # Cumulative view for the S-curve; running totals over the same buckets.
+    cp = cb = cc = 0
+    for r in series:
+        cp += r["planned"]; cb += r["baseline"]; cc += r["completed"]
+        r["planned_cum"], r["baseline_cum"], r["completed_cum"] = cp, cb, cc
+
+    return {
+        "not_applicable": False,
+        "p6_project_id": p6_proj.project_id,
+        "p6_project_name": p6_proj.name,
+        "summary": {
+            "planned": planned, "completed": completed, "in_progress": in_progress,
+            "not_started": not_started, "remaining": in_progress + not_started,
+            "pct_complete": round(completed / planned * 100, 1),
+            "basis": "count of P6 'Module Installation' activities by p6_activity.status",
+        },
+        "monthly": series,
+    }
+
+
+@router.get("/installation-planner")
+def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[str] = None, db: Session = Depends(get_db)):
+    """Portfolio-wide module installation: every scoped project by month,
+    plan vs completed, plus the SAP value and ECOD/TC context a planner needs
+    beside it. Same scoping as the dashboard summary (portfolio/phase from the
+    top bar). Four grouped queries in total — no per-project round trips.
+
+    'behind' is defined once here: cumulative planned through the current
+    month minus cumulative completed to date, floored at 0, in blocks.
+    """
+    from routers.sap import WBS_PREFIX
+
+    query = db.query(models.ProjectMapping)
+    if portfolio and portfolio.lower() != "all portfolios":
+        for part in portfolio.replace('+', ' ').strip().lower().split():
+            query = query.filter(
+                (func.lower(models.ProjectMapping.cluster).contains(part)) |
+                (func.lower(models.ProjectMapping.category).contains(part)) |
+                (func.lower(models.ProjectMapping.project).contains(part)))
+    if phase and phase != "ALL":
+        query = query.filter(models.ProjectMapping.is_commissioned == (phase == "Commissioned"))
+    # The mapping sync leaves duplicate project_ids (72 rows, 64 ids); keep one
+    # per id, preferring the row that carries WBS codes — same rule as project_service.
+    seen: Dict[str, models.ProjectMapping] = {}
+    for m in query.all():
+        if "demo" in (m.project_name_from_p6 or m.project or "").lower():
+            continue
+        pid = m.project_id or ""
+        cur = seen.get(pid)
+        score = lambda x: sum(1 for w in (x.spv_plant_code, x.agel, x.age6l) if w) + (1 if x.cluster else 0)
+        if cur is None or score(m) > score(cur):
+            seen[pid] = m
+    mappings = list(seen.values())
+
+    # A P6 project id can map to more than one P6 object (the 12-Sep sync added
+    # a second object for BAIYA and BANDHA). Activities are aggregated across
+    # all of them; the newest object supplies the project-level dates.
+    p6_objs: Dict[str, list] = {}
+    for p in db.query(models.P6Project).order_by(models.P6Project.data_date.asc().nullsfirst()).all():
+        p6_objs.setdefault(p.project_id, []).append(p)
+    scoped = [(m, p6_objs.get(m.project_id) or []) for m in mappings]
+    obj_ids = [o.p6_object_id for _, ps in scoped for o in ps]
+
+    A = models.P6Activity
+    base = [A.name.ilike("%module installation%"), A.project_object_id.in_(obj_ids or [-1])]
+    month = lambda col: func.to_char(func.date_trunc("month", col), "YYYY-MM")
+
+    by_status = {}
+    monthly: Dict[int, Dict[str, dict]] = {}
+    
+    def bucket(oid, k):
+        return monthly.setdefault(oid, {}).setdefault(k, {"planned": 0, "baseline": 0, "completed": 0, "activities": []})
+
+    def fmt(d):
+        return d.strftime("%Y-%m-%d") if d else None
+
+    for act in db.query(A).filter(*base).all():
+        oid = act.project_object_id
+        st = act.status
+        by_status.setdefault(oid, {})[st] = by_status.setdefault(oid, {}).get(st, 0) + 1
+        
+        item = {
+            "name": act.name,
+            "status": st,
+            "planned": fmt(act.planned_finish_date),
+            "baseline": fmt(act.baseline_finish_date),
+            "actual": fmt(act.actual_finish_date)
+        }
+        
+        if act.planned_finish_date:
+            b = bucket(oid, act.planned_finish_date.strftime("%Y-%m"))
+            b["planned"] += 1
+            if item not in b["activities"]: b["activities"].append(item)
+            
+        if act.baseline_finish_date:
+            b = bucket(oid, act.baseline_finish_date.strftime("%Y-%m"))
+            b["baseline"] += 1
+            if item not in b["activities"]: b["activities"].append(item)
+            
+        if act.actual_finish_date and st == "Completed":
+            b = bucket(oid, act.actual_finish_date.strftime("%Y-%m"))
+            b["completed"] += 1
+            if item not in b["activities"]: b["activities"].append(item)
+
+    # SAP value per 4-char WBS prefix (the same key SAP Intelligence attributes by), POrd only.
+    PO = models.MTPOAmount
+    po_by_prefix = {p: (float(v or 0), float(d or 0)) for p, v, d in
+                    db.query(WBS_PREFIX, func.sum(PO.net_order_value_inr), func.sum(PO.delivered_value_inr_cr))
+                      .filter(zsps_po_lines_only()).group_by(WBS_PREFIX)}
+    def codes(m):
+        out = []
+        for val in (m.spv_plant_code, m.agel, m.age6l):
+            out += [c.upper()[:4] for c in re.findall(r'H-?\s*([A-Za-z0-9]+)', str(val or ""))]
+        return set(out)
+
+    tc_by_map = {}
+    E = models.TcNetworkEdge
+    from sqlalchemy import case
+    for mid, n, charged in db.query(E.mapping_id, func.count(E.id), func.sum(case((E.normalized_status == "charged", 1), else_=0))).filter(E.mapping_id.isnot(None)).group_by(E.mapping_id):
+        tc_by_map[mid] = (n, int(charged or 0))
+
+    today = datetime.utcnow().strftime("%Y-%m")
+    projects, all_months = [], set()
+    tot = {"planned": 0, "completed": 0, "in_progress": 0, "not_started": 0, "this_month": {"planned": 0, "completed": 0},
+           "behind_projects": 0, "ordered_cr": 0.0, "delivered_cr": 0.0}
+    for m, ps in scoped:
+        p = ps[-1] if ps else None          # newest object for dates
+        oids = [o.p6_object_id for o in ps]
+        cs = codes(m)
+        ordered = sum(po_by_prefix.get(c, (0, 0))[0] for c in cs) / 1e7
+        delivered = sum(po_by_prefix.get(c, (0, 0))[1] for c in cs)
+        sched = p.scheduled_finish_date if p else None
+        basel = p.baseline_finish_date if p else None
+        slip = (sched.date() - basel.date()).days if sched and basel else None
+        lines, charged = tc_by_map.get(m.id, (0, 0))
+        row = {
+            "project_id": m.project_id, "name": m.project_name_from_p6 or m.project, "cluster": m.cluster,
+            "capacity_mwac": round(m.capacity_mwac or 0, 1), "is_commissioned": bool(m.is_commissioned),
+            "ordered_cr": round(ordered, 1), "delivered_cr": round(delivered, 1),
+            "ecod": {"scheduled": sched.strftime("%Y-%m-%d") if sched else None,
+                     "baseline": basel.strftime("%Y-%m-%d") if basel else None, "slip_days": slip},
+            "tc": {"lines": lines, "charged": charged},
+        }
+        st: Dict[str, int] = {}
+        for oid in oids:
+            for k, v in by_status.get(oid, {}).items():
+                st[k] = st.get(k, 0) + v
+        planned = sum(st.values())
+        if not p or planned == 0:
+            row.update({"not_applicable": True, "summary": None, "monthly": {}, "behind": 0, "next_due": None})
+            projects.append(row); continue
+        completed, inprog, notst = st.get("Completed", 0), st.get("In Progress", 0), st.get("Not Started", 0)
+        mo: Dict[str, dict] = {}
+        for oid in oids:
+            for k, v in monthly.get(oid, {}).items():
+                cell = mo.setdefault(k, {"planned": 0, "baseline": 0, "completed": 0, "activities": []})
+                for f in ["planned", "baseline", "completed"]: cell[f] += v[f]
+                for act in v.get("activities", []):
+                    if act not in cell["activities"]: cell["activities"].append(act)
+        all_months.update(mo)
+        planned_cum = sum(v["planned"] for k, v in mo.items() if k <= today)
+        completed_cum = sum(v["completed"] for v in mo.values())
+        behind = max(0, planned_cum - completed_cum)
+        future = sorted(k for k, v in mo.items() if k >= today and v["planned"] > 0)
+        row.update({
+            "not_applicable": False,
+            "summary": {"planned": planned, "completed": completed, "in_progress": inprog, "not_started": notst,
+                        "pct_complete": round(completed / planned * 100, 1)},
+            "monthly": mo, "behind": behind, "next_due": future[0] if future else None,
+        })
+        tot["planned"] += planned; tot["completed"] += completed; tot["in_progress"] += inprog; tot["not_started"] += notst
+        tm = mo.get(today, {})
+        tot["this_month"]["planned"] += tm.get("planned", 0); tot["this_month"]["completed"] += tm.get("completed", 0)
+        if behind > 0: tot["behind_projects"] += 1
+        projects.append(row)
+
+    # Portfolio ₹ is computed once over the UNION of scoped prefixes. Per-project
+    # rows attribute shared AGEL/AGE6L codes to every project that carries them,
+    # so summing rows would double-count (58,963 vs a true 52,974 when tested).
+    union = set().union(*(codes(m) for m, _ in scoped)) if scoped else set()
+    tot["ordered_cr"] = round(sum(po_by_prefix.get(c, (0, 0))[0] for c in union) / 1e7, 1)
+    tot["delivered_cr"] = round(sum(po_by_prefix.get(c, (0, 0))[1] for c in union), 1)
+    projects.sort(key=lambda r: (-r["behind"], r["not_applicable"], r["name"] or ""))
+    return {"months": sorted(all_months), "today": today, "totals": tot, "projects": projects,
+            "basis": "count of P6 'Module Installation' activities by status; months from planned/baseline/actual finish dates"}
+
+
+
+@router.get("/api/projects/{mapping_id}/delay-reasons")
+def get_project_delay_reasons(mapping_id: str, db: Session = Depends(get_db)):
+    """Why a project is behind, from what the platform can actually verify —
+    never a guess. Three independent signals, each labelled by source:
+
+      1. Every SAP purchase order for this project with value still to
+         deliver, owner (buyer/vendor) from ME2J (mt_me2j_po). Flagged
+         overdue when SAP's own contract validity date has passed — that
+         flag, not a colour choice, is what "responsible for a slow order"
+         means here.
+      2. Open Pulse non-conformances for this project (quality holds that can
+         block handover to installation).
+      3. Transmission lines this project depends on that are not yet charged,
+         with SAP's own expected date.
+
+    No inference beyond that: this does not claim WHY a PO is late (SAP has no
+    such field), only THAT it is open, since when its validity lapsed if it
+    has, and who owns it.
+    """
+    m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == mapping_id).first()
+    if not m:
+        return {"error": "Project not found"}
+
+    prefixes = _extract_wbs_prefixes(m)
+    now = datetime.utcnow()
+
+    # 1. Every open PO (value still to deliver), owner from ME2J. Overdue is a
+    # flag on this list, not a separate one — "pending" is the real scope.
+    PO, ME = models.MTPOAmount, models.MTME2JPO
+    pending_pos = []
+    if prefixes:
+        rows = (db.query(PO, ME)
+                .outerjoin(ME, ME.purchasing_document == PO.purchasing_document)
+                .filter(PO.doc_type == "POrd",
+                        or_(*[PO.wbs_element.ilike(f"H-{p}%") for p in prefixes]),
+                        (PO.net_order_value_inr - func.coalesce(PO.delivered_value_inr_cr, 0) * 10000000) > 1000)
+                .all())
+        seen = set()
+        for po, me in rows:
+            if po.purchasing_document in seen:
+                continue
+            seen.add(po.purchasing_document)
+            validity = me.validity_end if me else None
+            overdue_days = (now - validity).days if validity and validity < now else None
+            pending_pos.append({
+                "po": po.purchasing_document, "material": po.material_name, "vendor": po.vendor_name or (me.vendor_name if me else None),
+                "buyer": me.buyer_name if me else None, "buyer_email": me.buyer_email if me else None,
+                "ordered_cr": round((po.net_order_value_inr or 0) / 10000000, 2),
+                "remaining_cr": round((po.net_order_value_inr or 0) / 10000000 - (po.delivered_value_inr_cr or 0), 2),
+                "validity_end": validity.strftime("%Y-%m-%d") if validity else None,
+                "overdue_days": overdue_days, "overdue": overdue_days is not None,
+                "doc_type": me.doc_type if me else None,
+            })
+        pending_pos.sort(key=lambda r: (-(r["overdue_days"] or -1), -r["remaining_cr"]))
+
+    # 2. Open Pulse quality holds.
+    open_ncs = []
+    if m.pulse_project_uuid:
+        NC = models.PulseNC
+        for r in db.query(NC).filter(NC.project_id == m.pulse_project_uuid, ~NC.status.in_(["completed", "rejected"])).order_by(NC.created_at.asc()).limit(20):
+            open_ncs.append({"id": r.id, "status": r.status, "category": getattr(r, "category", None),
+                              "created_at": r.created_at.strftime("%Y-%m-%d") if r.created_at else None,
+                              "age_days": (now - r.created_at).days if r.created_at else None})
+
+    # 3. Transmission lines this project depends on, not yet charged.
+    E = models.TcNetworkEdge
+    pending_tc = [{"from": e.from_label, "to": e.to_label, "voltage": e.voltage, "status": e.normalized_status, "expected_date": e.expected_date}
+                  for e in db.query(E).filter(E.mapping_id == m.id, E.normalized_status != "charged")]
+
+    overdue_pos = [p for p in pending_pos if p["overdue"]]
+    return {
+        "project_id": mapping_id,
+        "pending_pos": pending_pos, "pending_pos_count": len(pending_pos),
+        "pending_pos_value_cr": round(sum(p["remaining_cr"] for p in pending_pos), 1),
+        "overdue_pos_count": len(overdue_pos),
+        "overdue_pos_value_cr": round(sum(p["remaining_cr"] for p in overdue_pos), 1),
+        "open_ncs": open_ncs, "open_ncs_count": len(open_ncs),
+        "pending_tc": pending_tc, "pending_tc_count": len(pending_tc),
+    }
+
+
+@router.get("/api/projects/{mapping_id}/installation-blocks")
+def get_project_installation_blocks(mapping_id: str, db: Session = Depends(get_db)):
+    """Every 'Module Installation' block for one project, named, with its
+    baseline / current-plan / actual dates and status — the detail behind a
+    planner grid cell's aggregate count. Same duplicate-P6-object handling as
+    installation-progress (a re-sync can leave a second P6 object per id).
+
+    'Planned' is P6's own current forecast (planned_finish_date); there is no
+    separate 'forecast' field in P6 to show alongside it, so this does not
+    invent a fourth date — baseline, planned/forecast, and actual (when done)
+    are the three real dates P6 carries per activity.
+    """
+    m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == mapping_id).first()
+    if not m:
+        return {"error": "Project not found"}
+    p6_rows = db.query(models.P6Project).filter(models.P6Project.project_id == m.project_id).all()
+    if not p6_rows:
+        return {"project_id": mapping_id, "blocks": []}
+
+    A = models.P6Activity
+    rows = db.query(A).filter(
+        A.project_object_id.in_([r.p6_object_id for r in p6_rows]),
+        A.name.ilike("%module installation%"),
+    ).order_by(A.planned_finish_date.asc().nullslast()).all()
+
+    fmt = lambda d: d.strftime("%Y-%m-%d") if d else None
+    blocks = [{
+        "name": a.name, "status": a.status,
+        "baseline_finish": fmt(a.baseline_finish_date),
+        "planned_finish": fmt(a.planned_finish_date),
+        "actual_finish": fmt(a.actual_finish_date),
+        "planned_month": a.planned_finish_date.strftime("%Y-%m") if a.planned_finish_date else None,
+        "actual_month": a.actual_finish_date.strftime("%Y-%m") if a.actual_finish_date else None,
+    } for a in rows]
+    return {"project_id": mapping_id, "blocks": blocks}

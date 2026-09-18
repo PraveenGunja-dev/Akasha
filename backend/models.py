@@ -571,6 +571,50 @@ class SyncLog(Base):
     message = Column(Text, nullable=True)
 
 
+class MTME2JPO(Base):
+    """PO-level ownership and lifecycle from ME2J — who raised it, who bought
+    it, when it was released, when its contract validity ends. Answers "who
+    is responsible and how long has this been open" for a PO; the money and
+    delivery figures stay on mt_poamount (ZSPS). Refreshed with every SAP
+    ingest from the same ME2J extract."""
+    __tablename__ = "mt_me2j_po"
+
+    purchasing_document = Column(String, primary_key=True)
+    vendor_name = Column(String, nullable=True)
+    buyer_name = Column(String, nullable=True, index=True)
+    buyer_email = Column(String, nullable=True)
+    pr_creator = Column(String, nullable=True)
+    pr_first_release = Column(DateTime, nullable=True)
+    po_first_release = Column(DateTime, nullable=True)
+    po_latest_release = Column(DateTime, nullable=True)
+    release_indicator = Column(String, nullable=True)
+    release_status = Column(String, nullable=True)
+    validity_end = Column(DateTime, nullable=True)
+    amendment_no = Column(Integer, nullable=True)
+    amendment_date = Column(DateTime, nullable=True)
+    doc_type = Column(String, nullable=True)        # NB / ZSER / ZCON / ZIMP …
+    incoterms = Column(String, nullable=True)
+    reason = Column(String, nullable=True)
+    document_date = Column(DateTime, nullable=True)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+
+class SyncSchedule(Base):
+    """Per-feed automatic sync schedule. The scheduler thread
+    (services/scheduler.py) runs a feed when next_run_at has passed and it is
+    enabled; every run still goes through sync_log, so the integrations panel
+    reads outcomes from one place whether a run was scheduled or manual."""
+    __tablename__ = "sync_schedule"
+
+    source = Column(String, primary_key=True)             # 'sharepoint' | 'p6' | ...
+    enabled = Column(Boolean, nullable=False, default=True)
+    interval_minutes = Column(Integer, nullable=False)
+    next_run_at = Column(DateTime, nullable=True)
+    last_run_at = Column(DateTime, nullable=True)
+    last_duration_s = Column(Float, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
 class MetricsCache(Base):
     """Per-project computed metrics cache with freshness tracking.
     Avoids recomputing dashboard/360/variance data on every chat question.

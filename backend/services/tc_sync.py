@@ -372,22 +372,38 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
     logger.info(f"Synced {region} Data")
 
 def run_sync():
-    logger.info("Starting Transmission Data Sync...")
-    token = get_auth_token()
-    if not token:
-        logger.error("Sync aborted: No auth token.")
-        return
+    """Fired in a background thread (routers/sync.py POST /tc/sync returns
+    before this finishes), so it logs its own outcome to sync_log — nothing
+    else observes whether it actually succeeded."""
+    import models
+    from services.sync_log_util import run_logged
 
-    db = SessionLocal()
+    logger.info("Starting Transmission Data Sync...")
+    log_db = SessionLocal()
+
+    def _do():
+        token = get_auth_token()
+        if not token:
+            raise RuntimeError("No auth token available (TC_AUTH_TOKEN / credentials not configured or login failed).")
+        db = SessionLocal()
+        try:
+            sync_region_data(db, token, "Khavda")
+            sync_region_data(db, token, "Rajasthan")
+            logger.info("Transmission Data Sync Complete!")
+            return {"status": "success", "message": "Synced Khavda and Rajasthan transmission data."}
+        except Exception as e:
+            logger.error(f"Error during sync: {e}")
+            db.rollback()
+            raise
+        finally:
+            db.close()
+
     try:
-        sync_region_data(db, token, "Khavda")
-        sync_region_data(db, token, "Rajasthan")
-        logger.info("Transmission Data Sync Complete!")
-    except Exception as e:
-        logger.error(f"Error during sync: {e}")
-        db.rollback()
+        run_logged(log_db, "tc", _do)
+    except Exception:
+        pass  # already logged as failed; run_sync() itself has no caller to report to
     finally:
-        db.close()
+        log_db.close()
 
 
 def sync_single_project(project_id: str) -> dict:
