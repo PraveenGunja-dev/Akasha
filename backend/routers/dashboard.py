@@ -1565,14 +1565,37 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
     obj_ids = [o.p6_object_id for _, ps in scoped for o in ps]
 
     A = models.P6Activity
+    R = models.P6ResourceAssignment
     base = [A.name.ilike("%module installation%"), A.project_object_id.in_(obj_ids or [-1])]
     month = lambda col: func.to_char(func.date_trunc("month", col), "YYYY-MM")
 
+    # Pre-load Material resource assignments for module counts per activity.
+    # Each block's Material assignment (resource_name 'Module - Construction')
+    # carries planned_units = scope (total modules) and actual_units = completed.
+    mod_res: Dict[int, tuple] = {}  # activity_object_id → (planned_units, actual_units)
+    for act_oid, p_units, a_units in (
+        db.query(R.activity_object_id, R.planned_units, R.actual_units)
+        .filter(R.resource_type == "Material",
+                R.activity_object_id.in_(
+                    db.query(A.p6_object_id).filter(*base)
+                ))
+        .all()
+    ):
+        # An activity can have multiple Material assignments; take the one with
+        # planned_units in the solar-block range (5–60) or just accumulate.
+        cur = mod_res.get(act_oid, (0.0, 0.0))
+        mod_res[act_oid] = (cur[0] + float(p_units or 0), cur[1] + float(a_units or 0))
+
     by_status = {}
+    by_status_modules: Dict[int, Dict[str, tuple]] = {}  # oid → {status → (scope, actual)}
     monthly: Dict[int, Dict[str, dict]] = {}
     
     def bucket(oid, k):
-        return monthly.setdefault(oid, {}).setdefault(k, {"planned": 0, "baseline": 0, "completed": 0, "activities": []})
+        return monthly.setdefault(oid, {}).setdefault(k, {
+            "planned": 0, "baseline": 0, "completed": 0,
+            "modules_planned": 0.0, "modules_baseline": 0.0, "modules_completed": 0.0,
+            "activities": []
+        })
 
     def fmt(d):
         return d.strftime("%Y-%m-%d") if d else None
@@ -1581,28 +1604,48 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
         oid = act.project_object_id
         st = act.status
         by_status.setdefault(oid, {})[st] = by_status.setdefault(oid, {}).get(st, 0) + 1
+
+        # Module counts for this activity from Material resource assignment
+        act_mod_scope, act_mod_actual = mod_res.get(act.p6_object_id, (0.0, 0.0))
+
+        # Accumulate module counts by status per project object
+        cur_mod = by_status_modules.setdefault(oid, {}).get(st, (0.0, 0.0))
+        by_status_modules[oid][st] = (cur_mod[0] + act_mod_scope, cur_mod[1] + act_mod_actual)
         
         item = {
             "name": act.name,
             "status": st,
-            "planned": fmt(act.planned_finish_date),
-            "baseline": fmt(act.baseline_finish_date),
-            "actual": fmt(act.actual_finish_date)
+            "forecast_start": fmt(act.planned_start_date),
+            "forecast_finish": fmt(act.planned_finish_date),
+            "baseline_finish": fmt(act.baseline_finish_date),
+            "actual_finish": fmt(act.actual_finish_date),
+            "modules_scope": round(act_mod_scope, 1),
+            "modules_actual": round(act_mod_actual, 1),
         }
         
+        today_month = datetime.utcnow().strftime("%Y-%m")
         if act.planned_finish_date:
             b = bucket(oid, act.planned_finish_date.strftime("%Y-%m"))
             b["planned"] += 1
+            b["modules_planned"] += act_mod_scope
             if item not in b["activities"]: b["activities"].append(item)
             
         if act.baseline_finish_date:
             b = bucket(oid, act.baseline_finish_date.strftime("%Y-%m"))
             b["baseline"] += 1
+            b["modules_baseline"] += act_mod_scope
             if item not in b["activities"]: b["activities"].append(item)
             
         if act.actual_finish_date and st == "Completed":
             b = bucket(oid, act.actual_finish_date.strftime("%Y-%m"))
             b["completed"] += 1
+            b["modules_completed"] += act_mod_actual
+            if item not in b["activities"]: b["activities"].append(item)
+        elif act_mod_actual > 0:
+            # Activity is In Progress but has modules installed. 
+            # Credit these completed modules to the current month.
+            b = bucket(oid, today_month)
+            b["modules_completed"] += act_mod_actual
             if item not in b["activities"]: b["activities"].append(item)
 
     # SAP value per 4-char WBS prefix (the same key SAP Intelligence attributes by), POrd only.
@@ -1624,8 +1667,12 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
 
     today = datetime.utcnow().strftime("%Y-%m")
     projects, all_months = [], set()
-    tot = {"planned": 0, "completed": 0, "in_progress": 0, "not_started": 0, "this_month": {"planned": 0, "completed": 0},
-           "behind_projects": 0, "ordered_cr": 0.0, "delivered_cr": 0.0}
+    tot = {"planned": 0, "completed": 0, "in_progress": 0, "not_started": 0,
+           "this_month": {"planned": 0, "completed": 0},
+           "behind_projects": 0, "ordered_cr": 0.0, "delivered_cr": 0.0,
+           # Module-level totals
+           "modules_planned": 0.0, "modules_completed": 0.0, "modules_in_progress": 0.0, "modules_not_started": 0.0,
+           "this_month_modules": {"planned": 0.0, "completed": 0.0}}
     for m, ps in scoped:
         p = ps[-1] if ps else None          # newest object for dates
         oids = [o.p6_object_id for o in ps]
@@ -1650,30 +1697,61 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
                 st[k] = st.get(k, 0) + v
         planned = sum(st.values())
         if not p or planned == 0:
-            row.update({"not_applicable": True, "summary": None, "monthly": {}, "behind": 0, "next_due": None})
+            row.update({"not_applicable": True, "summary": None, "monthly": {}, "behind": 0, "modules_behind": 0.0, "next_due": None})
             projects.append(row); continue
         completed, inprog, notst = st.get("Completed", 0), st.get("In Progress", 0), st.get("Not Started", 0)
+
+        # Module-level summary for this project
+        proj_mod = {"scope": 0.0, "actual": 0.0, "in_progress_scope": 0.0, "in_progress_actual": 0.0, "not_started_scope": 0.0}
+        for oid in oids:
+            for s_key, (s_scope, s_actual) in by_status_modules.get(oid, {}).items():
+                proj_mod["scope"] += s_scope
+                proj_mod["actual"] += s_actual
+                if s_key == "In Progress":
+                    proj_mod["in_progress_scope"] += s_scope
+                    proj_mod["in_progress_actual"] += s_actual
+                elif s_key == "Not Started":
+                    proj_mod["not_started_scope"] += s_scope
+
         mo: Dict[str, dict] = {}
         for oid in oids:
             for k, v in monthly.get(oid, {}).items():
-                cell = mo.setdefault(k, {"planned": 0, "baseline": 0, "completed": 0, "activities": []})
-                for f in ["planned", "baseline", "completed"]: cell[f] += v[f]
+                cell = mo.setdefault(k, {
+                    "planned": 0, "baseline": 0, "completed": 0,
+                    "modules_planned": 0.0, "modules_baseline": 0.0, "modules_completed": 0.0,
+                    "activities": []
+                })
+                for f in ["planned", "baseline", "completed", "modules_planned", "modules_baseline", "modules_completed"]:
+                    cell[f] += v[f]
                 for act in v.get("activities", []):
                     if act not in cell["activities"]: cell["activities"].append(act)
         all_months.update(mo)
         planned_cum = sum(v["planned"] for k, v in mo.items() if k <= today)
         completed_cum = sum(v["completed"] for v in mo.values())
         behind = max(0, planned_cum - completed_cum)
+        # Module-level behind: planned modules through this month minus completed modules
+        modules_planned_cum = sum(v["modules_planned"] for k, v in mo.items() if k <= today)
+        modules_completed_cum = sum(v["modules_completed"] for v in mo.values())
+        modules_behind = max(0.0, modules_planned_cum - modules_completed_cum)
         future = sorted(k for k, v in mo.items() if k >= today and v["planned"] > 0)
         row.update({
             "not_applicable": False,
             "summary": {"planned": planned, "completed": completed, "in_progress": inprog, "not_started": notst,
-                        "pct_complete": round(completed / planned * 100, 1)},
-            "monthly": mo, "behind": behind, "next_due": future[0] if future else None,
+                        "pct_complete": round(completed / planned * 100, 1),
+                        "modules_scope": round(proj_mod["scope"], 1),
+                        "modules_completed": round(proj_mod["actual"], 1),
+                        "modules_in_progress": round(proj_mod["in_progress_actual"], 1),
+                        "modules_not_started": round(proj_mod["not_started_scope"], 1),
+                        "modules_pct": round(proj_mod["actual"] / proj_mod["scope"] * 100, 1) if proj_mod["scope"] > 0 else 0},
+            "monthly": mo, "behind": behind, "modules_behind": round(modules_behind, 1),
+            "next_due": future[0] if future else None,
         })
         tot["planned"] += planned; tot["completed"] += completed; tot["in_progress"] += inprog; tot["not_started"] += notst
+        tot["modules_planned"] += proj_mod["scope"]; tot["modules_completed"] += proj_mod["actual"]
+        tot["modules_in_progress"] += proj_mod["in_progress_actual"]; tot["modules_not_started"] += proj_mod["not_started_scope"]
         tm = mo.get(today, {})
         tot["this_month"]["planned"] += tm.get("planned", 0); tot["this_month"]["completed"] += tm.get("completed", 0)
+        tot["this_month_modules"]["planned"] += tm.get("modules_planned", 0); tot["this_month_modules"]["completed"] += tm.get("modules_completed", 0)
         if behind > 0: tot["behind_projects"] += 1
         projects.append(row)
 
@@ -1683,9 +1761,14 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
     union = set().union(*(codes(m) for m, _ in scoped)) if scoped else set()
     tot["ordered_cr"] = round(sum(po_by_prefix.get(c, (0, 0))[0] for c in union) / 1e7, 1)
     tot["delivered_cr"] = round(sum(po_by_prefix.get(c, (0, 0))[1] for c in union), 1)
+    # Round module totals
+    for k in ["modules_planned", "modules_completed", "modules_in_progress", "modules_not_started"]:
+        tot[k] = round(tot[k], 1)
+    for k in ["planned", "completed"]:
+        tot["this_month_modules"][k] = round(tot["this_month_modules"][k], 1)
     projects.sort(key=lambda r: (-r["behind"], r["not_applicable"], r["name"] or ""))
     return {"months": sorted(all_months), "today": today, "totals": tot, "projects": projects,
-            "basis": "count of P6 'Module Installation' activities by status; months from planned/baseline/actual finish dates"}
+            "basis": "count of P6 'Module Installation' activities by status; months from planned/baseline/actual finish dates; module counts from Material resource assignments"}
 
 
 

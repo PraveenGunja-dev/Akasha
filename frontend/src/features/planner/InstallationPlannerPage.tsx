@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
-import { AlertTriangle, HardHat, CheckCircle2, CalendarClock, IndianRupee, ListChecks } from 'lucide-react';
+import { AlertTriangle, HardHat, CheckCircle2, CalendarClock, IndianRupee, ListChecks, Layers } from 'lucide-react';
 import { KPITile, ChartFrame, Card, CardHeader } from '../../components/ui/primitives';
 import { NotAvailable } from '../sap-intelligence/components/Drawer';
 import { useChartTheme } from '../../lib/chartTheme';
@@ -11,7 +11,7 @@ import { useProjectLink } from '../capacity/useProjectLink';
 import PlannerHeader from './PlannerHeader';
 import PlannerGrid from './PlannerGrid';
 import { DEFAULT_FILTERS, monthLabel, monthRange, shiftMonth, fyMonths } from './types';
-import type { PlannerData, PlannerFilters, PlannerProject } from './types';
+import type { PlannerData, PlannerFilters, PlannerProject, UnitKey } from './types';
 
 /* Portfolio-wide module installation, laid out the way a planner works:
    what's due each month, what got done, who is behind. Scope (portfolio,
@@ -87,18 +87,27 @@ export default function InstallationPlannerPage() {
 
   // Cumulative S-curve over the window, for the projects in view.
   const curve = useMemo(() => {
+    const isModules = filters.unit === 'modules';
     const rows = months.map(m => visible.reduce((a, p) => {
       const c = p.monthly[m]; if (!c) return a;
-      return { planned: a.planned + c.planned, baseline: a.baseline + c.baseline, completed: a.completed + c.completed };
+      return {
+        planned: a.planned + (isModules ? c.modules_planned : c.planned),
+        baseline: a.baseline + (isModules ? c.modules_baseline : c.baseline),
+        completed: a.completed + (isModules ? c.modules_completed : c.completed),
+      };
     }, { planned: 0, baseline: 0, completed: 0 }));
     // seed with everything before the window so cumulative lines start at the right height
     const before = visible.reduce((a, p) => {
-      for (const [k, c] of Object.entries(p.monthly)) if (months.length && k < months[0]) { a.planned += c.planned; a.baseline += c.baseline; a.completed += c.completed; }
+      for (const [k, c] of Object.entries(p.monthly)) if (months.length && k < months[0]) {
+        a.planned += isModules ? c.modules_planned : c.planned;
+        a.baseline += isModules ? c.modules_baseline : c.baseline;
+        a.completed += isModules ? c.modules_completed : c.completed;
+      }
       return a;
     }, { planned: 0, baseline: 0, completed: 0 });
     let cp = before.planned, cb = before.baseline, cc = before.completed;
     return rows.map(r => ({ ...r, cp: cp += r.planned, cb: cb += r.baseline, cc: cc += r.completed }));
-  }, [visible, months]);
+  }, [visible, months, filters.unit]);
 
   const curveOption = useMemo(() => ({
     backgroundColor: 'transparent',
@@ -106,16 +115,16 @@ export default function InstallationPlannerPage() {
     legend: { top: 0, itemHeight: 8, itemWidth: 16, textStyle: { fontSize: 11, color: chrome.fgSecondary } },
     grid: { left: 8, right: 12, top: 34, bottom: 8, containLabel: true },
     xAxis: { type: 'category', data: months.map(monthLabel), axisLabel: { fontSize: 10, color: chrome.fgTertiary }, axisLine: { lineStyle: { color: chrome.axisLine } } },
-    yAxis: { type: 'value', name: 'Blocks (cumulative)', minInterval: 1, nameTextStyle: { fontSize: 10, color: chrome.fgTertiary }, axisLabel: { fontSize: 10, color: chrome.fgTertiary }, splitLine: { lineStyle: { color: chrome.gridLine } } },
+    yAxis: { type: 'value', name: filters.unit === 'modules' ? 'Modules (cumulative)' : 'Blocks (cumulative)', minInterval: 1, nameTextStyle: { fontSize: 10, color: chrome.fgTertiary }, axisLabel: { fontSize: 10, color: chrome.fgTertiary }, splitLine: { lineStyle: { color: chrome.gridLine } } },
     series: [
       { name: 'Current plan', type: 'line', data: curve.map(r => r.cp), symbol: 'none', lineStyle: { width: 1.5, type: 'dashed', color: categorical[0] }, itemStyle: { color: categorical[0] } },
       { name: 'Baseline', type: 'line', data: curve.map(r => r.cb), symbol: 'none', lineStyle: { width: 1, type: 'dotted', color: chrome.fgTertiary }, itemStyle: { color: chrome.fgTertiary } },
       { name: 'Completed', type: 'line', data: curve.map(r => r.cc), symbol: 'circle', symbolSize: 4, lineStyle: { width: 2, color: status.healthy }, itemStyle: { color: status.healthy }, areaStyle: { color: status.healthy, opacity: 0.06 },
         markLine: data ? { symbol: 'none', silent: true, lineStyle: { color: chrome.fgTertiary, type: 'solid', width: 1 }, label: { formatter: 'today', fontSize: 9, color: chrome.fgTertiary }, data: [{ xAxis: monthLabel(data.today) }] } : undefined },
     ],
-  }), [curve, months, data, chrome, categorical, status]);
+  }), [curve, months, data, chrome, categorical, status, filters.unit]);
 
-  const behindList = useMemo(() => [...visible].filter(p => p.behind > 0).sort((a, b) => b.behind - a.behind).slice(0, 8), [visible]);
+  const behindList = useMemo(() => [...visible].filter(p => filters.unit === 'modules' ? p.modules_behind > 0 : p.behind > 0).sort((a, b) => (filters.unit === 'modules' ? b.modules_behind - a.modules_behind : b.behind - a.behind)).slice(0, 8), [visible, filters.unit]);
   const scopeLabel = `${portfolio ?? 'All portfolios'} · ${phase === 'ALL' ? 'All phases' : phase}`;
 
   if (loading && !data) {
@@ -140,6 +149,8 @@ export default function InstallationPlannerPage() {
   const pct = T.planned ? Math.round((T.completed / T.planned) * 100) : 0;
   const empty = visible.length === 0;
 
+  const isModules = filters.unit === 'modules';
+
   return (
     <motion.div variants={container} initial="hidden" animate="show" className="flex flex-col gap-3">
       <motion.section variants={item}>
@@ -147,11 +158,37 @@ export default function InstallationPlannerPage() {
       </motion.section>
 
       <motion.section variants={item} className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <KPITile label="Blocks installed" value={T.completed.toLocaleString('en-IN')} denominator={`/ ${T.planned.toLocaleString('en-IN')} planned`} icon={HardHat} source="P6"
-          proportion={{ pct, nowLabel: `${pct}%`, capLabel: `${T.in_progress} in progress · ${T.not_started} not started` }} />
-        <KPITile label={`This month · ${monthLabel(data!.today)}`} value={T.this_month.completed} denominator={`/ ${T.this_month.planned} due`} icon={CalendarClock} source="P6"
-          tone={T.this_month.planned > 0 && T.this_month.completed < T.this_month.planned ? 'watch' : 'neutral'}
-          subtext={T.this_month.planned ? `${T.this_month.planned - T.this_month.completed} still to finish this month` : 'Nothing due this month'} />
+        <KPITile
+          label={isModules ? 'Modules installed' : 'Blocks installed'}
+          value={isModules ? Math.round(T.modules_completed).toLocaleString('en-IN') : T.completed.toLocaleString('en-IN')}
+          denominator={isModules ? `/ ${Math.round(T.modules_planned).toLocaleString('en-IN')} scope` : `/ ${T.planned.toLocaleString('en-IN')} planned`}
+          icon={isModules ? Layers : HardHat}
+          source="P6"
+          proportion={{
+            pct: isModules ? (T.modules_planned ? Math.round((T.modules_completed / T.modules_planned) * 100) : 0) : pct,
+            nowLabel: `${isModules ? (T.modules_planned ? Math.round((T.modules_completed / T.modules_planned) * 100) : 0) : pct}%`,
+            capLabel: isModules
+              ? `${Math.round(T.modules_in_progress)} in progress · ${Math.round(T.modules_not_started)} not started`
+              : `${T.in_progress} in progress · ${T.not_started} not started`,
+          }}
+        />
+        <KPITile
+          label={`This month · ${monthLabel(data!.today)}`}
+          value={isModules ? Math.round(T.this_month_modules.completed) : T.this_month.completed}
+          denominator={isModules ? `/ ${Math.round(T.this_month_modules.planned)} due` : `/ ${T.this_month.planned} due`}
+          icon={CalendarClock}
+          source="P6"
+          tone={
+            (isModules ? T.this_month_modules.planned : T.this_month.planned) > 0 &&
+            (isModules ? T.this_month_modules.completed : T.this_month.completed) < (isModules ? T.this_month_modules.planned : T.this_month.planned)
+              ? 'watch' : 'neutral'
+          }
+          subtext={
+            (isModules ? T.this_month_modules.planned : T.this_month.planned)
+              ? `${isModules ? Math.round(T.this_month_modules.planned - T.this_month_modules.completed) : T.this_month.planned - T.this_month.completed} still to finish this month`
+              : 'Nothing due this month'
+          }
+        />
         <KPITile label="Projects behind plan" value={T.behind_projects} icon={AlertTriangle} source="P6" tone={T.behind_projects > 0 ? 'critical' : 'healthy'}
           subtext="Cumulative plan to date minus completed, per project" />
         <KPITile label="Materials delivered" value={cr(T.delivered_cr)} unit="Cr" denominator={`/ ${cr(T.ordered_cr)} Cr ordered`} icon={IndianRupee} source="SAP"
@@ -166,8 +203,8 @@ export default function InstallationPlannerPage() {
       ) : (
         <motion.section variants={item}>
           <Card pad="md">
-            <CardHeader icon={HardHat} title="Monthly plan vs completed" eyebrow={`${visible.length} projects · ${months.length} months · basis: ${filters.basis === 'planned' ? 'current plan' : 'baseline'}`} />
-            <PlannerGrid projects={visible} months={months} today={data!.today} basis={filters.basis} />
+            <CardHeader icon={isModules ? Layers : HardHat} title="Monthly plan vs completed" eyebrow={`${visible.length} projects · ${months.length} months · basis: ${filters.basis === 'planned' ? 'current plan' : 'baseline'} · ${isModules ? 'modules' : 'blocks'}`} />
+            <PlannerGrid projects={visible} months={months} today={data!.today} basis={filters.basis} unit={filters.unit} />
           </Card>
         </motion.section>
       )}
@@ -194,7 +231,9 @@ export default function InstallationPlannerPage() {
                         {p.ecod.slip_days != null && p.ecod.slip_days > 0 && ` · ECOD ${p.ecod.slip_days}d late`}
                       </div>
                     </button>
-                    <span className="shrink-0 rounded-md border border-status-critical-border bg-status-critical-bg px-2 py-0.5 text-[11px] font-semibold tabular-nums text-status-critical-fg">−{p.behind} blocks</span>
+                    <span className="shrink-0 rounded-md border border-status-critical-border bg-status-critical-bg px-2 py-0.5 text-[11px] font-semibold tabular-nums text-status-critical-fg">
+                      −{isModules ? Math.round(p.modules_behind) : p.behind} {isModules ? 'modules' : 'blocks'}
+                    </span>
                   </li>
                 ))}
               </ul>

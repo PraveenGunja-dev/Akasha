@@ -1,19 +1,24 @@
 export type WindowKey = 'NEXT6' | 'FY' | 'ALL';
 export type BasisKey = 'planned' | 'baseline';
 export type ShowKey = 'all' | 'behind' | 'notstarted' | 'done';
+export type UnitKey = 'blocks' | 'modules';
 
-export interface PlannerFilters { window: WindowKey; basis: BasisKey; show: ShowKey; search: string }
-export const DEFAULT_FILTERS: PlannerFilters = { window: 'NEXT6', basis: 'planned', show: 'all', search: '' };
+export interface PlannerFilters { window: WindowKey; basis: BasisKey; show: ShowKey; search: string; unit: UnitKey }
+export const DEFAULT_FILTERS: PlannerFilters = { window: 'NEXT6', basis: 'planned', show: 'all', search: '', unit: 'blocks' };
 
 export const WINDOW_LABELS: Record<WindowKey, string> = { NEXT6: 'Next 6 months', FY: 'This FY', ALL: 'All months' };
 export const BASIS_LABELS: Record<BasisKey, string> = { planned: 'Current plan', baseline: 'Baseline' };
 export const SHOW_LABELS: Record<ShowKey, string> = { all: 'All projects', behind: 'Behind plan', notstarted: 'Not started', done: 'Completed' };
+export const UNIT_LABELS: Record<UnitKey, string> = { blocks: 'Show in Blocks', modules: 'Show in Modules' };
 
 export interface MonthCell { 
   planned: number; 
   baseline: number; 
   completed: number;
-  activities?: { name: string; status: string; planned: string | null; baseline: string | null; actual: string | null }[];
+  modules_planned: number;
+  modules_baseline: number;
+  modules_completed: number;
+  activities?: { name: string; status: string; forecast_start: string | null; forecast_finish: string | null; baseline_finish: string | null; actual_finish: string | null; modules_scope: number; modules_actual: number }[];
 }
 
 export interface PlannerProject {
@@ -22,9 +27,13 @@ export interface PlannerProject {
   ecod: { scheduled: string | null; baseline: string | null; slip_days: number | null };
   tc: { lines: number; charged: number };
   not_applicable: boolean;
-  summary: { planned: number; completed: number; in_progress: number; not_started: number; pct_complete: number } | null;
+  summary: {
+    planned: number; completed: number; in_progress: number; not_started: number; pct_complete: number;
+    modules_scope: number; modules_completed: number; modules_in_progress: number; modules_not_started: number; modules_pct: number;
+  } | null;
   monthly: Record<string, MonthCell>;
   behind: number;
+  modules_behind: number;
   next_due: string | null;
 }
 
@@ -35,6 +44,8 @@ export interface PlannerData {
     planned: number; completed: number; in_progress: number; not_started: number;
     this_month: { planned: number; completed: number }; behind_projects: number;
     ordered_cr: number; delivered_cr: number;
+    modules_planned: number; modules_completed: number; modules_in_progress: number; modules_not_started: number;
+    this_month_modules: { planned: number; completed: number };
   };
   projects: PlannerProject[];
   basis: string;

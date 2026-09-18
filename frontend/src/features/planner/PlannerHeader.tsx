@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import type { ComponentType } from 'react';
-import { ChevronDown, CalendarRange, GitBranch, Filter, RefreshCw, Search, HardHat } from 'lucide-react';
+import { ChevronDown, CalendarRange, GitBranch, Filter, RefreshCw, Search, HardHat, Layers } from 'lucide-react';
 import { cx } from '../../components/ui/primitives/cx';
-import type { PlannerFilters, WindowKey, BasisKey, ShowKey } from './types';
-import { WINDOW_LABELS, BASIS_LABELS, SHOW_LABELS } from './types';
+import type { PlannerFilters, WindowKey, BasisKey, ShowKey, UnitKey } from './types';
+import { WINDOW_LABELS, BASIS_LABELS, SHOW_LABELS, UNIT_LABELS } from './types';
 
 /* Same header grammar as Capacity Overview: title + kicker on the left,
    dropdown menus + refresh on the right. Menu is copied from CapacityHeader
@@ -68,6 +68,18 @@ export default function PlannerHeader({ filters, onChange, onRefresh, refreshing
         <Menu<WindowKey> label="Window" icon={CalendarRange} value={filters.window} options={['NEXT6', 'FY', 'ALL']} labels={WINDOW_LABELS} onChange={window => onChange({ window })} />
         <Menu<BasisKey> label="Plan basis" icon={GitBranch} value={filters.basis} options={['planned', 'baseline']} labels={BASIS_LABELS} onChange={basis => onChange({ basis })} />
         <Menu<ShowKey> label="Show" icon={Filter} value={filters.show} options={['all', 'behind', 'notstarted', 'done']} labels={SHOW_LABELS} onChange={show => onChange({ show })} />
+        <div className="flex h-[34px] items-center rounded-lg border border-border bg-card p-0.5" role="radiogroup" aria-label="Show in">
+          {(['blocks', 'modules'] as UnitKey[]).map(u => (
+            <button key={u} role="radio" aria-checked={filters.unit === u} onClick={() => onChange({ unit: u })}
+              className={cx('flex items-center gap-1 rounded-md px-2.5 py-1 text-[11.5px] font-semibold transition-all',
+                filters.unit === u
+                  ? 'bg-brand-blue text-white shadow-sm'
+                  : 'text-fg-tertiary hover:text-fg-primary')}>
+              {u === 'blocks' ? <Layers className="h-3 w-3" /> : <Layers className="h-3 w-3" />}
+              {u === 'blocks' ? 'Blocks' : 'Modules'}
+            </button>
+          ))}
+        </div>
         <button onClick={onRefresh} disabled={refreshing} aria-label="Refresh"
           className="flex h-[34px] w-[34px] items-center justify-center rounded-lg border border-border bg-card text-fg-tertiary transition-colors hover:text-foreground disabled:opacity-50">
           <RefreshCw className={cx('h-3.5 w-3.5', refreshing && 'animate-spin')} />
