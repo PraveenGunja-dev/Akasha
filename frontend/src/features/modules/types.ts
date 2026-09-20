@@ -20,13 +20,21 @@ export interface ModuleProject {
   scod_source: 'manual' | 'manual_lta' | 'trial_run' | 'tc' | null;
   aop_plan: string;
   ftc_date: string;
+  /** True when every FTC phase is already charged — distinct from P6 simply having no FTC milestone. */
+  ftc_all_charged: boolean;
   tc_date: string;
   module_date: string;
   ordered_mwp: number;
   balance_ordering_mwp: number;
   total_receipt_mwp: number;
   erection_done_mwp: number;
+  /** Total receipt − erection. Can be negative where SAP's delivered qty is
+   *  short of what P6 reports erected (every commissioned project, whose old
+   *  POs predate the ZSPS extract) — surfaced, not floored. */
   module_inventory_mwp: number;
+  module_inventory_negative: boolean;
+  /** Measured MB52 stock on hand, for reconciling against the derived figure. */
+  module_inventory_sap_mwp: number;
   under_transit_mwp: number;
   balance_dispatch_mwp: number;
   completed_ftc_mwp: number;

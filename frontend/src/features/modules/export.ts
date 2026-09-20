@@ -45,9 +45,6 @@ const LEAD_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
   { label: 'LTA', width: 11 },
   { label: 'SCOD', width: 11 },
   { label: 'AOP\n(Plan)', width: 10 },
-  { label: 'FTC\nDate', width: 11 },
-  { label: 'TC\nDate', width: 11 },
-  { label: 'Module\nDate', width: 11 },
   { label: 'Ordered\n(MWp)', width: 10, numeric: true },
   { label: 'Balance\nOrdering\n(MWp)', width: 11, numeric: true },
   { label: 'Total\nReceipt\n(MWp)', width: 10, numeric: true },
@@ -59,11 +56,19 @@ const LEAD_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
 ];
 
 const MONTH_GROUP_LABEL = 'Month wise Module Requirement at Site (MWp)';
+// FTC/TC/Module sit after the month-wise plan, right before Remarks (user
+// decision 2026-09-20) — they used to follow AOP, ahead of the SAP columns.
+const DATE_COLUMNS: { label: string; width: number }[] = [
+  { label: 'FTC\nDate', width: 11 },
+  { label: 'TC\nDate', width: 11 },
+  { label: 'Module\nDate', width: 11 },
+];
 const TRAIL_COLUMN = { label: 'Remarks', width: 46 };
 
-const LEAD_COUNT = LEAD_COLUMNS.length;                       // 25
+const LEAD_COUNT = LEAD_COLUMNS.length;                       // 24
 const MONTH_COUNT = FORECAST_MONTHS.length + 1;               // 13 + Total
-const TOTAL_COLS = LEAD_COUNT + MONTH_COUNT + 1;              // + Remarks
+const DATE_COUNT = DATE_COLUMNS.length;                       // FTC, TC, Module
+const TOTAL_COLS = LEAD_COUNT + MONTH_COUNT + DATE_COUNT + 1; // + Remarks
 
 const STATUS_LABEL: Record<string, string> = {
   delivered: 'Delivered', in_progress: 'In Progress', ordered: 'Ordered', pending: 'Pending',
@@ -151,6 +156,14 @@ export async function exportModuleDeliveriesXLSX(
     ws.getColumn(col).width = 8;
   });
 
+  const dateStart = monthEnd + 1;
+  DATE_COLUMNS.forEach((c, i) => {
+    const col = dateStart + i;
+    ws.mergeCells(4, col, 5, col);
+    ws.getCell(4, col).value = c.label;
+    ws.getColumn(col).width = c.width;
+  });
+
   const remarksCol = TOTAL_COLS;
   ws.mergeCells(4, remarksCol, 5, remarksCol);
   ws.getCell(4, remarksCol).value = TRAIL_COLUMN.label;
@@ -213,9 +226,6 @@ export async function exportModuleDeliveriesXLSX(
         p.lta || '',
         p.scod || '',
         p.aop_plan || '',
-        p.ftc_date || '',
-        p.tc_date || '',
-        p.module_date || '',
         num(p.ordered_mwp),
         num(p.balance_ordering_mwp),
         num(p.total_receipt_mwp),
@@ -226,6 +236,9 @@ export async function exportModuleDeliveriesXLSX(
         STATUS_LABEL[p.status] ?? p.status,
         ...FORECAST_MONTHS.map(() => null),   // month-wise plan — no live source
         null,                                 // month total
+        p.ftc_date || (p.ftc_all_charged ? 'No pending FTC' : ''),
+        p.tc_date || '',
+        p.module_date || '',
         p.remarks || '',
       ]);
       row.height = 14;
@@ -234,20 +247,21 @@ export async function exportModuleDeliveriesXLSX(
         cell.font = { size: 8, color: { argb: INK } };
         cell.border = border;
         const lead = LEAD_COLUMNS[col - 1];
+        const inMonthBlock = col > LEAD_COUNT && col <= monthEnd;
         cell.alignment = {
-          horizontal: lead?.numeric ? 'right' : col > LEAD_COUNT && col < TOTAL_COLS ? 'right' : 'left',
+          horizontal: lead?.numeric ? 'right' : inMonthBlock ? 'right' : 'left',
           vertical: 'middle',
           wrapText: col === TOTAL_COLS,
         };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0.0';
-        if (col > LEAD_COUNT && col < TOTAL_COLS) {
+        if (inMonthBlock) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: EMPTY_BG } };
         }
       });
 
       ws.getCell(row.number, 2).font = { size: 8, bold: true, color: { argb: INK } };
       ws.getCell(row.number, 10).numFmt = '0.00';
-      const st = ws.getCell(row.number, 27);
+      const st = ws.getCell(row.number, LEAD_COUNT);
       st.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL[p.status] ?? BAND } };
       st.alignment = { horizontal: 'center', vertical: 'middle' };
     });
@@ -258,11 +272,13 @@ export async function exportModuleDeliveriesXLSX(
     '', `Total (${Object.values(grouped).reduce((s, g) => s + g.length, 0)} projects)`,
     '', '', '', '', '', '', '', null,
     num(totals.total_mwac), num(totals.total_mwp),
-    '', '', '', '', '', '', '',
+    '', '', '', '',
     num(totals.ordered_mwp), num(totals.balance_ordering_mwp), num(totals.received_mwp),
     num(totals.erection_mwp), num(totals.inventory_mwp), num(totals.under_transit_mwp),
     num(totals.balance_dispatch_mwp),
-    '', ...FORECAST_MONTHS.map(() => null), null, '',
+    '', ...FORECAST_MONTHS.map(() => null), null,
+    '', '', '',
+    '',
   ]);
   totalRow.height = 18;
   totalRow.eachCell({ includeEmpty: true }, (cell, col) => {

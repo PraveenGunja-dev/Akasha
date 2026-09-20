@@ -23,6 +23,14 @@ const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep
 /** Column index where each logical section starts — drives the divider rules. */
 const SECTION_EDGE = 'border-l border-border';
 
+// Total <th>/<td> count in the table body, for the group-header row's colSpan.
+// A hardcoded 40 here silently went stale when FTC/TC/Module moved after the
+// month block — the grouped-by-EPC header row then stopped short of the new
+// columns, leaving them uncoloured (user report 2026-09-20). 25 lead columns
+// (Sr..Status) + the month block (FORECAST_MONTHS + its Total) + FTC/TC/Module
+// + Remarks.
+const TABLE_COLUMN_COUNT = 25 + (FORECAST_MONTHS.length + 1) + 3 + 1;
+
 /** '07-Mar-27' -> '2027-03-07' for an <input type="date"> value */
 function scodToInputValue(scod: string): string {
   const m = scod.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
@@ -54,6 +62,51 @@ function isApproachingOrOverdue(dateStr: string): boolean {
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: 0.25 } } };
+
+/* ── Custom Tooltip ─────────────────────────────────────────────────────── */
+/** A sleek dark tooltip that replaces the ugly native browser title tooltip.
+ *  Wraps children and shows `text` on hover after a short delay. */
+function Tip({ text, children, className = '' }: { text?: string | null; children: React.ReactNode; className?: string }) {
+  const [show, setShow] = useState(false);
+  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapRef = React.useRef<HTMLSpanElement>(null);
+
+  if (!text) return <>{children}</>;
+
+  const handleEnter = (e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setPos({ x: rect.left + rect.width / 2, y: rect.top });
+    timerRef.current = setTimeout(() => setShow(true), 350);
+  };
+  const handleLeave = () => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+    setShow(false);
+  };
+
+  return (
+    <span
+      ref={wrapRef}
+      className={`cursor-pointer ${className}`}
+      onMouseEnter={handleEnter}
+      onMouseLeave={handleLeave}
+      onMouseDown={handleLeave}
+    >
+      {children}
+      {show && (
+        <span
+          style={{ left: pos.x, top: pos.y }}
+          className="fixed z-[9999] -translate-x-1/2 -translate-y-full pointer-events-none animate-[tipIn_150ms_ease-out]"
+        >
+          <span className="block max-w-[280px] rounded-md bg-neutral-900 px-2.5 py-1.5 text-[10px] leading-[1.45] font-medium text-neutral-100 shadow-lg shadow-black/30 whitespace-pre-line mb-1.5">
+            {text}
+          </span>
+        </span>
+      )}
+    </span>
+  );
+}
 
 const MW = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
 const sum = <T,>(rows: T[], pick: (r: T) => number) => rows.reduce((s, r) => s + (pick(r) || 0), 0);
@@ -132,33 +185,34 @@ function ThLabel({ label, unit }: { label: string; unit?: string }) {
   );
 }
 
-function Th({ children, className = '', stickyLeft, rowSpan, colSpan, title }: {
-  children: React.ReactNode; className?: string; stickyLeft?: number; rowSpan?: number; colSpan?: number; title?: string;
+function Th({ children, className = '', stickyLeft, rowSpan, colSpan, tip }: {
+  children: React.ReactNode; className?: string; stickyLeft?: number; rowSpan?: number; colSpan?: number; tip?: string;
 }) {
-  return (
+  const inner = (
     <th
-      rowSpan={rowSpan} colSpan={colSpan} title={title}
+      rowSpan={rowSpan} colSpan={colSpan}
       style={stickyLeft !== undefined ? { left: stickyLeft } : undefined}
       className={`px-1.5 py-1.5 align-middle text-center text-[9px] font-bold leading-[1.2] tracking-tight border-b border-r border-[var(--neutral-700)] bg-[var(--neutral-900)] text-[var(--neutral-50)] ${stickyLeft !== undefined ? 'sticky z-30' : ''} ${className}`}
     >
-      {children}
+      {tip ? <Tip text={tip}>{children}</Tip> : children}
     </th>
   );
+  return inner;
 }
 
 /** Centre is the default — the tracker centres every short code, date and
     flag, and only the name and remarks columns run left. */
-function Td({ children, className = '', stickyLeft, align = 'center', title, colSpan }: {
-  children?: React.ReactNode; className?: string; stickyLeft?: number; align?: 'left' | 'center' | 'right'; title?: string; colSpan?: number;
+function Td({ children, className = '', stickyLeft, align = 'center', tip, colSpan }: {
+  children?: React.ReactNode; className?: string; stickyLeft?: number; align?: 'left' | 'center' | 'right'; tip?: string; colSpan?: number;
 }) {
   const alignCls = align === 'right' ? 'text-right' : align === 'left' ? 'text-left' : 'text-center';
   return (
     <td
-      title={title} colSpan={colSpan}
+      colSpan={colSpan}
       style={stickyLeft !== undefined ? { left: stickyLeft } : undefined}
       className={`px-1.5 py-[3px] text-[10px] leading-[1.35] tabular-nums whitespace-nowrap ${GRID_LINE} ${alignCls} ${stickyLeft !== undefined ? 'sticky z-20' : ''} ${className}`}
     >
-      {children}
+      {tip ? <Tip text={tip}>{children}</Tip> : children}
     </td>
   );
 }
@@ -519,10 +573,12 @@ export default function ModuleDeliveriesPage() {
               ['tracker', 'Khavda tracker', 'Khavda projects not yet commissioned — the scope of the printed tracker'],
               ['all', 'All projects', 'Everything mapped: also Rajasthan, commissioned projects, and Khavda projects the printed tracker omits'],
             ] as const).map(([v, label, tip]) => (
-              <button key={v} onClick={() => setScope(v)} aria-pressed={scope === v} title={tip}
-                className={`px-2 py-1 transition-colors ${scope === v ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                {label}
-              </button>
+              <Tip text={tip}>
+                <button key={v} onClick={() => setScope(v)} aria-pressed={scope === v}
+                  className={`px-2 py-1 transition-colors ${scope === v ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
+                  {label}
+                </button>
+              </Tip>
             ))}
           </div>
         </div>
@@ -565,7 +621,18 @@ export default function ModuleDeliveriesPage() {
                 </Th>
                 <Th rowSpan={2} className="min-w-[80px]">SCOD</Th>
                 <Th rowSpan={2} className="min-w-[66px]"><ThLabel label="AOP" unit="(Plan)" /></Th>
-                <Th rowSpan={2} className="min-w-[76px]">
+                <Th rowSpan={2} className={`min-w-[64px] ${SECTION_EDGE}`}><ThLabel label="Ordered" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Ordering" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Total Receipt" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>
+                <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="From the CEO PDF tracker's manual monthly plan — no live data source yet, so these are intentionally blank">
+                  Month wise Module Requirement at Site (MWp)
+                </Th>
+                <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="FTC" unit="Date" />
                     <InfoTip info="First Time Charging. Base date mapped for the project." align="center" />
@@ -583,18 +650,7 @@ export default function ModuleDeliveriesPage() {
                     <InfoTip info={<span>Target delivery date at site.<br/><b>Calculation:</b> TC Date - Lead Time (98 or 136 days based on origin).</span>} align="center" />
                   </div>
                 </Th>
-                <Th rowSpan={2} className={`min-w-[64px] ${SECTION_EDGE}`}><ThLabel label="Ordered" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Ordering" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Total Receipt" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>
-                <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} title="From the CEO PDF tracker's manual monthly plan — no live data source yet, so these are intentionally blank">
-                  Month wise Module Requirement at Site (MWp)
-                </Th>
-                <Th rowSpan={2} className={`min-w-[210px] text-left ${SECTION_EDGE}`}>Remarks</Th>
+                <Th rowSpan={2} className="min-w-[210px] text-left">Remarks</Th>
               </tr>
               <tr>
                 {FORECAST_MONTHS.map((mo, i) => (
@@ -609,7 +665,7 @@ export default function ModuleDeliveriesPage() {
                   {/* Group Header */}
                   {groupBy !== 'none' && (
                     <tr className="cursor-pointer" onClick={() => toggleGroup(group)}>
-                      <td colSpan={40} className="border-y border-[var(--border-default)] bg-[var(--neutral-200)] px-1.5 py-1">
+                      <td colSpan={TABLE_COLUMN_COUNT} className="border-y border-[var(--border-default)] bg-[var(--neutral-200)] px-1.5 py-1">
                         <div className="sticky left-2 flex w-fit items-center gap-1.5">
                           {collapsed.has(group)
                             ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -664,24 +720,22 @@ export default function ModuleDeliveriesPage() {
                         ) : savingScodId === p.id ? (
                           <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
                         ) : (
-                          <button
-                            type="button"
-                            onClick={() => setEditingScodId(p.id)}
-                            className={`inline-flex items-center gap-1 rounded px-1 -mx-1 py-px text-[10px] decoration-dotted underline-offset-2 hover:bg-primary/5 hover:text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${p.scod_source === 'manual_lta' ? 'text-amber-500 font-semibold' : 'text-foreground'}`}
-                            title={`${p.scod_source === 'manual_lta' ? 'Derived from LTA offset' : p.scod_source === 'manual' ? 'Manually entered' : `Derived from ${p.scod_source ?? 'no source'}`} ${p.scod_lta_diff_days != null ? `\n(LTA ${p.scod_lta_diff_days >= 0 ? '+' : ''}${p.scod_lta_diff_days} days)` : ''} — click to override`}
-                          >
-                            <span>{p.scod || '-'}</span>
-                            {p.scod_source === 'manual' && <span className="h-1 w-1 shrink-0 rounded-full bg-primary" title="Manually entered" />}
-                          </button>
+                          <Tip text={`${p.scod_source === 'manual_lta' ? 'Derived from LTA offset' : p.scod_source === 'manual' ? 'Manually entered' : `Derived from ${p.scod_source ?? 'no source'}`} ${p.scod_lta_diff_days != null ? `\n(LTA ${p.scod_lta_diff_days >= 0 ? '+' : ''}${p.scod_lta_diff_days} days)` : ''} — click to override`}>
+                            <button
+                              type="button"
+                              onClick={() => setEditingScodId(p.id)}
+                              className={`inline-flex items-center gap-1 rounded px-1 -mx-1 py-px text-[10px] decoration-dotted underline-offset-2 hover:bg-primary/5 hover:text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${p.scod_source === 'manual_lta' ? 'text-amber-500 font-semibold' : 'text-foreground'}`}
+                            >
+                              <span>{p.scod || '-'}</span>
+                              {p.scod_source === 'manual' && <Tip text="Manually entered"><span className="h-1 w-1 shrink-0 rounded-full bg-primary" /></Tip>}
+                            </button>
+                          </Tip>
                         )}
                       </td>
                       <Td>{p.aop_plan || '-'}</Td>
-                      <Td>{p.ftc_date || '-'}</Td>
-                      <Td>{p.tc_date || '-'}</Td>
-                      <Td>{p.module_date || '-'}</Td>
                       {/* An apportioned figure is derived, not measured — mark it. */}
                       <Td align="right" className={`${SECTION_EDGE} ${p.ordered_mwp === 0 ? 'text-muted-foreground' : ''}`}
-                        title={p.po_apportioned ? `Apportioned: ${p.po_share_pct}% of a PO on WBS ${p.p6_name ? '' : ''}shared with other projects` : undefined}>
+                        tip={p.po_apportioned ? `Apportioned: ${p.po_share_pct}% of a PO on WBS shared with other projects` : undefined}>
                         {p.ordered_mwp > 0 ? MW(p.ordered_mwp) : '-'}
                         {p.po_apportioned && <span className="ml-0.5 text-[8px] align-super text-[var(--status-watch-fg)]">~</span>}
                       </Td>
@@ -689,8 +743,19 @@ export default function ModuleDeliveriesPage() {
                         {p.balance_ordering_mwp > 0 ? MW(p.balance_ordering_mwp) : '-'}
                       </Td>
                       <MwCell value={p.total_receipt_mwp} cap={p.ordered_mwp} />
-                      <Td align="right" className="text-muted-foreground/50" title="No source — needs MB51 movement types">-</Td>
-                      <Td align="right">{p.module_inventory_mwp > 0 ? MW(p.module_inventory_mwp) : '-'}</Td>
+                      <Td align="right"
+                        tip={p.erection_done_mwp > 0 ? 'Measured MWp installed, from the P6 Module Installation activities' : undefined}>
+                        {p.erection_done_mwp > 0 ? MW(p.erection_done_mwp) : '-'}
+                      </Td>
+                      {/* A negative is shown, not hidden behind a dash: it means
+                          SAP's receipt is short of what P6 reports erected. */}
+                      <Td align="right"
+                        className={p.module_inventory_negative ? 'text-[var(--status-critical-fg)]' : ''}
+                        tip={p.module_inventory_negative
+                          ? `SAP receipt (${MW(p.total_receipt_mwp)}) is below P6 erected (${MW(p.erection_done_mwp)}) — ZSPS carries no delivery history for this project. MB52 stock on hand: ${MW(p.module_inventory_sap_mwp)} MWp`
+                          : undefined}>
+                        {p.module_inventory_mwp !== 0 ? MW(p.module_inventory_mwp) : '-'}
+                      </Td>
                       <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>
                       <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
@@ -700,7 +765,16 @@ export default function ModuleDeliveriesPage() {
                         <Td key={mo} align="right" className={`text-muted-foreground/40 ${i === 0 ? SECTION_EDGE : ''}`}>-</Td>
                       ))}
                       <Td align="right" className="text-muted-foreground/40">-</Td>
-                      <Td align="left" className={`max-w-[240px] truncate text-muted-foreground ${SECTION_EDGE}`} title={p.remarks || undefined}>{p.remarks || '-'}</Td>
+                      <Td className={SECTION_EDGE}>
+                        {p.ftc_date
+                          ? p.ftc_date
+                          : p.ftc_all_charged
+                            ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
+                            : '-'}
+                      </Td>
+                      <Td>{p.tc_date || '-'}</Td>
+                      <Td>{p.module_date || '-'}</Td>
+                      <Td align="left" className="max-w-[240px] truncate text-muted-foreground" tip={p.remarks || undefined}>{p.remarks || '-'}</Td>
                     </tr>
                   ))}
                 </React.Fragment>
@@ -727,13 +801,10 @@ export default function ModuleDeliveriesPage() {
                 <Td />
                 <Td />
                 <Td />
-                <Td />
-                <Td />
-                <Td />
                 <Td align="right" className={`text-foreground tabular-nums ${SECTION_EDGE}`}>{MW(t.ordered_mwp)}</Td>
                 <Td align="right" className="text-[var(--status-critical-fg)] tabular-nums">{MW(t.balance_ordering_mwp)}</Td>
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.received_mwp)}</Td>
-                <Td align="right" className="tabular-nums text-muted-foreground/50">—</Td>
+                <Td align="right" className="text-foreground tabular-nums">{MW(t.erection_mwp)}</Td>
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>
@@ -741,6 +812,9 @@ export default function ModuleDeliveriesPage() {
                 {FORECAST_MONTHS.map(mo => <Td key={mo} />)}
                 <Td />
                 <Td className={SECTION_EDGE} />
+                <Td />
+                <Td />
+                <Td />
               </tr>
             </tbody>
           </table>

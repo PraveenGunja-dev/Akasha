@@ -20,8 +20,3 @@ export { ChartFrame } from './ChartFrame';
 export type { ChartFrameProps } from './ChartFrame';
 export { PageHeader } from './PageHeader';
 export { containerVariants, itemVariants } from './motion';
-
-/* NOT YET WRITTEN — exported here before the module existed, which broke
-   `tsc -b` for the whole app. Re-add the export in the same move that adds the
-   file, so the barrel never again references something that isn't there:
-     · HeroBand (+ HeroBandTop, HeroStatement, HeroSubline, HeroStats, HeroStat) */

@@ -57,6 +57,20 @@ def _safe_float(v, default=0.0):
 NON_EPC_EPS_LABELS = {"Khavda", "Rajasthan", "AGEL Projects", "Superseded", "Other (Outside Khavda)"}
 
 
+# A project_id can carry MORE THAN ONE p6_project row: a superseded schedule and
+# the current one (FY25-BAIYA_600MW and FY25-BANDHA_500MW each have two,
+# data_date 2026-07-18 vs 2026-09-12). Joining on project_id alone mixes both
+# schedules, which made the FTC dates flip between the old and new plan from one
+# request to the next — a ~4 month swing on BANDHA (30-Dec-26 vs 16-Apr-27) — and
+# would double the erected MWp. Every P6 lookup joins through this instead.
+LATEST_P6 = """
+    SELECT DISTINCT ON (project_id) project_id, p6_object_id, parent_eps_name
+    FROM p6_project
+    WHERE project_id IS NOT NULL
+    ORDER BY project_id, data_date DESC NULLS LAST, last_synced_at DESC NULLS LAST, p6_object_id DESC
+"""
+
+
 # ── Main Endpoint ────────────────────────────────────────────────────────────
 
 @router.get("/summary")
@@ -86,6 +100,10 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         WHERE (material_name ILIKE '%module%' OR short_text ILIKE '%module%')
           AND mw_multiplication_factor IS NOT NULL
           AND mw_multiplication_factor > 0
+          -- PO value is POrd only (the SLR rule); a PReq is a requisition, not
+          -- an order. Every module line is POrd today, so this changes no
+          -- number now — it stops a future PReq ingest inflating "Ordered".
+          AND doc_type = 'POrd'
         GROUP BY wbs_element
     """)).fetchall()
 
@@ -128,16 +146,39 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         pc = (row[0] or "").strip()
         inv_by_plant[pc] = inv_by_plant.get(pc, 0) + _safe_float(row[1])
 
-    # 4. Pre-fetch max COD dates from trial runs
-    all_tr = db.execute(text("""
-        SELECT project_name_p6, MAX(trial_run_finish) AS max_cod
-        FROM mt_trialrun
-        GROUP BY project_name_p6
+    # 3b. Erection done, from P6's "Module Installation" activities.
+    #     Each block-level activity carries a Material resource assignment whose
+    #     units are MWp, NOT a module count as an older comment in dashboard.py
+    #     claims: summed per project, planned_units lands within 10% of the
+    #     project's own capacity MWp on 47 of 49 projects (most within 1%), so
+    #     actual_units is measured MWp erected.
+    #     Note this is the MODULE installation activity, not "MMS Erection -
+    #     Purlin" — purlin is the mounting structure that precedes the modules,
+    #     so counting it here would report erected capacity that has no panels.
+    #     Joined through the latest P6 schedule only, for the same reason the
+    #     FTC/AOP lookups are (BAIYA/BANDHA each carry a superseded schedule,
+    #     which would otherwise double the erected figure).
+    all_p6_erect = db.execute(text(f"""
+        WITH latest_p6 AS ({LATEST_P6})
+        SELECT p.project_id, SUM(r.actual_units) AS erected_mwp
+        FROM p6_resource_assignment r
+        JOIN p6_activity a ON a.p6_object_id = r.activity_object_id
+        JOIN latest_p6 p ON p.p6_object_id = a.project_object_id
+        WHERE a.name ILIKE '%module installation%'
+          AND r.resource_type = 'Material'
+          AND r.actual_units IS NOT NULL
+        GROUP BY p.project_id
     """)).fetchall()
-    cod_by_p6: dict[str, datetime] = {}
-    for row in all_tr:
-        if row[0] and row[1]:
-            cod_by_p6[row[0]] = row[1]
+    erected_by_pid: dict[str, float] = {r[0]: _safe_float(r[1]) for r in all_p6_erect if r[0]}
+
+    # Erection is keyed by P6 project_id, but several mapping rows can share one
+    # (ASEJ6PL_S07 appears twice). Split it by capacity so the portfolio total
+    # stays right instead of counting the same erected MWp once per row.
+    cap_by_pid: dict[str, float] = {}
+    for m in mappings:
+        if m.project_id in erected_by_pid:
+            c = _safe_float(m.capacity_mwdc) or _safe_float(m.capacity_mwac) * _safe_float(m.ol or "1.35", 1.35)
+            cap_by_pid[m.project_id] = cap_by_pid.get(m.project_id, 0.0) + c
 
     # Both P6 lookups below join on p6_project.project_id, NOT p.name. P6's
     # project names have inconsistent spacing and suffixes against the
@@ -154,9 +195,10 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
 
     # 5b. Pre-fetch EPC contractor from Primavera's ParentEPSName (p6_project.parent_eps_name).
     #     Some EPS values are region/status groupings, not contractors — exclude those.
-    all_p6_epc = db.execute(text("""
-        SELECT project_id, parent_eps_name FROM p6_project
-        WHERE parent_eps_name IS NOT NULL AND project_id IS NOT NULL
+    all_p6_epc = db.execute(text(f"""
+        WITH latest_p6 AS ({LATEST_P6})
+        SELECT project_id, parent_eps_name FROM latest_p6
+        WHERE parent_eps_name IS NOT NULL
     """)).fetchall()
     p6_epc_by_pid: dict[str, str] = {}
     for row in all_p6_epc:
@@ -170,12 +212,13 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
     #     "Block-01 - COD" activities by requiring the name to start with COD.
     #     A multi-phase project takes its LATEST phase's date (user decision
     #     2026-09-19, same rule as Connectivity Phase).
-    all_p6_aop = db.execute(text("""
+    all_p6_aop = db.execute(text(f"""
+        WITH latest_p6 AS ({LATEST_P6})
         SELECT p.project_id, MAX(a.baseline_finish_date) AS aop
         FROM p6_activity a
-        JOIN p6_project p ON p.p6_object_id = a.project_object_id
+        JOIN latest_p6 p ON p.p6_object_id = a.project_object_id
         WHERE a.name ILIKE 'COD%' AND a.type = 'Finish Milestone'
-          AND a.baseline_finish_date IS NOT NULL AND p.project_id IS NOT NULL
+          AND a.baseline_finish_date IS NOT NULL
         GROUP BY p.project_id
     """)).fetchall()
     aop_by_pid: dict[str, datetime] = {row[0]: row[1] for row in all_p6_aop if row[0]}
@@ -189,33 +232,42 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
     #     construction-progress tracking, not the project/phase FTC commitment,
     #     and was inflating this into a list of per-block dates (user report
     #     2026-09-20).
-    all_p6_ftc = db.execute(text("""
-        SELECT p.project_id, a.name, a.planned_finish_date, a.actual_finish_date, a.wbs_name, a.wbs_object_id
+    #     Ordering is explicitly tie-broken on p6_object_id: two milestones can
+    #     share a date (NHPC, BANDHA), and without it the phase order shuffled
+    #     between requests.
+    all_p6_ftc = db.execute(text(f"""
+        WITH latest_p6 AS ({LATEST_P6})
+        SELECT p.project_id, a.name, a.planned_finish_date, a.actual_finish_date,
+               a.wbs_name, a.wbs_object_id, a.p6_object_id
         FROM p6_activity a
-        JOIN p6_project p ON p.p6_object_id = a.project_object_id
+        JOIN latest_p6 p ON p.p6_object_id = a.project_object_id
         WHERE (a.name ILIKE '%First Time Charging%' OR a.name ILIKE '%FTC%')
           AND a.type = 'Finish Milestone'
           AND (a.wbs_name ILIKE '%MILESTONE%' OR a.wbs_name ILIKE 'PHASE-%')
-          AND p.project_id IS NOT NULL
-        ORDER BY COALESCE(a.planned_finish_date, a.actual_finish_date) ASC
+        ORDER BY COALESCE(a.planned_finish_date, a.actual_finish_date) ASC, a.p6_object_id ASC
     """)).fetchall()
     
     import re
     # Dictionary mapping project_id -> wbs_object_id -> list of phase dicts
     ftc_phases_by_pid: dict[str, dict[int, list[dict]]] = {}
     for row in all_p6_ftc:
-        pid, name, p_dt, a_dt, wbs_name, wbs_id = row[0], row[1], row[2], row[3], row[4], row[5]
+        pid, name, p_dt, a_dt, wbs_name, wbs_id, act_id = row[0], row[1], row[2], row[3], row[4], row[5], row[6]
         
         # Determine the working date (actual if completed, else planned)
         dt = a_dt if a_dt else p_dt
         if not dt:
             continue
             
-        # Parse phase
-        match = re.search(r'(Phase[\s\-]*[IV]+)', name, re.IGNORECASE)
+        # Parse phase. P6 writes these as Roman ("Phase-II"), Arabic
+        # ("Phase-01") or a split tranche ("Phase II-A" / "Phase II-B", which
+        # BAIYA uses for its 59 MW and 75 MW halves) — dropping the A/B suffix
+        # collapsed those two into one indistinguishable "Ph-II".
+        match = re.search(r'Phase[\s\-]*((?:[IVX]+(?:\s*-\s*[AB])?|\d+))(?![\w])', name, re.IGNORECASE)
         phase = ""
         if match:
-            phase_num = match.group(1).upper().replace('PHASE', '').replace('-', '').strip()
+            phase_num = re.sub(r'\s*-\s*', '-', match.group(1).upper().strip())
+            if phase_num.isdigit():
+                phase_num = str(int(phase_num))
             phase = f"Ph-{phase_num}"
             
         # Parse MWac capacity from name or wbs_name
@@ -223,6 +275,15 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         mw_match = re.search(r'(\d+(?:\.\d+)?)\s*MW', name + " " + wbs_name, re.IGNORECASE)
         if mw_match:
             mw_ac = float(mw_match.group(1))
+
+        # A phase can be charged in several tranches that share the phase
+        # number and capacity, and are told apart ONLY by the block range P6
+        # puts in the name — NHPC runs four such Phase-II charges
+        # ("BL- 01 to 14", "BL- 15 to 24", …). Carry it so they stay distinct.
+        blocks = ""
+        blk_match = re.search(r'\bBL[\s\-]*[:\-]?\s*(.+)$', name, re.IGNORECASE)
+        if blk_match:
+            blocks = re.sub(r'\s+', ' ', blk_match.group(1)).strip(' .,-')
             
         if pid not in ftc_phases_by_pid:
             ftc_phases_by_pid[pid] = {}
@@ -233,17 +294,10 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             "phase": phase,
             "dt": dt,
             "is_completed": a_dt is not None,
-            "mw_ac": mw_ac
+            "mw_ac": mw_ac,
+            "act_id": act_id,
+            "blocks": blocks,
         })
-
-    # 6. Pre-fetch transmission SCOD (last-resort fallback for the SCOD cascade)
-    all_tc = db.execute(text("""
-        SELECT mapping_id, MAX(scd) AS scod
-        FROM tc_network_edge
-        WHERE mapping_id IS NOT NULL
-        GROUP BY mapping_id
-    """)).fetchall()
-    tc_scod_by_mapping: dict[int, str] = {row[0]: row[1] for row in all_tc if row[1]}
 
     # 6b. Connectivity phase from the transmission portal. A project's
     #     transmission often spans more than one Khavda phase; the last phase
@@ -301,8 +355,9 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             best_wid = min(wbs_sums.keys(), key=lambda wid: abs(wbs_sums[wid] - original_cap_mwac))
             ftc_list = wbs_dict[best_wid]
             
-        # Sort milestones by date so Phase 1 is first
-        ftc_list.sort(key=lambda x: x["dt"])
+        # Sort milestones by date so Phase 1 is first. The activity id breaks
+        # date ties so the phase order cannot vary between requests.
+        ftc_list.sort(key=lambda x: (x["dt"], x["act_id"]))
         
         # FIX: Distribute project capacity to FTC phases that didn't have capacity in their name (e.g. single phase)
         total_known_mwac = sum(p["mw_ac"] for p in ftc_list)
@@ -314,12 +369,16 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
                 for p in missing_cap_phases:
                     p["mw_ac"] = per_phase
         
-        # User requested: MWac comes from the FTC which is not completed
-        if ftc_list:
-            cap_mwac = sum(p["mw_ac"] for p in ftc_list if not p["is_completed"])
-        else:
-            cap_mwac = original_cap_mwac
-            
+        # Capacity is the project's own total, not the capacity left to charge
+        # (user decision 2026-09-20). Scoping it to un-charged phases zeroed the
+        # 17 fully-charged projects, and because the SAP POs below are
+        # apportioned by capacity share, that silently dropped 1,923 MWp — 47%
+        # of all module PO value — off the sheet. Only the FTC/TC/Module dates
+        # drop completed phases; capacity already charged is reported
+        # separately as completed_ftc_mwp.
+        cap_mwac = original_cap_mwac
+
+
         ol_val = _safe_float(m.ol, 0.0)
         cap_mwp = 0.0
         if ol_val > 0:
@@ -356,25 +415,31 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             plant_codes = [pc.strip() for pc in m.spv_plant_code.split(',')]
         inv = sum(inv_by_plant.get(pc, 0) for pc in plant_codes)
 
-        # Balance calculations
+        # Erection done: this project's share of the P6-measured erected MWp.
+        erected = 0.0
+        if m.project_id in erected_by_pid:
+            pid_cap = cap_by_pid.get(m.project_id, 0.0)
+            erected = erected_by_pid[m.project_id] * ((cap_mwp / pid_cap) if pid_cap > 0 else 1.0)
+
+        # Balance calculations. Dispatch is what is ordered but neither received
+        # nor already on its way (user definition 2026-09-20) — subtracting only
+        # the received part double-counted the in-transit MWp as still to dispatch.
         balance_ordering = max(cap_mwp - ordered, 0) if ordered > 0 else cap_mwp
-        balance_dispatch = max(ordered - delivered, 0) if delivered > 0 else ordered
+        balance_dispatch = max(ordered - delivered - in_transit, 0)
 
         # SCOD: manual override (user-entered in this tracker) takes precedence
-        # over the fallback cascade trial_run -> TC. No P6 milestone fallback —
-        # see note above.
+        # No fallback cascade: SCOD is only ever a manually-entered value or one
+        # populated from the connectivity sheet's own SCOD column (both land in
+        # manual_scod). A live trial-run finish or a TC network edge date is a
+        # different, unrelated commitment — showing it as SCOD was not what was
+        # actually being tracked here (user decision 2026-09-20). If neither the
+        # user nor the sheet has entered a value, SCOD is blank, not guessed.
         p6_name = m.project_name_from_p6 or ""
         scod = None
         scod_source = None
         if m.manual_scod:
             scod = m.manual_scod
             scod_source = "manual_lta" if m.manual_scod_is_lta else "manual"
-        elif p6_name in cod_by_p6:
-            scod = cod_by_p6[p6_name]
-            scod_source = "trial_run"
-        elif m.id in tc_scod_by_mapping:
-            scod = tc_scod_by_mapping[m.id]
-            scod_source = "tc"
 
         # AOP (Plan): baseline finish of the "COD Certification Finish" P6
         # milestone. No fallback — a transmission ECOD is a different
@@ -398,23 +463,50 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             
         lead_time = 136 if source_type in ("China", "SEA") else 98
         
+        # Only phases that have NOT been charged yet carry a date — a completed
+        # FTC needs no module delivery, so its date is dropped and its capacity
+        # is carried out separately as completed_ftc_mwp (user rule 2026-09-20).
+        # A phased project labels each date with that phase's own capacity, as
+        # stated in the P6 milestone name; an unphased project shows the bare
+        # date, its capacity being the project total already in the MWac column.
+        # The capacity is what separates NHPC's four same-named "Phase-II"
+        # tranches (125/125/125/175 MW) from one another.
+        pending = [p for p in ftc_list if not p["is_completed"]]
+        is_phased = len(pending) > 1 or any(p["phase"] for p in pending)
+
+        def _base_label(p, i):
+            lab = p["phase"] or (f"Ph-{i+1}" if len(ftc_list) > 1 else "")
+            if is_phased and p["mw_ac"] > 0:
+                mw = f"{p['mw_ac']:g}MW"
+                lab = f"{lab} ({mw})" if lab else mw
+            return lab
+
+        _seen = [_base_label(p, i) for i, p in enumerate(ftc_list) if not p["is_completed"]]
+        ambiguous_labels = {lab for lab in _seen if lab and _seen.count(lab) > 1}
+
         ftc_strs, tc_strs, mod_strs = [], [], []
         completed_ftc_mwac = 0.0
         for idx, phase_info in enumerate(ftc_list):
             ph_name = phase_info["phase"]
             dt = phase_info["dt"]
-            
+
             if phase_info["is_completed"]:
                 completed_ftc_mwac += phase_info["mw_ac"]
-                # Skip showing dates for completed phases since they are no longer pending
                 continue
-                
-            prefix = ph_name if ph_name else (f"Ph-{idx+1}" if len(ftc_list) > 1 else "")
-            prefix = f"{prefix}: " if prefix else ""
-            
+
+            label = ph_name if ph_name else (f"Ph-{idx+1}" if len(ftc_list) > 1 else "")
+            if is_phased and phase_info["mw_ac"] > 0:
+                mw_txt = f"{phase_info['mw_ac']:g}MW"
+                label = f"{label} ({mw_txt})" if label else mw_txt
+            # Only qualify with the block range where the phase+capacity alone
+            # would repeat, so the common single-charge phase stays short.
+            if phase_info["blocks"] and label in ambiguous_labels:
+                label = f"{label} BL-{phase_info['blocks']}"
+            prefix = f"{label}: " if label else ""
+
             tc_dt = dt - timedelta(days=45)
             mod_dt = tc_dt - timedelta(days=lead_time)
-            
+
             ftc_strs.append(f"{prefix}{dt.strftime('%d-%b-%y')}")
             tc_strs.append(f"{prefix}{tc_dt.strftime('%d-%b-%y')}")
             mod_strs.append(f"{prefix}{mod_dt.strftime('%d-%b-%y')}")
@@ -424,9 +516,13 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         if ol_val > 0:
             completed_ftc_mwp = completed_ftc_mwac * ol_val
             
-        ftc_date_str = ", ".join(ftc_strs)
-        tc_date_str = ", ".join(tc_strs)
-        module_date_str = ", ".join(mod_strs)
+        # " · " rather than ", ": a block-range label carries its own commas
+        # ("BL-34, 36 to 41, 44"), so a comma separator made one entry
+        # indistinguishable from the next.
+        sep = " · "
+        ftc_date_str = sep.join(ftc_strs)
+        tc_date_str = sep.join(tc_strs)
+        module_date_str = sep.join(mod_strs)
 
         # SPV: the mapping sheet often has a literal '-' placeholder instead of
         # leaving it blank. Fall back to the SPV code embedded in the P6 name
@@ -457,13 +553,29 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             "scod_source": scod_source,
             "aop_plan": aop_plan.strftime("%d-%b-%y") if isinstance(aop_plan, datetime) else "",
             "ftc_date": ftc_date_str,
+            # Distinguishes the two reasons an FTC cell is empty: every phase
+            # is already charged, versus P6 carrying no FTC milestone for the
+            # project at all. Derived from the milestones themselves, not from
+            # completed_ftc_mwp, which is zero whenever OL is missing.
+            "ftc_all_charged": bool(ftc_list) and not pending,
             "tc_date": tc_date_str,
             "module_date": module_date_str,
             "ordered_mwp": round(ordered, 1),
             "balance_ordering_mwp": round(balance_ordering, 1),
             "total_receipt_mwp": round(delivered, 1),
-            "erection_done_mwp": 0,  # Need MB51 data with proper movement types
-            "module_inventory_mwp": round(inv, 1),
+            "erection_done_mwp": round(erected, 1),
+            # Inventory is what has landed but is not yet on structures. The
+            # reference tracker defines it exactly this way and every row of it
+            # satisfies receipt - erection = inventory. It is NOT floored at 0:
+            # a negative means SAP's delivered_qty is short of what P6 reports
+            # erected for that project, which is a real source conflict and is
+            # flagged rather than hidden behind a plausible-looking zero.
+            "module_inventory_mwp": round(delivered - erected, 1),
+            "module_inventory_negative": (delivered - erected) < -0.5,
+            # The measured MB52 stock on hand, kept beside the derived figure so
+            # the two can be reconciled. Not the same quantity: MB52 is a
+            # point-in-time plant snapshot, this column is cumulative.
+            "module_inventory_sap_mwp": round(inv, 1),
             "under_transit_mwp": round(in_transit, 1),
             "balance_dispatch_mwp": round(balance_dispatch, 1),
             "completed_ftc_mwp": round(completed_ftc_mwp, 1),
@@ -489,7 +601,8 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         totals["ordered_mwp"] += ordered
         totals["balance_ordering_mwp"] += balance_ordering
         totals["received_mwp"] += delivered
-        totals["inventory_mwp"] += inv
+        totals["erection_mwp"] += erected
+        totals["inventory_mwp"] += (delivered - erected)
         totals["under_transit_mwp"] += in_transit
         totals["balance_dispatch_mwp"] += balance_dispatch
         totals["completed_ftc_mwp"] += completed_ftc_mwp

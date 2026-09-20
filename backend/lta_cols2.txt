@@ -1,0 +1,71 @@
+1.0
+Bhuj-I → Kps-I
+765kV
+AESL
+Foundation (nos.)
+0.0
+0.0
+0.0
+nan
+Charged
+nan
+nan
+nan
+nan
+nan
+1
+Bhuj-I → Kps-I
+nan
+Yes
+nan
+nan
+nan
+nan
+Charged
+109
+nan
+nan
+nan
+Sr.no.
+KPS
+Connectivity MW
+Connectivity Breakup
+Connectivity Phase
+Project
+Block
+PSS
+nan
+nan
+nan
+nan
+Sr.no.
+KPS
+Park
+Voltage
+Connectivity MW
+Connectivity Breakup
+Solar
+Wind
+Connectivity Phase
+Likey start date of connectivity
+Project
+P6 project Name
+SPV
+Category
+Block
+Plot
+PSS
+Module
+MMS
+SCOD
+ECOD
+Financing
+EPC Partner
+nan
+Phase
+nan
+nan
+1.0
+Padghe (GIS)
+19°24′31.91″N
+73°12′40.40″E

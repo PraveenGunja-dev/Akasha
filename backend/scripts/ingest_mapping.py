@@ -53,6 +53,13 @@ def ingest_mapping():
             cap_match = re.search(r'_(\d+(?:\.\d+)?)\s*_?MW', name, re.IGNORECASE)
             
             parsed = {}
+            # The SPV code is the leading token (ARE8L_LUDBAY_FT_150MW_PPA ->
+            # ARE8L). The master sheet leaves SPV blank or writes a literal '-'
+            # for several projects, and the name is the reliable second source.
+            head = name.split('_', 1)[0].strip()
+            if head and head != name.strip():
+                parsed['spv_name'] = head
+
             if mms_match:
                 parsed['mms_type'] = mms_match.group(1).upper()
                 parts = name[:mms_match.start()].split('_', 1)
@@ -98,24 +105,28 @@ def ingest_mapping():
             if not cap_ac:
                 cap_ac = parsed_p6.get('capacity_mwac', 0.0)
                 
-            plot_no = str(row.get('Plot No', '')).strip()
-            if not plot_no: plot_no = parsed_p6.get('plot_no', '')
-            
-            mms_type = str(row.get('MMS Type', '')).strip()
-            if not mms_type: mms_type = parsed_p6.get('mms_type', '')
-            
-            cat = str(row.get('Category', '')).strip()
-            if not cat: cat = parsed_p6.get('category', '')
-            
-            epc = str(row.get('Type (Cluster)', '')).strip()
-            if not epc: epc = parsed_p6.get('subcluster', '')
+            # The master sheet writes a literal '-' (and sometimes 'nan') as a
+            # placeholder rather than leaving a cell empty, so an emptiness test
+            # alone let those through as real values.
+            def _blank(v):
+                return str(v).strip().lower() in ('', '-', 'na', 'nan', 'none')
+
+            def _pick(col, key):
+                v = str(row.get(col, '')).strip()
+                return parsed_p6.get(key, '') if _blank(v) else v
+
+            spv_name = _pick('SPV', 'spv_name')
+            plot_no = _pick('Plot No', 'plot_no')
+            mms_type = _pick('MMS Type', 'mms_type')
+            cat = _pick('Category', 'category')
+            epc = _pick('Type (Cluster)', 'subcluster')
 
             raw_lta_date = row.get('ECOD')
             lta_date = parse_date(raw_lta_date)
 
             fields = dict(
                 project=project,
-                spv_name=str(row.get('SPV', '')).strip(),
+                spv_name=spv_name,
                 project_id=project_id,
                 project_name_from_p6=project_name_from_p6,
                 plot_no=plot_no,
