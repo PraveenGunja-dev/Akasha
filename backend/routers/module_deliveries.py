@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, text, or_
 from typing import Optional
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from database import get_db
 import models
@@ -281,8 +281,41 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
     type_breakdowns: dict[str, dict] = {}
 
     for i, m in enumerate(mappings):
-        cap_mwac = _safe_float(m.capacity_mwac)
-        cap_mwp = _safe_float(m.capacity_mwdc) or cap_mwac * _safe_float(m.ol or "1.35", 1.35)
+        original_cap_mwac = _safe_float(m.capacity_mwac)
+        
+        # Deduplicate FTC phases if multiple WBS exist
+        wbs_dict = ftc_phases_by_pid.get(m.project_id, {})
+        wbs_sums = {wid: sum(x["mw_ac"] for x in milestones) for wid, milestones in wbs_dict.items()}
+        total_all_wbs = sum(wbs_sums.values())
+        
+        ftc_list = []
+        if original_cap_mwac == 0:
+            for milestones in wbs_dict.values():
+                ftc_list.extend(milestones)
+        elif total_all_wbs <= original_cap_mwac * 1.05:
+            # Additive WBS: Project spans multiple WBS blocks (e.g. FY26-P14)
+            for milestones in wbs_dict.values():
+                ftc_list.extend(milestones)
+        elif wbs_sums:
+            # Mutually exclusive WBS
+            best_wid = min(wbs_sums.keys(), key=lambda wid: abs(wbs_sums[wid] - original_cap_mwac))
+            ftc_list = wbs_dict[best_wid]
+            
+        # Sort milestones by date so Phase 1 is first
+        ftc_list.sort(key=lambda x: x["dt"])
+        
+        # User requested: MWac comes from the FTC which is not completed
+        if ftc_list:
+            cap_mwac = sum(p["mw_ac"] for p in ftc_list if not p["is_completed"])
+        else:
+            cap_mwac = original_cap_mwac
+            
+        ol_val = _safe_float(m.ol, 0.0)
+        cap_mwp = 0.0
+        if ol_val > 0:
+            cap_mwp = cap_mwac * ol_val
+        elif _safe_float(m.capacity_mwdc) > 0:
+            cap_mwp = _safe_float(m.capacity_mwdc)
 
         # SAP PO data, apportioned by this project's share of the capacity on
         # its WBS element (share == 1.0 whenever it is the only project there).
@@ -352,28 +385,6 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         source_type = m.source_of_origin or "Unknown"
         if source_type == "India":
             source_type = "ALMM"  # Default mapping, user can refine
-
-        # FTC, TC, and Module Date logic (multi-phase)
-        from datetime import timedelta
-        
-        # Deduplicate FTC phases if multiple WBS exist
-        wbs_dict = ftc_phases_by_pid.get(m.project_id, {})
-        wbs_sums = {wid: sum(x["mw_ac"] for x in milestones) for wid, milestones in wbs_dict.items()}
-        total_all_wbs = sum(wbs_sums.values())
-        
-        ftc_list = []
-        if total_all_wbs <= cap_mwac * 1.05:
-            # Additive WBS: Project spans multiple WBS blocks (e.g. FY26-P14)
-            for milestones in wbs_dict.values():
-                ftc_list.extend(milestones)
-        elif wbs_sums:
-            # Mutually exclusive WBS (e.g. duplicates like Baiya or Bandha): 
-            # Pick the WBS group closest to the project's capacity
-            best_wid = min(wbs_sums.keys(), key=lambda wid: abs(wbs_sums[wid] - cap_mwac))
-            ftc_list = wbs_dict[best_wid]
-            
-        # Sort milestones by date so Phase 1 is first
-        ftc_list.sort(key=lambda x: x["dt"])
             
         lead_time = 136 if source_type in ("China", "SEA") else 98
         
