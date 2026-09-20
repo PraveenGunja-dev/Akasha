@@ -391,9 +391,10 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                 me2j_data = po_lookup.get(po_doc_key, {})
 
                 # --- Extract only required columns based on ZSPS ---
-                qty = safe_float(row.get('C.Quantity', 0))
+                # C.Quantity is Commitment (Pending) Quantity, A.Quantity is Actual (Delivered) Quantity.
+                still_qty = safe_float(row.get('C.Quantity', 0))
                 del_qty = safe_float(row.get('A.Quantity', 0))
-                still_qty = qty - del_qty if qty >= del_qty else 0
+                qty = still_qty + del_qty
                 
                 # ZSPS provides Commitment Amt (Pending) and Actual Amount (Delivered)
                 still_inr = safe_float(row.get('Commitment Amt', 0))
