@@ -410,7 +410,9 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             mod_strs.append(f"{prefix}{mod_dt.strftime('%d-%b-%y')}")
             
         # Convert completed MWac to MWp
-        completed_ftc_mwp = completed_ftc_mwac * _safe_float(m.ol or "1.35", 1.35)
+        completed_ftc_mwp = 0.0
+        if ol_val > 0:
+            completed_ftc_mwp = completed_ftc_mwac * ol_val
             
         ftc_date_str = ", ".join(ftc_strs)
         tc_date_str = ", ".join(tc_strs)
