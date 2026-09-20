@@ -9,6 +9,7 @@ import {
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
+import { InfoTip } from '../../components/ui/primitives/InfoTip';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODULE DELIVERIES & FORECAST
@@ -553,13 +554,34 @@ export default function ModuleDeliveriesPage() {
                 <Th rowSpan={2} className={`min-w-[38px] ${SECTION_EDGE}`}>OL</Th>
                 <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWac)" /></Th>
                 <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWp)" /></Th>
+                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="FTC Completed" unit="(MWp)" /></Th>
                 <Th rowSpan={2} className={`min-w-[74px] ${SECTION_EDGE}`}><ThLabel label="Connectivity" unit="Phase" /></Th>
-                <Th rowSpan={2} className="min-w-[62px]">LTA</Th>
+                <Th rowSpan={2} className="min-w-[62px]">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    LTA
+                    <InfoTip info="Long Term Access date (pulled from ECOD in master sheets)" align="center" />
+                  </div>
+                </Th>
                 <Th rowSpan={2} className="min-w-[80px]">SCOD</Th>
                 <Th rowSpan={2} className="min-w-[66px]"><ThLabel label="AOP" unit="(Plan)" /></Th>
-                <Th rowSpan={2} className="min-w-[76px]"><ThLabel label="FTC" unit="Date" /></Th>
-                <Th rowSpan={2} className="min-w-[76px]"><ThLabel label="TC" unit="Date" /></Th>
-                <Th rowSpan={2} className="min-w-[76px]"><ThLabel label="Module" unit="Date" /></Th>
+                <Th rowSpan={2} className="min-w-[76px]">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <ThLabel label="FTC" unit="Date" />
+                    <InfoTip info="First Time Charging. Base date mapped for the project." align="center" />
+                  </div>
+                </Th>
+                <Th rowSpan={2} className="min-w-[76px]">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <ThLabel label="TC" unit="Date" />
+                    <InfoTip info={<span>Trial Commissioning.<br/><b>Calculation:</b> FTC Date - 45 days.</span>} align="center" />
+                  </div>
+                </Th>
+                <Th rowSpan={2} className="min-w-[76px]">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <ThLabel label="Module" unit="Date" />
+                    <InfoTip info={<span>Target delivery date at site.<br/><b>Calculation:</b> TC Date - Lead Time (98 or 136 days based on origin).</span>} align="center" />
+                  </div>
+                </Th>
                 <Th rowSpan={2} className={`min-w-[64px] ${SECTION_EDGE}`}><ThLabel label="Ordered" unit="(MWp)" /></Th>
                 <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Ordering" unit="(MWp)" /></Th>
                 <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Total Receipt" unit="(MWp)" /></Th>
@@ -617,8 +639,9 @@ export default function ModuleDeliveriesPage() {
                       <Td align="right" className={SECTION_EDGE}>{p.ol > 0 ? p.ol.toFixed(2) : '-'}</Td>
                       <Td align="right">{MW(p.capacity_mwac)}</Td>
                       <Td align="right" className="font-semibold text-foreground">{MW(p.capacity_mwp)}</Td>
+                      <Td align="right" className="font-semibold text-[var(--status-watch-fg)]">{p.completed_ftc_mwp > 0 ? MW(p.completed_ftc_mwp) : '-'}</Td>
                       <Td className={SECTION_EDGE}>{p.connectivity_phase || <span className="text-muted-foreground/50">-</span>}</Td>
-                      <Td className="text-muted-foreground/50">{p.lta || '-'}</Td>
+                      <Td>{p.lta || '-'}</Td>
                       <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE}`}>
                         {editingScodId === p.id ? (
                           <input
@@ -643,8 +666,8 @@ export default function ModuleDeliveriesPage() {
                           <button
                             type="button"
                             onClick={() => setEditingScodId(p.id)}
-                            className="inline-flex items-center gap-1 rounded px-1 -mx-1 py-px text-[10px] text-foreground decoration-dotted underline-offset-2 hover:bg-primary/5 hover:text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
-                            title={p.scod_source === 'manual' ? 'Manually entered — click to edit' : `Derived from ${p.scod_source ?? 'no source'} — click to override`}
+                            className={`inline-flex items-center gap-1 rounded px-1 -mx-1 py-px text-[10px] decoration-dotted underline-offset-2 hover:bg-primary/5 hover:text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${p.scod_lta_diff_days != null ? 'text-amber-500 font-semibold' : 'text-foreground'}`}
+                            title={`${p.scod_source === 'manual' ? 'Manually entered' : `Derived from ${p.scod_source ?? 'no source'}`} ${p.scod_lta_diff_days != null ? `\n(LTA ${p.scod_lta_diff_days >= 0 ? '+' : ''}${p.scod_lta_diff_days} days)` : ''} — click to override`}
                           >
                             <span>{p.scod || '-'}</span>
                             {p.scod_source === 'manual' && <span className="h-1 w-1 shrink-0 rounded-full bg-primary" title="Manually entered" />}
@@ -698,6 +721,7 @@ export default function ModuleDeliveriesPage() {
                 <Td className={SECTION_EDGE} />
                 <Td align="right" className={`text-foreground tabular-nums `}>{MW(t.total_mwac)}</Td>
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.total_mwp)}</Td>
+                <Td align="right" className="text-foreground tabular-nums">{MW(t.completed_ftc_mwp)}</Td>
                 <Td className={SECTION_EDGE} />
                 <Td />
                 <Td />

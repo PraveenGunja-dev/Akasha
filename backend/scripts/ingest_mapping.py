@@ -37,6 +37,14 @@ def ingest_mapping():
             except ValueError:
                 return 0.0
 
+        def parse_date(val):
+            if pd.isna(val) or str(val).strip() == '':
+                return None
+            try:
+                return pd.to_datetime(val)
+            except Exception:
+                return None
+
         def parse_p6_name(name):
             if not name:
                 return {}
@@ -102,6 +110,9 @@ def ingest_mapping():
             epc = str(row.get('Type (Cluster)', '')).strip()
             if not epc: epc = parsed_p6.get('subcluster', '')
 
+            raw_lta_date = row.get('ECOD')
+            lta_date = parse_date(raw_lta_date)
+
             fields = dict(
                 project=project,
                 spv_name=str(row.get('SPV', '')).strip(),
@@ -123,6 +134,7 @@ def ingest_mapping():
                 not_allocated=str(row.get('Not Allocated', '')).strip(),
                 priority=str(row.get('Priority', '')).strip(),
                 source_of_origin=str(row.get('SourceOfOrigin', '')).strip(),
+                lta_date=lta_date,
             )
 
             if project_id in existing_by_pid:

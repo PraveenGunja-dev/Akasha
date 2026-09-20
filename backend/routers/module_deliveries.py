@@ -190,26 +190,51 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
     #     and was inflating this into a list of per-block dates (user report
     #     2026-09-20).
     all_p6_ftc = db.execute(text("""
-        SELECT p.project_id, a.name, a.planned_finish_date
+        SELECT p.project_id, a.name, a.planned_finish_date, a.actual_finish_date, a.wbs_name, a.wbs_object_id
         FROM p6_activity a
         JOIN p6_project p ON p.p6_object_id = a.project_object_id
         WHERE (a.name ILIKE '%First Time Charging%' OR a.name ILIKE '%FTC%')
           AND a.type = 'Finish Milestone'
           AND (a.wbs_name ILIKE '%MILESTONE%' OR a.wbs_name ILIKE 'PHASE-%')
-          AND a.planned_finish_date IS NOT NULL AND p.project_id IS NOT NULL
-        ORDER BY a.planned_finish_date ASC
+          AND p.project_id IS NOT NULL
+        ORDER BY COALESCE(a.planned_finish_date, a.actual_finish_date) ASC
     """)).fetchall()
     
     import re
-    ftc_phases_by_pid: dict[str, list[tuple[str, datetime]]] = {}
+    # Dictionary mapping project_id -> wbs_object_id -> list of phase dicts
+    ftc_phases_by_pid: dict[str, dict[int, list[dict]]] = {}
     for row in all_p6_ftc:
-        pid, name, dt = row[0], row[1], row[2]
+        pid, name, p_dt, a_dt, wbs_name, wbs_id = row[0], row[1], row[2], row[3], row[4], row[5]
+        
+        # Determine the working date (actual if completed, else planned)
+        dt = a_dt if a_dt else p_dt
+        if not dt:
+            continue
+            
+        # Parse phase
         match = re.search(r'(Phase[\s\-]*[IV]+)', name, re.IGNORECASE)
         phase = ""
         if match:
             phase_num = match.group(1).upper().replace('PHASE', '').replace('-', '').strip()
             phase = f"Ph-{phase_num}"
-        ftc_phases_by_pid.setdefault(pid, []).append((phase, dt))
+            
+        # Parse MWac capacity from name or wbs_name
+        mw_ac = 0.0
+        mw_match = re.search(r'(\d+(?:\.\d+)?)\s*MW', name + " " + wbs_name, re.IGNORECASE)
+        if mw_match:
+            mw_ac = float(mw_match.group(1))
+            
+        if pid not in ftc_phases_by_pid:
+            ftc_phases_by_pid[pid] = {}
+        if wbs_id not in ftc_phases_by_pid[pid]:
+            ftc_phases_by_pid[pid][wbs_id] = []
+            
+        ftc_phases_by_pid[pid][wbs_id].append({
+            "phase": phase,
+            "dt": dt,
+            "is_completed": a_dt is not None,
+            "mw_ac": mw_ac
+        })
 
     # 6. Pre-fetch transmission SCOD (last-resort fallback for the SCOD cascade)
     all_tc = db.execute(text("""
@@ -249,7 +274,7 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         "ordered_mwp": 0, "balance_ordering_mwp": 0,
         "received_mwp": 0, "erection_mwp": 0,
         "inventory_mwp": 0, "under_transit_mwp": 0,
-        "balance_dispatch_mwp": 0,
+        "balance_dispatch_mwp": 0, "completed_ftc_mwp": 0,
     }
 
     # Type breakdown accumulators
@@ -330,11 +355,39 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
 
         # FTC, TC, and Module Date logic (multi-phase)
         from datetime import timedelta
-        ftc_list = ftc_phases_by_pid.get(m.project_id, [])
+        
+        # Deduplicate FTC phases if multiple WBS exist
+        wbs_dict = ftc_phases_by_pid.get(m.project_id, {})
+        wbs_sums = {wid: sum(x["mw_ac"] for x in milestones) for wid, milestones in wbs_dict.items()}
+        total_all_wbs = sum(wbs_sums.values())
+        
+        ftc_list = []
+        if total_all_wbs <= cap_mwac * 1.05:
+            # Additive WBS: Project spans multiple WBS blocks (e.g. FY26-P14)
+            for milestones in wbs_dict.values():
+                ftc_list.extend(milestones)
+        elif wbs_sums:
+            # Mutually exclusive WBS (e.g. duplicates like Baiya or Bandha): 
+            # Pick the WBS group closest to the project's capacity
+            best_wid = min(wbs_sums.keys(), key=lambda wid: abs(wbs_sums[wid] - cap_mwac))
+            ftc_list = wbs_dict[best_wid]
+            
+        # Sort milestones by date so Phase 1 is first
+        ftc_list.sort(key=lambda x: x["dt"])
+            
         lead_time = 136 if source_type in ("China", "SEA") else 98
         
         ftc_strs, tc_strs, mod_strs = [], [], []
-        for idx, (ph_name, dt) in enumerate(ftc_list):
+        completed_ftc_mwac = 0.0
+        for idx, phase_info in enumerate(ftc_list):
+            ph_name = phase_info["phase"]
+            dt = phase_info["dt"]
+            
+            if phase_info["is_completed"]:
+                completed_ftc_mwac += phase_info["mw_ac"]
+                # Skip showing dates for completed phases since they are no longer pending
+                continue
+                
             prefix = ph_name if ph_name else (f"Ph-{idx+1}" if len(ftc_list) > 1 else "")
             prefix = f"{prefix}: " if prefix else ""
             
@@ -344,6 +397,9 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             ftc_strs.append(f"{prefix}{dt.strftime('%d-%b-%y')}")
             tc_strs.append(f"{prefix}{tc_dt.strftime('%d-%b-%y')}")
             mod_strs.append(f"{prefix}{mod_dt.strftime('%d-%b-%y')}")
+            
+        # Convert completed MWac to MWp
+        completed_ftc_mwp = completed_ftc_mwac * _safe_float(m.ol or "1.35", 1.35)
             
         ftc_date_str = ", ".join(ftc_strs)
         tc_date_str = ", ".join(tc_strs)
@@ -372,8 +428,9 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             "capacity_mwac": round(cap_mwac, 1),
             "capacity_mwp": round(cap_mwp, 1),
             "connectivity_phase": _phase_label(m.id),
-            "lta": "",  # Will be provided by user later
+            "lta": m.lta_date.strftime("%d-%b-%y") if isinstance(m.lta_date, datetime) else "",
             "scod": scod.strftime("%d-%b-%y") if isinstance(scod, datetime) else (str(scod) if scod else ""),
+            "scod_lta_diff_days": (scod - m.lta_date).days if isinstance(scod, datetime) and isinstance(m.lta_date, datetime) else None,
             "scod_source": scod_source,
             "aop_plan": aop_plan.strftime("%d-%b-%y") if isinstance(aop_plan, datetime) else "",
             "ftc_date": ftc_date_str,
@@ -386,6 +443,7 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             "module_inventory_mwp": round(inv, 1),
             "under_transit_mwp": round(in_transit, 1),
             "balance_dispatch_mwp": round(balance_dispatch, 1),
+            "completed_ftc_mwp": round(completed_ftc_mwp, 1),
             "status": status,
             "p6_name": p6_name,
             "remarks": "",
@@ -411,6 +469,7 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         totals["inventory_mwp"] += inv
         totals["under_transit_mwp"] += in_transit
         totals["balance_dispatch_mwp"] += balance_dispatch
+        totals["completed_ftc_mwp"] += completed_ftc_mwp
 
         # Type breakdown
         tb = type_breakdowns.setdefault(source_type, {"mwac": 0, "mwp": 0, "ordered": 0, "received": 0})

@@ -324,6 +324,7 @@ class ProjectMapping(Base):
     source_of_origin = Column(String, nullable=True)
     priority = Column(String, nullable=True)
     is_commissioned = Column(Boolean, default=False)
+    lta_date = Column(DateTime, nullable=True)
 
     # Pulse issues its own UUID per project and stamps it on every NC and RFI
     # (pulse_nc.project_id / pulse_rfi.project_id). Storing it here turns the

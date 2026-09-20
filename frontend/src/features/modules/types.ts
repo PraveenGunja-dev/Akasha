@@ -16,7 +16,8 @@ export interface ModuleProject {
   connectivity_phase: string;
   lta: string;
   scod: string;
-  scod_source: string | null;
+  scod_lta_diff_days?: number | null;
+  scod_source: 'manual' | 'trial_run' | 'tc' | null;
   aop_plan: string;
   ftc_date: string;
   tc_date: string;
@@ -28,7 +29,8 @@ export interface ModuleProject {
   module_inventory_mwp: number;
   under_transit_mwp: number;
   balance_dispatch_mwp: number;
-  status: 'delivered' | 'in_progress' | 'ordered' | 'pending';
+  completed_ftc_mwp: number;
+  status: 'pending' | 'ordered' | 'in_progress' | 'delivered' | 'needs_ordering';
   p6_name: string;
   remarks: string;
   /** SAP figures are this project's capacity share of a WBS element shared
