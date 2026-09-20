@@ -260,6 +260,7 @@ export default function ModuleDeliveriesPage() {
     inventory_mwp: sum(filtered, p => p.module_inventory_mwp),
     under_transit_mwp: sum(filtered, p => p.under_transit_mwp),
     balance_dispatch_mwp: sum(filtered, p => p.balance_dispatch_mwp),
+    completed_ftc_mwp: sum(filtered, p => p.completed_ftc_mwp),
   }), [filtered]);
 
   // Grouped projects
