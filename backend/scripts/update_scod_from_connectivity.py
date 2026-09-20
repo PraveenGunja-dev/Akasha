@@ -60,7 +60,10 @@ def fuzzy_match(db_mappings, project_val, spv_val, solar_cap, wind_cap):
 
 def main():
     db = SessionLocal()
-    file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "20260904_Connectivity_r1Share.xlsx")
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+    else:
+        file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "20260904_Connectivity_r1Share.xlsx")
     
     print(f"Reading {file_path}")
     try:

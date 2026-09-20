@@ -9,7 +9,10 @@ import models
 
 def main():
     db = SessionLocal()
-    file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "123_export.xlsx")
+    if len(sys.argv) > 1:
+        file_path = sys.argv[1]
+    else:
+        file_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "123_export.xlsx")
     
     print(f"Reading {file_path}")
     try:
