@@ -18,7 +18,7 @@ from sqlalchemy import func
 # file wins rather than a single hardcoded name.
 import re
 import glob
-SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "NEW31")
+SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "19_09")
 SAP_FILE_PATTERNS = {
     "zsps": re.compile(r"^ZPSPS007.*\.xlsx?$", re.I),
     "me2j": re.compile(r"^ME2J.*\.xlsx?$", re.I),
@@ -217,8 +217,8 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
     auto_upgrade_schema()
     from services.sync_guard import check_snapshot
     db = SessionLocal()
-    data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
-    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
+    data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "19_09")
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (1) 1.xlsx")
     
     # ================================================================
     # Build WBS mapping from SAP Master
@@ -231,7 +231,7 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
     print("Connecting to database...")
     db = SessionLocal()
     
-    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "Data", "NEW31")
+    data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "Data", "19_09")
     
     # MTPOAmount / MTEInvoicePOLookup are no longer pre-cleared here: their
     # delete now happens inside the ZSPS block's own transaction, guarded and

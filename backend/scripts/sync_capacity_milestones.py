@@ -37,10 +37,17 @@ DEFAULT_WIND_MW = 5.2
 DEFAULT_SOLAR_BLOCK_MW = 12.5
 
 def fetch_capacity_milestones():
-    logger.info("Starting Capacity Milestones Sync (Daily Job)")
     db = SessionLocal()
+    try:
+        _fetch_capacity_milestones(db)
+    finally:
+        db.close()
+
+
+def _fetch_capacity_milestones(db):
+    logger.info("Starting Capacity Milestones Sync (Daily Job)")
     p6 = P6Service()
-    
+
     # 1. Gather Projects
     solar_projects = db.query(ProjectMapping).all()
     # P6 projects mapping

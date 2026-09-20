@@ -330,7 +330,15 @@ class ProjectMapping(Base):
     # quality join from a free-text name match into an indexed equality join.
     pulse_project_uuid = Column(String, index=True, nullable=True)
 
-    tc_progress = Column(JSON, nullable=True)  # Added for rich transmission data# ------------------------------------------
+    tc_progress = Column(JSON, nullable=True)  # Added for rich transmission data
+
+    # User-entered SCOD override for the Module Deliveries tracker. Takes
+    # precedence over the computed trial-run -> P6 COD -> TC cascade in
+    # routers/module_deliveries.py, since the CEO tracker's SCOD is a
+    # planning commitment the project team enters directly, not always a
+    # measured date.
+    manual_scod = Column(DateTime, nullable=True)
+# ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------
 
@@ -613,6 +621,16 @@ class SyncSchedule(Base):
     last_run_at = Column(DateTime, nullable=True)
     last_duration_s = Column(Float, nullable=True)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+    # Optional automatic-run window, IST hour-of-day [start, end). Null on
+    # both = no restriction (fires as soon as due, any time of day) — the
+    # default for every feed. A heavy feed can be confined to off-peak hours
+    # so it never competes with live traffic; "Run now" always bypasses this,
+    # so it stays available on demand regardless of the window. Editable per
+    # feed from the Integrations panel — this is a user preference, not a
+    # fixed policy (user decision 2026-09-19).
+    window_start_hour = Column(Integer, nullable=True)
+    window_end_hour = Column(Integer, nullable=True)
 
 
 class MetricsCache(Base):

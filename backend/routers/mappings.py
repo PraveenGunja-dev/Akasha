@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
+from datetime import datetime
 import models
 from database import get_db
 
@@ -28,6 +29,7 @@ class ProjectMappingBase(BaseModel):
     source_of_origin: Optional[str] = None
     priority: Optional[str] = None
     is_commissioned: bool = False
+    manual_scod: Optional[datetime] = None
 
 class ProjectMappingCreate(ProjectMappingBase):
     pass

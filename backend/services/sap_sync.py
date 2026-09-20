@@ -26,8 +26,7 @@ def sync_sap_from_local(db: Session, zsps_path: str | None = None,
     from scripts.ingest_sap_data import SAP_DATA_DIR, find_sap_file, ingest_data
     from scripts.ingest_slr_data import ingest_slr
 
-    if zsps_path and not os.path.isabs(zsps_path):
-        zsps_path = os.path.abspath(zsps_path)
+    SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "19_09")
     if zsps_path and not os.path.exists(zsps_path):
         raise FileNotFoundError(zsps_path)
     paths = {k: (zsps_path if k == "zsps" and zsps_path else find_sap_file(k, SAP_DATA_DIR)) for k in ("zsps", "me2j", "mb52", "mb51")}

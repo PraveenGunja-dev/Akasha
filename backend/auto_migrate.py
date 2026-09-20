@@ -29,18 +29,25 @@ def auto_upgrade_schema():
 
     inspector = inspect(engine)
     existing_tables = inspector.get_table_names()
-    
+
     added_columns_count = 0
 
     with engine.begin() as conn:
+        # ALTER TABLE needs an ACCESS EXCLUSIVE lock, so it queues behind any
+        # open read transaction — including a stale 'idle in transaction'
+        # session left by a previous worker. Without a timeout that wait is
+        # unbounded and the whole app hangs before it ever serves a request,
+        # since this runs at import time on every --reload restart.
+        conn.execute(text("SET lock_timeout = '5s'"))
+
         for table_name, table in models.Base.metadata.tables.items():
             if table_name in existing_tables:
                 existing_columns = {c['name'].lower() for c in inspector.get_columns(table_name)}
-                
+
                 for column in table.columns:
                     if column.name.lower() not in existing_columns:
                         col_type = str(column.type.compile(engine.dialect))
-                        
+
                         try:
                             logger.info(f"➕ Adding missing column '{column.name}' ({col_type}) to table '{table_name}'...")
                             sql = text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}")

@@ -156,7 +156,7 @@ def ingest_slr(file_path=None, max_drop_pct=15.0, allow_drop=False):
     from services.sync_guard import check_snapshot
     data_dir = SAP_DATA_DIR
     file_path = file_path or find_sap_file("zsps", data_dir)
-    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")
+    master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (1) 1.xlsx")
 
     if not file_path or not os.path.exists(file_path):
         raise FileNotFoundError(f"No ZPSPS007 extract found in {data_dir}")

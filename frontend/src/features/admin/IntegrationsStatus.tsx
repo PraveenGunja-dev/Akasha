@@ -24,6 +24,7 @@ type FeedStatus = 'running' | 'down' | 'idle' | 'paused';
 interface Schedule {
   source: string; enabled: boolean; interval_minutes: number | null;
   next_run_at: string | null; last_run_at: string | null; last_duration_s: number | null; in_progress: boolean;
+  window_start_hour: number | null; window_end_hour: number | null;
 }
 interface Feed {
   key: string; label: string; status: FeedStatus; detail: string;
@@ -41,6 +42,17 @@ const INTERVALS: { value: number; label: string }[] = [
   { value: 120, label: 'Every 2 h' }, { value: 240, label: 'Every 4 h' }, { value: 360, label: 'Every 6 h' },
   { value: 720, label: 'Every 12 h' }, { value: 1440, label: 'Daily' }, { value: 10080, label: 'Weekly' },
 ];
+
+// Automatic-run window presets (IST hour-of-day). "Run now" always ignores
+// this — it only gates when a due feed is allowed to fire on its own.
+const WINDOWS: { key: string; label: string; start: number | null; end: number | null }[] = [
+  { key: 'any', label: 'Anytime', start: null, end: null },
+  { key: '1-5', label: 'Night · 1–5 AM', start: 1, end: 5 },
+  { key: '23-6', label: 'Night · 11 PM–6 AM', start: 23, end: 6 },
+  { key: '22-6', label: 'Off-hours · 10 PM–6 AM', start: 22, end: 6 },
+];
+const windowKey = (start: number | null, end: number | null) =>
+  WINDOWS.find(w => w.start === start && w.end === end)?.key ?? 'any';
 
 const relative = (iso: string | null | undefined): string => {
   if (!iso) return '—';
@@ -102,7 +114,7 @@ export default function IntegrationsStatus() {
     return () => { if (timer.current) window.clearTimeout(timer.current); };
   }, [load, anyRunning]);
 
-  const patch = async (key: string, body: { enabled?: boolean; interval_minutes?: number }) => {
+  const patch = async (key: string, body: { enabled?: boolean; interval_minutes?: number; window_start_hour?: number; window_end_hour?: number; clear_window?: boolean }) => {
     setBusy(b => ({ ...b, [key]: true }));
     try {
       const r = await fetch(`/akasha/api/integrations/schedules/${key}`, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
@@ -224,6 +236,20 @@ export default function IntegrationsStatus() {
                           <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5 text-fg-tertiary" />
                         </label>
                       </div>
+                      <label className="relative mt-1.5 inline-flex items-center" title="When this feed is allowed to fire on its own. &quot;Run now&quot; always works regardless.">
+                        <span className="sr-only">Run window for {f.label}</span>
+                        <select
+                          value={windowKey(sc.window_start_hour, sc.window_end_hour)} disabled={isBusy || !sc.enabled}
+                          onChange={e => {
+                            const w = WINDOWS.find(x => x.key === e.target.value)!;
+                            patch(f.key, w.start === null ? { clear_window: true } : { window_start_hour: w.start, window_end_hour: w.end! });
+                          }}
+                          className="h-6 appearance-none rounded-md border border-border-subtle bg-surface-sunken pl-2 pr-6 text-[11px] text-fg-tertiary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                        >
+                          {WINDOWS.map(w => <option key={w.key} value={w.key}>{w.label}</option>)}
+                        </select>
+                        <ChevronDown className="pointer-events-none absolute right-1.5 h-3 w-3 text-fg-tertiary" />
+                      </label>
                       {f.key === 'sap' && <div className="mt-1 text-[10.5px] text-fg-tertiary">Checks SharePoint; ingests only when a newer extract exists.</div>}
                     </td>
 

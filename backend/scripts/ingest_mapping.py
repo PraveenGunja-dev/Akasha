@@ -37,14 +37,33 @@ def ingest_mapping():
             except ValueError:
                 return 0.0
 
-        def parse_capacity_from_name(name):
-            # Fallback for projects missing from the old capacity file (mostly
-            # newer P6 IDs) - many P6 project names embed the MW rating directly,
-            # e.g. "ARE55L_A18_HSAT_600MW_PPA" or "...HSAT_250 MW_MLP T4 AP NEW".
+        def parse_p6_name(name):
             if not name:
-                return 0.0
-            match = re.search(r'(\d+(?:\.\d+)?)\s*MW', name, re.IGNORECASE)
-            return float(match.group(1)) if match else 0.0
+                return {}
+            # e.g. ARE55L_A15b_HSAT_50MW_PPA or ARE55L_S01_HSAT_100_MW_PPA
+            mms_match = re.search(r'_(HSAT|FT)_', name, re.IGNORECASE)
+            cap_match = re.search(r'_(\d+(?:\.\d+)?)\s*_?MW', name, re.IGNORECASE)
+            
+            parsed = {}
+            if mms_match:
+                parsed['mms_type'] = mms_match.group(1).upper()
+                parts = name[:mms_match.start()].split('_', 1)
+                if len(parts) > 1:
+                    parsed['plot_no'] = parts[1]
+                    
+            if cap_match:
+                parsed['capacity_mwac'] = float(cap_match.group(1))
+                trailer = name[cap_match.end():].strip('_')
+                if trailer:
+                    if 'PPA' in trailer.upper(): parsed['category'] = 'PPA'
+                    elif 'MERCHANT' in trailer.upper(): parsed['category'] = 'Merchant'
+                    elif 'GROUP' in trailer.upper(): parsed['category'] = 'Group'
+                    
+                    trailer_parts = trailer.split('_')
+                    # Guess EPC if the last part is not a common keyword
+                    if trailer_parts[-1].upper() not in ('PPA', 'MERCHANT', 'GROUP', 'NEW', 'COMMISSIONED', 'HYBRID', 'T4', 'AP', 'LTP'):
+                        parsed['subcluster'] = trailer_parts[-1]
+            return parsed
 
         # Upsert keyed on the stable P6 project id, instead of delete-all +
         # re-insert. project_mapping.id is a FK target for transmission data
@@ -65,18 +84,32 @@ def ingest_mapping():
             if not project:
                 project = project_name_from_p6
 
+            parsed_p6 = parse_p6_name(project_name_from_p6)
+
             cap_ac = parse_float(row.get('Capacity\n(MWac)', ''))
             if not cap_ac:
-                cap_ac = parse_capacity_from_name(project_name_from_p6)
+                cap_ac = parsed_p6.get('capacity_mwac', 0.0)
+                
+            plot_no = str(row.get('Plot No', '')).strip()
+            if not plot_no: plot_no = parsed_p6.get('plot_no', '')
+            
+            mms_type = str(row.get('MMS Type', '')).strip()
+            if not mms_type: mms_type = parsed_p6.get('mms_type', '')
+            
+            cat = str(row.get('Category', '')).strip()
+            if not cat: cat = parsed_p6.get('category', '')
+            
+            epc = str(row.get('Type (Cluster)', '')).strip()
+            if not epc: epc = parsed_p6.get('subcluster', '')
 
             fields = dict(
                 project=project,
                 spv_name=str(row.get('SPV', '')).strip(),
                 project_id=project_id,
                 project_name_from_p6=project_name_from_p6,
-                plot_no=str(row.get('Plot No', '')).strip(),
-                category=str(row.get('Category', '')).strip(),
-                mms_type=str(row.get('MMS Type', '')).strip(),
+                plot_no=plot_no,
+                category=cat,
+                mms_type=mms_type,
                 capacity_mwac=cap_ac,
                 ol=str(row.get('OL', '')).strip(),
                 capacity_mwdc=parse_float(row.get('Capacity (MWdc)', '')),
@@ -84,7 +117,9 @@ def ingest_mapping():
                 agel=str(row.get('AGEL', '')).strip(),
                 module_wbs=str(row.get('Module WBS', '')).strip(),
                 age6l=str(row.get('AGE6L', '')).strip(),
-                cluster=str(row.get('Type (Cluster)', '')).strip(),
+                cluster=epc,  # Used as subcluster previously, storing as cluster? Wait...
+                # Actually, the DB column is 'subcluster'. Let's ensure we map it to subcluster.
+                subcluster=epc,
                 not_allocated=str(row.get('Not Allocated', '')).strip(),
                 priority=str(row.get('Priority', '')).strip(),
                 source_of_origin=str(row.get('SourceOfOrigin', '')).strip(),

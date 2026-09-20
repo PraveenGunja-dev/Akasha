@@ -18,7 +18,7 @@ export interface MonthCell {
   modules_planned: number;
   modules_baseline: number;
   modules_completed: number;
-  activities?: { name: string; status: string; forecast_start: string | null; forecast_finish: string | null; baseline_finish: string | null; actual_finish: string | null; modules_scope: number; modules_actual: number }[];
+  activities?: { name: string; status: string; baseline_start: string | null; baseline_finish: string | null; forecast_start: string | null; forecast_finish: string | null; actual_start: string | null; actual_finish: string | null; modules_scope: number; modules_actual: number }[];
 }
 
 export interface PlannerProject {

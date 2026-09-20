@@ -105,6 +105,10 @@ def _with_schedule(db: Session, feed: dict) -> dict:
         "last_run_at": iso(sched.last_run_at) if sched else None,
         "last_duration_s": sched.last_duration_s if sched else None,
         "in_progress": scheduler.is_running(src),
+        # Automatic-run window (IST hour-of-day). Both null = unrestricted —
+        # fires as soon as due, any time. Manual "Run now" always ignores this.
+        "window_start_hour": sched.window_start_hour if sched else None,
+        "window_end_hour": sched.window_end_hour if sched else None,
     }
     if feed["schedule"]["in_progress"]:
         feed["status"], feed["detail"] = "running", "Sync in progress."
@@ -135,6 +139,14 @@ def get_integrations_status(db: Session = Depends(get_db)):
 class ScheduleUpdate(BaseModel):
     enabled: Optional[bool] = None
     interval_minutes: Optional[int] = None
+    # IST hour-of-day [start, end). Set both to restrict automatic runs to a
+    # window (e.g. 1, 5 for 1am-5am); set both to null to remove any
+    # restriction. "Run now" always ignores this — it's for automatic firing
+    # only. Whatever the user sets here is respected indefinitely; nothing
+    # resets it on restart.
+    window_start_hour: Optional[int] = None
+    window_end_hour: Optional[int] = None
+    clear_window: bool = False
 
 
 @router.patch("/schedules/{source}")
@@ -153,10 +165,22 @@ def update_schedule(source: str, body: ScheduleUpdate, db: Session = Depends(get
         sched.enabled = body.enabled
         if body.enabled and not sched.next_run_at:
             sched.next_run_at = datetime.utcnow()
+    if body.clear_window:
+        sched.window_start_hour = None
+        sched.window_end_hour = None
+    elif body.window_start_hour is not None or body.window_end_hour is not None:
+        if body.window_start_hour is None or body.window_end_hour is None:
+            raise HTTPException(400, "window_start_hour and window_end_hour must be set together")
+        for h, name in ((body.window_start_hour, "window_start_hour"), (body.window_end_hour, "window_end_hour")):
+            if not (0 <= h <= 23):
+                raise HTTPException(400, f"{name} must be between 0 and 23")
+        sched.window_start_hour = body.window_start_hour
+        sched.window_end_hour = body.window_end_hour
     sched.updated_at = datetime.utcnow()
     db.commit()
     return {"ok": True, "source": src, "enabled": sched.enabled, "interval_minutes": sched.interval_minutes,
-            "next_run_at": sched.next_run_at.isoformat() if sched.next_run_at else None}
+            "next_run_at": sched.next_run_at.isoformat() if sched.next_run_at else None,
+            "window_start_hour": sched.window_start_hour, "window_end_hour": sched.window_end_hour}
 
 
 @router.post("/schedules/{source}/run")

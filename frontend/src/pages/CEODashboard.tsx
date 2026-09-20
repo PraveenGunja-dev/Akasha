@@ -35,6 +35,7 @@ import QualityCommandCenter from '../features/quality/QualityCommandCenter';
 import EInvoiceIntelligence from '../features/analytics/EInvoiceIntelligence';
 import PortfolioIntelligence from '../features/intelligence/PortfolioIntelligence';
 import ComplianceDashboard from '../features/compliance/ComplianceDashboard';
+import ModuleDeliveriesPage from '../features/modules/ModuleDeliveriesPage';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -230,7 +231,7 @@ export default function CEODashboard() {
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
     'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview', 'installation_planner',
     'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
-    'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr', 'approvals'
+    'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr', 'approvals', 'module_deliveries'
   ];
 
   const handleTabChange = (tab: string) => {
@@ -335,7 +336,7 @@ export default function CEODashboard() {
                     {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} briefing={briefing} />}
                     
                     {activeTab === 'capacity_overview' && <CapacityOverviewPage />}
-                    {activeTab === 'installation_planner' && <InstallationPlannerPage />}
+                    {activeTab === 'installation_planner' && <ModuleDeliveriesPage />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}

@@ -1611,13 +1611,14 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
         # Accumulate module counts by status per project object
         cur_mod = by_status_modules.setdefault(oid, {}).get(st, (0.0, 0.0))
         by_status_modules[oid][st] = (cur_mod[0] + act_mod_scope, cur_mod[1] + act_mod_actual)
-        
         item = {
             "name": act.name,
             "status": st,
+            "baseline_start": fmt(act.baseline_start_date),
+            "baseline_finish": fmt(act.baseline_finish_date),
             "forecast_start": fmt(act.planned_start_date),
             "forecast_finish": fmt(act.planned_finish_date),
-            "baseline_finish": fmt(act.baseline_finish_date),
+            "actual_start": fmt(act.actual_start_date),
             "actual_finish": fmt(act.actual_finish_date),
             "modules_scope": round(act_mod_scope, 1),
             "modules_actual": round(act_mod_actual, 1),

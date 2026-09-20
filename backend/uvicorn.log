@@ -1,0 +1,787 @@
+INFO:     Will watch for changes in these directories: ['D:\\Akasha_Platform\\backend']
+INFO:     Uvicorn running on http://0.0.0.0:3510 (Press CTRL+C to quit)
+INFO:     Started reloader process [25188] using StatReload
+INFO:auto_migrate:\U0001f50d Checking for missing database columns...
+INFO:auto_migrate:\u2705 Database schema is up to date. No missing columns found.
+INFO:services.scheduler:[scheduler] started
+INFO:     Started server process [29380]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:services.pulse_service:Fetching all NCs from Pulse...
+INFO:services.pulse_service:Fetched 1561 NCs from Pulse.
+INFO:services.pulse_service:Fetching all RFIs from Pulse...
+INFO:     127.0.0.1:50873 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50882 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50874 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60391 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57778 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50881 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52883 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54587 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55795 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63299 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53988 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64377 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55794 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50880 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65072 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63631 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50879 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51390 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53905 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60353 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:56812 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51283 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Fetched 56412 RFIs from Pulse.
+INFO:services.pulse_service:Synced 1561 NCs to database.
+INFO:     127.0.0.1:51517 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51519 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56407 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60085 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63736 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52489 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57945 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58950 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Synced 56412 RFIs to database.
+WARNING:services.pulse_service:44 Pulse projects have no master mapping: ['220 kV TL Project', '33KV SCOH/DCOH Panther TL Project', '400KV TL Project (NHPC PSS to KPS-03)', '500 MW Solar Project, Bandha RJ, MLP T1', '600 MW Solar Project, Baiya RJ, NHPC', 'A-04 125MW Phase-1 Project', 'A-04 500MW Phase-1 Project', 'A-05 Phase-1 Project', 'A-07 42MW Phase-1 Project', 'A-07 500MW Phase-1 Project'] …
+INFO:openai._base_client:Retrying request to /chat/completions in 0.393421 seconds
+INFO:     127.0.0.1:63880 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.463758 seconds
+INFO:     127.0.0.1:52006 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62013 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53414 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60770 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55192 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49676 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57094 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54468 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.836054 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.978652 seconds
+INFO:     127.0.0.1:65241 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64191 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+Authenticating with SAP UAT BTP Token endpoint...
+Successfully obtained access token!
+Fetching invoices from LIVE SAP API...
+Successfully fetched 381 invoices!
+Dropping old table if exists to load fresh live data...
+Creating tables if not exists...
+Building WBS mapping from SAP Master...
+Pre-loading PO to WBS mappings from ZSPS/ME2J E-Invoice lookup table...
+Found 381 invoice records. Clearing old records in DB...
+Inserting new records...
+Live Ingestion complete! Total records inserted: 381
+INFO:     127.0.0.1:59985 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50828 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60684 - "GET /api/sap/filters HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60682 - "GET /api/sap/trends?phase=Ongoing&granularity=month HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55984 - "GET /api/sap/vendors?phase=Ongoing&limit=10 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52228 - "GET /api/sap/materials?phase=Ongoing&by=outstanding&limit=8 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60683 - "GET /api/sap/overview?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58572 - "GET /api/sap/pos?phase=Ongoing&page=1&size=25&sort=value&order=desc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59120 - "GET /api/sap/geography?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58105 - "GET /api/sap/overview?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60686 - "GET /api/sap/insights?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63951 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+WARNING:routers.sap:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:55110 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65409 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:52326 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+INFO:routers.sap:insight enrichment skipped: HTTPConnectionPool(host='127.0.0.1', port=11434): Read timed out. (read timeout=40)
+INFO:     127.0.0.1:53571 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:63444 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:57447 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53107 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50923 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56811 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51272 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57622 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53010 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59748 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64024 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61240 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53728 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55182 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54828 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55248 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54915 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57620 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51385 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64349 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54625 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50839 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58076 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60074 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60077 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60078 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60076 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60079 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60075 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61734 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62571 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59632 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65174 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57759 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51075 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56320 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52974 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53406 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59701 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53949 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54908 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:61237 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51285 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49786 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56804 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58042 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.375339 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.396287 seconds
+INFO:     127.0.0.1:61684 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52035 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:64186 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57327 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57929 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57931 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63089 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63090 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55848 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49794 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63086 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57208 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57933 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54125 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63702 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53034 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55178 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55177 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55179 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55181 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55183 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55185 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50106 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50107 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51043 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58433 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51045 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51041 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52159 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63438 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55470 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55479 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53312 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59502 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59504 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49861 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49863 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55472 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50593 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50803 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52182 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.999570 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.980091 seconds
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:61359 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.414891 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.474397 seconds
+INFO:     127.0.0.1:58882 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63455 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61718 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50934 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:openai._base_client:Retrying request to /chat/completions in 0.399072 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.841487 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.778290 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.387228 seconds
+INFO:     127.0.0.1:54899 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52009 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62567 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60134 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.967714 seconds
+INFO:     127.0.0.1:63270 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:openai._base_client:Retrying request to /chat/completions in 0.989371 seconds
+INFO:     127.0.0.1:57773 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51573 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51417 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+SharePoint: no dated subfolders; using base folder
+INFO:     127.0.0.1:57121 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Fetching all NCs from Pulse...
+INFO:services.pulse_service:Fetched 1562 NCs from Pulse.
+INFO:services.pulse_service:Fetching all RFIs from Pulse...
+SharePoint: no dated subfolders; using base folder
+INFO:     127.0.0.1:54388 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Fetched 56441 RFIs from Pulse.
+INFO:services.pulse_service:Synced 1562 NCs to database.
+INFO:     127.0.0.1:61717 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Synced 56441 RFIs to database.
+WARNING:services.pulse_service:44 Pulse projects have no master mapping: ['220 kV TL Project', '33KV SCOH/DCOH Panther TL Project', '400KV TL Project (NHPC PSS to KPS-03)', '500 MW Solar Project, Bandha RJ, MLP T1', '600 MW Solar Project, Baiya RJ, NHPC', 'A-04 125MW Phase-1 Project', 'A-04 500MW Phase-1 Project', 'A-05 Phase-1 Project', 'A-07 42MW Phase-1 Project', 'A-07 500MW Phase-1 Project'] …
+INFO:     127.0.0.1:59323 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57728 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62994 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55155 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61828 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58940 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61837 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61829 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53839 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50811 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51057 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61836 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51059 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61835 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54467 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59753 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58946 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60906 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52292 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63357 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61834 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59433 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:50654 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64310 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54960 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49785 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61509 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.398341 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.493302 seconds
+INFO:     127.0.0.1:54877 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59038 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57450 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60344 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59040 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57448 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55737 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55736 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65203 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60992 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54643 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52933 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61845 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55549 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54792 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58797 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53466 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53636 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52466 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56713 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:62629 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60933 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:53510 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.965519 seconds
+INFO:     127.0.0.1:50917 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54881 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.485169 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.493930 seconds
+INFO:     127.0.0.1:59258 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.800127 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.846938 seconds
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:services.tc_sync:Starting Transmission Data Sync...
+Authenticating with SAP UAT BTP Token endpoint...
+Successfully obtained access token!
+Fetching invoices from LIVE SAP API...
+Successfully fetched 381 invoices!
+Dropping old table if exists to load fresh live data...
+INFO:     127.0.0.1:62381 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:services.tc_sync:Failed to get auth token: 503 Server Error: Service Unavailable for url: https://powerback-api.unada.in/api/v1/user/login
+Creating tables if not exists...
+Building WBS mapping from SAP Master...
+Pre-loading PO to WBS mappings from ZSPS/ME2J E-Invoice lookup table...
+Found 381 invoice records. Clearing old records in DB...
+Inserting new records...
+Live Ingestion complete! Total records inserted: 381
+INFO:     127.0.0.1:51724 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64323 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:52551 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52762 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:60141 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+WARNING:  StatReload detected changes in 'scripts\ingest_sap_data.py'. Reloading...
+Preparing Database Infrastructure...
+Database 'Akasha' already exists.
+Starting Akasha Platform Backend on Port 3510...
+ INFO:services.pulse_service:Fetching all NCs from Pulse...
+INFO:services.pulse_service:Fetched 1562 NCs from Pulse.
+INFO:services.pulse_service:Fetching all RFIs from Pulse...
+INFO:services.pulse_service:Fetched 56447 RFIs from Pulse.
+INFO:services.pulse_service:Synced 1562 NCs to database.
+ERROR:services.scheduler:[scheduler] pulse failed: (psycopg2.errors.UniqueViolation) duplicate key value violates unique constraint "ix_pulse_rfi_pulse_id"
+DETAIL:  Key (pulse_id)=(74596883-d92d-4985-96c1-7052f2b1bf75) already exists.
+
+[SQL: INSERT INTO pulse_rfi (pulse_id, rfi_label, status, status_label, current_handler, cluster_name, project_name, project_id, project_type, spv_name, worklocation_name, workarea_name, contractor_name, vendor_name, engineer_name, quality_name, package_name, inspection_point_name, created_at, updated_at, last_synced_at, raw_attachments, raw_responses) VALUES (%(pulse_id)s, %(rfi_label)s, %(status)s, %(status_label)s, %(current_handler)s, %(cluster_name)s, %(project_name)s, %(project_id)s, %(project_type)s, %(spv_name)s, %(worklocation_name)s, %(workarea_name)s, %(contractor_name)s, %(vendor_name)s, %(engineer_name)s, %(quality_name)s, %(package_name)s, %(inspection_point_name)s, %(created_at)s, %(updated_at)s, %(last_synced_at)s, %(raw_attachments)s::JSON, %(raw_responses)s::JSON) RETURNING pulse_rfi.id]
+[parameters: {'pulse_id': '74596883-d92d-4985-96c1-7052f2b1bf75', 'rfi_label': 'RFI-BESS PSS-11-BL08-CIV-1018', 'status': 'submitted', 'status_label': 'In Review EE', 'current_handler': 'execution_engineer', 'cluster_name': 'Gujarat', 'project_name': 'BESS PSS-11 Project', 'project_id': '8abd6a50-0019-4db2-a03f-d9cf112c1344', 'project_type': 'bess', 'spv_name': 'AGE27BL', 'worklocation_name': 'BESS PSS-11', 'workarea_name': 'BL08', 'contractor_name': 'MSC Team BESS 11', 'vendor_name': 'M S CHOUHAN INFRAVENTURES PVT LTD', 'engineer_name': 'Yagya Pratap', 'quality_name': 'deepak kushwaha', 'package_name': 'Civil', 'inspection_point_name': 'Post-Pour Checks', 'created_at': datetime.datetime(2026, 9, 19, 22, 27, 34), 'updated_at': datetime.datetime(2026, 9, 19, 22, 33, 32), 'last_synced_at': datetime.datetime(2026, 9, 19, 18, 20, 28, 319618), 'raw_attachments': '[]', 'raw_responses': '[]'}]
+(Background on this error at: https://sqlalche.me/e/20/gkpj)
+SharePoint: no dated subfolders; using base folder
+INFO:     127.0.0.1:49676 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65325 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65184 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65324 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64359 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55352 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57205 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49677 - "GET /api/metrics/history?months=12&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65323 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52203 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58601 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57116 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57117 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64707 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63339 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63978 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65321 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52873 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64333 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57164 - "GET /api/metrics/history?months=12&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:57558 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65362 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62946 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62950 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62949 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60866 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62945 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59951 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59178 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57081 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55524 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54615 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54617 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49233 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62948 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64973 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52130 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55891 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62947 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55607 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:58697 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54911 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59710 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.433036 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.391781 seconds
+INFO:     127.0.0.1:51319 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53647 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.499365 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.391494 seconds
+INFO:     127.0.0.1:64519 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+SharePoint: no dated subfolders; using base folder
+INFO:     127.0.0.1:59898 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.964662 seconds
+INFO:     127.0.0.1:64879 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.791776 seconds
+INFO:     127.0.0.1:58163 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49717 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58698 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58708 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55378 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50764 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58700 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58705 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56246 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52588 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58706 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58229 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54774 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56237 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59891 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50900 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61560 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62641 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58704 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64627 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.853556 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.854460 seconds
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:51552 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63422 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:58064 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:50917 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60126 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:openai._base_client:Retrying request to /chat/completions in 0.420820 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.409193 seconds
+INFO:     127.0.0.1:61002 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61425 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65370 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.972498 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.794058 seconds
+INFO:     127.0.0.1:50964 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50450 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52676 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:51989 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:49224 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:52447 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56655 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63473 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53302 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53308 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59121 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53303 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59990 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53309 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57205 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64185 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54096 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55776 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57506 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51531 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53307 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63058 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50831 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62037 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53304 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60675 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56768 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56770 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56769 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56765 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56771 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52626 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:52627 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53289 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57460 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56767 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53291 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61085 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64501 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54395 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54393 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54391 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62817 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63945 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54089 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:55938 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64883 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54283 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51664 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.477493 seconds
+INFO:     127.0.0.1:59460 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.438766 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.431601 seconds
+INFO:     127.0.0.1:60580 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57731 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58927 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.778029 seconds
+INFO:     127.0.0.1:64723 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50868 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.911534 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.772824 seconds
+INFO:     127.0.0.1:49673 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62114 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50018 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:61096 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61479 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:58883 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:58875 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:53069 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64243 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61280 - "GET /api/project-360?nocache=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60601 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50072 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61289 - "GET /api/project-360?nocache=true HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59194 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64116 - "GET /api/project-360 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64112 - "GET /api/dashboard/api/projects/FY25-P15/slr?filter_code=ALL HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56101 - "GET /api/project-360 HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59246 - "GET /api/dashboard/api/projects/FY25-P15/slr?filter_code=ALL HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:64114 - "GET /api/project-360/FY25-P15/detail HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64808 - "GET /api/project-360/FY25-P15/detail HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59163 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50217 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61746 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63405 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61344 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.403735 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.456331 seconds
+INFO:     127.0.0.1:55838 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:54235 - "POST /api/project-diagnostic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52496 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: POST http://127.0.0.1:11434/v1/chat/completions "HTTP/1.1 200 OK"
+INFO:     127.0.0.1:63827 - "POST /api/project-diagnostic HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57192 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63116 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51765 - "GET /api/notifications/?skip=0&limit=50&project_id=FY25-P15&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63008 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63009 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52456 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56603 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61852 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64425 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53366 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60130 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61695 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57824 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51488 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+SharePoint: no dated subfolders; using base folder
+INFO:     127.0.0.1:52885 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52475 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65372 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51952 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Fetching all NCs from Pulse...
+INFO:services.pulse_service:Fetched 1562 NCs from Pulse.
+INFO:services.pulse_service:Fetching all RFIs from Pulse...
+INFO:     127.0.0.1:50623 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Fetched 56448 RFIs from Pulse.
+INFO:services.pulse_service:Synced 1562 NCs to database.
+INFO:     127.0.0.1:64010 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60073 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:services.pulse_service:Synced 56448 RFIs to database.
+WARNING:services.pulse_service:44 Pulse projects have no master mapping: ['220 kV TL Project', '33KV SCOH/DCOH Panther TL Project', '400KV TL Project (NHPC PSS to KPS-03)', '500 MW Solar Project, Bandha RJ, MLP T1', '600 MW Solar Project, Baiya RJ, NHPC', 'A-04 125MW Phase-1 Project', 'A-04 500MW Phase-1 Project', 'A-05 Phase-1 Project', 'A-07 42MW Phase-1 Project', 'A-07 500MW Phase-1 Project'] …
+INFO:     127.0.0.1:49347 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53422 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63608 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58550 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52894 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50617 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53311 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57462 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53822 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59710 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57912 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52622 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62236 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59506 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63859 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51111 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51908 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51906 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62758 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59341 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63389 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60601 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58804 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59851 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63494 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52052 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52933 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52601 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54021 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55378 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56504 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50771 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62414 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55404 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64378 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58118 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65502 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57720 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51321 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51330 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61070 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51322 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63214 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51329 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65318 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63910 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56591 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64534 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64715 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50914 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57716 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51328 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56422 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57108 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51324 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49287 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65042 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:64433 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51410 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.392410 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.470198 seconds
+INFO:     127.0.0.1:56807 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59156 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49748 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59283 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61767 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.918513 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.880058 seconds
+INFO:     127.0.0.1:53649 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51016 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58598 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51472 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61768 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:65040 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:64231 - "GET /api/generate-briefing HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:53271 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+SharePoint: no dated subfolders; using base folder
+INFO:     127.0.0.1:52594 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57741 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59898 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61440 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59704 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52434 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63836 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54856 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51569 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64789 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55160 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50203 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:57119 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64252 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64262 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64261 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64254 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52618 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50183 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64260 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58181 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65467 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53356 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59972 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54717 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55702 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64259 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62059 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58308 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52396 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52398 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:58941 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52644 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59016 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52226 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63807 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.486886 seconds
+INFO:     127.0.0.1:55888 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.407654 seconds
+INFO:     127.0.0.1:60735 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61720 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63291 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:56953 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.796432 seconds
+INFO:     127.0.0.1:58738 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63802 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50538 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55893 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58739 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63801 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50092 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51635 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63855 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62295 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58212 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.966714 seconds
+INFO:     127.0.0.1:52014 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53545 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64255 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63799 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65215 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49843 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60194 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51609 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:51389 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51089 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51093 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62698 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62702 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62701 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62704 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62706 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51091 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60242 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60240 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60893 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:55386 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58877 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53125 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50479 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50604 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50603 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64477 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:59319 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58810 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52428 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:52438 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+ERROR:routers.ai:AKASHA AI API Error: Request timed out.
+INFO:     127.0.0.1:49765 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:51196 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.469732 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.492274 seconds
+INFO:     127.0.0.1:60875 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49967 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49972 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53778 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:64900 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49971 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59891 - "GET /api/logistics?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:58827 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:52258 - "GET /api/financials/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53448 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49968 - "GET /api/metrics/history?months=12&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49969 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:63441 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:     127.0.0.1:65425 - "GET /api/financials?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62047 - "GET /api/logistics/details?phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.452696 seconds
+INFO:     127.0.0.1:59250 - "GET /api/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60472 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49970 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:62450 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:61093 - "GET /api/metrics/history?months=12&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:54682 - "GET /api/quality/overview HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.436911 seconds
+INFO:     127.0.0.1:60518 - "GET /api/dashboard/summary?phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:53370 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:httpx:HTTP Request: GET http://127.0.0.1:11434/api/tags "HTTP/1.1 200 OK"
+WARNING:routers.ai:OLLAMA_MODEL='llama3.1' is not pulled; using 'llama3.1:8b'
+INFO:     127.0.0.1:63861 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:60405 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.936857 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.952867 seconds
+INFO:     127.0.0.1:63585 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50254 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.998658 seconds
+INFO:openai._base_client:Retrying request to /chat/completions in 0.803004 seconds
+INFO:     127.0.0.1:50601 - "GET /api/notifications/?skip=0&limit=50&phase=Ongoing HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50613 - "GET /api/module-deliveries/summary HTTP/1.1" 200 OK
+INFO:openai._base_client:Retrying request to /chat/completions in 0.468431 seconds

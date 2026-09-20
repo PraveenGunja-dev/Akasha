@@ -28,8 +28,8 @@ const Chip = ({ tone, children }: { tone?: Extract<Tone, 'critical' | 'healthy' 
   <span className={cx('rounded-md px-1.5 py-0.5 text-[10.5px] font-medium leading-none',
     tone === 'critical' ? 'bg-status-critical-bg text-status-critical-fg'
       : tone === 'healthy' ? 'bg-status-healthy-bg text-status-healthy-fg'
-      : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg'
-      : 'bg-surface-sunken text-fg-secondary')}>
+        : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg'
+          : 'bg-surface-sunken text-fg-secondary')}>
     {children}
   </span>
 );
@@ -82,145 +82,145 @@ export default function PlannerGrid({ projects, months, today, basis, unit }: {
   return (
     <>
       <div className="flex flex-col">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-1 text-[11px] text-fg-tertiary">
-          <ArrowUpDown className="h-3 w-3" /> Sort
-          {SORTS.map(s => (
-            <button key={s.key} onClick={() => setSort(s.key)} aria-pressed={sort === s.key}
-              className={cx('rounded px-2 py-0.5 transition-colors', sort === s.key ? 'bg-brand-blue/10 font-semibold text-brand-blue' : 'hover:bg-surface-sunken hover:text-fg-primary')}>
-              {s.label}
-            </button>
-          ))}
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-1 text-[11px] text-fg-tertiary">
+            <ArrowUpDown className="h-3 w-3" /> Sort
+            {SORTS.map(s => (
+              <button key={s.key} onClick={() => setSort(s.key)} aria-pressed={sort === s.key}
+                className={cx('rounded px-2 py-0.5 transition-colors', sort === s.key ? 'bg-brand-blue/10 font-semibold text-brand-blue' : 'hover:bg-surface-sunken hover:text-fg-primary')}>
+                {s.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-3 text-[10.5px] text-fg-tertiary">
+            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-status-healthy-border bg-status-healthy-bg" />met</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-status-critical-border bg-status-critical-bg" />short</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-status-watch-border bg-status-watch-bg" />this month</span>
+            <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-border-default" />planned</span>
+            <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-medium">cell = plan · done <span className="text-brand-blue">({isModules ? 'modules' : 'blocks'})</span></span>
+          </div>
         </div>
-        <div className="flex items-center gap-3 text-[10.5px] text-fg-tertiary">
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-status-healthy-border bg-status-healthy-bg" />met</span>
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-status-critical-border bg-status-critical-bg" />short</span>
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-status-watch-border bg-status-watch-bg" />this month</span>
-          <span className="inline-flex items-center gap-1"><span className="h-2.5 w-2.5 rounded-sm border border-border-default" />planned</span>
-          <span className="rounded bg-surface-sunken px-1.5 py-0.5 font-medium">cell = plan · done <span className="text-brand-blue">({isModules ? 'modules' : 'blocks'})</span></span>
-        </div>
-      </div>
 
-      <div className="custom-scrollbar overflow-x-auto rounded-lg border border-border-subtle">
-        <table className="w-full table-fixed border-separate border-spacing-0 text-[11.5px]" style={{ minWidth: LEADER_W + DONE_W + BEHIND_W + months.length * 60 }}>
-          <colgroup>
-            <col style={{ width: LEADER_W }} />
-            <col style={{ width: DONE_W }} />
-            <col style={{ width: BEHIND_W }} />
-            {months.map(m => <col key={m} />)}
-          </colgroup>
-          <thead>
-            <tr>
-              <th className="sticky left-0 z-20 border-b border-r border-border-subtle bg-surface-1 px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary">Project</th>
-              <th className="sticky z-20 border-b border-border-subtle bg-surface-1 px-2 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary" style={{ left: LEADER_W }}>Done</th>
-              <th className="sticky z-20 border-b border-r border-border-subtle bg-surface-1 px-2 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary" style={{ left: LEADER_W + DONE_W }}>Behind</th>
-              {months.map(m => (
-                <th key={m} className={cx('border-b border-border-subtle px-1 py-2 text-center text-[10.5px] font-semibold uppercase tracking-wider',
-                  m === today ? 'bg-status-watch-bg text-status-watch-fg' : 'bg-surface-1 text-fg-tertiary')}>
-                  {monthLabel(m)}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(p => {
-              const s = p.summary;
-              const slip = p.ecod.slip_days;
-              const pctDel = p.ordered_cr ? Math.round((p.delivered_cr / p.ordered_cr) * 100) : null;
-              const displayPct = isModules ? (s?.modules_pct ?? 0) : (s?.pct_complete ?? 0);
-              return (
-                <tr key={p.project_id} className={cx('group', p.not_applicable && 'opacity-60')}>
-                  <td className="sticky left-0 z-10 border-b border-border-subtle bg-surface-1 px-3 py-3 group-hover:bg-surface-sunken">
-                    {/* Facts as pill chips, not run-on text: each one a discrete,
+        <div className="custom-scrollbar overflow-x-auto rounded-lg border border-border-subtle">
+          <table className="w-full table-fixed border-separate border-spacing-0 text-[11.5px]" style={{ minWidth: LEADER_W + DONE_W + BEHIND_W + months.length * 60 }}>
+            <colgroup>
+              <col style={{ width: LEADER_W }} />
+              <col style={{ width: DONE_W }} />
+              <col style={{ width: BEHIND_W }} />
+              {months.map(m => <col key={m} />)}
+            </colgroup>
+            <thead>
+              <tr>
+                <th className="sticky left-0 z-20 border-b border-r border-border-subtle bg-surface-1 px-3 py-2 text-left text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary">Project</th>
+                <th className="sticky z-20 border-b border-border-subtle bg-surface-1 px-2 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary" style={{ left: LEADER_W }}>Done</th>
+                <th className="sticky z-20 border-b border-r border-border-subtle bg-surface-1 px-2 py-2 text-right text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary" style={{ left: LEADER_W + DONE_W }}>Behind</th>
+                {months.map(m => (
+                  <th key={m} className={cx('border-b border-border-subtle px-1 py-2 text-center text-[10.5px] font-semibold uppercase tracking-wider',
+                    m === today ? 'bg-status-watch-bg text-status-watch-fg' : 'bg-surface-1 text-fg-tertiary')}>
+                    {monthLabel(m)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(p => {
+                const s = p.summary;
+                const slip = p.ecod.slip_days;
+                const pctDel = p.ordered_cr ? Math.round((p.delivered_cr / p.ordered_cr) * 100) : null;
+                const displayPct = isModules ? (s?.modules_pct ?? 0) : (s?.pct_complete ?? 0);
+                return (
+                  <tr key={p.project_id} className={cx('group', p.not_applicable && 'opacity-60')}>
+                    <td className="sticky left-0 z-10 border-b border-border-subtle bg-surface-1 px-3 py-3 group-hover:bg-surface-sunken">
+                      {/* Facts as pill chips, not run-on text: each one a discrete,
                         scannable unit. Colour only on the two chips that actually
                         carry a status (ECOD, TC); the rest are neutral. */}
-                    <div className="flex items-baseline justify-between gap-2">
-                      <a href={href(p.project_id, 'installation')} onClick={e => { e.preventDefault(); open(p.project_id, 'installation'); }}
-                        className="min-w-0 truncate text-[13px] font-semibold text-fg-primary hover:text-brand-blue" title={p.name}>
-                        {formatProjectName(p.name)}
-                      </a>
-                      {p.capacity_mwac > 0 && <span className="shrink-0 text-[11px] tabular-nums text-fg-tertiary">{p.capacity_mwac} MW</span>}
-                    </div>
-                    {p.not_applicable ? (
-                      <div className="mt-1.5 text-[11px] text-fg-tertiary">No module activities in P6</div>
-                    ) : (
-                      <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                        {isModules
-                          ? <Chip>{Math.round(s!.modules_completed)}/{Math.round(s!.modules_scope)} mod</Chip>
-                          : <Chip>{s!.completed}/{s!.planned} blk</Chip>}
-                        {slip == null ? null : slip === 0 ? <Chip tone="healthy">ECOD on plan</Chip>
-                          : <Chip tone={slip > 0 ? 'critical' : 'healthy'}>ECOD {slip > 0 ? '+' : '−'}{Math.abs(slip)}d</Chip>}
-                        <Chip>{pctDel == null ? 'SAP —' : `SAP ${pctDel}%`}</Chip>
-                        {p.tc.lines > 0 && <Chip tone={p.tc.charged < p.tc.lines ? 'watch' : undefined}>TC {p.tc.charged}/{p.tc.lines}</Chip>}
+                      <div className="flex items-baseline justify-between gap-2">
+                        <a href={href(p.project_id, 'installation')} onClick={e => { e.preventDefault(); open(p.project_id, 'installation'); }}
+                          className="min-w-0 truncate text-[13px] font-semibold text-fg-primary hover:text-brand-blue" title={p.name}>
+                          {formatProjectName(p.name)}
+                        </a>
+                        {p.capacity_mwac > 0 && <span className="shrink-0 text-[11px] tabular-nums text-fg-tertiary">{p.capacity_mwac} MW</span>}
                       </div>
-                    )}
-                  </td>
-                  <td style={{ left: LEADER_W }} className="sticky z-10 border-b border-border-subtle bg-surface-1 px-2 py-3 text-right group-hover:bg-surface-sunken">
-                    {!p.not_applicable && (
-                      <>
-                        <div className={cx('text-[16px] font-bold tabular-nums leading-none', displayPct >= 100 ? 'text-status-done-fg' : 'text-fg-primary')}>{Math.round(displayPct)}%</div>
-                        <MiniMeter pct={displayPct} tone={displayPct >= 100 ? 'done' : 'healthy'} className="mt-1.5" />
-                      </>
-                    )}
-                  </td>
-                  <td style={{ left: LEADER_W + DONE_W }} className="sticky z-10 border-b border-r border-border-subtle bg-surface-1 px-2 py-3 text-right group-hover:bg-surface-sunken">
-                    {p.not_applicable ? <span className="text-fg-tertiary">—</span>
-                      : (isModules ? p.modules_behind : p.behind) > 0
-                        ? <span className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-status-critical-bg px-2 py-1 text-[13px] font-bold tabular-nums text-status-critical-fg">{isModules ? Math.round(p.modules_behind) : p.behind}</span>
-                        : <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-status-healthy-bg text-status-healthy-fg"><Check className="h-3.5 w-3.5" /></span>}
-                  </td>
-                  {months.map(m => {
-                    const c = p.monthly[m];
-                    let plan: number, done: number;
-                    if (isModules) {
-                      plan = c ? Math.round(c.modules_planned) : 0;
-                      done = c ? Math.round(c.modules_completed) : 0;
-                    } else {
-                      plan = c ? c[basis] : 0;
-                      done = c ? c.completed : 0;
-                    }
-                    const short = m < today && plan > done ? plan - done : 0;
-                    return (
-                      <td key={m} className="border-b border-border-subtle p-[3px] text-center">
-                        {plan || done ? (
-                          <button 
-                            type="button"
-                            onClick={() => setSelectedCell({ p, m })}
-                            className={cx('flex w-full h-7 items-center justify-center gap-1 rounded border px-1 tabular-nums transition-colors hover:ring-2 hover:ring-brand-blue/50 cursor-pointer', cellClass(m, plan, done))} title={`${monthLabel(m)}: ${plan} ${isModules ? 'modules' : 'blocks'} planned, ${done} completed${short ? `, ${short} short` : ''}`}>
-                            <span className="text-[12px] font-semibold">{plan}</span><span className="opacity-50">·</span><span className="text-[12px]">{done}</span>
-                            {short > 0 && <span className="ml-0.5 rounded bg-status-critical-solid/15 px-1 text-[9.5px] font-semibold leading-4">−{short}</span>}
-                          </button>
-                        ) : <span className="text-fg-disabled/60">·</span>}
-                      </td>
-                    );
-                  })}
-                </tr>
-              );
-            })}
-          </tbody>
-          <tfoot>
-            <tr>
-              <td className="sticky left-0 z-10 border-r border-t border-border-subtle bg-surface-1 px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary">Portfolio · plan · done ({isModules ? 'modules' : 'blocks'})</td>
-              <td style={{ left: LEADER_W }} className="sticky z-10 border-t border-border-subtle bg-surface-1 px-2 py-2" />
-              <td style={{ left: LEADER_W + DONE_W }} className="sticky z-10 border-r border-t border-border-subtle bg-surface-1 px-2 py-2 text-right tabular-nums text-fg-tertiary">
-                {isModules ? Math.round(projects.reduce((a, p) => a + p.modules_behind, 0)) : projects.reduce((a, p) => a + p.behind, 0)}
-              </td>
-              {colTotals.map((t, i) => (
-                <td key={months[i]} className={cx('border-t border-border-subtle px-1 py-2 text-center tabular-nums', months[i] === today ? 'bg-status-watch-bg text-status-watch-fg font-semibold' : 'text-fg-secondary')}>
-                  {t.plan || t.done ? <><span className="font-medium">{isModules ? Math.round(t.plan) : t.plan}</span><span className="opacity-60"> · </span>{isModules ? Math.round(t.done) : t.done}</> : <span className="text-fg-disabled">·</span>}
+                      {p.not_applicable ? (
+                        <div className="mt-1.5 text-[11px] text-fg-tertiary">No module activities in P6</div>
+                      ) : (
+                        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                          {isModules
+                            ? <Chip>{Math.round(s!.modules_completed)}/{Math.round(s!.modules_scope)} mod</Chip>
+                            : <Chip>{s!.completed}/{s!.planned} blk</Chip>}
+                          {slip == null ? null : slip === 0 ? <Chip tone="healthy">ECOD on plan</Chip>
+                            : <Chip tone={slip > 0 ? 'critical' : 'healthy'}>ECOD {slip > 0 ? '+' : '−'}{Math.abs(slip)}d</Chip>}
+                          <Chip>{pctDel == null ? 'SAP —' : `SAP ${pctDel}%`}</Chip>
+                          {p.tc.lines > 0 && <Chip tone={p.tc.charged < p.tc.lines ? 'watch' : undefined}>TC {p.tc.charged}/{p.tc.lines}</Chip>}
+                        </div>
+                      )}
+                    </td>
+                    <td style={{ left: LEADER_W }} className="sticky z-10 border-b border-border-subtle bg-surface-1 px-2 py-3 text-right group-hover:bg-surface-sunken">
+                      {!p.not_applicable && (
+                        <>
+                          <div className={cx('text-[16px] font-bold tabular-nums leading-none', displayPct >= 100 ? 'text-status-done-fg' : 'text-fg-primary')}>{Math.round(displayPct)}%</div>
+                          <MiniMeter pct={displayPct} tone={displayPct >= 100 ? 'done' : 'healthy'} className="mt-1.5" />
+                        </>
+                      )}
+                    </td>
+                    <td style={{ left: LEADER_W + DONE_W }} className="sticky z-10 border-b border-r border-border-subtle bg-surface-1 px-2 py-3 text-right group-hover:bg-surface-sunken">
+                      {p.not_applicable ? <span className="text-fg-tertiary">—</span>
+                        : (isModules ? p.modules_behind : p.behind) > 0
+                          ? <span className="inline-flex min-w-[28px] items-center justify-center rounded-full bg-status-critical-bg px-2 py-1 text-[13px] font-bold tabular-nums text-status-critical-fg">{isModules ? Math.round(p.modules_behind) : p.behind}</span>
+                          : <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-status-healthy-bg text-status-healthy-fg"><Check className="h-3.5 w-3.5" /></span>}
+                    </td>
+                    {months.map(m => {
+                      const c = p.monthly[m];
+                      let plan: number, done: number;
+                      if (isModules) {
+                        plan = c ? Math.round(c.modules_planned) : 0;
+                        done = c ? Math.round(c.modules_completed) : 0;
+                      } else {
+                        plan = c ? c[basis] : 0;
+                        done = c ? c.completed : 0;
+                      }
+                      const short = m < today && plan > done ? plan - done : 0;
+                      return (
+                        <td key={m} className="border-b border-border-subtle p-[3px] text-center">
+                          {plan || done ? (
+                            <button
+                              type="button"
+                              onClick={() => setSelectedCell({ p, m })}
+                              className={cx('flex w-full h-7 items-center justify-center gap-1 rounded border px-1 tabular-nums transition-colors hover:ring-2 hover:ring-brand-blue/50 cursor-pointer', cellClass(m, plan, done))} title={`${monthLabel(m)}: ${plan} ${isModules ? 'modules' : 'blocks'} planned, ${done} completed${short ? `, ${short} short` : ''}`}>
+                              <span className="text-[12px] font-semibold">{plan}</span><span className="opacity-50">·</span><span className="text-[12px]">{done}</span>
+                              {short > 0 && <span className="ml-0.5 rounded bg-status-critical-solid/15 px-1 text-[9.5px] font-semibold leading-4">−{short}</span>}
+                            </button>
+                          ) : <span className="text-fg-disabled/60">·</span>}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td className="sticky left-0 z-10 border-r border-t border-border-subtle bg-surface-1 px-3 py-2 text-[10.5px] font-semibold uppercase tracking-wider text-fg-tertiary">Portfolio · plan · done ({isModules ? 'modules' : 'blocks'})</td>
+                <td style={{ left: LEADER_W }} className="sticky z-10 border-t border-border-subtle bg-surface-1 px-2 py-2" />
+                <td style={{ left: LEADER_W + DONE_W }} className="sticky z-10 border-r border-t border-border-subtle bg-surface-1 px-2 py-2 text-right tabular-nums text-fg-tertiary">
+                  {isModules ? Math.round(projects.reduce((a, p) => a + p.modules_behind, 0)) : projects.reduce((a, p) => a + p.behind, 0)}
                 </td>
-              ))}
-            </tr>
-          </tfoot>
-        </table>
+                {colTotals.map((t, i) => (
+                  <td key={months[i]} className={cx('border-t border-border-subtle px-1 py-2 text-center tabular-nums', months[i] === today ? 'bg-status-watch-bg text-status-watch-fg font-semibold' : 'text-fg-secondary')}>
+                    {t.plan || t.done ? <><span className="font-medium">{isModules ? Math.round(t.plan) : t.plan}</span><span className="opacity-60"> · </span>{isModules ? Math.round(t.done) : t.done}</> : <span className="text-fg-disabled">·</span>}
+                  </td>
+                ))}
+              </tr>
+            </tfoot>
+          </table>
+        </div>
       </div>
-    </div>
       <AnimatePresence>
         {selectedCell && (
-          <CellDetailsModal 
-            project={selectedCell.p} 
-            month={selectedCell.m} 
-            onClose={() => setSelectedCell(null)} 
+          <CellDetailsModal
+            project={selectedCell.p}
+            month={selectedCell.m}
+            onClose={() => setSelectedCell(null)}
             today={today}
             unit={unit}
           />
@@ -234,7 +234,7 @@ export default function PlannerGrid({ projects, months, today, basis, unit }: {
 function StatusGroup({ title, tone, activities, defaultOpen = false }: {
   title: string;
   tone: 'critical' | 'healthy' | 'watch' | 'neutral';
-  activities: { name: string; status: string; forecast_start: string | null; forecast_finish: string | null; baseline_finish: string | null; actual_finish: string | null; modules_scope: number; modules_actual: number }[];
+  activities: { name: string; status: string; baseline_start: string | null; baseline_finish: string | null; forecast_start: string | null; forecast_finish: string | null; actual_start: string | null; actual_finish: string | null; modules_scope: number; modules_actual: number }[];
   defaultOpen?: boolean;
 }) {
   const [isOpen, setIsOpen] = useState(defaultOpen);
@@ -273,9 +273,10 @@ function StatusGroup({ title, tone, activities, defaultOpen = false }: {
               <tr>
                 <th className="border-b border-inherit px-3 py-2 font-medium">Block Name</th>
                 <th className="border-b border-inherit px-3 py-2 font-medium">Modules</th>
-                <th className="border-b border-inherit px-3 py-2 font-medium">Forecast Start</th>
-                <th className="border-b border-inherit px-3 py-2 font-medium">Forecast Finish</th>
+                <th className="border-b border-inherit px-3 py-2 font-medium">Baseline Start</th>
                 <th className="border-b border-inherit px-3 py-2 font-medium">Baseline Finish</th>
+                <th className="border-b border-inherit px-3 py-2 font-medium">Start</th>
+                <th className="border-b border-inherit px-3 py-2 font-medium">Finish</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-inherit">
@@ -286,9 +287,22 @@ function StatusGroup({ title, tone, activities, defaultOpen = false }: {
                     <span className="font-medium text-fg-primary">{act.modules_actual || 0}</span>
                     <span className="text-fg-tertiary"> / {act.modules_scope || 0}</span>
                   </td>
-                  <td className="px-3 py-2 tabular-nums text-fg-secondary">{act.forecast_start || '—'}</td>
-                  <td className="px-3 py-2 tabular-nums text-fg-secondary">{act.forecast_finish || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums text-fg-tertiary">{act.baseline_start || '—'}</td>
                   <td className="px-3 py-2 tabular-nums text-fg-tertiary">{act.baseline_finish || '—'}</td>
+                  <td className="px-3 py-2 tabular-nums">
+                    {act.actual_start ? (
+                      <span className="font-medium text-fg-primary">{act.actual_start}</span>
+                    ) : (
+                      <span className="text-fg-secondary">{act.forecast_start || '—'}</span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 tabular-nums">
+                    {act.actual_finish ? (
+                      <span className="font-medium text-fg-primary">{act.actual_finish}</span>
+                    ) : (
+                      <span className="text-fg-secondary">{act.forecast_finish || '—'}</span>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -300,29 +314,37 @@ function StatusGroup({ title, tone, activities, defaultOpen = false }: {
 }
 
 function CellDetailsModal({ project, month, onClose, today, unit }: { project: PlannerProject; month: string; onClose: () => void; today: string; unit: UnitKey }) {
-  const c = project.monthly[month] || { planned: 0, baseline: 0, completed: 0, modules_planned: 0, modules_baseline: 0, modules_completed: 0, activities: [] };
+  const c = project.monthly[month] || { planned: 0, baseline: 0, completed: 0, activities: [], modules_planned: 0, modules_baseline: 0, modules_completed: 0 };
   const [sapOpen, setSapOpen] = useState(false);
 
-  const plan = c.planned || 0;
-  const done = c.completed || 0;
-  const short = month < today && plan > done ? plan - done : 0;
-  const modPlan = Math.round(c.modules_planned || 0);
-  const modDone = Math.round(c.modules_completed || 0);
-  const modShort = month < today && modPlan > modDone ? modPlan - modDone : 0;
-  
+  const isModules = unit === 'modules';
+  const activities = c.activities || [];
+
+  // Use the temporal buckets for scope/plan to preserve the original cell schedule for the Shortfall calculation.
+  const schedPlan = c.planned || 0;
+  const schedModPlan = c.modules_planned ? Math.round(c.modules_planned) : 0;
+
+  // For the Compact Stats Row, summarize the exact list of activities shown in this modal
+  const listPlan = activities.length;
+  const listModPlan = Math.round(activities.reduce((sum, a) => sum + (a.modules_scope || 0), 0));
+
+  const done = activities.filter(a => a.status === 'Completed').length;
+  const modDone = Math.round(activities.reduce((sum, a) => sum + (a.modules_actual || 0), 0));
+
+  const short = Math.max(0, schedPlan - done);
+  const modShort = Math.max(0, schedModPlan - modDone);
+
   const pendingSap = Math.max(0, project.ordered_cr - project.delivered_cr);
   const pctDel = project.ordered_cr ? Math.round((project.delivered_cr / project.ordered_cr) * 100) : 0;
 
-  const isModules = unit === 'modules';
-  const displayPlan = isModules ? modPlan : plan;
+  const schedDisplayPlan = isModules ? schedModPlan : schedPlan;
   const displayDone = isModules ? modDone : done;
   const displayShort = isModules ? modShort : short;
 
   // Group activities by status, priority order
   // When in 'modules' view, we track status based on actual module completion, 
   // since P6 activity status often lags behind the physical modules installed.
-  const activities = c.activities || [];
-  
+
   const isModCompleted = (a: typeof activities[0]) => a.modules_scope > 0 && a.modules_actual >= a.modules_scope;
   const isModInProgress = (a: typeof activities[0]) => a.modules_actual > 0 && a.modules_actual < a.modules_scope;
   const isModNotStarted = (a: typeof activities[0]) => a.modules_actual === 0;
@@ -355,7 +377,7 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
             <X className="h-4 w-4" />
           </button>
         </div>
-        
+
         <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
           <div className="flex flex-col gap-4">
             {/* Priority Status Banner */}
@@ -367,17 +389,17 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
                     Behind Plan — {displayShort} {isModules ? 'modules' : 'blocks'} short
                   </div>
                   <div className="mt-0.5 text-[11px] text-status-critical-fg/80">
-                    {displayDone} of {displayPlan} {isModules ? 'modules' : 'blocks'} completed for {monthLabel(month)}
+                    {displayDone} of {schedDisplayPlan} {isModules ? 'modules' : 'blocks'} completed for {monthLabel(month)}
                   </div>
                 </div>
               </div>
-            ) : month <= today && displayPlan > 0 ? (
+            ) : month <= today && schedDisplayPlan > 0 ? (
               <div className="flex items-center gap-3 rounded-lg border border-status-healthy-border bg-status-healthy-bg px-4 py-3">
                 <Check className="h-5 w-5 shrink-0 text-status-healthy-fg" />
                 <div className="flex-1">
                   <div className="text-[13px] font-bold text-status-healthy-fg">On Track</div>
                   <div className="mt-0.5 text-[11px] text-status-healthy-fg/80">
-                    All {displayPlan} {isModules ? 'modules' : 'blocks'} completed for {monthLabel(month)}
+                    All {schedDisplayPlan} {isModules ? 'modules' : 'blocks'} completed for {monthLabel(month)}
                   </div>
                 </div>
               </div>
@@ -415,7 +437,7 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
                         </span>
                       </div>
                     </div>
-                    
+
                     {project.ordered_cr > 0 && (
                       <div className="pt-1">
                         <div className="mb-1 flex justify-between text-[10px]">
@@ -423,8 +445,8 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
                           <span className="font-medium text-fg-secondary">{pctDel}%</span>
                         </div>
                         <div className="h-1.5 w-full overflow-hidden rounded-full bg-surface-sunken">
-                          <div 
-                            className="h-full rounded-full bg-brand-blue transition-all" 
+                          <div
+                            className="h-full rounded-full bg-brand-blue transition-all"
                             style={{ width: `${Math.min(pctDel, 100)}%` }}
                           />
                         </div>
@@ -440,7 +462,7 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
               <div className="rounded-lg border border-border-default bg-surface-sunken p-2.5">
                 <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-fg-tertiary">Blocks</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold tabular-nums text-fg-primary">{plan}</span>
+                  <span className="text-lg font-bold tabular-nums text-fg-primary">{listPlan}</span>
                   <span className="text-[10px] text-fg-tertiary">plan</span>
                   <span className="text-[10px] text-fg-disabled">·</span>
                   <span className="text-lg font-bold tabular-nums text-status-healthy-fg">{done}</span>
@@ -450,7 +472,7 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
               <div className="rounded-lg border border-border-default bg-surface-sunken p-2.5">
                 <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wider text-fg-tertiary">Modules</div>
                 <div className="flex items-baseline gap-1">
-                  <span className="text-lg font-bold tabular-nums text-fg-primary">{modPlan}</span>
+                  <span className="text-lg font-bold tabular-nums text-fg-primary">{listModPlan}</span>
                   <span className="text-[10px] text-fg-tertiary">scope</span>
                   <span className="text-[10px] text-fg-disabled">·</span>
                   <span className="text-lg font-bold tabular-nums text-status-healthy-fg">{modDone}</span>
@@ -471,7 +493,7 @@ function CellDetailsModal({ project, month, onClose, today, unit }: { project: P
                 </div>
               </div>
             </div>
-            
+
             {/* Activities grouped by status */}
             <div className="flex flex-col gap-2">
               <StatusGroup

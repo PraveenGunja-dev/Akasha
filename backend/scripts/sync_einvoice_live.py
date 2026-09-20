@@ -64,11 +64,18 @@ def sync_einvoice_live():
 
     print("Dropping old table if exists to load fresh live data...")
     models.EInvoiceRecord.__table__.drop(bind=engine, checkfirst=True)
-    
+
     print("Creating tables if not exists...")
     models.Base.metadata.create_all(bind=engine)
-    
+
     db = SessionLocal()
+    try:
+        _sync_einvoice_records(db, results)
+    finally:
+        db.close()
+
+
+def _sync_einvoice_records(db, results):
     data_dir = os.path.join(os.path.dirname(backend_dir), "Data", "NEW31")
         
     master_path = os.path.join(data_dir, "AKASHA SAP MASTER FILE (2).xlsx")

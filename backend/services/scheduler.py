@@ -27,17 +27,36 @@ logger = logging.getLogger(__name__)
 
 TICK_SECONDS = 30
 
-# source -> (label, default interval minutes). Intervals are editable from the
-# panel; these are only what a fresh database starts with.
+# source -> (label, default interval minutes, default window (start, end) in
+# IST hour-of-day or None). Both interval and window are editable from the
+# panel — this is only what a fresh database (or a feed never configured
+# before) starts with. The three heavy, multi-minute syncs default to a
+# 1am-5am IST window so they never compete with daytime traffic; the rest
+# default to no restriction (None), unchanged from before this feature.
 DEFAULTS: Dict[str, tuple] = {
-    "sharepoint": ("SAP (SharePoint)", 60),        # checks hourly, ingests only when a newer extract exists
-    "p6":         ("Primavera P6", 360),
-    "pulse":      ("Pulse (Quality)", 120),
-    "einvoice":   ("E-Invoice", 240),
-    "tc":         ("Transmission", 720),
-    "capacity":   ("Capacity Milestones", 1440),
-    "mapping":    ("Project Mapping", 1440),
+    "sharepoint": ("SAP (SharePoint)", 60, None),        # checks hourly, ingests only when a newer extract exists
+    "p6":         ("Primavera P6", 360, (1, 5)),
+    "pulse":      ("Pulse (Quality)", 120, None),
+    "einvoice":   ("E-Invoice", 240, None),
+    "tc":         ("Transmission", 720, None),
+    "capacity":   ("Capacity Milestones", 1440, (1, 5)),
+    "mapping":    ("Project Mapping", 1440, (1, 5)),
 }
+
+IST_OFFSET = timedelta(hours=5, minutes=30)
+
+
+def _within_window(sched) -> bool:
+    """True if `sched` has no window (fires whenever due) or the current IST
+    hour falls inside [window_start_hour, window_end_hour), wrapping past
+    midnight when start > end (e.g. 23 -> 6)."""
+    start, end = sched.window_start_hour, sched.window_end_hour
+    if start is None or end is None:
+        return True
+    ist_hour = (datetime.utcnow() + IST_OFFSET).hour
+    if start <= end:
+        return start <= ist_hour < end
+    return ist_hour >= start or ist_hour < end
 
 _locks: Dict[str, threading.Lock] = {k: threading.Lock() for k in DEFAULTS}
 _running: Dict[str, datetime] = {}
@@ -119,14 +138,19 @@ RUNNERS: Dict[str, Callable] = {
 # ── schedule persistence ─────────────────────────────────────────────────────
 
 def ensure_defaults(db):
-    """Seed sync_schedule for any feed missing a row. Idempotent."""
+    """Seed sync_schedule for any feed missing a row. Idempotent — only ever
+    fills in a row that doesn't exist yet, never overwrites one a user has
+    since edited (including clearing its window back to unrestricted)."""
     existing = {r.source for r in db.query(models.SyncSchedule).all()}
     now = datetime.utcnow()
-    for src, (_, minutes) in DEFAULTS.items():
+    for src, (_, minutes, window) in DEFAULTS.items():
         if src not in existing:
             # Stagger first runs so a fresh start doesn't fire everything at once.
-            db.add(models.SyncSchedule(source=src, enabled=True, interval_minutes=minutes,
-                                       next_run_at=now + timedelta(minutes=2 + 3 * len(existing)), updated_at=now))
+            db.add(models.SyncSchedule(
+                source=src, enabled=True, interval_minutes=minutes,
+                window_start_hour=window[0] if window else None,
+                window_end_hour=window[1] if window else None,
+                next_run_at=now + timedelta(minutes=2 + 3 * len(existing)), updated_at=now))
             existing.add(src)
     db.commit()
 
@@ -171,7 +195,10 @@ def _tick():
         due = db.query(models.SyncSchedule).filter(
             models.SyncSchedule.enabled.is_(True), models.SyncSchedule.next_run_at <= now).all()
         for s in due:
-            if s.source in RUNNERS and not is_running(s.source):
+            # Overdue but outside its window: leave next_run_at alone and
+            # just wait — it fires as soon as the window opens, checked
+            # again next tick. "Run now" (manual) always bypasses this.
+            if s.source in RUNNERS and not is_running(s.source) and _within_window(s):
                 run_now(s.source)
     except Exception as e:
         logger.error(f"[scheduler] tick failed: {e}")

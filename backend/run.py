@@ -37,36 +37,21 @@ def prepare_database():
     except Exception as e:
         print(f"Could not automatically ensure database exists: {e}")
 
-    # Run automatic schema migrations
+    # Run automatic schema migrations. Delegates to auto_migrate's version
+    # rather than duplicating the ALTER TABLE loop here, so there is exactly
+    # one place that sets a lock_timeout before altering — this script's own
+    # startup logs prove uvicorn's --reload on Windows fully re-executes this
+    # file (not just main:app) on every code change, so this runs every time,
+    # and it must not be able to hang behind a stale open transaction.
     try:
-        from database import engine, Base
-        import models
-        from sqlalchemy import inspect
-        
-        print("Auto-migrating database schema...")
-        # 1. Create missing tables
-        Base.metadata.create_all(bind=engine)
-        
-        # 2. Add missing columns to existing tables
-        inspector = inspect(engine)
-        with engine.begin() as conn:
-            for table_name, table in Base.metadata.tables.items():
-                if not inspector.has_table(table_name):
-                    continue
-                
-                existing_columns = [col['name'] for col in inspector.get_columns(table_name)]
-                for column in table.columns:
-                    if column.name not in existing_columns:
-                        col_type = column.type.compile(engine.dialect)
-                        print(f"Adding missing column: {table_name}.{column.name} ({col_type})")
-                        conn.execute(text(f"ALTER TABLE {table_name} ADD COLUMN {column.name} {col_type}"))
-        print("Schema auto-migration complete!")
+        from auto_migrate import auto_upgrade_schema
+        auto_upgrade_schema()
     except Exception as e:
         print(f"Auto-migration error: {e}")
 
 if __name__ == "__main__":
     load_dotenv(override=True)
-    
+
     if os.getenv("AUTO_SETUP_DB", "False").lower() == "true":
         print("Preparing Database Infrastructure...")
         prepare_database()
