@@ -18,6 +18,13 @@ from sqlalchemy import func
 # file wins rather than a single hardcoded name.
 import re
 import glob
+
+def _extract_wattage_from_text(short_text: str):
+    if not short_text:
+        return 1.0
+    m = re.search(r'(\d{3,4})\s*(?:W|Wp|w)', str(short_text))
+    return float(m.group(1)) / 1_000_000 if m else 1.0
+
 SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "19_09")
 SAP_FILE_PATTERNS = {
     "zsps": re.compile(r"^ZPSPS007.*\.xlsx?$", re.I),
@@ -273,6 +280,7 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                     
                 unrestricted = safe_float(row.get('Unrestricted', 0))
                 if unrestricted > 0:
+                    mw_mult = _extract_wattage_from_text(str(row.get('Material_Description', '')))
                     inv = models.MTInventory(
                         material_code=mat_code,
                         material_name=str(row.get('Materail_Name', '')),
@@ -283,7 +291,9 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                         storage_location_mapping=str(row.get('Storage_Location', '')),
                         wbs_element=wbs,
                         material_description=str(row.get('Material_Description', '')),
-                        base_unit=str(row.get('Base_Unit_of_Measure', ''))
+                        base_unit=str(row.get('Base_Unit_of_Measure', '')),
+                        mw_multiplication_factor=mw_mult,
+                        quantity_mw=unrestricted * mw_mult
                     )
                     inventories.append(inv)
             db.add_all(inventories)
@@ -392,6 +402,8 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                 
                 del_val_cr = del_val_inr / 10000000
 
+                mw_mult = _extract_wattage_from_text(safe_str(row.get('Short text', '')))
+                
                 po = models.MTPOAmount(
                     purchasing_document=po_doc,
                     wbs_element=wbs_el,
@@ -414,6 +426,8 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                     delivery_completed_flag=safe_str(me2j_data.get('Delivery Completed', '')),
                     document_date=safe_date(me2j_data.get('Document Date')),
                     doc_type=safe_str(row.get('Type', '')) or None,
+                    mw_multiplication_factor=mw_mult,
+                    po_quantities_mw=qty * mw_mult
                 )
                 po_amounts.append(po)
 
@@ -548,6 +562,7 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                 if not master_info:
                     continue
                 
+                mw_mult = _extract_wattage_from_text(str(row.get('Material_Description', '')))
                 m_doc = models.MTMaterialDocument(
                     material_code=mat_code,
                     material_name=str(row.get('Material_Name', '')),
@@ -563,7 +578,9 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                     storage_location=str(row.get('Storage_Location', '')),
                     block_plot_name=str(row.get('Block_Plot_Name', '')),
                     purchase_order=safe_sap_id(row.get('Purchase_Order', '')),
-                    base_unit=str(row.get('Base_Unit_of_Measure', ''))
+                    base_unit=str(row.get('Base_Unit_of_Measure', '')),
+                    mw_multiplication_factor=mw_mult,
+                    quantity_mw=qty * mw_mult
                 )
                 material_docs.append(m_doc)
             db.add_all(material_docs)
