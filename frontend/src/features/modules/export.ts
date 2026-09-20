@@ -8,7 +8,12 @@
    Columns with no live source (D/E, the month-wise plan) are written empty
    rather than filled with a derived guess — same as the screen. */
 import { saveAs } from 'file-saver';
+import type { PaperSize } from 'exceljs';
 import type { ModuleDeliveriesSummary, ModuleProject, ModuleTotals } from './types';
+
+// exceljs's PaperSize enum omits code 8 (A3), which this wide landscape
+// table needs — the numeric OOXML code is still valid at runtime.
+const A3: PaperSize = 8 as PaperSize;
 
 /** Rolling 13-month window starting at the current month, so the plan header
  *  never goes stale (it used to be a fixed 'Aug-26'..'Aug-27' literal). */
@@ -95,7 +100,7 @@ export async function exportModuleDeliveriesXLSX(
     views: [{ state: 'frozen', xSplit: 2, ySplit: 5 }],
     pageSetup: {
       orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0,
-      paperSize: 8, margins: { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 },
+      paperSize: A3, margins: { left: 0.2, right: 0.2, top: 0.3, bottom: 0.3, header: 0.1, footer: 0.1 },
     },
   });
 
