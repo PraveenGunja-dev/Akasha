@@ -325,7 +325,7 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         scod_source = None
         if m.manual_scod:
             scod = m.manual_scod
-            scod_source = "manual"
+            scod_source = "manual_lta" if m.manual_scod_is_lta else "manual"
         elif p6_name in cod_by_p6:
             scod = cod_by_p6[p6_name]
             scod_source = "trial_run"

@@ -17,7 +17,7 @@ export interface ModuleProject {
   lta: string;
   scod: string;
   scod_lta_diff_days?: number | null;
-  scod_source: 'manual' | 'trial_run' | 'tc' | null;
+  scod_source: 'manual' | 'manual_lta' | 'trial_run' | 'tc' | null;
   aop_plan: string;
   ftc_date: string;
   tc_date: string;

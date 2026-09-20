@@ -667,8 +667,8 @@ export default function ModuleDeliveriesPage() {
                           <button
                             type="button"
                             onClick={() => setEditingScodId(p.id)}
-                            className={`inline-flex items-center gap-1 rounded px-1 -mx-1 py-px text-[10px] decoration-dotted underline-offset-2 hover:bg-primary/5 hover:text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${p.scod_lta_diff_days != null ? 'text-amber-500 font-semibold' : 'text-foreground'}`}
-                            title={`${p.scod_source === 'manual' ? 'Manually entered' : `Derived from ${p.scod_source ?? 'no source'}`} ${p.scod_lta_diff_days != null ? `\n(LTA ${p.scod_lta_diff_days >= 0 ? '+' : ''}${p.scod_lta_diff_days} days)` : ''} — click to override`}
+                            className={`inline-flex items-center gap-1 rounded px-1 -mx-1 py-px text-[10px] decoration-dotted underline-offset-2 hover:bg-primary/5 hover:text-primary hover:underline focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${p.scod_source === 'manual_lta' ? 'text-amber-500 font-semibold' : 'text-foreground'}`}
+                            title={`${p.scod_source === 'manual_lta' ? 'Derived from LTA offset' : p.scod_source === 'manual' ? 'Manually entered' : `Derived from ${p.scod_source ?? 'no source'}`} ${p.scod_lta_diff_days != null ? `\n(LTA ${p.scod_lta_diff_days >= 0 ? '+' : ''}${p.scod_lta_diff_days} days)` : ''} — click to override`}
                           >
                             <span>{p.scod || '-'}</span>
                             {p.scod_source === 'manual' && <span className="h-1 w-1 shrink-0 rounded-full bg-primary" title="Manually entered" />}

@@ -339,6 +339,7 @@ class ProjectMapping(Base):
     # planning commitment the project team enters directly, not always a
     # measured date.
     manual_scod = Column(DateTime, nullable=True)
+    manual_scod_is_lta = Column(Boolean, default=False)
 # ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------

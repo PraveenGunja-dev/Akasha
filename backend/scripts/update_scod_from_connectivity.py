@@ -101,6 +101,7 @@ def main():
             
         scod_date = None
         
+        is_lta = False
         # 1. Try parsing as a standard date
         try:
             scod_date = pd.to_datetime(scod_val)
@@ -108,6 +109,7 @@ def main():
             # 2. If it's a string like "LTA + 30D" or "LTA", parse it relative to lta_date
             scod_str = str(scod_val).upper().strip()
             if 'LTA' in scod_str and match.lta_date:
+                is_lta = True
                 import re
                 from datetime import timedelta
                 m = re.search(r'LTA\s*([+-])\s*(\d+)', scod_str)
@@ -121,6 +123,7 @@ def main():
 
         if scod_date:
             match.manual_scod = scod_date
+            match.manual_scod_is_lta = is_lta
             updated_count += 1
             
     db.commit()
