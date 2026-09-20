@@ -578,9 +578,7 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                     storage_location=str(row.get('Storage_Location', '')),
                     block_plot_name=str(row.get('Block_Plot_Name', '')),
                     purchase_order=safe_sap_id(row.get('Purchase_Order', '')),
-                    base_unit=str(row.get('Base_Unit_of_Measure', '')),
-                    mw_multiplication_factor=mw_mult,
-                    quantity_mw=qty * mw_mult
+                    base_unit=str(row.get('Base_Unit_of_Measure', ''))
                 )
                 material_docs.append(m_doc)
             db.add_all(material_docs)
