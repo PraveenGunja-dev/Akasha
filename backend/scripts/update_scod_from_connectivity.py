@@ -94,18 +94,34 @@ def main():
         if pd.isna(scod_val) or str(scod_val).strip() == '' or str(scod_val) == 'nan' or str(scod_val) == 'NaT':
             continue
             
+        match = fuzzy_match(mappings, project, spv, solar_cap, wind_cap)
+        if not match:
+            missing.append(f"Project: {project} | SPV: {spv} | Solar: {solar_cap}")
+            continue
+            
+        scod_date = None
+        
+        # 1. Try parsing as a standard date
         try:
             scod_date = pd.to_datetime(scod_val)
         except Exception:
-            continue
-            
-        match = fuzzy_match(mappings, project, spv, solar_cap, wind_cap)
-        if match:
-            # Only update if different
+            # 2. If it's a string like "LTA + 30D" or "LTA", parse it relative to lta_date
+            scod_str = str(scod_val).upper().strip()
+            if 'LTA' in scod_str and match.lta_date:
+                import re
+                from datetime import timedelta
+                m = re.search(r'LTA\s*([+-])\s*(\d+)', scod_str)
+                if m:
+                    sign = 1 if m.group(1) == '+' else -1
+                    days = int(m.group(2))
+                    scod_date = match.lta_date + timedelta(days=sign * days)
+                else:
+                    # Just 'LTA' with no offset
+                    scod_date = match.lta_date
+
+        if scod_date:
             match.manual_scod = scod_date
             updated_count += 1
-        else:
-            missing.append(f"Project: {project} | SPV: {spv} | Solar: {solar_cap}")
             
     db.commit()
     print(f"Updated {updated_count} records with SCOD dates.")
