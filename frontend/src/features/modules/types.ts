@@ -51,6 +51,7 @@ export interface ModuleTotals {
   inventory_mwp: number;
   under_transit_mwp: number;
   balance_dispatch_mwp: number;
+  completed_ftc_mwp: number;
 }
 
 export interface TypeBreakdown {
