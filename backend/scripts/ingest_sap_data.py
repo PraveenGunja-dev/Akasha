@@ -21,9 +21,9 @@ import glob
 
 def _extract_wattage_from_text(short_text: str):
     if not short_text:
-        return 1.0
+        return None
     m = re.search(r'(\d{3,4})\s*(?:W|Wp|w)', str(short_text))
-    return float(m.group(1)) / 1_000_000 if m else 1.0
+    return float(m.group(1)) / 1_000_000 if m else None
 
 SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "19_09")
 SAP_FILE_PATTERNS = {
@@ -293,7 +293,7 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                         material_description=str(row.get('Material_Description', '')),
                         base_unit=str(row.get('Base_Unit_of_Measure', '')),
                         mw_multiplication_factor=mw_mult,
-                        quantity_mw=unrestricted * mw_mult
+                        quantity_mw=(unrestricted * mw_mult) if mw_mult is not None else None
                     )
                     inventories.append(inv)
             db.add_all(inventories)
@@ -427,7 +427,7 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                     document_date=safe_date(me2j_data.get('Document Date')),
                     doc_type=safe_str(row.get('Type', '')) or None,
                     mw_multiplication_factor=mw_mult,
-                    po_quantities_mw=qty * mw_mult
+                    po_quantities_mw=(qty * mw_mult) if mw_mult is not None else None
                 )
                 po_amounts.append(po)
 
