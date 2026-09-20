@@ -304,6 +304,16 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
         # Sort milestones by date so Phase 1 is first
         ftc_list.sort(key=lambda x: x["dt"])
         
+        # FIX: Distribute project capacity to FTC phases that didn't have capacity in their name (e.g. single phase)
+        total_known_mwac = sum(p["mw_ac"] for p in ftc_list)
+        missing_cap_phases = [p for p in ftc_list if p["mw_ac"] == 0]
+        if missing_cap_phases:
+            remaining = max(0, original_cap_mwac - total_known_mwac)
+            if remaining > 0:
+                per_phase = remaining / len(missing_cap_phases)
+                for p in missing_cap_phases:
+                    p["mw_ac"] = per_phase
+        
         # User requested: MWac comes from the FTC which is not completed
         if ftc_list:
             cap_mwac = sum(p["mw_ac"] for p in ftc_list if not p["is_completed"])
