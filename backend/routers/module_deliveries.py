@@ -646,6 +646,7 @@ def get_module_deliveries_summary(
             # UI offers that scope as a filter rather than hiding the rest.
             "cluster": (m.cluster or "").strip(),
             "is_commissioned": bool(m.is_commissioned) or "_Commissioned" in p6_name,
+            "is_tracked": m.is_tracked if m.is_tracked is not None else True,
             # True when this WBS element is shared with other projects, so the
             # SAP figures above are this project's capacity share of it rather
             # than a measured per-project number. Surfaced so the UI can say so.

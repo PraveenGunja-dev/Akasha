@@ -280,7 +280,7 @@ function Tip({
         >
           <span
             style={{ width: `${renderWidth}px` }}
-            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-normal break-words"
+            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words"
           >
             {content ? content : text ? renderHighlightedText(text) : null}
           </span>
@@ -428,7 +428,7 @@ function getMonthCellTheme(
 
   const p = (priority || 'standard').toLowerCase();
   const isLeveled = flags?.includes('leveled_early');
-  const isDelayed = flags?.includes('capacity_delayed');
+  const isOverload = flags?.includes('capacity_overload');
 
   if (p === 'p1') {
     return {
@@ -450,13 +450,13 @@ function getMonthCellTheme(
     };
   }
 
-  if (isDelayed) {
+  if (isOverload) {
     return {
       cellClass: 'bg-orange-500/15 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 font-semibold border-y border-orange-500/30 hover:bg-orange-500/25 transition-colors',
       badgeClass: 'bg-orange-500/20 text-orange-700 dark:text-orange-200 border border-orange-500/40',
       dotColor: 'bg-orange-500',
       label: MW(val),
-      tag: 'Quota-Delayed (past site target date)',
+      tag: 'Capacity Overload (exceeds monthly quota to hit its deadline)',
     };
   }
 
@@ -593,11 +593,24 @@ export default function ModuleDeliveriesPage() {
     }
   };
 
+  const toggleTracking = async (id: number, is_tracked: boolean) => {
+    try {
+      await fetch(`${API}/akasha/api/mappings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ is_tracked }),
+      });
+      await loadData();
+    } catch (e) {
+      console.error("Failed to update tracking status", e);
+    }
+  };
+
   // Filtered projects
   const filtered = useMemo(() => {
     if (!data) return [];
     return data.projects.filter(p => {
-      if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned)) return false;
+      if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned || p.is_tracked === false)) return false;
       if (statusFilter !== 'all') {
         if (statusFilter === 'needs_ordering') {
           if (p.balance_ordering_mwp <= 0) return false;
@@ -820,11 +833,11 @@ export default function ModuleDeliveriesPage() {
         </div>
       </motion.div>
 
-      {/* ── KPI CARDS ─────────────────────────────────────────────────────── */}
       <motion.div variants={container} initial="hidden" animate="show"
         className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3"
       >
-        <KpiCard title="Total Capacity" value={t.total_mwp} unit="MWp" icon={Sun} tint="var(--primary-500)" />
+        <KpiCard title="Total Capacity" value={t.total_mwp} unit="MWp" icon={Sun} tint="var(--primary-500)" 
+          sub={`${MW(t.total_mwac)} MWac`} />
         <KpiCard title="Ordered" value={t.ordered_mwp} unit="MWp" icon={Package} tint="var(--secondary-500)"
           pct={t.total_mwp > 0 ? t.ordered_mwp / t.total_mwp : 0}
           sub={`${orderedPct}% of capacity`} />
@@ -1020,7 +1033,7 @@ export default function ModuleDeliveriesPage() {
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-orange-500/30 bg-orange-500/15 text-orange-700 dark:text-orange-300 font-semibold">
               <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
-              Quota-Delayed (past site target)
+              Capacity Overload (exceeds monthly quota)
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
@@ -1028,7 +1041,7 @@ export default function ModuleDeliveriesPage() {
             </span>
           </div>
           <span className="text-[10px] text-muted-foreground italic">
-            * Click project's Priority badge to toggle Std → P1 → P2 &amp; auto-recalculate schedule. Quota-Delayed means monthly supplier capacity is fully booked ahead of this order — reprioritize to claim quota sooner.
+            * Click project's Priority badge to toggle Std → P1 → P2 &amp; auto-recalculate schedule. Capacity Overload means this order exceeds the source's assumed monthly quota — it's still placed on time against its module-date deadline rather than deferred, since a deadline can't slip but the quota assumption can.
           </span>
         </div>
 
@@ -1123,7 +1136,19 @@ export default function ModuleDeliveriesPage() {
                   {!collapsed.has(group) && projects.map((p, idx) => (
                     <tr key={p.id} className="group hover:bg-[var(--surface-sunken)]">
                       <Td stickyLeft={0} className="bg-card group-hover:bg-[var(--surface-sunken)] text-muted-foreground font-mono">{idx + 1}</Td>
-                      <Td stickyLeft={34} align="left" className="bg-card group-hover:bg-[var(--surface-sunken)] font-medium text-foreground shadow-[1px_0_0_0_var(--border-default)]">{p.project_name || p.p6_name}</Td>
+                      <Td stickyLeft={34} align="left" className="bg-card group-hover:bg-[var(--surface-sunken)] font-medium text-foreground shadow-[1px_0_0_0_var(--border-default)]">
+                        <div className="flex items-center gap-2">
+                          <Tip text={p.is_tracked !== false ? "Tracked in Khavda (uncheck to move to All Projects)" : "Untracked (check to track in Khavda)"}>
+                            <input 
+                              type="checkbox" 
+                              checked={p.is_tracked !== false}
+                              onChange={(e) => toggleTracking(p.id, e.target.checked)}
+                              className="w-3.5 h-3.5 rounded border-border text-primary cursor-pointer focus:ring-1 focus:ring-primary shrink-0"
+                            />
+                          </Tip>
+                          <span className="truncate">{p.project_name || p.p6_name}</span>
+                        </div>
+                      </Td>
                       <Td align="left" className="text-muted-foreground">{p.p6_name || '-'}</Td>
                       <Td className="font-mono">{p.spv}</Td>
                       <Td className="font-mono">{p.plot}</Td>
@@ -1205,14 +1230,11 @@ export default function ModuleDeliveriesPage() {
                         tip={p.erection_done_mwp > 0 ? 'Measured MWp installed, from the P6 Module Installation activities' : undefined}>
                         {p.erection_done_mwp > 0 ? MW(p.erection_done_mwp) : '-'}
                       </Td>
-                      {/* A negative is shown, not hidden behind a dash: it means
-                          SAP's receipt is short of what P6 reports erected. */}
                       <Td align="right"
-                        className={p.module_inventory_negative ? 'text-[var(--status-critical-fg)]' : ''}
                         tip={p.module_inventory_negative
                           ? `SAP receipt (${MW(p.total_receipt_mwp)}) is below P6 erected (${MW(p.erection_done_mwp)}) — ZSPS carries no delivery history for this project. MB52 stock on hand: ${MW(p.module_inventory_sap_mwp)} MWp`
                           : undefined}>
-                        {p.module_inventory_mwp !== 0 ? MW(p.module_inventory_mwp) : '-'}
+                        {p.module_inventory_mwp > 0 ? MW(p.module_inventory_mwp) : '-'}
                       </Td>
                       <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>
                       <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
@@ -1227,7 +1249,7 @@ export default function ModuleDeliveriesPage() {
                             key={mo}
                             align="right"
                             className={`${i === 0 ? SECTION_EDGE : ''} ${theme.cellClass}`}
-                            tip={val > 0 ? `${p.project_name || p.p6_name} (${theme.tag})\n${MW(val)} MWp planned in ${mo}\nSite Target Date: ${p.module_date || 'N/A'}\nFTC Phase: ${p.ftc_date || 'N/A'}${p.planning_flags?.includes('leveled_early') ? '\n⚡ Leveled early to protect vendor monthly capacity limits' : ''}` : undefined}
+                            tip={val > 0 ? `${p.project_name || p.p6_name} (${theme.tag})\n${MW(val)} MWp planned in ${mo}\n\nModule Date: ${p.module_date || 'N/A'}\nTC Date: ${p.tc_date || 'N/A'}\nFTC Date: ${p.ftc_date || 'N/A'}\n\nOrdering in ${mo} lands the material on site by TC Date, in time to support FTC.${p.planning_flags?.includes('leveled_early') ? '\n⚡ Leveled early to protect vendor monthly capacity limits' : ''}` : undefined}
                           >
                             {val > 0 ? (
                               <div className="inline-flex items-center justify-end gap-1 w-full">

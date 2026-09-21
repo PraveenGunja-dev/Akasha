@@ -340,6 +340,7 @@ class ProjectMapping(Base):
     # measured date.
     manual_scod = Column(DateTime, nullable=True)
     manual_scod_is_lta = Column(Boolean, default=False)
+    is_tracked = Column(Boolean, default=True)
 # ------------------------------------------
 # Transmission Portal (Tc) Data Models
 # ------------------------------------------

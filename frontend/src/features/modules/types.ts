@@ -61,6 +61,7 @@ export interface ModuleProject {
   po_share_pct: number | null;
   cluster: string;
   is_commissioned: boolean;
+  is_tracked: boolean;
 }
 
 export interface ModuleTotals {

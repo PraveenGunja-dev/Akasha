@@ -94,16 +94,16 @@ const EMPTY_BG = 'FFFBFCFD';
 // user downloads reads the same priority signal as the screen it came from
 // (user request 2026-09-21: the export should carry the same colours).
 const TIER_FILL: Record<string, string> = {
-  p1: 'FFFFE4E6', p2: 'FFFEF3C7', delayed: 'FFFFEDD5', leveled: 'FFF3E8FF', standard: 'FFD1FAE5',
+  p1: 'FFFFE4E6', p2: 'FFFEF3C7', overload: 'FFFFEDD5', leveled: 'FFF3E8FF', standard: 'FFD1FAE5',
 };
 const TIER_FONT: Record<string, string> = {
-  p1: 'FFBE123C', p2: 'FFB45309', delayed: 'FFC2410C', leveled: 'FF7E22CE', standard: 'FF047857',
+  p1: 'FFBE123C', p2: 'FFB45309', overload: 'FFC2410C', leveled: 'FF7E22CE', standard: 'FF047857',
 };
 function monthCellTier(priority: string | undefined, flags: string[] | undefined): keyof typeof TIER_FILL {
   const p = (priority || 'standard').toLowerCase();
   if (p === 'p1') return 'p1';
   if (p === 'p2') return 'p2';
-  if (flags?.includes('capacity_delayed')) return 'delayed';
+  if (flags?.includes('capacity_overload')) return 'overload';
   if (flags?.includes('leveled_early')) return 'leveled';
   return 'standard';
 }

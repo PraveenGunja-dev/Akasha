@@ -268,7 +268,7 @@ def run_module_planning_engine(
     }
     project_allocations: Dict[int, Dict[int, float]] = {}
     project_pulled_details: Dict[int, List[Dict[str, Any]]] = {}
-    project_delayed_details: Dict[int, List[Dict[str, Any]]] = {}
+    project_overload_details: Dict[int, List[Dict[str, Any]]] = {}
 
     for source, s_demands in by_source.items():
         cap = CAP_LIMITS.get(source, DEFAULT_CAP)
@@ -307,37 +307,27 @@ def run_module_planning_engine(
                         })
                 curr_m -= 1
 
-            # Every earlier month is at quota — the plan must still stay
-            # within {source}'s monthly capacity, so the remainder queues
-            # into the NEXT months instead of overshooting the target month
-            # (the previous behaviour let a single month run to 300-500% of
-            # quota whenever many projects were simultaneously overdue, since
-            # "pull earlier" has nowhere to go once curr_m hits 0). Forward
-            # fill is safe here because every source's total demand fits
-            # inside the full forecast window's total capacity — verified
-            # 2026-09-21 (largest case: ALMM 5,953 of 6,500 MWp available).
-            curr_m = target_m + 1
-            while rem > 1e-4 and curr_m < num_months:
-                avail = max(0.0, cap - monthly_alloc_by_source[source][curr_m])
-                if avail > 1e-4:
-                    take = min(rem, avail)
-                    monthly_alloc_by_source[source][curr_m] += take
-                    project_allocations[pid][curr_m] += take
-                    rem -= take
-                    project_delayed_details.setdefault(pid, []).append({
-                        'needed_by': forecast_months[target_m],
-                        'delayed_to': forecast_months[curr_m],
-                        'mwp': take,
-                        'reason': f"{source} {cap:.0f} MW/mo quota exhausted through {forecast_months[target_m]}",
-                    })
-                curr_m += 1
-
-            # Genuine structural shortfall: even the full window can't absorb
-            # this source's demand at its assumed monthly quota. Real overflow,
-            # not a scheduling artifact — flagged rather than hidden.
+            # Every earlier month is already at quota, and pulling further
+            # back isn't possible (month 0 is "now"). The target month's own
+            # date is the module DEADLINE — the latest an order can be placed
+            # and still make its FTC via the standard TC + lead-time math —
+            # not a soft target that can slide later. An earlier version of
+            # this pushed the remainder into a LATER month once quota ran out,
+            # which silently guaranteed missing that phase's FTC; a corrected
+            # deadline can't be worse than a corrected quota assumption, so
+            # the remainder is placed in the target month itself even if that
+            # means exceeding the assumed vendor quota there (user correction
+            # 2026-09-21: "the material should order before the module date
+            # only — that date is the deadline"). Flagged as capacity_overload
+            # so it reads as a genuine "the assumed monthly quota can't cover
+            # this deadline" signal, not a scheduling artifact.
             if rem > 1e-4:
                 monthly_alloc_by_source[source][target_m] += rem
                 project_allocations[pid][target_m] += rem
+                project_overload_details.setdefault(pid, []).append({
+                    'month': forecast_months[target_m],
+                    'mwp': rem,
+                })
                 d['project']['planning_flags'].append('capacity_overload')
                 rem = 0.0
 
@@ -393,7 +383,7 @@ def run_module_planning_engine(
         cap = CAP_LIMITS.get(source, DEFAULT_CAP)
 
         pulled_list = project_pulled_details.get(pid, [])
-        delayed_list = project_delayed_details.get(pid, [])
+        overload_list = project_overload_details.get(pid, [])
         months_str = ", ".join(non_zero_months) if non_zero_months else "immediate"
         excl_note = ""
         if excluded_list:
@@ -405,18 +395,20 @@ def run_module_planning_engine(
         # still forced into month 0" branch — a phase whose own module date
         # already passed is excluded above, not planned here (excl_note
         # surfaces it instead when some, not all, of a project's phases hit
-        # that).
+        # that). capacity_overload is already appended directly in the
+        # leveling loop (part 2) onto this same project dict, so it is not
+        # re-appended here.
         now_dt = datetime.now()
-        if delayed_list:
-            last_delay = delayed_list[-1]
-            total_delayed = sum(d['mwp'] for d in delayed_list)
-            diag = (f"{total_delayed:.1f} MWp queued past its {last_delay['needed_by']} target into "
-                    f"{last_delay['delayed_to']} — {source}'s {cap:.0f} MW/mo quota is fully booked by other "
-                    f"projects through {last_delay['needed_by']}. Full plan spans {months_str}.{excl_note}")
-            sugg = (f"This tranche will arrive after its original site target date. Confirm with site execution "
-                    f"whether the FTC schedule can absorb the delay, or re-prioritize this project (P1/P2) to "
-                    f"claim quota ahead of lower-priority demand in {source}.")
-            p['planning_flags'].append('capacity_delayed')
+        if overload_list:
+            total_overload = sum(x['mwp'] for x in overload_list)
+            overload_month = overload_list[-1]['month']
+            diag = (f"{total_overload:.1f} MWp placed in {overload_month} even though {source}'s {cap:.0f} MW/mo "
+                    f"assumed quota there is already booked by other projects — {overload_month} is this phase's "
+                    f"module-date deadline, so it is ordered on time rather than deferred past it. "
+                    f"Full plan spans {months_str}.{excl_note}")
+            sugg = (f"This exceeds {source}'s assumed monthly capacity in {overload_month}. Confirm the real "
+                    f"vendor capacity for that month, or split this order across an additional source to avoid "
+                    f"a genuine fabrication bottleneck — it cannot be pushed later without missing the FTC.")
         elif pulled_list:
             pulled_info = pulled_list[0]
             diag = (f"Scheduled into {months_str}: {pulled_info['mwp']:.1f} MWp pulled early from "
@@ -493,7 +485,7 @@ def run_module_planning_engine(
     # separately via the phase-level totals below).
     excluded_projects_count = sum(1 for p in projects if 'module_date_passed' in p.get('planning_flags', []))
     leveled_count = sum(1 for p in projects if 'leveled_early' in p.get('planning_flags', []))
-    delayed_count = sum(1 for p in projects if 'capacity_delayed' in p.get('planning_flags', []))
+    overload_count = sum(1 for p in projects if 'capacity_overload' in p.get('planning_flags', []))
     p1_count = sum(1 for p in projects if p.get('priority') == 'P1')
 
     # Two distinct, non-overlapping reasons the raw balance can exceed what's
@@ -518,8 +510,8 @@ def run_module_planning_engine(
         f"{p1_count} projects prioritized with guaranteed first-claim allocation on manufacturing quotas.",
         f"{leveled_count} projects were proactively pulled earlier to avoid exceeding vendor monthly limits.",
     ]
-    if delayed_count:
-        takeaways.append(f"{delayed_count} projects were pushed past their site target date because their source's monthly quota was fully booked.")
+    if overload_count:
+        takeaways.append(f"{overload_count} projects exceed their source's assumed monthly quota to stay on time — the module date is a deadline, so this was ordered as-scheduled rather than deferred past it.")
     if excluded_projects_count:
         takeaways.append(f"{excluded_projects_count} projects have no active plan: every pending phase's module date has already passed, so they're immediate exceptions rather than a scheduled order.")
     if excluded_module_passed_mwp > 0.5:

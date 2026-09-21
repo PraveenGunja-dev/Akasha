@@ -30,6 +30,7 @@ class ProjectMappingBase(BaseModel):
     priority: Optional[str] = None
     is_commissioned: bool = False
     manual_scod: Optional[datetime] = None
+    is_tracked: Optional[bool] = True
 
 class ProjectMappingCreate(ProjectMappingBase):
     pass
