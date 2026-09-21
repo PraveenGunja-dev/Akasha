@@ -184,7 +184,7 @@ def _fetch_capacity_milestones(db):
                     for r in m["Assignments"]:
                         # If resource UOM is MWdc (we can't fetch UOM easily without joining Resource, but we assume it's the largest planned unit or known name)
                         # We will use PlannedUnits. Usually, a solar block module assignment has PlannedUnits ~ 12.5.
-                        units = r.get("PlannedUnits", 0)
+                        units = float(r.get("PlannedUnits", 0) or 0)
                         if units > 5 and units < 50: # Safe assumption for MWdc
                             quantity_mw = units
                             found_mw = True

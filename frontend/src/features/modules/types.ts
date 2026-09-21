@@ -41,6 +41,7 @@ export interface ModuleProject {
   status: 'pending' | 'ordered' | 'in_progress' | 'delivered' | 'needs_ordering';
   p6_name: string;
   remarks: string;
+  ol: number;
   ai_suggestion?: string;
   priority?: 'P1' | 'P2' | 'standard';
   perspectives?: {
@@ -100,11 +101,14 @@ export interface ModuleDeliveriesSummary {
   forecast_months?: string[];
   capacity_summary?: Record<string, {
     monthly_cap_mwp: number;
+    monthly_cap_mwac: number;
     lead_time_days: number;
     allocated_by_month: number[];
+    allocated_by_month_mwac: number[];
     utilization_pct_by_month: number[];
     peak_month: string;
     peak_mwp: number;
+    peak_mwac: number;
   }>;
   strategic_briefing?: {
     scenario_version?: string;

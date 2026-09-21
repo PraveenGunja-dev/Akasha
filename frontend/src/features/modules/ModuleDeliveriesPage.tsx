@@ -5,7 +5,7 @@ import {
   Package, Sun, Truck, CheckCircle2, Clock, Search, Filter,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, MessageSquare,
+  Bot, X, Send, MessageSquare, ArrowDown,
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
@@ -19,6 +19,35 @@ import { MiniMeter } from '../../components/ui/primitives/Meter';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const API = import.meta.env.VITE_API_BASE || '';
+
+const DateChipGroup = ({ dateStr, colorClass, borderColorClass, badgeBgClass }: { dateStr?: string | null, colorClass: string, borderColorClass: string, badgeBgClass: string }) => {
+  if (!dateStr || dateStr === 'N/A') return <span className={`font-mono text-[11px] font-semibold ${colorClass}`}>N/A</span>;
+  
+  const parts = dateStr.split(' · ');
+  return (
+    <div className="flex flex-wrap gap-1.5 mt-1 mb-1">
+      {parts.map((part, i) => {
+        const colonIdx = part.indexOf(':');
+        if (colonIdx !== -1) {
+          const label = part.substring(0, colonIdx).trim();
+          const date = part.substring(colonIdx + 1).trim();
+          return (
+            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50`}>
+              <span className={`px-1.5 py-0.5 text-[9.5px] uppercase tracking-wider font-bold ${badgeBgClass} text-neutral-300`}>{label}</span>
+              <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass}`}>{date}</span>
+            </div>
+          );
+        } else {
+          return (
+            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50`}>
+              <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass}`}>{part}</span>
+            </div>
+          );
+        }
+      })}
+    </div>
+  );
+};
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -247,8 +276,10 @@ function Tip({
     // Strictly clamp left position so [left - halfW, left + halfW] is fully within [16, vw - 16]
     const clampedX = Math.max(halfW + 16, Math.min(vw - halfW - 16, idealX));
 
-    // Vertical placement: if element is near the top of viewport (<180px), render tooltip below
-    const showBelow = rect.top < 180;
+    // Vertical placement: if element is near the top of viewport, render tooltip below.
+    // Use a much larger threshold (380px) for custom content (like the multi-phase DateChipGroup) to prevent cutoff.
+    const clearanceThreshold = content ? 380 : (isDetailed ? 250 : 150);
+    const showBelow = rect.top < clearanceThreshold;
     const targetY = showBelow ? rect.bottom + 8 : rect.top - 8;
 
     setPos({ x: clampedX, y: targetY, below: showBelow });
@@ -428,7 +459,8 @@ function getMonthCellTheme(
 
   const p = (priority || 'standard').toLowerCase();
   const isLeveled = flags?.includes('leveled_early');
-  const isOverload = flags?.includes('capacity_overload');
+  const isDelayed = flags?.includes('capacity_delayed');
+  const isLtaExtended = flags?.includes('extended_to_lta');
 
   if (p === 'p1') {
     return {
@@ -450,13 +482,23 @@ function getMonthCellTheme(
     };
   }
 
-  if (isOverload) {
+  if (isDelayed) {
     return {
-      cellClass: 'bg-orange-500/15 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 font-semibold border-y border-orange-500/30 hover:bg-orange-500/25 transition-colors',
-      badgeClass: 'bg-orange-500/20 text-orange-700 dark:text-orange-200 border border-orange-500/40',
-      dotColor: 'bg-orange-500',
+      cellClass: 'bg-red-500/15 dark:bg-red-950/40 text-red-700 dark:text-red-300 font-semibold border-y border-red-500/30 hover:bg-red-500/25 transition-colors',
+      badgeClass: 'bg-red-500/20 text-red-700 dark:text-red-200 border border-red-500/40',
+      dotColor: 'bg-red-500',
       label: MW(val),
-      tag: 'Capacity Overload (exceeds monthly quota to hit its deadline)',
+      tag: 'Delayed past LTA (Vendor Quota Full, Critical Commercial Risk)',
+    };
+  }
+
+  if (isLtaExtended) {
+    return {
+      cellClass: 'bg-yellow-500/15 dark:bg-yellow-950/40 text-yellow-700 dark:text-yellow-300 font-semibold border-y border-yellow-500/30 hover:bg-yellow-500/25 transition-colors',
+      badgeClass: 'bg-yellow-500/20 text-yellow-700 dark:text-yellow-200 border border-yellow-500/40',
+      dotColor: 'bg-yellow-500',
+      label: MW(val),
+      tag: 'Extended to LTA (Vendor Quota Full, Safe for Transmission)',
     };
   }
 
@@ -767,7 +809,6 @@ export default function ModuleDeliveriesPage() {
     const cs = data?.capacity_summary;
     if (!cs) return [];
     return Object.entries(cs)
-      .filter(([, v]) => v.allocated_by_month.some(x => x > 0))
       .sort(([, a], [, b]) => b.allocated_by_month.reduce((s, x) => s + x, 0) - a.allocated_by_month.reduce((s, x) => s + x, 0));
   }, [data]);
 
@@ -1081,7 +1122,7 @@ export default function ModuleDeliveriesPage() {
                 <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>
                 <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>
                 <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
-                  Month wise Module Requirement at Site (MWp)
+                  Month wise Module Requirement at Site (MWp / MWac)
                 </Th>
                 <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
                   <div className="flex flex-col items-center justify-center gap-0.5">
@@ -1262,23 +1303,45 @@ export default function ModuleDeliveriesPage() {
                                     {MW(val)} MWp · {mo}
                                   </span>
                                 </div>
-                                <div className="space-y-1 pt-2 border-t border-neutral-800">
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-neutral-400">Module Date</span>
-                                    <span className="font-mono font-semibold text-amber-300">{p.module_date || 'N/A'}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-neutral-400">TC Date</span>
-                                    <span className="font-mono font-semibold text-amber-300">{p.tc_date || 'N/A'}</span>
-                                  </div>
-                                  <div className="flex items-center justify-between gap-3">
-                                    <span className="text-neutral-400">FTC Date</span>
-                                    <span className="font-mono font-semibold text-amber-300">{p.ftc_date || 'N/A'}</span>
+                                <div className="pt-3 pb-1 border-t border-neutral-800">
+                                  <div className="relative pl-4 border-l-2 border-neutral-700/50 space-y-4">
+                                    {/* Ordering Date */}
+                                    <div className="relative">
+                                      <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#1e2329] border-2 border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                                      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-0.5">TC Ordering Date</div>
+                                      <DateChipGroup dateStr={p.module_date} colorClass="text-amber-300" borderColorClass="border-amber-500/20" badgeBgClass="bg-neutral-800" />
+                                      <div className="text-[10px] text-neutral-400 mt-1.5 flex items-center gap-1.5 font-medium">
+                                        <ArrowDown className="w-3 h-3 text-neutral-500" />
+                                        {p.type === 'China' || p.type === 'SEA' ? 136 : 98} Days (Lead Time)
+                                      </div>
+                                    </div>
+                                    {/* Module Delivery Date */}
+                                    <div className="relative">
+                                      <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#1e2329] border-2 border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                                      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-0.5">Module Delivery Date</div>
+                                      <DateChipGroup dateStr={p.tc_date} colorClass="text-amber-300" borderColorClass="border-amber-500/20" badgeBgClass="bg-neutral-800" />
+                                      <div className="text-[10px] text-neutral-400 mt-1.5 flex items-center gap-1.5 font-medium">
+                                        <ArrowDown className="w-3 h-3 text-neutral-500" />
+                                        45 Days (Installation)
+                                      </div>
+                                    </div>
+                                    {/* FTC Date */}
+                                    <div className="relative">
+                                      <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#1e2329] border-2 border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
+                                      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-0.5">FTC Date</div>
+                                      <DateChipGroup dateStr={p.ftc_date} colorClass="text-amber-300" borderColorClass="border-amber-500/20" badgeBgClass="bg-neutral-800" />
+                                    </div>
                                   </div>
                                 </div>
-                                <div className="text-[10.5px] text-neutral-300 leading-relaxed pt-2 border-t border-neutral-800">
-                                  Ordering in <span className="text-emerald-300 font-semibold">{mo}</span> lands the material on site by TC Date, in time to support FTC.
-                                </div>
+                                {p.planning_flags?.includes('extended_to_lta') ? (
+                                  <div className="text-[10.5px] text-amber-300 leading-relaxed pt-2 border-t border-neutral-800">
+                                    ⚠️ Due to vendor capacity limits in earlier months, this order was extended to <span className="font-semibold">{mo}</span>. This misses the original TC date, but is still safe for transmission (LTA).
+                                  </div>
+                                ) : (
+                                  <div className="text-[10.5px] text-neutral-300 leading-relaxed pt-2 border-t border-neutral-800">
+                                    Ordering in <span className="text-emerald-300 font-semibold">{mo}</span> lands the material on site by Module Delivery Date, in time to support FTC.
+                                  </div>
+                                )}
                                 {p.planning_flags?.includes('leveled_early') && (
                                   <div className="text-[10.5px] text-purple-300 pt-2 border-t border-neutral-800">
                                     ⚡ Leveled early to protect vendor monthly capacity limits
@@ -1288,9 +1351,13 @@ export default function ModuleDeliveriesPage() {
                             ) : undefined}
                           >
                             {val > 0 ? (
-                              <div className="inline-flex items-center justify-end gap-1 w-full">
-                                {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0`} />}
-                                <span className="tabular-nums font-semibold">{theme.label}</span>
+                              <div className="flex flex-col items-center justify-center w-full">
+                                <div className="inline-flex items-center justify-center gap-1">
+                                  {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0`} />}
+                                  <span className="tabular-nums font-semibold text-center whitespace-nowrap">
+                                    {theme.label} <span className="text-muted-foreground/60 mx-[1px]">/</span> <span className="text-[11px] font-medium text-foreground/80">{Math.round(p.ol > 0 ? val / p.ol : val / 1.35)}</span>
+                                  </span>
+                                </div>
                               </div>
                             ) : (
                               <span className="text-muted-foreground/30">-</span>
@@ -1376,13 +1443,21 @@ export default function ModuleDeliveriesPage() {
                 <Td className={SECTION_EDGE} />
                 {FORECAST_MONTHS.map((mo, i) => {
                   const mTotal = sum(filtered, p => p.month_mwp?.[mo] || 0);
+                  const acTotal = sum(filtered, p => {
+                    const v = p.month_mwp?.[mo] || 0;
+                    return p.ol > 0 ? v / p.ol : v / 1.35;
+                  });
                   return (
                     <Td
                       key={mo}
-                      align="right"
-                      className={`text-foreground tabular-nums font-bold ${i === 0 ? SECTION_EDGE : ''} ${mTotal > 0 ? 'bg-primary/5 text-primary' : ''}`}
+                      align="center"
+                      className={`tabular-nums font-bold ${i === 0 ? SECTION_EDGE : ''} ${mTotal > 0 ? 'bg-primary/5 text-primary' : ''}`}
                     >
-                      {mTotal > 0 ? MW(mTotal) : '-'}
+                      {mTotal > 0 ? (
+                        <span className="whitespace-nowrap">
+                          {MW(mTotal)} <span className="text-muted-foreground/60 mx-[1px]">/</span> <span className="text-[11px] font-medium opacity-80">{MW(acTotal)}</span>
+                        </span>
+                      ) : '-'}
                     </Td>
                   );
                 })}
@@ -1435,9 +1510,9 @@ export default function ModuleDeliveriesPage() {
               <thead>
                 <tr>
                   <Th className="min-w-[120px] text-left">Source</Th>
-                  <Th className="min-w-[70px]">Quota /mo</Th>
+                  <Th className="min-w-[70px]">Quota (MWac)</Th>
                   {FORECAST_MONTHS.map(mo => <Th key={mo} className="min-w-[64px]">{mo}</Th>)}
-                  <Th className="min-w-[110px]">Peak</Th>
+                  <Th className="min-w-[110px]">Peak (MWac)</Th>
                 </tr>
               </thead>
               <tbody>
@@ -1450,10 +1525,10 @@ export default function ModuleDeliveriesPage() {
                       const tone = pctUsed >= 100 ? 'critical' : pctUsed >= 80 ? 'risk' : pctUsed >= 50 ? 'watch' : 'healthy';
                       return (
                         <Td key={FORECAST_MONTHS[i]} align="right"
-                          tip={val > 0 ? `${source} in ${FORECAST_MONTHS[i]}\n${MW(val)} of ${MW(v.monthly_cap_mwp)} MWp quota (${Math.round(pctUsed)}%)` : undefined}>
+                          tip={val > 0 ? `${source} in ${FORECAST_MONTHS[i]}\nConsuming: ${MW(v.allocated_by_month_mwac?.[i] ?? 0)} MWac of ${MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp)} MWac quota (${Math.round(pctUsed)}%)` : undefined}>
                           {val > 0 ? (
                             <div className="flex flex-col items-end gap-0.5 py-0.5">
-                              <span className="tabular-nums">{MW(val)}</span>
+                              <span className="tabular-nums">{MW(v.allocated_by_month_mwac?.[i] ?? 0)}</span>
                               <MiniMeter pct={pctUsed} tone={tone} className="w-10" />
                             </div>
                           ) : <span className="text-muted-foreground/25">-</span>}
@@ -1461,18 +1536,18 @@ export default function ModuleDeliveriesPage() {
                       );
                     })}
                     <Td align="right" className="text-muted-foreground">
-                      {v.peak_mwp > 0 ? `${MW(v.peak_mwp)} in ${v.peak_month}` : '-'}
+                      {v.peak_mwac > 0 ? `${MW(v.peak_mwac)} in ${v.peak_month}` : '-'}
                     </Td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-[var(--neutral-700)] bg-[var(--neutral-200)] font-bold">
                   <Td className="text-muted-foreground">Σ Total</Td>
                   <Td align="right" className="text-foreground tabular-nums">
-                    {MW(capacitySources.reduce((s, [, v]) => s + v.monthly_cap_mwp, 0))}
+                    {MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? v.monthly_cap_mwp), 0))}
                   </Td>
                   {FORECAST_MONTHS.map((mo, i) => (
                     <Td key={mo} align="right" className="text-foreground tabular-nums">
-                      {MW(capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month[i] || 0), 0))}
+                      {MW(capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month_mwac?.[i] || 0), 0))}
                     </Td>
                   ))}
                   <Td />
