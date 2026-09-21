@@ -1460,7 +1460,10 @@ export default function ModuleDeliveriesPage() {
                                           <>
                                             {/* Module Block (Yellow) */}
                                             <div className="flex-1 min-w-0 p-2 rounded-lg border border-amber-500/20 bg-amber-500/5 shadow-[inset_0_0_12px_rgba(245,158,11,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
-                                              <div className="text-[9px] uppercase tracking-wider text-amber-500/80 font-bold mb-1.5 transition-colors whitespace-nowrap">Module Date</div>
+                                              <div className="text-[9px] uppercase tracking-wider text-amber-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                                                <Star className="w-3 h-3 shrink-0 fill-amber-500/80 text-amber-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(245,158,11,0.8)]" />
+                                                Module Date
+                                              </div>
                                               <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-amber-300" borderColorClass="border-amber-500/30" badgeBgClass="bg-amber-950/50" />
                                               {renderRevised((() => {
                                                 const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
@@ -1484,7 +1487,10 @@ export default function ModuleDeliveriesPage() {
 
                                         {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
                                           <div className="flex-1 min-w-0 p-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 shadow-[inset_0_0_12px_rgba(16,185,129,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
-                                            <div className="text-[9px] uppercase tracking-wider text-emerald-500/80 font-bold mb-1.5 transition-colors whitespace-nowrap">FTC Date</div>
+                                            <div className="text-[9px] uppercase tracking-wider text-emerald-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                                              <Star className="w-3 h-3 shrink-0 fill-emerald-500/80 text-emerald-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(16,185,129,0.8)]" />
+                                              FTC Date
+                                            </div>
                                             <DateChipGroup dateStr={filterPhases(p.ftc_date)} colorClass="text-emerald-300" borderColorClass="border-emerald-500/30" badgeBgClass="bg-emerald-950/50" />
                                             {renderRevised((() => {
                                               const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
@@ -1504,7 +1510,10 @@ export default function ModuleDeliveriesPage() {
                                               </div>
                                             </div>
                                             <div className="flex-1 min-w-0 p-2 rounded-lg border border-purple-500/20 bg-purple-500/5 shadow-[inset_0_0_12px_rgba(168,85,247,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
-                                              <div className="text-[9px] uppercase tracking-wider text-purple-500/80 font-bold mb-1.5 transition-colors whitespace-nowrap">LTA Date</div>
+                                              <div className="text-[9px] uppercase tracking-wider text-purple-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                                                <Star className="w-3 h-3 shrink-0 fill-purple-500/80 text-purple-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" />
+                                                LTA Date
+                                              </div>
                                               <DateChipGroup dateStr={filterPhases(p.lta)} colorClass="text-purple-300" borderColorClass="border-purple-500/30" badgeBgClass="bg-purple-950/50" />
                                             </div>
                                           </>
