@@ -9,10 +9,12 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, text, or_
 from typing import Optional
 import re
+import json
 from datetime import datetime, timedelta
 
 from database import get_db
 import models
+from services.module_planner import run_module_planning_engine
 
 router = APIRouter(prefix="/api/module-deliveries", tags=["Module Deliveries"])
 
@@ -74,7 +76,11 @@ LATEST_P6 = """
 # ── Main Endpoint ────────────────────────────────────────────────────────────
 
 @router.get("/summary")
-def get_module_deliveries_summary(db: Session = Depends(get_db)):
+def get_module_deliveries_summary(
+    scenario: Optional[str] = "baseline",
+    priorities: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
     """
     Returns per-project module delivery data aligned to the PDF tracker columns.
     Every row represents one project_mapping entry that has a valid capacity.
@@ -298,6 +304,59 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             "act_id": act_id,
             "blocks": blocks,
         })
+
+    # 5e. Fallback for projects with NO "First Time Charging"/"FTC" milestone
+    #     at all — some projects (FY26-P25) name their charging milestone
+    #     "Final Block Charging" with no FTC text anywhere, so the primary
+    #     match above misses them entirely and they show blank rather than
+    #     "No pending FTC". Only ever fills a genuine gap: scoped to project_ids
+    #     absent from ftc_phases_by_pid, so it can never touch or duplicate a
+    #     project the primary FTC name match already found (user decision
+    #     2026-09-21).
+    missing_pids = [m.project_id for m in mappings if m.project_id and m.project_id not in ftc_phases_by_pid]
+    if missing_pids:
+        all_p6_ftc_fallback = db.execute(text(f"""
+            WITH latest_p6 AS ({LATEST_P6})
+            SELECT p.project_id, a.name, a.planned_finish_date, a.actual_finish_date,
+                   a.wbs_name, a.wbs_object_id, a.p6_object_id
+            FROM p6_activity a
+            JOIN latest_p6 p ON p.p6_object_id = a.project_object_id
+            WHERE a.name ILIKE '%Final%Charging%'
+              AND a.type = 'Finish Milestone'
+              AND (a.wbs_name ILIKE '%MILESTONE%' OR a.wbs_name ILIKE 'PHASE-%')
+              AND p.project_id = ANY(:pids)
+            ORDER BY COALESCE(a.planned_finish_date, a.actual_finish_date) ASC, a.p6_object_id ASC
+        """), {"pids": missing_pids}).fetchall()
+
+        for row in all_p6_ftc_fallback:
+            pid, name, p_dt, a_dt, wbs_name, wbs_id, act_id = row[0], row[1], row[2], row[3], row[4], row[5], row[6]
+            dt = a_dt if a_dt else p_dt
+            if not dt:
+                continue
+            match = re.search(r'Phase[\s\-]*((?:[IVX]+(?:\s*-\s*[AB])?|\d+))(?![\w])', name, re.IGNORECASE)
+            phase = ""
+            if match:
+                phase_num = re.sub(r'\s*-\s*', '-', match.group(1).upper().strip())
+                if phase_num.isdigit():
+                    phase_num = str(int(phase_num))
+                phase = f"Ph-{phase_num}"
+            mw_ac = 0.0
+            mw_match = re.search(r'(\d+(?:\.\d+)?)\s*MW', name + " " + wbs_name, re.IGNORECASE)
+            if mw_match:
+                mw_ac = float(mw_match.group(1))
+            blocks = ""
+            blk_match = re.search(r'\bBL[\s\-]*[:\-]?\s*(.+)$', name, re.IGNORECASE)
+            if blk_match:
+                blocks = re.sub(r'\s+', ' ', blk_match.group(1)).strip(' .,-')
+
+            ftc_phases_by_pid.setdefault(pid, {}).setdefault(wbs_id, []).append({
+                "phase": phase,
+                "dt": dt,
+                "is_completed": a_dt is not None,
+                "mw_ac": mw_ac,
+                "act_id": act_id,
+                "blocks": blocks,
+            })
 
     # 6b. Connectivity phase from the transmission portal. A project's
     #     transmission often spans more than one Khavda phase; the last phase
@@ -628,11 +687,31 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
     for i, p in enumerate(projects):
         p["sr"] = i + 1
 
+    # Parse priority overrides if supplied
+    parsed_priorities = {}
+    if priorities:
+        try:
+            import json
+            raw_dict = json.loads(priorities)
+            parsed_priorities = {int(k): str(v) for k, v in raw_dict.items()}
+        except Exception:
+            pass
+
+    # Run Intelligent Module Planning & Optimization Engine
+    planning_results = run_module_planning_engine(
+        projects,
+        scenario_version=scenario or "baseline",
+        priority_overrides=parsed_priorities
+    )
+
     return {
         "generated_at": datetime.now().isoformat(),
         "totals": totals,
         "projects": projects,
         "type_breakdowns": type_breakdowns,
+        "forecast_months": planning_results["forecast_months"],
+        "capacity_summary": planning_results["capacity_summary"],
+        "strategic_briefing": planning_results["strategic_briefing"],
         "data_coverage": {
             "total_projects": len(mappings),
             "with_sap_data": sum(1 for p in projects if p["ordered_mwp"] > 0),
@@ -640,3 +719,41 @@ def get_module_deliveries_summary(db: Session = Depends(get_db)):
             "with_epc": sum(1 for p in projects if p["epc"]),
         },
     }
+
+
+from pydantic import BaseModel
+from services.module_copilot import ask_module_planning_copilot
+
+class CopilotChatRequest(BaseModel):
+    query: Optional[str] = None
+    prompt: Optional[str] = None
+    scenario: Optional[str] = "baseline"
+    priorities: Optional[dict] = None
+    current_project_id: Optional[int] = None
+    context_filter: Optional[str] = None
+
+@router.post("/copilot-chat")
+def module_planning_copilot_chat(req: CopilotChatRequest, db: Session = Depends(get_db)):
+    """
+    On-Demand LLM Planning Copilot: Answers strategic questions about
+    supply quotas, priority trade-offs, shipping delays, and PPA risks.
+    """
+    user_query = req.query or req.prompt or "Provide strategic planning analysis."
+    summary_data = get_module_deliveries_summary(
+        scenario=req.scenario or "baseline",
+        priorities=json.dumps(req.priorities) if req.priorities else None,
+        db=db
+    )
+    
+    project_context = None
+    if req.current_project_id:
+        for p in summary_data.get("projects", []):
+            if p.get("id") == req.current_project_id:
+                project_context = p
+                break
+
+    return ask_module_planning_copilot(
+        query=user_query,
+        portfolio_context=summary_data.get("strategic_briefing", {}),
+        project_context=project_context
+    )

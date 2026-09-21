@@ -4,12 +4,14 @@ import ReactECharts from 'echarts-for-react';
 import {
   Package, Sun, Truck, CheckCircle2, Clock, Search, Filter,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
-  Layers, BarChart3,
+  Layers, BarChart3, Sparkles, ShieldCheck, Activity,
+  Bot, X, Send, MessageSquare,
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
+import { MiniMeter } from '../../components/ui/primitives/Meter';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    MODULE DELIVERIES & FORECAST
@@ -29,7 +31,7 @@ const SECTION_EDGE = 'border-l border-border';
 // columns, leaving them uncoloured (user report 2026-09-20). 25 lead columns
 // (Sr..Status) + the month block (FORECAST_MONTHS + its Total) + FTC/TC/Module
 // + Remarks.
-const TABLE_COLUMN_COUNT = 25 + (FORECAST_MONTHS.length + 1) + 3 + 1;
+const TABLE_COLUMN_COUNT = 26 + (FORECAST_MONTHS.length + 1) + 3 + 1;
 
 /** '07-Mar-27' -> '2027-03-07' for an <input type="date"> value */
 function scodToInputValue(scod: string): string {
@@ -40,50 +42,227 @@ function scodToInputValue(scod: string): string {
   return `20${m[3]}-${String(monIdx + 1).padStart(2, '0')}-${m[1].padStart(2, '0')}`;
 }
 
-function isApproachingOrOverdue(dateStr: string): boolean {
+// Whether ANY phase's module date falls within the next 14 days — but not
+// already past. "Already past" is no longer a frontend date-parsing guess:
+// the planning engine now authoritatively flags that via
+// `excluded_module_date_mwp` (a phase whose module date has already passed
+// is excluded from the plan entirely — user decision 2026-09-21), so the
+// notification banner reads that field instead of re-deriving "overdue"
+// here, and this helper only needs to cover the still-upcoming case.
+function hasApproachingDate(dateStr: string): boolean {
   if (!dateStr) return false;
   const matches = dateStr.match(/\d{2}-[a-zA-Z]{3}-\d{2}/g);
   if (!matches) return false;
-  
-  const now = new Date();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
   for (const m of matches) {
     const parts = m.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2})$/);
     if (!parts) continue;
     const monIdx = MONTH_ABBR.findIndex(a => a.toLowerCase() === parts[2].toLowerCase());
     const dt = new Date(2000 + parseInt(parts[3], 10), monIdx, parseInt(parts[1], 10));
-    
-    const diffDays = (dt.getTime() - now.getTime()) / (1000 * 3600 * 24);
-    if (diffDays <= 14) {
+
+    const diffDays = (dt.getTime() - today.getTime()) / (1000 * 3600 * 24);
+    if (diffDays >= 0 && diffDays <= 14) {
       return true;
     }
   }
   return false;
 }
 
+/** Parses one 'dd-Mon-yy' token (as found inside FTC/TC/Module Date strings) to a Date, or null. */
+function parseTrackerDate(token: string): Date | null {
+  const m = token.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2})/);
+  if (!m) return null;
+  const monIdx = MONTH_ABBR.findIndex(a => a.toLowerCase() === m[2].toLowerCase());
+  if (monIdx === -1) return null;
+  return new Date(2000 + parseInt(m[3], 10), monIdx, parseInt(m[1], 10));
+}
+
+/** FTC/TC/Module Date cells hold one or more '·'-separated phase entries
+ *  ("Ph-I (150MW): 20-Jun-26 · Ph-II (150MW): 17-Jul-26"). A phase whose date
+ *  has already passed needs its own order placed NOW rather than on the
+ *  forward plan, so it's coloured apart from phases still ahead of today
+ *  (user decision 2026-09-21) instead of reading as one uniform string.
+ */
+function DatedPhases({ value }: { value: string }) {
+  if (!value) return <>-</>;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const segments = value.split(' · ');
+  return (
+    <>
+      {segments.map((seg, i) => {
+        const dt = parseTrackerDate(seg);
+        const overdue = dt !== null && dt < today;
+        return (
+          <React.Fragment key={i}>
+            {i > 0 && <span className="text-muted-foreground/40"> · </span>}
+            <span className={overdue ? 'text-[var(--status-critical-fg)] font-semibold' : undefined}>{seg}</span>
+          </React.Fragment>
+        );
+      })}
+    </>
+  );
+}
+
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: 0.25 } } };
 
-/* ── Custom Tooltip ─────────────────────────────────────────────────────── */
-/** A sleek dark tooltip that replaces the ugly native browser title tooltip.
- *  Wraps children and shows `text` on hover after a short delay. */
-function Tip({ text, children, className = '' }: { text?: string | null; children: React.ReactNode; className?: string }) {
+/* ── Rich Tooltip Content Formatter with Vibrant Date & Days Styling ────── */
+function renderHighlightedText(rawText: string) {
+  if (!rawText) return null;
+
+  // Split into Primary Remark vs AI Suggestion
+  const parts = rawText.split(/(?=💡 AI Suggestion:)/g);
+
+  return (
+    <div className="space-y-2">
+      {parts.map((part, pIdx) => {
+        const isSuggestion = part.trim().startsWith('💡 AI Suggestion:');
+        const contentText = isSuggestion ? part.replace('💡 AI Suggestion:', '').trim() : part.trim();
+
+        // Match exact DD-Mon-YY, Mon-YY, X days overdue, X days remaining, due today, gain X days, lead times, and plain days
+        const regex = /(\b\d{1,2}-[A-Za-z]{3}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}\b|\b\d+\s*days?\s*(?:overdue|remaining)\b|\bdue\s*today\b|\bgain\s*\d+\s*days\b|\b\d+d\b|\b\d+\s*days\b)/gi;
+        const tokens = contentText.split(regex);
+
+        const renderedTokens = tokens.map((tok, tIdx) => {
+          if (!tok) return null;
+          // Exact date DD-Mon-YY (e.g. 20-Sep-26, 30-Apr-26)
+          if (/^\d{1,2}-[A-Za-z]{3}-\d{2}$/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-mono font-bold text-amber-300 bg-amber-500/20 border border-amber-500/40">
+                {tok}
+              </span>
+            );
+          }
+          // Month-Year (e.g. Sep-26, May-26)
+          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}$/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-mono font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40">
+                {tok}
+              </span>
+            );
+          }
+          // X days overdue
+          if (/days?\s*overdue/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-rose-300 bg-rose-500/25 border border-rose-500/50 shadow-sm animate-pulse">
+                ⚠️ {tok}
+              </span>
+            );
+          }
+          // X days remaining / due today
+          if (/days?\s*remaining|due\s*today/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-cyan-300 bg-cyan-500/20 border border-cyan-500/40">
+                ⏱️ {tok}
+              </span>
+            );
+          }
+          // gain X days
+          if (/gain\s*\d+\s*days/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40">
+                ⚡ {tok}
+              </span>
+            );
+          }
+          // Lead time (e.g. 98d, 136d, 45d)
+          if (/^\d+d$/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-mono font-bold text-purple-300 bg-purple-500/20 border border-purple-500/40">
+                {tok}
+              </span>
+            );
+          }
+          // General days mention (e.g. 30 days, 45 days)
+          if (/^\d+\s*days$/i.test(tok)) {
+            return (
+              <span key={tIdx} className="inline-block px-1 py-0.5 mx-0.5 rounded font-medium text-amber-200 bg-amber-500/15 border border-amber-500/30">
+                {tok}
+              </span>
+            );
+          }
+          return <span key={tIdx}>{tok}</span>;
+        });
+
+        if (isSuggestion) {
+          return (
+            <div key={pIdx} className="mt-2.5 pt-2 border-t border-neutral-700/80 bg-primary/10 -mx-1 px-3 py-2 rounded-lg border border-primary/30">
+              <div className="flex items-center gap-1.5 text-[11px] font-bold text-amber-300 mb-1">
+                <span>💡 AI Strategic Recommendation</span>
+              </div>
+              <div className="text-[11px] leading-relaxed text-neutral-100 font-normal">
+                {renderedTokens}
+              </div>
+            </div>
+          );
+        }
+
+        return (
+          <div key={pIdx} className="text-[11px] leading-relaxed text-neutral-100 font-normal">
+            {renderedTokens}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function Tip({
+  text,
+  content,
+  children,
+  className = '',
+  wide = false,
+}: {
+  text?: string | null;
+  content?: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+  wide?: boolean;
+}) {
   const [show, setShow] = useState(false);
-  const [pos, setPos] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [pos, setPos] = useState<{ x: number; y: number; below: boolean }>({ x: 0, y: 0, below: false });
   const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = React.useRef<HTMLSpanElement>(null);
 
-  if (!text) return <>{children}</>;
+  if (!text && !content) return <>{children}</>;
+
+  const isDetailed = wide || (text && (text.length > 60 || text.includes('FTC') || text.includes('AI Suggestion')));
+  const targetWidth = isDetailed ? 440 : 260;
 
   const handleEnter = (e: React.MouseEvent) => {
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    setPos({ x: rect.left + rect.width / 2, y: rect.top });
-    timerRef.current = setTimeout(() => setShow(true), 350);
+    const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+    
+    // Effective tooltip width clamped to available screen width
+    const effectiveW = Math.min(targetWidth, vw - 32);
+    const halfW = effectiveW / 2;
+
+    // Ideal center over trigger element
+    const idealX = rect.left + rect.width / 2;
+
+    // Strictly clamp left position so [left - halfW, left + halfW] is fully within [16, vw - 16]
+    const clampedX = Math.max(halfW + 16, Math.min(vw - halfW - 16, idealX));
+
+    // Vertical placement: if element is near the top of viewport (<180px), render tooltip below
+    const showBelow = rect.top < 180;
+    const targetY = showBelow ? rect.bottom + 8 : rect.top - 8;
+
+    setPos({ x: clampedX, y: targetY, below: showBelow });
+    timerRef.current = setTimeout(() => setShow(true), 200);
   };
+
   const handleLeave = () => {
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = null;
     setShow(false);
   };
+
+  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
+  const renderWidth = Math.min(targetWidth, vw - 32);
 
   return (
     <span
@@ -97,10 +276,13 @@ function Tip({ text, children, className = '' }: { text?: string | null; childre
       {show && (
         <span
           style={{ left: pos.x, top: pos.y }}
-          className="fixed z-[9999] -translate-x-1/2 -translate-y-full pointer-events-none animate-[tipIn_150ms_ease-out]"
+          className={`fixed z-[9999] -translate-x-1/2 ${pos.below ? 'translate-y-0' : '-translate-y-full'} pointer-events-none animate-[tipIn_150ms_ease-out]`}
         >
-          <span className="block max-w-[280px] rounded-md bg-neutral-900 px-2.5 py-1.5 text-[10px] leading-[1.45] font-medium text-neutral-100 shadow-lg shadow-black/30 whitespace-pre-line mb-1.5">
-            {text}
+          <span
+            style={{ width: `${renderWidth}px` }}
+            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-normal break-words"
+          >
+            {content ? content : text ? renderHighlightedText(text) : null}
           </span>
         </span>
       )}
@@ -224,6 +406,75 @@ function MwCell({ value, cap, className = '' }: { value: number; cap: number; cl
   return <Td align="right" className={`${color} ${className}`}>{value > 0 ? MW(value) : '-'}</Td>;
 }
 
+/* ── Best-in-Class Priority & Quota Cell Theming ────────────────────────── */
+function getMonthCellTheme(
+  val: number,
+  priority: string | undefined,
+  flags: string[] | undefined
+) {
+  if (val <= 0) {
+    return {
+      cellClass: 'text-muted-foreground/25',
+      badgeClass: '',
+      dotColor: '',
+      label: '-',
+      tag: '',
+    };
+  }
+
+  const p = (priority || 'standard').toLowerCase();
+  const isLeveled = flags?.includes('leveled_early');
+  const isDelayed = flags?.includes('capacity_delayed');
+
+  if (p === 'p1') {
+    return {
+      cellClass: 'bg-rose-500/15 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold border-y border-rose-500/30 hover:bg-rose-500/25 transition-colors',
+      badgeClass: 'bg-rose-500/20 text-rose-700 dark:text-rose-200 border border-rose-500/40',
+      dotColor: 'bg-rose-500 ring-2 ring-rose-500/30 animate-pulse',
+      label: MW(val),
+      tag: 'P1 Priority (Critical COD/PPA)',
+    };
+  }
+
+  if (p === 'p2') {
+    return {
+      cellClass: 'bg-amber-500/15 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-semibold border-y border-amber-500/30 hover:bg-amber-500/25 transition-colors',
+      badgeClass: 'bg-amber-500/20 text-amber-700 dark:text-amber-200 border border-amber-500/40',
+      dotColor: 'bg-amber-500',
+      label: MW(val),
+      tag: 'P2 Priority (Fast-Track)',
+    };
+  }
+
+  if (isDelayed) {
+    return {
+      cellClass: 'bg-orange-500/15 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 font-semibold border-y border-orange-500/30 hover:bg-orange-500/25 transition-colors',
+      badgeClass: 'bg-orange-500/20 text-orange-700 dark:text-orange-200 border border-orange-500/40',
+      dotColor: 'bg-orange-500',
+      label: MW(val),
+      tag: 'Quota-Delayed (past site target date)',
+    };
+  }
+
+  if (isLeveled) {
+    return {
+      cellClass: 'bg-purple-500/15 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold border-y border-purple-500/30 hover:bg-purple-500/25 transition-colors',
+      badgeClass: 'bg-purple-500/20 text-purple-700 dark:text-purple-200 border border-purple-500/40',
+      dotColor: 'bg-purple-500',
+      label: MW(val),
+      tag: 'Quota Leveled (Pulled Early)',
+    };
+  }
+
+  return {
+    cellClass: 'bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 font-medium border-y border-emerald-500/25 hover:bg-emerald-500/20 transition-colors',
+    badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border border-emerald-500/30',
+    dotColor: 'bg-emerald-500',
+    label: MW(val),
+    tag: 'Standard Schedule',
+  };
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
    MAIN PAGE COMPONENT
    ═══════════════════════════════════════════════════════════════════════════ */
@@ -243,17 +494,85 @@ export default function ModuleDeliveriesPage() {
   // Default to that so the figures reconcile with it; 'all' reveals the wider
   // portfolio (Rajasthan, commissioned, and Khavda projects the PDF omits).
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
+  const [showAiPlanner, setShowAiPlanner] = useState(true);
   const chartTheme = useChartTheme();
 
-  const loadData = React.useCallback(() => {
+  // AI Strategic Planning & Priority States
+  const [scenario, setScenario] = useState<'v1_baseline' | 'v2_strategic' | 'v3_commercial'>('v2_strategic');
+  const [priorities, setPriorities] = useState<Record<number, string>>({});
+  const [copilotOpen, setCopilotOpen] = useState(false);
+  const [copilotQuery, setCopilotQuery] = useState('');
+  const [copilotMessages, setCopilotMessages] = useState<Array<{ role: 'user' | 'assistant'; text: string; time: string }>>([
+    {
+      role: 'assistant',
+      text: 'Hello! I am your Akasha Strategic Module Planning Copilot. I analyze backward scheduling from FTC milestones, origin supplier quotas, PPA commitments, and laydown readiness. How can I assist your delivery optimization today?',
+      time: 'Just now',
+    },
+  ]);
+  const [copilotLoading, setCopilotLoading] = useState(false);
+  const [activePerspectiveProject, setActivePerspectiveProject] = useState<ModuleProject | null>(null);
+
+  const loadData = React.useCallback((sc = scenario, prio = priorities) => {
     setLoading(true);
-    return fetch(`${API}/akasha/api/module-deliveries/summary`)
+    const params = new URLSearchParams();
+    if (sc) params.append('scenario', sc);
+    if (Object.keys(prio).length > 0) {
+      params.append('priorities', JSON.stringify(prio));
+    }
+    return fetch(`${API}/akasha/api/module-deliveries/summary?${params.toString()}`)
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, []);
+  }, [scenario, priorities]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const cyclePriority = (projectId: number) => {
+    const current = priorities[projectId] || data?.projects.find(p => p.id === projectId)?.priority || 'standard';
+    const next = current === 'standard' || current === 'std' ? 'P1' : current === 'P1' ? 'P2' : 'standard';
+    const updated = { ...priorities, [projectId]: next };
+    setPriorities(updated);
+    loadData(scenario, updated);
+  };
+
+  const handleScenarioChange = (newSc: 'v1_baseline' | 'v2_strategic' | 'v3_commercial') => {
+    setScenario(newSc);
+    loadData(newSc, priorities);
+  };
+
+  const handleCopilotSubmit = async (queryText?: string) => {
+    const q = (queryText || copilotQuery).trim();
+    if (!q || copilotLoading) return;
+    const userMsg = { role: 'user' as const, text: q, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) };
+    setCopilotMessages(prev => [...prev, userMsg]);
+    setCopilotQuery('');
+    setCopilotLoading(true);
+    try {
+      const res = await fetch(`${API}/akasha/api/module-deliveries/copilot-chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: q,
+          scenario,
+          context_filter: search || undefined,
+        }),
+      });
+      const resJson = await res.json();
+      const botMsg = {
+        role: 'assistant' as const,
+        text: resJson.reply || 'No response from copilot.',
+        time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      };
+      setCopilotMessages(prev => [...prev, botMsg]);
+    } catch (err: any) {
+      setCopilotMessages(prev => [
+        ...prev,
+        { role: 'assistant', text: `Failed to consult AI Copilot: ${err.message}`, time: 'Just now' },
+      ]);
+    } finally {
+      setCopilotLoading(false);
+    }
+  };
 
   const saveScod = async (id: number, isoDateOrNull: string | null) => {
     setSavingScodId(id);
@@ -277,7 +596,9 @@ export default function ModuleDeliveriesPage() {
       if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned)) return false;
       if (statusFilter !== 'all') {
         if (statusFilter === 'needs_ordering') {
-          if (p.balance_ordering_mwp <= 0 || !isApproachingOrOverdue(p.module_date)) return false;
+          if (p.balance_ordering_mwp <= 0) return false;
+          const isException = (p.excluded_module_date_mwp ?? 0) > 0;
+          if (!isException && !hasApproachingDate(p.module_date)) return false;
         } else if (p.status !== statusFilter) {
           return false;
         }
@@ -296,9 +617,18 @@ export default function ModuleDeliveriesPage() {
     });
   }, [data, search, statusFilter, scope]);
 
-  const needsOrderingProjects = useMemo(() => {
+  // Split into the two tiers the planning engine actually distinguishes now:
+  // an exception order (module date already passed — outside the plan,
+  // needs placing immediately) is a different, more urgent action than a
+  // normal order that's simply coming up soon.
+  const exceptionOrderProjects = useMemo(() => {
     if (!data) return [];
-    return data.projects.filter(p => p.balance_ordering_mwp > 0 && isApproachingOrOverdue(p.module_date));
+    return data.projects.filter(p => (p.excluded_module_date_mwp ?? 0) > 0);
+  }, [data]);
+  const approachingOrderProjects = useMemo(() => {
+    if (!data) return [];
+    return data.projects.filter(p =>
+      p.balance_ordering_mwp > 0 && (p.excluded_module_date_mwp ?? 0) <= 0 && hasApproachingDate(p.module_date));
   }, [data]);
 
   // Totals are summed from the rows actually on screen. Using the server's
@@ -414,6 +744,16 @@ export default function ModuleDeliveriesPage() {
     };
   }, [data, chartTheme]);
 
+  // Source rows for the AI capacity-plan table below the grid: only sources
+  // the engine actually allocated anything to, largest total first.
+  const capacitySources = useMemo(() => {
+    const cs = data?.capacity_summary;
+    if (!cs) return [];
+    return Object.entries(cs)
+      .filter(([, v]) => v.allocated_by_month.some(x => x > 0))
+      .sort(([, a], [, b]) => b.allocated_by_month.reduce((s, x) => s + x, 0) - a.allocated_by_month.reduce((s, x) => s + x, 0));
+  }, [data]);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] gap-3">
@@ -457,6 +797,13 @@ export default function ModuleDeliveriesPage() {
           <span className="text-[10px] text-muted-foreground tabular-nums">
             {data.data_coverage.with_sap_data}/{data.data_coverage.total_projects} with SAP data
           </span>
+          <button
+            onClick={() => setCopilotOpen(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary/20 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-sm active:scale-95"
+          >
+            <Bot className="w-3.5 h-3.5" />
+            Strategic AI Copilot
+          </button>
           <button
             onClick={handleExport}
             disabled={exporting}
@@ -582,20 +929,70 @@ export default function ModuleDeliveriesPage() {
             ))}
           </div>
         </div>
+        <div className="flex items-center gap-1 text-[10px]">
+          <Sparkles className="w-3 h-3 text-primary" />
+          <span className="section-label mr-0.5">Scenario</span>
+          <div className="inline-flex overflow-hidden rounded-md border border-border">
+            {[
+              { id: 'v1_baseline', label: 'V1 Baseline', tip: 'Strict P6 FTC schedule without priority overrides' },
+              { id: 'v2_strategic', label: 'V2 Strategic', tip: 'Strategic priorities with supplier quota leveling' },
+              { id: 'v3_commercial', label: 'V3 PPA Safeguard', tip: 'Fast-tracks commercial PPA and SCOD-critical projects first' },
+            ].map(s => (
+              <Tip key={s.id} text={s.tip}>
+                <button
+                  onClick={() => handleScenarioChange(s.id as any)}
+                  aria-pressed={scenario === s.id}
+                  className={`px-2.5 py-1 text-[10px] font-medium transition-colors ${
+                    scenario === s.id
+                      ? 'bg-primary text-white font-semibold'
+                      : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
+                  }`}
+                >
+                  {s.label}
+                </button>
+              </Tip>
+            ))}
+          </div>
+        </div>
         <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{filtered.length} of {data.projects.length} projects</span>
       </motion.div>
 
       {/* ── MAIN DATA TABLE ───────────────────────────────────────────────── */}
       <motion.div variants={item} initial="hidden" animate="show" className="bento-card overflow-hidden">
+        {/* Color Legend Bar */}
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-border bg-card/60 text-[10px]">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+            <span className="font-semibold text-foreground flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-primary" />
+              Priority Delivery Cells:
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-300 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+              P1 Critical / COD Urgent
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              P2 Elevated Priority
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-purple-500/30 bg-purple-500/15 text-purple-700 dark:text-purple-300 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-purple-500" />
+              Quota Leveled (Pulled Early)
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-orange-500/30 bg-orange-500/15 text-orange-700 dark:text-orange-300 font-semibold">
+              <span className="w-1.5 h-1.5 rounded-full bg-orange-500" />
+              Quota-Delayed (past site target)
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-emerald-500/30 bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 font-medium">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+              Standard P6 Scheduled
+            </span>
+          </div>
+          <span className="text-[10px] text-muted-foreground italic">
+            * Click project's Priority badge to toggle Std → P1 → P2 &amp; auto-recalculate schedule. Quota-Delayed means monthly supplier capacity is fully booked ahead of this order — reprioritize to claim quota sooner.
+          </span>
+        </div>
+
         <div className="max-h-[72vh] overflow-auto custom-scrollbar">
-          {/* min-w-full, not w-full: with 40 columns the natural content width
-              always exceeds the container. w-full would force the browser's
-              auto layout to shrink every column below its declared width to
-              fit, which desyncs the frozen Sr/Project columns' hardcoded
-              sticky `left` offsets from their real rendered width and makes
-              adjacent column text visually overlap. min-w-full lets the table
-              grow past the container (the wrapper already scrolls) while
-              still filling it when there's little content. */}
           <table className="min-w-full text-left border-separate border-spacing-0">
             <thead className="sticky top-0 z-40">
               <tr>
@@ -608,6 +1005,7 @@ export default function ModuleDeliveriesPage() {
                 <Th rowSpan={2} className="min-w-[52px]">Type</Th>
                 <Th rowSpan={2} className="min-w-[46px]"><ThLabel label="MMS" unit="Type" /></Th>
                 <Th rowSpan={2} className="min-w-[124px] text-left">AGEL / EPC</Th>
+                <Th rowSpan={2} className="min-w-[62px]">Priority</Th>
                 <Th rowSpan={2} className={`min-w-[38px] ${SECTION_EDGE}`}>OL</Th>
                 <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWac)" /></Th>
                 <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWp)" /></Th>
@@ -629,7 +1027,7 @@ export default function ModuleDeliveriesPage() {
                 <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>
                 <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>
                 <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>
-                <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="From the CEO PDF tracker's manual monthly plan — no live data source yet, so these are intentionally blank">
+                <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
                   Month wise Module Requirement at Site (MWp)
                 </Th>
                 <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
@@ -693,6 +1091,26 @@ export default function ModuleDeliveriesPage() {
                       <Td>{p.type}</Td>
                       <Td className="font-mono">{p.mms_type || '-'}</Td>
                       <Td align="left" className="font-medium">{p.epc || '-'}</Td>
+                      <Td align="center">
+                        <Tip text={`Click to toggle priority: Std → P1 → P2\nCurrent: ${p.priority || 'standard'}`}>
+                          <button
+                            type="button"
+                            onClick={() => cyclePriority(p.id)}
+                            className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider transition-all transform active:scale-95 ${
+                              (p.priority || 'standard').toLowerCase() === 'p1'
+                                ? 'bg-rose-500/20 text-rose-600 dark:text-rose-300 border border-rose-500/40 shadow-sm shadow-rose-500/20'
+                                : (p.priority || 'standard').toLowerCase() === 'p2'
+                                  ? 'bg-amber-500/20 text-amber-600 dark:text-amber-300 border border-amber-500/40'
+                                  : 'bg-muted/60 text-muted-foreground hover:text-foreground border border-border/60'
+                            }`}
+                          >
+                            {(p.priority || 'standard').toLowerCase() === 'p1' && (
+                              <span className="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse" />
+                            )}
+                            {(p.priority || 'standard').toUpperCase()}
+                          </button>
+                        </Tip>
+                      </Td>
                       <Td align="right" className={SECTION_EDGE}>{p.ol > 0 ? p.ol.toFixed(2) : '-'}</Td>
                       <Td align="right">{MW(p.capacity_mwac)}</Td>
                       <Td align="right" className="font-semibold text-foreground">{MW(p.capacity_mwp)}</Td>
@@ -761,20 +1179,68 @@ export default function ModuleDeliveriesPage() {
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>
                       <Td className={SECTION_EDGE}><StatusBadge status={p.status} /></Td>
-                      {FORECAST_MONTHS.map((mo, i) => (
-                        <Td key={mo} align="right" className={`text-muted-foreground/40 ${i === 0 ? SECTION_EDGE : ''}`}>-</Td>
-                      ))}
-                      <Td align="right" className="text-muted-foreground/40">-</Td>
+                      {FORECAST_MONTHS.map((mo, i) => {
+                        const val = p.month_mwp?.[mo] || 0;
+                        const theme = getMonthCellTheme(val, p.priority, p.planning_flags);
+                        return (
+                          <Td
+                            key={mo}
+                            align="right"
+                            className={`${i === 0 ? SECTION_EDGE : ''} ${theme.cellClass}`}
+                            tip={val > 0 ? `${p.project_name || p.p6_name} (${theme.tag})\n${MW(val)} MWp planned in ${mo}\nSite Target Date: ${p.module_date || 'N/A'}\nFTC Phase: ${p.ftc_date || 'N/A'}${p.planning_flags?.includes('leveled_early') ? '\n⚡ Leveled early to protect vendor monthly capacity limits' : ''}` : undefined}
+                          >
+                            {val > 0 ? (
+                              <div className="inline-flex items-center justify-end gap-1 w-full">
+                                {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0`} />}
+                                <span className="tabular-nums font-semibold">{theme.label}</span>
+                              </div>
+                            ) : (
+                              <span className="text-muted-foreground/30">-</span>
+                            )}
+                          </Td>
+                        );
+                      })}
+                      <Td align="right" className="font-semibold text-foreground tabular-nums">
+                        {p.balance_ordering_mwp > 0 ? MW(p.balance_ordering_mwp) : '-'}
+                      </Td>
                       <Td className={SECTION_EDGE}>
                         {p.ftc_date
-                          ? p.ftc_date
+                          ? <DatedPhases value={p.ftc_date} />
                           : p.ftc_all_charged
                             ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
                             : '-'}
                       </Td>
-                      <Td>{p.tc_date || '-'}</Td>
-                      <Td>{p.module_date || '-'}</Td>
-                      <Td align="left" className="max-w-[240px] truncate text-muted-foreground" tip={p.remarks || undefined}>{p.remarks || '-'}</Td>
+                      <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>
+                      <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>
+                      <Td align="left" className="max-w-[280px] truncate text-muted-foreground"
+                        tip={p.remarks ? `${p.remarks}${p.ai_suggestion ? `\n\n💡 AI Suggestion:\n${p.ai_suggestion}` : ''}` : undefined}>
+                        <div className="flex items-center justify-between gap-1.5 overflow-hidden">
+                          <div className="flex items-center gap-1.5 overflow-hidden">
+                            {p.planning_flags?.includes('critical_ordering') && (
+                              <Tip text="Critical: Immediate PO required due to lead time">
+                                <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-rose-500 animate-pulse" />
+                              </Tip>
+                            )}
+                            {p.planning_flags?.includes('leveled_early') && (
+                              <Tip text="Leveled early to avoid vendor monthly quota limit">
+                                <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-amber-500" />
+                              </Tip>
+                            )}
+                            <span className={`truncate text-[10px] ${p.remarks ? 'text-foreground/90' : ''}`}>{p.remarks || '-'}</span>
+                          </div>
+                          {p.perspectives && (
+                            <Tip text="View 360° AI Multi-Perspective Strategy">
+                              <button
+                                type="button"
+                                onClick={() => setActivePerspectiveProject(p)}
+                                className="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                              </button>
+                            </Tip>
+                          )}
+                        </div>
+                      </Td>
                     </tr>
                   ))}
                 </React.Fragment>
@@ -786,6 +1252,7 @@ export default function ModuleDeliveriesPage() {
                     out of step when the view changes. */}
                 <Td stickyLeft={0} className="bg-[var(--neutral-200)] text-muted-foreground">Σ</Td>
                 <Td stickyLeft={34} align="left" className="bg-[var(--neutral-200)] text-foreground shadow-[1px_0_0_0_var(--border-default)]">Total ({filtered.length} projects)</Td>
+                <Td />
                 <Td />
                 <Td />
                 <Td />
@@ -809,8 +1276,21 @@ export default function ModuleDeliveriesPage() {
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>
                 <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>
                 <Td className={SECTION_EDGE} />
-                {FORECAST_MONTHS.map(mo => <Td key={mo} />)}
-                <Td />
+                {FORECAST_MONTHS.map((mo, i) => {
+                  const mTotal = sum(filtered, p => p.month_mwp?.[mo] || 0);
+                  return (
+                    <Td
+                      key={mo}
+                      align="right"
+                      className={`text-foreground tabular-nums font-bold ${i === 0 ? SECTION_EDGE : ''} ${mTotal > 0 ? 'bg-primary/5 text-primary' : ''}`}
+                    >
+                      {mTotal > 0 ? MW(mTotal) : '-'}
+                    </Td>
+                  );
+                })}
+                <Td align="right" className="text-foreground tabular-nums font-bold">
+                  {MW(sum(filtered, p => p.balance_ordering_mwp || 0))}
+                </Td>
                 <Td className={SECTION_EDGE} />
                 <Td />
                 <Td />
@@ -820,6 +1300,312 @@ export default function ModuleDeliveriesPage() {
           </table>
         </div>
       </motion.div>
+
+      {/* ── AI PROCUREMENT PLAN: MONTHLY ORDERING BY SOURCE ─────────────────
+          The planning engine (services/module_planner.py) already allocates
+          every project's balance-to-order across months against a per-source
+          monthly quota — that's what colours the month columns above. This is
+          the same allocation rolled up by source instead of by project, which
+          was being computed on every request and silently dropped: nothing
+          rendered capacity_summary or strategic_briefing before this. */}
+      {capacitySources.length > 0 && (
+        <motion.div variants={item} initial="hidden" animate="show" className="bento-card p-4">
+          <div className="flex items-baseline justify-between gap-2 mb-1">
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-sm font-semibold text-foreground">AI Procurement Plan — Ordering by Source</h2>
+              <InfoTip
+                info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWp) are planning assumptions built into the engine, not measured vendor commitments — confirm against current contracts before relying on them as hard limits. Bars show each month's planned order against that assumed quota."
+                align="center"
+              />
+            </div>
+            <span className="section-label">MWp planned per month, by origin</span>
+          </div>
+
+          {data.strategic_briefing?.executive_takeaways && data.strategic_briefing.executive_takeaways.length > 0 && (
+            <ul className="mb-3 flex flex-col gap-1">
+              {data.strategic_briefing.executive_takeaways.map((line, i) => (
+                <li key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
+                  <Sparkles className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
+                  {line}
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="overflow-x-auto custom-scrollbar rounded-md border border-border">
+            <table className="min-w-full text-left border-separate border-spacing-0">
+              <thead>
+                <tr>
+                  <Th className="min-w-[120px] text-left">Source</Th>
+                  <Th className="min-w-[70px]">Quota /mo</Th>
+                  {FORECAST_MONTHS.map(mo => <Th key={mo} className="min-w-[64px]">{mo}</Th>)}
+                  <Th className="min-w-[110px]">Peak</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {capacitySources.map(([source, v]) => (
+                  <tr key={source} className="hover:bg-[var(--surface-sunken)]">
+                    <Td align="left" className="font-semibold text-foreground">{source}</Td>
+                    <Td align="right" className="text-muted-foreground">{MW(v.monthly_cap_mwp)}</Td>
+                    {v.allocated_by_month.map((val, i) => {
+                      const pctUsed = v.utilization_pct_by_month[i] ?? 0;
+                      const tone = pctUsed >= 100 ? 'critical' : pctUsed >= 80 ? 'risk' : pctUsed >= 50 ? 'watch' : 'healthy';
+                      return (
+                        <Td key={FORECAST_MONTHS[i]} align="right"
+                          tip={val > 0 ? `${source} in ${FORECAST_MONTHS[i]}\n${MW(val)} of ${MW(v.monthly_cap_mwp)} MWp quota (${Math.round(pctUsed)}%)` : undefined}>
+                          {val > 0 ? (
+                            <div className="flex flex-col items-end gap-0.5 py-0.5">
+                              <span className="tabular-nums">{MW(val)}</span>
+                              <MiniMeter pct={pctUsed} tone={tone} className="w-10" />
+                            </div>
+                          ) : <span className="text-muted-foreground/25">-</span>}
+                        </Td>
+                      );
+                    })}
+                    <Td align="right" className="text-muted-foreground">
+                      {v.peak_mwp > 0 ? `${MW(v.peak_mwp)} in ${v.peak_month}` : '-'}
+                    </Td>
+                  </tr>
+                ))}
+                <tr className="border-t-2 border-[var(--neutral-700)] bg-[var(--neutral-200)] font-bold">
+                  <Td className="text-muted-foreground">Σ Total</Td>
+                  <Td align="right" className="text-foreground tabular-nums">
+                    {MW(capacitySources.reduce((s, [, v]) => s + v.monthly_cap_mwp, 0))}
+                  </Td>
+                  {FORECAST_MONTHS.map((mo, i) => (
+                    <Td key={mo} align="right" className="text-foreground tabular-nums">
+                      {MW(capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month[i] || 0), 0))}
+                    </Td>
+                  ))}
+                  <Td />
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </motion.div>
+      )}
+
+      {/* ── 360° MULTI-PERSPECTIVE MODAL ────────────────────────────────────── */}
+      {activePerspectiveProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4 pb-4 border-b border-border">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+                    (activePerspectiveProject.priority || 'standard').toLowerCase() === 'p1'
+                      ? 'bg-rose-500/20 text-rose-500 border border-rose-500/40'
+                      : (activePerspectiveProject.priority || 'standard').toLowerCase() === 'p2'
+                        ? 'bg-amber-500/20 text-amber-500 border border-amber-500/40'
+                        : 'bg-emerald-500/20 text-emerald-500 border border-emerald-500/40'
+                  }`}>
+                    {activePerspectiveProject.priority || 'STANDARD'} PRIORITY
+                  </span>
+                  <span className="text-xs font-semibold text-muted-foreground">
+                    {activePerspectiveProject.type} Source ({activePerspectiveProject.type === 'China' || activePerspectiveProject.type === 'SEA' ? '136d Lead' : '98d Lead'})
+                  </span>
+                </div>
+                <h3 className="text-base font-bold text-foreground">{activePerspectiveProject.project_name || activePerspectiveProject.p6_name}</h3>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  SPV: {activePerspectiveProject.spv} · Capacity: {MW(activePerspectiveProject.capacity_mwp)} MWp · FTC: {activePerspectiveProject.ftc_date || 'N/A'} · SCOD: {activePerspectiveProject.scod || 'N/A'}
+                </p>
+              </div>
+              <button
+                onClick={() => setActivePerspectiveProject(null)}
+                className="rounded-lg p-1 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Commercial */}
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1">
+                  <ShieldCheck className="w-4 h-4 text-rose-500" />
+                  Commercial &amp; PPA Safeguard
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {activePerspectiveProject.perspectives?.commercial || 'Standard PPA milestone alignment.'}
+                </p>
+              </div>
+
+              {/* Supply Chain */}
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1">
+                  <Truck className="w-4 h-4 text-amber-500" />
+                  Supply Chain &amp; Quota
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {activePerspectiveProject.perspectives?.supply_chain || 'Scheduled under monthly origin limits.'}
+                </p>
+              </div>
+
+              {/* Site Execution */}
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1">
+                  <Layers className="w-4 h-4 text-blue-500" />
+                  Site Laydown &amp; Civil
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {activePerspectiveProject.perspectives?.site_execution || 'Laydown readiness in sync with delivery target.'}
+                </p>
+              </div>
+
+              {/* Grid Transmission */}
+              <div className="rounded-lg border border-border bg-muted/20 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground mb-1">
+                  <Activity className="w-4 h-4 text-emerald-500" />
+                  Grid &amp; Transmission
+                </div>
+                <p className="text-[11px] leading-relaxed text-muted-foreground">
+                  {activePerspectiveProject.perspectives?.grid_transmission || 'Substation and line charging aligned.'}
+                </p>
+              </div>
+            </div>
+
+            {/* AI Recommendation */}
+            {activePerspectiveProject.ai_suggestion && (
+              <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-primary mb-1">
+                  <Sparkles className="w-4 h-4" />
+                  AI Synthesis &amp; Action Plan
+                </div>
+                <p className="text-[11px] leading-relaxed text-foreground/90 font-medium">
+                  {activePerspectiveProject.ai_suggestion}
+                </p>
+              </div>
+            )}
+
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  cyclePriority(activePerspectiveProject.id);
+                  setActivePerspectiveProject(prev => prev ? {
+                    ...prev,
+                    priority: (prev.priority === 'standard' || !prev.priority) ? 'P1' : prev.priority === 'P1' ? 'P2' : 'standard'
+                  } : null);
+                }}
+                className="rounded-lg border border-border bg-card px-3 py-1.5 text-xs font-medium text-foreground hover:bg-muted transition-colors"
+              >
+                Toggle Priority (Now: {activePerspectiveProject.priority || 'standard'})
+              </button>
+              <button
+                type="button"
+                onClick={() => setActivePerspectiveProject(null)}
+                className="rounded-lg bg-primary px-4 py-1.5 text-xs font-semibold text-white hover:bg-primary/90 transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── STRATEGIC AI COPILOT DRAWER ────────────────────────────────────── */}
+      {copilotOpen && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="relative flex h-full w-full max-w-md flex-col bg-card border-l border-border shadow-2xl animate-in slide-in-from-right duration-300">
+            {/* Drawer Header */}
+            <div className="flex items-center justify-between border-b border-border p-4 bg-muted/20">
+              <div className="flex items-center gap-2">
+                <div className="rounded-lg bg-primary/10 p-2 text-primary">
+                  <Bot className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-foreground flex items-center gap-1.5">
+                    Module Planning AI Copilot
+                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-[9px] font-semibold text-primary">Live LLM</span>
+                  </h3>
+                  <p className="text-[10px] text-muted-foreground">
+                    Scenario: {scenario.replace('_', ' ').toUpperCase()} · Context: {filtered.length} projects
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCopilotOpen(false)}
+                className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Prompt Quick Chips */}
+            <div className="border-b border-border p-2 bg-muted/10 flex flex-wrap gap-1.5">
+              {[
+                'Which projects risk missing SCOD?',
+                'What if China quota drops to 500 MW?',
+                'Why is Baiya scheduled in May-26?',
+                'Summarize procurement balance by source',
+              ].map(chip => (
+                <button
+                  key={chip}
+                  onClick={() => handleCopilotSubmit(chip)}
+                  disabled={copilotLoading}
+                  className="rounded-full border border-border/80 bg-card px-2.5 py-1 text-[10px] text-foreground hover:border-primary/50 hover:bg-primary/5 transition-all text-left truncate max-w-full"
+                >
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            {/* Chat Messages */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+              {copilotMessages.map((msg, idx) => (
+                <div
+                  key={idx}
+                  className={`flex flex-col ${msg.role === 'user' ? 'items-end' : 'items-start'}`}
+                >
+                  <div
+                    className={`max-w-[88%] rounded-xl px-3.5 py-2.5 text-xs leading-relaxed ${
+                      msg.role === 'user'
+                        ? 'bg-primary text-white rounded-br-none shadow-sm'
+                        : 'bg-muted/60 text-foreground border border-border rounded-bl-none shadow-sm'
+                    }`}
+                  >
+                    <div className="whitespace-pre-line">{msg.text}</div>
+                  </div>
+                  <span className="text-[9px] text-muted-foreground mt-1 px-1">{msg.time}</span>
+                </div>
+              ))}
+              {copilotLoading && (
+                <div className="flex items-center gap-2 text-muted-foreground text-xs p-2">
+                  <RefreshCw className="w-3.5 h-3.5 animate-spin text-primary" />
+                  <span>Synthesizing procurement &amp; schedule strategy…</span>
+                </div>
+              )}
+            </div>
+
+            {/* Input Footer */}
+            <div className="border-t border-border p-3 bg-card">
+              <form
+                onSubmit={e => {
+                  e.preventDefault();
+                  handleCopilotSubmit();
+                }}
+                className="flex items-center gap-2"
+              >
+                <input
+                  type="text"
+                  placeholder="Ask AI Copilot about deliveries, quotas, or SCODs..."
+                  value={copilotQuery}
+                  onChange={e => setCopilotQuery(e.target.value)}
+                  disabled={copilotLoading}
+                  className="flex-1 rounded-lg border border-border bg-background px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                />
+                <button
+                  type="submit"
+                  disabled={!copilotQuery.trim() || copilotLoading}
+                  className="rounded-lg bg-primary p-2 text-white hover:bg-primary/90 focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-40 transition-all"
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
