@@ -89,24 +89,7 @@ const HEADER_BG = 'FF101828';
 const GRID = 'FFD0D5DD';
 const BAND = 'FFF9FAFB';
 const EMPTY_BG = 'FFFBFCFD';
-// Same 5 tiers as ModuleDeliveriesPage's getMonthCellTheme, matched to the
-// same Tailwind swatches (rose/amber/orange/purple/emerald), so the export a
-// user downloads reads the same priority signal as the screen it came from
-// (user request 2026-09-21: the export should carry the same colours).
-const TIER_FILL: Record<string, string> = {
-  p1: 'FFFFE4E6', p2: 'FFFEF3C7', overload: 'FFFFEDD5', leveled: 'FFF3E8FF', standard: 'FFD1FAE5',
-};
-const TIER_FONT: Record<string, string> = {
-  p1: 'FFBE123C', p2: 'FFB45309', overload: 'FFC2410C', leveled: 'FF7E22CE', standard: 'FF047857',
-};
-function monthCellTier(priority: string | undefined, flags: string[] | undefined): keyof typeof TIER_FILL {
-  const p = (priority || 'standard').toLowerCase();
-  if (p === 'p1') return 'p1';
-  if (p === 'p2') return 'p2';
-  if (flags?.includes('capacity_overload')) return 'overload';
-  if (flags?.includes('leveled_early')) return 'leveled';
-  return 'standard';
-}
+
 
 type RichRun = { text: string; font?: { color: { argb: string } } };
 
@@ -214,56 +197,7 @@ function monthCellRichText(p: ModuleProject, mo: string, val: number, milestoneF
   return { richText: runs };
 }
 
-/** Generates a plain-text tooltip for Excel cell notes, mirroring the UI hover logic */
-function generateMonthNote(p: ModuleProject, mo: string, val: number, milestoneFilter: string): string | null {
-  const hasChips = getChipsForMonth(p, mo, val, milestoneFilter).length > 0;
-  if (val <= 0 && !hasChips) return null;
-  
-  // 1. Identify which phases apply to this specific column's month (mo)
-  const tcParts = (p.tc_date || '').split(' · ');
-  const matchingTcParts = tcParts.filter(part => part.includes(mo));
-  const matchingPhaseLabels = matchingTcParts.map(part => {
-    const colonIdx = part.indexOf(':');
-    return colonIdx !== -1 ? part.substring(0, colonIdx).trim() : null;
-  }).filter(Boolean) as string[];
-  const matchingPhasePrefixes = matchingPhaseLabels.map(l => l.split(' ')[0]);
 
-  // 2. Generic filter function to narrow down any date string
-  const filterPhases = (dateStr: string | null | undefined) => {
-    if (!dateStr || matchingPhaseLabels.length === 0) return dateStr?.split(' · ').join('\n') || 'N/A';
-    const parts = dateStr.split(' · ');
-    const matched = parts.filter(part => {
-      const colonIdx = part.indexOf(':');
-      if (colonIdx === -1) return true;
-      const label = part.substring(0, colonIdx).trim();
-      return matchingPhaseLabels.includes(label) || matchingPhasePrefixes.some(pref => label.startsWith(pref));
-    });
-    return matched.length > 0 ? matched.join('\n') : dateStr.split(' · ').join('\n');
-  };
-
-  const lines = [
-    `${p.project_name || p.p6_name}`,
-    `Planned Order: ${val > 0 ? val + ' MWp' : '0 MWp'} in ${mo}`
-  ];
-
-  if (milestoneFilter === 'all' || milestoneFilter === 'tc') {
-    lines.push('', `⭐ TC Date (Selected)`, filterPhases(p.tc_date));
-  }
-  
-  if (milestoneFilter === 'all' || milestoneFilter === 'module') {
-    lines.push('', `▶ Module Date`, filterPhases(p.module_date));
-  }
-  
-  if (milestoneFilter === 'all' || milestoneFilter === 'ftc') {
-    lines.push('', `▶ FTC Date`, filterPhases(p.ftc_date));
-  }
-
-  if (p.lta) {
-    lines.push('', `▶ LTA Date`, filterPhases(p.lta));
-  }
-
-  return lines.join('\n');
-}
 
 /** How many lines a cell will actually occupy once wrapped at colWidthChars,
  *  used to size the row instead of leaving it at a fixed height regardless of
@@ -459,10 +393,7 @@ export async function exportModuleDeliveriesXLSX(
       );
       row.height = Math.max(14, linesNeeded * 11 + 3);
 
-      // Same tier for every populated month cell in this row — the screen's
-      // getMonthCellTheme colours by the PROJECT's priority/flags, not per
-      // month, so one lookup covers the whole row.
-      const tier = monthCellTier(p.priority, p.planning_flags);
+      // same tier for every populated month cell in this row removed
 
       row.eachCell({ includeEmpty: true }, (cell, col) => {
         cell.font = { size: 8, color: { argb: INK }, name: 'Adani' };
@@ -477,8 +408,6 @@ export async function exportModuleDeliveriesXLSX(
         };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0';
         if (inMonthBlock) {
-          const mo = FORECAST_MONTHS[col - monthStart - 1];
-          const val = p.month_mwp?.[mo] || 0;
           
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: EMPTY_BG } };
         }

@@ -2,10 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
-  Package, Sun, Truck, CheckCircle2, Clock, Search, Filter,
+  Package, Sun, Truck, CheckCircle2, Clock, Search,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, MessageSquare, ArrowDown, ArrowRight, Star
+  Bot, X, Send, ArrowRight, Star
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
@@ -603,7 +603,6 @@ export default function ModuleDeliveriesPage() {
   // portfolio (Rajasthan, commissioned, and Khavda projects the PDF omits).
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'tc' | 'module' | 'ftc'>('all');
-  const [showAiPlanner, setShowAiPlanner] = useState(true);
   const chartTheme = useChartTheme();
 
   // AI Strategic Planning & Priority States
@@ -785,7 +784,11 @@ export default function ModuleDeliveriesPage() {
   const toggleGroup = (g: string) => {
     setCollapsed(prev => {
       const next = new Set(prev);
-      next.has(g) ? next.delete(g) : next.add(g);
+      if (next.has(g)) {
+        next.delete(g);
+      } else {
+        next.add(g);
+      }
       return next;
     });
   };
@@ -1036,7 +1039,7 @@ export default function ModuleDeliveriesPage() {
         <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Group</span>
-            <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
+            <select value={groupBy} onChange={e => setGroupBy(e.target.value as 'epc' | 'category' | 'type' | 'none')}
               className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
               <option value="none">None</option>
@@ -1062,7 +1065,7 @@ export default function ModuleDeliveriesPage() {
 
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Scope</span>
-            <select value={scope} onChange={e => setScope(e.target.value as any)}
+            <select value={scope} onChange={e => setScope(e.target.value as 'tracker' | 'all')}
               className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
               <option value="tracker">Khavda tracker</option>
@@ -1073,7 +1076,7 @@ export default function ModuleDeliveriesPage() {
           <div className="flex items-center gap-1.5">
             <Sparkles className="w-3.5 h-3.5 text-primary" />
             <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">Scenario</span>
-            <select value={scenario} onChange={e => handleScenarioChange(e.target.value as any)}
+            <select value={scenario} onChange={e => handleScenarioChange(e.target.value as 'v1_baseline' | 'v2_strategic' | 'v3_commercial')}
               className="pl-2 pr-6 py-1 bg-primary/10 border border-primary/30 rounded-md text-[11px] font-semibold text-primary focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
               <option value="v1_baseline">V1 Baseline</option>
@@ -1084,7 +1087,7 @@ export default function ModuleDeliveriesPage() {
 
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Milestone</span>
-            <select value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value as any)}
+            <select value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value as 'all' | 'tc' | 'module' | 'ftc')}
               className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
               <option value="all">All Phases</option>
