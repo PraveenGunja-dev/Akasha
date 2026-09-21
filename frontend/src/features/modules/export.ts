@@ -59,12 +59,17 @@ const LEAD_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
 const MONTH_GROUP_LABEL = 'Month wise Module Requirement at Site (MWp)';
 // FTC/TC/Module sit after the month-wise plan, right before Remarks (user
 // decision 2026-09-20) — they used to follow AOP, ahead of the SAP columns.
+// Widened from the original 11/46: at that width a 5-6 phase project (or the
+// AI's now much longer remarks, since the delay/exclusion explanations were
+// added) wrapped to 8-10 lines inside a fixed 14pt row and visibly bled into
+// the row below — this exact garbling is what prompted the redesign
+// (user report 2026-09-21).
 const DATE_COLUMNS: { label: string; width: number }[] = [
-  { label: 'FTC\nDate', width: 11 },
-  { label: 'TC\nDate', width: 11 },
-  { label: 'Module\nDate', width: 11 },
+  { label: 'FTC\nDate', width: 24 },
+  { label: 'TC\nDate', width: 24 },
+  { label: 'Module\nDate', width: 24 },
 ];
-const TRAIL_COLUMN = { label: 'Remarks', width: 46 };
+const TRAIL_COLUMN = { label: 'Remarks', width: 70 };
 
 const LEAD_COUNT = LEAD_COLUMNS.length;                       // 24
 const MONTH_COUNT = FORECAST_MONTHS.length + 1;               // 13 + Total
@@ -103,17 +108,27 @@ function monthCellTier(priority: string | undefined, flags: string[] | undefined
   return 'standard';
 }
 
-/** Splits an FTC/TC/Module Date cell ("Ph-I (150MW): 20-Jun-26 · Ph-II ...")
- *  into exceljs rich-text runs, colouring a phase red once its date has
- *  passed — the same distinction DatedPhases draws on screen. */
-function dateCellRichText(value: string): { richText: { text: string; font?: { color: { argb: string } } }[] } | string {
-  if (!value) return '';
+type RichRun = { text: string; font?: { color: { argb: string } } };
+
+/** A multi-phase date string is joined with " · " on screen, where it reads as
+ *  one line; forced into a much narrower Excel column that became several
+ *  unreadable wrapped fragments per phase. One phase per line is exact and
+ *  legible instead of an arbitrary character-wrap. */
+function splitPhases(value: string): string[] {
+  return value ? value.split(' · ') : [];
+}
+
+/** Rich-text runs for an FTC/TC/Module Date cell, one phase per line, colouring
+ *  a phase red once its own date has passed — the same distinction the
+ *  on-screen DatedPhases component draws. */
+function dateCellRichText(value: string): { richText: RichRun[] } | string {
+  const phases = splitPhases(value);
+  if (phases.length === 0) return '';
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const segments = value.split(' · ');
-  const runs: { text: string; font?: { color: { argb: string } } }[] = [];
-  segments.forEach((seg, i) => {
-    if (i > 0) runs.push({ text: ' · ', font: { color: { argb: 'FF98A2B3' } } });
+  const runs: RichRun[] = [];
+  phases.forEach((seg, i) => {
+    if (i > 0) runs.push({ text: '\n' });
     const m = seg.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2})/);
     let overdue = false;
     if (m) {
@@ -127,6 +142,16 @@ function dateCellRichText(value: string): { richText: { text: string; font?: { c
     runs.push(overdue ? { text: seg, font: { color: { argb: 'FFD92D20' } } } : { text: seg });
   });
   return { richText: runs };
+}
+
+/** How many lines a cell will actually occupy once wrapped at colWidthChars,
+ *  used to size the row instead of leaving it at a fixed height regardless of
+ *  content — a fixed 14pt row is what let long remarks and multi-phase dates
+ *  overflow into the row below. */
+function estimateWrappedLines(text: string, colWidthChars: number): number {
+  if (!text) return 1;
+  const perLine = Math.max(6, colWidthChars);
+  return text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / perLine)), 0);
 }
 
 const num = (v: number) => (v > 0 ? Math.round(v * 10) / 10 : null);
@@ -254,6 +279,11 @@ export async function exportModuleDeliveriesXLSX(
     }
 
     projects.forEach((p, idx) => {
+      const ftcText = p.ftc_date || (p.ftc_all_charged ? 'No pending FTC' : '');
+      const tcText = p.tc_date || '';
+      const modText = p.module_date || '';
+      const remarksText = p.remarks ? (p.ai_suggestion ? `${p.remarks} | AI Suggestion: ${p.ai_suggestion}` : p.remarks) : '';
+
       const row = ws.addRow([
         idx + 1,
         p.project_name || p.p6_name,
@@ -282,12 +312,26 @@ export async function exportModuleDeliveriesXLSX(
         STATUS_LABEL[p.status] ?? p.status,
         ...FORECAST_MONTHS.map(mo => num(p.month_mwp?.[mo] || 0)),
         num(p.balance_ordering_mwp || 0),
-        dateCellRichText(p.ftc_date || (p.ftc_all_charged ? 'No pending FTC' : '')),
-        dateCellRichText(p.tc_date || ''),
-        dateCellRichText(p.module_date || ''),
-        p.remarks ? (p.ai_suggestion ? `${p.remarks} | AI Suggestion: ${p.ai_suggestion}` : p.remarks) : '',
+        dateCellRichText(ftcText),
+        dateCellRichText(tcText),
+        dateCellRichText(modText),
+        remarksText,
       ]);
-      row.height = 14;
+
+      // Sized to the tallest wrapped cell instead of a fixed 14pt — that
+      // fixed height is what let a 5-6 phase date cell or a long AI remark
+      // overflow past its row and visually bleed into the one below
+      // (user report 2026-09-21). One phase = one line for the date columns
+      // (exact, since splitPhases drives the rich-text line breaks too);
+      // remarks is prose, so it's a character-wrap estimate instead.
+      const linesNeeded = Math.max(
+        1,
+        splitPhases(ftcText).length,
+        splitPhases(tcText).length,
+        splitPhases(modText).length,
+        estimateWrappedLines(remarksText, TRAIL_COLUMN.width),
+      );
+      row.height = Math.max(14, linesNeeded * 11 + 3);
 
       // Same tier for every populated month cell in this row — the screen's
       // getMonthCellTheme colours by the PROJECT's priority/flags, not per
@@ -299,10 +343,11 @@ export async function exportModuleDeliveriesXLSX(
         cell.border = border;
         const lead = LEAD_COLUMNS[col - 1];
         const inMonthBlock = col > LEAD_COUNT && col <= monthEnd;
+        const inDateBlock = col >= dateStart && col < dateStart + DATE_COUNT;
         cell.alignment = {
           horizontal: lead?.numeric ? 'right' : inMonthBlock ? 'right' : 'left',
           vertical: 'middle',
-          wrapText: col === TOTAL_COLS,
+          wrapText: col === TOTAL_COLS || inDateBlock,
         };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0.0';
         if (inMonthBlock) {
