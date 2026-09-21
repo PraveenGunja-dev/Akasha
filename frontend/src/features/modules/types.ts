@@ -41,7 +41,6 @@ export interface ModuleProject {
   status: 'pending' | 'ordered' | 'in_progress' | 'delivered' | 'needs_ordering';
   p6_name: string;
   remarks: string;
-  ol: number;
   ai_suggestion?: string;
   priority?: 'P1' | 'P2' | 'standard';
   perspectives?: {
