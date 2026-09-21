@@ -84,6 +84,50 @@ const HEADER_BG = 'FF101828';
 const GRID = 'FFD0D5DD';
 const BAND = 'FFF9FAFB';
 const EMPTY_BG = 'FFFBFCFD';
+// Same 5 tiers as ModuleDeliveriesPage's getMonthCellTheme, matched to the
+// same Tailwind swatches (rose/amber/orange/purple/emerald), so the export a
+// user downloads reads the same priority signal as the screen it came from
+// (user request 2026-09-21: the export should carry the same colours).
+const TIER_FILL: Record<string, string> = {
+  p1: 'FFFFE4E6', p2: 'FFFEF3C7', delayed: 'FFFFEDD5', leveled: 'FFF3E8FF', standard: 'FFD1FAE5',
+};
+const TIER_FONT: Record<string, string> = {
+  p1: 'FFBE123C', p2: 'FFB45309', delayed: 'FFC2410C', leveled: 'FF7E22CE', standard: 'FF047857',
+};
+function monthCellTier(priority: string | undefined, flags: string[] | undefined): keyof typeof TIER_FILL {
+  const p = (priority || 'standard').toLowerCase();
+  if (p === 'p1') return 'p1';
+  if (p === 'p2') return 'p2';
+  if (flags?.includes('capacity_delayed')) return 'delayed';
+  if (flags?.includes('leveled_early')) return 'leveled';
+  return 'standard';
+}
+
+/** Splits an FTC/TC/Module Date cell ("Ph-I (150MW): 20-Jun-26 · Ph-II ...")
+ *  into exceljs rich-text runs, colouring a phase red once its date has
+ *  passed — the same distinction DatedPhases draws on screen. */
+function dateCellRichText(value: string): { richText: { text: string; font?: { color: { argb: string } } }[] } | string {
+  if (!value) return '';
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const segments = value.split(' · ');
+  const runs: { text: string; font?: { color: { argb: string } } }[] = [];
+  segments.forEach((seg, i) => {
+    if (i > 0) runs.push({ text: ' · ', font: { color: { argb: 'FF98A2B3' } } });
+    const m = seg.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2})/);
+    let overdue = false;
+    if (m) {
+      const months = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+      const monIdx = months.indexOf(m[2].toLowerCase());
+      if (monIdx !== -1) {
+        const dt = new Date(2000 + parseInt(m[3], 10), monIdx, parseInt(m[1], 10));
+        overdue = dt < today;
+      }
+    }
+    runs.push(overdue ? { text: seg, font: { color: { argb: 'FFD92D20' } } } : { text: seg });
+  });
+  return { richText: runs };
+}
 
 const num = (v: number) => (v > 0 ? Math.round(v * 10) / 10 : null);
 
@@ -238,12 +282,17 @@ export async function exportModuleDeliveriesXLSX(
         STATUS_LABEL[p.status] ?? p.status,
         ...FORECAST_MONTHS.map(mo => num(p.month_mwp?.[mo] || 0)),
         num(p.balance_ordering_mwp || 0),
-        p.ftc_date || (p.ftc_all_charged ? 'No pending FTC' : ''),
-        p.tc_date || '',
-        p.module_date || '',
+        dateCellRichText(p.ftc_date || (p.ftc_all_charged ? 'No pending FTC' : '')),
+        dateCellRichText(p.tc_date || ''),
+        dateCellRichText(p.module_date || ''),
         p.remarks ? (p.ai_suggestion ? `${p.remarks} | AI Suggestion: ${p.ai_suggestion}` : p.remarks) : '',
       ]);
       row.height = 14;
+
+      // Same tier for every populated month cell in this row — the screen's
+      // getMonthCellTheme colours by the PROJECT's priority/flags, not per
+      // month, so one lookup covers the whole row.
+      const tier = monthCellTier(p.priority, p.planning_flags);
 
       row.eachCell({ includeEmpty: true }, (cell, col) => {
         cell.font = { size: 8, color: { argb: INK } };
@@ -257,7 +306,11 @@ export async function exportModuleDeliveriesXLSX(
         };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0.0';
         if (inMonthBlock) {
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: EMPTY_BG } };
+          const populated = typeof cell.value === 'number' && cell.value > 0;
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: populated ? TIER_FILL[tier] : EMPTY_BG } };
+          if (populated) {
+            cell.font = { size: 8, bold: true, color: { argb: TIER_FONT[tier] } };
+          }
         }
       });
 
