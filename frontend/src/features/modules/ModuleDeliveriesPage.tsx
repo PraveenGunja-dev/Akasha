@@ -828,7 +828,7 @@ export default function ModuleDeliveriesPage() {
           avoidLabelOverlap: false,
           itemStyle: {
             borderRadius: 5,
-            borderColor: chartTheme.chrome.bg,
+            borderColor: chartTheme.chrome.surface1,
             borderWidth: 2
           },
           label: { show: false },
