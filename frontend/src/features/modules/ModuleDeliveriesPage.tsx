@@ -5,7 +5,7 @@ import {
   Package, Sun, Truck, CheckCircle2, Clock, Search, Filter,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, MessageSquare, ArrowDown,
+  Bot, X, Send, MessageSquare, ArrowDown, ArrowRight, Star
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
@@ -32,15 +32,15 @@ const DateChipGroup = ({ dateStr, colorClass, borderColorClass, badgeBgClass }: 
           const label = part.substring(0, colonIdx).trim();
           const date = part.substring(colonIdx + 1).trim();
           return (
-            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50`}>
-              <span className={`px-1.5 py-0.5 text-[9.5px] uppercase tracking-wider font-bold ${badgeBgClass} text-neutral-300`}>{label}</span>
-              <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass}`}>{date}</span>
+            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50 whitespace-nowrap`}>
+              <span className={`px-1.5 py-0.5 text-[9.5px] uppercase tracking-wider font-bold ${badgeBgClass} text-neutral-300 whitespace-nowrap`}>{label}</span>
+              <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass} whitespace-nowrap`}>{date}</span>
             </div>
           );
         } else {
           return (
-            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50`}>
-              <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass}`}>{part}</span>
+            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50 whitespace-nowrap`}>
+              <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass} whitespace-nowrap`}>{part}</span>
             </div>
           );
         }
@@ -133,6 +133,62 @@ function DatedPhases({ value }: { value: string }) {
       })}
     </>
   );
+}
+
+type ChipData = { label: string; phase: string | null; type: 'tc' | 'module' | 'ftc' };
+function getChipsForMonth(p: any, mo: string, cellVal: number): ChipData[] {
+  const chips: ChipData[] = [];
+  if (!p.balance_ordering_mwp || p.balance_ordering_mwp <= 0) return chips;
+
+  // The cellVal tracks TC Ordering, so it represents the Blue chip
+  if (cellVal > 0) {
+      const ac = Math.round(p.ol > 0 ? cellVal / p.ol : cellVal / 1.35);
+      chips.push({ label: `${Math.round(cellVal)} / ${ac}`, phase: null, type: 'tc' });
+  }
+
+  const now = new Date();
+
+  const parseSegments = (val: string, type: 'tc' | 'module' | 'ftc') => {
+    if (!val) return;
+    val.split(' · ').forEach(seg => {
+      if (seg.includes(mo)) {
+        // Parse actual date from segment and skip if already passed
+        const dateMatch = seg.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+        if (dateMatch) {
+          const parsed = new Date(`${dateMatch[2]} ${dateMatch[1]}, 20${dateMatch[3].length === 2 ? dateMatch[3] : dateMatch[3].slice(-2)}`);
+          if (!isNaN(parsed.getTime()) && parsed < now) return; // Skip past dates
+        }
+
+        const parts = seg.split(': ');
+        if (parts.length > 1) {
+          const mwMatch = parts[0].match(/\((.*?MW)\)/i);
+          if (mwMatch) {
+            const acMatch = mwMatch[1].match(/([\d\.]+)/);
+            if (acMatch) {
+              const ac = parseFloat(acMatch[1]);
+              const dc = Math.round(ac * (p.ol > 0 ? p.ol : 1.35));
+              chips.push({ label: `${dc} / ${ac}`, phase: parts[0], type });
+            } else {
+              chips.push({ label: mwMatch[1], phase: parts[0], type });
+            }
+          } else {
+            chips.push({ label: '-', phase: parts[0], type });
+          }
+        } else {
+          const phasesCount = val.split(' · ').length;
+          const dc = p.balance_ordering_mwp / (phasesCount || 1);
+          const ac = Math.round(p.ol > 0 ? dc / p.ol : dc / 1.35);
+          chips.push({ label: `${Math.round(dc)} / ${ac}`, phase: null, type });
+        }
+      }
+    });
+  };
+  
+  // DB tc_date = Module delivery dates (later) → Yellow chips  
+  parseSegments(p.tc_date, 'module');
+  // FTC Date (Green)
+  parseSegments(p.ftc_date, 'ftc');
+  return chips;
 }
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
@@ -254,15 +310,29 @@ function Tip({
 }) {
   const [show, setShow] = useState(false);
   const [pos, setPos] = useState<{ x: number; y: number; below: boolean }>({ x: 0, y: 0, below: false });
-  const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapRef = React.useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    if (!show) return;
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setShow(false);
+      }
+    };
+    document.addEventListener('mousedown', handleGlobalClick);
+    return () => document.removeEventListener('mousedown', handleGlobalClick);
+  }, [show]);
 
   if (!text && !content) return <>{children}</>;
 
   const isDetailed = wide || (text && (text.length > 60 || text.includes('FTC') || text.includes('AI Suggestion')));
-  const targetWidth = isDetailed ? 440 : 260;
+  const targetWidth = isDetailed ? 540 : 260;
 
-  const handleEnter = (e: React.MouseEvent) => {
+  const toggleTip = (e: React.MouseEvent) => {
+    if (show) {
+      setShow(false);
+      return;
+    }
     const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
     
@@ -277,19 +347,12 @@ function Tip({
     const clampedX = Math.max(halfW + 16, Math.min(vw - halfW - 16, idealX));
 
     // Vertical placement: if element is near the top of viewport, render tooltip below.
-    // Use a much larger threshold (380px) for custom content (like the multi-phase DateChipGroup) to prevent cutoff.
     const clearanceThreshold = content ? 380 : (isDetailed ? 250 : 150);
     const showBelow = rect.top < clearanceThreshold;
     const targetY = showBelow ? rect.bottom + 8 : rect.top - 8;
 
     setPos({ x: clampedX, y: targetY, below: showBelow });
-    timerRef.current = setTimeout(() => setShow(true), 200);
-  };
-
-  const handleLeave = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = null;
-    setShow(false);
+    setShow(true);
   };
 
   const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
@@ -299,19 +362,18 @@ function Tip({
     <span
       ref={wrapRef}
       className={`cursor-pointer ${className}`}
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-      onMouseDown={handleLeave}
+      onClick={toggleTip}
     >
       {children}
       {show && (
         <span
           style={{ left: pos.x, top: pos.y }}
-          className={`fixed z-[9999] -translate-x-1/2 ${pos.below ? 'translate-y-0' : '-translate-y-full'} pointer-events-none animate-[tipIn_150ms_ease-out]`}
+          className={`fixed z-[9999] -translate-x-1/2 ${pos.below ? 'translate-y-0' : '-translate-y-full'} animate-[tipIn_150ms_ease-out]`}
+          onClick={(e) => e.stopPropagation()}
         >
           <span
             style={{ width: `${renderWidth}px` }}
-            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] text-left leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words"
+            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] text-left leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words cursor-auto"
           >
             {content ? content : text ? renderHighlightedText(text) : null}
           </span>
@@ -540,6 +602,7 @@ export default function ModuleDeliveriesPage() {
   // Default to that so the figures reconcile with it; 'all' reveals the wider
   // portfolio (Rajasthan, commissioned, and Khavda projects the PDF omits).
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
+  const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'tc' | 'module' | 'ftc'>('all');
   const [showAiPlanner, setShowAiPlanner] = useState(true);
   const chartTheme = useChartTheme();
 
@@ -732,23 +795,62 @@ export default function ModuleDeliveriesPage() {
     if (!data) return;
     setExporting(true);
     try {
-      await exportModuleDeliveriesXLSX(grouped, data.totals, data, moduleExportName('xlsx'));
+      await exportModuleDeliveriesXLSX(grouped, data.totals, data, moduleExportName('xlsx'), milestoneFilter);
     } finally {
       setExporting(false);
     }
   };
 
-  // Pipeline chart — reads the same filtered totals as the KPIs and the table
-  const pipelineChart = useMemo(() => {
+
+  // Type breakdown pie chart
+  const typeChart = useMemo(() => {
+    if (!data || !data.type_breakdowns) return {};
+    const types = Object.keys(data.type_breakdowns);
+    const colors: Record<string, string> = Object.fromEntries(
+      types.map((t, i) => [t, t === 'Unknown' ? chartTheme.status.neutral : chartTheme.categorical[i % chartTheme.categorical.length]])
+    );
+    const pieData = types.map(t => ({
+      name: t,
+      value: data.type_breakdowns[t].mwp,
+      itemStyle: { color: colors[t] },
+    }));
+
+    return {
+      tooltip: { trigger: 'item', valueFormatter: (v: number) => `${MW(v)} MWp` },
+      legend: { bottom: 0, textStyle: { fontSize: 10, color: chartTheme.chrome.fgSecondary } },
+      series: [
+        {
+          type: 'pie',
+          radius: ['40%', '70%'],
+          avoidLabelOverlap: false,
+          itemStyle: {
+            borderRadius: 5,
+            borderColor: chartTheme.chrome.bg,
+            borderWidth: 2
+          },
+          label: { show: false },
+          data: pieData,
+        }
+      ],
+      animationDuration: 600,
+    };
+  }, [data, chartTheme]);
+
+  const plannedByMonth = useMemo(() => {
+    return FORECAST_MONTHS.map(mo => {
+      return sum(filtered, p => p.month_mwp?.[mo] || 0);
+    });
+  }, [filtered]);
+
+  const plannedByMonthChart = useMemo(() => {
     if (!data) return {};
-    const t = totals;
     return {
       tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${MW(v)} MWp` },
       grid: { left: 20, right: 20, top: 30, bottom: 30, containLabel: true },
       xAxis: {
         type: 'category',
-        data: ['Total\nCapacity', 'Ordered', 'Received', 'Erected', 'Inventory', 'In Transit', 'Balance\nOrdering'],
-        axisLabel: { fontSize: 10, color: chartTheme.chrome.fgTertiary },
+        data: FORECAST_MONTHS,
+        axisLabel: { fontSize: 10, color: chartTheme.chrome.fgTertiary, interval: 'auto', rotate: 30 },
         axisLine: { show: false }, axisTick: { show: false },
       },
       yAxis: {
@@ -758,50 +860,14 @@ export default function ModuleDeliveriesPage() {
         splitLine: { lineStyle: { color: chartTheme.chrome.gridLine, type: 'dashed' } },
       },
       series: [{
-        type: 'bar', barMaxWidth: 48,
-        // One measure across pipeline stages — one colour. The trailing bar is a
-        // shortfall, which is a state, so it takes the reserved status colour.
-        data: [t.total_mwp, t.ordered_mwp, t.received_mwp, t.erection_mwp, t.inventory_mwp, t.under_transit_mwp, t.balance_ordering_mwp]
-          .map((value, i) => ({
-            value,
-            itemStyle: {
-              color: i === 6 ? chartTheme.status.critical : chartTheme.categorical[0],
-              borderRadius: [3, 3, 0, 0],
-            },
-          })),
-        label: { show: true, position: 'top', fontSize: 10, fontWeight: 600, color: chartTheme.chrome.fgSecondary, formatter: (p: any) => MW(p.value) },
+        type: 'bar',
+        barMaxWidth: 30,
+        itemStyle: { color: chartTheme.categorical[1], borderRadius: [3, 3, 0, 0] },
+        data: plannedByMonth,
       }],
       animationDuration: 600,
     };
-  }, [data, chartTheme, totals]);
-
-  // Type breakdown chart (horizontal stacked bar).
-  // Source type is categorical, so it takes the categorical ramp — status
-  // colours are reserved for state and must never encode a series here.
-  const typeChart = useMemo(() => {
-    if (!data || !data.type_breakdowns) return {};
-    const types = Object.keys(data.type_breakdowns);
-    const colors: Record<string, string> = Object.fromEntries(
-      types.map((t, i) => [t, t === 'Unknown' ? chartTheme.status.neutral : chartTheme.categorical[i % chartTheme.categorical.length]])
-    );
-    return {
-      tooltip: { trigger: 'axis', valueFormatter: (v: number) => `${MW(v)} MWp` },
-      grid: { left: 10, right: 20, top: 30, bottom: 10, containLabel: true },
-      xAxis: { type: 'value', axisLabel: { fontSize: 10, color: chartTheme.chrome.fgTertiary }, splitLine: { lineStyle: { color: chartTheme.chrome.gridLine, type: 'dashed' } } },
-      yAxis: { type: 'category', data: ['Capacity', 'Ordered', 'Received'], axisLabel: { fontSize: 10, color: chartTheme.chrome.fgTertiary } },
-      legend: { top: 0, textStyle: { fontSize: 10, color: chartTheme.chrome.fgSecondary } },
-      series: types.map(t => ({
-        name: t, type: 'bar', stack: 'total', barMaxWidth: 30,
-        itemStyle: { color: colors[t], borderRadius: [0, 2, 2, 0] },
-        data: [
-          data.type_breakdowns[t].mwp,
-          data.type_breakdowns[t].ordered,
-          data.type_breakdowns[t].received,
-        ],
-      })),
-      animationDuration: 600,
-    };
-  }, [data, chartTheme]);
+  }, [data, chartTheme, plannedByMonth]);
 
   // Source rows for the AI capacity-plan table below the grid: only sources
   // the engine actually allocated anything to, largest total first.
@@ -855,22 +921,6 @@ export default function ModuleDeliveriesPage() {
           <span className="text-[10px] text-muted-foreground tabular-nums">
             {data.data_coverage.with_sap_data}/{data.data_coverage.total_projects} with SAP data
           </span>
-          <button
-            onClick={() => setCopilotOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-primary/40 bg-primary/10 px-3 py-1.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary/20 focus:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-sm active:scale-95"
-          >
-            <Bot className="w-3.5 h-3.5" />
-            Strategic AI Copilot
-          </button>
-          <button
-            onClick={handleExport}
-            disabled={exporting}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-60"
-          >
-            {exporting
-              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Preparing…</>
-              : <><Download className="w-3.5 h-3.5" /> Export</>}
-          </button>
         </div>
       </motion.div>
 
@@ -893,20 +943,20 @@ export default function ModuleDeliveriesPage() {
           tint={t.balance_ordering_mwp > 0 ? '#ef4444' : '#10b981'} />
       </motion.div>
 
-      {/* ── PIPELINE CHART + TYPE BREAKDOWN ───────────────────────────────── */}
-      <motion.div variants={item} initial="hidden" animate="show" className="grid grid-cols-1 lg:grid-cols-5 gap-4">
-        <div className="bento-card lg:col-span-3 p-4">
+      {/* ── CHARTS ──────────────────────────────────────────────────────────── */}
+      <motion.div variants={item} initial="hidden" animate="show" className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bento-card p-4">
           <div className="flex items-baseline justify-between gap-2 mb-3">
-            <h2 className="text-sm font-semibold text-foreground">Module Pipeline</h2>
-            <span className="section-label">MWp by stage</span>
+            <h2 className="text-sm font-semibold text-foreground">Planned by Month</h2>
+            <span className="section-label">MWp</span>
           </div>
           <div className="h-[220px]">
-            <ReactECharts notMerge theme={chartTheme.themeName} option={pipelineChart} style={{ height: '100%', width: '100%' }} />
+            <ReactECharts notMerge theme={chartTheme.themeName} option={plannedByMonthChart} style={{ height: '100%', width: '100%' }} />
           </div>
         </div>
-        <div className="bento-card lg:col-span-2 p-4">
+        <div className="bento-card p-4">
           <div className="flex items-baseline justify-between gap-2 mb-3">
-            <h2 className="text-sm font-semibold text-foreground">Source Type Breakdown</h2>
+            <h2 className="text-sm font-semibold text-foreground">Capacity by Type</h2>
             <span className="section-label">MWp</span>
           </div>
           <div className="h-[220px]">
@@ -924,7 +974,7 @@ export default function ModuleDeliveriesPage() {
           re-deriving "overdue" from the date string independently (user
           decision 2026-09-21). */}
       {(exceptionOrderProjects.length > 0 || approachingOrderProjects.length > 0) && (
-        <motion.div variants={item} className="flex flex-col gap-2">
+        <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-2">
           {exceptionOrderProjects.length > 0 && (
             <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3 text-sm"
               style={{ borderColor: 'var(--status-critical-border)', background: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' }}>
@@ -973,7 +1023,7 @@ export default function ModuleDeliveriesPage() {
       )}
 
       {/* ── TOOLBAR ───────────────────────────────────────────────────────── */}
-      <motion.div variants={item} initial="hidden" animate="show" className="flex flex-wrap items-center gap-2">
+      <motion.div variants={item} initial="hidden" animate="show" className="flex flex-wrap items-center gap-3">
         <div className="relative flex-1 min-w-[200px] max-w-xs">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
           <input
@@ -982,73 +1032,81 @@ export default function ModuleDeliveriesPage() {
             className="w-full pl-8 pr-3 py-1.5 text-[11px] rounded-lg border border-border bg-card text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
           />
         </div>
-        <div className="flex items-center gap-1 text-[10px]">
-          <Filter className="w-3 h-3 text-muted-foreground" />
-          <span className="section-label mr-0.5">Group</span>
-          <div className="inline-flex overflow-hidden rounded-md border border-border">
-            {(['epc', 'category', 'type', 'none'] as const).map(g => (
-              <button key={g} onClick={() => setGroupBy(g)}
-                aria-pressed={groupBy === g}
-                className={`px-2 py-1 transition-colors ${groupBy === g ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                {g === 'none' ? 'None' : g.charAt(0).toUpperCase() + g.slice(1)}
-              </button>
-            ))}
+
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Group</span>
+            <select value={groupBy} onChange={e => setGroupBy(e.target.value as any)}
+              className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="none">None</option>
+              <option value="epc">EPC</option>
+              <option value="category">Category</option>
+              <option value="type">Type</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Status</span>
+            <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
+              className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="all">All</option>
+              <option value="delivered">Delivered</option>
+              <option value="in_progress">In Progress</option>
+              <option value="ordered">Ordered</option>
+              <option value="pending">Pending</option>
+              <option value="needs_ordering">Needs Ordering</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Scope</span>
+            <select value={scope} onChange={e => setScope(e.target.value as any)}
+              className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="tracker">Khavda tracker</option>
+              <option value="all">All projects</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <Sparkles className="w-3.5 h-3.5 text-primary" />
+            <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">Scenario</span>
+            <select value={scenario} onChange={e => handleScenarioChange(e.target.value as any)}
+              className="pl-2 pr-6 py-1 bg-primary/10 border border-primary/30 rounded-md text-[11px] font-semibold text-primary focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="v1_baseline">V1 Baseline</option>
+              <option value="v2_strategic">V2 Strategic</option>
+              <option value="v3_commercial">V3 PPA Safeguard</option>
+            </select>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Milestone</span>
+            <select value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value as any)}
+              className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="all">All Phases</option>
+              <option value="tc">TC Date</option>
+              <option value="module">Module Date</option>
+              <option value="ftc">FTC Date</option>
+            </select>
           </div>
         </div>
-        <div className="flex items-center gap-1 text-[10px]">
-          <span className="section-label mr-0.5">Status</span>
-          <div className="inline-flex overflow-hidden rounded-md border border-border">
-            {['all', 'delivered', 'in_progress', 'ordered', 'pending', 'needs_ordering'].map(s => (
-              <button key={s} onClick={() => setStatusFilter(s)}
-                aria-pressed={statusFilter === s}
-                className={`px-2 py-1 transition-colors ${statusFilter === s ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                {s === 'all' ? 'All' : s === 'needs_ordering' ? 'Needs Ordering' : s.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase())}
-              </button>
-            ))}
-          </div>
+
+        <div className="ml-auto flex items-center gap-3">
+          <span className="text-[10px] tabular-nums text-muted-foreground">{filtered.length} of {data.projects.length} projects</span>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary disabled:opacity-60 shadow-sm"
+          >
+            {exporting
+              ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Preparing…</>
+              : <><Download className="w-3.5 h-3.5" /> Export to Excel</>}
+          </button>
         </div>
-        <div className="flex items-center gap-1 text-[10px]">
-          <span className="section-label mr-0.5">Scope</span>
-          <div className="inline-flex overflow-hidden rounded-md border border-border">
-            {([
-              ['tracker', 'Khavda tracker', 'Khavda projects not yet commissioned — the scope of the printed tracker'],
-              ['all', 'All projects', 'Everything mapped: also Rajasthan, commissioned projects, and Khavda projects the printed tracker omits'],
-            ] as const).map(([v, label, tip]) => (
-              <Tip text={tip}>
-                <button key={v} onClick={() => setScope(v)} aria-pressed={scope === v}
-                  className={`px-2 py-1 transition-colors ${scope === v ? 'bg-primary text-white' : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'}`}>
-                  {label}
-                </button>
-              </Tip>
-            ))}
-          </div>
-        </div>
-        <div className="flex items-center gap-1 text-[10px]">
-          <Sparkles className="w-3 h-3 text-primary" />
-          <span className="section-label mr-0.5">Scenario</span>
-          <div className="inline-flex overflow-hidden rounded-md border border-border">
-            {[
-              { id: 'v1_baseline', label: 'V1 Baseline', tip: 'Strict P6 FTC schedule without priority overrides' },
-              { id: 'v2_strategic', label: 'V2 Strategic', tip: 'Strategic priorities with supplier quota leveling' },
-              { id: 'v3_commercial', label: 'V3 PPA Safeguard', tip: 'Fast-tracks commercial PPA and SCOD-critical projects first' },
-            ].map(s => (
-              <Tip key={s.id} text={s.tip}>
-                <button
-                  onClick={() => handleScenarioChange(s.id as any)}
-                  aria-pressed={scenario === s.id}
-                  className={`px-2.5 py-1 text-[10px] font-medium transition-colors ${
-                    scenario === s.id
-                      ? 'bg-primary text-white font-semibold'
-                      : 'bg-card text-muted-foreground hover:bg-muted hover:text-foreground'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              </Tip>
-            ))}
-          </div>
-        </div>
-        <span className="ml-auto text-[10px] tabular-nums text-muted-foreground">{filtered.length} of {data.projects.length} projects</span>
       </motion.div>
 
       {/* ── MAIN DATA TABLE ───────────────────────────────────────────────── */}
@@ -1132,13 +1190,13 @@ export default function ModuleDeliveriesPage() {
                 </Th>
                 <Th rowSpan={2} className="min-w-[76px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
-                    <ThLabel label="TC" unit="Date" />
+                    <ThLabel label="Module Ordering" unit="Date" />
                     <InfoTip info={<span>Trial Commissioning.<br/><b>Calculation:</b> FTC Date - 45 days.</span>} align="center" />
                   </div>
                 </Th>
                 <Th rowSpan={2} className="min-w-[76px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
-                    <ThLabel label="Module" unit="Date" />
+                    <ThLabel label="TC Delivery" unit="Date" />
                     <InfoTip info={<span>Target delivery date at site.<br/><b>Calculation:</b> TC Date - Lead Time (98 or 136 days based on origin).</span>} align="center" />
                   </div>
                 </Th>
@@ -1289,9 +1347,9 @@ export default function ModuleDeliveriesPage() {
                           <Td
                             key={mo}
                             align="right"
-                            className={`${i === 0 ? SECTION_EDGE : ''} ${theme.cellClass}`}
+                            className={`${i === 0 ? SECTION_EDGE : ''}`}
                             tipWide
-                            tipContent={val > 0 ? (
+                            tipContent={(val > 0 || getChipsForMonth(p, mo, val).length > 0) ? (
                               <div className="space-y-2 text-left">
                                 <div>
                                   <div className="font-semibold text-neutral-50">{p.project_name || p.p6_name}</div>
@@ -1303,39 +1361,167 @@ export default function ModuleDeliveriesPage() {
                                     {MW(val)} MWp · {mo}
                                   </span>
                                 </div>
-                                <div className="pt-3 pb-1 border-t border-neutral-800">
-                                  <div className="relative pl-4 border-l-2 border-neutral-700/50 space-y-4">
-                                    {/* Ordering Date */}
-                                    <div className="relative">
-                                      <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#1e2329] border-2 border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                                      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-0.5">TC Ordering Date</div>
-                                      <DateChipGroup dateStr={p.module_date} colorClass="text-amber-300" borderColorClass="border-amber-500/20" badgeBgClass="bg-neutral-800" />
-                                      <div className="text-[10px] text-neutral-400 mt-1.5 flex items-center gap-1.5 font-medium">
-                                        <ArrowDown className="w-3 h-3 text-neutral-500" />
-                                        {p.type === 'China' || p.type === 'SEA' ? 136 : 98} Days (Lead Time)
+                                <div className="pt-2 pb-1 border-t border-neutral-800">
+                                  {(() => {
+                                    const getShiftMonths = () => {
+                                      if (!p.module_date) return 0;
+                                      const match = p.module_date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+                                      if (!match) return 0;
+                                      const monIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                                        .findIndex(a => a.toLowerCase() === match[2].toLowerCase());
+                                      const year = parseInt(match[3].length === 2 ? match[3] : match[3].slice(-2), 10);
+                                      const origMonths = year * 12 + monIdx;
+
+                                      const targetMonIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                                        .findIndex(a => a.toLowerCase() === mo.split('-')[0].toLowerCase());
+                                      const targetYear = parseInt(mo.split('-')[1], 10);
+                                      const targetMonths = targetYear * 12 + targetMonIdx;
+
+                                      return targetMonths - origMonths;
+                                    };
+                                    const shiftMonths = getShiftMonths();
+                                    const isShifted = Math.abs(shiftMonths) > 0 && (p.planning_flags?.includes('extended_to_lta') || p.planning_flags?.includes('capacity_delayed') || p.planning_flags?.includes('leveled_early'));
+                                    
+                                    // Capacity Delayed = Red
+                                    // Extended to LTA = Purple (Matches LTA box)
+                                    // Leveled Early = Cyan
+                                    const shiftColor = p.planning_flags?.includes('capacity_delayed') ? 'text-red-400' : p.planning_flags?.includes('extended_to_lta') ? 'text-purple-400' : 'text-cyan-400';
+                                    const shiftBorder = p.planning_flags?.includes('capacity_delayed') ? 'border-red-500/30' : p.planning_flags?.includes('extended_to_lta') ? 'border-purple-500/30' : 'border-cyan-500/30';
+                                    const shiftLabel = shiftMonths > 0 ? `${shiftMonths}mo Delay` : `${Math.abs(shiftMonths)}mo Early`;
+
+                                      // 1. Identify which phases (if any) apply to this specific column's month (mo)
+                                      const tcParts = (p.tc_date || '').split(' · ');
+                                      const matchingTcParts = tcParts.filter(part => part.includes(mo));
+                                      const matchingPhaseLabels = matchingTcParts.map(part => {
+                                        const colonIdx = part.indexOf(':');
+                                        return colonIdx !== -1 ? part.substring(0, colonIdx).trim() : null;
+                                      }).filter(Boolean) as string[];
+                                      const matchingPhasePrefixes = matchingPhaseLabels.map(l => l.split(' ')[0]);
+  
+                                      // 2. Generic filter function to narrow down any date string to the matched phases
+                                      const filterPhases = (dateStr: string | null | undefined) => {
+                                        if (!dateStr || matchingPhaseLabels.length === 0) return dateStr;
+                                        const parts = dateStr.split(' · ');
+                                        const matched = parts.filter(part => {
+                                          const colonIdx = part.indexOf(':');
+                                          if (colonIdx === -1) return true; // Keep parts without phase labels
+                                          const label = part.substring(0, colonIdx).trim();
+                                          return matchingPhaseLabels.includes(label) || matchingPhasePrefixes.some(pref => label.startsWith(pref));
+                                        });
+                                        return matched.length > 0 ? matched.join(' · ') : dateStr;
+                                      };
+
+                                      const renderRevised = (labelMo: string) => {
+                                        if (!isShifted) return null;
+                                        return (
+                                          <div className="mt-2 pt-2 border-t border-neutral-700/50 flex flex-col items-center justify-center">
+                                            <div className={`flex items-center gap-1 text-[9px] font-bold ${shiftColor} mb-1.5`}>
+                                              <ArrowRight className="w-3 h-3 rotate-90" />
+                                              {shiftLabel}
+                                            </div>
+                                            <div className={`text-[10.5px] font-mono font-bold ${shiftColor} bg-neutral-900/50 px-2 py-0.5 rounded border ${shiftBorder}`}>
+                                              {labelMo}
+                                            </div>
+                                          </div>
+                                        );
+                                      };
+
+                                      return (
+                                      <div className="flex items-start justify-between group/timeline gap-1.5 w-full max-w-[500px]">
+                                        {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
+                                          <>
+                                            {/* TC Block (Blue) */}
+                                            <div className="flex-1 min-w-0 p-2 rounded-lg border-2 border-blue-500/80 bg-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.25)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default relative z-10">
+                                              <div className="text-[9px] uppercase tracking-wider text-blue-500 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
+                                                <Star className="w-3 h-3 shrink-0 fill-blue-500 text-blue-500 animate-pulse drop-shadow-[0_0_4px_rgba(59,130,246,0.8)]" />
+                                                TC Date
+                                              </div>
+                                              <DateChipGroup dateStr={filterPhases(p.tc_date)} colorClass="text-blue-200" borderColorClass="border-blue-500/50" badgeBgClass="bg-blue-900/80" />
+                                              {renderRevised(mo)}
+                                            </div>
+
+                                            {/* Arrow 1 */}
+                                            {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
+                                              <div className="flex flex-col items-center justify-center shrink-0 w-16 group-hover/timeline:opacity-40 transition-opacity mt-6">
+                                                <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
+                                                  <div className="h-[2px] w-full bg-gradient-to-r from-blue-500/70 via-amber-400/70 to-blue-500/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
+                                                  <ArrowRight className="w-3 h-3 text-amber-500 absolute -right-1" />
+                                                </div>
+                                                <div className="text-[8px] text-neutral-500 mt-1.5 font-medium whitespace-nowrap">{p.type === 'China' || p.type === 'SEA' ? 136 : 98}d Lead</div>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+
+                                        {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
+                                          <>
+                                            {/* Module Block (Yellow) */}
+                                            <div className="flex-1 min-w-0 p-2 rounded-lg border border-amber-500/20 bg-amber-500/5 shadow-[inset_0_0_12px_rgba(245,158,11,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
+                                              <div className="text-[9px] uppercase tracking-wider text-amber-500/80 font-bold mb-1.5 transition-colors whitespace-nowrap">Module Date</div>
+                                              <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-amber-300" borderColorClass="border-amber-500/30" badgeBgClass="bg-amber-950/50" />
+                                              {renderRevised((() => {
+                                                const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
+                                                d.setDate(d.getDate() + (p.type === 'China' || p.type === 'SEA' ? 136 : 98));
+                                                return d.toLocaleString('en-GB', { month: 'short', year: '2-digit' }).replace(' ', '-');
+                                              })())}
+                                            </div>
+
+                                            {/* Arrow 2 */}
+                                            {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
+                                              <div className="flex flex-col items-center justify-center shrink-0 w-16 group-hover/timeline:opacity-40 transition-opacity mt-6">
+                                                <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
+                                                  <div className="h-[2px] w-full bg-gradient-to-r from-amber-400/70 via-emerald-400/70 to-amber-400/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
+                                                  <ArrowRight className="w-3 h-3 text-emerald-500 absolute -right-1" />
+                                                </div>
+                                                <div className="text-[8px] text-neutral-500 mt-1.5 font-medium whitespace-nowrap">45d Install</div>
+                                              </div>
+                                            )}
+                                          </>
+                                        )}
+
+                                        {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
+                                          <div className="flex-1 min-w-0 p-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 shadow-[inset_0_0_12px_rgba(16,185,129,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
+                                            <div className="text-[9px] uppercase tracking-wider text-emerald-500/80 font-bold mb-1.5 transition-colors whitespace-nowrap">FTC Date</div>
+                                            <DateChipGroup dateStr={filterPhases(p.ftc_date)} colorClass="text-emerald-300" borderColorClass="border-emerald-500/30" badgeBgClass="bg-emerald-950/50" />
+                                            {renderRevised((() => {
+                                              const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
+                                              d.setDate(d.getDate() + (p.type === 'China' || p.type === 'SEA' ? 136 : 98) + 45);
+                                              return d.toLocaleString('en-GB', { month: 'short', year: '2-digit' }).replace(' ', '-');
+                                            })())}
+                                          </div>
+                                        )}
+
+                                        {/* LTA Block (Purple) */}
+                                        {p.lta && (
+                                          <>
+                                            <div className="flex flex-col items-center justify-center shrink-0 w-10 group-hover/timeline:opacity-40 transition-opacity mt-6">
+                                              <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
+                                                <div className="h-[2px] w-full bg-gradient-to-r from-emerald-400/70 via-purple-400/70 to-emerald-400/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
+                                                <ArrowRight className="w-3 h-3 text-purple-500 absolute -right-1" />
+                                              </div>
+                                            </div>
+                                            <div className="flex-1 min-w-0 p-2 rounded-lg border border-purple-500/20 bg-purple-500/5 shadow-[inset_0_0_12px_rgba(168,85,247,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
+                                              <div className="text-[9px] uppercase tracking-wider text-purple-500/80 font-bold mb-1.5 transition-colors whitespace-nowrap">LTA Date</div>
+                                              <DateChipGroup dateStr={filterPhases(p.lta)} colorClass="text-purple-300" borderColorClass="border-purple-500/30" badgeBgClass="bg-purple-950/50" />
+                                            </div>
+                                          </>
+                                        )}
                                       </div>
-                                    </div>
-                                    {/* Module Delivery Date */}
-                                    <div className="relative">
-                                      <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#1e2329] border-2 border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                                      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-0.5">Module Delivery Date</div>
-                                      <DateChipGroup dateStr={p.tc_date} colorClass="text-amber-300" borderColorClass="border-amber-500/20" badgeBgClass="bg-neutral-800" />
-                                      <div className="text-[10px] text-neutral-400 mt-1.5 flex items-center gap-1.5 font-medium">
-                                        <ArrowDown className="w-3 h-3 text-neutral-500" />
-                                        45 Days (Installation)
-                                      </div>
-                                    </div>
-                                    {/* FTC Date */}
-                                    <div className="relative">
-                                      <div className="absolute -left-[21px] top-1.5 w-2.5 h-2.5 rounded-full bg-[#1e2329] border-2 border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)]" />
-                                      <div className="text-[10px] uppercase tracking-wider text-neutral-500 font-bold mb-0.5">FTC Date</div>
-                                      <DateChipGroup dateStr={p.ftc_date} colorClass="text-amber-300" borderColorClass="border-amber-500/20" badgeBgClass="bg-neutral-800" />
-                                    </div>
-                                  </div>
+                                    );
+                                  })()}
                                 </div>
+
                                 {p.planning_flags?.includes('extended_to_lta') ? (
                                   <div className="text-[10.5px] text-amber-300 leading-relaxed pt-2 border-t border-neutral-800">
                                     ⚠️ Due to vendor capacity limits in earlier months, this order was extended to <span className="font-semibold">{mo}</span>. This misses the original TC date, but is still safe for transmission (LTA).
+                                  </div>
+                                ) : p.planning_flags?.includes('capacity_delayed') ? (
+                                  <div className="text-[10.5px] text-red-300 leading-relaxed pt-2 border-t border-neutral-800">
+                                    🚨 Due to vendor capacity limits, this order was delayed to <span className="font-semibold">{mo}</span>, which misses BOTH the FTC and LTA timelines! Critical commercial risk.
+                                  </div>
+                                ) : p.planning_flags?.includes('leveled_early') ? (
+                                  <div className="text-[10.5px] text-purple-300 leading-relaxed pt-2 border-t border-neutral-800">
+                                    ✨ To avoid vendor capacity limits in later months, this order was proactively pulled early to <span className="font-semibold">{mo}</span>. Materials will arrive ahead of schedule.
                                   </div>
                                 ) : (
                                   <div className="text-[10.5px] text-neutral-300 leading-relaxed pt-2 border-t border-neutral-800">
@@ -1350,13 +1536,18 @@ export default function ModuleDeliveriesPage() {
                               </div>
                             ) : undefined}
                           >
-                            {val > 0 ? (
-                              <div className="flex flex-col items-center justify-center w-full">
-                                <div className="inline-flex items-center justify-center gap-1">
-                                  {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0`} />}
-                                  <span className="tabular-nums font-semibold text-center whitespace-nowrap">
-                                    {theme.label} <span className="text-muted-foreground/60 mx-[1px]">/</span> <span className="text-[11px] font-medium text-foreground/80">{Math.round(p.ol > 0 ? val / p.ol : val / 1.35)}</span>
-                                  </span>
+                            {getChipsForMonth(p, mo, val).length > 0 ? (
+                              <div className="flex flex-col items-end justify-center w-full gap-1.5">
+                                <div className="flex flex-col items-end gap-1 w-full">
+                                  {getChipsForMonth(p, mo, val).map((c, idx) => (
+                                    <div key={idx} className={`px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
+                                      ${c.type === 'tc' ? 'bg-blue-500/20 text-blue-600 border border-blue-500/50 shadow-blue-500/10' : 
+                                        c.type === 'module' ? 'bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-amber-500/10' : 
+                                        'bg-emerald-500/20 text-emerald-600 border border-emerald-500/50 shadow-emerald-500/10'}`}>
+                                      {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5`} />}
+                                      <span className="tabular-nums text-[11px] tracking-tight font-extrabold">{c.label.split(' / ')[0]} <span className="opacity-40 mx-px font-semibold">/</span> <span className="text-[10px] font-bold opacity-80">{c.label.split(' / ')[1] || ''}</span></span>
+                                    </div>
+                                  ))}
                                 </div>
                               </div>
                             ) : (

@@ -139,9 +139,130 @@ function dateCellRichText(value: string): { richText: RichRun[] } | string {
         overdue = dt < today;
       }
     }
-    runs.push(overdue ? { text: seg, font: { color: { argb: 'FFD92D20' } } } : { text: seg });
+    runs.push(overdue ? { text: seg, font: { color: { argb: 'FFD92D20' }, name: 'Adani' } } : { text: seg, font: { name: 'Adani' } });
   });
   return { richText: runs };
+}
+
+type ChipData = { label: string; phase: string | null; type: 'tc' | 'module' | 'ftc' };
+
+function getChipsForMonth(p: ModuleProject, mo: string, cellVal: number, milestoneFilter: string): ChipData[] {
+  const chips: ChipData[] = [];
+  if (!p.balance_ordering_mwp || p.balance_ordering_mwp <= 0) return chips;
+
+  if (cellVal > 0) {
+      const ac = Math.round(p.ol > 0 ? cellVal / p.ol : cellVal / 1.35);
+      chips.push({ label: `${Math.round(cellVal)} / ${ac}`, phase: null, type: 'tc' });
+  }
+
+  const now = new Date();
+  const parseSegments = (val: string, type: 'tc' | 'module' | 'ftc') => {
+    if (!val) return;
+    val.split(' · ').forEach(seg => {
+      if (seg.includes(mo)) {
+        const dateMatch = seg.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+        if (dateMatch) {
+          const parsed = new Date(`${dateMatch[2]} ${dateMatch[1]}, 20${dateMatch[3].length === 2 ? dateMatch[3] : dateMatch[3].slice(-2)}`);
+          if (!isNaN(parsed.getTime()) && parsed < now) return; 
+        }
+
+        const parts = seg.split(': ');
+        if (parts.length > 1) {
+          const mwMatch = parts[0].match(/\((.*?MW)\)/i);
+          if (mwMatch) {
+            const acMatch = mwMatch[1].match(/([\d\.]+)/);
+            if (acMatch) {
+              const ac = parseFloat(acMatch[1]);
+              const dc = Math.round(ac * (p.ol > 0 ? p.ol : 1.35));
+              chips.push({ label: `${dc} / ${ac}`, phase: parts[0], type });
+            } else {
+              chips.push({ label: mwMatch[1], phase: parts[0], type });
+            }
+          } else {
+            chips.push({ label: '-', phase: parts[0], type });
+          }
+        } else {
+          const phasesCount = val.split(' · ').length;
+          const dc = p.balance_ordering_mwp / (phasesCount || 1);
+          const ac = Math.round(p.ol > 0 ? dc / p.ol : dc / 1.35);
+          chips.push({ label: `${Math.round(dc)} / ${ac}`, phase: null, type });
+        }
+      }
+    });
+  };
+  
+  parseSegments(p.tc_date || '', 'module');
+  parseSegments(p.ftc_date || '', 'ftc');
+  return chips.filter(c => milestoneFilter === 'all' || c.type === milestoneFilter);
+}
+
+function monthCellRichText(p: ModuleProject, mo: string, val: number, milestoneFilter: string): { richText: RichRun[] } | string {
+  const chips = getChipsForMonth(p, mo, val, milestoneFilter);
+  if (chips.length === 0) {
+    return '-';
+  }
+
+  const runs: RichRun[] = [];
+  chips.forEach((c, i) => {
+    if (i > 0) runs.push({ text: '\n' });
+    let color = 'FF2563EB'; // Blue (tc)
+    if (c.type === 'module') color = 'FFD97706'; // Amber (module)
+    if (c.type === 'ftc') color = 'FF059669'; // Emerald (ftc)
+    
+    runs.push({ text: `[ ${c.label} ]`, font: { color: { argb: color }, bold: true, name: 'Adani' } });
+  });
+  return { richText: runs };
+}
+
+/** Generates a plain-text tooltip for Excel cell notes, mirroring the UI hover logic */
+function generateMonthNote(p: ModuleProject, mo: string, val: number, milestoneFilter: string): string | null {
+  const hasChips = getChipsForMonth(p, mo, val, milestoneFilter).length > 0;
+  if (val <= 0 && !hasChips) return null;
+  
+  // 1. Identify which phases apply to this specific column's month (mo)
+  const tcParts = (p.tc_date || '').split(' · ');
+  const matchingTcParts = tcParts.filter(part => part.includes(mo));
+  const matchingPhaseLabels = matchingTcParts.map(part => {
+    const colonIdx = part.indexOf(':');
+    return colonIdx !== -1 ? part.substring(0, colonIdx).trim() : null;
+  }).filter(Boolean) as string[];
+  const matchingPhasePrefixes = matchingPhaseLabels.map(l => l.split(' ')[0]);
+
+  // 2. Generic filter function to narrow down any date string
+  const filterPhases = (dateStr: string | null | undefined) => {
+    if (!dateStr || matchingPhaseLabels.length === 0) return dateStr?.split(' · ').join('\n') || 'N/A';
+    const parts = dateStr.split(' · ');
+    const matched = parts.filter(part => {
+      const colonIdx = part.indexOf(':');
+      if (colonIdx === -1) return true;
+      const label = part.substring(0, colonIdx).trim();
+      return matchingPhaseLabels.includes(label) || matchingPhasePrefixes.some(pref => label.startsWith(pref));
+    });
+    return matched.length > 0 ? matched.join('\n') : dateStr.split(' · ').join('\n');
+  };
+
+  const lines = [
+    `${p.project_name || p.p6_name}`,
+    `Planned Order: ${val > 0 ? val + ' MWp' : '0 MWp'} in ${mo}`
+  ];
+
+  if (milestoneFilter === 'all' || milestoneFilter === 'tc') {
+    lines.push('', `⭐ TC Date (Selected)`, filterPhases(p.tc_date));
+  }
+  
+  if (milestoneFilter === 'all' || milestoneFilter === 'module') {
+    lines.push('', `▶ Module Date`, filterPhases(p.module_date));
+  }
+  
+  if (milestoneFilter === 'all' || milestoneFilter === 'ftc') {
+    lines.push('', `▶ FTC Date`, filterPhases(p.ftc_date));
+  }
+
+  if (p.lta) {
+    lines.push('', `▶ LTA Date`, filterPhases(p.lta));
+  }
+
+  return lines.join('\n');
 }
 
 /** How many lines a cell will actually occupy once wrapped at colWidthChars,
@@ -168,6 +289,7 @@ export async function exportModuleDeliveriesXLSX(
   totals: ModuleTotals,
   summary: ModuleDeliveriesSummary,
   filename: string,
+  milestoneFilter: 'all' | 'tc' | 'module' | 'ftc' = 'all'
 ) {
   const ExcelJS = await import('exceljs');
   const wb = new ExcelJS.Workbook();
@@ -226,7 +348,7 @@ export async function exportModuleDeliveriesXLSX(
   [...FORECAST_MONTHS, 'Total'].forEach((mo, i) => {
     const col = monthStart + i;
     ws.getCell(5, col).value = mo;
-    ws.getColumn(col).width = 8;
+    ws.getColumn(col).width = 14;
   });
 
   const dateStart = monthEnd + 1;
@@ -245,7 +367,7 @@ export async function exportModuleDeliveriesXLSX(
   for (const rowNo of [4, 5]) {
     for (let col = 1; col <= TOTAL_COLS; col++) {
       const cell = ws.getCell(rowNo, col);
-      cell.font = { bold: true, size: 8, color: { argb: 'FFFFFFFF' } };
+      cell.font = { bold: true, size: 8, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
       cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
       cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
       cell.border = {
@@ -275,7 +397,7 @@ export async function exportModuleDeliveriesXLSX(
       const gc = ws.getCell(gr.number, 1);
       const gMwp = projects.reduce((s, p) => s + p.capacity_mwp, 0);
       gc.value = `${groupName}   (${projects.length} project${projects.length !== 1 ? 's' : ''} · ${gMwp.toLocaleString('en-IN', { maximumFractionDigits: 1 })} MWp)`;
-      gc.font = { bold: true, size: 9, color: { argb: INK } };
+      gc.font = { bold: true, size: 9, color: { argb: INK }, name: 'Adani' };
       gc.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAECF0' } };
       gc.alignment = { vertical: 'middle' };
       gr.height = 16;
@@ -313,7 +435,7 @@ export async function exportModuleDeliveriesXLSX(
         num(p.under_transit_mwp),
         num(p.balance_dispatch_mwp),
         STATUS_LABEL[p.status] ?? p.status,
-        ...FORECAST_MONTHS.map(mo => num(p.month_mwp?.[mo] || 0)),
+        ...FORECAST_MONTHS.map(mo => monthCellRichText(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter)),
         num(p.balance_ordering_mwp || 0),
         dateCellRichText(ftcText),
         dateCellRichText(tcText),
@@ -333,6 +455,7 @@ export async function exportModuleDeliveriesXLSX(
         splitPhases(tcText).length,
         splitPhases(modText).length,
         estimateWrappedLines(remarksText, TRAIL_COLUMN.width),
+        ...FORECAST_MONTHS.map(mo => Math.max(1, getChipsForMonth(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter).length))
       );
       row.height = Math.max(14, linesNeeded * 11 + 3);
 
@@ -342,7 +465,7 @@ export async function exportModuleDeliveriesXLSX(
       const tier = monthCellTier(p.priority, p.planning_flags);
 
       row.eachCell({ includeEmpty: true }, (cell, col) => {
-        cell.font = { size: 8, color: { argb: INK } };
+        cell.font = { size: 8, color: { argb: INK }, name: 'Adani' };
         cell.border = border;
         const lead = LEAD_COLUMNS[col - 1];
         const inMonthBlock = col > LEAD_COUNT && col <= monthEnd;
@@ -350,19 +473,18 @@ export async function exportModuleDeliveriesXLSX(
         cell.alignment = {
           horizontal: lead?.numeric ? 'right' : inMonthBlock ? 'right' : 'left',
           vertical: 'middle',
-          wrapText: col === TOTAL_COLS || inDateBlock,
+          wrapText: col === TOTAL_COLS || inDateBlock || inMonthBlock,
         };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0';
         if (inMonthBlock) {
-          const populated = typeof cell.value === 'number' && cell.value > 0;
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: populated ? TIER_FILL[tier] : EMPTY_BG } };
-          if (populated) {
-            cell.font = { size: 8, bold: true, color: { argb: TIER_FONT[tier] } };
-          }
+          const mo = FORECAST_MONTHS[col - monthStart - 1];
+          const val = p.month_mwp?.[mo] || 0;
+          
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: EMPTY_BG } };
         }
       });
 
-      ws.getCell(row.number, 2).font = { size: 8, bold: true, color: { argb: INK } };
+      ws.getCell(row.number, 2).font = { size: 8, bold: true, color: { argb: INK }, name: 'Adani' };
       ws.getCell(row.number, 11).numFmt = '0.00';
       const st = ws.getCell(row.number, LEAD_COUNT);
       st.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL[p.status] ?? BAND } };
@@ -391,7 +513,7 @@ export async function exportModuleDeliveriesXLSX(
   ]);
   totalRow.height = 18;
   totalRow.eachCell({ includeEmpty: true }, (cell, col) => {
-    cell.font = { bold: true, size: 9, color: { argb: INK } };
+    cell.font = { bold: true, size: 9, color: { argb: INK }, name: 'Adani' };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAECF0' } };
     cell.border = { ...border, top: { style: 'medium', color: { argb: 'FF98A2B3' } } };
     cell.alignment = { horizontal: col >= 10 ? 'right' : 'left', vertical: 'middle' };
@@ -402,7 +524,7 @@ export async function exportModuleDeliveriesXLSX(
   ws.addRow([]);
   const sHead = ws.addRow(['Source type', 'Capacity (MWac)', 'Capacity (MWp)', 'Ordered (MWp)', 'Received (MWp)']);
   sHead.eachCell(cell => {
-    cell.font = { bold: true, size: 9, color: { argb: 'FFFFFFFF' } };
+    cell.font = { bold: true, size: 9, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
     cell.alignment = { horizontal: 'center', vertical: 'middle' };
     cell.border = border;
@@ -410,7 +532,7 @@ export async function exportModuleDeliveriesXLSX(
   Object.entries(summary.type_breakdowns).forEach(([type, b]) => {
     const r = ws.addRow([type, num(b.mwac), num(b.mwp), num(b.ordered), num(b.received)]);
     r.eachCell((cell, col) => {
-      cell.font = { size: 9, color: { argb: INK } };
+      cell.font = { size: 9, color: { argb: INK }, name: 'Adani' };
       cell.border = border;
       cell.alignment = { horizontal: col === 1 ? 'left' : 'right' };
       if (typeof cell.value === 'number') cell.numFmt = '#,##0';
@@ -420,9 +542,9 @@ export async function exportModuleDeliveriesXLSX(
   /* ── Provenance note ─────────────────────────────────────────────────── */
   ws.addRow([]);
   const note = ws.addRow(['Module inventory and in-transit from SAP; SCOD from P6 / trial run unless manually entered; EPC from Primavera EPS.']);
-  note.getCell(1).font = { size: 8, italic: true, color: { argb: 'FF667085' } };
+  note.getCell(1).font = { size: 8, italic: true, color: { argb: 'FF667085' }, name: 'Adani' };
   const note2 = ws.addRow(['Month-wise module requirement at site is generated by the Akasha AI Planning Engine: backward-scheduled from P6 FTC milestones (-45d TC, -lead time) and leveled against source supplier monthly limits.']);
-  note2.getCell(1).font = { size: 8, italic: true, color: { argb: 'FF667085' } };
+  note2.getCell(1).font = { size: 8, italic: true, color: { argb: 'FF667085' }, name: 'Adani' };
 
   const buf = await wb.xlsx.writeBuffer();
   saveAs(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), filename);
