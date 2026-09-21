@@ -91,8 +91,8 @@ def get_module_deliveries_summary(
     mappings = db.query(models.ProjectMapping).filter(
         models.ProjectMapping.capacity_mwac.isnot(None),
         models.ProjectMapping.capacity_mwac > 0,
-        models.ProjectMapping.category != 'Wind',
-        models.ProjectMapping.mms_type != 'Wind',
+        or_(models.ProjectMapping.category.is_(None), models.ProjectMapping.category != 'Wind'),
+        or_(models.ProjectMapping.mms_type.is_(None), models.ProjectMapping.mms_type != 'Wind'),
     ).all()
 
     # 2. Pre-fetch all SAP PO data for modules, keyed by WBS prefix

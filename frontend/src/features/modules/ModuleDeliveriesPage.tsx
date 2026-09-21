@@ -1444,7 +1444,7 @@ export default function ModuleDeliveriesPage() {
                                             </div>
 
                                             {/* Arrow 1 */}
-                                            {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
+                                            {milestoneFilter === 'all' && (
                                               <div className="flex flex-col items-center justify-center shrink-0 w-16 group-hover/timeline:opacity-40 transition-opacity mt-6">
                                                 <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
                                                   <div className="h-[2px] w-full bg-gradient-to-r from-blue-500/70 via-amber-400/70 to-blue-500/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
@@ -1470,7 +1470,7 @@ export default function ModuleDeliveriesPage() {
                                             </div>
 
                                             {/* Arrow 2 */}
-                                            {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
+                                            {milestoneFilter === 'all' && (
                                               <div className="flex flex-col items-center justify-center shrink-0 w-16 group-hover/timeline:opacity-40 transition-opacity mt-6">
                                                 <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
                                                   <div className="h-[2px] w-full bg-gradient-to-r from-amber-400/70 via-emerald-400/70 to-amber-400/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />

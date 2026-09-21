@@ -175,10 +175,36 @@ def run_module_planning_engine(
             }
             continue
 
-        # Extract pending phases from ftc_date string
+        # DB field 'module_date' actually stores TC ordering dates (earliest)
+        # DB field 'tc_date' actually stores Module delivery dates (later)
+        # Chronology: TC ordering -> Lead Time -> Module delivery -> 45 Days -> FTC
+        tc_str = p.get('module_date') or ''
         ftc_str = p.get('ftc_date') or ''
         phases = []
-        if ftc_str:
+        
+        if tc_str:
+            chunks = [c.strip() for c in tc_str.split('·')]
+            for c in chunks:
+                m_dt = _parse_date_str(c)
+                if not m_dt:
+                    continue
+                m_mw = re.search(r'\((\d+(?:\.\d+)?)\s*MW\)', c, re.IGNORECASE)
+                mw_ac = float(m_mw.group(1)) if m_mw else 0.0
+                
+                m_ph = re.search(r'^(Ph-[^\s:]+|Phase[^\s:]+)', c, re.IGNORECASE)
+                ph_label = m_ph.group(1) if m_ph else (f"Phase {len(phases)+1}" if len(chunks) > 1 else "Main")
+                
+                tc_ordering_dt = m_dt
+                mod_delivery_dt = tc_ordering_dt + timedelta(days=lead_time)
+                ftc_dt = mod_delivery_dt + timedelta(days=TC_OFFSET_DAYS)
+                phases.append({
+                    'phase_label': ph_label,
+                    'ftc_dt': ftc_dt,
+                    'tc_dt': tc_ordering_dt,
+                    'mod_dt': mod_delivery_dt,
+                    'mw_ac': mw_ac,
+                })
+        elif ftc_str:
             chunks = [c.strip() for c in ftc_str.split('·')]
             for c in chunks:
                 m_dt = _parse_date_str(c)
@@ -190,13 +216,13 @@ def run_module_planning_engine(
                 m_ph = re.search(r'^(Ph-[^\s:]+|Phase[^\s:]+)', c, re.IGNORECASE)
                 ph_label = m_ph.group(1) if m_ph else (f"Phase {len(phases)+1}" if len(chunks) > 1 else "Main")
                 
-                tc_dt = m_dt - timedelta(days=TC_OFFSET_DAYS)
-                mod_dt = tc_dt - timedelta(days=lead_time)
+                mod_delivery_dt = m_dt - timedelta(days=TC_OFFSET_DAYS)
+                tc_ordering_dt = mod_delivery_dt - timedelta(days=lead_time)
                 phases.append({
                     'phase_label': ph_label,
                     'ftc_dt': m_dt,
-                    'tc_dt': tc_dt,
-                    'mod_dt': mod_dt,
+                    'tc_dt': tc_ordering_dt,
+                    'mod_dt': mod_delivery_dt,
                     'mw_ac': mw_ac,
                 })
 
@@ -221,24 +247,30 @@ def run_module_planning_engine(
                 'mw_ac': float(p.get('capacity_mwac') or 0.0),
             })
 
-        # Calculate weighting across phases
-        total_mwac = sum(ph['mw_ac'] for ph in phases)
-        project_phases_map[p['id']] = phases
         ol = float(p.get('ol') or 0.0)
         if ol <= 0:
             ol = (float(p.get('capacity_mwp') or 0.0) / float(p.get('capacity_mwac') or 1.0)) if float(p.get('capacity_mwac') or 0) > 0 else 1.35
         p['ol'] = ol
 
         for ph in phases:
-            share = (ph['mw_ac'] / total_mwac) if total_mwac > 0 else (1.0 / len(phases))
-            req_mwp = round(bal * share, 1)
-            raw_idx = _calc_month_idx(ph['mod_dt'], base_month_dt, num_months)
+            ph_mwac = ph['mw_ac']
+            if ph_mwac <= 0:
+                # If no MW specified in string, fallback to distributing the pending balance
+                req_mwp = round(bal / len(phases), 1) if len(phases) > 0 else 0.0
+            else:
+                req_mwp = round(ph_mwac * ol, 1)
+                
+            raw_idx = _calc_month_idx(ph['tc_dt'], base_month_dt, num_months)
+
+            # If FTC date has already passed, this phase is completed — skip entirely
+            if ph['ftc_dt'] < base_month_dt:
+                continue
 
             if raw_idx < 0:
                 project_excluded_phases.setdefault(p['id'], []).append({
                     'phase_label': ph['phase_label'],
                     'ftc_dt': ph['ftc_dt'],
-                    'mod_dt': ph['mod_dt'],
+                    'mod_dt': ph['tc_dt'],  # Ordering Date has passed
                     'mwp': req_mwp,
                 })
                 continue

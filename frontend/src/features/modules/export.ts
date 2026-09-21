@@ -91,7 +91,7 @@ const BAND = 'FFF9FAFB';
 const EMPTY_BG = 'FFFBFCFD';
 
 
-type RichRun = { text: string; font?: { color: { argb: string } } };
+type RichRun = { text: string; font?: { color?: { argb: string }; bold?: boolean; name?: string } };
 
 /** A multi-phase date string is joined with " · " on screen, where it reads as
  *  one line; forced into a much narrower Excel column that became several
