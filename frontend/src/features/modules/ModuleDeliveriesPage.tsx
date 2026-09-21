@@ -4,7 +4,7 @@ import ReactECharts from 'echarts-for-react';
 import {
   Package, Sun, Truck, CheckCircle2, Clock, Search, Filter,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
-  Layers, BarChart3, Sparkles, ShieldCheck, Activity,
+  Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
   Bot, X, Send, MessageSquare,
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
@@ -280,7 +280,7 @@ function Tip({
         >
           <span
             style={{ width: `${renderWidth}px` }}
-            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words"
+            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] text-left leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words"
           >
             {content ? content : text ? renderHighlightedText(text) : null}
           </span>
@@ -388,8 +388,8 @@ function Th({ children, className = '', stickyLeft, rowSpan, colSpan, tip }: {
 
 /** Centre is the default — the tracker centres every short code, date and
     flag, and only the name and remarks columns run left. */
-function Td({ children, className = '', stickyLeft, align = 'center', tip, colSpan }: {
-  children?: React.ReactNode; className?: string; stickyLeft?: number; align?: 'left' | 'center' | 'right'; tip?: string; colSpan?: number;
+function Td({ children, className = '', stickyLeft, align = 'center', tip, tipContent, tipWide, colSpan }: {
+  children?: React.ReactNode; className?: string; stickyLeft?: number; align?: 'left' | 'center' | 'right'; tip?: string; tipContent?: React.ReactNode; tipWide?: boolean; colSpan?: number;
 }) {
   const alignCls = align === 'right' ? 'text-right' : align === 'left' ? 'text-left' : 'text-center';
   return (
@@ -398,7 +398,7 @@ function Td({ children, className = '', stickyLeft, align = 'center', tip, colSp
       style={stickyLeft !== undefined ? { left: stickyLeft } : undefined}
       className={`px-1.5 py-[3px] text-[10px] leading-[1.35] tabular-nums whitespace-nowrap ${GRID_LINE} ${alignCls} ${stickyLeft !== undefined ? 'sticky z-20' : ''} ${className}`}
     >
-      {tip ? <Tip text={tip}>{children}</Tip> : children}
+      {tipContent ? <Tip content={tipContent} wide={tipWide}>{children}</Tip> : tip ? <Tip text={tip}>{children}</Tip> : children}
     </td>
   );
 }
@@ -834,10 +834,10 @@ export default function ModuleDeliveriesPage() {
       </motion.div>
 
       <motion.div variants={container} initial="hidden" animate="show"
-        className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3"
+        className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3"
       >
-        <KpiCard title="Total Capacity" value={t.total_mwp} unit="MWp" icon={Sun} tint="var(--primary-500)" 
-          sub={`${MW(t.total_mwac)} MWac`} />
+        <KpiCard title="Total Capacity" value={t.total_mwac} unit="MWac" icon={Zap} tint="#06b6d4" />
+        <KpiCard title="Total Capacity" value={t.total_mwp} unit="MWp" icon={Sun} tint="var(--primary-500)" />
         <KpiCard title="Ordered" value={t.ordered_mwp} unit="MWp" icon={Package} tint="var(--secondary-500)"
           pct={t.total_mwp > 0 ? t.ordered_mwp / t.total_mwp : 0}
           sub={`${orderedPct}% of capacity`} />
@@ -1249,7 +1249,43 @@ export default function ModuleDeliveriesPage() {
                             key={mo}
                             align="right"
                             className={`${i === 0 ? SECTION_EDGE : ''} ${theme.cellClass}`}
-                            tip={val > 0 ? `${p.project_name || p.p6_name} (${theme.tag})\n${MW(val)} MWp planned in ${mo}\n\nModule Date: ${p.module_date || 'N/A'}\nTC Date: ${p.tc_date || 'N/A'}\nFTC Date: ${p.ftc_date || 'N/A'}\n\nOrdering in ${mo} lands the material on site by TC Date, in time to support FTC.${p.planning_flags?.includes('leveled_early') ? '\n⚡ Leveled early to protect vendor monthly capacity limits' : ''}` : undefined}
+                            tipWide
+                            tipContent={val > 0 ? (
+                              <div className="space-y-2 text-left">
+                                <div>
+                                  <div className="font-semibold text-neutral-50">{p.project_name || p.p6_name}</div>
+                                  <div className="text-[10px] text-neutral-400 mt-0.5">{theme.tag}</div>
+                                </div>
+                                <div className="flex items-center gap-1.5 text-[11px] pt-2 border-t border-neutral-800">
+                                  <span className="text-neutral-400">Planned</span>
+                                  <span className="inline-block px-1.5 py-0.5 rounded font-mono font-bold text-emerald-300 bg-emerald-500/20 border border-emerald-500/40">
+                                    {MW(val)} MWp · {mo}
+                                  </span>
+                                </div>
+                                <div className="space-y-1 pt-2 border-t border-neutral-800">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-neutral-400">Module Date</span>
+                                    <span className="font-mono font-semibold text-amber-300">{p.module_date || 'N/A'}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-neutral-400">TC Date</span>
+                                    <span className="font-mono font-semibold text-amber-300">{p.tc_date || 'N/A'}</span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span className="text-neutral-400">FTC Date</span>
+                                    <span className="font-mono font-semibold text-amber-300">{p.ftc_date || 'N/A'}</span>
+                                  </div>
+                                </div>
+                                <div className="text-[10.5px] text-neutral-300 leading-relaxed pt-2 border-t border-neutral-800">
+                                  Ordering in <span className="text-emerald-300 font-semibold">{mo}</span> lands the material on site by TC Date, in time to support FTC.
+                                </div>
+                                {p.planning_flags?.includes('leveled_early') && (
+                                  <div className="text-[10.5px] text-purple-300 pt-2 border-t border-neutral-800">
+                                    ⚡ Leveled early to protect vendor monthly capacity limits
+                                  </div>
+                                )}
+                              </div>
+                            ) : undefined}
                           >
                             {val > 0 ? (
                               <div className="inline-flex items-center justify-end gap-1 w-full">
