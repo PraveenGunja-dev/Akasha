@@ -154,7 +154,10 @@ function estimateWrappedLines(text: string, colWidthChars: number): number {
   return text.split('\n').reduce((sum, line) => sum + Math.max(1, Math.ceil(line.length / perLine)), 0);
 }
 
-const num = (v: number) => (v > 0 ? Math.round(v * 10) / 10 : null);
+// Rounded to whole MWp, matching the on-screen table (user decision
+// 2026-09-21) — a decimal place read as false precision on figures that are
+// mostly derived/apportioned anyway.
+const num = (v: number) => (v > 0 ? Math.round(v) : null);
 
 export function moduleExportName(ext: 'xlsx') {
   return `Khavda_Module_Deliveries_${new Date().toISOString().slice(0, 10)}.${ext}`;
@@ -349,7 +352,7 @@ export async function exportModuleDeliveriesXLSX(
           vertical: 'middle',
           wrapText: col === TOTAL_COLS || inDateBlock,
         };
-        if (typeof cell.value === 'number') cell.numFmt = '#,##0.0';
+        if (typeof cell.value === 'number') cell.numFmt = '#,##0';
         if (inMonthBlock) {
           const populated = typeof cell.value === 'number' && cell.value > 0;
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: populated ? TIER_FILL[tier] : EMPTY_BG } };
@@ -392,7 +395,7 @@ export async function exportModuleDeliveriesXLSX(
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAECF0' } };
     cell.border = { ...border, top: { style: 'medium', color: { argb: 'FF98A2B3' } } };
     cell.alignment = { horizontal: col >= 10 ? 'right' : 'left', vertical: 'middle' };
-    if (typeof cell.value === 'number') cell.numFmt = '#,##0.0';
+    if (typeof cell.value === 'number') cell.numFmt = '#,##0';
   });
 
   /* ── Source-type summary (the PDF's bottom block) ────────────────────── */
@@ -410,7 +413,7 @@ export async function exportModuleDeliveriesXLSX(
       cell.font = { size: 9, color: { argb: INK } };
       cell.border = border;
       cell.alignment = { horizontal: col === 1 ? 'left' : 'right' };
-      if (typeof cell.value === 'number') cell.numFmt = '#,##0.0';
+      if (typeof cell.value === 'number') cell.numFmt = '#,##0';
     });
   });
 

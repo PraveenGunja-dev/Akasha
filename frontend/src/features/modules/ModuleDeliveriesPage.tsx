@@ -290,10 +290,11 @@ function Tip({
   );
 }
 
-const MW = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 });
-// The month-wise AI allocation cells showed decimals (242.5, 8.6, 55) that
-// read as false precision for a planning figure — round to whole MWp there.
-const MW0 = (n: number) => Math.round(n).toLocaleString('en-IN');
+// Every MWp figure across this table (capacity, ordered, erected, FTC
+// completed, the AI's month-wise allocations, ...) is rounded to a whole
+// number — one decimal place read as false precision on what are mostly
+// derived/apportioned figures anyway (user decision 2026-09-21).
+const MW = (n: number) => Math.round(n).toLocaleString('en-IN');
 const sum = <T,>(rows: T[], pick: (r: T) => number) => rows.reduce((s, r) => s + (pick(r) || 0), 0);
 
 /* ── Status Badge ────────────────────────────────────────────────────────── */
@@ -434,7 +435,7 @@ function getMonthCellTheme(
       cellClass: 'bg-rose-500/15 dark:bg-rose-950/40 text-rose-700 dark:text-rose-300 font-semibold border-y border-rose-500/30 hover:bg-rose-500/25 transition-colors',
       badgeClass: 'bg-rose-500/20 text-rose-700 dark:text-rose-200 border border-rose-500/40',
       dotColor: 'bg-rose-500 ring-2 ring-rose-500/30 animate-pulse',
-      label: MW0(val),
+      label: MW(val),
       tag: 'P1 Priority (Critical COD/PPA)',
     };
   }
@@ -444,7 +445,7 @@ function getMonthCellTheme(
       cellClass: 'bg-amber-500/15 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 font-semibold border-y border-amber-500/30 hover:bg-amber-500/25 transition-colors',
       badgeClass: 'bg-amber-500/20 text-amber-700 dark:text-amber-200 border border-amber-500/40',
       dotColor: 'bg-amber-500',
-      label: MW0(val),
+      label: MW(val),
       tag: 'P2 Priority (Fast-Track)',
     };
   }
@@ -454,7 +455,7 @@ function getMonthCellTheme(
       cellClass: 'bg-orange-500/15 dark:bg-orange-950/40 text-orange-700 dark:text-orange-300 font-semibold border-y border-orange-500/30 hover:bg-orange-500/25 transition-colors',
       badgeClass: 'bg-orange-500/20 text-orange-700 dark:text-orange-200 border border-orange-500/40',
       dotColor: 'bg-orange-500',
-      label: MW0(val),
+      label: MW(val),
       tag: 'Quota-Delayed (past site target date)',
     };
   }
@@ -464,7 +465,7 @@ function getMonthCellTheme(
       cellClass: 'bg-purple-500/15 dark:bg-purple-950/40 text-purple-700 dark:text-purple-300 font-semibold border-y border-purple-500/30 hover:bg-purple-500/25 transition-colors',
       badgeClass: 'bg-purple-500/20 text-purple-700 dark:text-purple-200 border border-purple-500/40',
       dotColor: 'bg-purple-500',
-      label: MW0(val),
+      label: MW(val),
       tag: 'Quota Leveled (Pulled Early)',
     };
   }
@@ -473,7 +474,7 @@ function getMonthCellTheme(
     cellClass: 'bg-emerald-500/10 dark:bg-emerald-950/30 text-emerald-700 dark:text-emerald-300 font-medium border-y border-emerald-500/25 hover:bg-emerald-500/20 transition-colors',
     badgeClass: 'bg-emerald-500/15 text-emerald-700 dark:text-emerald-200 border border-emerald-500/30',
     dotColor: 'bg-emerald-500',
-    label: MW0(val),
+    label: MW(val),
     tag: 'Standard Schedule',
   };
 }
