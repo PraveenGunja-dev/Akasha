@@ -857,23 +857,59 @@ export default function ModuleDeliveriesPage() {
         </div>
       </motion.div>
 
-      {/* ── Notification Banner ────────────────────────────────────────────────── */}
-      {needsOrderingProjects.length > 0 && (
-        <motion.div variants={item} className="flex items-center justify-between gap-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-600 dark:text-amber-400">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            <div>
-              <p className="font-semibold">Module Ordering Action Required</p>
-              <p className="opacity-90 text-[13px]">{needsOrderingProjects.length} project(s) have Module Dates approaching within 14 days or are already overdue, and still require module procurement (Balance Ordering &gt; 0).</p>
+      {/* ── Notification Banner ──────────────────────────────────────────────
+          Two tiers, matching what the planning engine actually distinguishes
+          now: a phase whose module date already passed is excluded from the
+          plan entirely and needs an immediate exception order (critical) —
+          a different, more urgent action than one simply coming up soon
+          (watch). Reads the engine's own exclusion field rather than
+          re-deriving "overdue" from the date string independently (user
+          decision 2026-09-21). */}
+      {(exceptionOrderProjects.length > 0 || approachingOrderProjects.length > 0) && (
+        <motion.div variants={item} className="flex flex-col gap-2">
+          {exceptionOrderProjects.length > 0 && (
+            <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3 text-sm"
+              style={{ borderColor: 'var(--status-critical-border)', background: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' }}>
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Immediate Exception Orders Required</p>
+                  <p className="opacity-90 text-[13px]">
+                    {exceptionOrderProjects.length} project(s) have a phase whose module date has already passed — its ordering window is gone, so it's excluded from the monthly plan and needs to be placed now as an exception ({MW(sum(exceptionOrderProjects, p => p.excluded_module_date_mwp ?? 0))} MWp total).
+                  </p>
+                </div>
+              </div>
+              {statusFilter !== 'needs_ordering' && (
+                <button
+                  onClick={() => setStatusFilter('needs_ordering')}
+                  className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                  style={{ background: 'var(--status-critical-fg)' }}
+                >
+                  Review Projects
+                </button>
+              )}
             </div>
-          </div>
-          {statusFilter !== 'needs_ordering' && (
-            <button
-              onClick={() => setStatusFilter('needs_ordering')}
-              className="shrink-0 rounded-md bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 transition-colors"
-            >
-              Review Projects
-            </button>
+          )}
+          {approachingOrderProjects.length > 0 && (
+            <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3 text-sm"
+              style={{ borderColor: 'var(--status-watch-border)', background: 'var(--status-watch-bg)', color: 'var(--status-watch-fg)' }}>
+              <div className="flex items-center gap-3">
+                <Clock className="h-5 w-5 shrink-0" />
+                <div>
+                  <p className="font-semibold">Module Ordering Coming Up</p>
+                  <p className="opacity-90 text-[13px]">{approachingOrderProjects.length} project(s) have a Module Date within the next 14 days and still require procurement (Balance Ordering &gt; 0).</p>
+                </div>
+              </div>
+              {statusFilter !== 'needs_ordering' && (
+                <button
+                  onClick={() => setStatusFilter('needs_ordering')}
+                  className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
+                  style={{ background: 'var(--status-watch-fg)' }}
+                >
+                  Review Projects
+                </button>
+              )}
+            </div>
           )}
         </motion.div>
       )}
