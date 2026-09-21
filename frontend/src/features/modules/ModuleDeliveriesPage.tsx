@@ -136,7 +136,7 @@ function DatedPhases({ value }: { value: string }) {
 }
 
 type ChipData = { label: string; phase: string | null; type: 'tc' | 'module' | 'ftc' };
-function getChipsForMonth(p: any, mo: string, cellVal: number): ChipData[] {
+function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: string): ChipData[] {
   const chips: ChipData[] = [];
   if (!p.balance_ordering_mwp || p.balance_ordering_mwp <= 0) return chips;
 
@@ -188,7 +188,7 @@ function getChipsForMonth(p: any, mo: string, cellVal: number): ChipData[] {
   parseSegments(p.tc_date, 'module');
   // FTC Date (Green)
   parseSegments(p.ftc_date, 'ftc');
-  return chips;
+  return chips.filter(c => milestoneFilter === 'all' || c.type === milestoneFilter);
 }
 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
@@ -774,8 +774,8 @@ export default function ModuleDeliveriesPage() {
     const groups: Record<string, ModuleProject[]> = {};
     filtered.forEach(p => {
       const key = groupBy === 'epc' ? (p.epc || 'AGEL (Direct)')
-        : groupBy === 'category' ? (p.category || 'Unknown')
-          : (p.type || 'Unknown');
+        : groupBy === 'category' ? (p.category || (p.project_name?.toUpperCase().includes('PPA') ? 'PPA' : p.project_name?.toUpperCase().includes('MERCHANT') ? 'Merchant' : p.project_name?.toUpperCase().includes('GROUP') ? 'Group' : 'Unknown'))
+        : (p.type || 'Unknown');
       (groups[key] = groups[key] || []).push(p);
     });
     return groups;
@@ -1254,7 +1254,7 @@ export default function ModuleDeliveriesPage() {
                       <Td align="left" className="text-muted-foreground">{p.p6_name || '-'}</Td>
                       <Td className="font-mono">{p.spv}</Td>
                       <Td className="font-mono">{p.plot}</Td>
-                      <Td>{p.category || '-'}</Td>
+                      <Td>{p.category || (p.project_name?.toUpperCase().includes('PPA') ? 'PPA' : p.project_name?.toUpperCase().includes('MERCHANT') ? 'Merchant' : p.project_name?.toUpperCase().includes('GROUP') ? 'Group' : '-')}</Td>
                       <Td>{p.type}</Td>
                       <Td className="font-mono">{p.mms_type || '-'}</Td>
                       <Td align="left" className="font-medium">{p.epc || '-'}</Td>
@@ -1352,7 +1352,7 @@ export default function ModuleDeliveriesPage() {
                             align="right"
                             className={`${i === 0 ? SECTION_EDGE : ''}`}
                             tipWide
-                            tipContent={(val > 0 || getChipsForMonth(p, mo, val).length > 0) ? (
+                            tipContent={(val > 0 || getChipsForMonth(p, mo, val, milestoneFilter).length > 0) ? (
                               <div className="space-y-2 text-left">
                                 <div>
                                   <div className="font-semibold text-neutral-50">{p.project_name || p.p6_name}</div>
@@ -1434,9 +1434,13 @@ export default function ModuleDeliveriesPage() {
                                         {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
                                           <>
                                             {/* TC Block (Blue) */}
-                                            <div className="flex-1 min-w-0 p-2 rounded-lg border-2 border-blue-500/80 bg-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.25)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default relative z-10">
+                                            <div className={`flex-1 min-w-0 p-2 rounded-lg transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                              (p.tc_date || '').includes(mo) 
+                                                ? 'border-2 border-blue-500/80 bg-blue-500/20 shadow-[0_0_20px_rgba(59,130,246,0.25)] relative z-10' 
+                                                : 'border border-blue-500/20 bg-blue-500/5 shadow-[inset_0_0_12px_rgba(59,130,246,0.02)]'
+                                            }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-blue-500 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                <Star className="w-3 h-3 shrink-0 fill-blue-500 text-blue-500 animate-pulse drop-shadow-[0_0_4px_rgba(59,130,246,0.8)]" />
+                                                {(p.tc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-blue-500 text-blue-500 animate-pulse drop-shadow-[0_0_4px_rgba(59,130,246,0.8)]" />}
                                                 TC Date
                                               </div>
                                               <DateChipGroup dateStr={filterPhases(p.tc_date)} colorClass="text-blue-200" borderColorClass="border-blue-500/50" badgeBgClass="bg-blue-900/80" />
@@ -1459,9 +1463,13 @@ export default function ModuleDeliveriesPage() {
                                         {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
                                           <>
                                             {/* Module Block (Yellow) */}
-                                            <div className="flex-1 min-w-0 p-2 rounded-lg border border-amber-500/20 bg-amber-500/5 shadow-[inset_0_0_12px_rgba(245,158,11,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
+                                            <div className={`flex-1 min-w-0 p-2 rounded-lg transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                              (p.module_date || '').includes(mo)
+                                                ? 'border-2 border-amber-500/80 bg-amber-500/20 shadow-[0_0_20px_rgba(245,158,11,0.25)] relative z-10'
+                                                : 'border border-amber-500/20 bg-amber-500/5 shadow-[inset_0_0_12px_rgba(245,158,11,0.02)]'
+                                            }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-amber-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                <Star className="w-3 h-3 shrink-0 fill-amber-500/80 text-amber-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(245,158,11,0.8)]" />
+                                                {(p.module_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-amber-500/80 text-amber-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(245,158,11,0.8)]" />}
                                                 Module Date
                                               </div>
                                               <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-amber-300" borderColorClass="border-amber-500/30" badgeBgClass="bg-amber-950/50" />
@@ -1486,9 +1494,13 @@ export default function ModuleDeliveriesPage() {
                                         )}
 
                                         {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
-                                          <div className="flex-1 min-w-0 p-2 rounded-lg border border-emerald-500/20 bg-emerald-500/5 shadow-[inset_0_0_12px_rgba(16,185,129,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
+                                          <div className={`flex-1 min-w-0 p-2 rounded-lg transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                            (p.ftc_date || '').includes(mo)
+                                              ? 'border-2 border-emerald-500/80 bg-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.25)] relative z-10'
+                                              : 'border border-emerald-500/20 bg-emerald-500/5 shadow-[inset_0_0_12px_rgba(16,185,129,0.02)]'
+                                          }`}>
                                             <div className="text-[9px] uppercase tracking-wider text-emerald-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                              <Star className="w-3 h-3 shrink-0 fill-emerald-500/80 text-emerald-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(16,185,129,0.8)]" />
+                                              {(p.ftc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-emerald-500/80 text-emerald-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(16,185,129,0.8)]" />}
                                               FTC Date
                                             </div>
                                             <DateChipGroup dateStr={filterPhases(p.ftc_date)} colorClass="text-emerald-300" borderColorClass="border-emerald-500/30" badgeBgClass="bg-emerald-950/50" />
@@ -1509,9 +1521,13 @@ export default function ModuleDeliveriesPage() {
                                                 <ArrowRight className="w-3 h-3 text-purple-500 absolute -right-1" />
                                               </div>
                                             </div>
-                                            <div className="flex-1 min-w-0 p-2 rounded-lg border border-purple-500/20 bg-purple-500/5 shadow-[inset_0_0_12px_rgba(168,85,247,0.02)] transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default">
+                                            <div className={`flex-1 min-w-0 p-2 rounded-lg transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                              (p.lta || '').includes(mo)
+                                                ? 'border-2 border-purple-500/80 bg-purple-500/20 shadow-[0_0_20px_rgba(168,85,247,0.25)] relative z-10'
+                                                : 'border border-purple-500/20 bg-purple-500/5 shadow-[inset_0_0_12px_rgba(168,85,247,0.02)]'
+                                            }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-purple-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                <Star className="w-3 h-3 shrink-0 fill-purple-500/80 text-purple-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" />
+                                                {(p.lta || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-purple-500/80 text-purple-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" />}
                                                 LTA Date
                                               </div>
                                               <DateChipGroup dateStr={filterPhases(p.lta)} colorClass="text-purple-300" borderColorClass="border-purple-500/30" badgeBgClass="bg-purple-950/50" />
@@ -1548,10 +1564,10 @@ export default function ModuleDeliveriesPage() {
                               </div>
                             ) : undefined}
                           >
-                            {getChipsForMonth(p, mo, val).length > 0 ? (
+                            {getChipsForMonth(p, mo, val, milestoneFilter).length > 0 ? (
                               <div className="flex flex-col items-end justify-center w-full gap-1.5">
                                 <div className="flex flex-col items-end gap-1 w-full">
-                                  {getChipsForMonth(p, mo, val).map((c, idx) => (
+                                  {getChipsForMonth(p, mo, val, milestoneFilter).map((c, idx) => (
                                     <div key={idx} className={`px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
                                       ${c.type === 'tc' ? 'bg-blue-500/20 text-blue-600 border border-blue-500/50 shadow-blue-500/10' : 
                                         c.type === 'module' ? 'bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-amber-500/10' : 
