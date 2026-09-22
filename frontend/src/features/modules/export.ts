@@ -129,13 +129,14 @@ function dateCellRichText(value: string): { richText: RichRun[] } | string {
 
 type ChipData = { label: string; phase: string | null; type: 'tc' | 'module' | 'ftc' };
 
-function getChipsForMonth(p: ModuleProject, mo: string, cellVal: number, milestoneFilter: string): ChipData[] {
+function getChipsForMonth(p: ModuleProject, mo: string, cellVal: number, milestoneFilter: string, unitToggle: 'both' | 'mwp' | 'mwac'): ChipData[] {
   const chips: ChipData[] = [];
   if (!p.balance_ordering_mwp || p.balance_ordering_mwp <= 0) return chips;
 
   if (cellVal > 0) {
       const ac = Math.round(p.ol > 0 ? cellVal / p.ol : cellVal / 1.35);
-      chips.push({ label: `${Math.round(cellVal)} / ${ac}`, phase: null, type: 'tc' });
+      const labelStr = unitToggle === 'mwp' ? `${Math.round(cellVal)}` : unitToggle === 'mwac' ? `${ac}` : `${Math.round(cellVal)} / ${ac}`;
+      chips.push({ label: labelStr, phase: null, type: 'tc' });
   }
 
   const now = new Date();
@@ -157,7 +158,8 @@ function getChipsForMonth(p: ModuleProject, mo: string, cellVal: number, milesto
             if (acMatch) {
               const ac = parseFloat(acMatch[1]);
               const dc = Math.round(ac * (p.ol > 0 ? p.ol : 1.35));
-              chips.push({ label: `${dc} / ${ac}`, phase: parts[0], type });
+              const labelStr = unitToggle === 'mwp' ? `${dc}` : unitToggle === 'mwac' ? `${ac}` : `${dc} / ${ac}`;
+              chips.push({ label: labelStr, phase: parts[0], type });
             } else {
               chips.push({ label: mwMatch[1], phase: parts[0], type });
             }
@@ -168,7 +170,8 @@ function getChipsForMonth(p: ModuleProject, mo: string, cellVal: number, milesto
           const phasesCount = val.split(' · ').length;
           const dc = p.balance_ordering_mwp / (phasesCount || 1);
           const ac = Math.round(p.ol > 0 ? dc / p.ol : dc / 1.35);
-          chips.push({ label: `${Math.round(dc)} / ${ac}`, phase: null, type });
+          const labelStr = unitToggle === 'mwp' ? `${Math.round(dc)}` : unitToggle === 'mwac' ? `${ac}` : `${Math.round(dc)} / ${ac}`;
+          chips.push({ label: labelStr, phase: null, type });
         }
       }
     });
@@ -179,8 +182,8 @@ function getChipsForMonth(p: ModuleProject, mo: string, cellVal: number, milesto
   return chips.filter(c => milestoneFilter === 'all' || c.type === milestoneFilter);
 }
 
-function monthCellRichText(p: ModuleProject, mo: string, val: number, milestoneFilter: string): { richText: RichRun[] } | string {
-  const chips = getChipsForMonth(p, mo, val, milestoneFilter);
+function monthCellRichText(p: ModuleProject, mo: string, val: number, milestoneFilter: string, unitToggle: 'both' | 'mwp' | 'mwac'): { richText: RichRun[] } | string {
+  const chips = getChipsForMonth(p, mo, val, milestoneFilter, unitToggle);
   if (chips.length === 0) {
     return '-';
   }
@@ -223,7 +226,8 @@ export async function exportModuleDeliveriesXLSX(
   totals: ModuleTotals,
   summary: ModuleDeliveriesSummary,
   filename: string,
-  milestoneFilter: 'all' | 'tc' | 'module' | 'ftc' = 'all'
+  milestoneFilter: 'all' | 'tc' | 'module' | 'ftc' = 'all',
+  unitToggle: 'both' | 'mwp' | 'mwac' = 'both'
 ) {
   const ExcelJS = await import('exceljs');
   const wb = new ExcelJS.Workbook();
@@ -278,7 +282,7 @@ export async function exportModuleDeliveriesXLSX(
   const monthStart = LEAD_COUNT + 1;
   const monthEnd = LEAD_COUNT + MONTH_COUNT;
   ws.mergeCells(4, monthStart, 4, monthEnd);
-  ws.getCell(4, monthStart).value = MONTH_GROUP_LABEL;
+  ws.getCell(4, monthStart).value = `Month wise Module Requirement at Site (${unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})`;
   [...FORECAST_MONTHS, 'Total'].forEach((mo, i) => {
     const col = monthStart + i;
     ws.getCell(5, col).value = mo;
@@ -369,7 +373,7 @@ export async function exportModuleDeliveriesXLSX(
         num(p.under_transit_mwp),
         num(p.balance_dispatch_mwp),
         STATUS_LABEL[p.status] ?? p.status,
-        ...FORECAST_MONTHS.map(mo => monthCellRichText(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter)),
+        ...FORECAST_MONTHS.map(mo => monthCellRichText(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter, unitToggle)),
         num(p.balance_ordering_mwp || 0),
         dateCellRichText(ftcText),
         dateCellRichText(tcText),
@@ -389,7 +393,7 @@ export async function exportModuleDeliveriesXLSX(
         splitPhases(tcText).length,
         splitPhases(modText).length,
         estimateWrappedLines(remarksText, TRAIL_COLUMN.width),
-        ...FORECAST_MONTHS.map(mo => Math.max(1, getChipsForMonth(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter).length))
+        ...FORECAST_MONTHS.map(mo => Math.max(1, getChipsForMonth(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter, unitToggle).length))
       );
       row.height = Math.max(14, linesNeeded * 11 + 3);
 

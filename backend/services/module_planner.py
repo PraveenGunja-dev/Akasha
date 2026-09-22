@@ -10,6 +10,7 @@ synthesizes 360-degree multi-perspective AI operational recommendations.
 from datetime import datetime, timedelta
 import re
 from typing import Dict, List, Any, Optional
+from dateutil.relativedelta import relativedelta
 
 CAP_LIMITS: Dict[str, float] = {
     'China': 750.0,
@@ -252,19 +253,33 @@ def run_module_planning_engine(
             ol = (float(p.get('capacity_mwp') or 0.0) / float(p.get('capacity_mwac') or 1.0)) if float(p.get('capacity_mwac') or 0) > 0 else 1.35
         p['ol'] = ol
 
-        for ph in phases:
+        is_ppa = p.get('category') == 'PPA' or 'PPA' in (p.get('project_name') or '').upper()
+
+        active_phases = [ph for ph in phases if ph['ftc_dt'] >= base_month_dt]
+        if not active_phases:
+            continue
+
+        for ph in active_phases:
             ph_mwac = ph['mw_ac']
-            if ph_mwac <= 0:
-                # If no MW specified in string, fallback to distributing the pending balance
-                req_mwp = round(bal / len(phases), 1) if len(phases) > 0 else 0.0
-            else:
-                req_mwp = round(ph_mwac * ol, 1)
+            ph['req_mwp'] = round(ph_mwac * ol, 1) if ph_mwac > 0 else round(bal / len(active_phases), 1)
+
+        total_active_mwp = sum(ph['req_mwp'] for ph in active_phases)
+        if total_active_mwp > bal and bal > 0:
+            scale_factor = bal / total_active_mwp
+            running_sum = 0.0
+            for i, ph in enumerate(active_phases):
+                if i == len(active_phases) - 1:
+                    ph['req_mwp'] = round(bal - running_sum, 1)
+                else:
+                    ph['req_mwp'] = round(ph['req_mwp'] * scale_factor, 1)
+                running_sum += ph['req_mwp']
+
+        for ph in active_phases:
+            req_mwp = ph['req_mwp']
+            if req_mwp <= 0:
+                continue
                 
             raw_idx = _calc_month_idx(ph['tc_dt'], base_month_dt, num_months)
-
-            # If FTC date has already passed, this phase is completed — skip entirely
-            if ph['ftc_dt'] < base_month_dt:
-                continue
 
             if raw_idx < 0:
                 project_excluded_phases.setdefault(p['id'], []).append({
@@ -289,6 +304,7 @@ def run_module_planning_engine(
                 'target_month_idx': max(0, min(num_months - 1, raw_idx)),
                 'lead_time': lead_time,
                 'ol': ol,
+                'is_ppa': is_ppa,
             })
             project_total_demand[p['id']] = project_total_demand.get(p['id'], 0.0) + req_mwp
 
@@ -314,8 +330,9 @@ def run_module_planning_engine(
             monthly_alloc_by_source[source] = [0.0] * num_months
             monthly_alloc_mwp_by_source[source] = [0.0] * num_months
             
-        # Priority sort: P1 first, then P2, then Standard; then earliest FTC date, then earliest Module Date
+        # Priority sort: PPA first, then P1/P2/Standard, then earliest FTC date, then earliest Module Date
         s_demands.sort(key=lambda x: (
+            0 if x.get('is_ppa') else 1,
             PRIORITY_RANKS.get(x['priority'], 3),
             x['ftc_dt'],
             x['mod_dt'],
@@ -332,11 +349,10 @@ def run_module_planning_engine(
             curr_m = target_m
             ol = d.get('ol', 1.35)
             while rem > 1e-4 and curr_m >= 0:
-                avail = max(0.0, cap - monthly_alloc_by_source[source][curr_m])
-                avail_mwp = avail * ol
-                if avail_mwp > 1e-4:
-                    take_mwp = min(rem, avail_mwp)
-                    take_mwac = take_mwp / ol
+                avail_mwac = max(0.0, cap - monthly_alloc_by_source[source][curr_m])
+                if avail_mwac > 1e-4:
+                    take_mwac = min(rem / ol, avail_mwac)
+                    take_mwp = take_mwac * ol
                     monthly_alloc_by_source[source][curr_m] += take_mwac
                     monthly_alloc_mwp_by_source[source][curr_m] += take_mwp
                     project_allocations[pid][curr_m] += take_mwp
@@ -361,17 +377,21 @@ def run_module_planning_engine(
                 lta_m = target_m
                 
                 if lta_parsed:
-                    lta_mod_dt = lta_parsed - timedelta(days=TC_OFFSET_DAYS + lead_time)
-                    lta_calc = _calc_month_idx(lta_mod_dt, base_month_dt, num_months)
-                    lta_m = max(target_m, lta_calc)
+                    lta_m = -1
+                    for m_idx in range(num_months):
+                        m_start = base_month_dt + relativedelta(months=m_idx)
+                        worst_case_tc_dt = m_start + relativedelta(months=1) - timedelta(days=1)
+                        worst_case_ftc_dt = worst_case_tc_dt + timedelta(days=lead_time + TC_OFFSET_DAYS)
+                        if worst_case_ftc_dt.date() <= lta_parsed.date():
+                            lta_m = m_idx
+                    lta_m = max(target_m, lta_m)
                     
                 curr_m = target_m + 1
                 while rem > 1e-4 and curr_m < num_months:
-                    avail = max(0.0, cap - monthly_alloc_by_source[source][curr_m])
-                    avail_mwp = avail * ol
-                    if avail_mwp > 1e-4:
-                        take_mwp = min(rem, avail_mwp)
-                        take_mwac = take_mwp / ol
+                    avail_mwac = max(0.0, cap - monthly_alloc_by_source[source][curr_m])
+                    if avail_mwac > 1e-4:
+                        take_mwac = min(rem / ol, avail_mwac)
+                        take_mwp = take_mwac * ol
                         monthly_alloc_by_source[source][curr_m] += take_mwac
                         monthly_alloc_mwp_by_source[source][curr_m] += take_mwp
                         project_allocations[pid][curr_m] += take_mwp
@@ -588,21 +608,49 @@ def run_module_planning_engine(
         x['mwp'] for phases in project_excluded_phases.values() for x in phases
     ), 1)
 
-    takeaways = [
-        f"Scenario '{scenario_version.replace('_', ' ').title()}': Planned {round(total_planned, 1):,} MWp across {len(forecast_months)} months.",
-        f"{p1_count} projects prioritized with guaranteed first-claim allocation on manufacturing quotas.",
-        f"{leveled_count} projects were proactively pulled earlier to avoid exceeding vendor monthly limits.",
-    ]
-    if extended_lta_count:
-        takeaways.append(f"{extended_lta_count} projects were safely extended to their LTA dates, avoiding quota limits while respecting transmission timelines.")
-    if delayed_count:
-        takeaways.append(f"{delayed_count} projects were delayed past their LTA dates due to strict monthly vendor quotas. Critical commercial risk.")
-    if excluded_projects_count:
-        takeaways.append(f"{excluded_projects_count} projects have no active plan: every pending phase's module date has already passed, so they're immediate exceptions rather than a scheduled order.")
-    if excluded_module_passed_mwp > 0.5:
-        takeaways.append(f"{excluded_module_passed_mwp:,} MWp excluded: its module date already passed — that phase's ordering window is gone, place it as an immediate exception, not part of this plan.")
-    if excluded_ftc_charged_mwp > 0.5:
-        takeaways.append(f"{excluded_ftc_charged_mwp:,} MWp excluded: already FTC-charged, so the SAP balance there is a records gap, not an ordering need.")
+    takeaways = []
+    try:
+        import openai
+        import os
+        api_key = os.environ.get("OPENAI_API_KEY")
+        if api_key:
+            client = openai.OpenAI(api_key=api_key)
+            prompt = (
+                "Act as a Chief Strategy Officer for a major solar company. Summarize the following portfolio planning constraints into 3 sharp, analytical bullet points focusing on risk, factory constraints, and supply chain mitigation:\n"
+                f"- Total Planned: {round(total_planned, 1):,} MWp\n"
+                f"- Projects Pulled Early (to avoid quota breach): {leveled_count}\n"
+                f"- Projects Delayed past LTA (Critical Commercial Risk): {delayed_count}\n"
+                f"- Projects Extended to LTA: {extended_lta_count}\n"
+                f"- Prioritized P1 Projects: {p1_count}\n"
+                f"- Excluded Unplanned Demand (Missed Dates): {excluded_module_passed_mwp} MWp"
+            )
+            response = client.chat.completions.create(
+                model="gpt-4",
+                messages=[{"role": "user", "content": prompt}],
+                temperature=0.5,
+                max_tokens=250
+            )
+            ai_text = response.choices[0].message.content.strip().split('\n')
+            takeaways = [t.strip('- *') for t in ai_text if t.strip()]
+            takeaways.insert(0, f"🤖 [AI Strategist]: Scenario '{scenario_version.replace('_', ' ').title()}' generated using predictive leveling.")
+        else:
+            raise Exception("No OPENAI_API_KEY")
+    except Exception as e:
+        takeaways = [
+            f"Scenario '{scenario_version.replace('_', ' ').title()}': Planned {round(total_planned, 1):,} MWp across {len(forecast_months)} months.",
+            f"{p1_count} projects prioritized with guaranteed first-claim allocation on manufacturing quotas.",
+            f"{leveled_count} projects were proactively pulled earlier to avoid exceeding vendor monthly limits.",
+        ]
+        if extended_lta_count:
+            takeaways.append(f"{extended_lta_count} projects were safely extended to their LTA dates, avoiding quota limits while respecting transmission timelines.")
+        if delayed_count:
+            takeaways.append(f"{delayed_count} projects were delayed past their LTA dates due to strict monthly vendor quotas. Critical commercial risk.")
+        if excluded_projects_count:
+            takeaways.append(f"{excluded_projects_count} projects have no active plan: every pending phase's module date has already passed, so they're immediate exceptions rather than a scheduled order.")
+        if excluded_module_passed_mwp > 0.5:
+            takeaways.append(f"{excluded_module_passed_mwp:,.1f} MWp excluded: its module date already passed — that phase's ordering window is gone, place it as an immediate exception, not part of this plan.")
+        if excluded_ftc_charged_mwp > 0.5:
+            takeaways.append(f"{excluded_ftc_charged_mwp:,.1f} MWp excluded: already FTC-charged, so the SAP balance there represents a records mismatch, not an unfulfilled ordering requirement.")
 
     strategic_briefing = {
         'scenario_version': scenario_version,

@@ -1,11 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
   Package, Sun, Truck, CheckCircle2, Clock, Search,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, ArrowRight, Star
+  Bot, X, Send, ArrowRight, Star, Columns3
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
@@ -32,14 +32,14 @@ const DateChipGroup = ({ dateStr, colorClass, borderColorClass, badgeBgClass }: 
           const label = part.substring(0, colonIdx).trim();
           const date = part.substring(colonIdx + 1).trim();
           return (
-            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50 whitespace-nowrap`}>
+            <div key={i} className={`flex items-center shrink-0 rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50 whitespace-nowrap`}>
               <span className={`px-1.5 py-0.5 text-[9.5px] uppercase tracking-wider font-bold ${badgeBgClass} text-neutral-300 whitespace-nowrap`}>{label}</span>
               <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass} whitespace-nowrap`}>{date}</span>
             </div>
           );
         } else {
           return (
-            <div key={i} className={`flex items-center rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50 whitespace-nowrap`}>
+            <div key={i} className={`flex items-center shrink-0 rounded overflow-hidden border ${borderColorClass} bg-neutral-900/50 whitespace-nowrap`}>
               <span className={`px-2 py-0.5 font-mono text-[10.5px] font-bold ${colorClass} whitespace-nowrap`}>{part}</span>
             </div>
           );
@@ -136,14 +136,15 @@ function DatedPhases({ value }: { value: string }) {
 }
 
 type ChipData = { label: string; phase: string | null; type: 'tc' | 'module' | 'ftc' };
-function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: string): ChipData[] {
+function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: string, unitToggle: 'both' | 'mwp' | 'mwac' = 'both'): ChipData[] {
   const chips: ChipData[] = [];
   if (!p.balance_ordering_mwp || p.balance_ordering_mwp <= 0) return chips;
 
   // The cellVal tracks TC Ordering, so it represents the Blue chip
   if (cellVal > 0) {
       const ac = Math.round(p.ol > 0 ? cellVal / p.ol : cellVal / 1.35);
-      chips.push({ label: `${Math.round(cellVal)} / ${ac}`, phase: null, type: 'tc' });
+      const labelStr = unitToggle === 'mwp' ? `${Math.round(cellVal)}` : unitToggle === 'mwac' ? `${ac}` : `${Math.round(cellVal)} / ${ac}`;
+      chips.push({ label: labelStr, phase: null, type: 'tc' });
   }
 
   const now = new Date();
@@ -167,7 +168,8 @@ function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: 
             if (acMatch) {
               const ac = parseFloat(acMatch[1]);
               const dc = Math.round(ac * (p.ol > 0 ? p.ol : 1.35));
-              chips.push({ label: `${dc} / ${ac}`, phase: parts[0], type });
+              const labelStr = unitToggle === 'mwp' ? `${dc}` : unitToggle === 'mwac' ? `${ac}` : `${dc} / ${ac}`;
+              chips.push({ label: labelStr, phase: parts[0], type });
             } else {
               chips.push({ label: mwMatch[1], phase: parts[0], type });
             }
@@ -178,7 +180,8 @@ function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: 
           const phasesCount = val.split(' · ').length;
           const dc = p.balance_ordering_mwp / (phasesCount || 1);
           const ac = Math.round(p.ol > 0 ? dc / p.ol : dc / 1.35);
-          chips.push({ label: `${Math.round(dc)} / ${ac}`, phase: null, type });
+          const labelStr = unitToggle === 'mwp' ? `${Math.round(dc)}` : unitToggle === 'mwac' ? `${ac}` : `${Math.round(dc)} / ${ac}`;
+          chips.push({ label: labelStr, phase: null, type });
         }
       }
     });
@@ -326,7 +329,7 @@ function Tip({
   if (!text && !content) return <>{children}</>;
 
   const isDetailed = wide || (text && (text.length > 60 || text.includes('FTC') || text.includes('AI Suggestion')));
-  const targetWidth = isDetailed ? 540 : 260;
+  const targetWidth = isDetailed ? 900 : 260;
 
   const toggleTip = (e: React.MouseEvent) => {
     if (show) {
@@ -372,7 +375,7 @@ function Tip({
           onClick={(e) => e.stopPropagation()}
         >
           <span
-            style={{ width: `${renderWidth}px` }}
+            style={{ width: 'max-content', maxWidth: `${renderWidth}px` }}
             className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] text-left leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words cursor-auto"
           >
             {content ? content : text ? renderHighlightedText(text) : null}
@@ -587,6 +590,60 @@ function getMonthCellTheme(
    MAIN PAGE COMPONENT
    ═══════════════════════════════════════════════════════════════════════════ */
 
+/* ── Column Visibility System ─────────────────────────────────────────────
+   Default-visible columns are the ones the user most frequently needs.
+   The remaining columns are hidden by default but can be toggled on via
+   a "Columns" dropdown in the toolbar. */
+type ColumnKey =
+  | 'project' | 'p6_name' | 'spv' | 'plot' | 'category' | 'type' | 'mms_type'
+  | 'epc' | 'priority' | 'ol' | 'capacity_mwac' | 'capacity_mwp'
+  | 'ftc_completed' | 'connectivity' | 'lta' | 'scod' | 'aop'
+  | 'ordered' | 'balance_ordering' | 'total_receipt' | 'erection_done'
+  | 'module_inventory' | 'under_transit' | 'balance_dispatch' | 'status'
+  | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'tc_delivery_date' | 'remarks';
+
+const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
+  { key: 'project', label: 'Project' },
+  { key: 'p6_name', label: 'P6 Name' },
+  { key: 'spv', label: 'SPV' },
+  { key: 'plot', label: 'Plot' },
+  { key: 'category', label: 'Category' },
+  { key: 'type', label: 'Type' },
+  { key: 'mms_type', label: 'MMS Type' },
+  { key: 'epc', label: 'AGEL / EPC' },
+  { key: 'priority', label: 'Priority' },
+  { key: 'ol', label: 'OL' },
+  { key: 'capacity_mwac', label: 'Capacity (MWac)' },
+  { key: 'capacity_mwp', label: 'Capacity (MWp)' },
+  { key: 'ftc_completed', label: 'FTC Completed' },
+  { key: 'connectivity', label: 'Connectivity Phase' },
+  { key: 'lta', label: 'LTA' },
+  { key: 'scod', label: 'SCOD' },
+  { key: 'aop', label: 'AOP' },
+  { key: 'ordered', label: 'Ordered' },
+  { key: 'balance_ordering', label: 'Balance Ordering' },
+  { key: 'total_receipt', label: 'Total Receipt' },
+  { key: 'erection_done', label: 'Erection Done' },
+  { key: 'module_inventory', label: 'Module Inventory' },
+  { key: 'under_transit', label: 'Under Transit' },
+  { key: 'balance_dispatch', label: 'Balance Dispatch' },
+  { key: 'status', label: 'Status' },
+  { key: 'month_wise', label: 'Month Wise Allocation' },
+  { key: 'ftc_date', label: 'FTC Date' },
+  { key: 'module_ordering_date', label: 'Module Ordering Date' },
+  { key: 'tc_delivery_date', label: 'TC Delivery Date' },
+  { key: 'remarks', label: 'Remarks' },
+];
+
+const DEFAULT_VISIBLE: Set<ColumnKey> = new Set([
+  'project', 'spv', 'plot',
+  'capacity_mwac', 'capacity_mwp', 'ftc_completed',
+  'lta', 'scod', 'aop',
+  'ordered', 'balance_ordering', 'total_receipt',
+  'erection_done', 'module_inventory', 'under_transit', 'balance_dispatch',
+  'month_wise', 'remarks',
+]);
+
 export default function ModuleDeliveriesPage() {
   const [data, setData] = useState<ModuleDeliveriesSummary | null>(null);
   const [loading, setLoading] = useState(true);
@@ -603,6 +660,34 @@ export default function ModuleDeliveriesPage() {
   // portfolio (Rajasthan, commissioned, and Khavda projects the PDF omits).
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'tc' | 'module' | 'ftc'>('all');
+  const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('both');
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
+  const [colDropdownOpen, setColDropdownOpen] = useState(false);
+  const [insightsOpen, setInsightsOpen] = useState(false);
+  // Optimistic tracking state — keeps the UI stable while the PUT is in flight
+  const [trackingOverrides, setTrackingOverrides] = useState<Record<number, boolean>>({});
+  const colDropdownRef = React.useRef<HTMLDivElement>(null);
+
+  const isColVisible = useCallback((key: ColumnKey) => visibleCols.has(key), [visibleCols]);
+  const toggleCol = useCallback((key: ColumnKey) => {
+    setVisibleCols(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  }, []);
+
+  // Close column dropdown on outside click
+  useEffect(() => {
+    if (!colDropdownOpen) return;
+    const handleClick = (e: MouseEvent) => {
+      if (colDropdownRef.current && !colDropdownRef.current.contains(e.target as Node)) {
+        setColDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [colDropdownOpen]);
   const chartTheme = useChartTheme();
 
   // AI Strategic Planning & Priority States
@@ -698,15 +783,47 @@ export default function ModuleDeliveriesPage() {
   };
 
   const toggleTracking = async (id: number, is_tracked: boolean) => {
+    // Optimistic update: immediately reflect the change in UI
+    setTrackingOverrides(prev => ({ ...prev, [id]: is_tracked }));
     try {
       await fetch(`${API}/akasha/api/mappings/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ is_tracked }),
       });
-      await loadData();
+      // Silently refresh data in background without showing loading state
+      const params = new URLSearchParams();
+      if (scenario) params.append('scenario', scenario);
+      if (Object.keys(priorities).length > 0) {
+        params.append('priorities', JSON.stringify(priorities));
+      }
+      fetch(`${API}/akasha/api/module-deliveries/summary?${params.toString()}`)
+        .then(r => r.json())
+        .then(d => {
+          setData(d);
+          // Clear the optimistic override once real data arrives
+          setTrackingOverrides(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        })
+        .catch(() => {
+          // Revert optimistic override on error
+          setTrackingOverrides(prev => {
+            const next = { ...prev };
+            delete next[id];
+            return next;
+          });
+        });
     } catch (e) {
       console.error("Failed to update tracking status", e);
+      // Revert optimistic override on error
+      setTrackingOverrides(prev => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
     }
   };
 
@@ -714,7 +831,9 @@ export default function ModuleDeliveriesPage() {
   const filtered = useMemo(() => {
     if (!data) return [];
     return data.projects.filter(p => {
-      if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned || p.is_tracked === false)) return false;
+      // Use optimistic override if present, otherwise fall back to server value
+      const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : p.is_tracked;
+      if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned || effectiveTracked === false)) return false;
       if (statusFilter !== 'all') {
         if (statusFilter === 'needs_ordering') {
           if (p.balance_ordering_mwp <= 0) return false;
@@ -736,7 +855,7 @@ export default function ModuleDeliveriesPage() {
       }
       return true;
     });
-  }, [data, search, statusFilter, scope]);
+  }, [data, search, statusFilter, scope, trackingOverrides]);
 
   // Split into the two tiers the planning engine actually distinguishes now:
   // an exception order (module date already passed — outside the plan,
@@ -798,7 +917,7 @@ export default function ModuleDeliveriesPage() {
     if (!data) return;
     setExporting(true);
     try {
-      await exportModuleDeliveriesXLSX(grouped, data.totals, data, moduleExportName('xlsx'), milestoneFilter);
+      await exportModuleDeliveriesXLSX(grouped, data.totals, data, moduleExportName('xlsx'), milestoneFilter, unitToggle);
     } finally {
       setExporting(false);
     }
@@ -914,7 +1033,7 @@ export default function ModuleDeliveriesPage() {
             <div className="rounded-lg border border-border bg-[var(--surface-sunken)] p-1.5">
               <Package className="w-4 h-4 text-primary" />
             </div>
-            <h1 className="text-xl font-semibold text-foreground tracking-tight">Module Deliveries &amp; Forecast</h1>
+            <h1 className="text-xl font-semibold text-foreground tracking-tight">Cell Repartition Sheet</h1>
           </div>
           <p className="text-xs text-muted-foreground">
             Khavda FY 26-27 Solar Projects · Live data from SAP, P6 &amp; Transmission · Updated {new Date(data.generated_at).toLocaleString('en-IN', { dateStyle: 'medium', timeStyle: 'short' })}
@@ -1072,19 +1191,6 @@ export default function ModuleDeliveriesPage() {
               <option value="all">All projects</option>
             </select>
           </div>
-
-          <div className="flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5 text-primary" />
-            <span className="text-[10px] font-semibold text-primary uppercase tracking-wider">Scenario</span>
-            <select value={scenario} onChange={e => handleScenarioChange(e.target.value as 'v1_baseline' | 'v2_strategic' | 'v3_commercial')}
-              className="pl-2 pr-6 py-1 bg-primary/10 border border-primary/30 rounded-md text-[11px] font-semibold text-primary focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
-            >
-              <option value="v1_baseline">V1 Baseline</option>
-              <option value="v2_strategic">V2 Strategic</option>
-              <option value="v3_commercial">V3 PPA Safeguard</option>
-            </select>
-          </div>
-
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Milestone</span>
             <select value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value as 'all' | 'tc' | 'module' | 'ftc')}
@@ -1096,10 +1202,59 @@ export default function ModuleDeliveriesPage() {
               <option value="ftc">FTC Date</option>
             </select>
           </div>
+
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Unit</span>
+            <select value={unitToggle} onChange={e => setUnitToggle(e.target.value as 'both' | 'mwp' | 'mwac')}
+              className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
+            >
+              <option value="both">MWp / MWac</option>
+              <option value="mwp">MWp</option>
+              <option value="mwac">MWac</option>
+            </select>
+          </div>
         </div>
 
         <div className="ml-auto flex items-center gap-3">
           <span className="text-[10px] tabular-nums text-muted-foreground">{filtered.length} of {data.projects.length} projects</span>
+
+          {/* Column Visibility Dropdown */}
+          <div ref={colDropdownRef} className="relative">
+            <button
+              onClick={() => setColDropdownOpen(o => !o)}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-sm"
+            >
+              <Columns3 className="w-3.5 h-3.5" />
+              Columns
+              <span className="text-[9px] text-muted-foreground tabular-nums">({visibleCols.size}/{ALL_COLUMNS.length})</span>
+            </button>
+            {colDropdownOpen && (
+              <div className="absolute right-0 top-full mt-1 z-50 w-56 max-h-[400px] overflow-y-auto rounded-lg border border-border bg-card shadow-xl custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-150">
+                <div className="sticky top-0 bg-card border-b border-border px-3 py-2 flex items-center justify-between z-10">
+                  <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Show / Hide Columns</span>
+                  <button
+                    onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
+                    className="text-[10px] text-primary hover:underline font-medium"
+                  >Reset</button>
+                </div>
+                {ALL_COLUMNS.map(col => (
+                  <label
+                    key={col.key}
+                    className="flex items-center gap-2.5 px-3 py-1.5 text-[11px] text-foreground hover:bg-muted/50 cursor-pointer transition-colors select-none"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={visibleCols.has(col.key)}
+                      onChange={() => toggleCol(col.key)}
+                      className="w-3.5 h-3.5 rounded border-border text-primary cursor-pointer focus:ring-1 focus:ring-primary accent-[var(--primary)]"
+                    />
+                    <span className={visibleCols.has(col.key) ? 'font-medium' : 'text-muted-foreground'}>{col.label}</span>
+                  </label>
+                ))}
+              </div>
+            )}
+          </div>
+
           <button
             onClick={handleExport}
             disabled={exporting}
@@ -1142,9 +1297,6 @@ export default function ModuleDeliveriesPage() {
               Standard P6 Scheduled
             </span>
           </div>
-          <span className="text-[10px] text-muted-foreground italic">
-            * Click project's Priority badge to toggle Std → P1 → P2 &amp; auto-recalculate schedule. Capacity Overload means this order exceeds the source's assumed monthly quota — it's still placed on time against its module-date deadline rather than deferred, since a deadline can't slip but the quota assumption can.
-          </span>
         </div>
 
         <div className="max-h-[72vh] overflow-auto custom-scrollbar">
@@ -1152,64 +1304,66 @@ export default function ModuleDeliveriesPage() {
             <thead className="sticky top-0 z-40">
               <tr>
                 <Th stickyLeft={0} rowSpan={2} className="w-[34px] min-w-[34px]">Sr</Th>
-                <Th stickyLeft={34} rowSpan={2} className="min-w-[188px] text-left">Project</Th>
-                <Th rowSpan={2} className="min-w-[178px] text-left">P6 Name</Th>
-                <Th rowSpan={2} className="min-w-[62px]">SPV</Th>
-                <Th rowSpan={2} className="min-w-[46px]">Plot</Th>
-                <Th rowSpan={2} className="min-w-[62px]">Category</Th>
-                <Th rowSpan={2} className="min-w-[52px]">Type</Th>
-                <Th rowSpan={2} className="min-w-[46px]"><ThLabel label="MMS" unit="Type" /></Th>
-                <Th rowSpan={2} className="min-w-[124px] text-left">AGEL / EPC</Th>
-                <Th rowSpan={2} className="min-w-[62px]">Priority</Th>
-                <Th rowSpan={2} className={`min-w-[38px] ${SECTION_EDGE}`}>OL</Th>
-                <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWac)" /></Th>
-                <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="FTC Completed" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className={`min-w-[74px] ${SECTION_EDGE}`}><ThLabel label="Connectivity" unit="Phase" /></Th>
-                <Th rowSpan={2} className="min-w-[62px]">
+                {isColVisible('project') && <Th stickyLeft={34} rowSpan={2} className="min-w-[188px] text-left">Project</Th>}
+                {isColVisible('p6_name') && <Th rowSpan={2} className="min-w-[178px] text-left">P6 Name</Th>}
+                {isColVisible('spv') && <Th rowSpan={2} className="min-w-[62px]">SPV</Th>}
+                {isColVisible('plot') && <Th rowSpan={2} className="min-w-[46px]">Plot</Th>}
+                {isColVisible('category') && <Th rowSpan={2} className="min-w-[62px]">Category</Th>}
+                {isColVisible('type') && <Th rowSpan={2} className="min-w-[52px]">Type</Th>}
+                {isColVisible('mms_type') && <Th rowSpan={2} className="min-w-[46px]"><ThLabel label="MMS" unit="Type" /></Th>}
+                {isColVisible('epc') && <Th rowSpan={2} className="min-w-[124px] text-left">AGEL / EPC</Th>}
+                {isColVisible('priority') && <Th rowSpan={2} className="min-w-[62px]">Priority</Th>}
+                {isColVisible('ol') && <Th rowSpan={2} className={`min-w-[38px] ${SECTION_EDGE}`}>OL</Th>}
+                {isColVisible('capacity_mwac') && <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWac)" /></Th>}
+                {isColVisible('capacity_mwp') && <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWp)" /></Th>}
+                {isColVisible('ftc_completed') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="FTC Completed" unit="(MWp)" /></Th>}
+                {isColVisible('connectivity') && <Th rowSpan={2} className={`min-w-[74px] ${SECTION_EDGE}`}><ThLabel label="Connectivity" unit="Phase" /></Th>}
+                {isColVisible('lta') && <Th rowSpan={2} className="min-w-[62px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     LTA
                     <InfoTip info="Long Term Access date (pulled from ECOD in master sheets)" align="center" />
                   </div>
-                </Th>
-                <Th rowSpan={2} className="min-w-[80px]">SCOD</Th>
-                <Th rowSpan={2} className="min-w-[66px]"><ThLabel label="AOP" unit="(Plan)" /></Th>
-                <Th rowSpan={2} className={`min-w-[64px] ${SECTION_EDGE}`}><ThLabel label="Ordered" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Ordering" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Total Receipt" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>
-                <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>
-                <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
-                  Month wise Module Requirement at Site (MWp / MWac)
-                </Th>
-                <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
+                </Th>}
+                {isColVisible('scod') && <Th rowSpan={2} className="min-w-[80px]">SCOD</Th>}
+                {isColVisible('aop') && <Th rowSpan={2} className="min-w-[66px]"><ThLabel label="AOP" unit="(Plan)" /></Th>}
+                {isColVisible('ordered') && <Th rowSpan={2} className={`min-w-[64px] ${SECTION_EDGE}`}><ThLabel label="Ordered" unit="(MWp)" /></Th>}
+                {isColVisible('balance_ordering') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Ordering" unit="(MWp)" /></Th>}
+                {isColVisible('total_receipt') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Total Receipt" unit="(MWp)" /></Th>}
+                {isColVisible('erection_done') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>}
+                {isColVisible('module_inventory') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>}
+                {isColVisible('under_transit') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>}
+                {isColVisible('balance_dispatch') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>}
+                {isColVisible('status') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>}
+                {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
+                  Month wise Module Requirement at Site ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
+                </Th>}
+                {isColVisible('ftc_date') && <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="FTC" unit="Date" />
                     <InfoTip info="First Time Charging. Base date mapped for the project." align="center" />
                   </div>
-                </Th>
-                <Th rowSpan={2} className="min-w-[76px]">
+                </Th>}
+                {isColVisible('module_ordering_date') && <Th rowSpan={2} className="min-w-[76px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="Module Ordering" unit="Date" />
                     <InfoTip info={<span>Trial Commissioning.<br/><b>Calculation:</b> FTC Date - 45 days.</span>} align="center" />
                   </div>
-                </Th>
-                <Th rowSpan={2} className="min-w-[76px]">
+                </Th>}
+                {isColVisible('tc_delivery_date') && <Th rowSpan={2} className="min-w-[76px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="TC Delivery" unit="Date" />
                     <InfoTip info={<span>Target delivery date at site.<br/><b>Calculation:</b> TC Date - Lead Time (98 or 136 days based on origin).</span>} align="center" />
                   </div>
-                </Th>
-                <Th rowSpan={2} className="min-w-[210px] text-left">Remarks</Th>
+                </Th>}
+                {isColVisible('remarks') && <Th rowSpan={2} className="min-w-[210px] text-left">Remarks</Th>}
               </tr>
               <tr>
-                {FORECAST_MONTHS.map((mo, i) => (
-                  <Th key={mo} className={`min-w-[48px] font-semibold ${i === 0 ? SECTION_EDGE : ''}`}>{mo}</Th>
-                ))}
-                <Th className="min-w-[52px]">Total</Th>
+                {isColVisible('month_wise') && <>
+                  {FORECAST_MONTHS.map((mo, i) => (
+                    <Th key={mo} className={`min-w-[48px] font-semibold ${i === 0 ? SECTION_EDGE : ''}`}>{mo}</Th>
+                  ))}
+                  <Th className="min-w-[52px]">Total</Th>
+                </>}
               </tr>
             </thead>
             <tbody>
@@ -1235,30 +1389,35 @@ export default function ModuleDeliveriesPage() {
                   {/* Rows. The frozen Sr/Project cells hover to a SOLID colour,
                       never a translucent one — they sit above the scrolling
                       columns, so any alpha lets that content bleed through. */}
-                  {!collapsed.has(group) && projects.map((p, idx) => (
+                  {!collapsed.has(group) && projects.map((p, idx) => {
+                    const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : (p.is_tracked !== false);
+                    return (
                     <tr key={p.id} className="group hover:bg-[var(--surface-sunken)]">
                       <Td stickyLeft={0} className="bg-card group-hover:bg-[var(--surface-sunken)] text-muted-foreground font-mono">{idx + 1}</Td>
-                      <Td stickyLeft={34} align="left" className="bg-card group-hover:bg-[var(--surface-sunken)] font-medium text-foreground shadow-[1px_0_0_0_var(--border-default)]">
+                      {isColVisible('project') && <Td stickyLeft={34} align="left" className="bg-card group-hover:bg-[var(--surface-sunken)] font-medium text-foreground shadow-[1px_0_0_0_var(--border-default)]">
                         <div className="flex items-center gap-2">
-                          <Tip text={p.is_tracked !== false ? "Tracked in Khavda (uncheck to move to All Projects)" : "Untracked (check to track in Khavda)"}>
-                            <input 
-                              type="checkbox" 
-                              checked={p.is_tracked !== false}
-                              onChange={(e) => toggleTracking(p.id, e.target.checked)}
-                              className="w-3.5 h-3.5 rounded border-border text-primary cursor-pointer focus:ring-1 focus:ring-primary shrink-0"
-                            />
-                          </Tip>
+                          <input 
+                            type="checkbox" 
+                            checked={effectiveTracked}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              toggleTracking(p.id, e.target.checked);
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                            title={effectiveTracked ? "Tracked in Khavda (uncheck to move to All Projects)" : "Untracked (check to track in Khavda)"}
+                            className="w-3.5 h-3.5 rounded border-border text-primary cursor-pointer focus:ring-1 focus:ring-primary shrink-0"
+                          />
                           <span className="truncate">{p.project_name || p.p6_name}</span>
                         </div>
-                      </Td>
-                      <Td align="left" className="text-muted-foreground">{p.p6_name || '-'}</Td>
-                      <Td className="font-mono">{p.spv}</Td>
-                      <Td className="font-mono">{p.plot}</Td>
-                      <Td>{p.category || (p.project_name?.toUpperCase().includes('PPA') ? 'PPA' : p.project_name?.toUpperCase().includes('MERCHANT') ? 'Merchant' : p.project_name?.toUpperCase().includes('GROUP') ? 'Group' : '-')}</Td>
-                      <Td>{p.type}</Td>
-                      <Td className="font-mono">{p.mms_type || '-'}</Td>
-                      <Td align="left" className="font-medium">{p.epc || '-'}</Td>
-                      <Td align="center">
+                      </Td>}
+                      {isColVisible('p6_name') && <Td align="left" className="text-muted-foreground">{p.p6_name || '-'}</Td>}
+                      {isColVisible('spv') && <Td className="font-mono">{p.spv}</Td>}
+                      {isColVisible('plot') && <Td className="font-mono">{p.plot}</Td>}
+                      {isColVisible('category') && <Td>{p.category || (p.project_name?.toUpperCase().includes('PPA') ? 'PPA' : p.project_name?.toUpperCase().includes('MERCHANT') ? 'Merchant' : p.project_name?.toUpperCase().includes('GROUP') ? 'Group' : '-')}</Td>}
+                      {isColVisible('type') && <Td>{p.type}</Td>}
+                      {isColVisible('mms_type') && <Td className="font-mono">{p.mms_type || '-'}</Td>}
+                      {isColVisible('epc') && <Td align="left" className="font-medium">{p.epc || '-'}</Td>}
+                      {isColVisible('priority') && <Td align="center">
                         <Tip text={`Click to toggle priority: Std → P1 → P2\nCurrent: ${p.priority || 'standard'}`}>
                           <button
                             type="button"
@@ -1277,14 +1436,14 @@ export default function ModuleDeliveriesPage() {
                             {(p.priority || 'standard').toUpperCase()}
                           </button>
                         </Tip>
-                      </Td>
-                      <Td align="right" className={SECTION_EDGE}>{p.ol > 0 ? p.ol.toFixed(2) : '-'}</Td>
-                      <Td align="right">{MW(p.capacity_mwac)}</Td>
-                      <Td align="right" className="font-semibold text-foreground">{MW(p.capacity_mwp)}</Td>
-                      <Td align="right" className="font-semibold text-[var(--status-watch-fg)]">{p.completed_ftc_mwp > 0 ? MW(p.completed_ftc_mwp) : '-'}</Td>
-                      <Td className={SECTION_EDGE}>{p.connectivity_phase || <span className="text-muted-foreground/50">-</span>}</Td>
-                      <Td>{p.lta || '-'}</Td>
-                      <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE}`}>
+                      </Td>}
+                      {isColVisible('ol') && <Td align="right" className={SECTION_EDGE}>{p.ol > 0 ? p.ol.toFixed(2) : '-'}</Td>}
+                      {isColVisible('capacity_mwac') && <Td align="right">{MW(p.capacity_mwac)}</Td>}
+                      {isColVisible('capacity_mwp') && <Td align="right" className="font-semibold text-foreground">{MW(p.capacity_mwp)}</Td>}
+                      {isColVisible('ftc_completed') && <Td align="right" className="font-semibold text-[var(--status-watch-fg)]">{p.completed_ftc_mwp > 0 ? MW(p.completed_ftc_mwp) : '-'}</Td>}
+                      {isColVisible('connectivity') && <Td className={SECTION_EDGE}>{p.connectivity_phase || <span className="text-muted-foreground/50">-</span>}</Td>}
+                      {isColVisible('lta') && <Td>{p.lta || '-'}</Td>}
+                      {isColVisible('scod') && <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE}`}>
                         {editingScodId === p.id ? (
                           <input
                             type="date"
@@ -1316,34 +1475,34 @@ export default function ModuleDeliveriesPage() {
                             </button>
                           </Tip>
                         )}
-                      </td>
-                      <Td>{p.aop_plan || '-'}</Td>
+                      </td>}
+                      {isColVisible('aop') && <Td>{p.aop_plan || '-'}</Td>}
                       {/* An apportioned figure is derived, not measured — mark it. */}
-                      <Td align="right" className={`${SECTION_EDGE} ${p.ordered_mwp === 0 ? 'text-muted-foreground' : ''}`}
+                      {isColVisible('ordered') && <Td align="right" className={`${SECTION_EDGE} ${p.ordered_mwp === 0 ? 'text-muted-foreground' : ''}`}
                         tip={p.po_apportioned ? `Apportioned: ${p.po_share_pct}% of a PO on WBS shared with other projects` : undefined}>
                         {p.ordered_mwp > 0 ? MW(p.ordered_mwp) : '-'}
                         {p.po_apportioned && <span className="ml-0.5 text-[8px] align-super text-[var(--status-watch-fg)]">~</span>}
-                      </Td>
-                      <Td align="right" className={p.balance_ordering_mwp > 0 ? 'text-[var(--status-critical-fg)]' : 'text-muted-foreground'}>
+                      </Td>}
+                      {isColVisible('balance_ordering') && <Td align="right" className={p.balance_ordering_mwp > 0 ? 'text-[var(--status-critical-fg)]' : 'text-muted-foreground'}>
                         {p.balance_ordering_mwp > 0 ? MW(p.balance_ordering_mwp) : '-'}
-                      </Td>
-                      <MwCell value={p.total_receipt_mwp} cap={p.ordered_mwp} />
-                      <Td align="right"
+                      </Td>}
+                      {isColVisible('total_receipt') && <MwCell value={p.total_receipt_mwp} cap={p.ordered_mwp} />}
+                      {isColVisible('erection_done') && <Td align="right"
                         tip={p.erection_done_mwp > 0 ? 'Measured MWp installed, from the P6 Module Installation activities' : undefined}>
                         {p.erection_done_mwp > 0 ? MW(p.erection_done_mwp) : '-'}
-                      </Td>
-                      <Td align="right"
+                      </Td>}
+                      {isColVisible('module_inventory') && <Td align="right"
                         tip={p.module_inventory_negative
                           ? `SAP receipt (${MW(p.total_receipt_mwp)}) is below P6 erected (${MW(p.erection_done_mwp)}) — ZSPS carries no delivery history for this project. MB52 stock on hand: ${MW(p.module_inventory_sap_mwp)} MWp`
                           : undefined}>
                         {p.module_inventory_mwp > 0 ? MW(p.module_inventory_mwp) : '-'}
-                      </Td>
-                      <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>
-                      <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
+                      </Td>}
+                      {isColVisible('under_transit') && <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>}
+                      {isColVisible('balance_dispatch') && <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
-                      </Td>
-                      <Td className={SECTION_EDGE}><StatusBadge status={p.status} /></Td>
-                      {FORECAST_MONTHS.map((mo, i) => {
+                      </Td>}
+                      {isColVisible('status') && <Td className={SECTION_EDGE}><StatusBadge status={p.status} /></Td>}
+                      {isColVisible('month_wise') && FORECAST_MONTHS.map((mo, i) => {
                         const val = p.month_mwp?.[mo] || 0;
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags);
                         return (
@@ -1352,7 +1511,7 @@ export default function ModuleDeliveriesPage() {
                             align="right"
                             className={`${i === 0 ? SECTION_EDGE : ''}`}
                             tipWide
-                            tipContent={(val > 0 || getChipsForMonth(p, mo, val, milestoneFilter).length > 0) ? (
+                            tipContent={(val > 0 || getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0) ? (
                               <div className="space-y-2 text-left">
                                 <div>
                                   <div className="font-semibold text-neutral-50">{p.project_name || p.p6_name}</div>
@@ -1430,7 +1589,7 @@ export default function ModuleDeliveriesPage() {
                                       };
 
                                       return (
-                                      <div className="flex items-start justify-between group/timeline gap-1.5 w-full max-w-[500px]">
+                                      <div className="flex items-start justify-between group/timeline gap-1.5 w-full">
                                         {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
                                           <>
                                             {/* TC Block (Blue) */}
@@ -1440,10 +1599,10 @@ export default function ModuleDeliveriesPage() {
                                                 : 'border border-blue-500/20 bg-blue-500/5 shadow-[inset_0_0_12px_rgba(59,130,246,0.02)]'
                                             }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-blue-500 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.tc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-blue-500 text-blue-500 animate-pulse drop-shadow-[0_0_4px_rgba(59,130,246,0.8)]" />}
+                                                {(p.module_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-blue-500 text-blue-500 animate-pulse drop-shadow-[0_0_4px_rgba(59,130,246,0.8)]" />}
                                                 TC Date
                                               </div>
-                                              <DateChipGroup dateStr={filterPhases(p.tc_date)} colorClass="text-blue-200" borderColorClass="border-blue-500/50" badgeBgClass="bg-blue-900/80" />
+                                              <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-blue-200" borderColorClass="border-blue-500/50" badgeBgClass="bg-blue-900/80" />
                                               {renderRevised(mo)}
                                             </div>
 
@@ -1469,10 +1628,10 @@ export default function ModuleDeliveriesPage() {
                                                 : 'border border-amber-500/20 bg-amber-500/5 shadow-[inset_0_0_12px_rgba(245,158,11,0.02)]'
                                             }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-amber-500/80 font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.module_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-amber-500/80 text-amber-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(245,158,11,0.8)]" />}
+                                                {(p.tc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-amber-500/80 text-amber-500/80 animate-pulse drop-shadow-[0_0_4px_rgba(245,158,11,0.8)]" />}
                                                 Module Date
                                               </div>
-                                              <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-amber-300" borderColorClass="border-amber-500/30" badgeBgClass="bg-amber-950/50" />
+                                              <DateChipGroup dateStr={filterPhases(p.tc_date)} colorClass="text-amber-300" borderColorClass="border-amber-500/30" badgeBgClass="bg-amber-950/50" />
                                               {renderRevised((() => {
                                                 const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
                                                 d.setDate(d.getDate() + (p.type === 'China' || p.type === 'SEA' ? 136 : 98));
@@ -1564,16 +1723,24 @@ export default function ModuleDeliveriesPage() {
                               </div>
                             ) : undefined}
                           >
-                            {getChipsForMonth(p, mo, val, milestoneFilter).length > 0 ? (
+                            {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0 ? (
                               <div className="flex flex-col items-end justify-center w-full gap-1.5">
                                 <div className="flex flex-col items-end gap-1 w-full">
-                                  {getChipsForMonth(p, mo, val, milestoneFilter).map((c, idx) => (
+                                  {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
                                     <div key={idx} className={`px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
                                       ${c.type === 'tc' ? 'bg-blue-500/20 text-blue-600 border border-blue-500/50 shadow-blue-500/10' : 
                                         c.type === 'module' ? 'bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-amber-500/10' : 
                                         'bg-emerald-500/20 text-emerald-600 border border-emerald-500/50 shadow-emerald-500/10'}`}>
                                       {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5`} />}
-                                      <span className="tabular-nums text-[11px] tracking-tight font-extrabold">{c.label.split(' / ')[0]} <span className="opacity-40 mx-px font-semibold">/</span> <span className="text-[10px] font-bold opacity-80">{c.label.split(' / ')[1] || ''}</span></span>
+                                      <span className="tabular-nums text-[11px] tracking-tight font-extrabold">
+                                        {c.label.split(' / ')[0]}
+                                        {c.label.includes(' / ') && (
+                                          <>
+                                            <span className="opacity-40 mx-px font-semibold">/</span>
+                                            <span className="text-[10px] font-bold opacity-80">{c.label.split(' / ')[1]}</span>
+                                          </>
+                                        )}
+                                      </span>
                                     </div>
                                   ))}
                                 </div>
@@ -1584,49 +1751,61 @@ export default function ModuleDeliveriesPage() {
                           </Td>
                         );
                       })}
-                      <Td align="right" className="font-semibold text-foreground tabular-nums">
+                      {isColVisible('month_wise') && <Td align="right" className="font-semibold text-foreground tabular-nums">
                         {p.balance_ordering_mwp > 0 ? MW(p.balance_ordering_mwp) : '-'}
-                      </Td>
-                      <Td className={SECTION_EDGE}>
+                      </Td>}
+                      {isColVisible('ftc_date') && <Td className={SECTION_EDGE}>
                         {p.ftc_date
                           ? <DatedPhases value={p.ftc_date} />
                           : p.ftc_all_charged
                             ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
                             : '-'}
-                      </Td>
-                      <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>
-                      <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>
-                      <Td align="left" className="max-w-[280px] truncate text-muted-foreground"
-                        tip={p.remarks ? `${p.remarks}${p.ai_suggestion ? `\n\n💡 AI Suggestion:\n${p.ai_suggestion}` : ''}` : undefined}>
-                        <div className="flex items-center justify-between gap-1.5 overflow-hidden">
-                          <div className="flex items-center gap-1.5 overflow-hidden">
+                      </Td>}
+                      {isColVisible('module_ordering_date') && <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>}
+                      {isColVisible('tc_delivery_date') && <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>}
+                      {isColVisible('remarks') && <Td align="left" className="min-w-[240px] max-w-[280px]">
+                        <div className={`flex items-center justify-between gap-1.5 overflow-hidden transition-all duration-200 ${
+                          p.perspectives 
+                            ? 'bg-gradient-to-r from-primary/5 to-transparent border border-primary/20 rounded-md pl-1.5 pr-0.5 py-0.5 group-hover:border-primary/40' 
+                            : ''
+                        }`}>
+                          <div className="flex items-center gap-1.5 overflow-hidden flex-1">
                             {p.planning_flags?.includes('critical_ordering') && (
                               <Tip text="Critical: Immediate PO required due to lead time">
-                                <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-rose-500 animate-pulse" />
+                                <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-rose-500 animate-pulse shadow-[0_0_4px_var(--rose-500)]" />
                               </Tip>
                             )}
                             {p.planning_flags?.includes('leveled_early') && (
                               <Tip text="Leveled early to avoid vendor monthly quota limit">
-                                <span className="inline-block w-2 h-2 shrink-0 rounded-full bg-amber-500" />
+                                <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-amber-500" />
                               </Tip>
                             )}
-                            <span className={`truncate text-[10px] ${p.remarks ? 'text-foreground/90' : ''}`}>{p.remarks || '-'}</span>
+                            <Tip 
+                              text={p.remarks ? `${p.remarks}${p.ai_suggestion ? `\n\n💡 AI Suggestion:\n${p.ai_suggestion}` : ''}` : undefined}
+                              className="overflow-hidden flex-1"
+                            >
+                              <span className={`block truncate text-[10px] ${p.remarks ? (p.perspectives ? 'text-primary/90 font-medium' : 'text-foreground/90') : 'text-muted-foreground'}`}>
+                                {p.remarks || '-'}
+                              </span>
+                            </Tip>
                           </div>
                           {p.perspectives && (
                             <Tip text="View 360° AI Multi-Perspective Strategy">
                               <button
                                 type="button"
                                 onClick={() => setActivePerspectiveProject(p)}
-                                className="shrink-0 rounded p-0.5 text-primary/70 hover:text-primary hover:bg-primary/10 transition-colors"
+                                className="shrink-0 flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-primary shadow-sm hover:bg-primary hover:text-primary-foreground transition-colors"
                               >
-                                <Sparkles className="w-3 h-3" />
+                                <Bot className="w-2.5 h-2.5" />
+                                <span>AI</span>
                               </button>
                             </Tip>
                           )}
                         </div>
-                      </Td>
+                      </Td>}
                     </tr>
-                  ))}
+                  );})}
+
                 </React.Fragment>
               ))}
 
@@ -1635,31 +1814,32 @@ export default function ModuleDeliveriesPage() {
                 {/* One cell per visible column — no colSpan arithmetic to drift
                     out of step when the view changes. */}
                 <Td stickyLeft={0} className="bg-[var(--neutral-200)] text-muted-foreground">Σ</Td>
-                <Td stickyLeft={34} align="left" className="bg-[var(--neutral-200)] text-foreground shadow-[1px_0_0_0_var(--border-default)]">Total ({filtered.length} projects)</Td>
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td />
-                <Td className={SECTION_EDGE} />
-                <Td align="right" className={`text-foreground tabular-nums `}>{MW(t.total_mwac)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.total_mwp)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.completed_ftc_mwp)}</Td>
-                <Td className={SECTION_EDGE} />
-                <Td />
-                <Td />
-                <Td />
-                <Td align="right" className={`text-foreground tabular-nums ${SECTION_EDGE}`}>{MW(t.ordered_mwp)}</Td>
-                <Td align="right" className="text-[var(--status-critical-fg)] tabular-nums">{MW(t.balance_ordering_mwp)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.received_mwp)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.erection_mwp)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>
-                <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>
-                <Td className={SECTION_EDGE} />
+                {isColVisible('project') && <Td stickyLeft={34} align="left" className="bg-[var(--neutral-200)] text-foreground shadow-[1px_0_0_0_var(--border-default)]">Total ({filtered.length} projects)</Td>}
+                {isColVisible('p6_name') && <Td />}
+                {isColVisible('spv') && <Td />}
+                {isColVisible('plot') && <Td />}
+                {isColVisible('category') && <Td />}
+                {isColVisible('type') && <Td />}
+                {isColVisible('mms_type') && <Td />}
+                {isColVisible('epc') && <Td />}
+                {isColVisible('priority') && <Td />}
+                {isColVisible('ol') && <Td className={SECTION_EDGE} />}
+                {isColVisible('capacity_mwac') && <Td align="right" className={`text-foreground tabular-nums `}>{MW(t.total_mwac)}</Td>}
+                {isColVisible('capacity_mwp') && <Td align="right" className="text-foreground tabular-nums">{MW(t.total_mwp)}</Td>}
+                {isColVisible('ftc_completed') && <Td align="right" className="text-foreground tabular-nums">{MW(t.completed_ftc_mwp)}</Td>}
+                {isColVisible('connectivity') && <Td className={SECTION_EDGE} />}
+                {isColVisible('lta') && <Td />}
+                {isColVisible('scod') && <Td />}
+                {isColVisible('aop') && <Td />}
+                {isColVisible('ordered') && <Td align="right" className={`text-foreground tabular-nums ${SECTION_EDGE}`}>{MW(t.ordered_mwp)}</Td>}
+                {isColVisible('balance_ordering') && <Td align="right" className="text-[var(--status-critical-fg)] tabular-nums">{MW(t.balance_ordering_mwp)}</Td>}
+                {isColVisible('total_receipt') && <Td align="right" className="text-foreground tabular-nums">{MW(t.received_mwp)}</Td>}
+                {isColVisible('erection_done') && <Td align="right" className="text-foreground tabular-nums">{MW(t.erection_mwp)}</Td>}
+                {isColVisible('module_inventory') && <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>}
+                {isColVisible('under_transit') && <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>}
+                {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
+                {isColVisible('status') && <Td className={SECTION_EDGE} />}
+                {isColVisible('month_wise') && <>
                 {FORECAST_MONTHS.map((mo, i) => {
                   const mTotal = sum(filtered, p => p.month_mwp?.[mo] || 0);
                   const acTotal = sum(filtered, p => {
@@ -1683,10 +1863,11 @@ export default function ModuleDeliveriesPage() {
                 <Td align="right" className="text-foreground tabular-nums font-bold">
                   {MW(sum(filtered, p => p.balance_ordering_mwp || 0))}
                 </Td>
-                <Td className={SECTION_EDGE} />
-                <Td />
-                <Td />
-                <Td />
+                </>}
+                {isColVisible('ftc_date') && <Td className={SECTION_EDGE} />}
+                {isColVisible('module_ordering_date') && <Td />}
+                {isColVisible('tc_delivery_date') && <Td />}
+                {isColVisible('remarks') && <Td />}
               </tr>
             </tbody>
           </table>
@@ -1701,30 +1882,61 @@ export default function ModuleDeliveriesPage() {
           was being computed on every request and silently dropped: nothing
           rendered capacity_summary or strategic_briefing before this. */}
       {capacitySources.length > 0 && (
-        <motion.div variants={item} initial="hidden" animate="show" className="bento-card p-4">
-          <div className="flex items-baseline justify-between gap-2 mb-1">
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-sm font-semibold text-foreground">AI Procurement Plan — Ordering by Source</h2>
-              <InfoTip
-                info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWp) are planning assumptions built into the engine, not measured vendor commitments — confirm against current contracts before relying on them as hard limits. Bars show each month's planned order against that assumed quota."
-                align="center"
-              />
+        <motion.div variants={item} initial="hidden" animate="show"
+          className="relative overflow-hidden rounded-xl border border-primary/20 bg-gradient-to-br from-card to-primary/5 p-5 shadow-sm"
+        >
+          {/* Subtle glow effect in the background */}
+          <div className="absolute -right-20 -top-20 h-64 w-64 rounded-full bg-primary/10 blur-3xl" />
+          
+          <div className="relative z-10 flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="flex items-center justify-center w-6 h-6 rounded-md bg-primary/10 text-primary">
+                    <Bot className="w-3.5 h-3.5" />
+                  </div>
+                  <h2 className="text-base font-semibold text-foreground tracking-tight">AI Procurement Strategy</h2>
+                  <span className="inline-flex items-center rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold text-primary border border-primary/20">
+                    <Sparkles className="mr-1 h-3 w-3" />
+                    Auto-Generated
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                  Monthly ordering plan by origin, respecting factory quotas.
+                  <InfoTip
+                    info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWp) are planning assumptions built into the engine. Confirm against contracts before relying on them as hard limits."
+                    align="left"
+                  />
+                </p>
+              </div>
+              
+              {data.strategic_briefing?.executive_takeaways && data.strategic_briefing.executive_takeaways.length > 0 && (
+                <button
+                  onClick={() => setInsightsOpen(!insightsOpen)}
+                  className="shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary/20 bg-primary/10 text-[11px] font-semibold text-primary hover:bg-primary/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+                >
+                  <Sparkles className="w-3 h-3" />
+                  {insightsOpen ? 'Hide Insights' : 'View Insights'}
+                  {insightsOpen ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronRight className="w-3.5 h-3.5" />}
+                </button>
+              )}
             </div>
-            <span className="section-label">MWp planned per month, by origin</span>
-          </div>
 
-          {data.strategic_briefing?.executive_takeaways && data.strategic_briefing.executive_takeaways.length > 0 && (
-            <ul className="mb-3 flex flex-col gap-1">
-              {data.strategic_briefing.executive_takeaways.map((line, i) => (
-                <li key={i} className="flex items-start gap-1.5 text-[11px] text-muted-foreground">
-                  <Sparkles className="w-3 h-3 mt-0.5 shrink-0 text-primary" />
-                  {line}
-                </li>
-              ))}
-            </ul>
-          )}
+            {insightsOpen && data.strategic_briefing?.executive_takeaways && data.strategic_briefing.executive_takeaways.length > 0 && (
+              <div className="rounded-lg border border-primary/10 bg-card/60 backdrop-blur-sm p-3.5 shadow-sm animate-in slide-in-from-top-2 fade-in duration-200">
+                <h3 className="text-[11px] font-semibold uppercase tracking-wider text-primary/80 mb-2">Executive Takeaways</h3>
+                <ul className="flex flex-col gap-2">
+                  {data.strategic_briefing.executive_takeaways.map((line, i) => (
+                    <li key={i} className="flex items-start gap-2 text-[12px] leading-relaxed text-foreground/90">
+                      <div className="mt-[3px] shrink-0 w-1.5 h-1.5 rounded-full bg-primary/50" />
+                      <span>{line}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
-          <div className="overflow-x-auto custom-scrollbar rounded-md border border-border">
+          <div className="overflow-x-auto custom-scrollbar rounded-lg border border-border bg-card">
             <table className="min-w-full text-left border-separate border-spacing-0">
               <thead>
                 <tr>
@@ -1773,6 +1985,7 @@ export default function ModuleDeliveriesPage() {
                 </tr>
               </tbody>
             </table>
+          </div>
           </div>
         </motion.div>
       )}
