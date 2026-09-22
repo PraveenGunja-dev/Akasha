@@ -12,8 +12,8 @@ _LOG_TTL = 300  # 5 minutes
 router = APIRouter(prefix="/api")
 
 @router.get("/logistics")
-def get_logistics(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
-    cache_key = f"log_{project_name or 'All'}_{portfolio or 'All'}"
+def get_logistics(project_name: Optional[str] = None, portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"log_{project_name or 'All'}_{portfolio or 'All'}_{phase or 'All'}"
     if not nocache and cache_key in _LOG_CACHE:
         entry = _LOG_CACHE[cache_key]
         if time.time() - entry["timestamp"] < _LOG_TTL:
@@ -28,12 +28,18 @@ def get_logistics(project_name: Optional[str] = None, portfolio: Optional[str] =
             (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
+        
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(True))
     if project_name and project_name != "All":
         map_query = map_query.filter(models.ProjectMapping.project_name_from_p6 == project_name)
         
     mappings = map_query.all()
     
-    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios"):
+    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios") or (phase and phase.lower() not in ("all", "")):
         wbs_exacts = [
             str(m.module_wbs).strip()
             for m in mappings
@@ -61,8 +67,8 @@ def get_logistics(project_name: Optional[str] = None, portfolio: Optional[str] =
     return result
 
 @router.get("/logistics/details")
-def get_logistics_details(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
-    cache_key = f"log_det_{project_name or 'All'}_{portfolio or 'All'}"
+def get_logistics_details(project_name: Optional[str] = None, portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"log_det_{project_name or 'All'}_{portfolio or 'All'}_{phase or 'All'}"
     if not nocache and cache_key in _LOG_CACHE:
         entry = _LOG_CACHE[cache_key]
         if time.time() - entry["timestamp"] < _LOG_TTL:
@@ -76,12 +82,18 @@ def get_logistics_details(project_name: Optional[str] = None, portfolio: Optiona
             (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
+        
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(True))
     if project_name and project_name != "All":
         map_query = map_query.filter(models.ProjectMapping.project_name_from_p6 == project_name)
         
     mappings = map_query.all()
 
-    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios"):
+    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios") or (phase and phase.lower() not in ("all", "")):
         wbs_exacts = [
             str(m.module_wbs).strip()
             for m in mappings

@@ -18,13 +18,14 @@ logger = logging.getLogger(__name__)
 
 @router.get("/overview")
 def get_quality_overview(
-    cluster: Optional[str] = None,
+    portfolio: Optional[str] = None,
+    phase: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """Portfolio-wide quality KPIs for the Quality Command Center."""
     q = db.query(models.PulseNC)
-    if cluster:
-        q = q.filter(models.PulseNC.cluster_name == cluster)
+    if portfolio and portfolio.lower() != "all portfolios":
+        q = q.filter(models.PulseNC.cluster_name == portfolio)
 
     all_ncs = q.all()
     total = len(all_ncs)
@@ -35,9 +36,9 @@ def get_quality_overview(
     rfi_status_q = db.query(models.PulseRFI.status, func.count(models.PulseRFI.id))
     rfi_handler_q = db.query(models.PulseRFI.current_handler, func.count(models.PulseRFI.id)) \
         .filter(models.PulseRFI.status != "completed")
-    if cluster:
-        rfi_status_q = rfi_status_q.filter(models.PulseRFI.cluster_name == cluster)
-        rfi_handler_q = rfi_handler_q.filter(models.PulseRFI.cluster_name == cluster)
+    if portfolio and portfolio.lower() != "all portfolios":
+        rfi_status_q = rfi_status_q.filter(models.PulseRFI.cluster_name == portfolio)
+        rfi_handler_q = rfi_handler_q.filter(models.PulseRFI.cluster_name == portfolio)
 
     rfi_by_status = {
         (s or "unknown"): c

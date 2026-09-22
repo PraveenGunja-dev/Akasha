@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import os, shutil, tempfile
 from datetime import datetime
 
@@ -14,11 +14,23 @@ router = APIRouter(
     responses={404: {"description": "Not found"}},
 )
 
+def _filter_statutory(query, model, portfolio: Optional[str], phase: Optional[str]):
+    if (portfolio and portfolio.lower() != "all portfolios") or (phase and phase.lower() not in ("all", "")):
+        query = query.join(models.ProjectMapping, model.project_id == models.ProjectMapping.project_id)
+        if portfolio and portfolio.lower() != "all portfolios":
+            query = query.filter(models.ProjectMapping.cluster == portfolio)
+        normalised = (phase or "all").strip().lower()
+        if normalised == "ongoing":
+            query = query.filter(models.ProjectMapping.is_commissioned.is_(False))
+        elif normalised == "commissioned":
+            query = query.filter(models.ProjectMapping.is_commissioned.is_(True))
+    return query
+
 @router.get("/compliance")
-def get_statutory_compliance(db: Session = Depends(get_db)):
+def get_statutory_compliance(portfolio: Optional[str] = None, phase: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all statutory compliance dashboard summary records."""
-    records = db.query(models.StatutoryCompliance).all()
-    return records
+    query = db.query(models.StatutoryCompliance)
+    return _filter_statutory(query, models.StatutoryCompliance, portfolio, phase).all()
 
 @router.get("/compliance/{project_id}")
 def get_project_statutory_compliance(project_id: str, db: Session = Depends(get_db)):
@@ -29,10 +41,10 @@ def get_project_statutory_compliance(project_id: str, db: Session = Depends(get_
     return records
 
 @router.get("/epc-status")
-def get_epc_status(db: Session = Depends(get_db)):
+def get_epc_status(portfolio: Optional[str] = None, phase: Optional[str] = None, db: Session = Depends(get_db)):
     """Get detailed EPC BOCW, CLRA, and GST statuses."""
-    records = db.query(models.EPCStatutoryStatus).all()
-    return records
+    query = db.query(models.EPCStatutoryStatus)
+    return _filter_statutory(query, models.EPCStatutoryStatus, portfolio, phase).all()
 
 @router.get("/epc-status/{project_id}")
 def get_project_epc_status(project_id: str, db: Session = Depends(get_db)):
@@ -41,22 +53,25 @@ def get_project_epc_status(project_id: str, db: Session = Depends(get_db)):
     return records
 
 @router.get("/insurance")
-def get_insurance_policies(db: Session = Depends(get_db)):
+def get_insurance_policies(portfolio: Optional[str] = None, phase: Optional[str] = None, db: Session = Depends(get_db)):
     """Get all insurance policies with expiry and premium details."""
-    records = db.query(models.InsurancePolicy).all()
-    return records
+    query = db.query(models.InsurancePolicy)
+    return _filter_statutory(query, models.InsurancePolicy, portfolio, phase).all()
 
 @router.get("/dashboard-summary")
-def get_dashboard_summary(db: Session = Depends(get_db)):
+def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] = None, db: Session = Depends(get_db)):
     """Get aggregated stats for the Compliance dashboard widget."""
-    total_compliance = db.query(func.count(models.StatutoryCompliance.id)).scalar()
+    comp_q = _filter_statutory(db.query(models.StatutoryCompliance), models.StatutoryCompliance, portfolio, phase)
+    ins_q = _filter_statutory(db.query(models.InsurancePolicy), models.InsurancePolicy, portfolio, phase)
+
+    total_compliance = comp_q.count()
     
     # Calculate % of documents available
     docs_available = 0
     total_docs = total_compliance * 6 # 6 doc types per project
     
     if total_compliance > 0:
-        compliance_records = db.query(models.StatutoryCompliance).all()
+        compliance_records = comp_q.all()
         for r in compliance_records:
             docs_available += sum(1 for status in [
                 r.gst_status, r.bocw_status, r.clra_status, 
@@ -66,24 +81,16 @@ def get_dashboard_summary(db: Session = Depends(get_db)):
     completion_rate = (docs_available / total_docs * 100) if total_docs > 0 else 0
     
     # Expiries or pending renewals
-    renewals_pending = db.query(func.count(models.InsurancePolicy.id)).filter(
-        models.InsurancePolicy.renewal_alert == "Renewal"
-    ).scalar()
+    renewals_pending = ins_q.filter(models.InsurancePolicy.renewal_alert == "Renewal").count()
     
     # CLRA offline count
-    clra_pending = db.query(func.count(models.StatutoryCompliance.id)).filter(
-        models.StatutoryCompliance.clra_status == "Not Available"
-    ).scalar()
+    clra_pending = comp_q.filter(models.StatutoryCompliance.clra_status == "Not Available").count()
 
     # BOCW missing count
-    bocw_pending = db.query(func.count(models.StatutoryCompliance.id)).filter(
-        models.StatutoryCompliance.bocw_status == "Not Available"
-    ).scalar()
+    bocw_pending = comp_q.filter(models.StatutoryCompliance.bocw_status == "Not Available").count()
 
     # SPCB missing count
-    spcb_pending = db.query(func.count(models.StatutoryCompliance.id)).filter(
-        models.StatutoryCompliance.spcb_status == "Not Available"
-    ).scalar()
+    spcb_pending = comp_q.filter(models.StatutoryCompliance.spcb_status == "Not Available").count()
 
     return {
         "total_projects_tracked": total_compliance,

@@ -121,7 +121,7 @@ export default function CEODashboard() {
         fetch(`/akasha/api/logistics${queryStr}`),
         fetch(`/akasha/api/financials/details${queryStr}`),
         fetch(`/akasha/api/logistics/details${queryStr}`),
-        fetch(`/akasha/api/quality/overview${portfolio ? '?cluster=' + encodeURIComponent(portfolio) : ''}`)
+        fetch(`/akasha/api/quality/overview${queryStr}`)
       ]);
 
       const [dash, p6, sap, log, fDet, lDet, qualityData] = await Promise.all([

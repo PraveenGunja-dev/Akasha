@@ -79,6 +79,8 @@ LATEST_P6 = """
 def get_module_deliveries_summary(
     scenario: Optional[str] = "baseline",
     priorities: Optional[str] = None,
+    portfolio: Optional[str] = None,
+    phase: Optional[str] = None,
     db: Session = Depends(get_db)
 ):
     """
@@ -88,12 +90,23 @@ def get_module_deliveries_summary(
 
     # 1. Load all solar projects with capacity (modules are a solar-only concept;
     #    Wind entries have no module tracking and pollute this view).
-    mappings = db.query(models.ProjectMapping).filter(
+    query = db.query(models.ProjectMapping).filter(
         models.ProjectMapping.capacity_mwac.isnot(None),
         models.ProjectMapping.capacity_mwac > 0,
         or_(models.ProjectMapping.category.is_(None), models.ProjectMapping.category != 'Wind'),
         or_(models.ProjectMapping.mms_type.is_(None), models.ProjectMapping.mms_type != 'Wind'),
-    ).all()
+    )
+
+    if portfolio and portfolio.lower() != "all portfolios":
+        query = query.filter(models.ProjectMapping.cluster == portfolio)
+
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        query = query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        query = query.filter(models.ProjectMapping.is_commissioned.is_(True))
+
+    mappings = query.all()
 
     # 2. Pre-fetch all SAP PO data for modules, keyed by WBS prefix
     #    We query once and bucket in Python to avoid N+1.

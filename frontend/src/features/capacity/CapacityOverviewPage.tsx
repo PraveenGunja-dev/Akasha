@@ -118,15 +118,19 @@ export default function CapacityOverviewPage() {
 
   const [searchParams] = useSearchParams();
   const portfolio = searchParams.get('portfolio');
+  const phase = searchParams.get('phase');
   const { themeName, chrome } = useChartTheme();
   const { createAction, openCount, trackedIds } = useCapacityActions();
 
   /* ── Load ── */
   useEffect(() => {
     let live = true;
-    const url = portfolio
-      ? `/akasha/api/dashboard/capacity-overview?portfolio=${encodeURIComponent(portfolio)}`
-      : '/akasha/api/dashboard/capacity-overview';
+    const params = new URLSearchParams();
+    if (portfolio) params.append('portfolio', portfolio);
+    if (phase) params.append('phase', phase);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const url = `/akasha/api/dashboard/capacity-overview${qs}`;
+
     (async () => {
       setLoading(true);
       setError(null);
@@ -142,7 +146,7 @@ export default function CapacityOverviewPage() {
       }
     })();
     return () => { live = false; };
-  }, [portfolio, reloadKey]);
+  }, [portfolio, phase, reloadKey]);
 
   const patch = useCallback((p: Partial<CapacityFilters>) => setFilters((f) => ({ ...f, ...p })), []);
 

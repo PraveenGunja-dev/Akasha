@@ -12,8 +12,8 @@ _FIN_TTL = 300  # 5 minutes
 router = APIRouter(prefix="/api")
 
 @router.get("/financials")
-def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
-    cache_key = f"fin_{project_name or 'All'}_{portfolio or 'All'}"
+def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"fin_{project_name or 'All'}_{portfolio or 'All'}_{phase or 'All'}"
     if not nocache and cache_key in _FIN_CACHE:
         entry = _FIN_CACHE[cache_key]
         if time.time() - entry["timestamp"] < _FIN_TTL:
@@ -46,6 +46,12 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
             (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
+        
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(True))
     
     # 2. Local Project Filter
     if project_name and project_name != "All":
@@ -53,7 +59,7 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
         
     mappings = map_query.all()
     
-    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios"):
+    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios") or (phase and phase.lower() not in ("all", "")):
         wbs_exacts = [
             str(m.module_wbs).strip()
             for m in mappings
@@ -298,8 +304,8 @@ def get_material_mix(limit: int = 7, db: Session = Depends(get_db)):
 
 
 @router.get("/financials/details")
-def get_financials_details(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
-    cache_key = f"fin_det_{project_name or 'All'}_{portfolio or 'All'}"
+def get_financials_details(project_name: Optional[str] = None, portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"fin_det_{project_name or 'All'}_{portfolio or 'All'}_{phase or 'All'}"
     if not nocache and cache_key in _FIN_CACHE:
         entry = _FIN_CACHE[cache_key]
         if time.time() - entry["timestamp"] < _FIN_TTL:
@@ -313,13 +319,19 @@ def get_financials_details(project_name: Optional[str] = None, portfolio: Option
             (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
+        
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(True))
             
     if project_name and project_name != "All":
         map_query = map_query.filter(models.ProjectMapping.project_name_from_p6 == project_name)
         
     mappings = map_query.all()
     
-    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios"):
+    if (project_name and project_name != "All") or (portfolio and portfolio.lower() != "all portfolios") or (phase and phase.lower() not in ("all", "")):
         wbs_exacts = [
             str(m.module_wbs).strip()
             for m in mappings

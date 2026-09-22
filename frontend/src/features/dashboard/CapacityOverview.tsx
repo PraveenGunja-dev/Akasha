@@ -278,18 +278,22 @@ export default function CapacityOverview() {
   const [viewMode, setViewMode] = useState<'Monthly' | 'Quarterly' | 'Yearly'>('Monthly');
   const [searchParams] = useSearchParams();
   const portfolio = searchParams.get('portfolio');
+  const phase = searchParams.get('phase');
   const { themeName } = useChartTheme();
 
   useEffect(() => {
     setLoading(true);
-    const url = portfolio
-      ? `/akasha/api/dashboard/capacity-overview?portfolio=${encodeURIComponent(portfolio)}`
-      : '/akasha/api/dashboard/capacity-overview';
+    const params = new URLSearchParams();
+    if (portfolio) params.append('portfolio', portfolio);
+    if (phase) params.append('phase', phase);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    const url = `/akasha/api/dashboard/capacity-overview${qs}`;
+
     fetch(url)
       .then(res => res.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { console.error(e); setError("Failed to load Capacity Overview data."); setLoading(false); });
-  }, [portfolio]);
+  }, [portfolio, phase]);
 
   /* ── Derived values ──────────────────────────────────────────────────── */
 

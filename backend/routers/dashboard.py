@@ -212,7 +212,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
             if phase_val and phase_val != "Unknown Phase":
                 parsed_edge_phases[edge.id] = {str(phase_val).strip().upper()}
     # Pre-fetch Capacity Overview to get accurate COD and Trial Run MW (and dynamically computed WTG capacity)
-    cap_data = get_capacity_overview(portfolio, db)
+    cap_data = get_capacity_overview(portfolio, phase, db)
     proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
     
     portfolio_summary["achieved_mw"] = sum(cap_data.get("totals", {}).values())
@@ -373,8 +373,13 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
             }
         })
         
-    # ... inside get_dashboard_summary ...
     portfolio_summary["total_projects"] = len(project_list)
+    
+    if (portfolio and portfolio.lower() != "all portfolios") or (phase and phase != "ALL"):
+        portfolio_summary["total_po_value"] = round(sum(p["sap"]["po_value"] for p in project_list), 2)
+        portfolio_summary["total_po_delivered_cr"] = round(sum(p["sap"]["po_delivered_cr"] for p in project_list), 2)
+        # In a filtered view, we only show mapped spend, so drop unmapped po_count.
+        portfolio_summary["total_po_count"] = 0
     
     # Global Quality (Pulse) Metrics
     total_ncs = db.query(func.count(models.PulseNC.id)).scalar() or 0
@@ -644,13 +649,13 @@ def global_search(q: str, db: Session = Depends(get_db)):
     return results
 
 @router.get("/knowledge-graph")
-def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+def get_knowledge_graph(portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     """
     Returns a single unified knowledge graph with rich detail data per project:
     Root → EPS Regions → Projects (with P6/SAP/TC details) → Key Vendors
     """
     global _KG_CACHE
-    cache_key = str(portfolio).lower() if portfolio else "all"
+    cache_key = f"{str(portfolio).lower() if portfolio else 'all'}_{str(phase).lower() if phase else 'all'}"
     
     if not nocache and cache_key in _KG_CACHE:
         entry = _KG_CACHE[cache_key]
@@ -674,11 +679,17 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
     
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        query = query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        query = query.filter(models.ProjectMapping.is_commissioned.is_(True))
+    
     all_mappings = query.all()
     portfolio_groups = {}
     
     # Pre-load Capacity Overview to get accurate COD and Trial Run MW
-    cap_data = get_capacity_overview(portfolio, db)
+    cap_data = get_capacity_overview(portfolio, phase, db)
     proj_cap_dict = {p["project_id"]: p for p in cap_data.get("projects", []) if p["project_id"]}
     
     # Pre-load TC data for exact project association
@@ -951,7 +962,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, nocache: bool = False, 
     return result
 
 @router.get("/capacity-overview")
-def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
+def get_capacity_overview(portfolio: Optional[str] = None, phase: Optional[str] = None, db: Session = Depends(get_db)):
     """
     Returns Capacity overview based on actual COD and Trial Run milestones.
     Logic:
@@ -977,6 +988,12 @@ def get_capacity_overview(portfolio: Optional[str] = None, db: Session = Depends
             (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
+
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        query = query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        query = query.filter(models.ProjectMapping.is_commissioned.is_(True))
             
     mappings = query.all()
     

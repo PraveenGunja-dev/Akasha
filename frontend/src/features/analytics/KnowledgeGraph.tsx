@@ -217,11 +217,18 @@ export default function KnowledgeGraph() {
     setStats({ n: Array.from(nodeMap.values()).filter(n=>n.visible).length, e: edges.length });
   }, [expandedNodes, searchQuery]);
 
+  const phase = searchParams.get('phase');
+
   useEffect(() => {
     (async () => {
       setLoading(true);
       try {
-        const url = portfolio ? `/akasha/api/dashboard/knowledge-graph?portfolio=${encodeURIComponent(portfolio)}` : '/akasha/api/dashboard/knowledge-graph';
+        const params = new URLSearchParams();
+        if (portfolio) params.append('portfolio', portfolio);
+        if (phase) params.append('phase', phase);
+        const qs = params.toString() ? `?${params.toString()}` : '';
+        const url = `/akasha/api/dashboard/knowledge-graph${qs}`;
+
         const res = await fetch(url);
         const data = await res.json();
         rootDataRef.current = data;
@@ -237,7 +244,7 @@ export default function KnowledgeGraph() {
       } catch (e) { console.error(e); }
       finally { setLoading(false); }
     })();
-  }, [portfolio]); // Removed processData from dependencies to fix infinite loop
+  }, [portfolio, phase]); // Removed processData from dependencies to fix infinite loop
 
   // Re-process when expanded nodes or search changes
   useEffect(() => {

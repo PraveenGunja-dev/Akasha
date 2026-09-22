@@ -4,6 +4,8 @@ import { Shield, FileText, CheckCircle, AlertTriangle, XCircle, Loader2, Calenda
 import ReactECharts from 'echarts-for-react';
 import { formatProjectName } from '../../lib/projectName';
 
+import { useSearchParams } from 'react-router-dom';
+
 export default function ComplianceDashboard() {
   const [loading, setLoading] = useState(true);
   const [summaryData, setSummaryData] = useState<any>(null);
@@ -17,14 +19,23 @@ export default function ComplianceDashboard() {
   const statutoryRef = useRef<HTMLDivElement>(null);
   const insuranceRef = useRef<HTMLDivElement>(null);
 
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
+  const phase = searchParams.get('phase');
+
   const fetchData = async () => {
     setLoading(true);
     try {
+      const params = new URLSearchParams();
+      if (portfolio) params.append('portfolio', portfolio);
+      if (phase) params.append('phase', phase);
+      const qs = params.toString() ? `?${params.toString()}` : '';
+
       const [sumRes, compRes, epcRes, insRes] = await Promise.all([
-        fetch('/akasha/api/statutory/dashboard-summary'),
-        fetch('/akasha/api/statutory/compliance'),
-        fetch('/akasha/api/statutory/epc-status'),
-        fetch('/akasha/api/statutory/insurance')
+        fetch(`/akasha/api/statutory/dashboard-summary${qs}`),
+        fetch(`/akasha/api/statutory/compliance${qs}`),
+        fetch(`/akasha/api/statutory/epc-status${qs}`),
+        fetch(`/akasha/api/statutory/insurance${qs}`)
       ]);
       
       if (sumRes.ok) setSummaryData(await sumRes.json());
@@ -38,7 +49,7 @@ export default function ComplianceDashboard() {
     }
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [portfolio, phase]);
 
   // Auto-dismiss upload message after 5s
   useEffect(() => {

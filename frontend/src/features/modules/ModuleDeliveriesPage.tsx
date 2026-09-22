@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
   Package, Sun, Truck, CheckCircle2, Clock, Search,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, ArrowRight, Star, Columns3
+  Bot, X, Send, ArrowRight, Star, Columns3, Info
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject } from './types';
 import { useChartTheme } from '../../lib/chartTheme';
@@ -19,6 +20,29 @@ import { MiniMeter } from '../../components/ui/primitives/Meter';
    ═══════════════════════════════════════════════════════════════════════════ */
 
 const API = import.meta.env.VITE_API_BASE || '';
+
+const parseMaxDate = (dStr?: string | null) => {
+  if (!dStr) return 0;
+  const matches = [...dStr.matchAll(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/g)];
+  if (matches.length === 0) return 0;
+  let maxTime = 0;
+  matches.forEach(m => {
+    const yearStr = m[3];
+    const year = yearStr.length === 2 ? `20${yearStr}` : yearStr;
+    const parsed = new Date(`${m[2]} ${m[1]}, ${year}`).getTime();
+    if (parsed > maxTime) maxTime = parsed;
+  });
+  return maxTime;
+};
+
+const isLTADelayed = (p: ModuleProject) => {
+  if (p.planning_flags?.includes('capacity_delayed')) return true;
+  const ltaTime = parseMaxDate(p.lta);
+  if (ltaTime === 0) return false;
+  const ftcTime = parseMaxDate(p.ftc_date);
+  const moduleTime = parseMaxDate(p.module_date);
+  return Math.max(ftcTime, moduleTime) > ltaTime;
+};
 
 const DateChipGroup = ({ dateStr, colorClass, borderColorClass, badgeBgClass }: { dateStr?: string | null, colorClass: string, borderColorClass: string, badgeBgClass: string }) => {
   if (!dateStr || dateStr === 'N/A') return <span className={`font-mono text-[11px] font-semibold ${colorClass}`}>N/A</span>;
@@ -151,6 +175,12 @@ function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: 
 
   const parseSegments = (val: string, type: 'tc' | 'module' | 'ftc') => {
     if (!val) return;
+    let totalDc = 0;
+    let totalAc = 0;
+    let validCount = 0;
+    let hasStringFallback = false;
+    let stringFallbackLabel = '';
+
     val.split(' · ').forEach(seg => {
       if (seg.includes(mo)) {
         // Parse actual date from segment and skip if already passed
@@ -168,23 +198,38 @@ function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: 
             if (acMatch) {
               const ac = parseFloat(acMatch[1]);
               const dc = Math.round(ac * (p.ol > 0 ? p.ol : 1.35));
-              const labelStr = unitToggle === 'mwp' ? `${dc}` : unitToggle === 'mwac' ? `${ac}` : `${dc} / ${ac}`;
-              chips.push({ label: labelStr, phase: parts[0], type });
+              totalDc += dc;
+              totalAc += ac;
+              validCount++;
             } else {
-              chips.push({ label: mwMatch[1], phase: parts[0], type });
+              hasStringFallback = true;
+              stringFallbackLabel = mwMatch[1];
             }
           } else {
-            chips.push({ label: '-', phase: parts[0], type });
+            hasStringFallback = true;
+            stringFallbackLabel = '-';
           }
         } else {
           const phasesCount = val.split(' · ').length;
           const dc = p.balance_ordering_mwp / (phasesCount || 1);
           const ac = Math.round(p.ol > 0 ? dc / p.ol : dc / 1.35);
-          const labelStr = unitToggle === 'mwp' ? `${Math.round(dc)}` : unitToggle === 'mwac' ? `${ac}` : `${Math.round(dc)} / ${ac}`;
-          chips.push({ label: labelStr, phase: null, type });
+          totalDc += dc;
+          totalAc += ac;
+          validCount++;
         }
       }
     });
+
+    if (validCount > 0) {
+      const roundedDc = Math.round(totalDc);
+      const roundedAc = Math.round(totalAc);
+      const labelStr = unitToggle === 'mwp' ? `${roundedDc}` : unitToggle === 'mwac' ? `${roundedAc}` : `${roundedDc} / ${roundedAc}`;
+      // Add ' xN' if grouped? User asked to combine them. We'll just show the combined sum, 
+      // the tooltip already breaks down the individual phases.
+      chips.push({ label: labelStr, phase: validCount > 1 ? `Combined (${validCount})` : null, type });
+    } else if (hasStringFallback) {
+      chips.push({ label: stringFallbackLabel, phase: null, type });
+    }
   };
   
   // DB tc_date = Module delivery dates (later) → Yellow chips  
@@ -663,6 +708,7 @@ export default function ModuleDeliveriesPage() {
   const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
   const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
   const [colDropdownOpen, setColDropdownOpen] = useState(false);
+  const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
   // Optimistic tracking state — keeps the UI stable while the PUT is in flight
   const [trackingOverrides, setTrackingOverrides] = useState<Record<number, boolean>>({});
@@ -705,10 +751,16 @@ export default function ModuleDeliveriesPage() {
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [activePerspectiveProject, setActivePerspectiveProject] = useState<ModuleProject | null>(null);
 
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio');
+  const phase = searchParams.get('phase');
+
   const loadData = React.useCallback((sc = scenario, prio = priorities) => {
     setLoading(true);
     const params = new URLSearchParams();
     if (sc) params.append('scenario', sc);
+    if (portfolio) params.append('portfolio', portfolio);
+    if (phase) params.append('phase', phase);
     if (Object.keys(prio).length > 0) {
       params.append('priorities', JSON.stringify(prio));
     }
@@ -716,7 +768,7 @@ export default function ModuleDeliveriesPage() {
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [scenario, priorities]);
+  }, [scenario, priorities, portfolio, phase]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -835,10 +887,12 @@ export default function ModuleDeliveriesPage() {
       const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : p.is_tracked;
       if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned || effectiveTracked === false)) return false;
       if (statusFilter !== 'all') {
-        if (statusFilter === 'needs_ordering') {
-          if (p.balance_ordering_mwp <= 0) return false;
-          const isException = (p.excluded_module_date_mwp ?? 0) > 0;
-          if (!isException && !hasApproachingDate(p.module_date)) return false;
+        if (statusFilter === 'exception_orders') {
+          if (p.balance_ordering_mwp <= 0 || (p.excluded_module_date_mwp ?? 0) <= 0) return false;
+        } else if (statusFilter === 'upcoming_orders') {
+          if (p.balance_ordering_mwp <= 0 || (p.excluded_module_date_mwp ?? 0) > 0 || !hasApproachingDate(p.module_date)) return false;
+        } else if (statusFilter === 'lta_delayed') {
+          if (!isLTADelayed(p)) return false;
         } else if (p.status !== statusFilter) {
           return false;
         }
@@ -869,6 +923,11 @@ export default function ModuleDeliveriesPage() {
     if (!data) return [];
     return data.projects.filter(p =>
       p.balance_ordering_mwp > 0 && (p.excluded_module_date_mwp ?? 0) <= 0 && hasApproachingDate(p.module_date));
+  }, [data]);
+
+  const ltaDelayedProjects = useMemo(() => {
+    if (!data) return [];
+    return data.projects.filter(isLTADelayed);
   }, [data]);
 
   // Totals are summed from the rows actually on screen. Using the server's
@@ -917,7 +976,7 @@ export default function ModuleDeliveriesPage() {
     if (!data) return;
     setExporting(true);
     try {
-      await exportModuleDeliveriesXLSX(grouped, data.totals, data, moduleExportName('xlsx'), milestoneFilter, unitToggle);
+      await exportModuleDeliveriesXLSX(grouped, data.totals, data, moduleExportName('xlsx'), milestoneFilter, 'both');
     } finally {
       setExporting(false);
     }
@@ -1095,27 +1154,27 @@ export default function ModuleDeliveriesPage() {
           (watch). Reads the engine's own exclusion field rather than
           re-deriving "overdue" from the date string independently (user
           decision 2026-09-21). */}
-      {(exceptionOrderProjects.length > 0 || approachingOrderProjects.length > 0) && (
-        <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-2 gap-2">
+      {(exceptionOrderProjects.length > 0 || approachingOrderProjects.length > 0 || ltaDelayedProjects.length > 0) && (
+        <motion.div variants={item} className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {exceptionOrderProjects.length > 0 && (
             <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3 text-sm"
               style={{ borderColor: 'var(--status-critical-border)', background: 'var(--status-critical-bg)', color: 'var(--status-critical-fg)' }}>
               <div className="flex items-center gap-3">
                 <AlertTriangle className="h-5 w-5 shrink-0" />
                 <div>
-                  <p className="font-semibold">Immediate Exception Orders Required</p>
-                  <p className="opacity-90 text-[13px]">
-                    {exceptionOrderProjects.length} project(s) have a phase whose module date has already passed — its ordering window is gone, so it's excluded from the monthly plan and needs to be placed now as an exception ({MW(sum(exceptionOrderProjects, p => p.excluded_module_date_mwp ?? 0))} MWp total).
+                  <p className="font-semibold">Immediate Exception Orders</p>
+                  <p className="opacity-90 text-[12px] mt-0.5 leading-snug">
+                    {exceptionOrderProjects.length} project(s) missed their ordering window ({MW(sum(exceptionOrderProjects, p => p.excluded_module_date_mwp ?? 0))} MWp). Requires immediate exception.
                   </p>
                 </div>
               </div>
-              {statusFilter !== 'needs_ordering' && (
+              {statusFilter !== 'exception_orders' && (
                 <button
-                  onClick={() => setStatusFilter('needs_ordering')}
+                  onClick={() => setStatusFilter('exception_orders')}
                   className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                   style={{ background: 'var(--status-critical-fg)' }}
                 >
-                  Review Projects
+                  Review
                 </button>
               )}
             </div>
@@ -1126,17 +1185,40 @@ export default function ModuleDeliveriesPage() {
               <div className="flex items-center gap-3">
                 <Clock className="h-5 w-5 shrink-0" />
                 <div>
-                  <p className="font-semibold">Module Ordering Coming Up</p>
-                  <p className="opacity-90 text-[13px]">{approachingOrderProjects.length} project(s) have a Module Date within the next 14 days and still require procurement (Balance Ordering &gt; 0).</p>
+                  <p className="font-semibold">Upcoming Module Orders</p>
+                  <p className="opacity-90 text-[12px] mt-0.5 leading-snug">
+                    {approachingOrderProjects.length} project(s) require procurement within the next 14 days.
+                  </p>
                 </div>
               </div>
-              {statusFilter !== 'needs_ordering' && (
+              {statusFilter !== 'upcoming_orders' && (
                 <button
-                  onClick={() => setStatusFilter('needs_ordering')}
+                  onClick={() => setStatusFilter('upcoming_orders')}
                   className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
                   style={{ background: 'var(--status-watch-fg)' }}
                 >
-                  Review Projects
+                  Review
+                </button>
+              )}
+            </div>
+          )}
+          {ltaDelayedProjects.length > 0 && (
+            <div className="flex items-center justify-between gap-4 rounded-md border px-4 py-3 text-sm border-red-500/30 bg-red-500/10 text-red-200">
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 shrink-0 text-red-500" />
+                <div>
+                  <p className="font-semibold text-red-400">LTA Delayed (Review)</p>
+                  <p className="opacity-90 text-[12px] mt-0.5 text-red-300 leading-snug">
+                    {ltaDelayedProjects.length} project(s) are missing their LTA deadlines due to module/FTC delays.
+                  </p>
+                </div>
+              </div>
+              {statusFilter !== 'lta_delayed' && (
+                <button
+                  onClick={() => setStatusFilter('lta_delayed')}
+                  className="shrink-0 rounded-md px-3 py-1.5 text-xs font-semibold text-white transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 dark:focus:ring-offset-gray-900 bg-red-600 hover:bg-red-700"
+                >
+                  Review
                 </button>
               )}
             </div>
@@ -1178,7 +1260,9 @@ export default function ModuleDeliveriesPage() {
               <option value="in_progress">In Progress</option>
               <option value="ordered">Ordered</option>
               <option value="pending">Pending</option>
-              <option value="needs_ordering">Needs Ordering</option>
+              <option value="exception_orders">Exception Orders</option>
+              <option value="upcoming_orders">Upcoming Orders</option>
+              <option value="lta_delayed">LTA Delayed</option>
             </select>
           </div>
 
@@ -1263,6 +1347,14 @@ export default function ModuleDeliveriesPage() {
             {exporting
               ? <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Preparing…</>
               : <><Download className="w-3.5 h-3.5" /> Export to Excel</>}
+          </button>
+          
+          <button
+            onClick={() => setIsLegendOpen(true)}
+            className="inline-flex items-center justify-center rounded-lg border border-border bg-card w-8 h-8 text-foreground transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary shadow-sm"
+            title="Legend & Logic"
+          >
+            <Info className="w-4 h-4" />
           </button>
         </div>
       </motion.div>
@@ -1442,7 +1534,35 @@ export default function ModuleDeliveriesPage() {
                       {isColVisible('capacity_mwp') && <Td align="right" className="font-semibold text-foreground">{MW(p.capacity_mwp)}</Td>}
                       {isColVisible('ftc_completed') && <Td align="right" className="font-semibold text-[var(--status-watch-fg)]">{p.completed_ftc_mwp > 0 ? MW(p.completed_ftc_mwp) : '-'}</Td>}
                       {isColVisible('connectivity') && <Td className={SECTION_EDGE}>{p.connectivity_phase || <span className="text-muted-foreground/50">-</span>}</Td>}
-                      {isColVisible('lta') && <Td>{p.lta || '-'}</Td>}
+                      {isColVisible('lta') && (() => {
+                        if (!p.lta || p.lta === '-') return <Td>-</Td>;
+                        const delayed = isLTADelayed(p);
+                        return (
+                          <Td className={delayed ? "bg-red-500/10 text-red-400 font-bold relative cursor-help" : ""}>
+                            <div className="flex items-center justify-center gap-1.5 w-full h-full">
+                              {p.lta}
+                              {delayed && (
+                                <Tip wide content={
+                                  <div className="space-y-2 text-left">
+                                    <div className="flex items-center gap-2 border-b border-neutral-700 pb-2">
+                                      <Bot className="w-4 h-4 text-red-400" />
+                                      <span className="font-semibold text-red-100">Project Delay Review</span>
+                                    </div>
+                                    <p className="text-[11px] text-red-200 leading-relaxed">
+                                      The projected <b>Module Delivery</b> or <b>FTC Date</b> for this project is landing later than the <b>{p.lta}</b> LTA deadline.
+                                    </p>
+                                    <p className="text-[11px] text-red-300/80 italic">
+                                      This poses a critical commercial risk. Please review supplier allocations.
+                                    </p>
+                                  </div>
+                                }>
+                                  <AlertTriangle className="w-3.5 h-3.5 text-red-500 cursor-help" />
+                                </Tip>
+                              )}
+                            </div>
+                          </Td>
+                        );
+                      })()}
                       {isColVisible('scod') && <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE}`}>
                         {editingScodId === p.id ? (
                           <input
@@ -1505,11 +1625,39 @@ export default function ModuleDeliveriesPage() {
                       {isColVisible('month_wise') && FORECAST_MONTHS.map((mo, i) => {
                         const val = p.month_mwp?.[mo] || 0;
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags);
+                        
+                        const getShiftMonths = () => {
+                          if (!p.module_date) return 0;
+                          const match = p.module_date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
+                          if (!match) return 0;
+                          const monIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                            .findIndex(a => a.toLowerCase() === match[2].toLowerCase());
+                          const year = parseInt(match[3].length === 2 ? match[3] : match[3].slice(-2), 10);
+                          const origMonths = year * 12 + monIdx;
+
+                          const targetMonIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+                            .findIndex(a => a.toLowerCase() === mo.split('-')[0].toLowerCase());
+                          const targetYear = parseInt(mo.split('-')[1], 10);
+                          const targetMonths = targetYear * 12 + targetMonIdx;
+
+                          return targetMonths - origMonths;
+                        };
+                        const shiftMonths = getShiftMonths();
+                        const isShifted = Math.abs(shiftMonths) > 0 && (p.planning_flags?.includes('extended_to_lta') || p.planning_flags?.includes('capacity_delayed') || p.planning_flags?.includes('leveled_early'));
+                        
+                        // Capacity Delayed = Red
+                        // Extended to LTA = Purple (Matches LTA box)
+                        // Leveled Early = Cyan
+                        const shiftColor = p.planning_flags?.includes('capacity_delayed') ? 'text-red-400' : p.planning_flags?.includes('extended_to_lta') ? 'text-purple-400' : 'text-cyan-400';
+                        const shiftBorder = p.planning_flags?.includes('capacity_delayed') ? 'border-red-500/30' : p.planning_flags?.includes('extended_to_lta') ? 'border-purple-500/30' : 'border-cyan-500/30';
+                        const shiftLabel = shiftMonths > 0 ? `${shiftMonths}mo Delay` : `${Math.abs(shiftMonths)}mo Early`;
+                        const shiftTriangleColor = p.planning_flags?.includes('capacity_delayed') ? 'border-t-red-500' : p.planning_flags?.includes('extended_to_lta') ? 'border-t-purple-500' : 'border-t-cyan-500';
+
                         return (
                           <Td
                             key={mo}
                             align="right"
-                            className={`${i === 0 ? SECTION_EDGE : ''}`}
+                            className={`${i === 0 ? SECTION_EDGE : ''} relative`}
                             tipWide
                             tipContent={(val > 0 || getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0) ? (
                               <div className="space-y-2 text-left">
@@ -1525,31 +1673,6 @@ export default function ModuleDeliveriesPage() {
                                 </div>
                                 <div className="pt-2 pb-1 border-t border-neutral-800">
                                   {(() => {
-                                    const getShiftMonths = () => {
-                                      if (!p.module_date) return 0;
-                                      const match = p.module_date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
-                                      if (!match) return 0;
-                                      const monIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                                        .findIndex(a => a.toLowerCase() === match[2].toLowerCase());
-                                      const year = parseInt(match[3].length === 2 ? match[3] : match[3].slice(-2), 10);
-                                      const origMonths = year * 12 + monIdx;
-
-                                      const targetMonIdx = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-                                        .findIndex(a => a.toLowerCase() === mo.split('-')[0].toLowerCase());
-                                      const targetYear = parseInt(mo.split('-')[1], 10);
-                                      const targetMonths = targetYear * 12 + targetMonIdx;
-
-                                      return targetMonths - origMonths;
-                                    };
-                                    const shiftMonths = getShiftMonths();
-                                    const isShifted = Math.abs(shiftMonths) > 0 && (p.planning_flags?.includes('extended_to_lta') || p.planning_flags?.includes('capacity_delayed') || p.planning_flags?.includes('leveled_early'));
-                                    
-                                    // Capacity Delayed = Red
-                                    // Extended to LTA = Purple (Matches LTA box)
-                                    // Leveled Early = Cyan
-                                    const shiftColor = p.planning_flags?.includes('capacity_delayed') ? 'text-red-400' : p.planning_flags?.includes('extended_to_lta') ? 'text-purple-400' : 'text-cyan-400';
-                                    const shiftBorder = p.planning_flags?.includes('capacity_delayed') ? 'border-red-500/30' : p.planning_flags?.includes('extended_to_lta') ? 'border-purple-500/30' : 'border-cyan-500/30';
-                                    const shiftLabel = shiftMonths > 0 ? `${shiftMonths}mo Delay` : `${Math.abs(shiftMonths)}mo Early`;
 
                                       // 1. Identify which phases (if any) apply to this specific column's month (mo)
                                       const tcParts = (p.tc_date || '').split(' · ');
@@ -1727,12 +1850,18 @@ export default function ModuleDeliveriesPage() {
                               <div className="flex flex-col items-end justify-center w-full gap-1.5">
                                 <div className="flex flex-col items-end gap-1 w-full">
                                   {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
-                                    <div key={idx} className={`px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
+                                    <div key={idx} className={`relative px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
                                       ${c.type === 'tc' ? 'bg-blue-500/20 text-blue-600 border border-blue-500/50 shadow-blue-500/10' : 
                                         c.type === 'module' ? 'bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-amber-500/10' : 
                                         'bg-emerald-500/20 text-emerald-600 border border-emerald-500/50 shadow-emerald-500/10'}`}>
-                                      {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5`} />}
-                                      <span className="tabular-nums text-[11px] tracking-tight font-extrabold">
+                                      {isShifted && (
+                                        <div
+                                          className={`absolute top-0 right-0 w-0 h-0 border-t-[10px] border-l-[10px] border-l-transparent ${shiftTriangleColor} opacity-100 z-10 drop-shadow-sm`}
+                                          title={shiftLabel}
+                                        />
+                                      )}
+                                      {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5 relative z-20`} />}
+                                      <span className="tabular-nums text-[11px] tracking-tight font-extrabold relative z-20">
                                         {c.label.split(' / ')[0]}
                                         {c.label.includes(' / ') && (
                                           <>
@@ -2207,6 +2336,138 @@ export default function ModuleDeliveriesPage() {
                   <Send className="w-4 h-4" />
                 </button>
               </form>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* ── LEGEND MODAL ─────────────────────────────────────────────────── */}
+      {isLegendOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
+          <div className="relative w-full max-w-2xl rounded-2xl border border-border/50 bg-card/95 p-0 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-border/50 bg-muted/30 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-primary/10 rounded-lg">
+                  <Info className="w-5 h-5 text-primary" />
+                </div>
+                <h3 className="text-lg font-bold tracking-tight text-foreground">Legend & Table Logic</h3>
+              </div>
+              <button
+                onClick={() => setIsLegendOpen(false)}
+                className="rounded-full p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground transition-colors focus:outline-none"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            {/* Content */}
+            <div className="p-6 space-y-8 overflow-y-auto max-h-[75vh] custom-scrollbar">
+              {/* Section 1 */}
+              <section>
+                <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Layers className="w-3.5 h-3.5" />
+                  Capacity Block Chips
+                </h4>
+                <div className="grid grid-cols-[120px_1fr] sm:grid-cols-[140px_1fr] gap-x-6 gap-y-4 items-center">
+                  <div className="flex justify-end">
+                    <span className="inline-flex w-16 justify-center px-1.5 py-[3px] rounded items-center font-bold text-[11px] tracking-tight bg-emerald-500/20 text-emerald-600 border border-emerald-500/50 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>
+                      100
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <strong className="text-foreground font-semibold">FTC (First Time Commissioning)</strong>
+                    <div className="text-fg-secondary text-xs mt-0.5">Target or actual commissioning dates.</div>
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <span className="inline-flex w-16 justify-center px-1.5 py-[3px] rounded items-center font-bold text-[11px] tracking-tight bg-amber-500/20 text-amber-600 border border-amber-500/50 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>
+                      100
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <strong className="text-foreground font-semibold">Module Delivery</strong>
+                    <div className="text-fg-secondary text-xs mt-0.5">Target or actual date modules arrive on site.</div>
+                  </div>
+
+                  <div className="flex justify-end">
+                    <span className="inline-flex w-16 justify-center px-1.5 py-[3px] rounded items-center font-bold text-[11px] tracking-tight bg-blue-500/20 text-blue-600 border border-blue-500/50 shadow-sm">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5"></span>
+                      100
+                    </span>
+                  </div>
+                  <div className="text-sm">
+                    <strong className="text-foreground font-semibold">TC (Trial Commissioning)</strong>
+                    <div className="text-fg-secondary text-xs mt-0.5">Blocks energised but not yet reached FTC.</div>
+                  </div>
+                </div>
+              </section>
+              
+              <div className="h-px bg-border-subtle w-full" />
+
+              <section>
+                <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <AlertTriangle className="w-3.5 h-3.5" />
+                  Delivery Priority Rows
+                </h4>
+                <div className="grid grid-cols-[120px_1fr] sm:grid-cols-[140px_1fr] gap-x-6 gap-y-5 items-center">
+                  <div className="flex justify-end">
+                    <span className="inline-flex px-2.5 py-1 rounded border border-rose-500/30 bg-rose-500/15 text-rose-700 dark:text-rose-300 font-semibold text-[10px] shadow-sm whitespace-nowrap">
+                      P1 Critical / COD Urgent
+                    </span>
+                  </div>
+                  <div className="text-sm text-fg-secondary">
+                    High-priority deliveries tied to imminent COD commitments.
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <span className="inline-flex px-2.5 py-1 rounded border border-amber-500/30 bg-amber-500/15 text-amber-700 dark:text-amber-300 font-semibold text-[10px] shadow-sm whitespace-nowrap">
+                      P2 Elevated Priority
+                    </span>
+                  </div>
+                  <div className="text-sm text-fg-secondary">
+                    Medium-to-high priority deliveries slightly further out.
+                  </div>
+                </div>
+              </section>
+
+              <div className="h-px bg-border-subtle w-full" />
+
+              <section>
+                <h4 className="mb-4 text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Planning Adjustments (Inside Tooltips)
+                </h4>
+                <div className="grid grid-cols-[120px_1fr] sm:grid-cols-[140px_1fr] gap-x-6 gap-y-4 items-center">
+                  <div className="flex justify-end">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-400 bg-red-400/10 px-2.5 py-1 rounded border border-red-400/20 whitespace-nowrap">
+                      Capacity Delayed
+                    </span>
+                  </div>
+                  <div className="text-sm text-fg-secondary">
+                    Modules arriving later than initially planned, pushing schedule out.
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-cyan-400 bg-cyan-400/10 px-2.5 py-1 rounded border border-cyan-400/20 whitespace-nowrap">
+                      Leveled Early
+                    </span>
+                  </div>
+                  <div className="text-sm text-fg-secondary">
+                    Modules pulled in early to smooth out quota or supply chain constraints.
+                  </div>
+                  
+                  <div className="flex justify-end">
+                    <span className="inline-flex items-center gap-1.5 text-xs font-bold text-purple-400 bg-purple-400/10 px-2.5 py-1 rounded border border-purple-400/20 whitespace-nowrap">
+                      Extended to LTA
+                    </span>
+                  </div>
+                  <div className="text-sm text-fg-secondary">
+                    Aligned to LTA constraints.
+                  </div>
+                </div>
+              </section>
             </div>
           </div>
         </div>

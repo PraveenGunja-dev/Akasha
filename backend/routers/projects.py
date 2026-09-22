@@ -19,8 +19,8 @@ def get_master_projects(db: Session = Depends(get_db)):
     return {"projects": [p[0] for p in projects if p[0]]}
 
 @router.get("/summary")
-def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
-    cache_key = f"{project_name or 'All'}_{portfolio or 'All'}"
+def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[str] = None, phase: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
+    cache_key = f"{project_name or 'All'}_{portfolio or 'All'}_{phase or 'All'}"
     if not nocache and cache_key in _SUMMARY_CACHE:
         entry = _SUMMARY_CACHE[cache_key]
         if time.time() - entry["timestamp"] < _SUMMARY_TTL:
@@ -29,7 +29,7 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
     query = db.query(models.P6Project)
     
     # 1. Filter by mapped projects and Portfolio
-    map_query = db.query(models.ProjectMapping.project_id).filter(
+    map_query = db.query(models.ProjectMapping).filter(
         ~models.ProjectMapping.project_name_from_p6.ilike("%demo%"),
         ~models.ProjectMapping.project.ilike("%demo%")
     )
@@ -40,7 +40,13 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
             (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
         )
         
-    valid_ids = [m[0] for m in map_query.all() if m[0]]
+    normalised = (phase or "all").strip().lower()
+    if normalised == "ongoing":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(False))
+    elif normalised == "commissioned":
+        map_query = map_query.filter(models.ProjectMapping.is_commissioned.is_(True))
+        
+    valid_ids = [m.project_id for m in map_query.all() if m.project_id]
     query = query.filter(models.P6Project.project_id.in_(valid_ids))
         
     # 2. Filter by specific project_name (Local)
