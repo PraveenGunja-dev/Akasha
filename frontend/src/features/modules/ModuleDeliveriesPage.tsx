@@ -660,7 +660,7 @@ export default function ModuleDeliveriesPage() {
   // portfolio (Rajasthan, commissioned, and Khavda projects the PDF omits).
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'tc' | 'module' | 'ftc'>('all');
-  const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('both');
+  const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
   const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
   const [colDropdownOpen, setColDropdownOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
