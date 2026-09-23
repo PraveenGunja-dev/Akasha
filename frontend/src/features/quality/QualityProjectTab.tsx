@@ -25,6 +25,7 @@ const HANDLER_CONFIG: Record<string, { label: string; color: string; bg: string 
   execution_engineer: { label: 'EE Review Pending', color: 'text-status-risk-fg', bg: 'bg-status-risk-bg' },
   quality_inspector: { label: 'QI Review Pending', color: 'text-status-done-fg', bg: 'bg-status-done-bg' },
 };
+const HANDLER_LABELS = HANDLER_CONFIG;
 
 interface QualityProjectTabProps {
   projectName: string;
@@ -214,7 +215,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
               <Users className="w-3.5 h-3.5 text-primary" /> Who Needs to Act? <span className="text-foreground ml-1">{handlerTotal} open</span>
             </h3>
             <div className="grid grid-cols-3 gap-3">
-              {Object.entries(HANDLER_LABELS).map(([key, cfg]) => {
+              {Object.entries(HANDLER_LABELS).map(([key, cfg]: [string, any]) => {
                 const count = byHandler[key] || 0;
                 return (
                   <div key={key} className={`flex flex-col items-center justify-center gap-2 p-4 rounded-xl border border-transparent transition-all hover:scale-[1.02] cursor-default ${cfg.bg}`}>
