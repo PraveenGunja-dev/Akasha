@@ -5,25 +5,25 @@ import {
 } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  raised: { label: 'Raised', color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20' },
-  submitted: { label: 'In Review (EE)', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-  approved: { label: 'In Review (QI)', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-  completed: { label: 'Approved', color: 'text-success', bg: 'bg-success/10', border: 'border-success/20' },
-  rejected: { label: 'Rejected', color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  raised: { label: 'Raised', color: 'text-status-critical-fg', bg: 'bg-status-critical-bg', border: 'border-status-critical-border' },
+  submitted: { label: 'In Review (EE)', color: 'text-status-risk-fg', bg: 'bg-status-risk-bg', border: 'border-status-risk-border' },
+  approved: { label: 'In Review (QI)', color: 'text-status-done-fg', bg: 'bg-status-done-bg', border: 'border-status-done-border' },
+  completed: { label: 'Approved', color: 'text-status-healthy-fg', bg: 'bg-status-healthy-bg', border: 'border-status-healthy-border' },
+  rejected: { label: 'Rejected', color: 'text-status-watch-fg', bg: 'bg-status-watch-bg', border: 'border-status-watch-border' },
 };
 
 const RFI_STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  raised: { label: 'Raised', color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20' },
-  submitted: { label: 'Submitted', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-  approved: { label: 'Approved', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-  completed: { label: 'Passed', color: 'text-success', bg: 'bg-success/10', border: 'border-success/20' },
-  rejected: { label: 'Rejected', color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  raised: { label: 'Draft', color: 'text-muted-foreground', bg: 'bg-muted', border: 'border-border' },
+  submitted: { label: 'Submitted', color: 'text-status-risk-fg', bg: 'bg-status-risk-bg', border: 'border-status-risk-border' },
+  approved: { label: 'In Review (QI)', color: 'text-status-done-fg', bg: 'bg-status-done-bg', border: 'border-status-done-border' },
+  completed: { label: 'Completed', color: 'text-status-healthy-fg', bg: 'bg-status-healthy-bg', border: 'border-status-healthy-border' },
+  rejected: { label: 'Rejected', color: 'text-status-watch-fg', bg: 'bg-status-watch-bg', border: 'border-status-watch-border' },
 };
 
-const HANDLER_LABELS: Record<string, { label: string; color: string; bg: string }> = {
-  contractor: { label: 'Contractor Pending', color: 'text-destructive', bg: 'bg-destructive/5' },
-  execution_engineer: { label: 'EE Review Pending', color: 'text-amber-500', bg: 'bg-amber-500/5' },
-  quality_inspector: { label: 'QI Review Pending', color: 'text-blue-500', bg: 'bg-blue-500/5' },
+const HANDLER_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
+  contractor: { label: 'Contractor Action', color: 'text-status-critical-fg', bg: 'bg-status-critical-bg' },
+  execution_engineer: { label: 'EE Review Pending', color: 'text-status-risk-fg', bg: 'bg-status-risk-bg' },
+  quality_inspector: { label: 'QI Review Pending', color: 'text-status-done-fg', bg: 'bg-status-done-bg' },
 };
 
 interface QualityProjectTabProps {
@@ -321,7 +321,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
 
         <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
           <table className="intel-table relative w-full">
-            <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+            <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
               <tr>
                 <th className="whitespace-nowrap">NC ID & Status</th>
                 <th>Defect / Description</th>
@@ -366,7 +366,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
                     </td>
                     <td className="align-top">
                       {nc.current_handler ? (
-                        <div className="flex items-center gap-1 text-[10px] text-amber-500 font-medium capitalize">
+                        <div className="flex items-center gap-1 text-[10px] text-status-risk-fg font-medium capitalize">
                           <Clock className="w-2.5 h-2.5 shrink-0" /> {nc.current_handler.replace(/_/g, ' ')}
                         </div>
                       ) : <span className="text-muted-foreground/50 text-[10px]">—</span>}
@@ -416,7 +416,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
 
           <div className="overflow-x-auto max-h-[400px] overflow-y-auto custom-scrollbar">
             <table className="intel-table relative w-full">
-              <thead className="sticky top-0 bg-slate-50/95 dark:bg-gray-900/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
+              <thead className="sticky top-0 bg-card/95 backdrop-blur-sm z-10 text-[10px] uppercase tracking-wider">
                 <tr>
                   <th className="whitespace-nowrap">RFI ID & Status</th>
                   <th>Inspection Point</th>
@@ -462,7 +462,7 @@ export default function QualityProjectTab({ projectName }: QualityProjectTabProp
                       </td>
                       <td className="align-top">
                         {rfi.current_handler ? (
-                          <div className="flex items-center gap-1 text-[10px] text-amber-500 font-medium capitalize">
+                          <div className="flex items-center gap-1 text-[10px] text-status-risk-fg font-medium capitalize">
                             <Clock className="w-2.5 h-2.5 shrink-0" /> {rfi.current_handler.replace(/_/g, ' ')}
                           </div>
                         ) : <span className="text-muted-foreground/50 text-[10px]">—</span>}

@@ -124,6 +124,7 @@ def run_module_planning_engine(
             
         p['priority'] = proj_priority
         p['month_mwp'] = {mo: 0.0 for mo in forecast_months}
+        p['month_overdue_mwp'] = {mo: 0.0 for mo in forecast_months}
         p['planning_flags'] = []
         p['perspectives'] = {}
         # MWp needing an immediate exception order, outside this plan, because
@@ -255,40 +256,68 @@ def run_module_planning_engine(
 
         is_ppa = p.get('category') == 'PPA' or 'PPA' in (p.get('project_name') or '').upper()
 
-        active_phases = [ph for ph in phases if ph['ftc_dt'] >= base_month_dt]
+        # What gets planned is the Balance Ordering column (MWp) — the capacity
+        # still to be ordered — consumed phase by phase in ordering-date order
+        # (user rule 2026-09-23). Previously each phase claimed its own full
+        # capacity (phase MWac × OL) and the set was scaled proportionally only
+        # when it overshot the balance, so every phase appeared in the grid at
+        # once. Sequential fill instead finishes the phase that must be ordered
+        # first, then the next, and stops when the balance is spent: a phase
+        # beyond the balance is not planned at all, on the reading that what is
+        # already ordered covered the earlier phases.
+        phases.sort(key=lambda ph: (ph['tc_dt'], ph['ftc_dt'], ph['phase_label']))
+
+        remaining = bal
+        active_phases = []
+        for ph in phases:
+            if remaining <= 1e-4:
+                break
+            # A phase with no capacity in its P6 label cannot state its own
+            # requirement, so it absorbs whatever balance is left rather than
+            # having a share invented for it.
+            need = round(ph['mw_ac'] * ol, 1) if ph['mw_ac'] > 0 else remaining
+            ph['req_mwp'] = round(min(need, remaining), 1)
+            remaining = round(remaining - ph['req_mwp'], 1)
+            active_phases.append(ph)
+
+        # Balance left over after every phase has its full requirement: the
+        # project needs more modules than its phases account for. It lands on
+        # the last phase so the row still totals the Balance Ordering column
+        # exactly, rather than quietly planning less than is owed.
+        if remaining > 1e-4 and active_phases:
+            active_phases[-1]['req_mwp'] = round(active_phases[-1]['req_mwp'] + remaining, 1)
+            remaining = 0.0
+
         if not active_phases:
             continue
 
-        for ph in active_phases:
-            ph_mwac = ph['mw_ac']
-            ph['req_mwp'] = round(ph_mwac * ol, 1) if ph_mwac > 0 else round(bal / len(active_phases), 1)
-
-        total_active_mwp = sum(ph['req_mwp'] for ph in active_phases)
-        if total_active_mwp > bal and bal > 0:
-            scale_factor = bal / total_active_mwp
-            running_sum = 0.0
-            for i, ph in enumerate(active_phases):
-                if i == len(active_phases) - 1:
-                    ph['req_mwp'] = round(bal - running_sum, 1)
-                else:
-                    ph['req_mwp'] = round(ph['req_mwp'] * scale_factor, 1)
-                running_sum += ph['req_mwp']
+        # The phases actually funded, in the order they must be ordered — read
+        # back in part 3 so a project's remark names its own first phase.
+        project_phases_map[p['id']] = active_phases
 
         for ph in active_phases:
             req_mwp = ph['req_mwp']
             if req_mwp <= 0:
                 continue
-                
+
             raw_idx = _calc_month_idx(ph['tc_dt'], base_month_dt, num_months)
 
-            if raw_idx < 0:
+            # An ordering date that has already passed is still real demand:
+            # the modules are owed whether or not the window was missed. It is
+            # planned into the earliest orderable month and competes for vendor
+            # quota like everything else, carrying an overdue marker so it is
+            # never read as a healthy on-schedule allocation (user decision
+            # 2026-09-23, replacing the earlier rule that dropped it from the
+            # forward plan). Recorded here as well so the exception banner and
+            # the per-cell marking can both be driven off it.
+            is_overdue = raw_idx < 0
+            if is_overdue:
                 project_excluded_phases.setdefault(p['id'], []).append({
                     'phase_label': ph['phase_label'],
                     'ftc_dt': ph['ftc_dt'],
                     'mod_dt': ph['tc_dt'],  # Ordering Date has passed
                     'mwp': req_mwp,
                 })
-                continue
 
             demands.append({
                 'project_id': p['id'],
@@ -302,6 +331,7 @@ def run_module_planning_engine(
                 'mwp': req_mwp,
                 'raw_month_idx': raw_idx,
                 'target_month_idx': max(0, min(num_months - 1, raw_idx)),
+                'overdue': is_overdue,
                 'lead_time': lead_time,
                 'ol': ol,
                 'is_ppa': is_ppa,
@@ -320,6 +350,10 @@ def run_module_planning_engine(
         s: [0.0] * num_months for s in CAP_LIMITS
     }
     project_allocations: Dict[int, Dict[int, float]] = {}
+    # Of the MWp allocated to a month, how much came from a phase whose own
+    # ordering date had already passed. Kept separate from the allocation so a
+    # cell can be marked overdue without changing the figure it shows.
+    project_overdue_alloc: Dict[int, Dict[int, float]] = {}
     project_pulled_details: Dict[int, List[Dict[str, Any]]] = {}
     project_capacity_delayed_details: Dict[int, List[Dict[str, Any]]] = {}
     project_lta_extended_details: Dict[int, List[Dict[str, Any]]] = {}
@@ -342,6 +376,8 @@ def run_module_planning_engine(
         for d in s_demands:
             pid = d['project_id']
             project_allocations.setdefault(pid, {m_i: 0.0 for m_i in range(num_months)})
+            project_overdue_alloc.setdefault(pid, {m_i: 0.0 for m_i in range(num_months)})
+            is_overdue_demand = bool(d.get('overdue'))
             rem = d['mwp']
             target_m = d['target_month_idx']
 
@@ -356,6 +392,8 @@ def run_module_planning_engine(
                     monthly_alloc_by_source[source][curr_m] += take_mwac
                     monthly_alloc_mwp_by_source[source][curr_m] += take_mwp
                     project_allocations[pid][curr_m] += take_mwp
+                    if is_overdue_demand:
+                        project_overdue_alloc[pid][curr_m] += take_mwp
                     rem -= take_mwp
                     if curr_m < target_m:
                         project_pulled_details.setdefault(pid, []).append({
@@ -395,8 +433,10 @@ def run_module_planning_engine(
                         monthly_alloc_by_source[source][curr_m] += take_mwac
                         monthly_alloc_mwp_by_source[source][curr_m] += take_mwp
                         project_allocations[pid][curr_m] += take_mwp
+                        if is_overdue_demand:
+                            project_overdue_alloc[pid][curr_m] += take_mwp
                         rem -= take_mwp
-                        
+
                         if curr_m <= lta_m:
                             project_lta_extended_details.setdefault(pid, []).append({
                                 'pushed_from': forecast_months[target_m],
@@ -421,6 +461,8 @@ def run_module_planning_engine(
                 monthly_alloc_by_source[source][num_months - 1] += (rem / ol)
                 monthly_alloc_mwp_by_source[source][num_months - 1] += rem
                 project_allocations[pid][num_months - 1] += rem
+                if is_overdue_demand:
+                    project_overdue_alloc[pid][num_months - 1] += rem
                 project_capacity_delayed_details.setdefault(pid, []).append({
                     'pushed_from': forecast_months[target_m],
                     'pushed_to': forecast_months[num_months - 1],
@@ -439,37 +481,31 @@ def run_module_planning_engine(
 
         # bal<=0 and ftc_all_charged projects were finished in part 1
         # (remarks/perspectives already set, `continue`d before ever entering
-        # `demands`). A project can ALSO have every one of its phases excluded
-        # here for a different reason — each one's own module date already
-        # passed (user decision 2026-09-21) — leaving active_demand at 0 while
-        # bal is still positive. Without checking that too, the "fix rounding
-        # discrepancies" step below saw month_mwp all-zero against a nonzero
-        # bal and dumped the full balance back in, exactly like the
-        # ftc_all_charged case did before it was fixed.
+        # `demands`). Every other project with a balance now reaches this point
+        # with demand queued: since 2026-09-23 a phase whose ordering date has
+        # passed is planned into the earliest orderable month rather than being
+        # dropped from the forward plan, so there is no longer a case where the
+        # whole balance is excluded and month_mwp comes back empty.
         if bal <= 0 or p.get('ftc_all_charged'):
             continue
         p['excluded_module_date_mwp'] = round(sum(x['mwp'] for x in excluded_list), 1)
-        if active_demand <= 0 and excluded_list:
-            total_excl = sum(x['mwp'] for x in excluded_list)
-            phase_bits = "; ".join(
-                f"{x['phase_label']} ({x['mwp']:.1f} MWp, module date {x['mod_dt'].strftime('%d-%b-%y')} — overdue)"
-                for x in excluded_list
-            )
-            p['remarks'] = (f"Every pending phase's module date has already passed: {phase_bits}. "
-                             f"These no longer fit the forward monthly plan — their ordering window is gone, "
-                             f"so they're excluded from it rather than forced into a stale target month.")
-            p['ai_suggestion'] = f"Place these {total_excl:.1f} MWp as an immediate exception order, outside the monthly leveling schedule — the original FTC date for these phases can no longer be met via the standard lead-time math."
+        if excluded_list and 'module_date_passed' not in p['planning_flags']:
             p['planning_flags'].append('module_date_passed')
-            continue
 
         allocs = project_allocations.get(pid, {})
+        overdue_allocs = project_overdue_alloc.get(pid, {})
         for m_i, mo in enumerate(forecast_months):
             p['month_mwp'][mo] = round(allocs.get(m_i, 0.0), 1)
+            # How much of that month's figure is demand whose ordering window
+            # has already closed — the cell shows the same MWp either way, and
+            # this is what lets the grid mark it rather than imply it is on plan.
+            p['month_overdue_mwp'][mo] = round(overdue_allocs.get(m_i, 0.0), 1)
 
-        # Fix minor rounding discrepancies — against active_demand (what was
-        # actually queued for leveling), NOT the raw bal, which can now be
-        # larger than what's planned when some of a project's phases were
-        # excluded above but others are still active.
+        # Fix minor rounding discrepancies against active_demand — the MWp
+        # actually queued for leveling, which the sequential phase fill now
+        # draws from the Balance Ordering column, so it equals bal for every
+        # project whose phases were all funded. Reconciling against bal itself
+        # would be wrong for a project whose phases could not absorb it.
         row_sum = sum(p['month_mwp'].values())
         diff = round(active_demand - row_sum, 1)
         if abs(diff) > 0:
@@ -488,8 +524,11 @@ def run_module_planning_engine(
         excl_note = ""
         if excluded_list:
             total_excl = sum(x['mwp'] for x in excluded_list)
-            excl_note = (f" Separately, {total_excl:.1f} MWp across {len(excluded_list)} phase(s) already passed "
-                         f"their own module date and is excluded from this plan as an immediate exception.")
+            overdue_months = ", ".join(
+                mo for mo in forecast_months if p['month_overdue_mwp'].get(mo, 0.0) > 0) or "the earliest open month"
+            excl_note = (f" Of this, {total_excl:.1f} MWp across {len(excluded_list)} phase(s) already passed its own "
+                         f"ordering date and is planned into {overdue_months} as an immediate order — the earliest "
+                         f"month still open, not a date that meets the original FTC.")
 
         # Build Primary Diagnosis & Suggestion
         now_dt = datetime.now()

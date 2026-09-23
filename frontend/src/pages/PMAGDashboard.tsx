@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useTheme } from '../hooks/useTheme';
 import ReactECharts from 'echarts-for-react';
 import {
   Home, Activity, TrendingUp, AlertTriangle, Layers, Wifi, Bell,
@@ -54,7 +55,7 @@ export default function PMAGDashboard() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, , toggleTheme] = useTheme();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isCopilotOpen, setIsCopilotOpen] = useState(false);
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -73,7 +74,6 @@ export default function PMAGDashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   const loadAllData = () => {
@@ -327,7 +327,7 @@ export default function PMAGDashboard() {
               <input value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search projects..."
                 className="pl-9 pr-4 py-1.5 w-52 rounded-lg bg-muted dark:bg-card text-[12px] text-foreground dark:text-muted-foreground placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-primary/20 border border-transparent transition-all" />
             </div>
-            <button onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-card transition-colors">
+            <button onClick={toggleTheme} className="p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-card transition-colors">
               {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
             </button>
             <button className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted dark:hover:bg-card transition-colors">
@@ -354,7 +354,7 @@ export default function PMAGDashboard() {
         </header>
 
         {/* Dashboard Content */}
-        <main className="flex-1 p-4">
+        <main className="flex-1 p-5">
           <AnimatePresence mode="wait">
             {selectedProjectId ? (
               <motion.div

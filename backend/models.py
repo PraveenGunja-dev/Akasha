@@ -227,6 +227,13 @@ class MTPOAmount(Base):
     # ZSPS 'Type': POrd (purchase order) or PReq (requisition). Constant per
     # document. PO-value metrics count POrd only — see slr_rules.zsps_po_lines_only.
     doc_type = Column(String, nullable=True, index=True)
+    # ZSPS 'C.Document line'. Without it a PO line has no identity of its own:
+    # one document legitimately carries many lines with the same material and
+    # the same amounts (86 identical cement bulker deliveries on 4510019805),
+    # so document+material+value cannot tell a genuine repeat from a row already
+    # loaded. Needed to merge an additional extract without either duplicating
+    # or silently dropping lines. Null on rows loaded before 2026-09-23.
+    document_line = Column(String, nullable=True, index=True)
     
     upload_time = Column(DateTime, default=datetime.utcnow)
 

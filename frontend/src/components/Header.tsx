@@ -1,21 +1,18 @@
 import { useState, useEffect } from "react";
 import { Moon, Sun } from "lucide-react";
 import adaniLogo from "../assets/adani-dpr-icon.ico";
+import { useTheme } from '../hooks/useTheme';
 
 export default function Header() {
-  const [theme, setTheme] = useState<"light" | "dark">("light");
+  const [theme, , toggleTheme] = useTheme();
 
   useEffect(() => {
     if (theme === "dark") {
-      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove("dark");
     }
   }, [theme]);
 
-  const toggleTheme = () => {
-    setTheme(theme === "light" ? "dark" : "light");
-  };
+
 
   return (
     <header className="absolute top-0 w-full z-50 px-8 py-5 flex items-center justify-between border-b border-white/10 dark:border-white/5 bg-background/40 backdrop-blur-md transition-all duration-300">

@@ -92,10 +92,10 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
   const tabs = ['All', 'Transmission', 'Critical Path', 'Risk', 'COD', 'Scope', 'Trials', 'Dates'];
 
   const getIcon = (type: string) => {
-    if (!type) return <Clock className="w-4 h-4 text-sky-500" />;
+    if (!type) return <Clock className="w-4 h-4 text-primary" />;
     if (type.includes('Scope') || type.includes('Budget')) return <TrendingUp className="w-4 h-4 text-destructive" />;
     if (type.includes('COD') || type.includes('Trial') || type.includes('Critical')) return <AlertCircle className="w-4 h-4 text-warning" />;
-    return <CalendarDays className="w-4 h-4 text-sky-500" />;
+    return <CalendarDays className="w-4 h-4 text-primary" />;
   };
 
   const dropdownClasses = "absolute right-0 top-full mt-3 w-[450px] bg-card border border-border dark:border-border rounded-2xl shadow-[0_10px_40px_rgba(0,0,0,0.15)] z-[100] flex flex-col overflow-hidden max-h-[600px] transform origin-top-right transition-all";
@@ -107,10 +107,10 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
         <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[90]" onClick={onClose} />
       )}
       <div className={isFullScreen ? fullScreenClasses : dropdownClasses}>
-        <div className="p-4 border-b border-muted dark:border-border flex items-center justify-between bg-sky-50/50 dark:bg-sky-900/10 shrink-0">
+        <div className="p-4 border-b border-muted dark:border-border flex items-center justify-between bg-sky-50/50 dark:bg-primary/20 shrink-0">
           <div className="flex items-center gap-2">
             <span className="font-bold text-[15px] tracking-tight text-foreground dark:text-white">Notifications</span>
-            <span className="px-2 py-0.5 bg-sky-100 dark:bg-sky-500/20 text-sky-600 dark:text-sky-400 rounded-full text-[10px] font-bold">
+            <span className="px-2 py-0.5 bg-primary/20 dark:bg-primary/20 text-primary dark:text-primary rounded-full text-[10px] font-bold">
               {tabNotifications.length} {tabHasMore ? '+' : ''}
             </span>
           </div>
@@ -118,7 +118,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
             <button onClick={() => setIsFullScreen(!isFullScreen)} className="p-1.5 text-muted-foreground hover:text-foreground transition-colors hover:bg-black/5 dark:hover:bg-white/5 rounded-lg">
               {isFullScreen ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
             </button>
-            <button onClick={onMarkAllRead} className="text-[12px] text-sky-500 hover:text-sky-600 font-semibold transition-colors px-2 py-1 hover:bg-sky-50 dark:hover:bg-sky-900/20 rounded-lg">Mark all read</button>
+            <button onClick={onMarkAllRead} className="text-[12px] text-primary hover:text-primary font-semibold transition-colors px-2 py-1 hover:bg-sky-50 dark:hover:bg-primary/20 rounded-lg">Mark all read</button>
             {isFullScreen && (
               <button onClick={onClose} className="p-1.5 text-muted-foreground hover:text-destructive transition-colors hover:bg-black/5 dark:hover:bg-white/5 rounded-lg">
                 <X className="w-4 h-4" />
@@ -137,7 +137,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
               onClick={() => setActiveTab(tab)}
               className={`px-3.5 py-1.5 text-[12px] font-semibold rounded-full transition-all shrink-0 ${
                 activeTab === tab 
-                  ? 'bg-sky-500 text-white shadow-md' 
+                  ? 'bg-primary/20 text-white shadow-md' 
                   : 'bg-card border border-border dark:border-gray-700 text-muted-foreground dark:text-muted-foreground hover:text-foreground dark:hover:text-white hover:bg-muted dark:hover:bg-card'
               }`}
             >
@@ -150,7 +150,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
       <div className="overflow-y-auto flex-1 bg-card">
         {isLoadingTab ? (
           <div className="p-12 flex flex-col items-center justify-center text-muted-foreground">
-            <Loader2 className="w-8 h-8 mb-3 animate-spin text-sky-500 opacity-50" />
+            <Loader2 className="w-8 h-8 mb-3 animate-spin text-primary opacity-50" />
             <p className="text-[13px] font-medium text-muted-foreground">Loading {activeTab} notifications...</p>
           </div>
         ) : tabNotifications.length === 0 ? (
@@ -173,7 +173,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                 className={`p-3 transition-all group relative bg-card ${isFullScreen ? 'border border-muted dark:border-border rounded-xl shadow-sm hover:shadow-md' : 'border-b border-muted dark:border-border hover:bg-muted dark:hover:bg-white/5'} ${group.every((n: any) => n.is_read) ? 'opacity-70' : ''}`}
               >
                 {!group.every((n: any) => n.is_read) && (
-                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-sky-500 ${isFullScreen ? 'rounded-l-xl' : 'rounded-r-full'}`} />
+                  <div className={`absolute left-0 top-0 bottom-0 w-1 bg-primary/20 ${isFullScreen ? 'rounded-l-xl' : 'rounded-r-full'}`} />
                 )}
                 
                 <div className="flex gap-3 relative z-10">
@@ -183,7 +183,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                   
                   <div className="flex-1 min-w-0 flex flex-col gap-1.5 mt-0.5">
                     <div className="flex justify-between items-start">
-                      <span className="font-bold text-[13px] text-foreground dark:text-white truncate pr-2 group-hover:text-sky-600 dark:group-hover:text-sky-400 transition-colors tracking-tight">{formatProjectName(projectName)}</span>
+                      <span className="font-bold text-[13px] text-foreground dark:text-white truncate pr-2 group-hover:text-primary dark:group-hover:text-primary transition-colors tracking-tight">{formatProjectName(projectName)}</span>
                       <span className="text-[9px] font-semibold text-muted-foreground whitespace-nowrap bg-muted dark:bg-card border border-border dark:border-gray-700 px-1.5 py-0.5 rounded shrink-0 shadow-sm mt-0.5">
                         {group.length} {group.length === 1 ? 'Message' : 'Messages'}
                       </span>
@@ -194,7 +194,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                         <div key={n.id} className="border-b border-border/50 dark:border-gray-700/50 pb-2 last:border-0 last:pb-0">
                           <div className="flex items-center flex-wrap gap-1.5 mb-1">
                             {n.block && (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-muted-foreground border border-sky-100 dark:border-sky-500/20 shadow-sm">
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-sky-50 dark:bg-primary/20 text-primary dark:text-muted-foreground border border-primary/30 dark:border-primary/30 shadow-sm">
                                 {n.block}
                               </span>
                             )}
@@ -219,7 +219,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                                       e.stopPropagation();
                                       onSimulate(projectName, n);
                                     }}
-                                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold text-[10px] uppercase tracking-wider border border-sky-200 dark:border-sky-500/20 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors shadow-sm"
+                                    className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-sky-50 dark:bg-primary/20 text-primary dark:text-primary font-bold text-[10px] uppercase tracking-wider border border-primary/30 dark:border-primary/30 hover:bg-primary/20 dark:hover:bg-primary/20 transition-colors shadow-sm"
                                   >
                                     <Play className="w-3 h-3" /> Simulate
                                   </button>
@@ -227,7 +227,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                                 <button 
                                   onClick={(e) => fetchAISuggestion(e, n)}
                                   disabled={loadingSuggestion === n.id}
-                                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[10px] uppercase tracking-wider border border-purple-200 dark:border-purple-500/20 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors shadow-sm disabled:opacity-50"
+                                  className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-purple-50 dark:bg-status-ai-bg text-status-ai-fg dark:text-status-ai-fg font-bold text-[10px] uppercase tracking-wider border border-status-ai-border dark:border-status-ai-border hover:bg-status-ai-bg dark:hover:bg-status-ai-bg transition-colors shadow-sm disabled:opacity-50"
                                 >
                                   <Sparkles className="w-3 h-3" /> 
                                   {loadingSuggestion === n.id ? 'Thinking...' : 'AI Suggestion'}
@@ -235,11 +235,11 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                               </div>
 
                               {aiSuggestions[n.id] && (
-                                <div className="p-2 mt-0.5 rounded-lg bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 relative overflow-hidden">
-                                  <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
+                                <div className="p-2 mt-0.5 rounded-lg bg-purple-50/50 dark:bg-status-ai-bg border border-status-ai-border dark:border-status-ai-border relative overflow-hidden">
+                                  <div className="absolute top-0 left-0 w-1 h-full bg-status-ai-bg"></div>
                                   <div className="flex gap-1.5 items-start">
-                                    <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
-                                    <p className="text-[11px] text-purple-900 dark:text-purple-100 font-medium leading-snug">
+                                    <Sparkles className="w-3.5 h-3.5 text-status-ai-fg mt-0.5 shrink-0" />
+                                    <p className="text-[11px] text-status-ai-fg dark:text-status-ai-fg font-medium leading-snug">
                                       {aiSuggestions[n.id]}
                                     </p>
                                   </div>
@@ -256,7 +256,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                             e.stopPropagation();
                             setExpandedProjects(prev => ({ ...prev, [projectName]: true }));
                           }}
-                          className="text-[10px] text-sky-500 hover:text-sky-600 font-semibold pt-1 text-left w-full transition-colors"
+                          className="text-[10px] text-primary hover:text-primary font-semibold pt-1 text-left w-full transition-colors"
                         >
                           + {group.length - 2} more notifications
                         </button>
@@ -286,7 +286,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                                 e.stopPropagation();
                                 onSimulate(projectName, group[0]);
                               }}
-                              className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold text-[10px] uppercase tracking-wider border border-sky-200 dark:border-sky-500/20 hover:bg-sky-100 dark:hover:bg-sky-500/20 transition-colors shadow-sm"
+                              className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-sky-50 dark:bg-primary/20 text-primary dark:text-primary font-bold text-[10px] uppercase tracking-wider border border-primary/30 dark:border-primary/30 hover:bg-primary/20 dark:hover:bg-primary/20 transition-colors shadow-sm"
                             >
                               <Play className="w-3 h-3" /> Simulate Project
                             </button>
@@ -294,7 +294,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                           <button 
                             onClick={(e) => fetchAISuggestion(e, group[0])}
                             disabled={loadingSuggestion === group[0].id}
-                            className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-purple-50 dark:bg-purple-500/10 text-purple-600 dark:text-purple-400 font-bold text-[10px] uppercase tracking-wider border border-purple-200 dark:border-purple-500/20 hover:bg-purple-100 dark:hover:bg-purple-500/20 transition-colors shadow-sm disabled:opacity-50"
+                            className="flex-1 flex items-center justify-center gap-1 py-1 rounded bg-purple-50 dark:bg-status-ai-bg text-status-ai-fg dark:text-status-ai-fg font-bold text-[10px] uppercase tracking-wider border border-status-ai-border dark:border-status-ai-border hover:bg-status-ai-bg dark:hover:bg-status-ai-bg transition-colors shadow-sm disabled:opacity-50"
                           >
                             <Sparkles className="w-3 h-3" /> 
                             {loadingSuggestion === group[0].id ? 'Thinking...' : 'AI Suggestion'}
@@ -302,11 +302,11 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
                         </div>
 
                         {aiSuggestions[group[0].id] && (
-                          <div className="p-2 mt-0.5 rounded-lg bg-purple-50/50 dark:bg-purple-900/20 border border-purple-100 dark:border-purple-800/50 relative overflow-hidden">
-                            <div className="absolute top-0 left-0 w-1 h-full bg-purple-400"></div>
+                          <div className="p-2 mt-0.5 rounded-lg bg-purple-50/50 dark:bg-status-ai-bg border border-status-ai-border dark:border-status-ai-border relative overflow-hidden">
+                            <div className="absolute top-0 left-0 w-1 h-full bg-status-ai-bg"></div>
                             <div className="flex gap-1.5 items-start">
-                              <Sparkles className="w-3.5 h-3.5 text-purple-500 mt-0.5 shrink-0" />
-                              <p className="text-[11px] text-purple-900 dark:text-purple-100 font-medium leading-snug">
+                              <Sparkles className="w-3.5 h-3.5 text-status-ai-fg mt-0.5 shrink-0" />
+                              <p className="text-[11px] text-status-ai-fg dark:text-status-ai-fg font-medium leading-snug">
                                 {aiSuggestions[group[0].id]}
                               </p>
                             </div>

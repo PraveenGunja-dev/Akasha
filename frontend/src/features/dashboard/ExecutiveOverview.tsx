@@ -310,21 +310,6 @@ export default function ExecutiveOverview({ dashboardData, briefing, briefingLoa
   return (
     <div className="flex w-full flex-col gap-4 pb-8">
 
-      {/* Names the surface and states where its figures come from. On a screen
-          that drives capital decisions, provenance is part of the design. */}
-      <PageHeader
-        title="Portfolio Overview"
-        subtitle={`${totalProjects} mapped projects · ${Math.round(totalMW).toLocaleString('en-IN')} MW planned capacity`}
-        right={
-          <div className="flex flex-wrap items-center gap-1.5">
-            <SourceTag system="P6" />
-            <SourceTag system="SAP" />
-            <SourceTag system="TC" />
-            <SourceTag system="Pulse" />
-          </div>
-        }
-      />
-
       {/* ══ KPI BAND ══
           One hero + two primary tiles carry the "how are we doing" answer;
           three supporting tiles sit beneath. Every drill-down is preserved,

@@ -840,7 +840,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
       {/* ── Intelligence Card Grid ── */}
       {loading ? (
         <div className="bento-card overflow-hidden mb-8 p-0">
-          <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
+          <div className="flex items-center px-6 py-3 bg-muted border-b border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground">
             <div className="w-[30%] min-w-[200px] pr-4">Project Details</div>
             <div className="w-[20%] min-w-[130px] pl-4">Schedule</div>
             <div className="w-[20%] min-w-[150px] pl-4">Supply Chain</div>
@@ -862,7 +862,7 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
         </div>
       ) : (
         <div className="bento-card overflow-hidden mb-8 p-0 flex flex-col max-h-[700px]">
-          <div className="flex items-center px-6 py-3 bg-muted dark:bg-gray-900/50 border-b border-border dark:border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground shrink-0 z-10">
+          <div className="flex items-center px-6 py-3 bg-muted border-b border-border text-[11px] font-bold uppercase tracking-[0.08em] text-muted-foreground shrink-0 z-10">
             <div className="w-[30%] min-w-[200px] pr-4">Project Details</div>
             <div className="w-[20%] min-w-[130px] pl-4">Schedule</div>
             <div className="w-[20%] min-w-[150px] pl-4">Supply Chain</div>

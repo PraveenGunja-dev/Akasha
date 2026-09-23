@@ -19,11 +19,12 @@ from sqlalchemy import func
 import re
 import glob
 
-def _extract_wattage_from_text(short_text: str):
-    if not short_text:
-        return None
-    m = re.search(r'(\d{3,4})\s*(?:W|Wp|w)', str(short_text))
-    return float(m.group(1)) / 1_000_000 if m else None
+from services.module_wattage import mw_factor as _extract_wattage_from_text
+# MW per module, read from the material short text. The rule lives in
+# services/module_wattage.py so the ingest, the backfill and the merge all read
+# a text the same way; it also covers the vendors who state the wattage only
+# inside the part number (Jinko JKM590N, Goldi GF-585, Redren -144-585), which
+# the old local regex could not see.
 
 SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "19_09")
 SAP_FILE_PATTERNS = {
@@ -82,6 +83,141 @@ def ingest_me2j_po(db, df_me2j):
     except Exception:
         db.rollback()
         raise
+
+
+def _zsps_filters(df):
+    """The ZSPS row filters, in one place so the primary load and any extra
+    extract are screened identically."""
+    df = df[df['C.Document'].notna()]
+    if 'Summary' in df.columns:
+        blank = df['Summary'].astype(str).str.strip().str.lower()
+        df = df[df['Summary'].isna() | (blank == '') | (blank == 'nan')]
+    if 'Type' in df.columns:
+        df = df[df['Type'].astype(str).str.strip() == 'POrd']
+    comm = pd.to_numeric(df['Commitment Amt'], errors='coerce').fillna(0.0)
+    act = pd.to_numeric(df['Actual Amount'], errors='coerce').fillna(0.0)
+    df = df[(comm != 0) | (act != 0)]
+    if 'Description' in df.columns:
+        bad = df[df['Description'].astype(str)
+                 .str.contains('SPGS|PMC|ISA', case=False, na=False)]['C.Document'].unique()
+        df = df[~df['C.Document'].isin(bad)]
+    return df
+
+
+def _is_solar_module_line(short_text):
+    """A PV module line, judged on the LINE's own material text.
+
+    Deliberately narrow. 'module' and 'panel' alone are far too broad: SAP uses
+    them for power supply modules, Yaskawa power modules, dual relay connector
+    modules, robotic module-cleaning units and LT/HT panels, none of which carry
+    generating capacity. The PO's Description field is not consulted either,
+    because it describes the whole order and would pull in every unrelated line
+    on a PO that happens to mention modules.
+
+    So the text must name a module or panel AND either say it is solar/PV or
+    yield a real per-panel wattage. That is the same evidence the MWp figures
+    rest on, which keeps this test and services/module_wattage.py in agreement.
+    """
+    t = str(short_text or "")
+    low = t.lower()
+    if "module" not in low and "panel" not in low:
+        return False
+    if "solar" in low or "pv" in low:
+        return True
+    return _extract_wattage_from_text(t) is not None
+
+
+def _line_key(doc, line, wbs, text):
+    """Identity of a PO line. The document line number is what makes a genuine
+    repeat distinguishable from a row already loaded; material text is included
+    so a line renumbered between extracts is not mistaken for a new one."""
+    return (str(doc), str(line or ""), str(wbs or "").upper(),
+            str(text or "").strip().upper())
+
+
+def collect_extra_module_lines(primary_path, data_dir, wbs_map, already):
+    """Module PO lines present in another ZPSPS007 extract but not in `already`.
+
+    Returns new MTPOAmount rows. Only module/panel lines are considered: a
+    secondary extract is trusted to supplement modules, not to restate the
+    whole portfolio, so nothing else it carries is taken.
+    """
+    pat = SAP_FILE_PATTERNS["zsps"]
+    others = [f for f in glob.glob(os.path.join(data_dir, "*"))
+              if pat.match(os.path.basename(f))
+              and os.path.abspath(f) != os.path.abspath(primary_path or "")]
+    if not others:
+        return []
+
+    seen = {_line_key(r.purchasing_document, r.document_line, r.wbs_element, r.short_text)
+            for r in already}
+    extra = []
+    for path in sorted(others):
+        try:
+            df = pd.read_excel(path)
+        except Exception as exc:
+            print(f"  extra ZSPS {os.path.basename(path)}: unreadable ({exc}) - skipped")
+            continue
+        df.columns = [str(c).strip() for c in df.columns]
+        if 'C.Document' not in df.columns:
+            continue
+        df = _zsps_filters(df)
+
+        added = 0
+        for _, row in df.iterrows():
+            txt = safe_str(row.get('Short text', ''))
+            desc = safe_str(row.get('Description', ''))
+            if not _is_solar_module_line(txt):
+                continue
+            doc = safe_sap_id(row.get('C.Document', ''))
+            if not doc or doc.lower() == 'nan':
+                continue
+            wbs = safe_str(row.get('WBS Element', ''))
+            if not wbs or wbs.lower() in ('nan', 'none'):
+                continue
+            if not match_wbs_to_master(wbs, wbs_map):
+                continue
+            line_no = safe_sap_id(row.get('C.Document line', '')) or None
+            key = _line_key(doc, line_no, wbs, txt)
+            if key in seen:
+                continue
+            seen.add(key)
+
+            still_q = safe_float(row.get('C.Quantity', 0))
+            del_q = safe_float(row.get('A.Quantity', 0))
+            qty = still_q + del_q
+            still_inr = safe_float(row.get('Commitment Amt', 0))
+            del_inr = safe_float(row.get('Actual Amount', 0))
+            mw = _extract_wattage_from_text(txt)
+            extra.append(models.MTPOAmount(
+                purchasing_document=doc,
+                wbs_element=wbs,
+                material_name=desc,
+                vendor_name=safe_str(row.get('Vendor Name', '')),
+                short_text=txt,
+                order_quantity=qty,
+                po_quantities=qty,
+                net_order_value=still_inr + del_inr,
+                net_order_value_inr=still_inr + del_inr,
+                still_to_deliver_qty=still_q,
+                still_to_deliver_inr=still_inr,
+                delivered_qty=del_q,
+                delivered_value_inr_cr=del_inr / 10000000,
+                currency='INR',
+                doc_type=safe_str(row.get('Type', '')) or None,
+                document_line=line_no,
+                mw_multiplication_factor=mw,
+                po_quantities_mw=(qty * mw) if mw is not None else None,
+            ))
+            added += 1
+        val = sum((r.net_order_value_inr or 0) for r in extra) / 10000000
+        print(f"  extra ZSPS {os.path.basename(path)}: +{added} module lines")
+    if extra:
+        mwp = sum((r.po_quantities_mw or 0) for r in extra)
+        val = sum((r.net_order_value_inr or 0) for r in extra) / 10000000
+        print(f"  extra module lines merged in total: {len(extra)} "
+              f"({mwp:,.1f} MWp, Rs {val:,.1f} Cr)")
+    return extra
 
 
 def find_sap_file(key: str, data_dir: str = SAP_DATA_DIR):
@@ -427,10 +563,23 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
                     delivery_completed_flag=safe_str(me2j_data.get('Delivery Completed', '')),
                     document_date=safe_date(me2j_data.get('Document Date')),
                     doc_type=safe_str(row.get('Type', '')) or None,
+                    document_line=safe_sap_id(row.get('C.Document line', '')) or None,
                     mw_multiplication_factor=mw_mult,
                     po_quantities_mw=(qty * mw_mult) if mw_mult is not None else None
                 )
                 po_amounts.append(po)
+
+            # --- Module lines from any OTHER ZPSPS007 extract in the folder ---
+            # SAP is often exported per project or per period, so a second
+            # extract can carry module lines the main one does not. Those lines
+            # are unioned in here rather than being lost to the newest-file
+            # rule. Strictly additive: an extra extract can only ADD module
+            # lines, never change or remove what the primary extract said, so
+            # the primary stays authoritative and the snapshot guard above
+            # still measures the real portfolio.
+            po_amounts += collect_extra_module_lines(
+                primary_path=zsps_path, data_dir=data_dir, wbs_map=wbs_map,
+                already=po_amounts)
 
             # --- Guard: is this a plausible successor to what is live now? ---
             # The 20 Aug -> 16 Sep incident (BESS cluster silently dropped,

@@ -234,6 +234,31 @@ export default function CEODashboard() {
     'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr', 'approvals', 'module_deliveries'
   ];
 
+  const bannerContent: Record<string, { part1: string, part2: string, sub: string }> = {
+    overview: { part1: "Executive", part2: "Overview", sub: "Command Center for global operations and portfolio health." },
+    risk: { part1: "Governance & Risk", part2: "Command Center", sub: "Identify risks early. Ensure compliance. Drive timely intervention." },
+    quality: { part1: "Quality", part2: "Command Center", sub: "Ensure uncompromising standards across all project phases." },
+    capacity_overview: { part1: "Capacity", part2: "Overview", sub: "Optimize resource allocation and workforce planning." },
+    installation_planner: { part1: "Ordering", part2: "Schedule", sub: "Manage module deliveries and site execution." },
+    financial: { part1: "SAP", part2: "Intelligence", sub: "Real-time financial tracking and ERP integration." },
+    einvoice_intelligence: { part1: "E-Invoice", part2: "Intelligence", sub: "Automated vendor payments and cash flow visibility." },
+    transmission_data: { part1: "Transmission", part2: "Data", sub: "Monitor grid connectivity and substation progress." },
+    approvals: { part1: "Compliance &", part2: "Approvals", sub: "Streamline regulatory clearances and permits." },
+    schedule: { part1: "P6 & DPR", part2: "Intelligence", sub: "Track critical path delays and field progress." },
+    project360: { part1: "Project 360", part2: "Command Center", sub: "Complete situational awareness across all sites." },
+    admin: { part1: "Platform", part2: "Admin", sub: "System integrations and user management." },
+    reports: { part1: "Executive", part2: "Reports", sub: "Automated insights and strategic briefings." },
+    executive_brief: { part1: "AI Executive", part2: "Briefing", sub: "Synthesized portfolio insights powered by Akasha AI." },
+    smart_search: { part1: "Akasha", part2: "Smart Search", sub: "Instant retrieval of documents, drawings, and communications." },
+    project_map: { part1: "Interactive", part2: "Project Map", sub: "Geospatial visualization of the entire portfolio." },
+    knowledge_graph: { part1: "Enterprise", part2: "Knowledge Graph", sub: "Navigate complex relationships between tasks and entities." }
+  };
+
+  const currentBanner = bannerContent[activeTab] || {
+    part1: "Akasha", part2: "Intelligence",
+    sub: "Command Center for global operations, portfolio health, and predictive analytics."
+  };
+
   const handleTabChange = (tab: string) => {
     setPreviousTab(activeTab);
     setActiveTab(tab);
@@ -299,7 +324,7 @@ export default function CEODashboard() {
           </div>
         ) : (
           /* 3b. Normal Dashboard Area */
-          <main className="flex-1 p-4">
+          <main className="flex-1 p-5">
             <div className="w-full">
               {projectId ? (
                 <div className="w-full h-full min-h-[calc(100vh-120px)]">
@@ -309,7 +334,39 @@ export default function CEODashboard() {
                   />
                 </div>
               ) : (
-                <AnimatePresence mode="wait">
+                <>
+                  {/* Hero Banner */}
+                  <div className="relative w-full mb-6 group cursor-default">
+                    {/* Glowing Gradient Border Layer */}
+                    <div className="absolute -inset-1 bg-gradient-to-r from-brand-blue via-brand-purple to-brand-pink rounded-[20px] blur opacity-0 group-hover:opacity-40 transition duration-1000 group-hover:duration-300"></div>
+
+                    {/* Gradient Border Wrapper */}
+                    <div className="relative rounded-2xl p-px bg-border group-hover:bg-gradient-to-r group-hover:from-brand-blue group-hover:via-brand-purple group-hover:to-brand-pink transition-colors duration-300">
+                      {/* Main Banner Content */}
+                      <div className="relative w-full h-36 sm:h-40 rounded-[15px] overflow-hidden flex items-center shrink-0 shadow-sm bg-background">
+                        <img 
+                          src="/akasha/hero1.png" 
+                          alt="Akasha Solar Dashboard" 
+                          className="absolute inset-0 w-full h-full object-cover object-center opacity-100"
+                        />
+                        <div className="absolute inset-0 bg-gradient-to-r from-background from-10% via-background/80 via-30% via-background/40 via-50% via-background/10 via-70% to-transparent to-90% pointer-events-none"></div>
+                      
+                      <div className="relative z-10 px-8 sm:px-10 max-w-2xl drop-shadow-sm">
+                        <h1 className="text-3xl sm:text-[42px] font-black mb-3 tracking-tight leading-none flex items-center flex-wrap gap-x-3 transition-all duration-500 group-hover:drop-shadow-[0_0_15px_rgba(118,72,157,0.5)]">
+                          <span className="text-foreground transition-all duration-500 group-hover:text-brand-blue">{currentBanner.part1}</span>
+                          <span className="text-transparent bg-clip-text bg-gradient-to-r from-brand-blue to-brand-purple">
+                            {currentBanner.part2}
+                          </span>
+                        </h1>
+                        <p className="text-sm sm:text-base text-muted-foreground font-medium max-w-lg leading-relaxed">
+                          {currentBanner.sub}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  </div>
+
+                  <AnimatePresence mode="wait">
                   <motion.div
                     key={activeTab}
                     initial={{ opacity: 0, y: 10 }}
@@ -353,6 +410,7 @@ export default function CEODashboard() {
                     )}
                   </motion.div>
                 </AnimatePresence>
+                </>
               )}
             </div>
           </main>

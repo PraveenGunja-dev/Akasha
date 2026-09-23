@@ -5,7 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
   Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, IndianRupee, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
-  Loader2, Brain, CheckCircle2, BrainCircuit, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt, HardHat
+  Loader2, Brain, CheckCircle2, BrainCircuit, Presentation, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt, HardHat
 } from 'lucide-react';
 import InstallationProcurementTab from './InstallationProcurementTab';
 import { ProjectWBS } from './ProjectWBS';
@@ -16,6 +16,7 @@ import { saveAs } from 'file-saver';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ComplianceTab from '../compliance/ComplianceTab';
+import CPAGModal from './CPAGModal';
 import ActivityInvestigationModal from '../intelligence/ActivityInvestigationModal';
 import { formatProjectName } from '../../lib/projectName';
 
@@ -131,7 +132,7 @@ const TabBtn = ({ active, label, icon: Icon, onClick }: any) => (
    The screen opened on ten equal tiles and left the reader to work out the
    answer from them. This states the answer in a sentence first, then lets the
    tiles be the evidence for it. */
-const HealthBanner = ({ tier, progressPct, scheduleVariance, pendingCod, unitType, forecast }: any) => {
+const HealthBanner = ({ tier, progressPct, scheduleVariance, pendingCod, unitType, forecast, action }: any) => {
   const tone = tier === 'Critical' ? 'critical'
     : (tier === 'High Risk' || tier === 'Watchlist') ? 'risk'
     : 'healthy';
@@ -168,10 +169,14 @@ const HealthBanner = ({ tier, progressPct, scheduleVariance, pendingCod, unitTyp
   return (
     <div className={`flex items-start gap-3 rounded-lg border border-l-[3px] border-border-subtle ${rail} bg-surface-1 px-4 py-3.5`}>
       <Icon className={`mt-0.5 h-[18px] w-[18px] shrink-0 ${iconTint}`} strokeWidth={1.75} />
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <p className="text-[15px] font-semibold text-fg-primary">{headline}</p>
         <p className="mt-0.5 text-[14px] leading-relaxed text-fg-secondary">{facts.join(' · ')}</p>
       </div>
+      {/* The banner is the first thing read on the page, so a pack that exists
+          for this project is offered here rather than left to be found in the
+          tab row. */}
+      {action && <div className="shrink-0 self-center">{action}</div>}
     </div>
   );
 };
@@ -354,6 +359,29 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [loading, setLoading] = useState(true);
   const [detailLoading, setDetailLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'intelligence' | 'sap' | 'einvoice' | 'p6' | 'transmission' | 'quality' | 'approvals' | 'installation'>('overview');
+  /* CPAG pack — BESS only. The tab is hidden entirely for every other
+     project rather than shown empty, because no other portfolio has one. */
+  const [isBess, setIsBess] = useState(false);
+  const [isBessLabel, setIsBessLabel] = useState<string | null>(null);
+  const [cpagOpen, setCpagOpen] = useState(false);
+
+  /* Is this one of the six BESS projects that carry a CPAG pack? */
+  useEffect(() => {
+    let live = true;
+    if (!projectId) { setIsBess(false); return; }
+    fetch('/akasha/api/bess/projects')
+      .then(r => (r.ok ? r.json() : []))
+      .then((rows: { projectId: string; pss: string; hasSchedule: boolean }[]) => {
+        if (!live) return;
+        const hit = rows.find(r => r.projectId === projectId && r.hasSchedule);
+        setIsBess(Boolean(hit));
+        setIsBessLabel(hit?.pss ?? null);
+      })
+      .catch(() => { if (live) { setIsBess(false); setIsBessLabel(null); } });
+    return () => { live = false; };
+  }, [projectId]);
+
+
   const [diagnostic, setDiagnostic] = useState<any>(null);
   const [diagLoading, setDiagLoading] = useState(false);
   const [showDelayedModal, setShowDelayedModal] = useState(false);
@@ -1164,6 +1192,15 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             quieter treatment — 12px labels, tabular figures, and colour only
             where a value is actually a problem — but nothing is demoted out
             of the grid. */}
+        {isBess && projectId && (
+          <CPAGModal
+            open={cpagOpen}
+            projectId={projectId}
+            projectLabel={isBessLabel ?? undefined}
+            onClose={() => setCpagOpen(false)}
+          />
+        )}
+
         <HealthBanner
           tier={tier}
           progressPct={progressPct}
@@ -1171,6 +1208,16 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           pendingCod={detail?.mapping?.pendingCodBlocks || 0}
           unitType={detail?.mapping?.unitType}
           forecast={p.forecastFinish || p.forecastMonth}
+          action={isBess && (
+            <button
+              onClick={() => setCpagOpen(true)}
+              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5
+                         text-[13px] font-semibold text-primary transition-colors hover:bg-primary/20
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <Presentation className="h-3.5 w-3.5" strokeWidth={1.75} />
+              View CPAG pack
+            </button>
+          )}
         />
 
         <div className="flex flex-wrap gap-3 [&>*]:min-w-[180px] [&>*]:flex-1 [&>*]:basis-[calc(20%-0.6rem)]">
@@ -1369,14 +1416,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   <div className="flex-1 w-full max-w-[240px] space-y-4">
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
+                        <div className="w-3 h-3 rounded-sm bg-status-healthy-bg shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">Completed</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.completedActivities}</span>
                     </div>
                     <div className="flex items-center justify-between text-sm group">
                       <div className="flex items-center gap-3">
-                        <div className="w-3 h-3 rounded-sm bg-blue-500 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
+                        <div className="w-3 h-3 rounded-sm bg-primary/20 shadow-[0_0_8px_rgba(59,130,246,0.4)]"></div>
                         <span className="text-foreground/80 font-medium group-hover:text-foreground transition-colors">In Progress</span>
                       </div>
                       <span className="font-mono font-bold text-foreground">{p.inProgressActivities}</span>
@@ -1525,7 +1572,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             {/* Total POs — shown in all tabs (POrd count only, pulled from SLR data) */}
                             <HeroMetric label="Total POs" value={sap.summary.totalPOs} icon={FileText} hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'pos' ? null : 'pos')} active={expandedMetric === 'pos'} />
                             {/* Vendors — shown in all tabs */}
-                            <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-purple-500 dark:text-purple-400" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
+                            <HeroMetric label="Vendors" value={sap.summary.totalVendors} icon={Users} color="text-status-ai-fg dark:text-status-ai-fg" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'vendors' ? null : 'vendors')} active={expandedMetric === 'vendors'} />
                             {/* Materials — commented out for ALL, SPV, AGEL, AGE6L */}
                             {/* <HeroMetric label="Materials" value={unifiedMaterials.length} icon={Layers} color="text-primary dark:text-primary" hasBreakdown onClick={() => setExpandedMetric(expandedMetric === 'materials' ? null : 'materials')} active={expandedMetric === 'materials'} /> */}
                             {/* PO Volume — commented out for ALL, SPV, AGEL, AGE6L */}
@@ -1751,7 +1798,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                               <td className="text-right font-mono text-success">{fmtCost(sumDelivered)}</td>
                                               <td className="text-center">
                                                 {storages.length > 0 ? storages.map((s: any, idx) => (
-                                                  <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{s}</span>
+                                                  <span key={idx} className={`px-1.5 py-0.5 rounded text-[9px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-status-ai-bg text-status-ai-fg'}`}>{s}</span>
                                                 )) : '—'}
                                               </td>
                                             </tr>
@@ -1764,7 +1811,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                 <td className="text-right font-mono text-muted-foreground">{Number(po.orderedQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[po.materialCode]?.baseUnit && unifiedMaterialsMap[po.materialCode]?.baseUnit !== '—' && <span className="text-[10px] ml-1">{unifiedMaterialsMap[po.materialCode].baseUnit}</span>}</td>
                                                 <td className="text-right font-mono text-muted-foreground">{fmtCost(po.budgetINR)}</td>
                                                 <td className="text-right font-mono text-muted-foreground">{fmtCost(po.deliveredINR)}</td>
-                                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{po.storageLocation || '—'}</span></td>
+                                                <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-status-ai-bg text-status-ai-fg'}`}>{po.storageLocation || '—'}</span></td>
                                               </tr>
                                             ))}
                                           </React.Fragment>
@@ -1776,7 +1823,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         <tr key={i} className="hover:bg-muted transition-colors">
                                           <td className="text-left font-medium text-foreground/80 max-w-[200px] truncate" title={v.vendorName}>{v.vendorName}</td>
                                           <td className="text-center font-mono font-semibold text-primary">{v.poCount}</td>
-                                          <td className="text-center font-mono text-purple-400">{v.materialCount}</td>
+                                          <td className="text-center font-mono text-status-ai-fg">{v.materialCount}</td>
                                           <td className="text-right font-mono font-semibold text-foreground">{Number(v.totalOrderedQty || 0).toLocaleString('en-IN')}</td>
                                           <td className="text-right font-mono text-pink-400">{fmtCost(v.totalBudgetINR)}</td>
                                         </tr>
@@ -1788,7 +1835,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                           <td className="text-left text-foreground/70 max-w-[180px] truncate" title={mat.materialDescription}>{mat.materialDescription}</td>
                                           <td className="text-right font-mono text-primary">{mat.orderedQty ? <>{Number(mat.orderedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
                                           <td className="text-right font-mono text-success">{mat.consumedQty ? <>{Number(mat.consumedQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
-                                          <td className="text-right font-mono text-purple-400">{mat.inventoryQty ? <>{Number(mat.inventoryQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
+                                          <td className="text-right font-mono text-status-ai-fg">{mat.inventoryQty ? <>{Number(mat.inventoryQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
                                           <td className="text-right font-mono text-warning">{mat.inTransitQty ? <>{Number(mat.inTransitQty).toLocaleString('en-IN')} {mat.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{mat.baseUnit}</span>}</> : '—'}</td>
                                         </tr>
                                       ))}
@@ -1811,8 +1858,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                           <td className="text-left font-mono text-primary/80">{inv.materialCode}</td>
                                           <td className="text-left text-foreground/70 max-w-[150px] truncate">{inv.materialName || '—'}</td>
                                           <td className="text-right font-mono font-semibold text-success">{Number(inv.inventoryQty || 0).toLocaleString('en-IN')} {inv.baseUnit && inv.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{inv.baseUnit}</span> : unifiedMaterialsMap[inv.materialCode]?.baseUnit && unifiedMaterialsMap[inv.materialCode]?.baseUnit !== '—' ? <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[inv.materialCode].baseUnit}</span> : null}</td>
-                                          <td className="text-right font-mono text-purple-400">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-purple-500/10 text-purple-500'}`}>{inv.storageLocation || '—'}</span></td>
+                                          <td className="text-right font-mono text-status-ai-fg">{inv.inventoryValueINR ? `₹${Number(inv.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                          <td className="text-center"><span className={`px-1.5 py-0.5 rounded text-[9px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/10 text-primary' : 'bg-status-ai-bg text-status-ai-fg'}`}>{inv.storageLocation || '—'}</span></td>
                                         </tr>
                                       ))}
                                       {/* ── Budget / Utilized / Remaining Rows ── */}
@@ -1856,7 +1903,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               {expandedMetric === 'inventory' && (
                                 <div className="mt-3 pt-3 border-t border-border/30 flex items-center gap-6 text-xs">
                                   <span className="text-muted-foreground">Total Inventory Value:</span>
-                                  <span className="font-mono font-bold text-purple-400">{fmtCost(sap.summary.totalInventoryValueINR)}</span>
+                                  <span className="font-mono font-bold text-status-ai-fg">{fmtCost(sap.summary.totalInventoryValueINR)}</span>
                                   <span className="text-muted-foreground ml-4">Total Inventory Qty:</span>
                                   <span className="font-mono font-bold text-success">{fmtMW(sap.summary.totalInventoryQty)}</span>
                                 </div>
@@ -2023,8 +2070,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                   <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
                                                   <td className="px-4 py-3 text-center"><span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">{row.line_count || 1}</span></td>
                                                   <td className="px-4 py-3 text-right font-mono">₹{row.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                  <td className="px-4 py-3 text-right text-emerald-500/80 font-mono">₹{row.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                  <td className="px-4 py-3 text-right text-amber-500/80 font-mono">₹{row.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                  <td className="px-4 py-3 text-right text-status-healthy-fg font-mono">₹{row.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                  <td className="px-4 py-3 text-right text-status-risk-fg font-mono">₹{row.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                                                   <td className="px-4 py-3 text-center">
                                                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
                                                       }`}>
@@ -2040,8 +2087,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                     <td className="px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]" title={item.description}>{item.description || '—'}</td>
                                                     <td className="px-4 py-2 text-center text-[11px] text-muted-foreground">{item.wbs_element}</td>
                                                     <td className="px-4 py-2 text-right text-[11px] text-muted-foreground font-mono">₹{item.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2 text-right text-[11px] text-emerald-500/50 font-mono">₹{item.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2 text-right text-[11px] text-amber-500/50 font-mono">₹{item.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2 text-right text-[11px] text-status-healthy-fg font-mono">₹{item.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                    <td className="px-4 py-2 text-right text-[11px] text-status-risk-fg font-mono">₹{item.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
                                                     <td className="px-4 py-2"></td>
                                                   </tr>
                                                 ))}
@@ -2167,8 +2214,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                     {/* Top Grouped Header */}
                                     <tr className="bg-slate-200/90 dark:bg-slate-800/90 backdrop-blur-md shadow-sm text-[10px] uppercase tracking-wider text-center font-bold">
                                       <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-foreground">Material Intelligence</th>
-                                      <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-emerald-700 dark:text-emerald-400 bg-emerald-500/5">Volumetric Data (Qty)</th>
-                                      <th colSpan={4} className="py-2.5 border-b border-border/50 text-blue-700 dark:text-blue-400 bg-blue-500/5">Financial Impact (INR)</th>
+                                      <th colSpan={5} className="py-2.5 border-b border-border/50 border-r border-border/30 text-status-healthy-fg dark:text-status-healthy-fg bg-status-healthy-bg">Volumetric Data (Qty)</th>
+                                      <th colSpan={4} className="py-2.5 border-b border-border/50 text-primary dark:text-primary bg-primary/20">Financial Impact (INR)</th>
                                     </tr>
                                     {/* Sub Header */}
                                     <tr className="bg-slate-100/95 dark:bg-slate-900/95 backdrop-blur-md shadow-md text-[10px] uppercase tracking-wider whitespace-nowrap">
@@ -2179,17 +2226,17 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                       <th className="text-left py-2 border-b border-border border-r border-border/30">WBS Tracking</th>
 
                                       {/* Qty */}
-                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Ordered</th>
-                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Consumed</th>
-                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">Inventory</th>
-                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-emerald-900/10">In Transit</th>
-                                      <th className="text-center py-2 border-b border-border border-r border-border/30 bg-emerald-50/50 dark:bg-emerald-900/10">Remaining</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-status-healthy-bg">Ordered</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-status-healthy-bg">Consumed</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-status-healthy-bg">Inventory</th>
+                                      <th className="text-center py-2 border-b border-border bg-emerald-50/50 dark:bg-status-healthy-bg">In Transit</th>
+                                      <th className="text-center py-2 border-b border-border border-r border-border/30 bg-emerald-50/50 dark:bg-status-healthy-bg">Remaining</th>
 
                                       {/* Financials */}
-                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">PO Budget</th>
-                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Utilized</th>
-                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Inventory Val</th>
-                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-blue-900/10">Remaining Bal</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-primary/20">PO Budget</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-primary/20">Utilized</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-primary/20">Inventory Val</th>
+                                      <th className="text-center py-2 border-b border-border bg-blue-50/50 dark:bg-primary/20">Remaining Bal</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -2217,17 +2264,17 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                             </td>
 
                                             {/* Quantities */}
-                                            <td className="text-center font-mono font-semibold text-primary bg-emerald-50/20 dark:bg-emerald-900/5">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
-                                            <td className="text-center font-mono font-semibold text-success bg-emerald-50/20 dark:bg-emerald-900/5">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
-                                            <td className="text-center font-mono text-purple-500 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
-                                            <td className="text-center font-mono text-warning bg-emerald-50/20 dark:bg-emerald-900/5">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
-                                            <td className="text-center font-mono font-semibold text-orange-500 border-r border-border/30 bg-emerald-50/20 dark:bg-emerald-900/5">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono font-semibold text-primary bg-emerald-50/20 dark:bg-status-healthy-bg">{mat.orderedQty ? Number(mat.orderedQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono font-semibold text-success bg-emerald-50/20 dark:bg-status-healthy-bg">{mat.consumedQty ? Number(mat.consumedQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono text-status-ai-fg bg-emerald-50/20 dark:bg-status-healthy-bg">{mat.inventoryQty ? Number(mat.inventoryQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono text-warning bg-emerald-50/20 dark:bg-status-healthy-bg">{mat.inTransitQty ? Number(mat.inTransitQty).toLocaleString('en-IN') : '—'}</td>
+                                            <td className="text-center font-mono font-semibold text-status-risk-fg border-r border-border/30 bg-emerald-50/20 dark:bg-status-healthy-bg">{mat.remainingQty ? Number(mat.remainingQty).toLocaleString('en-IN') : '—'}</td>
 
                                             {/* Financials */}
-                                            <td className="text-center font-mono text-foreground/70 bg-blue-50/20 dark:bg-blue-900/5">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                            <td className="text-center font-mono text-success/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
-                                            <td className="text-center font-mono text-purple-500/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
-                                            <td className="text-center font-mono text-warning/90 bg-blue-50/20 dark:bg-blue-900/5">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
+                                            <td className="text-center font-mono text-foreground/70 bg-blue-50/20 dark:bg-primary/20">{mat.budgetINR ? `₹${Number(mat.budgetINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                            <td className="text-center font-mono text-success/90 bg-blue-50/20 dark:bg-primary/20">{mat.deliveredINR ? `₹${Number(mat.deliveredINR).toLocaleString('en-IN')}` : '—'}</td>
+                                            <td className="text-center font-mono text-status-ai-fg bg-blue-50/20 dark:bg-primary/20">{mat.inventoryValueINR ? `₹${Number(mat.inventoryValueINR).toLocaleString('en-IN', { maximumFractionDigits: 0 })}` : '—'}</td>
+                                            <td className="text-center font-mono text-warning/90 bg-blue-50/20 dark:bg-primary/20">{mat.remainingBalanceINR ? `₹${Number(mat.remainingBalanceINR).toLocaleString('en-IN')}` : '—'}</td>
                                           </tr>
 
                                           {/* Drill-down Detail Row */}
@@ -2270,7 +2317,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                     <td className="text-right font-mono font-semibold text-primary dark:text-primary py-2 px-4">{sumQty.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Unit</td>
                                                                     <td className="text-center py-2 px-4">
                                                                       {storages.length > 0 ? storages.map((s: any, idx) => (
-                                                                        <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{s}</span>
+                                                                        <span key={idx} className={`px-2 py-0.5 rounded text-[10px] font-medium mr-1 ${s === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-status-ai-bg text-status-ai-fg dark:text-status-ai-fg'}`}>{s}</span>
                                                                       )) : '—'}
                                                                     </td>
                                                                   </tr>
@@ -2280,7 +2327,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                       <td className="text-left font-mono text-muted-foreground py-2 px-4">{po.documentDate ? formatDate(po.documentDate) : '—'}</td>
                                                                       <td className="text-right font-mono text-muted-foreground py-2 px-4">{po.orderedQty} Unit</td>
                                                                       <td className="text-center py-2 px-4">
-                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{po.storageLocation || '—'}</span>
+                                                                        <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${po.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-status-ai-bg text-status-ai-fg dark:text-status-ai-fg'}`}>{po.storageLocation || '—'}</span>
                                                                       </td>
                                                                     </tr>
                                                                   ))}
@@ -2359,7 +2406,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                                   <td className="text-right font-mono font-semibold text-success dark:text-success py-2 px-4">{inv.inventoryQty}</td>
                                                                   <td className="text-right font-mono font-semibold text-foreground py-2 px-4">{fmtCost(inv.inventoryValueINR)}</td>
                                                                   <td className="text-center py-2 px-4">
-                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-purple-500/10 text-purple-600 dark:text-purple-400'}`}>{inv.storageLocation || '—'}</span>
+                                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-medium ${inv.storageLocation === 'CS01' ? 'bg-primary/10 text-primary dark:text-primary' : 'bg-status-ai-bg text-status-ai-fg dark:text-status-ai-fg'}`}>{inv.storageLocation || '—'}</span>
                                                                   </td>
                                                                 </tr>
                                                               );
@@ -2693,11 +2740,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <div key={i} className={`relative flex items-center shrink-0 w-[240px] mr-14 transition-transform duration-500 hover:z-50 ${isEven ? 'translate-y-[40px]' : '-translate-y-[40px]'}`}>
                                   {i !== 0 && (
                                     <div className={`absolute -left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 bg-background border-[3px] rounded-full z-20 transition-colors duration-300 ${isCompleted ? 'border-primary shadow-[0_0_8px_rgba(59,130,246,0.5)]' :
-                                      isInProgress ? 'border-amber-500 shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse' : 'border-border shadow-inner'}`}></div>
+                                      isInProgress ? 'border-status-risk-border shadow-[0_0_8px_rgba(245,158,11,0.5)] animate-pulse' : 'border-border shadow-inner'}`}></div>
                                   )}
                                   <div className={`group w-full rounded-xl flex flex-col z-10 border transition-all duration-300 hover:scale-[1.03] hover:-translate-y-1 ${isCompleted ? 'bg-white/40 dark:bg-gray-900/40 border-primary/40 shadow-md' :
-                                    isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-amber-500/50 shadow-md ring-1 ring-amber-500/20' : 'bg-card/40 dark:bg-card/40 border-border shadow-md'}`}>
-                                    <div className={`px-3 py-2 flex items-center gap-2 border-b ${isCompleted ? 'border-primary/20 text-primary' : isInProgress ? 'border-amber-500/20 text-amber-500' : 'border-border text-muted-foreground'}`}>
+                                    isInProgress ? 'bg-white/40 dark:bg-gray-900/40 border-status-risk-border shadow-md ring-1 ring-status-risk-border' : 'bg-card/40 dark:bg-card/40 border-border shadow-md'}`}>
+                                    <div className={`px-3 py-2 flex items-center gap-2 border-b ${isCompleted ? 'border-primary/20 text-primary' : isInProgress ? 'border-status-risk-border text-status-risk-fg' : 'border-border text-muted-foreground'}`}>
                                       <div className={`w-6 h-6 rounded-lg flex items-center justify-center text-[10px] font-black ${isCompleted ? 'bg-gradient-to-br from-primary to-blue-700 text-white' :
                                         isInProgress ? 'bg-gradient-to-br from-amber-400 to-orange-600 text-white animate-pulse' : 'bg-muted border border-border text-muted-foreground'}`}>
                                         {isCompleted ? <Check className="w-3.5 h-3.5 text-white" /> : i + 1}
@@ -2711,7 +2758,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                             <CheckCircle2 className="w-2.5 h-2.5" /> Done
                                           </div>
                                         ) : isInProgress ? (
-                                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-amber-500/10 text-amber-500 rounded text-[9px] font-semibold border border-amber-500/20">
+                                          <div className="flex items-center gap-1 px-1.5 py-0.5 bg-status-risk-bg text-status-risk-fg rounded text-[9px] font-semibold border border-status-risk-border">
                                             <Activity className="w-2.5 h-2.5 animate-pulse" /> Active
                                           </div>
                                         ) : (
@@ -2721,7 +2768,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         )}
                                       </div>
                                       <div className={`font-mono text-[10px] px-1.5 py-0.5 rounded border font-medium ${isCompleted ? 'bg-primary/5 text-primary border-primary/20' :
-                                        isInProgress ? 'bg-amber-500/5 text-amber-500 border-amber-500/20' : 'bg-card/50 text-muted-foreground border-border'}`}>
+                                        isInProgress ? 'bg-status-risk-bg text-status-risk-fg border-status-risk-border' : 'bg-card/50 text-muted-foreground border-border'}`}>
                                         {dateStr}
                                       </div>
                                     </div>
@@ -2736,7 +2783,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                         fill="none" stroke="currentColor"
                                         strokeWidth={isCompleted ? "2.5" : "1.5"}
                                         strokeDasharray={isInProgress ? "4 4" : "0"}
-                                        className={`${isCompleted ? 'text-primary' : isInProgress ? 'text-amber-500' : 'text-border dark:text-gray-700'}`}
+                                        className={`${isCompleted ? 'text-primary' : isInProgress ? 'text-status-risk-fg' : 'text-border dark:text-gray-700'}`}
                                       />
                                     </svg>
                                   )}
@@ -3013,7 +3060,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               })
                               .map((edge: any, i: number) => (
                                 <tr key={i} className="hover:bg-muted transition-colors">
-                                  <td className="font-bold text-purple-400 font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
+                                  <td className="font-bold text-status-ai-fg font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
                                     {edge.project} <span className="text-muted-foreground ml-1 font-normal lowercase tracking-normal">({edge.phase})</span>
                                   </td>
                                   <td className="font-medium text-foreground/90 max-w-[150px] truncate" title={edge.fromLabel || edge.fromNode}>{edge.fromLabel || edge.fromNode}</td>
@@ -3046,7 +3093,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {tc.khavdaEdges.length > 0 && (
                     <div className="intelligence-card p-6">
                       <h3 className="text-sm font-semibold text-foreground mb-4 flex items-center gap-2">
-                        <Zap className="w-4 h-4 text-purple-400" /> Khavda Transmission Lines
+                        <Zap className="w-4 h-4 text-status-ai-fg" /> Khavda Transmission Lines
                       </h3>
                       <div className="overflow-auto max-h-[400px]">
                         <table className="intel-table">
@@ -3069,7 +3116,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           <tbody>
                             {tc.khavdaEdges.map((edge: any, i: number) => (
                               <tr key={i}>
-                                <td className="font-bold text-purple-400 font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
+                                <td className="font-bold text-status-ai-fg font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
                                   {edge.project} <span className="text-muted-foreground ml-1 font-normal lowercase tracking-normal">({edge.phase})</span>
                                 </td>
                                 <td className="font-medium text-foreground/90 max-w-[150px] truncate" title={edge.fromLabel || edge.fromNode}>{edge.fromLabel || edge.fromNode}</td>
@@ -3078,9 +3125,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                      (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                  <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-primary/20 text-primary border border-primary/30' :
+                                      (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border' :
                                         'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.status || '—'}
@@ -3126,7 +3173,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           <tbody>
                             {tc.rajasthanEdges.map((edge: any, i: number) => (
                               <tr key={i}>
-                                <td className="font-bold text-purple-400 font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
+                                <td className="font-bold text-status-ai-fg font-mono text-[10px] uppercase tracking-wider truncate max-w-[200px]" title={`${edge.project} (${edge.phase})`}>
                                   {edge.project} <span className="text-muted-foreground ml-1 font-normal lowercase tracking-normal">({edge.phase})</span>
                                 </td>
                                 <td className="font-medium text-foreground/90 max-w-[150px] truncate" title={edge.fromLabel || edge.fromNode}>{edge.fromLabel || edge.fromNode}</td>
@@ -3135,9 +3182,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 <td className="font-mono text-xs">{edge.length || '—'}</td>
                                 <td className="text-muted-foreground/70 text-xs max-w-[120px] truncate">{edge.contractor || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                      (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(edge.normalizedStatus || edge.status || '').toLowerCase() === 'charged' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'completed' ? 'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border' :
+                                    (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in_progress' || (edge.normalizedStatus || edge.status || '').toLowerCase() === 'in progress' ? 'bg-primary/20 text-primary border border-primary/30' :
+                                      (edge.normalizedStatus || edge.status || '').toLowerCase() === 'under_bidding' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border' :
                                         'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {edge.normalizedStatus || edge.status || '—'}
@@ -3185,9 +3232,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                 </td>
                                 <td className="text-muted-foreground/70 text-xs">{n.region || '—'}</td>
                                 <td>
-                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(n.status || '').toLowerCase() === 'charged' || (n.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                    (n.status || '').toLowerCase() === 'in_progress' || (n.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                      (n.status || '').toLowerCase() === 'under_bidding' ? 'bg-orange-500/10 text-orange-500 border border-orange-500/20' :
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider ${(n.status || '').toLowerCase() === 'charged' || (n.status || '').toLowerCase() === 'completed' ? 'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border' :
+                                    (n.status || '').toLowerCase() === 'in_progress' || (n.status || '').toLowerCase() === 'in progress' ? 'bg-primary/20 text-primary border border-primary/30' :
+                                      (n.status || '').toLowerCase() === 'under_bidding' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border' :
                                         'bg-slate-500/10 text-slate-500 border border-slate-500/20'
                                     }`}>
                                     {n.status || '—'}
@@ -3264,7 +3311,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.cod_actual_date || 'Done'}
                             </div>
                           ) : (
-                            <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                            <div className="font-semibold text-primary flex items-center gap-1 truncate text-[11px]">
                               <Clock className="w-3 h-3 shrink-0" /> {status.cod_forecast_date || 'TBD'}
                             </div>
                           )}
@@ -3277,7 +3324,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                               <CheckCircle2 className="w-3 h-3 shrink-0" /> {status.tr_actual_date || 'Done'}
                             </div>
                           ) : (
-                            <div className="font-semibold text-blue-500 flex items-center gap-1 truncate text-[11px]">
+                            <div className="font-semibold text-primary flex items-center gap-1 truncate text-[11px]">
                               <Clock className="w-3 h-3 shrink-0" /> Pending
                             </div>
                           )}
@@ -3385,9 +3432,9 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                             </td>
                             <td className="px-4 py-3 text-muted-foreground text-xs max-w-[200px] truncate" title={act.wbsName}>{act.wbsName || '—'}</td>
                             <td className="px-4 py-3">
-                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(act.status || '').toLowerCase() === 'completed' ? 'bg-green-500/10 text-green-500 border border-green-500/20' :
-                                (act.status || '').toLowerCase() === 'in progress' ? 'bg-blue-500/10 text-blue-500 border border-blue-500/20' :
-                                  'bg-red-500/10 text-red-500 border border-red-500/20'
+                              <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${(act.status || '').toLowerCase() === 'completed' ? 'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border' :
+                                (act.status || '').toLowerCase() === 'in progress' ? 'bg-primary/20 text-primary border border-primary/30' :
+                                  'bg-status-critical-bg text-status-critical-fg border border-status-critical-border'
                                 }`}>
                                 {act.status}
                               </span>
@@ -3468,7 +3515,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                       {/* Node Card */}
                       <div className={`w-full bg-card rounded-2xl shadow-lg flex flex-col z-10 border-2 ${isCompleted ? 'border-primary shadow-primary/20' :
-                        isInProgress ? 'border-amber-500 shadow-amber-500/20' :
+                        isInProgress ? 'border-status-risk-border shadow-status-risk-fg/20' :
                           'border-border shadow-black/5'
                         }`}>
                         <div className={`px-4 py-3 flex items-center gap-3 border-b ${isCompleted ? 'bg-primary/5 border-primary/20 text-primary' :

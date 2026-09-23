@@ -125,6 +125,40 @@
     --accent-900: #71233c;
     --accent-950: #3f0f1e;
 
+    /* ═══ TEXT RAMP ═══ */
+    --text-50: #edf7f2;
+    --text-100: #dcefe6;
+    --text-200: #b9dfcc;
+    --text-300: #95d0b3;
+    --text-400: #72c099;
+    --text-500: #4fb080;
+    --text-600: #3f8d66;
+    --text-700: #2f6a4d;
+    --text-800: #204633;
+    --text-900: #10231a;
+    --text-950: #08120d;
+
+    /* ═══ BACKGROUND RAMP ═══ */
+    --background-50: #ecf9f2;
+    --background-100: #d9f2e6;
+    --background-200: #b3e6cc;
+    --background-300: #8cd9b3;
+    --background-400: #66cc99;
+    --background-500: #40bf80;
+    --background-600: #339966;
+    --background-700: #26734d;
+    --background-800: #194d33;
+    --background-900: #0d261a;
+    --background-950: #06130d;
+
+    /* ═══ BRAND GRADIENTS ═══ */
+    --linearPrimarySecondary: linear-gradient(135deg, #0B74B0, #75479C);
+    --linearPrimaryAccent: linear-gradient(135deg, #0B74B0, #BD3861);
+    --linearSecondaryAccent: linear-gradient(135deg, #75479C, #BD3861);
+    --radialPrimarySecondary: radial-gradient(#0B74B0, #75479C);
+    --radialPrimaryAccent: radial-gradient(#0B74B0, #BD3861);
+    --radialSecondaryAccent: radial-gradient(#75479C, #BD3861);
+
     /* ═══════════════ SEMANTIC — LIGHT ═══════════════ */
 
     /* Surfaces: an elevation ladder, not a pile of shadows. */
@@ -290,6 +324,32 @@
     --accent-800: #f7d1dc;
     --accent-900: #fbe8ed;
     --accent-950: #fdf2f5;
+
+    /* ═══ TEXT RAMP — DARK ═══ */
+    --text-50: #08120d;
+    --text-100: #10231a;
+    --text-200: #204633;
+    --text-300: #2f6a4d;
+    --text-400: #3f8d66;
+    --text-500: #4fb080;
+    --text-600: #72c099;
+    --text-700: #95d0b3;
+    --text-800: #b9dfcc;
+    --text-900: #dcefe6;
+    --text-950: #edf7f2;
+
+    /* ═══ BACKGROUND RAMP — DARK ═══ */
+    --background-50: #05140f;
+    --background-100: #0a291f;
+    --background-200: #14523d;
+    --background-300: #1f7a5c;
+    --background-400: #29a37a;
+    --background-500: #33cc99;
+    --background-600: #5cd6ad;
+    --background-700: #85e0c2;
+    --background-800: #adebd6;
+    --background-900: #d6f5eb;
+    --background-950: #ebfaf5;
 
     /* Surfaces: a real ladder. Each step is a deliberate lift, not opacity. */
     --surface-0: #0a0e17;

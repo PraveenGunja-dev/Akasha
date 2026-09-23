@@ -10,17 +10,17 @@ import {
 
 /* ── Status config ── */
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  raised: { label: 'Raised', color: 'text-destructive', bg: 'bg-destructive/10', border: 'border-destructive/20' },
-  submitted: { label: 'In Review (EE)', color: 'text-amber-500', bg: 'bg-amber-500/10', border: 'border-amber-500/20' },
-  approved: { label: 'In Review (QI)', color: 'text-blue-500', bg: 'bg-blue-500/10', border: 'border-blue-500/20' },
-  completed: { label: 'Approved', color: 'text-success', bg: 'bg-success/10', border: 'border-success/20' },
-  rejected: { label: 'Rejected', color: 'text-orange-500', bg: 'bg-orange-500/10', border: 'border-orange-500/20' },
+  raised: { label: 'Raised', color: 'text-status-critical-fg', bg: 'bg-status-critical-bg', border: 'border-status-critical-border' },
+  submitted: { label: 'In Review (EE)', color: 'text-status-risk-fg', bg: 'bg-status-risk-bg', border: 'border-status-risk-border' },
+  approved: { label: 'In Review (QI)', color: 'text-status-done-fg', bg: 'bg-status-done-bg', border: 'border-status-done-border' },
+  completed: { label: 'Approved', color: 'text-status-healthy-fg', bg: 'bg-status-healthy-bg', border: 'border-status-healthy-border' },
+  rejected: { label: 'Rejected', color: 'text-status-watch-fg', bg: 'bg-status-watch-bg', border: 'border-status-watch-border' },
 };
 
 const HANDLER_CONFIG: Record<string, { label: string; color: string }> = {
-  contractor: { label: 'Contractor', color: 'text-destructive' },
-  execution_engineer: { label: 'Execution Engineer', color: 'text-amber-500' },
-  quality_inspector: { label: 'Quality Inspector', color: 'text-blue-500' },
+  contractor: { label: 'Contractor', color: 'text-status-critical-fg' },
+  execution_engineer: { label: 'Execution Engineer', color: 'text-status-risk-fg' },
+  quality_inspector: { label: 'Quality Inspector', color: 'text-status-done-fg' },
 };
 
 /* ── KPI Card ── */
@@ -329,7 +329,7 @@ export default function QualityCommandCenter() {
         </h3>
         <div className="flex gap-4">
           <WorkflowStage label="Raised" count={byStatus.raised || 0} total={ov.total_ncs} color="text-destructive" onClick={() => drillTo('raised')} />
-          <WorkflowStage label="In Review (EE)" count={byStatus.submitted || 0} total={ov.total_ncs} color="text-amber-500" onClick={() => drillTo('submitted')} />
+          <WorkflowStage label="In Review (EE)" count={byStatus.submitted || 0} total={ov.total_ncs} color="text-status-risk-fg" onClick={() => drillTo('submitted')} />
           <WorkflowStage label="In Review (QI)" count={byStatus.approved || 0} total={ov.total_ncs} color="text-blue-500" onClick={() => drillTo('approved')} />
           <WorkflowStage label="Approved" count={byStatus.completed || 0} total={ov.total_ncs} color="text-success" isLast onClick={() => drillTo('completed')} />
         </div>
@@ -363,7 +363,7 @@ export default function QualityCommandCenter() {
         </div>
 
         <div className="flex gap-4">
-          <WorkflowStage label="In Review (EE)" count={rfiByStatus.submitted || 0} total={ov.total_rfis} color="text-amber-500" />
+          <WorkflowStage label="In Review (EE)" count={rfiByStatus.submitted || 0} total={ov.total_rfis} color="text-status-risk-fg" />
           <WorkflowStage label="In Review (QI)" count={rfiByStatus.approved || 0} total={ov.total_rfis} color="text-blue-500" />
           <WorkflowStage label="Completed" count={rfiByStatus.completed || 0} total={ov.total_rfis} color="text-success" isLast />
         </div>
@@ -702,7 +702,7 @@ export default function QualityCommandCenter() {
                     </div>
                   </div>
                   <div className="text-right shrink-0">
-                    <div className={`text-lg font-bold ${nc.age_days > 30 ? 'text-destructive' : nc.age_days > 14 ? 'text-warning' : nc.age_days > 7 ? 'text-amber-500' : 'text-muted-foreground'}`}>
+                    <div className={`text-lg font-bold ${nc.age_days > 30 ? 'text-status-critical-fg' : nc.age_days > 14 ? 'text-status-risk-fg' : nc.age_days > 7 ? 'text-status-watch-fg' : 'text-muted-foreground'}`}>
                       {nc.age_days}d
                     </div>
                     <div className="text-[9px] text-muted-foreground/50 uppercase">Age</div>

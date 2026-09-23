@@ -1,3 +1,4 @@
+import { useTheme } from '../../hooks/useTheme';
 import React, { useState, useEffect, useRef } from 'react';
 import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, RefreshCw, BookOpen } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -7,7 +8,7 @@ import NotificationDropdown from './NotificationDropdown';
 import PMAGThreadPanel from './PMAGThreadPanel';
 
 export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing, onNavigateToSimulation }: any) {
-  const [theme, setTheme] = useState<'light' | 'dark'>('light');
+  const [theme, , toggleTheme] = useTheme();
   const navigate = useNavigate();
   const { projectId } = useParams();
   const { user, logout } = useAuth();
@@ -77,12 +78,11 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   };
 
   useEffect(() => {
-    document.documentElement.classList.toggle('dark', theme === 'dark');
   }, [theme]);
 
   return (
     <>
-    <header className="h-[73px] bg-card border-b border-border dark:border-border shadow-sm flex items-center justify-between px-4 shrink-0 z-40">
+    <header className="h-[73px] bg-card border-b border-border shadow-sm flex items-center justify-between px-5 shrink-0 z-40">
       
       {/* Left: hamburger (mobile) & Title */}
       <div className="flex items-center gap-3 flex-1">
@@ -105,12 +105,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         >
           <button 
             onClick={() => setIsPhaseOpen(!isPhaseOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground text-[12px] font-semibold transition-colors shadow-sm"
           >
             <span>{currentPhase === 'ALL' ? 'All Phases' : currentPhase}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPhaseOpen ? 'rotate-180' : ''}`} />
           </button>
-          <div className={`absolute top-full right-0 mt-1 w-36 py-1 bg-card rounded-lg shadow-lg border border-muted dark:border-gray-700 transition-all z-50 ${isPhaseOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
+          <div className={`absolute top-full right-0 mt-1 w-36 py-1 bg-card rounded-lg shadow-lg border border-border transition-all z-50 ${isPhaseOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
             {['Ongoing', 'Commissioned', 'ALL'].map(p => (
               <button
                 key={p}
@@ -125,7 +125,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
                   });
                   setIsPhaseOpen(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPhase === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-gray-700/50'}`}
+                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPhase === p ? 'bg-primary-100 text-primary-700 font-bold' : 'text-foreground hover:bg-muted'}`}
               >
                 {p === 'ALL' ? 'All Phases' : p}
               </button>
@@ -140,12 +140,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         >
           <button 
             onClick={() => setIsPortfolioOpen(!isPortfolioOpen)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border dark:border-gray-700 bg-card hover:bg-muted dark:hover:bg-gray-700/50 text-foreground text-[12px] font-semibold transition-colors shadow-sm"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border bg-card hover:bg-muted text-foreground text-[12px] font-semibold transition-colors shadow-sm"
           >
             <span>{currentPortfolio === 'All Portfolios' ? 'All Portfolios' : currentPortfolio}</span>
             <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPortfolioOpen ? 'rotate-180' : ''}`} />
           </button>
-          <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-card rounded-lg shadow-lg border border-muted dark:border-gray-700 transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
+          <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-card rounded-lg shadow-lg border border-border transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
             {['All Portfolios', 'Solar Khavda', 'Solar Rajasthan', 'Wind', 'BESS'].map(p => (
               <button
                 key={p}
@@ -160,7 +160,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
                   });
                   setIsPortfolioOpen(false);
                 }}
-                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPortfolio === p ? 'bg-sky-50 dark:bg-sky-500/10 text-sky-600 dark:text-sky-400 font-bold' : 'text-foreground dark:text-muted-foreground hover:bg-muted dark:hover:bg-gray-700/50'}`}
+                className={`w-full text-left px-4 py-2 text-[12px] transition-colors ${currentPortfolio === p ? 'bg-primary-100 text-primary-700 font-bold' : 'text-foreground hover:bg-muted'}`}
               >
                 {p}
               </button>
@@ -173,7 +173,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
           <button 
             onClick={onSyncData}
             disabled={isSyncing}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-sky-500/20 bg-background hover:bg-sky-500/5 text-foreground text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-primary-200 bg-card hover:bg-primary-50 text-foreground text-[12px] font-semibold transition-colors shadow-sm mr-2 ${isSyncing ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
             <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-sky-500' : ''}`} />
             <span className="hidden lg:inline">{isSyncing ? 'Syncing...' : 'Sync All Data'}</span>
@@ -183,7 +183,8 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         {/* Ask Akasha */}
         <button 
           onClick={onOpenCopilot} 
-          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-400 hover:to-blue-500 text-white text-[12px] font-semibold transition-all shadow-[0_0_15px_rgba(14,165,233,0.3)] border border-sky-400/50 hover:scale-[1.02] active:scale-[0.98]"
+          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg text-white text-[12px] font-semibold transition-all shadow-md hover:shadow-lg border border-primary-400/50 hover:scale-[1.02] active:scale-[0.98]"
+          style={{ background: 'var(--linearPrimarySecondary)' }}
           title="Ask Akasha — Project Intelligence AI Copilot"
         >
           <Sparkles className="w-3.5 h-3.5 animate-pulse" />
@@ -194,22 +195,22 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         <a 
           href="/AKASHA_USER_GUIDE.docx" 
           download
-          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-white text-[12px] font-semibold transition-colors shadow-sm"
+          className="flex items-center gap-1.5 px-3 py-1.5 mr-2 rounded-lg bg-status-healthy text-white text-[12px] font-semibold transition-colors shadow-sm hover:opacity-90"
         >
           <BookOpen className="w-3.5 h-3.5" />
           <span className="hidden lg:inline text-shadow-sm">User Guide</span>
         </a>
 
         <button 
-          onClick={() => setTheme(t => t === 'light' ? 'dark' : 'light')} 
-          className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          onClick={toggleTheme} 
+          className="hidden sm:block p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
         >
           {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
         </button>
 
         {/* Bell */}
         <div className="relative" ref={notificationRef}>
-            <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-black/5 dark:hover:bg-white/5 transition-colors">
+            <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <Bell className="w-4 h-4" />
             {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-red-500 ring-[1.5px] ring-background" />}
             </button>
@@ -235,12 +236,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
                <User className="w-3.5 h-3.5 text-muted-foreground" />
             </div>
           </div>
-          <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border dark:border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
-             <div className="px-3 py-2 border-b border-muted dark:border-border">
-               <p className="text-[12px] font-semibold text-foreground dark:text-white">{user?.display_name || 'User'}</p>
+          <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
+             <div className="px-3 py-2 border-b border-border">
+               <p className="text-[12px] font-semibold text-foreground">{user?.display_name || 'User'}</p>
                <p className="text-[11px] text-muted-foreground truncate">{user?.role || 'executive'}</p>
              </div>
-             <button onClick={handleSignOut} className="w-full text-left px-3 py-1.5 text-[12px] text-destructive hover:bg-destructive/10 dark:hover:bg-red-900/10 transition-colors flex items-center gap-1.5">
+             <button onClick={handleSignOut} className="w-full text-left px-3 py-1.5 text-[12px] text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5">
                <LogOut className="w-3.5 h-3.5" />
                Sign Out
              </button>

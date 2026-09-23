@@ -1,5 +1,20 @@
 /* ── Module Deliveries Types ────────────────────────────────────────────── */
 
+/** The LTA rule, evaluated server-side: a PPA project's LTA must not cross its
+ *  SCOD, any other project's must not cross its AOP. `contract` is read from
+ *  the P6 name's _PPA/_MERCHANT/_GROUP token and is null where the name has
+ *  none — in that case the AOP basis is a default, not a reading, and the UI
+ *  says so. `days_late` is null when the basis date is missing (no signal,
+ *  not a pass) and positive when the LTA lands after it. */
+export interface LtaRisk {
+  contract: 'PPA' | 'MERCHANT' | 'GROUP' | null;
+  is_ppa: boolean;
+  basis: 'SCOD' | 'AOP';
+  basis_date: string;
+  days_late: number | null;
+  breached: boolean;
+}
+
 export interface ModuleProject {
   sr: number;
   id: number;
@@ -15,6 +30,10 @@ export interface ModuleProject {
   capacity_mwp: number;
   connectivity_phase: string;
   lta: string;
+  /** Whether the LTA date itself misses the project's delivery commitment —
+   *  SCOD for a PPA project, AOP (Plan) for every other. Server-computed from
+   *  the real dates; null where the project has no LTA at all. */
+  lta_risk?: LtaRisk | null;
   scod: string;
   scod_lta_diff_days?: number | null;
   scod_source: 'manual' | 'manual_lta' | 'trial_run' | 'tc' | null;
@@ -50,6 +69,10 @@ export interface ModuleProject {
     grid_transmission: string;
   };
   month_mwp?: Record<string, number>;
+  /** How much of each month's planned MWp came from a phase whose ordering
+   *  date had already passed. Same units as month_mwp and never larger than
+   *  it — it marks a cell as overdue without changing the figure shown. */
+  month_overdue_mwp?: Record<string, number>;
   planning_flags?: string[];
   /** MWp needing an immediate exception order, outside the monthly plan,
    *  because its module date already passed — authoritative from the

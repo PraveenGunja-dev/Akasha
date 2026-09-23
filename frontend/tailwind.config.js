@@ -105,8 +105,12 @@ export default {
         ring: tok("ring"),
 
         /* ── Legacy semantic aliases (~4,000 existing call sites) ── */
-        background: tok("background"),
+        background: {
+          DEFAULT: tok("background"),
+          ...ramp("background"),
+        },
         foreground: tok("foreground"),
+        text: ramp("text"),
         card: {
           DEFAULT: tok("card"),
           foreground: tok("card-foreground"),

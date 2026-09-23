@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Lock, X, ArrowRight } from "lucide-react";
 import PresentationModal from "../components/ui/PresentationModal";
 import { useAuth } from "../context/AuthContext";
+import { useTheme } from '../hooks/useTheme';
 
 const ROLE_ROUTES: Record<string, string> = {
   executive: '/ceo-dashboard',
@@ -66,7 +67,7 @@ const SQUARES = [
 ];
 
 export default function LandingPage() {
-  const [theme, setTheme] = useState<"light" | "dark">("dark");
+  const [theme, setTheme] = useTheme();
   const [showPresentation, setShowPresentation] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
@@ -74,7 +75,6 @@ export default function LandingPage() {
   const isDark = theme === "dark";
 
   useEffect(() => {
-    document.documentElement.classList.toggle("dark", isDark);
   }, [isDark]);
 
   useEffect(() => {

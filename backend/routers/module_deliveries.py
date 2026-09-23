@@ -21,12 +21,9 @@ router = APIRouter(prefix="/api/module-deliveries", tags=["Module Deliveries"])
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _extract_wattage_from_text(short_text: str) -> Optional[float]:
-    """Extract wattage (e.g. 620W) from SAP short_text and convert to MW."""
-    if not short_text:
-        return None
-    m = re.search(r'(\d{3,4})\s*(?:W|Wp|w)', short_text)
-    return float(m.group(1)) / 1_000_000 if m else None
+from services.module_wattage import mw_factor as _extract_wattage_from_text
+# Single source for "how many MW is one module", shared with the ingest — see
+# services/module_wattage.py.
 
 
 def _wbs_key(wbs: str) -> Optional[str]:
@@ -51,6 +48,28 @@ def _safe_float(v, default=0.0):
         return float(v) if v else default
     except (ValueError, TypeError):
         return default
+
+
+# The contract type decides which commitment the LTA date must land before: a
+# PPA project's LTA must not cross its SCOD, any other project's must not cross
+# its AOP (user rule 2026-09-23). project_mapping.category is unusable for this
+# — it reads 'PPA' on 1 of 45 solar rows — so the classification comes from the
+# contract token the P6 name carries (ARE55L_S01_HSAT_100_MW_PPA). That token is
+# present on 40 of 45 rows. The display project name is deliberately NOT used as
+# a fallback: it disagrees with the P6 token on 14 rows (AESL PPA (C&I) is
+# _MERCHANT in P6; MLP T1 CG carries no 'PPA' in its display name but is _PPA).
+_CONTRACT_TOKENS = ("PPA", "MERCHANT", "GROUP")
+
+
+def _contract_token(p6_name: Optional[str]) -> Optional[str]:
+    """'PPA' | 'MERCHANT' | 'GROUP' from the P6 name, or None where it carries
+    no token — None is reported as-is so the UI can say the AOP basis was a
+    default rather than a reading."""
+    parts = re.split(r"[_\s]+", (p6_name or "").upper())
+    for tok in _CONTRACT_TOKENS:
+        if tok in parts:
+            return tok
+    return None
 
 
 # p6_project.parent_eps_name (Primavera's ParentEPSName) doubles as an EPC
@@ -518,6 +537,32 @@ def get_module_deliveries_summary(
         # commitment and would misrepresent this specific date.
         aop_plan = aop_by_pid.get(m.project_id)
 
+        # LTA breach. A PPA project's LTA must not cross its SCOD; every other
+        # project's must not cross its AOP (Plan). Computed here, against the
+        # real dates, rather than re-parsed from the formatted strings on the
+        # client. Reported only where both dates exist — a missing basis date
+        # is no signal, not a pass, so days_late stays null and nothing is
+        # flagged. days_late is positive when the LTA lands AFTER the basis.
+        contract = _contract_token(p6_name)
+        is_ppa = contract == "PPA"
+        basis_dt = scod if is_ppa else aop_plan
+        lta_risk = None
+        if isinstance(m.lta_date, datetime):
+            # Calendar dates, not datetimes: a P6 baseline finish carries a
+            # time-of-day (17:00) while lta_date and manual_scod are midnight,
+            # so subtracting the datetimes reported every slip one day short
+            # and made a same-day pair read as -1.
+            days_late = ((m.lta_date.date() - basis_dt.date()).days
+                         if isinstance(basis_dt, datetime) else None)
+            lta_risk = {
+                "contract": contract,
+                "is_ppa": is_ppa,
+                "basis": "SCOD" if is_ppa else "AOP",
+                "basis_date": basis_dt.strftime("%d-%b-%y") if isinstance(basis_dt, datetime) else "",
+                "days_late": days_late,
+                "breached": bool(days_late is not None and days_late > 0),
+            }
+
         # Determine delivery status
         if ordered > 0 and delivered >= ordered * 0.95:
             status = "delivered"
@@ -620,6 +665,7 @@ def get_module_deliveries_summary(
             "capacity_mwp": round(cap_mwp, 1),
             "connectivity_phase": _phase_label(m.id),
             "lta": m.lta_date.strftime("%d-%b-%y") if isinstance(m.lta_date, datetime) else "",
+            "lta_risk": lta_risk,
             "scod": scod.strftime("%d-%b-%y") if isinstance(scod, datetime) else (str(scod) if scod else ""),
             "scod_lta_diff_days": (scod - m.lta_date).days if isinstance(scod, datetime) and isinstance(m.lta_date, datetime) else None,
             "scod_source": scod_source,
