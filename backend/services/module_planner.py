@@ -125,6 +125,7 @@ def run_module_planning_engine(
         p['priority'] = proj_priority
         p['month_mwp'] = {mo: 0.0 for mo in forecast_months}
         p['month_overdue_mwp'] = {mo: 0.0 for mo in forecast_months}
+        p['month_phases'] = {mo: [] for mo in forecast_months}
         p['planning_flags'] = []
         p['perspectives'] = {}
         # MWp needing an immediate exception order, outside this plan, because
@@ -329,6 +330,7 @@ def run_module_planning_engine(
                 'tc_dt': ph['tc_dt'],
                 'mod_dt': ph['mod_dt'],
                 'mwp': req_mwp,
+                'mw_ac': ph.get('mw_ac') or 0.0,
                 'raw_month_idx': raw_idx,
                 'target_month_idx': max(0, min(num_months - 1, raw_idx)),
                 'overdue': is_overdue,
@@ -354,6 +356,11 @@ def run_module_planning_engine(
     # ordering date had already passed. Kept separate from the allocation so a
     # cell can be marked overdue without changing the figure it shows.
     project_overdue_alloc: Dict[int, Dict[int, float]] = {}
+    # Which phases make up each month's allocation, in ordering sequence. The
+    # grid cell shows one MWp figure, but a planner placing that order needs to
+    # know it is 'Ph-IV then Ph-V', not the project's whole phase list -- the
+    # tooltip showed every phase in every month before this (user 2026-09-24).
+    project_phase_alloc: Dict[int, Dict[int, List[Dict[str, Any]]]] = {}
     project_pulled_details: Dict[int, List[Dict[str, Any]]] = {}
     project_capacity_delayed_details: Dict[int, List[Dict[str, Any]]] = {}
     project_lta_extended_details: Dict[int, List[Dict[str, Any]]] = {}
@@ -394,6 +401,16 @@ def run_module_planning_engine(
                     project_allocations[pid][curr_m] += take_mwp
                     if is_overdue_demand:
                         project_overdue_alloc[pid][curr_m] += take_mwp
+                    project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append({
+                        'phase_label': d['phase_label'],
+                        'mwp': round(take_mwp, 1),
+                        'mw_ac': d.get('mw_ac') or 0.0,
+                        'order_date': d['tc_dt'].strftime('%d-%b-%y'),
+                        'tc_date': d['mod_dt'].strftime('%d-%b-%y'),
+                        'ftc_date': d['ftc_dt'].strftime('%d-%b-%y'),
+                        'overdue': is_overdue_demand,
+                        'shifted': curr_m != d['target_month_idx'],
+                    })
                     rem -= take_mwp
                     if curr_m < target_m:
                         project_pulled_details.setdefault(pid, []).append({
@@ -435,6 +452,16 @@ def run_module_planning_engine(
                         project_allocations[pid][curr_m] += take_mwp
                         if is_overdue_demand:
                             project_overdue_alloc[pid][curr_m] += take_mwp
+                        project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append({
+                            'phase_label': d['phase_label'],
+                            'mwp': round(take_mwp, 1),
+                            'mw_ac': d.get('mw_ac') or 0.0,
+                            'order_date': d['tc_dt'].strftime('%d-%b-%y'),
+                            'tc_date': d['mod_dt'].strftime('%d-%b-%y'),
+                            'ftc_date': d['ftc_dt'].strftime('%d-%b-%y'),
+                            'overdue': is_overdue_demand,
+                            'shifted': curr_m != d['target_month_idx'],
+                        })
                         rem -= take_mwp
 
                         if curr_m <= lta_m:
@@ -463,6 +490,16 @@ def run_module_planning_engine(
                 project_allocations[pid][num_months - 1] += rem
                 if is_overdue_demand:
                     project_overdue_alloc[pid][num_months - 1] += rem
+                project_phase_alloc.setdefault(pid, {}).setdefault(num_months - 1, []).append({
+                    'phase_label': d['phase_label'],
+                    'mwp': round(rem, 1),
+                    'mw_ac': d.get('mw_ac') or 0.0,
+                    'order_date': d['tc_dt'].strftime('%d-%b-%y'),
+                    'tc_date': d['mod_dt'].strftime('%d-%b-%y'),
+                    'ftc_date': d['ftc_dt'].strftime('%d-%b-%y'),
+                    'overdue': is_overdue_demand,
+                    'shifted': True,
+                })
                 project_capacity_delayed_details.setdefault(pid, []).append({
                     'pushed_from': forecast_months[target_m],
                     'pushed_to': forecast_months[num_months - 1],
@@ -494,12 +531,26 @@ def run_module_planning_engine(
 
         allocs = project_allocations.get(pid, {})
         overdue_allocs = project_overdue_alloc.get(pid, {})
+        phase_allocs = project_phase_alloc.get(pid, {})
         for m_i, mo in enumerate(forecast_months):
             p['month_mwp'][mo] = round(allocs.get(m_i, 0.0), 1)
             # How much of that month's figure is demand whose ordering window
             # has already closed — the cell shows the same MWp either way, and
             # this is what lets the grid mark it rather than imply it is on plan.
             p['month_overdue_mwp'][mo] = round(overdue_allocs.get(m_i, 0.0), 1)
+            # One entry per phase, in ordering sequence, so the cell's MWp can
+            # be read as the orders that make it up.
+            merged: Dict[str, Dict[str, Any]] = {}
+            for part in phase_allocs.get(m_i, []):
+                cur = merged.get(part['phase_label'])
+                if cur:
+                    cur['mwp'] = round(cur['mwp'] + part['mwp'], 1)
+                    cur['overdue'] = cur['overdue'] or part['overdue']
+                    cur['shifted'] = cur['shifted'] or part['shifted']
+                else:
+                    merged[part['phase_label']] = dict(part)
+            p['month_phases'][mo] = sorted(
+                merged.values(), key=lambda x: (_parse_date_str(x['order_date']) or datetime.max))
 
         # Fix minor rounding discrepancies against active_demand — the MWp
         # actually queued for leveling, which the sequential phase fill now

@@ -6,9 +6,10 @@ import {
   Package, Sun, Truck, CheckCircle2, Clock, Search,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, ArrowRight, Star, Columns3, Info
+  Bot, X, Send, ArrowRight, Columns3, Info
 } from 'lucide-react';
-import type { ModuleDeliveriesSummary, ModuleProject, LtaRisk } from './types';
+import type { ModuleDeliveriesSummary, ModuleProject, LtaRisk, MonthPhase } from './types';
+import { PLANNING_RULES } from './planningRules';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
@@ -31,35 +32,6 @@ const isLTADelayed = (p: ModuleProject) => p.lta_risk?.breached === true;
 /** "LTA crosses SCOD by 92 days" — the one phrasing, used in cell and banner. */
 const ltaBreachLine = (r: LtaRisk) =>
   `LTA crosses ${r.basis} by ${r.days_late} day${r.days_late === 1 ? '' : 's'}`;
-
-const DateChipGroup = ({ dateStr, colorClass, borderColorClass, badgeBgClass }: { dateStr?: string | null, colorClass: string, borderColorClass: string, badgeBgClass: string }) => {
-  if (!dateStr || dateStr === 'N/A') return <span className={`font-mono text-[11px] font-semibold ${colorClass}`}>N/A</span>;
-  
-  const parts = dateStr.split(' · ');
-  return (
-    <div className="flex flex-col gap-1 mt-1 mb-1 w-full">
-      {parts.map((part, i) => {
-        const colonIdx = part.indexOf(':');
-        if (colonIdx !== -1) {
-          const label = part.substring(0, colonIdx).trim();
-          const date = part.substring(colonIdx + 1).trim();
-          return (
-            <div key={i} className={`flex flex-col w-full rounded-md overflow-hidden border ${borderColorClass} bg-background/90 shadow-xs`}>
-              <span className={`px-1.5 py-0.5 text-[8.5px] uppercase tracking-wider font-extrabold ${badgeBgClass} ${colorClass} border-b ${borderColorClass} text-center truncate`}>{label}</span>
-              <span className={`px-2 py-0.5 font-mono text-[10px] font-bold ${colorClass} bg-muted/20 text-center whitespace-nowrap`}>{date}</span>
-            </div>
-          );
-        } else {
-          return (
-            <div key={i} className={`flex items-center justify-center w-full rounded-md overflow-hidden border ${borderColorClass} bg-background/90 shadow-xs`}>
-              <span className={`px-2 py-0.5 font-mono text-[10px] font-bold ${colorClass} bg-muted/20 text-center whitespace-nowrap`}>{part}</span>
-            </div>
-          );
-        }
-      })}
-    </div>
-  );
-};
 
 const MONTH_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -708,6 +680,7 @@ export default function ModuleDeliveriesPage() {
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'tc' | 'module' | 'ftc'>('all');
   const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
+  const [rulesOpen, setRulesOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
   const [colDropdownOpen, setColDropdownOpen] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
@@ -1392,7 +1365,71 @@ export default function ModuleDeliveriesPage() {
               Standard P6 Scheduled
             </span>
           </div>
+
+          {/* Every rule behind these numbers, from the same source the export
+              writes to its Planning Rules sheet — so what is defended in a
+              meeting matches what is read on screen. */}
+          <button
+            type="button"
+            onClick={() => setRulesOpen(o => !o)}
+            aria-expanded={rulesOpen}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-card px-2 py-1 text-[10px] font-semibold text-fg-secondary transition-colors hover:border-primary/40 hover:text-foreground focus:outline-none focus-visible:ring-1 focus-visible:ring-primary"
+          >
+            <Info className="h-3 w-3" />
+            How this plan is built
+            <ChevronDown className={`h-3 w-3 transition-transform ${rulesOpen ? 'rotate-180' : ''}`} />
+          </button>
         </div>
+
+        {rulesOpen && (
+          <div className="border-b border-border bg-surface-sunken/60 px-4 py-4">
+            <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+              <p className="text-[11px] leading-relaxed text-fg-secondary">
+                Every rule the monthly plan applies. The same list is written to the
+                <span className="font-semibold text-fg-primary"> Planning Rules </span>
+                sheet of the Excel export.
+              </p>
+              <span className="shrink-0 font-mono text-[10px] tabular-nums text-fg-tertiary">
+                {PLANNING_RULES.reduce((a, g) => a + g.rules.length, 0)} rules ·{' '}
+                {PLANNING_RULES.length} areas
+              </span>
+            </div>
+
+            {/* A column flow, not a grid: with a grid every row was as tall as its
+                tallest group, which left big dead bands between the two rows. Columns
+                let each group pack against the one above it, and break-inside-avoid
+                keeps a group from being split down the middle. */}
+            <div className="columns-1 gap-x-8 md:columns-2 xl:columns-3 [column-fill:_balance]">
+              {PLANNING_RULES.map(group => (
+                <section key={group.title} className="mb-4 break-inside-avoid">
+                  <h4 className="mb-2 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider text-fg-tertiary">
+                    <span className="shrink-0">{group.title}</span>
+                    <span className="h-px flex-1 bg-border-subtle" />
+                  </h4>
+                  <dl className="space-y-2">
+                    {group.rules.map(rule => (
+                      <div key={rule.name} className="border-l-2 border-border-subtle pl-2.5">
+                        <dt className="text-[11px] font-semibold leading-snug text-fg-primary">
+                          {rule.name}
+                        </dt>
+                        <dd className="mt-0.5 text-[10.5px] leading-[1.55] text-fg-secondary">
+                          {rule.detail}
+                          {rule.source && (
+                            /* Kept on one line so it reads as a citation rather than
+                               stray text wrapping onto its own row. */
+                            <span className="ml-1.5 inline-block whitespace-nowrap rounded border border-border-subtle bg-surface-2 px-1 py-px font-mono text-[9px] text-fg-tertiary">
+                              {rule.source}
+                            </span>
+                          )}
+                        </dd>
+                      </div>
+                    ))}
+                  </dl>
+                </section>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="max-h-[72vh] overflow-auto custom-scrollbar">
           <table className="min-w-full text-left border-separate border-spacing-0">
@@ -1668,8 +1705,6 @@ export default function ModuleDeliveriesPage() {
                         // Capacity Delayed = Red
                         // Extended to LTA = Purple (Matches LTA box)
                         // Leveled Early = Cyan
-                        const shiftColor = p.planning_flags?.includes('capacity_delayed') ? 'text-status-critical-fg' : p.planning_flags?.includes('extended_to_lta') ? 'text-status-ai-fg' : 'text-cyan-400';
-                        const shiftBorder = p.planning_flags?.includes('capacity_delayed') ? 'border-status-critical-border' : p.planning_flags?.includes('extended_to_lta') ? 'border-status-ai-border' : 'border-cyan-500/30';
                         const shiftLabel = shiftMonths > 0 ? `${shiftMonths}mo Delay` : `${Math.abs(shiftMonths)}mo Early`;
                         const shiftTriangleColor = p.planning_flags?.includes('capacity_delayed') ? 'border-t-red-500' : p.planning_flags?.includes('extended_to_lta') ? 'border-t-purple-500' : 'border-t-cyan-500';
 
@@ -1735,154 +1770,151 @@ export default function ModuleDeliveriesPage() {
                                   </div>
                                 )}
 
-                                <div className="pt-2 pb-1 border-t border-border-subtle">
-                                  {(() => {
-                                      // 1. Identify which phases (if any) apply to this specific column's month (mo)
-                                      const tcParts = (p.tc_date || '').split(' · ');
-                                      const matchingTcParts = tcParts.filter(part => part.includes(mo));
-                                      const matchingPhaseLabels = matchingTcParts.map(part => {
-                                        const colonIdx = part.indexOf(':');
-                                        return colonIdx !== -1 ? part.substring(0, colonIdx).trim() : null;
-                                      }).filter(Boolean) as string[];
-                                      const matchingPhasePrefixes = matchingPhaseLabels.map(l => l.split(' ')[0]);
-  
-                                      // 2. Generic filter function to narrow down any date string to the matched phases
-                                      const filterPhases = (dateStr: string | null | undefined) => {
-                                        if (!dateStr || matchingPhaseLabels.length === 0) return dateStr;
-                                        const parts = dateStr.split(' · ');
-                                        const matched = parts.filter(part => {
-                                          const colonIdx = part.indexOf(':');
-                                          if (colonIdx === -1) return true;
-                                          const label = part.substring(0, colonIdx).trim();
-                                          return matchingPhaseLabels.includes(label) || matchingPhasePrefixes.some(pref => label.startsWith(pref));
-                                        });
-                                        return matched.length > 0 ? matched.join(' · ') : dateStr;
-                                      };
+                                {/* The four milestone columns, but showing only the phases
+                                    THIS month's order actually covers, each with how much of
+                                    it is being taken. Before, every column listed the whole
+                                    project's phase list, so a 114 MWp order displayed all
+                                    318 MWp of phases. month_phases comes from the planner,
+                                    which fills one phase in full before starting the next. */}
+                                {(() => {
+                                  const phases = p.month_phases?.[mo] ?? [];
+                                  if (phases.length === 0) return null;
 
-                                      const renderRevised = (labelMo: string) => {
-                                        if (!isShifted) return null;
-                                        return (
-                                          <div className="mt-2 pt-2 border-t border-border-subtle flex flex-col items-center justify-center">
-                                            <div className={`flex items-center gap-1 text-[9px] font-bold ${shiftColor} mb-1.5`}>
-                                              <ArrowRight className="w-3 h-3 rotate-90" />
-                                              {shiftLabel}
-                                            </div>
-                                            <div className={`text-[10px] font-mono font-bold ${shiftColor} bg-surface-sunken/80 px-2 py-0.5 rounded-full border ${shiftBorder}`}>
-                                              {labelMo}
-                                            </div>
+                                  /* Quantity follows the Unit selector in the toolbar, so the
+                                     tooltip never contradicts the column it came from. */
+                                  const qty = (ph: MonthPhase) =>
+                                    unitToggle === 'mwac' ? `${ph.mw_ac} MWac`
+                                      : unitToggle === 'mwp' ? `${MW(ph.mwp)} MWp`
+                                        : `${MW(ph.mwp)} MWp / ${ph.mw_ac} MWac`;
+
+                                  const taken = phases.reduce((a, x) => a + (x.mwp || 0), 0);
+                                  const takenAc = phases.reduce((a, x) => a + (x.mw_ac || 0), 0);
+                                  const takenLabel =
+                                    unitToggle === 'mwac' ? `${MW(takenAc)} MWac`
+                                      : unitToggle === 'mwp' ? `${MW(taken)} MWp`
+                                        : `${MW(taken)} MWp / ${MW(takenAc)} MWac`;
+
+                                  /* One stack of phase chips under a milestone heading. The
+                                     date shown is that phase's own date for this milestone. */
+                                  const Stack = ({ field, text, border, bg }: {
+                                    field: 'order_date' | 'tc_date' | 'ftc_date';
+                                    text: string; border: string; bg: string;
+                                  }) => (
+                                    <div className="space-y-1">
+                                      {phases.map((ph, i) => (
+                                        <div key={`${ph.phase_label}-${i}`}
+                                          className={`rounded-md border px-1.5 py-1 ${border} ${bg}`}>
+                                          <div className="flex items-baseline justify-between gap-1.5">
+                                            <span className={`text-[9px] font-semibold ${text}`}>{ph.phase_label}</span>
+                                            <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
                                           </div>
-                                        );
-                                      };
+                                          <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
+                                            {ph[field]}
+                                          </div>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
 
-                                      return (
-                                      <div className="flex w-full flex-wrap items-stretch justify-between gap-x-1.5 gap-y-2 group/timeline">
+                                  const Arrow = ({ label }: { label?: string }) => (
+                                    <div className="mt-6 flex shrink-0 flex-col items-center justify-start w-9 sm:w-11">
+                                      <div className="relative flex w-full items-center justify-center">
+                                        <div className="h-px w-full rounded-full bg-border-default" />
+                                        <ArrowRight className="absolute -right-1 h-3 w-3 text-fg-tertiary" />
+                                      </div>
+                                      {label && (
+                                        <div className="mt-1.5 whitespace-nowrap text-[8px] font-medium text-fg-tertiary">{label}</div>
+                                      )}
+                                    </div>
+                                  );
+
+                                  const Col = ({ title, text, children }: {
+                                    title: string; text: string; children: React.ReactNode;
+                                  }) => (
+                                    <div className="min-w-0 flex-1 basis-[112px]">
+                                      <div className={`mb-1.5 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider ${text}`}>
+                                        {title}
+                                      </div>
+                                      {children}
+                                    </div>
+                                  );
+
+                                  return (
+                                    <div className="border-t border-border-subtle pt-2">
+                                      <div className="mb-2 flex items-baseline justify-between gap-2">
+                                        <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
+                                          Ordering in {mo} &middot; {phases.length} phase{phases.length === 1 ? '' : 's'}
+                                        </span>
+                                        <span className="font-mono text-[10px] tabular-nums text-fg-secondary">
+                                          taking <span className="font-bold text-fg-primary">{takenLabel}</span>
+                                        </span>
+                                      </div>
+
+                                      <div className="flex w-full flex-wrap items-start gap-x-1.5 gap-y-2">
                                         {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
                                           <>
-                                            {/* Module Ordering Block (Blue) */}
-                                            <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
-                                              (p.module_date || '').includes(mo) 
-                                                ? 'border border-primary/40 bg-primary/10 ring-1 ring-inset ring-primary/40 relative z-10' 
-                                                : 'border border-primary/25 bg-primary/[0.06]'
-                                            }`}>
-                                              <div className="text-[9px] uppercase tracking-wider text-primary font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.module_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-primary text-primary" />}
-                                                Module Order
-                                              </div>
-                                              <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-primary" borderColorClass="border-primary/30" badgeBgClass="bg-primary/20" />
-                                              {renderRevised(mo)}
-                                            </div>
-
-                                            {/* Arrow 1 */}
+                                            <Col title="Module Order" text="text-primary">
+                                              <Stack field="order_date" text="text-primary"
+                                                border="border-primary/30" bg="bg-primary/[0.07]" />
+                                            </Col>
                                             {milestoneFilter === 'all' && (
-                                              <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12 transition-opacity mt-6">
-                                                <div className="w-full flex items-center justify-center relative transition-transform">
-                                                  <div className="h-[2px] w-full bg-border-default rounded-full" />
-                                                  <ArrowRight className="w-3 h-3 text-status-risk-fg absolute -right-1" />
-                                                </div>
-                                                <div className="text-[8px] text-fg-tertiary mt-1.5 font-medium whitespace-nowrap">{p.type === 'China' || p.type === 'SEA' ? 136 : 98}d Lead</div>
-                                              </div>
+                                              <Arrow label={`${p.type === 'China' || p.type === 'SEA' ? 136 : 98}d Lead`} />
                                             )}
                                           </>
                                         )}
 
                                         {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
                                           <>
-                                            {/* TC Delivery Block (Yellow) */}
-                                            <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
-                                              (p.tc_date || '').includes(mo)
-                                                ? 'border border-status-risk-border bg-status-risk-bg ring-1 ring-inset ring-status-risk-border relative z-10'
-                                                : 'border border-status-risk-border/50 bg-status-risk-bg/50'
-                                            }`}>
-                                              <div className="text-[9px] uppercase tracking-wider text-status-risk-fg font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.tc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-risk-fg text-status-risk-fg" />}
-                                                TC Date
-                                              </div>
-                                              <DateChipGroup dateStr={filterPhases(p.tc_date)} colorClass="text-status-risk-fg" borderColorClass="border-status-risk-border" badgeBgClass="bg-status-risk-bg" />
-                                              {renderRevised((() => {
-                                                const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
-                                                d.setDate(d.getDate() + (p.type === 'China' || p.type === 'SEA' ? 136 : 98));
-                                                return d.toLocaleString('en-GB', { month: 'short', year: '2-digit' }).replace(' ', '-');
-                                              })())}
-                                            </div>
-
-                                            {/* Arrow 2 */}
-                                            {milestoneFilter === 'all' && (
-                                              <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12 transition-opacity mt-6">
-                                                <div className="w-full flex items-center justify-center relative transition-transform">
-                                                  <div className="h-[2px] w-full bg-border-default rounded-full" />
-                                                  <ArrowRight className="w-3 h-3 text-status-healthy-fg absolute -right-1" />
-                                                </div>
-                                                <div className="text-[8px] text-fg-tertiary mt-1.5 font-medium whitespace-nowrap">45d Install</div>
-                                              </div>
-                                            )}
+                                            <Col title="TC Date" text="text-status-risk-fg">
+                                              <Stack field="tc_date" text="text-status-risk-fg"
+                                                border="border-status-risk-border" bg="bg-status-risk-bg/60" />
+                                            </Col>
+                                            {milestoneFilter === 'all' && <Arrow label="45d Install" />}
                                           </>
                                         )}
 
                                         {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
-                                          <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
-                                            (p.ftc_date || '').includes(mo)
-                                              ? 'border border-status-healthy-border bg-status-healthy-bg ring-1 ring-inset ring-status-healthy-border relative z-10'
-                                              : 'border border-status-healthy-border/50 bg-status-healthy-bg/50'
-                                          }`}>
-                                            <div className="text-[9px] uppercase tracking-wider text-status-healthy-fg font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                              {(p.ftc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-healthy-fg text-status-healthy-fg" />}
-                                              FTC Date
-                                            </div>
-                                            <DateChipGroup dateStr={filterPhases(p.ftc_date)} colorClass="text-status-healthy-fg" borderColorClass="border-status-healthy-border" badgeBgClass="bg-status-healthy-bg" />
-                                            {renderRevised((() => {
-                                              const d = new Date(`${mo.split('-')[0]} 15, 20${mo.split('-')[1]}`);
-                                              d.setDate(d.getDate() + (p.type === 'China' || p.type === 'SEA' ? 136 : 98) + 45);
-                                              return d.toLocaleString('en-GB', { month: 'short', year: '2-digit' }).replace(' ', '-');
-                                            })())}
-                                          </div>
+                                          <Col title="FTC Date" text="text-status-healthy-fg">
+                                            <Stack field="ftc_date" text="text-status-healthy-fg"
+                                              border="border-status-healthy-border" bg="bg-status-healthy-bg/60" />
+                                          </Col>
                                         )}
 
-                                        {/* LTA Block (Purple) */}
                                         {p.lta && (
                                           <>
-                                            <div className="flex flex-col items-center justify-center shrink-0 w-8 sm:w-10 transition-opacity mt-6">
-                                              <div className="w-full flex items-center justify-center relative transition-transform">
-                                                <div className="h-[2px] w-full bg-border-default rounded-full" />
-                                                <ArrowRight className="w-3 h-3 text-status-ai-fg absolute -right-1" />
+                                            <Arrow />
+                                            {/* One date for the whole project, not per phase. */}
+                                            <Col title="LTA Date" text="text-status-ai-fg">
+                                              <div className="rounded-md border border-status-ai-border bg-status-ai-bg/60 px-1.5 py-1">
+                                                <div className="text-[9px] font-semibold text-status-ai-fg">Project</div>
+                                                <div className="font-mono text-[10.5px] font-bold tabular-nums text-status-ai-fg">
+                                                  {p.lta}
+                                                </div>
                                               </div>
-                                            </div>
-                                            <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
-                                              (p.lta || '').includes(mo)
-                                                ? 'border border-status-ai-border bg-status-ai-bg ring-1 ring-inset ring-status-ai-border relative z-10'
-                                                : 'border border-status-ai-border/50 bg-status-ai-bg/50'
-                                            }`}>
-                                              <div className="text-[9px] uppercase tracking-wider text-status-ai-fg font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.lta || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-ai-fg text-status-ai-fg" />}
-                                                LTA Date
-                                              </div>
-                                              <DateChipGroup dateStr={filterPhases(p.lta)} colorClass="text-status-ai-fg" borderColorClass="border-status-ai-border" badgeBgClass="bg-status-ai-bg" />
-                                            </div>
+                                            </Col>
                                           </>
                                         )}
                                       </div>
-                                    );
-                                  })()}
-                                </div>
+
+                                      {/* Flags belong on the phase, not the project: only some of
+                                          a month's phases may be overdue or quota-moved. */}
+                                      {phases.some(x => x.overdue || x.shifted) && (
+                                        <div className="mt-2 flex flex-wrap items-center gap-1">
+                                          {phases.filter(x => x.overdue).map((x, i) => (
+                                            <span key={`o${i}`} className="rounded bg-status-critical-bg px-1.5 py-0.5 text-[9px] font-bold text-status-critical-fg">
+                                              {x.phase_label} overdue
+                                            </span>
+                                          ))}
+                                          {phases.filter(x => !x.overdue && x.shifted).map((x, i) => (
+                                            <span key={`s${i}`} className="rounded bg-status-risk-bg px-1.5 py-0.5 text-[9px] font-bold text-status-risk-fg">
+                                              {x.phase_label} moved by quota
+                                            </span>
+                                          ))}
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
 
                                 {p.planning_flags?.includes('extended_to_lta') ? (
                                   <div className="text-[10.5px] text-status-risk-fg leading-relaxed pt-2 border-t border-border-subtle">

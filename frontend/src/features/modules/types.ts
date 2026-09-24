@@ -15,6 +15,23 @@ export interface LtaRisk {
   breached: boolean;
 }
 
+/** One phase's share of a single month's order. */
+export interface MonthPhase {
+  phase_label: string;
+  /** MWp of this phase ordered in this month. */
+  mwp: number;
+  /** The phase's own AC capacity, as stated in its P6 milestone name. */
+  mw_ac: number;
+  /** When the order must be placed to hold the phase's FTC. */
+  order_date: string;
+  tc_date: string;
+  ftc_date: string;
+  /** The ordering window has already closed — this is a catch-up order. */
+  overdue: boolean;
+  /** Vendor quota moved it out of its target month. */
+  shifted: boolean;
+}
+
 export interface ModuleProject {
   sr: number;
   id: number;
@@ -69,6 +86,11 @@ export interface ModuleProject {
     grid_transmission: string;
   };
   month_mwp?: Record<string, number>;
+  /** The phases that make up each month's order, in the sequence they must be
+   *  placed. The planner fills one phase in full before starting the next, so
+   *  a month shows only the phases its MWp actually covers — not the whole
+   *  project's phase list. */
+  month_phases?: Record<string, MonthPhase[]>;
   /** How much of each month's planned MWp came from a phase whose ordering
    *  date had already passed. Same units as month_mwp and never larger than
    *  it — it marks a cell as overdue without changing the figure shown. */
