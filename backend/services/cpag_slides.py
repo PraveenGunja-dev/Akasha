@@ -25,10 +25,34 @@ from pptx.oxml.ns import nsdecls, qn
 from services.cpag_pptx_base import (
     BAND, _generated_by, BODY_W, CONTENT_TOP, INK, MARGIN, MUTED, RULE,
     _content_slide, _date, _heading, _footnote, _layout, _line_chart,
-    _bar_chart, _month, _num, _pct, _section_slide, _table, _text,
-    _variance_tint, _drop_empty_placeholders,
+    _bar_chart, _month, _num, _pct, _section_slide, _table, _table_grouped,
+    _text, _variance_tint, _drop_empty_placeholders,
     BRAND_BLUE, BRAND_PURPLE, WHITE, SLIDE_W, SLIDE_H, COVER_PHOTO,
+    GREY_COL, PEACH_COL,
 )
+
+
+def _next_months(last_month: Optional[str], n: int) -> List[str]:
+    """The next `n` month strings ("YYYY-MM") after `last_month`, for the
+    pack's "Forecast Delivery Schedule" columns. Falls back to a fixed pair
+    when no reported month is known, rather than leaving the header blank."""
+    if not last_month or "-" not in last_month:
+        return ["2026-09", "2026-10"][:n]
+    y, m = (int(x) for x in last_month.split("-")[:2])
+    out = []
+    for _ in range(n):
+        m += 1
+        if m > 12:
+            m = 1
+            y += 1
+        out.append(f"{y:04d}-{m:02d}")
+    return out
+
+
+def _last_reported_month(project: Optional[Dict[str, Any]]) -> Optional[str]:
+    curve = (project or {}).get("sCurve") or []
+    reported = [c["month"] for c in curve if c.get("actualCumPct") is not None]
+    return max(reported) if reported else None
 
 
 # ── Slides that exist but cannot be populated ──────────────────────────────
@@ -301,13 +325,15 @@ def slide_scurve(prs, pss: str, spv: str, curve, buckets,
     else:
         v_top = chart_top + Inches(2.2)
 
-    # 3. Variance & Remarks table across full width (6 columns)
-    v_header = ["Activity", "Wtg.", "Plan", "Actual",
-                "Variance in Plan Vs Actual",
-                "Variance Remark & Mitigation / Action Plan"]
-    v_rows = [v_header]
+    # 3. Variance & Remarks table across full width (6 columns), with the
+    # pack's own merged "FTM" header spanning the Plan/Actual pair.
+    v_top_groups = [("", 1), ("", 1), ("FTM", 2), ("", 1), ("", 1)]
+    v_head = ["Activity", "Wtg.", "Plan", "Actual",
+              "Variance in Plan Vs Actual",
+              "Variance Remark & Mitigation / Action Plan"]
+    v_rows: List[List[Any]] = []
     tints = {}
-    for i, b in enumerate(buckets, start=1):
+    for i, b in enumerate(buckets):
         v_rows.append([
             b["label"].split(",")[0],
             _pct(b["weightPct"], 0),
@@ -325,9 +351,9 @@ def slide_scurve(prs, pss: str, spv: str, curve, buckets,
     ])
     tints[len(v_rows) - 1] = _variance_tint(actual_total - plan_total)
 
-    _table(slide, v_rows, MARGIN, v_top, BODY_W,
-           col_w=[1.8, 0.6, 0.6, 0.6, 1.2, 7.49],
-           size=8, row_h=0.26, head_h=0.28, tints=tints, tint_col=4)
+    _table_grouped(slide, v_top_groups, v_head, v_rows, MARGIN, v_top, BODY_W,
+                   col_w=[1.8, 0.6, 0.6, 0.6, 1.2, 7.49],
+                   size=8, row_h=0.26, head_h=0.24, tints=tints, tint_col=4)
 
     _footnote(slide,
               "P6 weightage units - planned against actual, phased on baseline "
@@ -343,110 +369,228 @@ def _milestone_of(pkg, *needles):
     return None
 
 
-def slide_procurement(prs, pss: str, packages, sap, sap_note) -> None:
+def _receipt_milestones(pkg) -> List[Dict[str, Any]]:
+    return sorted(
+        (m for m in pkg["milestones"]
+         if "receipt at site" in m["name"].lower()),
+        key=lambda m: m.get("baselineFinish") or "",
+    )
+
+
+def _actual_or_forecast(m) -> str:
+    """Actual where the milestone landed; P6's own forecast finish where it
+    hasn't yet - never blank just because the work is still ahead of today.
+    The asterisk marks a forecast so it reads as a projection, not a fact."""
+    if not m:
+        return "-"
+    if m.get("actualFinish"):
+        return _date(m["actualFinish"])
+    if m.get("forecastFinish"):
+        return f"{_date(m['forecastFinish'])}*"
+    return "-"
+
+
+def slide_procurement(prs, pss: str, packages, sap, sap_note,
+                      project: Optional[Dict[str, Any]] = None) -> None:
+    """Seventeen columns with the pack's own two-row merged header - Sr. No.
+    through Remarks, "Expected Delivery at Site" over Start/Finish,
+    "Manufacturing Status" over QAP Acceptance/MC Date, and "Forecast
+    Delivery Schedule (Qty)" over the next two reporting months.
+    """
     slide = _content_slide(
         prs,
         f"Procurement & Monthly Rolling Plan for Supply of Equipment - {pss}",
         "P6 ordering milestones joined to SAP purchase orders")
     by_material = {r["material"]: r for r in (sap or [])}
+    fc_months = _next_months(_last_reported_month(project), 2)
+    fc_labels = [_month(m) for m in fc_months]
 
-    rows = [["Package", "Scope", "Manufacturer", "PO number", "PO date",
-             "Mfg. clearance", "Lots recd.", "Last receipt", "Slip"]]
-    for pkg in packages:
+    top_groups = [
+        ("", 1), ("", 1), ("", 1), ("", 1), ("", 1), ("", 1), ("", 1),
+        ("", 1), ("", 1),
+        ("Expected Delivery at Site", 2),
+        ("Manufacturing Status", 2),
+        ("", 1),
+        ("Forecast Delivery Schedule (Qty)", 2),
+        ("", 1),
+    ]
+    head = ["Sr. No.", "Packages", "Manufacturer", "UOM", "Scope",
+            "Ordering Completed", "Balance Ordering", "PO Number", "PO Date",
+            "Start", "Finish", "QAP Acceptance Date", "MC Date",
+            "Delivered At Site", fc_labels[0], fc_labels[1], "Remarks"]
+
+    rows = []
+    for i, pkg in enumerate(packages, start=1):
         order = _milestone_of(pkg, "placement of the order")
         mc = _milestone_of(pkg, "manufacturing clearance", "ntp")
-        receipts = [m for m in pkg["milestones"]
-                    if "receipt at site" in m["name"].lower()]
+        receipts = _receipt_milestones(pkg)
         done = [m for m in receipts if m["actualFinish"]]
-        last = max((m["actualFinish"] or "" for m in receipts), default="")
+        landed = sorted((m["actualFinish"] for m in done))
         slips = [m["slipDays"] for m in pkg["milestones"]
                  if m["slipDays"] is not None]
+        worst = max(slips) if slips else None
         sap_row = by_material.get(pkg.get("sapMaterial") or "")
+        scope = pkg.get("scopeQty")
+        ordered = sap_row.get("orderQtyRaw") if sap_row else None
+        # Balance is only meaningful when scope and ordered share a unit; SAP
+        # quantities mix units across multi-line POs for every material
+        # except containers, so it is otherwise left blank rather than guessed.
+        balance = "-"
+        if (scope is not None and ordered is not None
+                and sap_row and sap_row.get("material") == "BESS Containers"):
+            balance = _num(max(scope - ordered, 0))
+        remark_bits = []
+        if receipts:
+            remark_bits.append(f"{len(done)} of {len(receipts)} lots received")
+        if landed:
+            remark_bits.append(f"last {_date(landed[-1])}")
+        if worst is not None and worst > 0:
+            remark_bits.append(f"worst slip +{worst}d")
+        # Expected Delivery at Site: first and last lot, actual where it has
+        # landed, P6's own forecast where it hasn't - the same pattern as PO
+        # Date and MC Date below, so a reader sees one convention throughout.
+        delivery_start = _actual_or_forecast(receipts[0]) if receipts else "-"
+        delivery_finish = _actual_or_forecast(receipts[-1]) if receipts else "-"
         rows.append([
+            str(i),
             pkg.get("packageBase") or pkg.get("package"),
-            _num(pkg["scopeQty"]) if pkg["scopeQty"] else "-",
             (sap_row["vendor"] if sap_row else "-") or "-",
+            pkg.get("uom") or ("Nos." if scope else "-"),
+            _num(scope) if scope else "-",
+            _num(ordered) if ordered is not None else "-",
+            balance,
             (sap_row["poNumbers"] if sap_row else "-") or "-",
-            _date(order["actualFinish"]) if order else "-",
-            _date(mc["actualFinish"]) if mc else "-",
-            f"{len(done)}/{len(receipts)}" if receipts else "-",
-            _date(last) if last else "-",
-            f"{max(slips):+d}d" if slips else "-",
+            _actual_or_forecast(order),
+            delivery_start, delivery_finish,
+            "-", _actual_or_forecast(mc),
+            _num(sap_row["deliveredQtyRaw"]) if sap_row and sap_row.get("deliveredQtyRaw") else "-",
+            "-", "-",
+            "; ".join(remark_bits) if remark_bits else "-",
         ])
-    _table(slide, rows, MARGIN, CONTENT_TOP, BODY_W,
-           col_w=[2.5, 0.7, 2.4, 2.0, 1.0, 1.1, 0.8, 1.0, 0.6],
-           size=8.5, row_h=0.29)
-    _footnote(slide, sap_note or
-              "SAP holds no PO date or delivery date for these projects, so dates "
-              "are P6 ordering milestones; manufacturer and PO number are from "
-              "SAP. QAP acceptance date and forecast delivery quantities have no "
-              "source in any connected system.")
+    # The reference tints this table by column, not by row: grey over the
+    # nine ordering columns (Sr. No. through PO Date), peach over the eight
+    # delivery-tracking columns (Expected Delivery through Remarks).
+    col_tint = [GREY_COL] * 9 + [PEACH_COL] * 8
+    _table_grouped(
+        slide, top_groups, head, rows, MARGIN, CONTENT_TOP, BODY_W,
+        col_w=[0.35, 1.3, 1.25, 0.4, 0.45, 0.65, 0.65, 1.05, 0.6, 0.55, 0.55,
+               0.65, 0.6, 0.6, 0.42, 0.42, 1.4],
+        size=7.2, row_h=0.27, head_h=0.24, col_tint=col_tint)
+    base_note = sap_note or (
+        "SAP holds no PO date or delivery date for these projects, so dates "
+        "are P6 ordering milestones; manufacturer, PO number and delivered "
+        "quantity are from SAP. QAP acceptance date and forecast delivery "
+        "quantities have no source in any connected system.")
+    _footnote(slide, base_note + " * marks a forecast date - P6's current "
+              "schedule finish for a milestone that has not happened yet.")
+
+
+def _approval_remark(a: Dict[str, Any]) -> str:
+    if a["status"] == "Completed":
+        slip = a.get("slipDays")
+        if slip is None or slip <= 0:
+            return f"Completed {_date(a['actualFinish'])}."
+        return f"Completed {_date(a['actualFinish'])} - {slip}d behind baseline."
+    if a["status"] == "In Progress":
+        return "In progress."
+    if a.get("forecastFinish"):
+        return f"Forecast {_date(a['forecastFinish'])}."
+    return "-"
 
 
 def slide_approvals(prs, pss: str, items, done: int, total: int,
                     start: int, end: int, page: str) -> None:
+    """Nine columns, exactly as the pack has them: SN through Remarks, no
+    separate slip column - slip is folded into the Remarks text instead."""
     slide = _content_slide(prs, f"Statutory and Other Approvals ({pss})",
                            f"{done} of {total} complete · {page}")
-    rows = [["#", "Activity Name", "Responsible", "Approval Authority",
-             "BL Start", "BL Finish", "Act./Fcst Start",
-             "Act./Fcst Finish", "Slip"]]
+    rows = [["SN", "Activity Name", "Responsible", "Approval Authority",
+             "Baseline Start", "Baseline Finish", "Actual/ Forecast Start",
+             "Actual/ Forecast Finish", "Remarks"]]
     for i, a in enumerate(items[start:end], start=start + 1):
         rows.append([
             str(i), a["name"], "-", "-",
             _date(a["baselineStart"]), _date(a["baselineFinish"]),
             _date(a["actualStart"]),
             _date(a["actualFinish"] or a["forecastFinish"]),
-            "-" if a["slipDays"] is None else f"{a['slipDays']:+d}d",
+            _approval_remark(a),
         ])
     _table(slide, rows, MARGIN, CONTENT_TOP, BODY_W,
-           col_w=[0.4, 3.6, 1.1, 1.4, 1.1, 1.1, 1.2, 1.3, 0.6],
+           col_w=[0.35, 2.6, 1.0, 1.25, 1.0, 1.0, 1.1, 1.15, 3.84],
            size=8.5, row_h=0.30)
     _footnote(slide,
-              "Responsible party, approval authority and remarks are narrative "
-              "columns in the pack with no system of record, so they are blank.")
+              "Responsible party and approval authority are narrative columns "
+              "in the pack with no system of record, so they are blank.")
 
 
 def slide_ordering_status(prs, pss_group: str, kind: str, rows_body,
                           page: str) -> None:
+    """Eleven columns, exactly as the pack has them, including the "Verified
+    by Engineering Consultant" column the pack always prints as NA."""
     slide = _content_slide(prs, f"{kind} ordering Status ({pss_group})", page)
-    header = ["SN", "Equipment / Package", "Qty / Scope", "Spec issue date",
-              "TBER date", "Qualified vendors", "Receipt of offer",
-              "Commercial NFA", "Release of PO/SO", "Update"]
+    header = ["SN", "Equipment/ Package", "Qty / Scope",
+              "Final / Revised Specifications Issue Date",
+              "Verified by Engineering Consultant", "TBER Date",
+              "Qualified Vendors", "Receipt of Offer",
+              "Commercial NFA Submission", "Release of PO / SO", "Update"]
     _table(slide, [header] + (rows_body or []), MARGIN, CONTENT_TOP, BODY_W,
-           col_w=[0.4, 2.3, 0.9, 1.0, 0.9, 1.2, 1.0, 1.0, 1.1, 2.5],
-           size=8, row_h=0.30)
+           col_w=[0.35, 1.9, 0.85, 1.25, 1.1, 0.95, 1.15, 0.95, 1.1, 1.15, 1.54],
+           size=9.5, row_h=0.40, head_h=0.34)
     _footnote(slide,
-              "Specification issue date, consultant verification, TBER date, "
-              "qualified vendor list, receipt of offer and commercial NFA "
-              "submission are not held in any connected system and are left "
-              "blank. Release of PO/SO is the P6 order-placement milestone; "
-              "vendor and value come from SAP.")
+              "Specification issue date, TBER date, qualified vendor list, "
+              "receipt of offer and commercial NFA submission are not held in "
+              "any connected system and are left blank. Release of PO/SO is "
+              "the P6 order-placement milestone; * marks a forecast date "
+              "where the order has not yet been placed. Vendor and value "
+              "come from SAP.")
 
 
 def slide_mandays(prs, series, planned: int, earned: int, title_suffix: str,
                   posted: Optional[int] = None) -> None:
+    """Chart and summary on top, then the per-month grid underneath - the
+    same layout as the S-curve and Financial slides, so a reader can take a
+    number off the table without reading the chart."""
     slide = _content_slide(
         prs, f"Mandays Deployment Plan vs Actual - {title_suffix}",
-        "Planned Labor units against earned mandays")
+        "Scope (planned Labor units) against earned mandays")
+    chart_h = Inches(2.35)
     if series:
         _bar_chart(slide, [_month(m["month"]) for m in series],
                    [("Planned (month)", [m.get("planMonth", 0) for m in series]),
                     ("Earned (month)", [m.get("earnedMonth", 0) for m in series])],
-                   MARGIN, CONTENT_TOP, Inches(6.9), Inches(4.4))
+                   MARGIN, CONTENT_TOP, Inches(7.15), chart_h)
     rows = [["Measure", "Mandays"],
-            ["Planned", _num(planned)],
-            ["Earned", _num(earned)],
+            ["Scope (planned Labor units)", _num(planned)],
+            ["Earned (scope x % complete)", _num(earned)],
             ["Remaining", _num(planned - earned)],
             ["Earned %", _pct((earned / planned * 100) if planned else None)]]
     if posted is not None:
         rows.append(["Posted actual units", _num(posted)])
-    _table(slide, rows, MARGIN + Inches(7.15), CONTENT_TOP, Inches(5.14),
-           col_w=[2.8, 2.34], size=11, row_h=0.4)
+    _table(slide, rows, MARGIN + Inches(7.35), CONTENT_TOP, Inches(4.94),
+           col_w=[3.0, 1.94], size=10, row_h=0.42)
+
+    if series:
+        months = [_month(m["month"]) for m in series]
+        grid_rows = [
+            [""] + months,
+            ["Planned (month)"] + [_num(m.get("planMonth", 0)) for m in series],
+            ["Earned (month)"] + [_num(m.get("earnedMonth", 0)) for m in series],
+            ["Planned cum."] + [_num(m.get("planCum", 0)) for m in series],
+            ["Earned cum."] + [_num(m.get("earnedCum", 0)) for m in series],
+        ]
+        label_w = 1.6
+        each_w = (12.29 - label_w) / max(1, len(months))
+        _table(slide, grid_rows, MARGIN, CONTENT_TOP + chart_h + Inches(0.1),
+               BODY_W, col_w=[label_w] + [each_w] * len(months),
+               size=7.5, row_h=0.24)
+
     _footnote(slide,
-              "Earned mandays are derived, not measured: planned Labor units x "
-              "activity percent complete. Actual labour units are not posted in "
-              "P6, so this shows work credited rather than workmen deployed and "
-              "cannot reveal a productivity gap.")
+              "Scope is planned Labor units (mandays) on the schedule. Earned "
+              "= scope x activity percent complete - the same percent that "
+              "drives physical progress - because actual labour units are "
+              "not posted in P6 (1-4 non-zero rows out of 1,300-3,300 per "
+              "project). This shows mandays credited for work done, not "
+              "workmen deployed, and cannot reveal a productivity gap.")
 
 
 def slide_manpower_curve(prs, series, title_suffix: str) -> None:
@@ -465,28 +609,81 @@ def slide_manpower_curve(prs, series, title_suffix: str) -> None:
               "connected system.")
 
 
-def slide_financial(prs, receipt_series, commercial, projects) -> None:
-    slide = _content_slide(prs, "Financial S Curve",
-                           "Value received at site, all projects")
-    if receipt_series:
-        _bar_chart(slide, [_month(m["month"]) for m in receipt_series],
-                   [("Received (Rs Cr)", [m["monthCr"] for m in receipt_series])],
-                   MARGIN, CONTENT_TOP, Inches(6.9), Inches(4.4))
-    rows = [["PSS", "Ordered Rs Cr", "Delivered Rs Cr", "Delivered %"]]
-    for p in projects:
-        pct = (p["deliveredCr"] / p["orderCr"] * 100) if p["orderCr"] else None
-        rows.append([p["pss"], _num(p["orderCr"], 1),
-                     _num(p["deliveredCr"], 1), _pct(pct, 0)])
-    rows.append(["Total", _num(commercial["orderCr"], 1),
-                 _num(commercial["deliveredCr"], 1),
-                 _pct(commercial["deliveredPct"], 0)])
-    _table(slide, rows, MARGIN + Inches(7.15), CONTENT_TOP, Inches(5.14),
-           col_w=[1.5, 1.3, 1.3, 1.04], size=10.5, row_h=0.38)
+def slide_financial(prs, financial: Dict[str, Any], label: str) -> None:
+    """The pack's own Financial S-Curve layout: one combo chart, then a
+    four-row month grid - Budgeted cumulative / Monthly Budgeted / Actual
+    Cumulative / Monthly Actual - exactly as slide 45 has it, rather than the
+    per-PSS ordered/delivered table this used to substitute.
+    """
+    slide = _content_slide(prs, "Financial S Curve", label)
+    series = financial.get("series") or []
+    months = [_month(pt["month"]) for pt in series]
+
+    if series:
+        cd = CategoryChartData()
+        cd.categories = months
+        cd.add_series("Monthly Budgeted", [pt["budgetedMonthCr"] for pt in series])
+        cd.add_series("Monthly Actual", [pt["actualMonthCr"] for pt in series])
+        cd.add_series("Budgeted- cumulative", [pt["budgetedCumCr"] for pt in series])
+        cd.add_series("Actual Cumulative", [pt["actualCumCr"] for pt in series])
+        shape = slide.shapes.add_chart(
+            XL_CHART_TYPE.COLUMN_CLUSTERED, MARGIN, CONTENT_TOP,
+            BODY_W, Inches(3.1), cd)
+        chart = shape.chart
+        chart.has_title = False
+        chart.has_legend = True
+        chart.legend.position = XL_LEGEND_POSITION.TOP
+        chart.legend.include_in_layout = False
+        chart.font.size = Pt(8.5)
+        plot_area = chart._element.plotArea
+        bar_chart = plot_area.find(qn("c:barChart"))
+        if bar_chart is not None:
+            series_list = list(bar_chart.findall(qn("c:ser")))
+            ax_ids = bar_chart.findall(qn("c:axId"))
+            if len(ax_ids) >= 2 and len(series_list) >= 4:
+                cat_ax_id, val_ax_id = ax_ids[0].get("val"), ax_ids[1].get("val")
+                line_chart = parse_xml(f'''
+                    <c:lineChart {nsdecls("c")}>
+                        <c:grouping val="standard"/>
+                        <c:axId val="{cat_ax_id}"/>
+                        <c:axId val="{val_ax_id}"/>
+                    </c:lineChart>
+                ''')
+                first_ax = line_chart.find(qn("c:axId"))
+                for s in series_list[2:]:
+                    bar_chart.remove(s)
+                    line_chart.insert(line_chart.index(first_ax), s)
+                plot_area.insert(plot_area.index(bar_chart) + 1, line_chart)
+            plot = chart.plots[0]
+            if len(plot.series) >= 2:
+                plot.series[0].format.fill.solid()
+                plot.series[0].format.fill.fore_color.rgb = BRAND_BLUE
+                plot.series[1].format.fill.solid()
+                plot.series[1].format.fill.fore_color.rgb = BRAND_PURPLE
+
+    # The month grid beneath the chart, in the pack's own row order.
+    grid_top = CONTENT_TOP + Inches(3.2)
+    header = [""] + months
+    rows = [
+        header,
+        ["Budgeted- cumulative"] + [_num(pt["budgetedCumCr"], 0) for pt in series],
+        ["Monthly Budgeted"] + [_num(pt["budgetedMonthCr"], 0) for pt in series],
+        ["Actual Cumulative"] + [_num(pt["actualCumCr"], 0) for pt in series],
+        ["Monthly Actual"] + [_num(pt["actualMonthCr"], 0) for pt in series],
+    ]
+    label_w = 1.7
+    each_w = (12.29 - label_w) / max(1, len(months))
+    _table(slide, rows, MARGIN, grid_top, BODY_W,
+           col_w=[label_w] + [each_w] * len(months), size=7.5, row_h=0.24)
     _footnote(slide,
-              "Goods-receipt value from SAP; purchase orders only. The budgeted "
-              "curve in the pack comes from the capex NFA phasing, which is not "
-              "held in any connected system. Goods-receipt postings carry a "
-              "credit sign convention and are normalised here.")
+              "Budgeted is derived, not measured: the Rs 16,358 Cr approved "
+              "NFA (NFA_R1, 04-Apr-26) spread across each project's own P6 "
+              "baseline schedule, weighted by dispatchable MWh share - a "
+              "schedule projection onto a real total, not a cost-loaded plan. "
+              "Actual is SAP goods-receipt value and is currently zero "
+              "portfolio-wide because mt_materialdocument, the only source "
+              "with a posting date to phase it by month, holds no rows at "
+              "this sync.")
 
 
 def slide_contractors(prs, pss: str, items, note: str) -> None:
@@ -706,17 +903,22 @@ def slide_civil(prs, pss: str, spv: str, con: Dict[str, Any]) -> None:
 
 
 def slide_electrical(prs, pss: str, spv: str, elec: Dict[str, Any]) -> None:
-    """Electrical progress on the pack's own element labels."""
+    """Electrical progress on the pack's own element labels.
+
+    The pack prints Scope and Plan as separate columns even though they hold
+    the same figure here - both are kept so the column count matches.
+    """
     slide = _content_slide(prs, f"Electrical Plan Vs Actual Summary {pss}", spv)
     items = elec.get("items") or []
-    rows = [["Element", "UoM", "Scope", "Actual", "Plan %", "Actual %"]]
+    rows = [["Element", "UoM", "Scope", "Plan", "Actual", "Plan %", "Actual %"]]
     tints = {}
     for i, it in enumerate(items, start=1):
         rows.append([it["element"], it["uom"], _num(it["scope"]),
-                     _num(it["actual"]), "100%", _pct(it["actualPct"], 0)])
+                     _num(it.get("plan", it["scope"])), _num(it["actual"]),
+                     "100%", _pct(it["actualPct"], 0)])
         tints[i] = _achievement(it["actualPct"])
-    _table(slide, rows, MARGIN, CONTENT_TOP, Inches(5.9),
-           col_w=[2.1, 0.6, 1.1, 1.1, 0.8, 0.9], size=9.5, row_h=0.3,
+    _table(slide, rows, MARGIN, CONTENT_TOP, Inches(6.15),
+           col_w=[1.9, 0.55, 0.95, 0.85, 0.9, 0.75, 0.85], size=9, row_h=0.3,
            tints=tints)
 
     if items:
@@ -724,7 +926,7 @@ def slide_electrical(prs, pss: str, spv: str, elec: Dict[str, Any]) -> None:
             slide, [it["element"] for it in items],
             [("Plan", [100 for _ in items]),
              ("Actual", [it["actualPct"] or 0 for it in items])],
-            MARGIN + Inches(6.15), CONTENT_TOP, Inches(6.14), Inches(4.1),
+            MARGIN + Inches(6.35), CONTENT_TOP, Inches(5.94), Inches(4.1),
             number_format='0"%"')
         plots = chart.plots[0].series
         plots[0].format.fill.solid()

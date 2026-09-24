@@ -176,14 +176,27 @@ const UnavailableBoard: React.FC<{ reason: string; needs?: string }> = ({ reason
    spans both rows. */
 interface Group { label: string; span: number }
 
+/* Verified against the circulated deck's own table fills (slide XML dump,
+   2026-09-24): 7030A0 is the header purple used most often across the deck
+   (176 of 312 header cells sampled), and body rows are plain white almost
+   everywhere - there is no alternating row band in the native tables. The
+   one exception is Procurement, which tints by COLUMN (grey over ordering
+   columns, peach over delivery-tracking columns) - reproduced via `colTint`. */
+const HEADER_PURPLE = '#7030A0';
+const GREY_COL = '#F2F2F2';
+const PEACH_COL = '#FBE2D5';
+
 const T: React.FC<{
   head: string[]; rows: (string | React.ReactNode)[][];
   groups?: Group[];
   widths?: number[]; size?: number; align?: ('l' | 'r')[];
   compact?: boolean;
-}> = ({ head, rows, groups, widths, size = 13, align, compact }) => {
-  const headCell = cx('border border-[#9c6fb0] bg-[#7b3f9d] font-semibold text-white',
+  colTint?: ('grey' | 'peach' | null)[];
+}> = ({ head, rows, groups, widths, size = 13, align, compact, colTint }) => {
+  const headCell = cx('border border-[#5a2680] font-semibold text-white',
     compact ? 'px-2 py-1' : 'px-2.5 py-1.5');
+  const tintColor = (t: 'grey' | 'peach' | null | undefined) =>
+    t === 'grey' ? GREY_COL : t === 'peach' ? PEACH_COL : '#ffffff';
   /* A column covered by a labelled group is headed twice, so its lower cell is
      drawn; a column under an unlabelled group spans both rows instead. */
   const spannedTwice: boolean[] = [];
@@ -203,11 +216,12 @@ const T: React.FC<{
             {groups.map((g, i) => {
               const firstCol = groups.slice(0, i).reduce((a, x) => a + x.span, 0);
               return g.label ? (
-                <th key={i} colSpan={g.span} className={cx(headCell, 'text-center')}>
+                <th key={i} colSpan={g.span} style={{ background: HEADER_PURPLE }}
+                  className={cx(headCell, 'text-center')}>
                   {g.label}
                 </th>
               ) : (
-                <th key={i} colSpan={g.span} rowSpan={2}
+                <th key={i} colSpan={g.span} rowSpan={2} style={{ background: HEADER_PURPLE }}
                   className={cx(headCell, align?.[firstCol] === 'r' ? 'text-right' : 'text-left')}>
                   {head[firstCol]}
                 </th>
@@ -218,7 +232,8 @@ const T: React.FC<{
         <tr>
           {head.map((h, i) => (
             (groups && !spannedTwice[i]) ? null : (
-              <th key={i} className={cx(headCell, align?.[i] === 'r' ? 'text-right' : 'text-left')}>
+              <th key={i} style={{ background: HEADER_PURPLE }}
+                className={cx(headCell, align?.[i] === 'r' ? 'text-right' : 'text-left')}>
                 {h}
               </th>
             )
@@ -227,9 +242,10 @@ const T: React.FC<{
       </thead>
       <tbody>
         {rows.map((r, ri) => (
-          <tr key={ri} className={ri % 2 ? 'bg-[#fdf1e8]' : 'bg-white'}>
+          <tr key={ri}>
             {r.map((c, ci) => (
               <td key={ci}
+                style={{ background: tintColor(colTint?.[ci]) }}
                 className={cx('border border-[#c9ccd2] text-[#1a1a1a]',
                   compact ? 'px-2 py-[2.5px]' : 'px-2.5 py-[6px]',
                   align?.[ci] === 'r' ? 'text-right tabular-nums' : 'text-left')}>
@@ -253,10 +269,11 @@ interface BuildArgs {
   meta: any;
   commercial: any;
   manpower: any;
+  financial?: any;
   single: boolean;
 }
 
-export function buildSlides({ projects, meta, commercial, manpower, single }: BuildArgs): Slide[] {
+export function buildSlides({ projects, meta, commercial, manpower, financial, single }: BuildArgs): Slide[] {
   const out: Slide[] = [];
   const label = projects.map((p) => p.pss).join(', ');
   const half = Math.max(1, Math.ceil(projects.length / 2));
@@ -397,13 +414,20 @@ export function buildSlides({ projects, meta, commercial, manpower, single }: Bu
     'The issue register — impact, corrective action, owner and support required — is narrative and has no system of record.',
     'Variance and slip are measured throughout this pack; the commentary around them is not.');
 
-  add(financialSlide(commercial, projects));
+  add(financialSlide(financial ?? { series: [] }, label));
 
   groups.forEach((g) => {
     const gl = g.map((p: any) => p.pss).join(', ');
     add(sectionSlide(`Ordering Status ${gl}`));
-    add(orderingSlide(g, 'Supply', gl));
-    add(orderingSlide(g, 'Service', gl));
+    (['Supply', 'Service'] as const).forEach((kind) => {
+      const rows = buildOrderingRows(g, kind);
+      const pageCount = Math.max(1, Math.ceil(rows.length / ORDERING_PAGE_SIZE));
+      for (let pg = 0; pg < pageCount; pg += 1) {
+        const chunk = rows.slice(pg * ORDERING_PAGE_SIZE, (pg + 1) * ORDERING_PAGE_SIZE);
+        add(orderingSlide(chunk, pg * ORDERING_PAGE_SIZE, rows.length, kind, gl,
+          `page ${pg + 1} of ${pageCount}`));
+      }
+    });
   });
 
   groups.forEach((g) => {
@@ -783,12 +807,16 @@ const ElectricalBody: React.FC<{ project: any }> = ({ project }) => {
     <div className="flex h-full flex-col gap-2.5">
       <div className="grid min-h-0 flex-1 grid-cols-[1.05fr_1fr] gap-5">
         <div className="min-w-0">
+          {/* The pack prints Scope and Plan as separate columns even though they
+              hold the same figure here (Plan is phased flat across full scope,
+              since P6 carries no dated quantity curve). Both are kept, rather
+              than merged, so the column count matches the pack exactly. */}
           <T
-            head={['Element', 'UoM', 'Scope', 'Actual', 'Plan %', 'Actual %']}
-            align={['l', 'l', 'r', 'r', 'r', 'r']} size={10.5}
-            widths={[34, 10, 16, 16, 12, 12]}
+            head={['Element', 'UoM', 'Scope', 'Plan', 'Actual', 'Plan %', 'Actual %']}
+            align={['l', 'l', 'r', 'r', 'r', 'r', 'r']} size={10}
+            widths={[28, 8, 13, 13, 13, 12, 13]}
             rows={items.map((i: any) => [
-              i.element, i.uom, NUM(i.scope), NUM(i.actual), '100%',
+              i.element, i.uom, NUM(i.scope), NUM(i.plan ?? i.scope), NUM(i.actual), '100%',
               <span key="p" style={{ color: achievementColor(i.actualPct), fontWeight: 700 }}>
                 {PCT(i.actualPct, 0)}
               </span>,
@@ -994,13 +1022,54 @@ const SCurveBody: React.FC<{ project: any }> = ({ project }) => {
 const milestoneOf = (pkg: any, ...needles: string[]) =>
   pkg.milestones?.find((m: any) => needles.some((n) => m.name.toLowerCase().includes(n)));
 
-const procurementSlide = (p: any): Slide => ({
+/* A date the pack would print even before it happens: actual where the
+   milestone is done, P6's current forecast finish where it isn't — never a
+   blank just because the work hasn't reached that point yet. The forecast
+   half is marked (asterisk in the cell, spelled out once in the footnote)
+   so a reader can tell a measurement from a projection at a glance. */
+const actualOrForecast = (m: any | null | undefined): [string, boolean] => {
+  if (!m) return ['—', false];
+  if (m.actualFinish) return [DATE(m.actualFinish), false];
+  if (m.forecastFinish) return [`${DATE(m.forecastFinish)}*`, true];
+  return ['—', false];
+};
+
+const receiptMilestones = (pkg: any) => (pkg.milestones ?? [])
+  .filter((m: any) => m.name.toLowerCase().includes('receipt at site'))
+  .slice()
+  .sort((a: any, b: any) =>
+    (a.baselineFinish ?? '').localeCompare(b.baselineFinish ?? ''));
+
+/* The pack's "Forecast Delivery Schedule (Qty)" columns are named for the two
+   months after the last one actually reported — not a fixed pair — so a
+   project reporting to Sep-26 shows Oct-26/Nov-26, matching what the pack
+   itself would print next time it runs. */
+const nextMonths = (p: any, n: number): string[] => {
+  const curve = p.sCurve ?? [];
+  const reported = curve.filter((c: any) => c.actualCumPct !== null).map((c: any) => c.month);
+  const last = reported.length ? reported.sort().slice(-1)[0] : null;
+  const [y0, m0] = last ? last.split('-').map(Number) : [2026, 9];
+  const out: string[] = [];
+  let y = y0, m = m0;
+  for (let i = 0; i < n; i += 1) {
+    m += 1;
+    if (m > 12) { m = 1; y += 1; }
+    out.push(MONTH_LABEL(`${y}-${String(m).padStart(2, '0')}`));
+  }
+  return out;
+};
+
+const procurementSlide = (p: any): Slide => {
+  const [fc1, fc2] = nextMonths(p, 2);
+  return {
   id: `proc-${p.pss}`, section: 'Procurement',
   title: `Procurement & Monthly Rolling Plan for Supply of Equipment — ${p.pss}`,
   subtitle: 'P6 ordering milestones joined to SAP purchase orders',
   render: () => {
     const byMat = new Map((p.sap ?? []).map((r: any) => [r.material, r]));
     return (
+      <div className="flex h-full flex-col gap-1.5">
+      <div className="min-h-0 flex-1 overflow-hidden">
       <T
         /* The pack's own header: three merged groups over paired columns. */
         groups={[
@@ -1010,33 +1079,40 @@ const procurementSlide = (p: any): Slide => ({
           { label: 'Expected Delivery at Site', span: 2 },
           { label: 'Manufacturing Status', span: 2 },
           { label: '', span: 1 },
-          { label: 'Forecast Delivery (Qty)', span: 2 },
+          { label: 'Forecast Delivery Schedule (Qty)', span: 2 },
           { label: '', span: 1 },
         ]}
-        head={['Sr.', 'Packages', 'Manufacturer', 'UOM', 'Scope',
+        head={['Sr. No.', 'Packages', 'Manufacturer', 'UOM', 'Scope',
                'Ordering Completed', 'Balance Ordering', 'PO Number', 'PO Date',
-               'Start', 'Finish', 'QAP Acceptance', 'MC Date', 'Delivered At Site',
-               'Next month', 'Following', 'Remarks']}
+               'Start', 'Finish', 'QAP Acceptance Date', 'MC Date', 'Delivered At Site',
+               fc1, fc2, 'Remarks']}
         align={['r', 'l', 'l', 'l', 'r', 'r', 'r', 'l', 'l', 'l', 'l', 'l', 'l',
                 'r', 'r', 'r', 'l']}
-        size={8.5}
-        widths={[2.5, 11, 10.5, 3.5, 4, 5.5, 5.5, 9, 5, 4.5, 4.5, 5.5, 5, 5, 3.5, 3.5, 12]}
+        size={8}
+        widths={[2.5, 10.5, 10, 3.5, 4, 5.5, 5.5, 9.5, 5, 4.5, 4.5, 6, 5, 5, 3.5, 3.5, 12.7]}
+        colTint={[...Array(9).fill('grey'), ...Array(8).fill('peach')]}
         rows={(p.packages ?? []).map((pkg: any, i: number) => {
           const order = milestoneOf(pkg, 'placement of the order');
           const mc = milestoneOf(pkg, 'manufacturing clearance', 'ntp');
-          const receipts = (pkg.milestones ?? []).filter((m: any) =>
-            m.name.toLowerCase().includes('receipt at site'));
+          const receipts = receiptMilestones(pkg);
           const done = receipts.filter((m: any) => m.actualFinish);
-          const last = receipts.map((m: any) => m.actualFinish).filter(Boolean).sort().pop();
           const slips = (pkg.milestones ?? []).map((m: any) => m.slipDays)
             .filter((x: any) => x !== null && x !== undefined);
           const worst = slips.length ? Math.max(...slips) : null;
           const sap: any = byMat.get(pkg.sapMaterial ?? '');
           const ordered = sap?.orderQtyRaw ?? null;
           const scope = pkg.scopeQty ?? null;
+          const [poDate] = actualOrForecast(order);
+          const [mcDate] = actualOrForecast(mc);
+          // Expected Delivery at Site: first and last "Receipt at Site" lot,
+          // actual where landed, P6's own forecast where it hasn't yet.
+          const [deliveryStart] = receipts.length ? actualOrForecast(receipts[0]) : ['—', false];
+          const [deliveryFinish] = receipts.length ? actualOrForecast(receipts[receipts.length - 1]) : ['—', false];
+          const lastLanded = [...done].sort((a, b) =>
+            (a.actualFinish ?? '').localeCompare(b.actualFinish ?? '')).pop();
           const remark = [
             receipts.length ? `${done.length} of ${receipts.length} lots received` : null,
-            last ? `last ${DATE(last)}` : null,
+            lastLanded ? `last ${DATE(lastLanded.actualFinish)}` : null,
             worst !== null && worst > 0 ? `worst slip +${worst}d` : null,
           ].filter(Boolean).join('; ') || '—';
           return [
@@ -1051,18 +1127,42 @@ const procurementSlide = (p: any): Slide => ({
             scope !== null && ordered !== null && sap?.material === 'BESS Containers'
               ? NUM(Math.max(scope - ordered, 0)) : '—',
             sap?.poNumbers ?? '—',
-            order ? DATE(order.actualFinish) : '—',
-            '—', '—', '—',
-            mc ? DATE(mc.actualFinish) : '—',
+            poDate,
+            deliveryStart, deliveryFinish,
+            '—', mcDate,
             sap?.deliveredQtyRaw ? NUM(sap.deliveredQtyRaw) : '—',
             '—', '—',
             remark,
           ];
         })}
       />
+      </div>
+      <p className="shrink-0 text-[10px] italic leading-snug text-[#6b7280]">
+        {p.sapNote || (p.sapAvailable
+          ? 'SAP holds no PO date or delivery date for these projects, so dates are P6 ordering milestones; manufacturer, PO number and delivered quantity are from SAP.'
+          : 'SAP has no purchase orders for this project in the current extract; dates below are P6 ordering milestones only.')}
+        {' '}* forecast (not yet actual) — P6’s current schedule finish for that milestone.
+      </p>
+      </div>
     );
   },
-});
+  };
+};
+
+/* The reference pack's approvals table is nine columns ending in a single
+   Remarks column — there is no separate slip column. Slip is real and useful,
+   so rather than add an eleventh column the pack doesn't have, it is folded
+   into the words of Remarks the way the pack folds its own commentary in. */
+const approvalRemark = (a: any): string => {
+  if (a.status === 'Completed') {
+    const slip = a.slipDays;
+    if (slip === null || slip === undefined || slip <= 0) return `Completed ${DATE(a.actualFinish)}.`;
+    return `Completed ${DATE(a.actualFinish)} — ${slip}d behind baseline.`;
+  }
+  if (a.status === 'In Progress') return 'In progress.';
+  if (a.forecastFinish) return `Forecast ${DATE(a.forecastFinish)}.`;
+  return '—';
+};
 
 const approvalsSlide = (p: any, from: number, to: number, page: string): Slide => ({
   id: `appr-${p.pss}-${page}`, section: 'Approvals',
@@ -1071,20 +1171,15 @@ const approvalsSlide = (p: any, from: number, to: number, page: string): Slide =
   render: () => (
     <T
       head={['SN', 'Activity Name', 'Responsible', 'Approval Authority',
-             'Baseline Start', 'Baseline Finish', 'Actual/Forecast Start',
-             'Actual/Forecast Finish', 'Slip', 'Remarks']}
-      align={['r', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'r', 'l']} size={10}
-      widths={[3, 22, 8, 10, 8, 8, 9, 10, 5, 17]}
+             'Baseline Start', 'Baseline Finish', 'Actual/ Forecast Start',
+             'Actual/ Forecast Finish', 'Remarks']}
+      align={['r', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l']} size={10}
+      widths={[3, 24, 9, 11, 9, 9, 10, 11, 14]}
       rows={(p.approvals ?? []).slice(from, to).map((a: any, i: number) => [
         String(from + i + 1), a.name, '—', '—',
         DATE(a.baselineStart), DATE(a.baselineFinish), DATE(a.actualStart),
         DATE(a.actualFinish ?? a.forecastFinish),
-        <span key="s" style={{ color: varColor(a.slipDays === null ? null : -a.slipDays) }}>
-          {a.slipDays === null ? '—' : `${a.slipDays > 0 ? '+' : ''}${a.slipDays}d`}
-        </span>,
-        a.status === 'Completed'
-          ? `Completed ${DATE(a.actualFinish)}`
-          : a.forecastFinish ? `Forecast ${DATE(a.forecastFinish)}` : '—',
+        approvalRemark(a),
       ])}
     />
   ),
@@ -1128,22 +1223,66 @@ const MandaysBody: React.FC<{ man: any }> = ({ man }) => {
   }), [s, categorical, chrome]);
   const planned = man.totalPlannedMandays ?? 0;
   const earned = man.earnedMandays ?? 0;
+  const months = s.map((m: any) => MONTH_LABEL(m.month));
+
+  /* Same layout as the S-curve and Financial slides: chart and summary on
+     top, then the per-month figures spelled out in a grid underneath, so a
+     reader can take a number off the table without reading the chart. */
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="grid min-h-0 flex-1 grid-cols-[1.4fr_1fr] gap-6">
-        <div className="min-w-0"><Chart option={option} height={352} /></div>
-        <T head={['Measure', 'Mandays']} align={['l', 'r']} size={13}
+    <div className="flex h-full flex-col gap-1.5">
+      <div className="grid min-h-0 flex-[1.3] grid-cols-[1.4fr_1fr] gap-6">
+        <div className="min-w-0"><Chart option={option} height={230} /></div>
+        <T head={['Measure', 'Mandays']} align={['l', 'r']} size={12}
           rows={[
-            ['Planned', NUM(planned)], ['Earned', NUM(earned)],
+            ['Scope (planned Labor units)', NUM(planned)],
+            ['Earned (scope × % complete)', NUM(earned)],
             ['Remaining', NUM(planned - earned)],
             ['Earned %', PCT(planned ? (earned / planned) * 100 : null)],
             ['Posted actual units', NUM(man.postedActualUnits ?? 0)],
           ]} />
       </div>
-      <p className="shrink-0 text-[11px] italic leading-snug text-[#6b7280]">
-        Earned mandays are derived, not measured: planned Labor units × activity percent complete.
-        Actual labour units are not posted in P6, so this shows work credited rather than workmen
-        deployed and cannot reveal a productivity gap.
+      <table className="w-full shrink-0 table-fixed border-collapse text-[8.5px]">
+        <colgroup>
+          <col style={{ width: '14%' }} />
+          {months.map((_: string, i: number) => (
+            <col key={i} style={{ width: `${86 / Math.max(months.length, 1)}%` }} />
+          ))}
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="border border-[#c9ccd2] bg-[#f6f7f9] px-1 py-1" />
+            {months.map((m: string) => (
+              <th key={m} className="border border-[#c9ccd2] bg-[#f6f7f9] px-0.5 py-1 text-center font-semibold text-[#1a1a1a]">
+                {m}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {([
+            ['Planned (month)', (m: any) => m.planMonth],
+            ['Earned (month)', (m: any) => m.earnedMonth],
+            ['Planned cum.', (m: any) => m.planCum],
+            ['Earned cum.', (m: any) => m.earnedCum],
+          ] as [string, (m: any) => number][]).map(([rowLabel, pick]) => (
+            <tr key={rowLabel}>
+              <td className="border border-[#c9ccd2] px-1 py-[3px] font-semibold text-[#1a1a1a]">
+                {rowLabel}
+              </td>
+              {s.map((m: any, i: number) => (
+                <td key={i} className="border border-[#c9ccd2] px-0.5 py-[3px] text-center tabular-nums text-[#374151]">
+                  {NUM(pick(m), 0)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="shrink-0 text-[9.5px] italic leading-snug text-[#6b7280]">
+        Scope is planned Labor units (mandays) on the schedule. Earned = scope × activity percent
+        complete — the same percent that drives physical progress — because actual labour units are
+        not posted in P6 (1–4 non-zero rows out of 1,300–3,300 per project). This shows mandays
+        credited for work done, not workmen deployed, and cannot reveal a productivity gap.
       </p>
     </div>
   );
@@ -1188,49 +1327,94 @@ const ManpowerCurveBody: React.FC<{ man: any }> = ({ man }) => {
   );
 };
 
-const financialSlide = (commercial: any, projects: any[]): Slide => ({
+const financialSlide = (financial: any, label: string): Slide => ({
   id: 'financial', section: 'Commercial', title: 'Financial S Curve',
-  subtitle: 'Value received at site',
-  render: () => <FinancialBody commercial={commercial} projects={projects} />,
+  subtitle: label,
+  render: () => <FinancialBody financial={financial} />,
 });
 
-const FinancialBody: React.FC<{ commercial: any; projects: any[] }> = ({ commercial, projects }) => {
+/* The pack's own layout: one combo chart (monthly bars behind cumulative
+   lines, both series) then a four-row month grid underneath it - Budgeted
+   cumulative / Monthly Budgeted / Actual Cumulative / Monthly Actual - not
+   the per-PSS ordered/delivered table this used to substitute. */
+const FinancialBody: React.FC<{ financial: any }> = ({ financial }) => {
   const { categorical } = useChartTheme();
-  const s = commercial.receiptSeries ?? [];
+  const s = financial?.series ?? [];
+  const months = s.map((m: any) => MONTH_LABEL(m.month));
+
   const option = useMemo(() => ({
-    grid: { left: 54, right: 58, top: 26, bottom: 24, containLabel: true },
+    grid: { left: 54, right: 58, top: 26, bottom: 22, containLabel: true },
     tooltip: { trigger: 'axis', valueFormatter: (v: number) => `₹${NUM(v, 1)} Cr` },
-    legend: { show: true, top: 0, right: 0, itemWidth: 13, itemHeight: 8 },
-    xAxis: { type: 'category', data: s.map((m: any) => MONTH_LABEL(m.month)) },
-    yAxis: [{ type: 'value', name: '₹ Cr' },
-            { type: 'value', name: 'Cumulative', splitLine: { show: false } }],
+    legend: { show: true, top: 0, right: 0, itemWidth: 13, itemHeight: 8, itemGap: 12 },
+    xAxis: { type: 'category', data: months },
+    yAxis: [{ type: 'value', name: '₹ Cr (monthly)' },
+            { type: 'value', name: '₹ Cr (cumulative)', splitLine: { show: false } }],
     series: [
-      { name: 'Received (month)', type: 'bar', barWidth: '42%',
-        data: s.map((m: any) => m.monthCr),
-        itemStyle: { color: categorical[0], borderRadius: [3, 3, 0, 0] } },
-      { name: 'Cumulative', type: 'line', yAxisIndex: 1, symbol: 'none', smooth: 0.25,
-        data: s.map((m: any) => m.cumCr),
+      { name: 'Monthly Budgeted', type: 'bar', barWidth: '26%',
+        data: s.map((m: any) => m.budgetedMonthCr),
+        itemStyle: { color: categorical[0], borderRadius: [2, 2, 0, 0] } },
+      { name: 'Monthly Actual', type: 'bar', barWidth: '26%',
+        data: s.map((m: any) => m.actualMonthCr),
+        itemStyle: { color: categorical[1], borderRadius: [2, 2, 0, 0] } },
+      { name: 'Budgeted cumulative', type: 'line', yAxisIndex: 1, symbol: 'none', smooth: 0.25,
+        data: s.map((m: any) => m.budgetedCumCr),
+        lineStyle: { width: 2.2, type: 'dashed', color: categorical[0] },
+        itemStyle: { color: categorical[0] } },
+      { name: 'Actual cumulative', type: 'line', yAxisIndex: 1, symbol: 'none', smooth: 0.25,
+        data: s.map((m: any) => m.actualCumCr),
         lineStyle: { width: 2.6, color: categorical[1] },
         itemStyle: { color: categorical[1] } },
     ],
-  }), [s, categorical]);
+  }), [s, months, categorical]);
+
   return (
-    <div className="flex h-full flex-col gap-3">
-      <div className="grid min-h-0 flex-1 grid-cols-[1.4fr_1fr] gap-6">
-        <div className="min-w-0"><Chart option={option} height={352} /></div>
-        <T head={['PSS', 'Ordered ₹Cr', 'Delivered ₹Cr', 'Delivered %']}
-          align={['l', 'r', 'r', 'r']} size={12}
-          rows={[
-            ...projects.map((p) => [p.pss, NUM(p.orderCr, 1), NUM(p.deliveredCr, 1),
-              PCT(p.orderCr ? (p.deliveredCr / p.orderCr) * 100 : null, 0)]),
-            [<strong key="t">Total</strong>, <strong key="o">{NUM(commercial.orderCr, 1)}</strong>,
-             <strong key="d">{NUM(commercial.deliveredCr, 1)}</strong>,
-             <strong key="p">{PCT(commercial.deliveredPct, 0)}</strong>],
-          ]} />
+    <div className="flex h-full flex-col gap-1.5">
+      <div className="shrink-0"><Chart option={option} height={260} /></div>
+      <div className="min-h-0 flex-1 overflow-hidden">
+        <table className="w-full table-fixed border-collapse text-[8.5px]">
+          <colgroup>
+            <col style={{ width: '13%' }} />
+            {months.map((_: string, i: number) => (
+              <col key={i} style={{ width: `${87 / Math.max(months.length, 1)}%` }} />
+            ))}
+          </colgroup>
+          <thead>
+            <tr>
+              <th className="border border-[#c9ccd2] bg-[#f6f7f9] px-1 py-1" />
+              {months.map((m: string) => (
+                <th key={m} className="border border-[#c9ccd2] bg-[#f6f7f9] px-0.5 py-1 text-center font-semibold text-[#1a1a1a]">
+                  {m}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {([
+              ['Budgeted- cumulative', (m: any) => m.budgetedCumCr],
+              ['Monthly Budgeted', (m: any) => m.budgetedMonthCr],
+              ['Actual Cumulative', (m: any) => m.actualCumCr],
+              ['Monthly Actual', (m: any) => m.actualMonthCr],
+            ] as [string, (m: any) => number][]).map(([rowLabel, pick]) => (
+              <tr key={rowLabel}>
+                <td className="border border-[#c9ccd2] px-1 py-[3px] font-semibold text-[#1a1a1a]">
+                  {rowLabel}
+                </td>
+                {s.map((m: any, i: number) => (
+                  <td key={i} className="border border-[#c9ccd2] px-0.5 py-[3px] text-center tabular-nums text-[#374151]">
+                    {NUM(pick(m), 0)}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
-      <p className="shrink-0 text-[11px] italic leading-snug text-[#6b7280]">
-        Goods-receipt value from SAP, purchase orders only. The pack's budgeted curve comes from the
-        capex NFA phasing, which is not held in any connected system.
+      <p className="shrink-0 text-[9.5px] italic leading-snug text-[#6b7280]">
+        Budgeted is derived, not measured: the ₹16,358 Cr approved NFA (NFA_R1, 04-Apr-26) spread
+        across each project&rsquo;s own P6 baseline schedule, weighted by dispatchable MWh share — a
+        schedule projection onto a real total, not a cost-loaded plan. Actual is SAP goods-receipt
+        value and reads zero portfolio-wide because mt_materialdocument, the only source with a
+        posting date to phase it by month, holds no rows at this sync.
       </p>
     </div>
   );
@@ -1258,35 +1442,68 @@ const contractorSlide = (p: any): Slide => ({
   ),
 });
 
-const orderingSlide = (group: any[], kind: string, gl: string): Slide => ({
-  id: `ordering-${kind}-${gl}`, section: 'Ordering status',
-  title: `${kind} ordering Status (${gl})`, subtitle: `${kind} packages`,
-  render: () => {
-    const rows: any[] = [];
-    group.forEach((p) => {
-      const byMat = new Map((p.sap ?? []).map((r: any) => [r.material, r]));
-      (p.packages ?? []).forEach((pkg: any) => {
-        const sap: any = byMat.get(pkg.sapMaterial ?? '');
-        if (kind === 'Supply' ? !sap : !!sap) return;
-        const order = milestoneOf(pkg, 'placement of the order');
-        rows.push([String(rows.length + 1),
-          `${pkg.packageBase ?? pkg.package} (${p.pss})`,
-          pkg.scopeQty ? `${NUM(pkg.scopeQty)} nos` : '—',
-          '—', '—', '—', '—', '—',
-          order ? DATE(order.actualFinish) : '—',
-          sap ? `${sap.vendor} · ₹${NUM(sap.orderCr, 1)} Cr` : '—']);
-      });
+/* Supply and Service are two different WBS branches ("Ordering & Delivery"
+   and "Service Order"), reported on separate slides in the pack. Reading the
+   split off which packages happen to have a SAP price match would put a
+   civil/consultancy service on the wrong slide whenever a supply item's SAP
+   line was missing — so the split follows the WBS branch each package
+   actually came from, not a guess from SAP presence. */
+const buildOrderingRows = (group: any[], kind: string): any[][] => {
+  const rows: any[][] = [];
+  group.forEach((p) => {
+    const byMat = new Map((p.sap ?? []).map((r: any) => [r.material, r]));
+    const pkgs = kind === 'Supply' ? (p.packages ?? []) : (p.servicePackages ?? []);
+    pkgs.forEach((pkg: any) => {
+      const sap: any = byMat.get(pkg.sapMaterial ?? '');
+      const order = milestoneOf(pkg, 'placement of the order');
+      const [releaseDate] = actualOrForecast(order);
+      rows.push([
+        `${pkg.packageBase ?? pkg.package} (${p.pss})`,
+        pkg.scopeQty ? `${NUM(pkg.scopeQty)} nos` : '—',
+        '—',
+        /* The pack always prints "NA" in this column for every package —
+           reproduced literally rather than left blank, since that is what
+           the reference itself shows. */
+        'NA',
+        '—', '—', '—', '—',
+        releaseDate,
+        sap ? `${sap.vendor} · ₹${NUM(sap.orderCr, 1)} Cr` : '—',
+      ]);
     });
-    return (
-      <T
-        head={['SN', 'Equipment / Package', 'Qty', 'Spec date', 'TBER date',
-               'Qualified vendors', 'Offer recd.', 'NFA', 'Release of PO/SO', 'Update']}
-        align={['r', 'l', 'r', 'l', 'l', 'l', 'l', 'l', 'l', 'l']} size={10}
-        widths={[3, 18, 7, 8, 8, 10, 8, 6, 11, 21]}
-        rows={rows.slice(0, 13)}
-      />
-    );
-  },
+  });
+  return rows;
+};
+
+const ORDERING_PAGE_SIZE = 9;
+
+const orderingSlide = (rows: any[][], startAt: number, total: number,
+                       kind: string, gl: string, page: string): Slide => ({
+  id: `ordering-${kind}-${gl}-${startAt}`, section: 'Ordering status',
+  title: `${kind} ordering Status (${gl})`,
+  subtitle: `${kind} packages · ${page} · ${total} total`,
+  render: () => (
+    <div className="flex h-full flex-col gap-1.5">
+      <div className="min-h-0 flex-1">
+        <T
+          head={['SN', 'Equipment/ Package', 'Qty / Scope',
+                 'Final / Revised Specifications Issue Date',
+                 'Verified by Engineering Consultant', 'TBER Date',
+                 'Qualified Vendors', 'Receipt of Offer',
+                 'Commercial NFA Submission', 'Release of PO / SO', 'Update']}
+          align={['r', 'l', 'r', 'l', 'l', 'l', 'l', 'l', 'l', 'l', 'l']} size={10}
+          widths={[3, 16, 7, 10, 9, 8, 10, 8, 9, 10, 10]}
+          rows={rows.map((r, i) => [String(startAt + i + 1), ...r])}
+        />
+      </div>
+      <p className="shrink-0 text-[10px] italic leading-snug text-[#6b7280]">
+        Specification issue date, TBER date, qualified vendor list, receipt of
+        offer and commercial NFA submission are not held in any connected
+        system and are left blank. Release of PO/SO is the P6 order-placement
+        milestone; * marks a forecast date where the order has not yet been
+        placed. Vendor and value come from SAP.
+      </p>
+    </div>
+  ),
 });
 
 /* ── Viewer ── */

@@ -44,10 +44,19 @@ BRAND_PURPLE = RGBColor(0x76, 0x48, 0x9D)
 INK = RGBColor(0x10, 0x18, 0x28)
 MUTED = RGBColor(0x66, 0x70, 0x85)
 RULE = RGBColor(0xE4, 0xE7, 0xEC)
-BAND = RGBColor(0xFD, 0xF1, 0xE8)   # the pack rules rows in a warm tint
-HEADER = RGBColor(0x7B, 0x3F, 0x9D) # and heads them in purple
-CELL_RULE = RGBColor(0xC9, 0xCC, 0xD2)
+# Verified against the circulated deck's own table fills (slide XML dump,
+# 2026-09-24): header purple 7030A0 is the deck's mode (176/312 header cells
+# across every slide; 912A82 and 782170 are the runner-ups). Body rows are
+# plain white almost everywhere - there is no alternating row band in the
+# native tables. The one exception is the Procurement table, which tints by
+# COLUMN (grey for ordering columns, peach for delivery-tracking columns),
+# not by row - reproduced as GREY_COL/PEACH_COL for that table specifically.
+HEADER = RGBColor(0x70, 0x30, 0xA0)
+GREY_COL = RGBColor(0xF2, 0xF2, 0xF2)
+PEACH_COL = RGBColor(0xFB, 0xE2, 0xD5)
 WHITE = RGBColor(0xFF, 0xFF, 0xFF)
+BAND = WHITE
+CELL_RULE = RGBColor(0xC9, 0xCC, 0xD2)
 CRITICAL = RGBColor(0xD9, 0x2D, 0x20)
 RISK = RGBColor(0xF7, 0x90, 0x09)
 HEALTHY = RGBColor(0x12, 0xB7, 0x6A)
@@ -296,6 +305,100 @@ def _rule(cell, edge: str) -> None:
     fill.append(clr)
     ln.append(fill)
     tc_pr.append(ln)
+
+
+def _table_grouped(slide, top_groups: Sequence[tuple], head: Sequence[str],
+                   rows: Sequence[Sequence[str]], left, top, width,
+                   *, col_w: Optional[Sequence[float]] = None, size=8,
+                   row_h=0.26, head_h=0.26,
+                   tints: Optional[Dict[int, RGBColor]] = None,
+                   tint_col: Optional[int] = None,
+                   col_tint: Optional[Sequence[RGBColor]] = None) -> None:
+    """A table with the pack's own two-row header: `top_groups` is a list of
+    (label, span) covering every column left to right. A labelled entry draws
+    a horizontal merge across `span` columns on the top row, with the leaf
+    labels for those columns coming from `head` on the row beneath. An entry
+    with an empty label instead merges vertically - that single column's own
+    header, from `head`, spans both rows, exactly as the pack's own "Sr. No.",
+    "Packages" etc. columns do next to the merged "Expected Delivery at Site"
+    group.
+    """
+    n_cols = len(head)
+    n_data = len(rows)
+    n_rows = 2 + n_data
+    height = Inches(head_h * 2 + row_h * n_data)
+    shape = slide.shapes.add_table(n_rows, n_cols, left, top, width, height)
+    tbl = shape.table
+    tbl.first_row = True
+    tbl.horz_banding = False
+
+    if col_w:
+        total = sum(col_w)
+        for i, w in enumerate(col_w):
+            tbl.columns[i].width = Emu(int(width * (w / total)))
+    tbl.rows[0].height = Inches(head_h)
+    tbl.rows[1].height = Inches(head_h)
+    for r in range(2, n_rows):
+        tbl.rows[r].height = Inches(row_h)
+
+    def _style_header_cell(cell, text_value: str, align: str = "left"):
+        cell.text = text_value
+        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+        cell.margin_left = cell.margin_right = Inches(0.04)
+        cell.margin_top = cell.margin_bottom = 0
+        cell.fill.solid()
+        cell.fill.fore_color.rgb = HEADER
+        for edge in ("L", "R", "T", "B"):
+            _rule(cell, edge)
+        para = cell.text_frame.paragraphs[0]
+        para.alignment = PP_ALIGN.CENTER if align == "center" else PP_ALIGN.LEFT
+        for run in para.runs:
+            run.font.size = Pt(size)
+            run.font.bold = True
+            run.font.name = "Calibri"
+            run.font.color.rgb = WHITE
+
+    # Every header cell is styled before any merge call, since python-pptx
+    # merges by marking the followers hMerge/vMerge - their own formatting
+    # stops mattering once merged, but must exist first for the merge to see
+    # a normal cell there.
+    col = 0
+    for label, span in top_groups:
+        for i in range(span):
+            _style_header_cell(tbl.cell(0, col + i), "")
+            _style_header_cell(tbl.cell(1, col + i), "")
+        if label:
+            _style_header_cell(tbl.cell(0, col), label, align="center")
+            for i in range(span):
+                _style_header_cell(tbl.cell(1, col + i), head[col + i])
+            if span > 1:
+                tbl.cell(0, col).merge(tbl.cell(0, col + span - 1))
+        else:
+            _style_header_cell(tbl.cell(0, col), head[col])
+            tbl.cell(0, col).merge(tbl.cell(1, col))
+        col += span
+
+    for r, row in enumerate(rows):
+        rr = r + 2
+        for c, val in enumerate(row):
+            cell = tbl.cell(rr, c)
+            cell.text = "" if val is None else str(val)
+            cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+            cell.margin_left = cell.margin_right = Inches(0.04)
+            cell.margin_top = cell.margin_bottom = 0
+            cell.fill.solid()
+            for edge in ("L", "R", "T", "B"):
+                _rule(cell, edge)
+            cell.fill.fore_color.rgb = col_tint[c] if col_tint else WHITE
+            para = cell.text_frame.paragraphs[0]
+            para.alignment = PP_ALIGN.RIGHT if (c and _numeric(val)) else PP_ALIGN.LEFT
+            for run in para.runs:
+                run.font.size = Pt(size)
+                run.font.name = "Calibri"
+                if tints and r in tints and (tint_col is None or c == tint_col):
+                    run.font.color.rgb = tints[r]
+                else:
+                    run.font.color.rgb = INK
 
 
 def _numeric(v: Any) -> bool:

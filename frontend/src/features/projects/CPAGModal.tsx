@@ -104,6 +104,7 @@ export const CPAGModal: React.FC<{
         buckets: project.progress.buckets,
         sCurve: project.sCurve.series,
         packages: project.procurement.packages,
+        servicePackages: project.procurement.servicePackages ?? [],
         sap: project.procurement.sap,
         sapNote: project.procurement.sapNote,
         approvals: project.approvals.items,
@@ -130,6 +131,7 @@ export const CPAGModal: React.FC<{
           },
           commercial: project.commercial,
           manpower: project.manpower,
+          financial: project.financial,
           single: true,
         }),
         deckTitle: `${m.pss} — ${m.spv} · CPAG pack`,
@@ -141,6 +143,7 @@ export const CPAGModal: React.FC<{
         slides: buildSlides({
           projects: portfolio.projects, meta: portfolio.meta,
           commercial: portfolio.commercial, manpower: portfolio.manpower,
+          financial: portfolio.financial,
           single: false,
         }),
         deckTitle: `BESS portfolio · ${portfolio.meta.projectCount} projects · CPAG pack`,

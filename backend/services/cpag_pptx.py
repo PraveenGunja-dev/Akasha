@@ -45,41 +45,58 @@ def _fmt_qty(v) -> str:
 
 
 def _order_date(m) -> str:
-    return _date(m["actualFinish"]) if m and m.get("actualFinish") else "-"
+    """Actual finish where the order has been placed; P6's own forecast where
+    it hasn't - never blank just because the milestone is still ahead."""
+    if not m:
+        return "-"
+    if m.get("actualFinish"):
+        return _date(m["actualFinish"])
+    if m.get("forecastFinish"):
+        return f"{_date(m['forecastFinish'])}*"
+    return "-"
+
+
+ORDERING_PAGE_SIZE = 9
 
 
 def _ordering_rows(projects: List[Dict[str, Any]], kind: str) -> List[List[str]]:
-    """Ordering-status rows: what SAP and P6 hold, blanks where nothing does."""
+    """Ordering-status rows: what SAP and P6 hold, blanks where nothing does.
+
+    Supply and Service are two different WBS branches ("Ordering & Delivery"
+    and "Service Order"), which the pack reports on separate slides - the
+    split follows the branch each package actually came from (`packages` vs
+    `servicePackages`), not a guess from whether a SAP price happens to exist
+    for it, which would misfile a service item whenever its supply sibling's
+    SAP line was missing.
+
+    "Verified by Engineering Consultant" is always "NA" in the circulated
+    pack, so it is reproduced literally rather than left blank.
+    """
     rows: List[List[str]] = []
-    n = 0
+    key = "packages" if kind == "supply" else "servicePackages"
     for p in projects:
         by_material = {r["material"]: r for r in (p.get("sap") or [])}
-        for pkg in p.get("packages") or []:
+        for pkg in p.get(key) or []:
             sap_row = by_material.get(pkg.get("sapMaterial") or "")
-            if kind == "supply" and not sap_row:
-                continue
-            if kind == "service" and sap_row:
-                continue
             order = None
             for m in pkg["milestones"]:
                 if "placement of the order" in m["name"].lower():
                     order = m
                     break
-            n += 1
             rows.append([
-                str(n),
                 f"{pkg.get('packageBase') or pkg.get('package')} ({p['pss']})",
                 _fmt_qty(pkg.get("scopeQty")),
-                "-", "-", "-", "-", "-",
+                "-", "NA", "-", "-", "-", "-",
                 _order_date(order),
                 (f"{sap_row['vendor']} · Rs {sap_row['orderCr']} Cr"
                  if sap_row else "-"),
             ])
-    return rows[:16]
+    return rows
 
 
 def _compose(prs, projects: List[Dict[str, Any]], meta: Dict[str, Any],
              commercial: Dict[str, Any], manpower: Dict[str, Any],
+             financial: Dict[str, Any],
              *, single: bool) -> None:
     """The pack's running order, over however many projects are in scope."""
     label = _group_label(projects)
@@ -139,7 +156,7 @@ def _compose(prs, projects: List[Dict[str, Any]], meta: Dict[str, Any],
     _section_slide(prs, f"Procurement Status: {label}")
     for p in projects:
         S.slide_procurement(prs, p["pss"], p.get("packages") or [],
-                            p.get("sap") or [], p.get("sapNote"))
+                            p.get("sap") or [], p.get("sapNote"), project=p)
 
     # Construction progress — element level
     for group in groups:
@@ -203,19 +220,24 @@ def _compose(prs, projects: List[Dict[str, Any]], meta: Dict[str, Any],
         "Variance and slip are measured throughout this pack; the commentary "
         "around them is not.")
 
-    S.slide_financial(prs, commercial.get("receiptSeries") or [],
-                      commercial, projects)
+    S.slide_financial(prs, financial or {}, label)
 
-    # Ordering status
+    # Ordering status - paginated, since a group of three projects runs to
+    # 45+ supply packages and one slide's worth would silently drop the rest.
     for group in groups:
         gl = _group_label(group)
         _section_slide(prs, f"Ordering Status {gl}")
-        S.slide_ordering_status(prs, gl, "Supply",
-                                _ordering_rows(group, "supply"),
-                                "Supply packages")
-        S.slide_ordering_status(prs, gl, "Service",
-                                _ordering_rows(group, "service"),
-                                "Service packages")
+        for kind_label, kind_key in (("Supply", "supply"), ("Service", "service")):
+            rows = _ordering_rows(group, kind_key)
+            page_count = max(1, -(-len(rows) // ORDERING_PAGE_SIZE))
+            for pg in range(page_count):
+                chunk = rows[pg * ORDERING_PAGE_SIZE:(pg + 1) * ORDERING_PAGE_SIZE]
+                numbered = [[str(pg * ORDERING_PAGE_SIZE + i + 1), *r]
+                            for i, r in enumerate(chunk)]
+                S.slide_ordering_status(
+                    prs, gl, kind_label, numbered,
+                    f"{kind_label} packages - page {pg + 1} of {page_count} "
+                    f"- {len(rows)} total")
 
     # Statutory approvals — two pages per project, as the pack runs them
     for group in groups:
@@ -261,6 +283,7 @@ def build_project_pptx(d: Dict[str, Any]) -> bytes:
         "buckets": d["progress"]["buckets"],
         "sCurve": d["sCurve"]["series"],
         "packages": d["procurement"]["packages"],
+        "servicePackages": d["procurement"].get("servicePackages") or [],
         "sap": d["procurement"]["sap"],
         "sapNote": d["procurement"].get("sapNote"),
         "approvals": d["approvals"]["items"],
@@ -286,7 +309,7 @@ def build_project_pptx(d: Dict[str, Any]) -> bytes:
     }
     prs = _deck()
     _compose(prs, [project], scope_meta, d["commercial"], d["manpower"],
-             single=True)
+             d.get("financial") or {}, single=True)
     buf = BytesIO()
     prs.save(buf)
     return buf.getvalue()
@@ -296,7 +319,7 @@ def build_portfolio_pptx(d: Dict[str, Any]) -> bytes:
     """All six projects, the pack's full running order."""
     prs = _deck()
     _compose(prs, d["projects"], d["meta"], d["commercial"], d["manpower"],
-             single=False)
+             d.get("financial") or {}, single=False)
     buf = BytesIO()
     prs.save(buf)
     return buf.getvalue()

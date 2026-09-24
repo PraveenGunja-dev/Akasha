@@ -77,6 +77,15 @@ BESS_PROJECTS: Dict[str, Dict[str, Any]] = {
     },
 }
 
+# Approved NFA_R1 (04-Apr-26), from the CPAG pack's own capex table: Hard
+# Cost 14,090 + Soft Cost 647 + Land Cost 1,190 + Contingency 431 = Rs 16,358
+# Cr, across all six projects.  No system holds a month-by-month phasing of
+# this figure, so the Financial S-Curve's Budgeted row spreads it across each
+# project's own P6 baseline schedule, weighted by dispatchable MWh share -
+# a schedule projection onto a real approved total, not a measurement.
+TOTAL_NFA_CR = 16358.0
+TOTAL_DISPATCHABLE_MWH = sum(c["dispatchable_mwh"] for c in BESS_PROJECTS.values())
+
 # WBS branch code -> the CPAG pack's four weighted buckets.  Everything the map
 # does not name (Project Milestones, HOTO, Contract Closure, Pre-Construction)
 # belongs to the construction bucket - folding it in is what makes the weights
@@ -187,6 +196,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """
     projects: List[Dict[str, Any]] = []
     recv: Dict[str, float] = defaultdict(float)
+    budget_series_list: List[List[Dict[str, Any]]] = []
     order_cr = delivered_cr = po_count = 0.0
     appr_total = appr_done = 0
     mandays_plan = mandays_earned = 0.0
@@ -209,7 +219,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
         contractors = _contractors(db, cfg)
         engineering = _engineering(db, poid, roots)
         construction = _construction(db, poid, roots)
-        electrical = _electrical(db, poid, roots, None)
+        electrical = _electrical(db, poid, roots)
         commissioning = _commissioning(db, poid)
         quality = _quality(db, cfg)
 
@@ -236,6 +246,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
             "sCurve": curve["series"],
             "approvals": appr["items"],
             "packages": proc["packages"],
+            "servicePackages": proc.get("servicePackages") or [],
             "sap": proc["sap"],
             "sapNote": proc.get("sapNote"),
             "contractors": contractors["items"],
@@ -253,6 +264,8 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
         for pt in comm["receiptSeries"]:
             recv[pt["month"]] += pt["monthCr"]
+        budget_series_list.append(
+            _budget_series(curve["series"], cfg["dispatchable_mwh"]))
         order_cr += comm["orderCr"]
         delivered_cr += comm["deliveredCr"]
         po_count += comm["poCount"]
@@ -309,6 +322,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
                      "earnedMandays": round(mandays_earned),
                      "earnedPct": _pct(mandays_earned, mandays_plan),
                      "derived": True},
+        "financial": _merge_financial(budget_series_list, recv_series),
     }
 
 
@@ -443,10 +457,18 @@ CONSTRUCTION_BRANCHES = {"5", "6", "10", "11", "12"}
 
 
 def _construction(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
-    """Element-by-stage physical progress from P6 Material resources."""
+    """Element-by-stage physical progress from P6 Material resources.
+
+    The Civil slide and the Electrical slide draw on the same Material pool
+    (both are "installed quantity" work under the Construction WBS branches).
+    Resources already reported on the Electrical slide (`ELECTRICAL_ELEMENTS`)
+    are excluded here so a cable-laying or erection quantity is never counted
+    on both slides as if it were two different pieces of work.
+    """
     ids = [k for k, v in roots.items() if v in CONSTRUCTION_BRANCHES]
     if not ids:
         return {"elements": [], "basis": ""}
+    electrical_resources = {resource for _label, resource, _uom in ELECTRICAL_ELEMENTS}
     rows = db.execute(
         text("""select r.resource_name, sum(r.planned_units), sum(r.actual_units)
                 from p6_resource_assignment r
@@ -462,6 +484,8 @@ def _construction(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, An
     # in its own right and is grouped under General.
     elements: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for name, planned, actual in rows:
+        if name in electrical_resources:
+            continue
         pl, ac = _f(planned), _f(actual)
         if " - " in name:
             element, stage = name.split(" - ", 1)
@@ -511,12 +535,20 @@ ELECTRICAL_ELEMENTS = [
 ]
 
 
-def _electrical(db: Session, poid: int, roots: Dict[int, str],
-                data_date) -> Dict[str, Any]:
-    """Element-level electrical progress, on the pack's own row labels."""
+def _electrical(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
+    """Element-level electrical progress, on the pack's own row labels.
+
+    Fetches its own data date from the project rather than trusting a caller
+    to pass one, so the single-project and portfolio call sites can never
+    disagree on what "today" is for this slide.
+    """
     ids = [k for k, v in roots.items() if v in CONSTRUCTION_BRANCHES]
     if not ids:
         return {"items": [], "basis": ""}
+    data_date = db.execute(
+        text("select data_date from p6_project where p6_object_id = :o"),
+        {"o": poid},
+    ).scalar()
     rows = db.execute(
         text("""select r.resource_name, sum(r.planned_units), sum(r.actual_units)
                 from p6_resource_assignment r
@@ -535,20 +567,21 @@ def _electrical(db: Session, poid: int, roots: Dict[int, str],
         scope, actual = by_name[resource]
         items.append({
             "element": label, "resource": resource, "uom": uom,
-            "scope": round(scope), "actual": round(actual),
+            # The pack prints both a "Scope" and a "Plan" column holding the
+            # same figure (plan is the full scope, phased flat since P6 holds
+            # no dated quantity curve) - reproduced as two columns to match.
+            "scope": round(scope), "plan": round(scope), "actual": round(actual),
             "actualPct": _pct(actual, scope),
-            # The pack prints a plan column that is plan-to-date, not full
-            # scope. P6 carries no dated quantity curve, so plan is the scope
-            # and the column says so.
             "planPct": 100.0,
         })
     return {
         "items": items,
         "dataDate": _iso(data_date),
         "basis": "P6 Material resources on Construction activities. Scope "
-                 "reconciles with the pack; actuals read higher because the "
-                 "pack is FTM 10-Sep-26 and this is P6's data date. Plan is "
-                 "full scope - P6 holds no dated quantity curve to phase it.",
+                 "reconciles with the pack; actuals may read differently "
+                 "because the pack is FTM 10-Sep-26 and this is P6's data "
+                 "date. Plan is full scope - P6 holds no dated quantity "
+                 "curve to phase it.",
     }
 
 
@@ -583,6 +616,8 @@ def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     roots = _wbs_roots(db, poid)
 
     curve = _s_curve(db, poid)
+    comm = _commercial(db, cfg)
+    budget = _budget_series(curve["series"], cfg["dispatchable_mwh"])
     return {
         "meta": _meta(ctx),
         "progress": _progress(db, poid, roots, curve["lastActualMonth"]),
@@ -591,12 +626,13 @@ def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
         "approvals": _approvals(db, poid, roots),
         "engineering": _engineering(db, poid, roots),
         "construction": _construction(db, poid, roots),
-        "electrical": _electrical(db, poid, roots, ctx["data_date"]),
+        "electrical": _electrical(db, poid, roots),
         "commissioning": _commissioning(db, poid),
         "quality": _quality(db, cfg),
         "manpower": _manpower(db, poid),
         "contractors": _contractors(db, cfg),
-        "commercial": _commercial(db, cfg),
+        "commercial": comm,
+        "financial": _merge_financial([budget], comm["receiptSeries"]),
     }
 
 
@@ -711,49 +747,72 @@ def _s_curve(db: Session, poid: int) -> Dict[str, Any]:
             "totalUnits": round(total)}
 
 
-def _procurement(db: Session, poid: int, cfg) -> Dict[str, Any]:
-    """Ordering and delivery milestones per package, joined to SAP PO value."""
+def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
+                              ) -> List[Dict[str, Any]]:
+    """Every activity under one named WBS node's direct children, shaped as
+    the pack's package rows. Used for both "Ordering & Delivery" (supply) and
+    "Service Order" (service) - two sibling branches under Procurement that
+    the pack reports on separate slides, so both get pulled the same way
+    rather than only the one branch a single query happened to reach.
+    """
     parent = db.execute(
         text("""select p6_object_id from p6_wbs_node
-                where project_object_id = :o and wbs_name = 'Ordering & Delivery'"""),
-        {"o": poid},
+                where project_object_id = :o and wbs_name = :n"""),
+        {"o": poid, "n": wbs_name},
     ).fetchone()
-    packages: List[Dict[str, Any]] = []
-    if parent:
-        nodes = db.execute(
-            text("""select p6_object_id, wbs_name from p6_wbs_node
-                    where project_object_id = :o and parent_object_id = :p
-                    order by wbs_name"""),
-            {"o": poid, "p": parent[0]},
+    if not parent:
+        return []
+    nodes = db.execute(
+        text("""select p6_object_id, wbs_name from p6_wbs_node
+                where project_object_id = :o and parent_object_id = :p
+                order by wbs_name"""),
+        {"o": poid, "p": parent[0]},
+    ).fetchall()
+    out: List[Dict[str, Any]] = []
+    for node_id, name in nodes:
+        # Every activity attached to this WBS node - not a named subset of
+        # milestones - so a tracking step added under a package is picked up
+        # without the mapping needing to name it.
+        acts = db.execute(
+            text("""select name, status, baseline_finish_date,
+                           actual_finish_date, finish_date
+                    from p6_activity where wbs_object_id = :w
+                    order by baseline_start_date nulls last"""),
+            {"w": node_id},
         ).fetchall()
-        for node_id, name in nodes:
-            acts = db.execute(
-                text("""select name, status, baseline_finish_date,
-                               actual_finish_date, finish_date
-                        from p6_activity where wbs_object_id = :w
-                        order by baseline_start_date nulls last"""),
-                {"w": node_id},
-            ).fetchall()
-            if not acts:
-                continue
-            if any(t in name.lower() for t in PACKAGE_EXCLUDE):
-                continue
-            base = re.sub(r"\s*-\s*[\d,]+\s*(nos|set|sets|kms|km)\.?\s*$", "",
-                          name, flags=re.I).strip()
-            qty = None
-            m = re.search(r"-\s*([\d,]+)\s*(nos|set|sets|kms|km)", name, re.I)
-            if m:
-                qty = int(m.group(1).replace(",", ""))
-            packages.append({
-                "package": name, "packageBase": base, "scopeQty": qty,
-                "sapMaterial": PACKAGE_SAP.get(base),
-                "milestones": [{
-                    "name": a[0], "status": a[1],
-                    "baselineFinish": _iso(a[2]), "actualFinish": _iso(a[3]),
-                    "forecastFinish": _iso(a[4]),
-                    "slipDays": (a[3] - a[2]).days if a[2] and a[3] else None,
-                } for a in acts],
-            })
+        if not acts:
+            continue
+        if any(t in name.lower() for t in PACKAGE_EXCLUDE):
+            continue
+        base = re.sub(r"\s*-\s*[\d,]+\s*(nos|set|sets|kms|km)\.?\s*$", "",
+                      name, flags=re.I).strip()
+        qty = None
+        m = re.search(r"-\s*([\d,]+)\s*(nos|set|sets|kms|km)", name, re.I)
+        if m:
+            qty = int(m.group(1).replace(",", ""))
+        out.append({
+            "package": name, "packageBase": base, "scopeQty": qty,
+            "sapMaterial": PACKAGE_SAP.get(base),
+            "milestones": [{
+                "name": a[0], "status": a[1],
+                "baselineFinish": _iso(a[2]), "actualFinish": _iso(a[3]),
+                "forecastFinish": _iso(a[4]),
+                "slipDays": (a[3] - a[2]).days if a[2] and a[3] else None,
+            } for a in acts],
+        })
+    return out
+
+
+def _procurement(db: Session, poid: int, cfg) -> Dict[str, Any]:
+    """Ordering and delivery activities per package, joined to SAP PO value.
+
+    "Ordering & Delivery" and "Service Order" are sibling WBS branches under
+    Procurement - the pack reports them as two different slide families
+    (Supply / Service ordering status), so both are pulled here rather than
+    only the supply side.
+    """
+    packages = _wbs_children_as_packages(db, poid, "Ordering & Delivery")
+    service_packages = _wbs_children_as_packages(db, poid, "Service Order")
 
     # SAP side, supply prefix only - the civil prefix carries services.
     sap_rows: List[Any] = []
@@ -783,8 +842,8 @@ def _procurement(db: Session, poid: int, cfg) -> Dict[str, Any]:
         note = ("Supply POs for this project are not present in the current "
                 "ZPSPS007 extract. Civil scope is available under "
                 f"{cfg['civil_wbs']}.")
-    return {"packages": packages, "sap": sap,
-            "sapAvailable": bool(cfg["supply_wbs"]), "sapNote": note}
+    return {"packages": packages, "servicePackages": service_packages,
+            "sap": sap, "sapAvailable": bool(cfg["supply_wbs"]), "sapNote": note}
 
 
 def _approvals(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
@@ -906,6 +965,60 @@ def _contractors(db: Session, cfg) -> Dict[str, Any]:
             "note": "Monthly contractor headcount (forecast / actual / shortfall) "
                     "is not held in any connected system. Contracted and delivered "
                     "value, and Pulse quality records, are shown instead."}
+
+
+def _budget_series(curve_series: List[Dict[str, Any]],
+                   dispatchable_mwh: float) -> List[Dict[str, Any]]:
+    """This project's derived share of the approved NFA (TOTAL_NFA_CR above),
+    phased on its own P6 baseline plan curve rather than a cost-loaded
+    schedule no connected system holds."""
+    share_cr = TOTAL_NFA_CR * (float(dispatchable_mwh) / TOTAL_DISPATCHABLE_MWH)
+    out, prev = [], 0.0
+    for pt in curve_series:
+        plan_pct = pt.get("planCumPct")
+        if plan_pct is None:
+            continue
+        cum = share_cr * (plan_pct / 100.0)
+        out.append({"month": pt["month"], "cumCr": round(cum, 2),
+                    "monthCr": round(cum - prev, 2)})
+        prev = cum
+    return out
+
+
+def _merge_financial(budget_series_list: List[List[Dict[str, Any]]],
+                     receipt_series: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """One or more projects' derived budget curves, and the (already
+    combined) receipt curve, onto a single month axis - the pack's own
+    Financial S-Curve table: Budgeted cumulative / Monthly Budgeted / Actual
+    Cumulative / Monthly Actual, one column per month."""
+    months = sorted(
+        {pt["month"] for series in budget_series_list for pt in series}
+        | {pt["month"] for pt in receipt_series}
+    )
+    budget_by_month: Dict[str, float] = defaultdict(float)
+    for series in budget_series_list:
+        by_month = {pt["month"]: pt["cumCr"] for pt in series}
+        carried = 0.0
+        for m in months:
+            if m in by_month:
+                carried = by_month[m]
+            budget_by_month[m] += carried
+
+    receipt_cum = {pt["month"]: pt["cumCr"] for pt in receipt_series}
+    rows, prev_b, carried_a = [], 0.0, 0.0
+    for m in months:
+        b = budget_by_month.get(m, prev_b)
+        if m in receipt_cum:
+            carried_a = receipt_cum[m]
+        rows.append({
+            "month": m,
+            "budgetedCumCr": round(b, 2),
+            "budgetedMonthCr": round(b - prev_b, 2),
+            "actualCumCr": round(carried_a, 2),
+            "actualMonthCr": round(carried_a - (rows[-1]["actualCumCr"] if rows else 0.0), 2),
+        })
+        prev_b = b
+    return {"series": rows}
 
 
 def _commercial(db: Session, cfg) -> Dict[str, Any]:
