@@ -102,15 +102,26 @@ def _pct(v: Any, dp: int = 1) -> str:
 
 
 def _deck() -> Presentation:
-    """The pack's own template, slides already stripped."""
-    return Presentation(str(TEMPLATE))
+    """The pack's own template, slides already stripped, or fallback presentation."""
+    if TEMPLATE.exists():
+        try:
+            return Presentation(str(TEMPLATE))
+        except Exception:
+            pass
+    prs = Presentation()
+    prs.slide_width = SLIDE_W
+    prs.slide_height = SLIDE_H
+    return prs
 
 
 def _layout(prs: Presentation, name: str):
-    for lay in prs.slide_masters[0].slide_layouts:
-        if lay.name == name:
-            return lay
-    return prs.slide_layouts[6]
+    if prs.slide_masters:
+        for lay in prs.slide_masters[0].slide_layouts:
+            if lay.name == name:
+                return lay
+    if len(prs.slide_layouts) > 6:
+        return prs.slide_layouts[6]
+    return prs.slide_layouts[0]
 
 
 def _drop_empty_placeholders(slide) -> None:
@@ -125,13 +136,23 @@ def _drop_empty_placeholders(slide) -> None:
 def _content_slide(prs: Presentation, title: str, subtitle: str = ""):
     """A branded content slide with the pack's title treatment."""
     slide = prs.slides.add_slide(_layout(prs, LAYOUT_CONTENT))
+    has_title = False
     for shape in slide.placeholders:
         idx = shape.placeholder_format.idx
         if idx == 0:
             shape.text_frame.text = title
+            has_title = True
         elif idx == 1 and subtitle:
             shape.text_frame.text = subtitle
     _drop_empty_placeholders(slide)
+
+    if not has_title:
+        top = Inches(0.4)
+        _text(slide, MARGIN, top, BODY_W, Inches(0.45), title, size=22, bold=True)
+        if subtitle:
+            _text(slide, MARGIN, top + Inches(0.42), BODY_W, Inches(0.25), subtitle,
+                  size=12, color=MUTED)
+
     return slide
 
 

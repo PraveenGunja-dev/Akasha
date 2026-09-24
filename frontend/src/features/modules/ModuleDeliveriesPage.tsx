@@ -268,7 +268,7 @@ function renderHighlightedText(rawText: string) {
           // X days overdue
           if (/days?\s*overdue/i.test(tok)) {
             return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-status-critical-fg bg-status-critical-bg border border-status-critical-border shadow-sm animate-pulse">
+              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-status-critical-fg bg-status-critical-bg border border-status-critical-border shadow-sm">
                 ⚠️ {tok}
               </span>
             );
@@ -310,11 +310,11 @@ function renderHighlightedText(rawText: string) {
 
         if (isSuggestion) {
           return (
-            <div key={pIdx} className="mt-2.5 pt-2 border-t border-neutral-700/80 bg-primary/10 -mx-1 px-3 py-2 rounded-lg border border-primary/30">
+            <div key={pIdx} className="mt-2.5 pt-2 border-t border-border-default bg-primary/10 -mx-1 px-3 py-2 rounded-lg border border-primary/30">
               <div className="flex items-center gap-1.5 text-[11px] font-bold text-status-risk-fg mb-1">
                 <span>💡 AI Strategic Recommendation</span>
               </div>
-              <div className="text-[11px] leading-relaxed text-neutral-100 font-normal">
+              <div className="text-[11px] leading-relaxed text-fg-primary font-normal">
                 {renderedTokens}
               </div>
             </div>
@@ -322,7 +322,7 @@ function renderHighlightedText(rawText: string) {
         }
 
         return (
-          <div key={pIdx} className="text-[11px] leading-relaxed text-neutral-100 font-normal">
+          <div key={pIdx} className="text-[11px] leading-relaxed text-fg-primary font-normal">
             {renderedTokens}
           </div>
         );
@@ -409,7 +409,7 @@ function Tip({
         >
           <span
             style={{ width: 'max-content', maxWidth: `${renderWidth}px` }}
-            className="block rounded-xl bg-neutral-950/95 backdrop-blur-md border border-neutral-700/80 p-3.5 text-[11px] text-left leading-relaxed font-medium text-neutral-100 shadow-2xl shadow-black/90 whitespace-pre-line break-words cursor-auto"
+            className="block rounded-xl border border-border-default bg-popover/95 p-3.5 text-left text-[11px] font-medium leading-relaxed text-fg-primary shadow-lg shadow-black/10 backdrop-blur-md dark:shadow-black/40 whitespace-pre-line break-words cursor-auto"
           >
             {content ? content : text ? renderHighlightedText(text) : null}
           </span>
@@ -578,7 +578,7 @@ function getMonthCellTheme(
     return {
       cellClass: 'bg-status-critical-bg dark:bg-status-critical-bg text-status-critical-fg dark:text-status-critical-fg font-semibold border-y border-status-critical-border hover:bg-status-critical-bg transition-colors',
       badgeClass: 'bg-status-critical-bg text-status-critical-fg dark:text-status-critical-fg border border-status-critical-border',
-      dotColor: 'bg-status-critical-bg ring-2 ring-status-critical-border animate-pulse',
+      dotColor: 'bg-status-critical-bg ring-2 ring-status-critical-border',
       label: MW(val),
       tag: 'P1 Priority (Critical COD/PPA)',
     };
@@ -1368,7 +1368,7 @@ export default function ModuleDeliveriesPage() {
               Priority Delivery Cells:
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-status-critical-border bg-status-critical-bg text-status-critical-fg dark:text-status-critical-fg font-semibold">
-              <span className="w-1.5 h-1.5 rounded-full bg-status-critical-bg animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-status-critical-bg" />
               P1 Critical / COD Urgent
             </span>
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-status-risk-border bg-status-risk-bg text-status-risk-fg dark:text-status-risk-fg font-semibold">
@@ -1526,7 +1526,7 @@ export default function ModuleDeliveriesPage() {
                             }`}
                           >
                             {(p.priority || 'standard').toLowerCase() === 'p1' && (
-                              <span className="w-1.5 h-1.5 rounded-full bg-status-critical-bg animate-pulse" />
+                              <span className="w-1.5 h-1.5 rounded-full bg-status-critical-bg" />
                             )}
                             {(p.priority || 'standard').toUpperCase()}
                           </button>
@@ -1542,36 +1542,40 @@ export default function ModuleDeliveriesPage() {
                         const r = p.lta_risk;
                         const delayed = r?.breached === true;
                         return (
-                          <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-bold relative cursor-help" : ""}>
+                          <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-semibold relative" : ""}>
                             <div className="flex items-center justify-center gap-1.5 w-full h-full">
                               {p.lta}
                               {delayed && r && (
                                 <Tip wide content={
-                                  <div className="space-y-2 text-left">
-                                    <div className="flex items-center gap-2 border-b border-neutral-700 pb-2">
-                                      <AlertTriangle className="w-4 h-4 text-status-critical-fg" />
-                                      <span className="font-semibold text-status-critical-fg">LTA Breach Review</span>
+                                  <div className="w-[300px] max-w-[calc(100vw-48px)] text-left">
+                                    <div className="flex items-center gap-2">
+                                      <AlertTriangle className="h-3.5 w-3.5 shrink-0 text-status-critical-fg" />
+                                      <span className="text-[12px] font-semibold text-fg-primary">LTA breach</span>
+                                      <span className="ml-auto rounded bg-status-critical-bg px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-status-critical-fg">
+                                        +{r.days_late}d
+                                      </span>
                                     </div>
-                                    <p className="text-[11px] text-status-critical-fg leading-relaxed">
-                                      LTA <b>{p.lta}</b> lands <b>{r.days_late} day{r.days_late === 1 ? '' : 's'}</b> after this
-                                      project&apos;s {r.basis} commitment of <b>{r.basis_date}</b>.
+                                    {/* The number first, in plain body text: the red badge above
+                                        already carries the alarm, so repeating it on every line
+                                        would leave nothing for the eye to land on. */}
+                                    <p className="mt-2 text-[11px] leading-relaxed text-fg-secondary">
+                                      LTA <b className="text-fg-primary">{p.lta}</b> lands{' '}
+                                      <b className="text-fg-primary">{r.days_late} day{r.days_late === 1 ? '' : 's'}</b> after the{' '}
+                                      {r.basis} commitment of <b className="text-fg-primary">{r.basis_date}</b>.
                                     </p>
                                     {/* Which rule applied, and on what evidence. A row measured
                                         against AOP only because the P6 name carries no contract
                                         token says so, rather than implying it is merchant. */}
-                                    <p className="text-[10.5px] leading-relaxed text-status-critical-fg/80">
+                                    <p className="mt-1.5 border-t border-border-subtle pt-1.5 text-[10.5px] leading-relaxed text-fg-tertiary">
                                       {r.is_ppa
-                                        ? <>PPA project (P6 name carries <b>_PPA</b>) &mdash; the LTA must not cross SCOD.</>
+                                        ? <>PPA project &mdash; measured against SCOD.</>
                                         : r.contract
-                                          ? <>Non-PPA project (P6 name carries <b>_{r.contract}</b>) &mdash; the LTA must not cross AOP (Plan).</>
-                                          : <>The P6 name carries no contract token, so this row is measured against <b>AOP</b> by default &mdash; confirm the contract type before acting.</>}
-                                    </p>
-                                    <p className="text-[11px] text-status-critical-fg italic">
-                                      Critical commercial risk. Please review the connectivity and delivery plan.
+                                          ? <>Non-PPA ({r.contract.toLowerCase()}) &mdash; measured against AOP (Plan).</>
+                                          : <>No contract token in the P6 name, so this row falls back to <b className="text-fg-secondary">AOP</b>. Confirm the contract type before acting.</>}
                                     </p>
                                   </div>
                                 }>
-                                  <AlertTriangle className="w-3.5 h-3.5 text-status-critical-fg cursor-help" />
+                                  <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-status-critical-fg" />
                                 </Tip>
                               )}
                             </div>
@@ -1676,15 +1680,15 @@ export default function ModuleDeliveriesPage() {
                             className={`${i === 0 ? SECTION_EDGE : ''} relative`}
                             tipWide
                             tipContent={(val > 0 || getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0) ? (
-                              <div className="space-y-2.5 text-left w-[580px] max-w-[calc(100vw-48px)]">
+                              <div className="space-y-2.5 text-left w-[660px] max-w-[calc(100vw-48px)]">
                                 <div>
                                   <div className="flex items-center justify-between gap-2">
-                                    <div className="font-semibold text-neutral-50 text-[12px]">{p.project_name || p.p6_name}</div>
-                                    <div className="text-[10px] text-neutral-400 font-mono">
-                                      Project Total: <span className="text-neutral-100 font-bold">{MW(p.capacity_mwp)} MWp</span> {p.capacity_mwac ? `(${p.capacity_mwac} MWac)` : ''}
+                                    <div className="font-semibold text-fg-primary text-[12px]">{p.project_name || p.p6_name}</div>
+                                    <div className="text-[10px] text-fg-tertiary font-mono">
+                                      Project Total: <span className="text-fg-primary font-bold">{MW(p.capacity_mwp)} MWp</span> {p.capacity_mwac ? `(${p.capacity_mwac} MWac)` : ''}
                                     </div>
                                   </div>
-                                  <div className="text-[10px] text-neutral-400 mt-0.5">{theme.tag}</div>
+                                  <div className="text-[10px] text-fg-tertiary mt-0.5">{theme.tag}</div>
                                 </div>
 
                                 {/* Dynamic Planned / Milestone Section */}
@@ -1693,10 +1697,10 @@ export default function ModuleDeliveriesPage() {
                                   const isMilestoneOnly = val <= 0 && monthChips.length > 0;
                                   
                                   return (
-                                    <div className="pt-2 border-t border-neutral-800 space-y-1.5">
+                                    <div className="pt-2 border-t border-border-subtle space-y-1.5">
                                       <div className="flex items-center justify-between gap-2 text-[11px]">
                                         <div className="flex items-center gap-1.5">
-                                          <span className="text-neutral-400 font-medium">
+                                          <span className="text-fg-tertiary font-medium">
                                             {isMilestoneOnly ? 'Milestone Target:' : 'Planned Order:'}
                                           </span>
                                           <span className={`inline-flex items-center px-2 py-0.5 rounded font-mono font-bold ${
@@ -1709,14 +1713,14 @@ export default function ModuleDeliveriesPage() {
                                               : `${MW(val)} MWp · ${mo}`}
                                           </span>
                                         </div>
-                                        <div className="text-[10px] text-neutral-400 font-mono">
+                                        <div className="text-[10px] text-fg-tertiary font-mono">
                                           Balance to Order: <span className={`font-semibold ${p.balance_ordering_mwp > 0 ? 'text-status-risk-fg' : 'text-status-healthy-fg'}`}>{p.balance_ordering_mwp > 0 ? `${MW(p.balance_ordering_mwp)} MWp` : '0 MWp'}</span>
                                         </div>
                                       </div>
 
                                       {isMilestoneOnly && (
-                                        <div className="text-[10px] text-neutral-400 leading-snug">
-                                          Target milestone scheduled in <span className="font-semibold text-neutral-200">{mo}</span>. Related module procurement orders are scheduled <span className="font-semibold text-neutral-200">{p.type === 'China' || p.type === 'SEA' ? '136' : '98'} days earlier</span>.
+                                        <div className="text-[10px] text-fg-tertiary leading-snug">
+                                          Target milestone scheduled in <span className="font-semibold text-fg-primary">{mo}</span>. Related module procurement orders are scheduled <span className="font-semibold text-fg-primary">{p.type === 'China' || p.type === 'SEA' ? '136' : '98'} days earlier</span>.
                                         </div>
                                       )}
                                     </div>
@@ -1731,7 +1735,7 @@ export default function ModuleDeliveriesPage() {
                                   </div>
                                 )}
 
-                                <div className="pt-2 pb-1 border-t border-neutral-800">
+                                <div className="pt-2 pb-1 border-t border-border-subtle">
                                   {(() => {
                                       // 1. Identify which phases (if any) apply to this specific column's month (mo)
                                       const tcParts = (p.tc_date || '').split(' · ');
@@ -1758,12 +1762,12 @@ export default function ModuleDeliveriesPage() {
                                       const renderRevised = (labelMo: string) => {
                                         if (!isShifted) return null;
                                         return (
-                                          <div className="mt-2 pt-2 border-t border-neutral-700/50 flex flex-col items-center justify-center">
+                                          <div className="mt-2 pt-2 border-t border-border-subtle flex flex-col items-center justify-center">
                                             <div className={`flex items-center gap-1 text-[9px] font-bold ${shiftColor} mb-1.5`}>
                                               <ArrowRight className="w-3 h-3 rotate-90" />
                                               {shiftLabel}
                                             </div>
-                                            <div className={`text-[10px] font-mono font-bold ${shiftColor} bg-neutral-900/80 px-2 py-0.5 rounded-full border ${shiftBorder}`}>
+                                            <div className={`text-[10px] font-mono font-bold ${shiftColor} bg-surface-sunken/80 px-2 py-0.5 rounded-full border ${shiftBorder}`}>
                                               {labelMo}
                                             </div>
                                           </div>
@@ -1771,17 +1775,17 @@ export default function ModuleDeliveriesPage() {
                                       };
 
                                       return (
-                                      <div className="flex items-start justify-between group/timeline gap-2 w-full">
+                                      <div className="flex w-full flex-wrap items-stretch justify-between gap-x-1.5 gap-y-2 group/timeline">
                                         {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
                                           <>
                                             {/* Module Ordering Block (Blue) */}
-                                            <div className={`flex-1 min-w-[110px] p-2.5 rounded-xl transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                            <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
                                               (p.module_date || '').includes(mo) 
-                                                ? 'border-2 border-primary/40 bg-primary/20 shadow-[0_0_20px_rgba(59,130,246,0.25)] relative z-10' 
-                                                : 'border border-primary/30 bg-primary/10 shadow-[inset_0_0_12px_rgba(59,130,246,0.02)]'
+                                                ? 'border border-primary/40 bg-primary/10 ring-1 ring-inset ring-primary/40 relative z-10' 
+                                                : 'border border-primary/25 bg-primary/[0.06]'
                                             }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-primary font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.module_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-primary text-primary animate-pulse drop-shadow-[0_0_4px_rgba(59,130,246,0.8)]" />}
+                                                {(p.module_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-primary text-primary" />}
                                                 Module Order
                                               </div>
                                               <DateChipGroup dateStr={filterPhases(p.module_date)} colorClass="text-primary" borderColorClass="border-primary/30" badgeBgClass="bg-primary/20" />
@@ -1790,12 +1794,12 @@ export default function ModuleDeliveriesPage() {
 
                                             {/* Arrow 1 */}
                                             {milestoneFilter === 'all' && (
-                                              <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12 group-hover/timeline:opacity-40 transition-opacity mt-6">
-                                                <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
-                                                  <div className="h-[2px] w-full bg-gradient-to-r from-blue-500/70 via-amber-400/70 to-blue-500/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
+                                              <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12 transition-opacity mt-6">
+                                                <div className="w-full flex items-center justify-center relative transition-transform">
+                                                  <div className="h-[2px] w-full bg-border-default rounded-full" />
                                                   <ArrowRight className="w-3 h-3 text-status-risk-fg absolute -right-1" />
                                                 </div>
-                                                <div className="text-[8px] text-neutral-400 mt-1.5 font-medium whitespace-nowrap">{p.type === 'China' || p.type === 'SEA' ? 136 : 98}d Lead</div>
+                                                <div className="text-[8px] text-fg-tertiary mt-1.5 font-medium whitespace-nowrap">{p.type === 'China' || p.type === 'SEA' ? 136 : 98}d Lead</div>
                                               </div>
                                             )}
                                           </>
@@ -1804,13 +1808,13 @@ export default function ModuleDeliveriesPage() {
                                         {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
                                           <>
                                             {/* TC Delivery Block (Yellow) */}
-                                            <div className={`flex-1 min-w-[110px] p-2.5 rounded-xl transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                            <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
                                               (p.tc_date || '').includes(mo)
-                                                ? 'border-2 border-status-risk-border bg-status-risk-bg shadow-[0_0_20px_rgba(245,158,11,0.25)] relative z-10'
-                                                : 'border border-status-risk-border/50 bg-status-risk-bg/50 shadow-[inset_0_0_12px_rgba(245,158,11,0.02)]'
+                                                ? 'border border-status-risk-border bg-status-risk-bg ring-1 ring-inset ring-status-risk-border relative z-10'
+                                                : 'border border-status-risk-border/50 bg-status-risk-bg/50'
                                             }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-status-risk-fg font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.tc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-risk-fg text-status-risk-fg animate-pulse drop-shadow-[0_0_4px_rgba(245,158,11,0.8)]" />}
+                                                {(p.tc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-risk-fg text-status-risk-fg" />}
                                                 TC Date
                                               </div>
                                               <DateChipGroup dateStr={filterPhases(p.tc_date)} colorClass="text-status-risk-fg" borderColorClass="border-status-risk-border" badgeBgClass="bg-status-risk-bg" />
@@ -1823,25 +1827,25 @@ export default function ModuleDeliveriesPage() {
 
                                             {/* Arrow 2 */}
                                             {milestoneFilter === 'all' && (
-                                              <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12 group-hover/timeline:opacity-40 transition-opacity mt-6">
-                                                <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
-                                                  <div className="h-[2px] w-full bg-gradient-to-r from-amber-400/70 via-emerald-400/70 to-amber-400/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
+                                              <div className="flex flex-col items-center justify-center shrink-0 w-10 sm:w-12 transition-opacity mt-6">
+                                                <div className="w-full flex items-center justify-center relative transition-transform">
+                                                  <div className="h-[2px] w-full bg-border-default rounded-full" />
                                                   <ArrowRight className="w-3 h-3 text-status-healthy-fg absolute -right-1" />
                                                 </div>
-                                                <div className="text-[8px] text-neutral-400 mt-1.5 font-medium whitespace-nowrap">45d Install</div>
+                                                <div className="text-[8px] text-fg-tertiary mt-1.5 font-medium whitespace-nowrap">45d Install</div>
                                               </div>
                                             )}
                                           </>
                                         )}
 
                                         {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
-                                          <div className={`flex-1 min-w-[110px] p-2.5 rounded-xl transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                          <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
                                             (p.ftc_date || '').includes(mo)
-                                              ? 'border-2 border-status-healthy-border bg-status-healthy-bg shadow-[0_0_20px_rgba(16,185,129,0.25)] relative z-10'
-                                              : 'border border-status-healthy-border/50 bg-status-healthy-bg/50 shadow-[inset_0_0_12px_rgba(16,185,129,0.02)]'
+                                              ? 'border border-status-healthy-border bg-status-healthy-bg ring-1 ring-inset ring-status-healthy-border relative z-10'
+                                              : 'border border-status-healthy-border/50 bg-status-healthy-bg/50'
                                           }`}>
                                             <div className="text-[9px] uppercase tracking-wider text-status-healthy-fg font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                              {(p.ftc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-healthy-fg text-status-healthy-fg animate-pulse drop-shadow-[0_0_4px_rgba(16,185,129,0.8)]" />}
+                                              {(p.ftc_date || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-healthy-fg text-status-healthy-fg" />}
                                               FTC Date
                                             </div>
                                             <DateChipGroup dateStr={filterPhases(p.ftc_date)} colorClass="text-status-healthy-fg" borderColorClass="border-status-healthy-border" badgeBgClass="bg-status-healthy-bg" />
@@ -1856,19 +1860,19 @@ export default function ModuleDeliveriesPage() {
                                         {/* LTA Block (Purple) */}
                                         {p.lta && (
                                           <>
-                                            <div className="flex flex-col items-center justify-center shrink-0 w-8 sm:w-10 group-hover/timeline:opacity-40 transition-opacity mt-6">
-                                              <div className="w-full flex items-center justify-center relative group-hover/timeline:translate-x-1 transition-transform">
-                                                <div className="h-[2px] w-full bg-gradient-to-r from-emerald-400/70 via-purple-400/70 to-emerald-400/70 bg-[length:200%_auto] animate-[gradient-flow_2s_linear_infinite] rounded-full" />
+                                            <div className="flex flex-col items-center justify-center shrink-0 w-8 sm:w-10 transition-opacity mt-6">
+                                              <div className="w-full flex items-center justify-center relative transition-transform">
+                                                <div className="h-[2px] w-full bg-border-default rounded-full" />
                                                 <ArrowRight className="w-3 h-3 text-status-ai-fg absolute -right-1" />
                                               </div>
                                             </div>
-                                            <div className={`flex-1 min-w-[110px] p-2.5 rounded-xl transition-all group-hover/timeline:opacity-40 hover:!opacity-100 cursor-default ${
+                                            <div className={`min-w-0 flex-1 basis-[104px] rounded-lg p-2 transition-all cursor-default ${
                                               (p.lta || '').includes(mo)
-                                                ? 'border-2 border-status-ai-border bg-status-ai-bg shadow-[0_0_20px_rgba(168,85,247,0.25)] relative z-10'
-                                                : 'border border-status-ai-border/50 bg-status-ai-bg/50 shadow-[inset_0_0_12px_rgba(168,85,247,0.02)]'
+                                                ? 'border border-status-ai-border bg-status-ai-bg ring-1 ring-inset ring-status-ai-border relative z-10'
+                                                : 'border border-status-ai-border/50 bg-status-ai-bg/50'
                                             }`}>
                                               <div className="text-[9px] uppercase tracking-wider text-status-ai-fg font-bold mb-1.5 transition-colors flex items-center gap-1.5 whitespace-nowrap">
-                                                {(p.lta || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-ai-fg text-status-ai-fg animate-pulse drop-shadow-[0_0_4px_rgba(168,85,247,0.8)]" />}
+                                                {(p.lta || '').includes(mo) && <Star className="w-3 h-3 shrink-0 fill-status-ai-fg text-status-ai-fg" />}
                                                 LTA Date
                                               </div>
                                               <DateChipGroup dateStr={filterPhases(p.lta)} colorClass="text-status-ai-fg" borderColorClass="border-status-ai-border" badgeBgClass="bg-status-ai-bg" />
@@ -1881,24 +1885,24 @@ export default function ModuleDeliveriesPage() {
                                 </div>
 
                                 {p.planning_flags?.includes('extended_to_lta') ? (
-                                  <div className="text-[10.5px] text-status-risk-fg leading-relaxed pt-2 border-t border-neutral-800">
+                                  <div className="text-[10.5px] text-status-risk-fg leading-relaxed pt-2 border-t border-border-subtle">
                                     ⚠️ Due to vendor capacity limits in earlier months, this order was extended to <span className="font-semibold">{mo}</span>. This misses the original TC date, but is still safe for transmission (LTA).
                                   </div>
                                 ) : p.planning_flags?.includes('capacity_delayed') ? (
-                                  <div className="text-[10.5px] text-status-critical-fg leading-relaxed pt-2 border-t border-neutral-800">
+                                  <div className="text-[10.5px] text-status-critical-fg leading-relaxed pt-2 border-t border-border-subtle">
                                     🚨 Due to vendor capacity limits, this order was delayed to <span className="font-semibold">{mo}</span>, which misses BOTH the FTC and LTA timelines! Critical commercial risk.
                                   </div>
                                 ) : p.planning_flags?.includes('leveled_early') ? (
-                                  <div className="text-[10.5px] text-status-ai-fg leading-relaxed pt-2 border-t border-neutral-800">
+                                  <div className="text-[10.5px] text-status-ai-fg leading-relaxed pt-2 border-t border-border-subtle">
                                     ✨ To avoid vendor capacity limits in later months, this order was proactively pulled early to <span className="font-semibold">{mo}</span>. Materials will arrive ahead of schedule.
                                   </div>
                                 ) : (
-                                  <div className="text-[10.5px] text-neutral-300 leading-relaxed pt-2 border-t border-neutral-800">
+                                  <div className="text-[10.5px] text-fg-secondary leading-relaxed pt-2 border-t border-border-subtle">
                                     Ordering in <span className="text-status-healthy-fg font-semibold">{mo}</span> lands the material on site by Module Delivery Date, in time to support FTC.
                                   </div>
                                 )}
                                 {p.planning_flags?.includes('leveled_early') && (
-                                  <div className="text-[10.5px] text-status-ai-fg pt-2 border-t border-neutral-800">
+                                  <div className="text-[10.5px] text-status-ai-fg pt-2 border-t border-border-subtle">
                                     ⚡ Leveled early to protect vendor monthly capacity limits
                                   </div>
                                 )}
@@ -1960,7 +1964,7 @@ export default function ModuleDeliveriesPage() {
                           <div className="flex items-center gap-1.5 overflow-hidden flex-1">
                             {p.planning_flags?.includes('critical_ordering') && (
                               <Tip text="Critical: Immediate PO required due to lead time">
-                                <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-status-critical-bg animate-pulse shadow-[0_0_4px_var(--rose-500)]" />
+                                <span className="inline-block w-1.5 h-1.5 shrink-0 rounded-full bg-status-critical-bg shadow-[0_0_4px_var(--rose-500)]" />
                               </Tip>
                             )}
                             {p.planning_flags?.includes('leveled_early') && (
