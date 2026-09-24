@@ -35,13 +35,28 @@ import re
 import sys
 import os
 from collections import defaultdict
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pandas as pd
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from database import SessionLocal
 import models
+
+
+# LTA values the connectivity export does not carry at all. Four solar projects
+# have no ECOD anywhere in it, so the passes below cannot fill them and the LTA
+# breach check then skips the row silently (a missing basis date is no signal,
+# not a pass). These came from the planning team directly, so they live here as
+# the audit trail for what was set and on whose word.
+#
+# A month given without a day means the LAST day of that month.
+# Keyed on the P6 project name, which is unique. Applied only where the export
+# produced nothing, so a real ECOD arriving later always wins.
+MANUAL_LTA: dict[str, tuple[datetime, str]] = {
+    'ARE55L_S02A_HSAT_175_MW_PPA': (datetime(2026, 12, 31), 'planning team 2026-09-24, "Dec-26"'),
+    'ASEB1PL_BAIYA_FT_600MW_PPA': (datetime(2028, 3, 31), 'planning team 2026-09-24, "Mar-28"'),
+}
 
 
 def _parse_date(val):
@@ -230,8 +245,27 @@ def main():
             mapping.manual_scod_is_lta = a["scod_is_lta"]
             updated_scod += 1
 
+    # Manual fallbacks, for the projects the export does not carry. Never
+    # overwrites a date the export produced.
+    manual_set = []
+    for p6_name, (lta, note) in MANUAL_LTA.items():
+        rows = db.query(models.ProjectMapping).filter(
+            models.ProjectMapping.project_name_from_p6 == p6_name).all()
+        if len(rows) != 1:
+            print(f"  manual LTA {p6_name}: {len(rows)} mappings matched - skipped")
+            continue
+        m = rows[0]
+        if m.lta_date is not None:
+            continue
+        m.lta_date = lta
+        manual_set.append((m, lta, note))
+
     db.commit()
     print(f"Updated {updated_lta} records with LTA dates (max ECOD per project).")
+    if manual_set:
+        print(f"Set {len(manual_set)} LTA date(s) from the manual table (no ECOD at source):")
+        for m, lta, note in manual_set:
+            print(f"  - {m.project} [{m.spv_name} {m.plot_no or '-'}] -> {lta:%d-%b-%Y}  ({note})")
     print(f"Updated {updated_scod} records with SCOD dates (literal, or LTA-relative to that max).")
     if ambiguous:
         print(f"Skipped {len(ambiguous)} row group(s) — could not resolve to exactly one project:")

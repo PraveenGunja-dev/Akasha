@@ -1794,69 +1794,85 @@ export default function ModuleDeliveriesPage() {
                                       : unitToggle === 'mwp' ? `${MW(taken)} MWp`
                                         : `${MW(taken)} MWp / ${MW(takenAc)} MWac`;
 
-                                  /* One stack of phase chips under a milestone heading. The
-                                     date shown is that phase's own date for this milestone. */
-                                  /* Each milestone shows the date as it NOW falls. When vendor
-                                     quota moved the order later, every downstream step moved with
-                                     it, so the planned date is kept underneath, struck through, and
-                                     the slip is stated. Showing only the original produced rows
-                                     where the TC preceded the order that caused it. */
-                                  const Stack = ({ field, text, border, bg }: {
-                                    field: 'order' | 'tc' | 'ftc';
+                                  /* One chip: a phase's date for one milestone. Real P6 dates
+                                     only -- a delayed order keeps its dates and says it is
+                                     delayed, because a recalculated FTC would be our arithmetic
+                                     presented as a commitment. */
+                                  const Chip = ({ ph, field, text, border, bg }: {
+                                    ph: MonthPhase; field: 'order' | 'tc' | 'ftc';
                                     text: string; border: string; bg: string;
-                                  }) => (
-                                    <div className="space-y-1">
-                                      {phases.map((ph, i) => {
-                                        const planned = field === 'order' ? ph.order_date : field === 'tc' ? ph.tc_date : ph.ftc_date;
-                                        const placed = field === 'order' ? ph.placed_order_date : field === 'tc' ? ph.placed_tc_date : ph.placed_ftc_date;
-                                        return (
-                                          <div key={`${ph.phase_label}-${i}`}
-                                            className={`rounded-md border px-1.5 py-1 ${border} ${bg}`}>
-                                            <div className="flex items-baseline justify-between gap-1.5">
-                                              <span className={`text-[9px] font-semibold ${text}`}>{ph.phase_label}</span>
-                                              <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
-                                            </div>
-                                            <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
-                                              {placed}
-                                            </div>
-                                            {ph.revised && (
-                                              <div className="mt-0.5 flex items-baseline gap-1">
-                                                <span className="font-mono text-[9px] tabular-nums text-fg-tertiary line-through">
-                                                  {planned}
-                                                </span>
-                                                <span className="font-mono text-[9px] font-bold tabular-nums text-status-critical-fg">
-                                                  {ph.slip_months > 0 ? `+${ph.slip_months}` : ph.slip_months}mo
-                                                </span>
-                                              </div>
-                                            )}
+                                  }) => {
+                                    const date = field === 'order' ? ph.order_date : field === 'tc' ? ph.tc_date : ph.ftc_date;
+                                    /* An unphased project has no phase to name: the planner calls
+                                       it "Main"/"Project Balance" internally, and printing that
+                                       invented a phase the project has not got. */
+                                    const named = ph.phase_label
+                                      && !/^(main|project balance)$/i.test(ph.phase_label);
+                                    return (
+                                      <div className={`flex h-full flex-col rounded-md border px-1.5 py-1 ${border} ${bg}`}>
+                                        <div className="flex items-baseline justify-between gap-1.5">
+                                          {named
+                                            ? <span className={`text-[9px] font-semibold ${text}`}>{ph.phase_label}</span>
+                                            : <span />}
+                                          <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
+                                        </div>
+                                        <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
+                                          {date}
+                                        </div>
+                                        {field === 'order' && ph.delay_months > 0 && (
+                                          <div className="mt-0.5 font-mono text-[9px] font-bold leading-tight tabular-nums text-status-critical-fg">
+                                            delayed to {ph.order_month} (+{ph.delay_months}mo)
                                           </div>
-                                        );
-                                      })}
-                                    </div>
-                                  );
-
-                                  const Arrow = ({ label }: { label?: string }) => (
-                                    <div className="mt-6 flex shrink-0 flex-col items-center justify-start w-9 sm:w-11">
-                                      <div className="relative flex w-full items-center justify-center">
-                                        <div className="h-px w-full rounded-full bg-border-default" />
-                                        <ArrowRight className="absolute -right-1 h-3 w-3 text-fg-tertiary" />
+                                        )}
+                                        {field === 'ftc' && !ph.ftc_reachable && (
+                                          <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-critical-fg">
+                                            not achievable &mdash; {ph.ftc_short_days}d short
+                                          </div>
+                                        )}
                                       </div>
-                                      {label && (
-                                        <div className="mt-1.5 whitespace-nowrap text-[8px] font-medium text-fg-tertiary">{label}</div>
-                                      )}
-                                    </div>
-                                  );
+                                    );
+                                  };
 
-                                  const Col = ({ title, text, children }: {
-                                    title: string; text: string; children: React.ReactNode;
-                                  }) => (
-                                    <div className="min-w-0 flex-1 basis-[112px]">
-                                      <div className={`mb-1.5 whitespace-nowrap text-[9px] font-bold uppercase tracking-wider ${text}`}>
-                                        {title}
-                                      </div>
-                                      {children}
-                                    </div>
-                                  );
+                                  /* The milestones in view, and the gap label that sits between
+                                     each pair. Built as data so the grid can size itself: the
+                                     Unit and Milestone selectors both change how many there are. */
+                                  const lead = p.type === 'China' || p.type === 'SEA' ? 136 : 98;
+                                  type Milestone = {
+                                    title: string; text: string; border: string; bg: string;
+                                    field?: 'order' | 'tc' | 'ftc'; gapBefore?: string;
+                                  };
+                                  const milestones: Milestone[] = [];
+                                  if (milestoneFilter === 'all' || milestoneFilter === 'module') {
+                                    milestones.push({ title: 'Module Order', field: 'order', text: 'text-primary',
+                                      border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
+                                  }
+                                  if (milestoneFilter === 'all' || milestoneFilter === 'tc') {
+                                    milestones.push({ title: 'TC Date', field: 'tc', text: 'text-status-risk-fg',
+                                      border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
+                                      gapBefore: milestones.length ? `${lead}d Lead` : undefined });
+                                  }
+                                  if (milestoneFilter === 'all' || milestoneFilter === 'ftc') {
+                                    milestones.push({ title: 'FTC Date', field: 'ftc', text: 'text-status-healthy-fg',
+                                      border: 'border-status-healthy-border', bg: 'bg-status-healthy-bg/60',
+                                      gapBefore: milestones.length ? '45d Install' : undefined });
+                                  }
+                                  if (p.lta) {
+                                    // One date for the whole project, so it spans every phase row.
+                                    milestones.push({ title: 'LTA Date', text: 'text-status-ai-fg',
+                                      border: 'border-status-ai-border', bg: 'bg-status-ai-bg/60',
+                                      gapBefore: milestones.length ? ' ' : undefined });
+                                  }
+
+                                  /* A grid, not a flex row. Flex sized each column to its own
+                                     content, so a column carrying a "delayed" or "not achievable"
+                                     line grew taller than its neighbours and the arrows floated at
+                                     whatever height they happened to land. In a grid every cell in
+                                     a row shares one height and the arrows centre against it. */
+                                  const track: string[] = [];
+                                  milestones.forEach((m, i) => {
+                                    if (i > 0) track.push('40px');
+                                    track.push('minmax(104px, 1fr)');
+                                  });
 
                                   return (
                                     <div className="border-t border-border-subtle pt-2">
@@ -1869,60 +1885,69 @@ export default function ModuleDeliveriesPage() {
                                         </span>
                                       </div>
 
-                                      <div className="flex w-full flex-wrap items-start gap-x-1.5 gap-y-2">
-                                        {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
-                                          <>
-                                            <Col title="Module Order" text="text-primary">
-                                              <Stack field="order" text="text-primary"
-                                                border="border-primary/30" bg="bg-primary/[0.07]" />
-                                            </Col>
-                                            {milestoneFilter === 'all' && (
-                                              <Arrow label={`${p.type === 'China' || p.type === 'SEA' ? 136 : 98}d Lead`} />
-                                            )}
-                                          </>
-                                        )}
-
-                                        {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
-                                          <>
-                                            <Col title="TC Date" text="text-status-risk-fg">
-                                              <Stack field="tc" text="text-status-risk-fg"
-                                                border="border-status-risk-border" bg="bg-status-risk-bg/60" />
-                                            </Col>
-                                            {milestoneFilter === 'all' && <Arrow label="45d Install" />}
-                                          </>
-                                        )}
-
-                                        {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
-                                          <Col title="FTC Date" text="text-status-healthy-fg">
-                                            <Stack field="ftc" text="text-status-healthy-fg"
-                                              border="border-status-healthy-border" bg="bg-status-healthy-bg/60" />
-                                          </Col>
-                                        )}
-
-                                        {p.lta && (
-                                          <>
-                                            <Arrow />
-                                            {/* One date for the whole project, not per phase. */}
-                                            <Col title="LTA Date" text="text-status-ai-fg">
-                                              <div className="rounded-md border border-status-ai-border bg-status-ai-bg/60 px-1.5 py-1">
-                                                <div className="text-[9px] font-semibold text-status-ai-fg">Project</div>
-                                                <div className="font-mono text-[10.5px] font-bold tabular-nums text-status-ai-fg">
-                                                  {p.lta}
+                                      <div
+                                        className="grid w-full items-stretch gap-x-1 gap-y-1"
+                                        style={{
+                                          gridTemplateColumns: track.join(' '),
+                                          gridTemplateRows: `auto repeat(${phases.length}, minmax(0, auto))`,
+                                        }}
+                                      >
+                                        {milestones.map((m, i) => {
+                                          const col = i * 2 + 1;
+                                          return (
+                                            <React.Fragment key={m.title}>
+                                              {i > 0 && (
+                                                /* Spans every phase row and centres in it. */
+                                                <div
+                                                  className="flex flex-col items-center justify-center"
+                                                  style={{ gridColumn: col - 1, gridRow: `2 / span ${phases.length}` }}
+                                                >
+                                                  <div className="relative flex w-full items-center justify-center">
+                                                    <div className="h-px w-full rounded-full bg-border-default" />
+                                                    <ArrowRight className="absolute -right-0.5 h-3 w-3 text-fg-tertiary" />
+                                                  </div>
+                                                  {m.gapBefore && m.gapBefore.trim() && (
+                                                    <div className="mt-1 whitespace-nowrap text-[8px] font-medium text-fg-tertiary">
+                                                      {m.gapBefore}
+                                                    </div>
+                                                  )}
                                                 </div>
+                                              )}
+                                              <div
+                                                className={`whitespace-nowrap text-[9px] font-bold uppercase tracking-wider ${m.text}`}
+                                                style={{ gridColumn: col, gridRow: 1 }}
+                                              >
+                                                {m.title}
                                               </div>
-                                            </Col>
-                                          </>
-                                        )}
+                                              {m.field
+                                                ? phases.map((ph, j) => (
+                                                  <div key={`${m.title}-${j}`} style={{ gridColumn: col, gridRow: j + 2 }}>
+                                                    <Chip ph={ph} field={m.field!} text={m.text}
+                                                      border={m.border} bg={m.bg} />
+                                                  </div>
+                                                ))
+                                                : (
+                                                  <div style={{ gridColumn: col, gridRow: `2 / span ${phases.length}` }}>
+                                                    <div className={`flex h-full flex-col justify-center rounded-md border px-1.5 py-1 ${m.border} ${m.bg}`}>
+                                                      <div className={`text-[9px] font-semibold ${m.text}`}>Project</div>
+                                                      <div className={`font-mono text-[10.5px] font-bold tabular-nums ${m.text}`}>
+                                                        {p.lta}
+                                                      </div>
+                                                    </div>
+                                                  </div>
+                                                )}
+                                            </React.Fragment>
+                                          );
+                                        })}
                                       </div>
 
                                       {/* Flags belong on the phase, not the project: only some of
                                           a month's phases may be overdue or quota-moved. */}
-                                      {phases.some(x => x.revised) && (
-                                        <div className="mt-2 text-[10px] leading-relaxed text-fg-secondary">
-                                          Struck-through dates are the original plan. Where the order
-                                          moved, its TC and FTC moved by the same amount &mdash; the lead
-                                          time and 45-day install run from the date the order is
-                                          actually placed.
+                                      {phases.some(x => !x.ftc_reachable) && (
+                                        <div className="mt-2 text-[10px] leading-relaxed text-status-critical-fg">
+                                          Dates shown are the P6 plan. Where the order can only be placed
+                                          later, the FTC above can no longer be met from that month &mdash;
+                                          an order needs its full lead time plus 45 days to install.
                                         </div>
                                       )}
 
@@ -1930,12 +1955,12 @@ export default function ModuleDeliveriesPage() {
                                         <div className="mt-2 flex flex-wrap items-center gap-1">
                                           {phases.filter(x => x.overdue).map((x, i) => (
                                             <span key={`o${i}`} className="rounded bg-status-critical-bg px-1.5 py-0.5 text-[9px] font-bold text-status-critical-fg">
-                                              {x.phase_label} overdue
+                                              {x.phase_label && !/^(main|project balance)$/i.test(x.phase_label) ? `${x.phase_label} ` : ''}ordering window passed
                                             </span>
                                           ))}
                                           {phases.filter(x => !x.overdue && x.shifted).map((x, i) => (
                                             <span key={`s${i}`} className="rounded bg-status-risk-bg px-1.5 py-0.5 text-[9px] font-bold text-status-risk-fg">
-                                              {x.phase_label} moved by quota
+                                              {x.phase_label && !/^(main|project balance)$/i.test(x.phase_label) ? `${x.phase_label} ` : ''}moved by vendor quota
                                             </span>
                                           ))}
                                         </div>

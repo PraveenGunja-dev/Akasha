@@ -71,9 +71,15 @@ export const PLANNING_RULES: RuleGroup[] = [
         source: 'module_planner.py',
       },
       {
-        name: 'A moved order moves everything after it',
+        name: 'Delayed orders keep their real dates',
         detail:
-          'When vendor quota pushes an order into a later month, its TC and FTC move by the same amount — the lead time and the 45-day install run from the date the order is actually placed, not from the original plan. The tooltip shows the new date with the original struck through beneath it.',
+          'When an order can only be placed later than planned, the phase keeps its P6 order, TC and FTC dates and is reported as delayed by N months. No recalculated FTC is published — that would be our arithmetic presented as a commitment, and the commitment is the one in P6.',
+        source: 'module_planner.py',
+      },
+      {
+        name: 'FTC achievability',
+        detail:
+          'The P6 FTC is checked against the month the order can actually be placed: an order needs its full lead time plus the 45-day install before FTC. Where less than that remains the milestone is marked not achievable, with how many days short. 47 of 56 phase orders currently fail this check.',
         source: 'module_planner.py',
       },
       {

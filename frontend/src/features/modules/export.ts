@@ -492,9 +492,9 @@ export async function exportModuleDeliveriesXLSX(
     views: [{ state: 'frozen', ySplit: 2 }],
     pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: A3 },
   });
-  ps.mergeCells('A1:M1');
+  ps.mergeCells('A1:N1');
   const pTitle = ps.getCell('A1');
-  pTitle.value = 'Order breakdown by phase — each phase is ordered in full before the next begins. Dates are as they now fall: a moved order moves its TC and FTC with it.';
+  pTitle.value = 'Order breakdown by phase — each phase is ordered in full before the next begins. Dates are the P6 plan; a delayed order is reported as delayed, and the FTC is checked against the month it can actually be placed.';
   pTitle.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
   pTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
   pTitle.alignment = { horizontal: 'left', vertical: 'middle' };
@@ -504,8 +504,8 @@ export async function exportModuleDeliveriesXLSX(
     { h: 'Project', w: 30 }, { h: 'Plot', w: 8 }, { h: 'Order month', w: 12 },
     { h: 'Phase', w: 10 }, { h: 'Order qty (MWp)', w: 15 }, { h: 'Phase (MWac)', w: 13 },
     { h: 'Place order by', w: 14 }, { h: 'TC date', w: 12 }, { h: 'FTC date', w: 12 },
-    { h: 'Slip vs plan', w: 12 }, { h: 'Planned order', w: 14 },
-    { h: 'Status', w: 16 }, { h: 'LTA', w: 12 },
+    { h: 'Delay', w: 10 }, { h: 'Ordered in', w: 11 }, { h: 'FTC achievable', w: 15 },
+    { h: 'Status', w: 18 }, { h: 'LTA', w: 12 },
   ];
   const pHead = ps.addRow(pCols.map(c => c.h));
   pHead.eachCell(cell => {
@@ -524,31 +524,36 @@ export async function exportModuleDeliveriesXLSX(
     pBand = !pBand;
     rowsFor.forEach(({ mo, ph }) => {
       const status = ph.overdue ? 'Overdue' : ph.shifted ? 'Moved by quota' : 'On schedule';
-      /* The placed dates are the ones that now apply: when quota moves an
-         order later, its TC and FTC move with it. The original plan is kept
-         in its own column so the slip can be seen rather than inferred. */
+      /* Real P6 dates. A delayed order keeps its dates and is reported as
+         delayed; no recalculated FTC is published, because that would be our
+         arithmetic presented as a commitment. */
+      const label = ph.phase_label && !/^(main|project balance)$/i.test(ph.phase_label)
+        ? ph.phase_label : '-';
       const r = ps.addRow([
-        proj.project_name || proj.p6_name, proj.plot || '', mo, ph.phase_label,
+        proj.project_name || proj.p6_name, proj.plot || '', mo, label,
         Math.round(ph.mwp), ph.mw_ac || null,
-        ph.placed_order_date, ph.placed_tc_date, ph.placed_ftc_date,
-        ph.revised ? `${ph.slip_months > 0 ? '+' : ''}${ph.slip_months} mo` : '-',
-        ph.revised ? ph.order_date : '-',
+        ph.order_date, ph.tc_date, ph.ftc_date,
+        ph.delay_months > 0 ? `+${ph.delay_months} mo` : '-',
+        ph.order_month || mo,
+        ph.ftc_reachable ? 'Yes' : `No - ${ph.ftc_short_days}d short`,
         status, proj.lta || '',
       ]);
       r.eachCell((cell, col) => {
-        const isStatus = col === 12;
-        const isSlip = col === 10;
+        const isStatus = col === 13;
+        const isDelay = col === 10;
+        const isFtc = col === 12;
+        const red = (isStatus && ph.overdue) || (isDelay && ph.delay_months > 0)
+          || (isFtc && !ph.ftc_reachable);
         cell.font = {
           size: 9, name: 'Adani',
-          color: { argb: (isStatus && ph.overdue) || (isSlip && ph.revised) ? 'FFB42318' : INK },
-          bold: (isStatus && ph.overdue) || (isSlip && ph.revised),
-          italic: col === 11,
+          color: { argb: red ? 'FFB42318' : INK },
+          bold: red,
         };
         cell.border = border;
         cell.alignment = { horizontal: col === 1 ? 'left' : col === 5 || col === 6 ? 'right' : 'center' };
         if (typeof cell.value === 'number') cell.numFmt = '#,##0';
         if (pBand) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: BAND } };
-        if (isStatus && ph.overdue) {
+        if ((isStatus && ph.overdue) || (isFtc && !ph.ftc_reachable)) {
           cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFEE4E2' } };
         }
       });

@@ -71,44 +71,49 @@ def _parse_date_str(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-def _phase_record(d, month_idx, mwp, base_month_dt, overdue):
-    """One phase's share of one month's order, with its dates cascaded.
+def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
+    """One phase's share of one month's order.
 
-    The order date a phase was PLANNED for and the month it can actually be
-    placed in are different things once vendor quota moves it. Everything
-    downstream moves with it: an order placed in Nov cannot have its TC in
-    Aug. Reporting the original TC/FTC beside a moved order date produced
-    impossible rows -- one showed an order placed in Mar-27 against a TC of
-    23-Aug-26, ten months earlier (user 2026-09-24).
+    The dates reported are the REAL ones: the phase's own P6 FTC milestone and
+    the order/TC dates backward-scheduled from it. We do not publish a
+    recalculated "revised FTC" — that would be our inference dressed as a
+    commitment, and the commitment is the one in P6 (user decision 2026-09-24).
 
-    So the placed date keeps the phase's own day-of-month but moves into the
-    month the order actually lands in, and TC and FTC are re-derived from it
-    using the same lead time and 45-day install offset as the original plan.
-    Both sets are returned: `*_date` is what was planned, `placed_*` is what
-    now happens, and the UI shows the second where they differ.
+    What we do report is the consequence. When the order can only be placed
+    later than planned, that is stated as a delay, and the FTC is checked
+    against the month the order actually lands in: an order needs its full
+    lead time plus the 45-day install before FTC, so if less than that remains,
+    the milestone cannot be met and `ftc_reachable` is False. Showing a
+    5-month-away FTC beside an order placed this month, with nothing said, was
+    what produced rows claiming an FTC one month after the order -- and, worse,
+    FTCs dated before the order that causes them.
     """
     lead = d.get('lead_time', DEFAULT_LEAD_TIME)
-    placed_order = (base_month_dt + relativedelta(months=month_idx)
-                    + relativedelta(day=d['tc_dt'].day))
-    placed_tc = placed_order + timedelta(days=lead)
-    placed_ftc = placed_tc + timedelta(days=TC_OFFSET_DAYS)
-    slip = ((placed_order.year - d['tc_dt'].year) * 12
-            + (placed_order.month - d['tc_dt'].month))
+    placed_month_start = base_month_dt + relativedelta(months=month_idx)
+    planned_order = d['tc_dt']
+    delay_months = ((placed_month_start.year - planned_order.year) * 12
+                    + (placed_month_start.month - planned_order.month))
+    # Measured from the day the order would actually be raised -- the phase's
+    # own planned day-of-month, moved into the month it lands in. Measuring
+    # from month-end instead lost up to 30 days on every phase and reported
+    # even on-schedule work as unreachable.
+    effective_order = placed_month_start + relativedelta(day=planned_order.day)
+    days_available = (d['ftc_dt'] - effective_order).days
+    days_needed = lead + TC_OFFSET_DAYS
     f = lambda x: x.strftime('%d-%b-%y')
     return {
         'phase_label': d['phase_label'],
         'mwp': round(mwp, 1),
         'mw_ac': d.get('mw_ac') or 0.0,
-        # As planned, backward-scheduled from the P6 FTC milestone.
-        'order_date': f(d['tc_dt']),
+        # The plan of record, from P6. Not recomputed.
+        'order_date': f(planned_order),
         'tc_date': f(d['mod_dt']),
         'ftc_date': f(d['ftc_dt']),
-        # As it now falls, given the month the order can actually be placed.
-        'placed_order_date': f(placed_order),
-        'placed_tc_date': f(placed_tc),
-        'placed_ftc_date': f(placed_ftc),
-        'slip_months': slip,
-        'revised': slip != 0,
+        # The consequence of placing it in this month.
+        'order_month': forecast_months[month_idx] if month_idx < len(forecast_months) else '',
+        'delay_months': max(0, delay_months),
+        'ftc_reachable': days_available >= days_needed,
+        'ftc_short_days': max(0, days_needed - days_available),
         'overdue': overdue,
         'shifted': month_idx != d['target_month_idx'],
     }
@@ -445,7 +450,8 @@ def run_module_planning_engine(
                     if is_overdue_demand:
                         project_overdue_alloc[pid][curr_m] += take_mwp
                     project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append(
-                        _phase_record(d, curr_m, take_mwp, base_month_dt, is_overdue_demand))
+                        _phase_record(d, curr_m, take_mwp, base_month_dt, is_overdue_demand,
+                                  forecast_months))
                     rem -= take_mwp
                     if curr_m < target_m:
                         project_pulled_details.setdefault(pid, []).append({
@@ -488,7 +494,8 @@ def run_module_planning_engine(
                         if is_overdue_demand:
                             project_overdue_alloc[pid][curr_m] += take_mwp
                         project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append(
-                            _phase_record(d, curr_m, take_mwp, base_month_dt, is_overdue_demand))
+                            _phase_record(d, curr_m, take_mwp, base_month_dt, is_overdue_demand,
+                                  forecast_months))
                         rem -= take_mwp
 
                         if curr_m <= lta_m:
@@ -518,7 +525,8 @@ def run_module_planning_engine(
                 if is_overdue_demand:
                     project_overdue_alloc[pid][num_months - 1] += rem
                 project_phase_alloc.setdefault(pid, {}).setdefault(num_months - 1, []).append(
-                    _phase_record(d, num_months - 1, rem, base_month_dt, is_overdue_demand))
+                    _phase_record(d, num_months - 1, rem, base_month_dt, is_overdue_demand,
+                              forecast_months))
                 project_capacity_delayed_details.setdefault(pid, []).append({
                     'pushed_from': forecast_months[target_m],
                     'pushed_to': forecast_months[num_months - 1],
@@ -569,10 +577,11 @@ def run_module_planning_engine(
                     cur['mwp'] = round(cur['mwp'] + part['mwp'], 1)
                     cur['overdue'] = cur['overdue'] or part['overdue']
                     cur['shifted'] = cur['shifted'] or part['shifted']
-                    if part['slip_months'] > cur['slip_months']:
-                        for k in ('placed_order_date', 'placed_tc_date',
-                                  'placed_ftc_date', 'slip_months', 'revised'):
-                            cur[k] = part[k]
+                    # Worst case across the passes: the longest delay, and
+                    # unreachable wins over reachable.
+                    cur['delay_months'] = max(cur['delay_months'], part['delay_months'])
+                    cur['ftc_short_days'] = max(cur['ftc_short_days'], part['ftc_short_days'])
+                    cur['ftc_reachable'] = cur['ftc_reachable'] and part['ftc_reachable']
                 else:
                     merged[part['phase_label']] = dict(part)
             p['month_phases'][mo] = sorted(
