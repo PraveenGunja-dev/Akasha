@@ -2420,9 +2420,9 @@ export default function ModuleDeliveriesPage() {
               <thead>
                 <tr>
                   <Th className="min-w-[120px] text-left">Source</Th>
-                  <Th className="min-w-[70px]">Quota {unitToggle === 'mwp' ? '(MWp)' : unitToggle === 'mwac' ? '(MWac)' : '(MWp / MWac)'}</Th>
+                  <Th className="min-w-[70px]">Quota (MWac)</Th>
                   {FORECAST_MONTHS.map(mo => <Th key={mo} className="min-w-[64px]">{mo}</Th>)}
-                  <Th className="min-w-[110px]">Peak {unitToggle === 'mwp' ? '(MWp)' : unitToggle === 'mwac' ? '(MWac)' : '(MWp / MWac)'}</Th>
+                  <Th className="min-w-[110px]">Peak (MWac)</Th>
                 </tr>
               </thead>
               <tbody>
@@ -2430,7 +2430,7 @@ export default function ModuleDeliveriesPage() {
                   <tr key={source} className="hover:bg-[var(--surface-sunken)]">
                     <Td align="left" className="font-semibold text-foreground">{source}</Td>
                     <Td align="right" className="text-muted-foreground whitespace-nowrap">
-                      {unitToggle === 'mwp' ? MW(v.monthly_cap_mwp) : unitToggle === 'mwac' ? MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp) : `${MW(v.monthly_cap_mwp)} / ${MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp)}`}
+                      {MW(v.monthly_cap_mwac ?? 500)}
                     </Td>
                     {v.allocated_by_month.map((val, i) => {
                       const pctUsed = v.utilization_pct_by_month[i] ?? 0;
@@ -2440,8 +2440,8 @@ export default function ModuleDeliveriesPage() {
                           tip={val > 0 ? `${source} in ${FORECAST_MONTHS[i]}\nConsuming: ${MW(v.allocated_by_month_mwac?.[i] ?? 0)} MWac of ${MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp)} MWac quota (${Math.round(pctUsed)}%)` : undefined}>
                           {val > 0 ? (
                             <div className="flex flex-col items-end gap-0.5 py-0.5">
-                              <span className="tabular-nums whitespace-nowrap">
-                                {unitToggle === 'mwp' ? MW(val) : unitToggle === 'mwac' ? MW(v.allocated_by_month_mwac?.[i] ?? 0) : `${MW(val)} / ${MW(v.allocated_by_month_mwac?.[i] ?? 0)}`}
+                              <span className="tabular-nums">
+                                {MW(v.allocated_by_month_mwac?.[i] ?? 0)}
                               </span>
                               <MiniMeter pct={pctUsed} tone={tone} className="w-10" />
                             </div>
@@ -2450,32 +2450,20 @@ export default function ModuleDeliveriesPage() {
                       );
                     })}
                     <Td align="right" className="text-muted-foreground">
-                      {unitToggle === 'mwp'
-                        ? (v.peak_mwp > 0 ? `${MW(v.peak_mwp)} in ${v.peak_month}` : '-')
-                        : unitToggle === 'mwac'
-                          ? (v.peak_mwac > 0 ? `${MW(v.peak_mwac)} in ${v.peak_month}` : '-')
-                          : (v.peak_mwp > 0 ? `${MW(v.peak_mwp)} / ${MW(v.peak_mwac)} in ${v.peak_month}` : '-')}
+                      {v.peak_mwac > 0 ? `${MW(v.peak_mwac)} in ${v.peak_month}` : '-'}
                     </Td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-[var(--neutral-700)] bg-[var(--neutral-200)] font-bold">
                   <Td className="text-muted-foreground">Σ Total</Td>
                   <Td align="right" className="text-foreground tabular-nums whitespace-nowrap">
-                    {unitToggle === 'mwp' 
-                      ? MW(capacitySources.reduce((s, [, v]) => s + v.monthly_cap_mwp, 0)) 
-                      : unitToggle === 'mwac' 
-                        ? MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? v.monthly_cap_mwp), 0))
-                        : `${MW(capacitySources.reduce((s, [, v]) => s + v.monthly_cap_mwp, 0))} / ${MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? v.monthly_cap_mwp), 0))}`}
+                    {MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? 500), 0))}
                   </Td>
-                  {FORECAST_MONTHS.map((mo, i) => {
-                    const mwpTotal = capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month[i] || 0), 0);
-                    const mwacTotal = capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month_mwac?.[i] || 0), 0);
-                    return (
-                      <Td key={mo} align="right" className="text-foreground tabular-nums whitespace-nowrap">
-                        {unitToggle === 'mwp' ? MW(mwpTotal) : unitToggle === 'mwac' ? MW(mwacTotal) : `${MW(mwpTotal)} / ${MW(mwacTotal)}`}
-                      </Td>
-                    );
-                  })}
+                  {FORECAST_MONTHS.map((mo, i) => (
+                    <Td key={mo} align="right" className="text-foreground tabular-nums">
+                      {MW(capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month_mwac?.[i] || 0), 0))}
+                    </Td>
+                  ))}
                   <Td />
                 </tr>
               </tbody>
