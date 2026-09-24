@@ -1040,6 +1040,15 @@ const receiptMilestones = (pkg: any) => (pkg.milestones ?? [])
   .sort((a: any, b: any) =>
     (a.baselineFinish ?? '').localeCompare(b.baselineFinish ?? ''));
 
+/* MDCC — Manufacturer Document Control Certificate — is a real, literal P6
+   milestone (usually several: "MDCC LOT - 1", "MDCC LOT - 2"...). The MDCC
+   Date column takes the latest lot, so it reads as "cleared through MDCC up
+   to" rather than only the first lot's clearance. */
+const mdccMilestones = (pkg: any) => (pkg.milestones ?? [])
+  .filter((m: any) => m.name.toLowerCase().trim().startsWith('mdcc'))
+  .slice()
+  .sort((a: any, b: any) => (a.baselineFinish ?? '').localeCompare(b.baselineFinish ?? ''));
+
 /* The pack's "Forecast Delivery Schedule (Qty)" columns are named for the two
    months after the last one actually reported — not a fixed pair — so a
    project reporting to Sep-26 shows Oct-26/Nov-26, matching what the pack
@@ -1084,7 +1093,7 @@ const procurementSlide = (p: any): Slide => {
         ]}
         head={['Sr. No.', 'Packages', 'Manufacturer', 'UOM', 'Scope',
                'Ordering Completed', 'Balance Ordering', 'PO Number', 'PO Date',
-               'Start', 'Finish', 'QAP Acceptance Date', 'MC Date', 'Delivered At Site',
+               'Start', 'Finish', 'CDD', 'MDCC Date', 'Delivered At Site',
                fc1, fc2, 'Remarks']}
         align={['r', 'l', 'l', 'l', 'r', 'r', 'r', 'l', 'l', 'l', 'l', 'l', 'l',
                 'r', 'r', 'r', 'l']}
@@ -1093,7 +1102,7 @@ const procurementSlide = (p: any): Slide => {
         colTint={[...Array(9).fill('grey'), ...Array(8).fill('peach')]}
         rows={(p.packages ?? []).map((pkg: any, i: number) => {
           const order = milestoneOf(pkg, 'placement of the order');
-          const mc = milestoneOf(pkg, 'manufacturing clearance', 'ntp');
+          const mdcc = mdccMilestones(pkg);
           const receipts = receiptMilestones(pkg);
           const done = receipts.filter((m: any) => m.actualFinish);
           const slips = (pkg.milestones ?? []).map((m: any) => m.slipDays)
@@ -1103,7 +1112,11 @@ const procurementSlide = (p: any): Slide => {
           const ordered = sap?.orderQtyRaw ?? null;
           const scope = pkg.scopeQty ?? null;
           const [poDate] = actualOrForecast(order);
-          const [mcDate] = actualOrForecast(mc);
+          // MDCC Date: the latest lot cleared, actual where cleared, P6's own
+          // forecast where it hasn't been yet. CDD has no matching P6
+          // milestone (checked: no activity literally named "CDD" exists),
+          // so it stays blank rather than guessed.
+          const [mdccDate] = mdcc.length ? actualOrForecast(mdcc[mdcc.length - 1]) : ['—', false];
           // Expected Delivery at Site: first and last "Receipt at Site" lot,
           // actual where landed, P6's own forecast where it hasn't yet.
           const [deliveryStart] = receipts.length ? actualOrForecast(receipts[0]) : ['—', false];
@@ -1129,7 +1142,7 @@ const procurementSlide = (p: any): Slide => {
             sap?.poNumbers ?? '—',
             poDate,
             deliveryStart, deliveryFinish,
-            '—', mcDate,
+            '—', mdccDate,
             sap?.deliveredQtyRaw ? NUM(sap.deliveredQtyRaw) : '—',
             '—', '—',
             remark,

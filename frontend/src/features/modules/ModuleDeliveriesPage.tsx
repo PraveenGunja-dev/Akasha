@@ -1965,7 +1965,20 @@ export default function ModuleDeliveriesPage() {
                                     ph: MonthPhase; field: 'order' | 'tc' | 'ftc';
                                     text: string; border: string; bg: string;
                                   }) => {
-                                    const date = field === 'order' ? ph.order_date : field === 'tc' ? ph.tc_date : ph.ftc_date;
+                                    /* A delayed order pushes TC/FTC forward with it. Showing the
+                                       stale P6 date as the headline while the order itself is
+                                       already marked "delayed to Oct-26" reads as if December is
+                                       still coming — it isn't, because ordering hasn't happened
+                                       yet. The headline follows the delay (next_tc_date /
+                                       next_ftc_date); the untouched P6 plan date moves to the
+                                       annotation line below (user 2026-09-24: "the allocation
+                                       should [put] the TC at Jan[uary], not [still show] Dec as
+                                       the main date — fall back to the projected date, the
+                                       Original only if it isn't missed"). */
+                                    const delayed = ph.delay_months > 0;
+                                    const date = field === 'order' ? ph.order_date
+                                      : field === 'tc' ? (delayed ? ph.next_tc_date : ph.tc_date)
+                                        : (delayed ? ph.next_ftc_date : ph.ftc_date);
                                     /* An unphased project has no phase to name: the planner calls
                                        it "Main"/"Project Balance" internally, and printing that
                                        invented a phase the project has not got. */
@@ -1988,11 +2001,12 @@ export default function ModuleDeliveriesPage() {
                                         <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
                                           {date}
                                         </div>
-                                        {/* A delayed order carries its P6 date unchanged above (that
-                                            stays the plan of record) and states the delay here. TC and
-                                            FTC then show what actually follows from ordering that late —
-                                            labelled "projected" because it is our arithmetic, not a P6
-                                            commitment, per the data-honesty rule on inference. */}
+                                        {/* Order still leads with its own delay state. TC/FTC now lead
+                                            with the projected date (above), so the annotation here is
+                                            the untouched P6 plan date they've slipped past — still
+                                            visible, just no longer the headline, per the data-honesty
+                                            rule that inference must be labelled and the P6 commitment
+                                            stays auditable. */}
                                         {field === 'order' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 font-mono text-[9px] font-bold leading-tight tabular-nums text-status-critical-fg">
                                             delayed to {ph.order_month} (+{ph.delay_months}mo)
@@ -2000,13 +2014,13 @@ export default function ModuleDeliveriesPage() {
                                         )}
                                         {field === 'tc' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-risk-fg">
-                                            projected: <span className="font-mono tabular-nums">{ph.next_tc_date}</span>
+                                            P6 plan: <span className="font-mono tabular-nums">{ph.tc_date}</span>
                                           </div>
                                         )}
                                         {field === 'ftc' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-critical-fg">
                                             {!ph.ftc_reachable && <div>not achievable &mdash; {ph.ftc_short_days}d short</div>}
-                                            projected: <span className="font-mono tabular-nums">{ph.next_ftc_date}</span>
+                                            P6 plan: <span className="font-mono tabular-nums">{ph.ftc_date}</span>
                                           </div>
                                         )}
                                       </div>
@@ -2021,21 +2035,23 @@ export default function ModuleDeliveriesPage() {
                                     title: string; text: string; border: string; bg: string;
                                     field?: 'order' | 'tc' | 'ftc'; gapBefore?: string;
                                   };
+                                  /* The Milestone selector filters which chip a calendar cell shows
+                                     (getChipsForMonth, above) — it is a view of one stage at a time
+                                     on the grid. This tooltip is the opposite: it exists to show how
+                                     one stage's date drives the next, so it always carries the full
+                                     Module Ordering -> TC Delivery -> FTC Date pipeline regardless of
+                                     which single milestone is selected in the toolbar (user
+                                     2026-09-24: selecting the module filter must not drop TC/FTC from
+                                     here — only the calendar chips narrow). */
                                   const milestones: Milestone[] = [];
-                                  if (milestoneFilter === 'all' || milestoneFilter === 'module') {
-                                    milestones.push({ title: 'Module Ordering', field: 'order', text: 'text-primary',
-                                      border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
-                                  }
-                                  if (milestoneFilter === 'all' || milestoneFilter === 'tc') {
-                                    milestones.push({ title: 'TC Delivery', field: 'tc', text: 'text-status-risk-fg',
-                                      border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
-                                      gapBefore: milestones.length ? `${lead}d Lead` : undefined });
-                                  }
-                                  if (milestoneFilter === 'all' || milestoneFilter === 'ftc') {
-                                    milestones.push({ title: 'FTC Date', field: 'ftc', text: 'text-status-healthy-fg',
-                                      border: 'border-status-healthy-border', bg: 'bg-status-healthy-bg/60',
-                                      gapBefore: milestones.length ? '45d Install' : undefined });
-                                  }
+                                  milestones.push({ title: 'Module Ordering', field: 'order', text: 'text-primary',
+                                    border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
+                                  milestones.push({ title: 'TC Delivery', field: 'tc', text: 'text-status-risk-fg',
+                                    border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
+                                    gapBefore: `${lead}d Lead` });
+                                  milestones.push({ title: 'FTC Date', field: 'ftc', text: 'text-status-healthy-fg',
+                                    border: 'border-status-healthy-border', bg: 'bg-status-healthy-bg/60',
+                                    gapBefore: '45d Install' });
                                   if (p.lta) {
                                     // One date for the whole project, so it spans every phase row.
                                     milestones.push({ title: 'LTA Date', text: 'text-status-ai-fg',

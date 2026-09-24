@@ -377,6 +377,16 @@ def _receipt_milestones(pkg) -> List[Dict[str, Any]]:
     )
 
 
+def _mdcc_milestones(pkg) -> List[Dict[str, Any]]:
+    """MDCC (Manufacturer Document Control Certificate) is a real, literal P6
+    milestone - usually several lots ("MDCC LOT - 1", "MDCC LOT - 2"...). The
+    MDCC Date column takes the latest lot cleared."""
+    return sorted(
+        (m for m in pkg["milestones"] if m["name"].lower().strip().startswith("mdcc")),
+        key=lambda m: m.get("baselineFinish") or "",
+    )
+
+
 def _actual_or_forecast(m) -> str:
     """Actual where the milestone landed; P6's own forecast finish where it
     hasn't yet - never blank just because the work is still ahead of today.
@@ -394,8 +404,12 @@ def slide_procurement(prs, pss: str, packages, sap, sap_note,
                       project: Optional[Dict[str, Any]] = None) -> None:
     """Seventeen columns with the pack's own two-row merged header - Sr. No.
     through Remarks, "Expected Delivery at Site" over Start/Finish,
-    "Manufacturing Status" over QAP Acceptance/MC Date, and "Forecast
-    Delivery Schedule (Qty)" over the next two reporting months.
+    "Manufacturing Status" over CDD/MDCC Date, and "Forecast Delivery
+    Schedule (Qty)" over the next two reporting months.
+
+    CDD has no matching P6 milestone (checked: no activity literally named
+    "CDD" exists) and stays blank rather than guessed. MDCC Date is a real,
+    literal P6 milestone ("MDCC LOT - N") - the latest lot cleared.
     """
     slide = _content_slide(
         prs,
@@ -416,13 +430,13 @@ def slide_procurement(prs, pss: str, packages, sap, sap_note,
     ]
     head = ["Sr. No.", "Packages", "Manufacturer", "UOM", "Scope",
             "Ordering Completed", "Balance Ordering", "PO Number", "PO Date",
-            "Start", "Finish", "QAP Acceptance Date", "MC Date",
+            "Start", "Finish", "CDD", "MDCC Date",
             "Delivered At Site", fc_labels[0], fc_labels[1], "Remarks"]
 
     rows = []
     for i, pkg in enumerate(packages, start=1):
         order = _milestone_of(pkg, "placement of the order")
-        mc = _milestone_of(pkg, "manufacturing clearance", "ntp")
+        mdcc = _mdcc_milestones(pkg)
         receipts = _receipt_milestones(pkg)
         done = [m for m in receipts if m["actualFinish"]]
         landed = sorted((m["actualFinish"] for m in done))
@@ -448,7 +462,7 @@ def slide_procurement(prs, pss: str, packages, sap, sap_note,
             remark_bits.append(f"worst slip +{worst}d")
         # Expected Delivery at Site: first and last lot, actual where it has
         # landed, P6's own forecast where it hasn't - the same pattern as PO
-        # Date and MC Date below, so a reader sees one convention throughout.
+        # Date and MDCC Date below, so a reader sees one convention throughout.
         delivery_start = _actual_or_forecast(receipts[0]) if receipts else "-"
         delivery_finish = _actual_or_forecast(receipts[-1]) if receipts else "-"
         rows.append([
@@ -462,7 +476,7 @@ def slide_procurement(prs, pss: str, packages, sap, sap_note,
             (sap_row["poNumbers"] if sap_row else "-") or "-",
             _actual_or_forecast(order),
             delivery_start, delivery_finish,
-            "-", _actual_or_forecast(mc),
+            "-", _actual_or_forecast(mdcc[-1]) if mdcc else "-",
             _num(sap_row["deliveredQtyRaw"]) if sap_row and sap_row.get("deliveredQtyRaw") else "-",
             "-", "-",
             "; ".join(remark_bits) if remark_bits else "-",
@@ -479,8 +493,9 @@ def slide_procurement(prs, pss: str, packages, sap, sap_note,
     base_note = sap_note or (
         "SAP holds no PO date or delivery date for these projects, so dates "
         "are P6 ordering milestones; manufacturer, PO number and delivered "
-        "quantity are from SAP. QAP acceptance date and forecast delivery "
-        "quantities have no source in any connected system.")
+        "quantity are from SAP. CDD and forecast delivery quantities have no "
+        "source in any connected system; MDCC Date is the latest MDCC lot "
+        "cleared.")
     _footnote(slide, base_note + " * marks a forecast date - P6's current "
               "schedule finish for a milestone that has not happened yet.")
 
