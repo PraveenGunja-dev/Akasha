@@ -1192,14 +1192,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             quieter treatment — 12px labels, tabular figures, and colour only
             where a value is actually a problem — but nothing is demoted out
             of the grid. */}
-        {isBess && projectId && (
-          <CPAGModal
-            open={cpagOpen}
-            projectId={projectId}
-            projectLabel={isBessLabel ?? undefined}
-            onClose={() => setCpagOpen(false)}
-          />
-        )}
 
         <HealthBanner
           tier={tier}
@@ -1208,16 +1200,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           pendingCod={detail?.mapping?.pendingCodBlocks || 0}
           unitType={detail?.mapping?.unitType}
           forecast={p.forecastFinish || p.forecastMonth}
-          action={isBess && (
-            <button
-              onClick={() => setCpagOpen(true)}
-              className="flex items-center gap-1.5 rounded-lg border border-primary/30 bg-primary/10 px-3 py-1.5
-                         text-[13px] font-semibold text-primary transition-colors hover:bg-primary/20
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-              <Presentation className="h-3.5 w-3.5" strokeWidth={1.75} />
-              View CPAG pack
-            </button>
-          )}
         />
 
         <div className="flex flex-wrap gap-3 [&>*]:min-w-[180px] [&>*]:flex-1 [&>*]:basis-[calc(20%-0.6rem)]">

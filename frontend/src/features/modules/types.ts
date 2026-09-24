@@ -38,6 +38,13 @@ export interface MonthPhase {
   ftc_reachable: boolean;
   /** How many days short, when it cannot. */
   ftc_short_days: number;
+  /** Where TC and FTC actually land if the order goes in this late — the
+   *  mechanical result of the same lead time and 45-day install run from the
+   *  month the order can really be placed. Not a new commitment (the P6 dates
+   *  above stay as they are); this is what follows FROM a delay, shown only
+   *  where delay_months > 0. Equal to tc_date/ftc_date when delay_months is 0. */
+  next_tc_date: string;
+  next_ftc_date: string;
   /** The ordering window has already closed — this is a catch-up order. */
   overdue: boolean;
   /** Vendor quota moved it out of its target month. */

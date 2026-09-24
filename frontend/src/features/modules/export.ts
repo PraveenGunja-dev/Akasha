@@ -504,8 +504,9 @@ export async function exportModuleDeliveriesXLSX(
     { h: 'Project', w: 30 }, { h: 'Plot', w: 8 }, { h: 'Order month', w: 12 },
     { h: 'Phase', w: 10 }, { h: 'Order qty (MWp)', w: 15 }, { h: 'Phase (MWac)', w: 13 },
     { h: 'Place order by', w: 14 }, { h: 'TC date', w: 12 }, { h: 'FTC date', w: 12 },
-    { h: 'Delay', w: 10 }, { h: 'Ordered in', w: 11 }, { h: 'FTC achievable', w: 15 },
-    { h: 'Status', w: 18 }, { h: 'LTA', w: 12 },
+    { h: 'Delay', w: 10 }, { h: 'Ordered in', w: 11 },
+    { h: 'Projected TC', w: 13 }, { h: 'Projected FTC', w: 13 },
+    { h: 'FTC achievable', w: 15 }, { h: 'Status', w: 18 }, { h: 'LTA', w: 12 },
   ];
   const pHead = ps.addRow(pCols.map(c => c.h));
   pHead.eachCell(cell => {
@@ -529,25 +530,35 @@ export async function exportModuleDeliveriesXLSX(
          arithmetic presented as a commitment. */
       const label = ph.phase_label && !/^(main|project balance)$/i.test(ph.phase_label)
         ? ph.phase_label : '-';
+      // Projected TC/FTC only printed where a delay makes them differ from
+      // the P6 plan — otherwise they'd just repeat columns 8/9 for every
+      // on-schedule row.
+      const projTc = ph.delay_months > 0 ? ph.next_tc_date : '-';
+      const projFtc = ph.delay_months > 0 ? ph.next_ftc_date : '-';
       const r = ps.addRow([
         proj.project_name || proj.p6_name, proj.plot || '', mo, label,
         Math.round(ph.mwp), ph.mw_ac || null,
         ph.order_date, ph.tc_date, ph.ftc_date,
         ph.delay_months > 0 ? `+${ph.delay_months} mo` : '-',
         ph.order_month || mo,
+        projTc, projFtc,
         ph.ftc_reachable ? 'Yes' : `No - ${ph.ftc_short_days}d short`,
         status, proj.lta || '',
       ]);
       r.eachCell((cell, col) => {
-        const isStatus = col === 13;
+        const isStatus = col === 15;
         const isDelay = col === 10;
-        const isFtc = col === 12;
+        const isProjected = col === 12 || col === 13;
+        const isFtc = col === 14;
         const red = (isStatus && ph.overdue) || (isDelay && ph.delay_months > 0)
           || (isFtc && !ph.ftc_reachable);
         cell.font = {
           size: 9, name: 'Adani',
           color: { argb: red ? 'FFB42318' : INK },
           bold: red,
+          // Projected dates are our arithmetic, not a P6 commitment — italic
+          // marks them as inference, matching the same rule the tooltip uses.
+          italic: isProjected && ph.delay_months > 0,
         };
         cell.border = border;
         cell.alignment = { horizontal: col === 1 ? 'left' : col === 5 || col === 6 ? 'right' : 'center' };

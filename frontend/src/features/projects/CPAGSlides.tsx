@@ -1348,44 +1348,44 @@ export const CPAGSlideViewer: React.FC<{
 
   return (
     <div className={cx('flex flex-col', full
-      ? 'fixed inset-0 z-[120] bg-[#0b1020]'
-      : 'rounded-xl border border-border bg-[#0b1020]')}>
+      ? 'fixed inset-0 z-[120] bg-white'
+      : 'rounded-xl border border-slate-200 bg-white')}>
       {/* Chrome */}
-      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-4 py-2.5">
+      <div className="flex shrink-0 items-center justify-between gap-3 border-b border-slate-200 px-4 py-2.5 bg-white rounded-t-xl">
         <div className="flex min-w-0 items-center gap-3">
           <button
             onClick={() => setShowIndex((v) => !v)}
             aria-label="Slide index"
-            className="rounded-lg p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
             <List className="h-[18px] w-[18px]" strokeWidth={1.5} />
           </button>
-          <span className="rounded-full border border-primary/30 bg-primary/20 px-2.5 py-1 text-[11px] font-semibold text-primary">
+          <span className="rounded-full border border-primary/30 bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
             {index + 1} / {total}
           </span>
-          <p className="truncate text-[13px] font-medium text-white/80">{deckTitle}</p>
+          <p className="truncate text-[13px] font-medium text-slate-700">{deckTitle}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1.5">
           <a
             href={downloadHref}
-            className="flex items-center gap-1.5 rounded-lg border border-white/15 px-2.5 py-1.5 text-[12px]
-                       font-medium text-white/80 transition-colors hover:bg-white/10 hover:text-white
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+            className="flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px]
+                       font-medium text-slate-700 transition-colors hover:bg-slate-100 hover:text-slate-900
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
             <Download className="h-3.5 w-3.5" strokeWidth={1.5} /> .pptx
           </a>
           <button
             onClick={() => setFull((v) => !v)}
             aria-label={full ? 'Exit full screen' : 'Full screen'}
-            className="rounded-lg p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white
-                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900
+                       focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
             {full ? <Minimize2 className="h-[18px] w-[18px]" strokeWidth={1.5} />
                   : <Maximize2 className="h-[18px] w-[18px]" strokeWidth={1.5} />}
           </button>
           {onClose && (
             <button
               onClick={onClose} aria-label="Close"
-              className="rounded-lg p-1.5 text-white/60 transition-colors hover:bg-white/10 hover:text-white
-                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/40">
+              className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900
+                         focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
               <X className="h-[18px] w-[18px]" strokeWidth={1.5} />
             </button>
           )}
@@ -1401,11 +1401,11 @@ export const CPAGSlideViewer: React.FC<{
               animate={{ width: 252, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.18 }}
-              className="custom-scrollbar shrink-0 overflow-y-auto border-r border-white/10 bg-black/20">
+              className="custom-scrollbar shrink-0 overflow-y-auto border-r border-slate-200 bg-white">
               <div className="w-[252px] py-2">
                 {sections.map((sec) => (
                   <div key={sec.section} className="mb-1">
-                    <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-white/35">
+                    <p className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                       {sec.section}
                     </p>
                     {sec.items.map((it) => (
@@ -1413,9 +1413,9 @@ export const CPAGSlideViewer: React.FC<{
                         key={it.i}
                         onClick={() => setIndex(it.i)}
                         className={cx('block w-full truncate px-3 py-1.5 text-left text-[12px] transition-colors',
-                          it.i === index ? 'bg-primary/20 font-semibold text-white'
-                            : 'text-white/55 hover:bg-white/5 hover:text-white/90')}>
-                        <span className="mr-2 tabular-nums text-white/30">{it.i + 1}</span>
+                          it.i === index ? 'bg-primary/10 font-semibold text-primary'
+                            : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900')}>
+                        <span className="mr-2 tabular-nums text-slate-400">{it.i + 1}</span>
                         {it.title}
                       </button>
                     ))}
@@ -1428,7 +1428,7 @@ export const CPAGSlideViewer: React.FC<{
 
         {/* Stage */}
         <div ref={stageRef}
-          className={cx('relative min-w-0 flex-1 overflow-hidden bg-[#050810]',
+          className={cx('relative min-w-0 flex-1 overflow-hidden bg-slate-50',
             full ? '' : 'h-[min(72vh,760px)]')}>
           <AnimatePresence mode="wait">
             <motion.div
@@ -1472,13 +1472,13 @@ export const CPAGSlideViewer: React.FC<{
       </div>
 
       {/* Progress rail */}
-      <div className="shrink-0 border-t border-white/10 px-4 py-2">
+      <div className="shrink-0 border-t border-slate-200 px-4 py-2 bg-white rounded-b-xl">
         <div className="flex items-center gap-3">
-          <div className="h-1 flex-1 overflow-hidden rounded-full bg-white/10">
+          <div className="h-1 flex-1 overflow-hidden rounded-full bg-slate-100">
             <div className="h-full rounded-full bg-primary transition-[width] duration-300"
               style={{ width: `${((index + 1) / total) * 100}%` }} />
           </div>
-          <span className="flex items-center gap-1.5 text-[11px] text-white/40">
+          <span className="flex items-center gap-1.5 text-[11px] text-slate-400">
             <Info className="h-3 w-3" strokeWidth={1.5} />
             Arrow keys to navigate
           </span>

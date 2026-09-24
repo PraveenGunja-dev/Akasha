@@ -100,6 +100,14 @@ def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
     effective_order = placed_month_start + relativedelta(day=planned_order.day)
     days_available = (d['ftc_dt'] - effective_order).days
     days_needed = lead + TC_OFFSET_DAYS
+    # Where TC and FTC actually fall if the order goes in on effective_order --
+    # not a new commitment, just the mechanical result of the same lead time
+    # and 45-day install run from the month the order can really be placed
+    # (user 2026-09-25: "when we order from that month we need to plan next
+    # TC and FTC fall on"). Always computed, alongside the untouched P6 dates
+    # above; the UI shows this only where a delay makes it differ from them.
+    next_tc = effective_order + timedelta(days=lead)
+    next_ftc = next_tc + timedelta(days=TC_OFFSET_DAYS)
     f = lambda x: x.strftime('%d-%b-%y')
     return {
         'phase_label': d['phase_label'],
@@ -114,6 +122,8 @@ def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
         'delay_months': max(0, delay_months),
         'ftc_reachable': days_available >= days_needed,
         'ftc_short_days': max(0, days_needed - days_available),
+        'next_tc_date': f(next_tc),
+        'next_ftc_date': f(next_ftc),
         'overdue': overdue,
         'shifted': month_idx != d['target_month_idx'],
     }
@@ -578,7 +588,12 @@ def run_module_planning_engine(
                     cur['overdue'] = cur['overdue'] or part['overdue']
                     cur['shifted'] = cur['shifted'] or part['shifted']
                     # Worst case across the passes: the longest delay, and
-                    # unreachable wins over reachable.
+                    # unreachable wins over reachable. next_tc/next_ftc travel
+                    # with whichever pass is the longer delay, since that is
+                    # the one that actually governs when the phase completes.
+                    if part['delay_months'] > cur['delay_months']:
+                        cur['next_tc_date'] = part['next_tc_date']
+                        cur['next_ftc_date'] = part['next_ftc_date']
                     cur['delay_months'] = max(cur['delay_months'], part['delay_months'])
                     cur['ftc_short_days'] = max(cur['ftc_short_days'], part['ftc_short_days'])
                     cur['ftc_reachable'] = cur['ftc_reachable'] and part['ftc_reachable']

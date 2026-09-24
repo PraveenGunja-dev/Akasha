@@ -28,8 +28,18 @@ class ProjectMappingBase(BaseModel):
     not_allocated: Optional[str] = None
     source_of_origin: Optional[str] = None
     priority: Optional[str] = None
-    is_commissioned: bool = False
+    # Optional, not bool: the column is nullable and 63 of 87 rows are
+    # actually NULL, not False. A non-optional bool here made every read AND
+    # write of those rows 500 with a Pydantic validation error — including
+    # the existing SCOD save and the LTA save this schema now also carries,
+    # discovered while wiring the latter up (2026-09-25).
+    is_commissioned: Optional[bool] = False
     manual_scod: Optional[datetime] = None
+    # The LTA date: read from the connectivity export where it exists, but
+    # several projects have no ECOD there at all (see MANUAL_LTA in
+    # scripts/update_lta_from_123.py), so planning needs to set or correct it
+    # by hand from the Ordering Schedule table.
+    lta_date: Optional[datetime] = None
     is_tracked: Optional[bool] = True
 
 class ProjectMappingCreate(ProjectMappingBase):

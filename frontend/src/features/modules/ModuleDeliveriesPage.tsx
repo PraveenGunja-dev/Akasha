@@ -6,7 +6,7 @@ import {
   Package, Sun, Truck, CheckCircle2, Clock, Search,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
-  Bot, X, Send, ArrowRight, Columns3, Info
+  Bot, X, Send, ArrowRight, Columns3, Info, Calendar
 } from 'lucide-react';
 import type { ModuleDeliveriesSummary, ModuleProject, LtaRisk, MonthPhase } from './types';
 import { PLANNING_RULES } from './planningRules';
@@ -119,21 +119,97 @@ function DatedPhases({ value }: { value: string }) {
   );
 }
 
-type ChipData = { label: string; phase: string | null; type: 'tc' | 'module' | 'ftc' };
+/** One segment of a "Ph-I (50MW): 11-Aug-26 · Ph-II (50MW): 20-Aug-26" style
+ *  date string: the phase label (null when unphased), its stated AC capacity,
+ *  and the date. */
+function splitDateField(dateStr: string | null | undefined): { label: string | null; mwAc: number; date: string }[] {
+  return (dateStr || '').split(' · ').map(s => s.trim()).filter(Boolean).map(seg => {
+    const colonIdx = seg.indexOf(':');
+    let label: string | null = null;
+    let rest = seg;
+    if (colonIdx !== -1) {
+      label = seg.slice(0, colonIdx).trim();
+      rest = seg.slice(colonIdx + 1).trim();
+    }
+    const dateMatch = rest.match(/\d{1,2}-[A-Za-z]{3}-\d{2,4}/);
+    const date = dateMatch ? dateMatch[0] : rest;
+    const mwMatch = label ? label.match(/\(([\d.]+)\s*MW\)/i) : null;
+    // The "(50MW)" suffix is only there to carry the capacity — strip it once
+    // read, so the phase label shown is just "Ph-I".
+    const cleanLabel = label ? label.replace(/\s*\([^)]*\)\s*$/, '').trim() || null : null;
+    return { label: cleanLabel, mwAc: mwMatch ? parseFloat(mwMatch[1]) : 0, date };
+  });
+}
+
+/** "11-Aug-26" -> "Aug-26", to compare against a FORECAST_MONTHS entry. */
+function monthOfDate(dateStr: string): string {
+  const m = dateStr.match(/\d{1,2}-([A-Za-z]{3})-(\d{2})/);
+  return m ? `${m[1]}-${m[2]}` : '';
+}
+
+/** The Module Order / TC / FTC grid for a milestone-only month (month_phases
+ *  has no entry for it — the order was placed in a different month, this is
+ *  only when the milestone lands), rebuilt from the project's own
+ *  module_date/tc_date/ftc_date strings so the grid still shows real dates
+ *  instead of going blank (user 2026-09-24: "we need to do showing all
+ *  dates" — restoring what the page showed before month_phases existed).
+ *
+ *  No delay_months/ftc_reachable is computed here — those are the planner's
+ *  scheduling judgement on a real order, and this is not one; the values are
+ *  left at their "nothing to report" defaults so the Chip renders the date
+ *  alone. */
+function buildFallbackPhases(p: ModuleProject, mo: string): MonthPhase[] {
+  const modSegs = splitDateField(p.module_date);
+  const tcSegs = splitDateField(p.tc_date);
+  const ftcSegs = splitDateField(p.ftc_date);
+  const all = [...modSegs, ...tcSegs, ...ftcSegs];
+  const relevant = new Set<string | null>();
+  all.forEach(s => { if (monthOfDate(s.date) === mo) relevant.add(s.label); });
+  if (relevant.size === 0) return [];
+
+  const pick = (segs: typeof modSegs, label: string | null) =>
+    segs.find(s => s.label === label) ?? (segs.length === 1 ? segs[0] : undefined);
+  const ol = p.ol > 0 ? p.ol : 1.35;
+
+  return Array.from(relevant).map(label => {
+    const m = pick(modSegs, label);
+    const t = pick(tcSegs, label);
+    const f = pick(ftcSegs, label);
+    const mwAc = m?.mwAc || t?.mwAc || f?.mwAc || 0;
+    return {
+      phase_label: label || 'Main',
+      mwp: Math.round(mwAc * ol * 10) / 10,
+      mw_ac: mwAc,
+      order_date: m?.date || '-',
+      tc_date: t?.date || '-',
+      ftc_date: f?.date || '-',
+      order_month: '',
+      delay_months: 0,
+      ftc_reachable: true,
+      ftc_short_days: 0,
+      next_tc_date: t?.date || '-',
+      next_ftc_date: f?.date || '-',
+      overdue: false,
+      shifted: false,
+    };
+  });
+}
+
+type ChipData = { label: string; phase: string | null; type: 'module' | 'tc' | 'ftc' };
 function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: string, unitToggle: 'both' | 'mwp' | 'mwac' = 'both'): ChipData[] {
   const chips: ChipData[] = [];
   if (!p.balance_ordering_mwp || p.balance_ordering_mwp <= 0) return chips;
 
-  // The cellVal tracks TC Ordering, so it represents the Blue chip
+  // The cellVal tracks Module Ordering, so it represents the Blue chip
   if (cellVal > 0) {
       const ac = Math.round(p.ol > 0 ? cellVal / p.ol : cellVal / 1.35);
       const labelStr = unitToggle === 'mwp' ? `${Math.round(cellVal)}` : unitToggle === 'mwac' ? `${ac}` : `${Math.round(cellVal)} / ${ac}`;
-      chips.push({ label: labelStr, phase: null, type: 'tc' });
+      chips.push({ label: labelStr, phase: null, type: 'module' });
   }
 
   const now = new Date();
 
-  const parseSegments = (val: string, type: 'tc' | 'module' | 'ftc') => {
+  const parseSegments = (val: string, type: 'module' | 'tc' | 'ftc') => {
     if (!val) return;
     let totalDc = 0;
     let totalAc = 0;
@@ -192,8 +268,8 @@ function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: 
     }
   };
   
-  // DB tc_date = Module delivery dates (later) → Yellow chips  
-  parseSegments(p.tc_date, 'module');
+  // DB tc_date = TC Delivery dates (later) → Yellow chips  
+  parseSegments(p.tc_date, 'tc');
   // FTC Date (Green)
   parseSegments(p.ftc_date, 'ftc');
   return chips.filter(c => milestoneFilter === 'all' || c.type === milestoneFilter);
@@ -673,12 +749,14 @@ export default function ModuleDeliveriesPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [editingScodId, setEditingScodId] = useState<number | null>(null);
   const [savingScodId, setSavingScodId] = useState<number | null>(null);
+  const [editingLtaId, setEditingLtaId] = useState<number | null>(null);
+  const [savingLtaId, setSavingLtaId] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   // The printed tracker covers Khavda projects not yet commissioned (33 rows).
   // Default to that so the figures reconcile with it; 'all' reveals the wider
   // portfolio (Rajasthan, commissioned, and Khavda projects the PDF omits).
   const [scope, setScope] = useState<'tracker' | 'all'>('tracker');
-  const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'tc' | 'module' | 'ftc'>('all');
+  const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'module' | 'tc' | 'ftc'>('module');
   const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
   const [rulesOpen, setRulesOpen] = useState(false);
   const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
@@ -806,6 +884,26 @@ export default function ModuleDeliveriesPage() {
     } finally {
       setSavingScodId(null);
       setEditingScodId(null);
+    }
+  };
+
+  // LTA has the same "sometimes there is no source date at all" problem SCOD
+  // had (see MANUAL_LTA in update_lta_from_123.py — 4 solar projects carry no
+  // ECOD anywhere in the connectivity export), so it gets the same
+  // check-it-yourself editing rather than being stuck blank until the master
+  // sheet catches up.
+  const saveLta = async (id: number, isoDateOrNull: string | null) => {
+    setSavingLtaId(id);
+    try {
+      await fetch(`${API}/akasha/api/mappings/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ lta_date: isoDateOrNull }),
+      });
+      await loadData();
+    } finally {
+      setSavingLtaId(null);
+      setEditingLtaId(null);
     }
   };
 
@@ -1241,12 +1339,12 @@ export default function ModuleDeliveriesPage() {
           </div>
           <div className="flex items-center gap-1.5">
             <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Milestone</span>
-            <select value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value as 'all' | 'tc' | 'module' | 'ftc')}
+            <select value={milestoneFilter} onChange={e => setMilestoneFilter(e.target.value as 'all' | 'module' | 'tc' | 'ftc')}
               className="pl-2 pr-6 py-1 bg-card border border-border rounded-md text-[11px] font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary appearance-none cursor-pointer"
             >
               <option value="all">All Phases</option>
-              <option value="tc">TC Date</option>
-              <option value="module">Module Date</option>
+              <option value="module">Module Ordering Date</option>
+              <option value="tc">TC Delivery Date</option>
               <option value="ftc">FTC Date</option>
             </select>
           </div>
@@ -1575,13 +1673,51 @@ export default function ModuleDeliveriesPage() {
                       {isColVisible('ftc_completed') && <Td align="right" className="font-semibold text-[var(--status-watch-fg)]">{p.completed_ftc_mwp > 0 ? MW(p.completed_ftc_mwp) : '-'}</Td>}
                       {isColVisible('connectivity') && <Td className={SECTION_EDGE}>{p.connectivity_phase || <span className="text-muted-foreground/50">-</span>}</Td>}
                       {isColVisible('lta') && (() => {
-                        if (!p.lta || p.lta === '-') return <Td>-</Td>;
                         const r = p.lta_risk;
                         const delayed = r?.breached === true;
+                        // Editable for the same reason SCOD is: the connectivity export
+                        // carries no ECOD at all for some projects (see MANUAL_LTA in
+                        // update_lta_from_123.py), so a row can sit blank or wrong until
+                        // planning corrects it here rather than waiting on the master sheet.
+                        if (editingLtaId === p.id) {
+                          return (
+                            <Td className="relative">
+                              <input
+                                type="date"
+                                autoFocus
+                                defaultValue={scodToInputValue(p.lta)}
+                                disabled={savingLtaId === p.id}
+                                className="w-[112px] rounded border border-border bg-background px-1 py-0 text-[10px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary disabled:opacity-50"
+                                onBlur={e => {
+                                  const v = e.target.value;
+                                  if (v === scodToInputValue(p.lta)) { setEditingLtaId(null); return; }
+                                  saveLta(p.id, v || null);
+                                }}
+                                onKeyDown={e => {
+                                  if (e.key === 'Escape') setEditingLtaId(null);
+                                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur();
+                                }}
+                              />
+                            </Td>
+                          );
+                        }
                         return (
                           <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-semibold relative" : ""}>
-                            <div className="flex items-center justify-center gap-1.5 w-full h-full">
-                              {p.lta}
+                            <div className="flex items-center justify-center gap-1 w-full h-full">
+                              {savingLtaId === p.id ? (
+                                <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
+                              ) : (
+                                <Tip text={p.lta ? 'Click to change the LTA date' : 'No LTA on file — click to set one'}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setEditingLtaId(p.id)}
+                                    className={`inline-flex items-center gap-1 rounded px-1 -mx-1 py-px focus:outline-none focus-visible:ring-1 focus-visible:ring-primary ${delayed ? 'hover:bg-status-critical-solid/10' : 'hover:bg-primary/5 hover:text-primary'}`}
+                                  >
+                                    <span>{p.lta || '-'}</span>
+                                    <Calendar className={`h-3 w-3 shrink-0 ${delayed ? 'opacity-70' : 'text-fg-tertiary opacity-60'}`} />
+                                  </button>
+                                </Tip>
+                              )}
                               {delayed && r && (
                                 <Tip wide content={
                                   <div className="w-[300px] max-w-[calc(100vw-48px)] text-left">
@@ -1682,19 +1818,31 @@ export default function ModuleDeliveriesPage() {
                         const val = p.month_mwp?.[mo] || 0;
                         const overdueVal = p.month_overdue_mwp?.[mo] || 0;
                         const cellPhases = p.month_phases?.[mo] ?? [];
-                        /* Whether THIS month's order can still hold its FTC. The
-                           footer used to read project-level planning flags, which
-                           do not know about per-phase reachability, so a month whose
-                           FTC was 92 days out of reach still printed "in time to
-                           support FTC" directly under the box saying it was not. */
+                        /* month_phases only carries the month an ORDER is placed. A
+                           milestone-only month (val<=0, this cell just marks when a
+                           module/TC/FTC date lands) has no entry there at all, so the
+                           four-column grid went blank for it and a date that used to be
+                           on screen disappeared (user 2026-09-24: "we need to do showing
+                           all dates"). displayPhases falls back to the project's own
+                           module_date/tc_date/ftc_date strings for that case, so the grid
+                           always shows the real dates it can find. No delay/reachability
+                           is computed for the fallback — it is a display of the existing
+                           plan, not a new scheduling decision. */
+                        const displayPhases = cellPhases.length > 0 ? cellPhases : buildFallbackPhases(p, mo);
+                        // Is this the month an order is actually placed, or only a month a
+                        // milestone date lands in (module_date/tc_date/ftc_date land past
+                        // this cell's own order month, shown via the date-string fallback)?
+                        const isRealOrder = cellPhases.length > 0;
+                        /* Whether THIS month's order can still hold its FTC. Judged only
+                           on a REAL order (cellPhases) — a fallback display phase has no
+                           scheduling basis to judge reachability against. */
                         const unreachable = cellPhases.filter(x => !x.ftc_reachable);
                         const worstShort = unreachable.reduce((a, x) => Math.max(a, x.ftc_short_days), 0);
-                        /* A phase can reach its FTC and still charge after the LTA. The
-                           audit found 2 month-cells reading "on time" in exactly that
-                           state, so it gets its own verdict rather than being folded
-                           into success. */
+                        /* A phase can reach its FTC and still charge after the LTA. This
+                           is real information even for a milestone-only month, so it is
+                           judged on displayPhases, not cellPhases. */
                         const ltaDue = p.lta ? Date.parse(p.lta.replace(/-/g, ' ')) : NaN;
-                        const ltaLate = Number.isNaN(ltaDue) ? [] : cellPhases.filter(
+                        const ltaLate = Number.isNaN(ltaDue) ? [] : displayPhases.filter(
                           x => Date.parse(x.ftc_date.replace(/-/g, ' ')) > ltaDue);
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags, overdueVal > 0);
                         
@@ -1792,7 +1940,7 @@ export default function ModuleDeliveriesPage() {
                                     318 MWp of phases. month_phases comes from the planner,
                                     which fills one phase in full before starting the next. */}
                                 {(() => {
-                                  const phases = p.month_phases?.[mo] ?? [];
+                                  const phases = displayPhases;
                                   if (phases.length === 0) return null;
 
                                   /* Quantity follows the Unit selector in the toolbar, so the
@@ -1829,19 +1977,36 @@ export default function ModuleDeliveriesPage() {
                                           {named
                                             ? <span className={`text-[9px] font-semibold ${text}`}>{ph.phase_label}</span>
                                             : <span />}
-                                          <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
+                                          {/* An unphased project's date strings carry no per-phase MW
+                                              annotation, so a milestone-only fallback for it has no
+                                              honest quantity to report — showing "0 MWp" next to a real
+                                              project would read as a measured zero, not an unknown. */}
+                                          {(ph.mwp > 0 || ph.mw_ac > 0) && (
+                                            <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
+                                          )}
                                         </div>
                                         <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
                                           {date}
                                         </div>
+                                        {/* A delayed order carries its P6 date unchanged above (that
+                                            stays the plan of record) and states the delay here. TC and
+                                            FTC then show what actually follows from ordering that late —
+                                            labelled "projected" because it is our arithmetic, not a P6
+                                            commitment, per the data-honesty rule on inference. */}
                                         {field === 'order' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 font-mono text-[9px] font-bold leading-tight tabular-nums text-status-critical-fg">
                                             delayed to {ph.order_month} (+{ph.delay_months}mo)
                                           </div>
                                         )}
-                                        {field === 'ftc' && !ph.ftc_reachable && (
+                                        {field === 'tc' && ph.delay_months > 0 && (
+                                          <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-risk-fg">
+                                            projected: <span className="font-mono tabular-nums">{ph.next_tc_date}</span>
+                                          </div>
+                                        )}
+                                        {field === 'ftc' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-critical-fg">
-                                            not achievable &mdash; {ph.ftc_short_days}d short
+                                            {!ph.ftc_reachable && <div>not achievable &mdash; {ph.ftc_short_days}d short</div>}
+                                            projected: <span className="font-mono tabular-nums">{ph.next_ftc_date}</span>
                                           </div>
                                         )}
                                       </div>
@@ -1858,11 +2023,11 @@ export default function ModuleDeliveriesPage() {
                                   };
                                   const milestones: Milestone[] = [];
                                   if (milestoneFilter === 'all' || milestoneFilter === 'module') {
-                                    milestones.push({ title: 'Module Order', field: 'order', text: 'text-primary',
+                                    milestones.push({ title: 'Module Ordering', field: 'order', text: 'text-primary',
                                       border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
                                   }
                                   if (milestoneFilter === 'all' || milestoneFilter === 'tc') {
-                                    milestones.push({ title: 'TC Date', field: 'tc', text: 'text-status-risk-fg',
+                                    milestones.push({ title: 'TC Delivery', field: 'tc', text: 'text-status-risk-fg',
                                       border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
                                       gapBefore: milestones.length ? `${lead}d Lead` : undefined });
                                   }
@@ -1893,11 +2058,19 @@ export default function ModuleDeliveriesPage() {
                                     <div className="border-t border-border-subtle pt-2">
                                       <div className="mb-2 flex items-baseline justify-between gap-2">
                                         <span className="text-[10px] font-semibold uppercase tracking-wider text-fg-tertiary">
-                                          Ordering in {mo} &middot; {phases.length} phase{phases.length === 1 ? '' : 's'}
+                                          {isRealOrder ? 'Ordering in' : 'Milestone dates for'} {mo} &middot; {phases.length} phase{phases.length === 1 ? '' : 's'}
                                         </span>
-                                        <span className="font-mono text-[10px] tabular-nums text-fg-secondary">
-                                          taking <span className="font-bold text-fg-primary">{takenLabel}</span>
-                                        </span>
+                                        {/* "taking X MWp" only for a real order: for a milestone-only
+                                            month the MW figure is already stated above as "Milestone
+                                            Target", and this fallback total is a re-derivation from date
+                                            strings that could round differently — showing a second number
+                                            here risked exactly the kind of contradiction this page keeps
+                                            getting caught on. */}
+                                        {isRealOrder && (
+                                          <span className="font-mono text-[10px] tabular-nums text-fg-secondary">
+                                            taking <span className="font-bold text-fg-primary">{takenLabel}</span>
+                                          </span>
+                                        )}
                                       </div>
 
                                       <div
@@ -1991,14 +2164,15 @@ export default function ModuleDeliveriesPage() {
                                   </div>
                                 ) : ltaLate.length > 0 ? (
                                   <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-risk-fg">
-                                    Every FTC above is reachable, but{' '}
+                                    {isRealOrder ? 'Every FTC above is reachable, but' : 'This is a milestone month, and'}{' '}
                                     <span className="font-semibold">
-                                      {ltaLate.length} of {cellPhases.length} phase{cellPhases.length === 1 ? '' : 's'}
+                                      {ltaLate.length} of {displayPhases.length} phase{displayPhases.length === 1 ? '' : 's'}
                                     </span>{' '}
                                     charges only after the LTA of <span className="font-semibold">{p.lta}</span> &mdash;
                                     transmission, not supply, is the binding constraint here.
                                   </div>
-                                ) : p.planning_flags?.includes('extended_to_lta') ? (
+                                ) : !isRealOrder ? null
+                                : p.planning_flags?.includes('extended_to_lta') ? (
                                   <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-risk-fg">
                                     Vendor capacity in the earlier months was full, so this order was extended to{' '}
                                     <span className="font-semibold">{mo}</span>. It misses the original TC date but is
@@ -2023,8 +2197,8 @@ export default function ModuleDeliveriesPage() {
                                 <div className="flex flex-col items-end gap-1 w-full">
                                   {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
                                     <div key={idx} className={`relative px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
-                                      ${c.type === 'tc' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' : 
-                                        c.type === 'module' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border shadow-status-risk-fg/20' : 
+                                      ${c.type === 'module' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' :
+                                        c.type === 'tc' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border shadow-status-risk-fg/20' :
                                         'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border shadow-status-healthy-fg/20'}`}>
                                       {isShifted && (
                                         <div
@@ -2052,8 +2226,12 @@ export default function ModuleDeliveriesPage() {
                           </Td>
                         );
                       })}
-                      {isColVisible('month_wise') && <Td align="right" className="font-semibold text-foreground tabular-nums">
-                        {p.balance_ordering_mwp > 0 ? MW(p.balance_ordering_mwp) : '-'}
+                      {isColVisible('month_wise') && <Td align="right" className="font-semibold text-foreground tabular-nums"
+                        tip={Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0) < (p.balance_ordering_mwp || 0) ? "Total planned is less than balance to order due to missed dates or completed FTCs" : undefined}>
+                        {(() => {
+                          const planned = Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0);
+                          return planned > 0 ? MW(planned) : '-';
+                        })()}
                       </Td>}
                       {isColVisible('ftc_date') && <Td className={SECTION_EDGE}>
                         {p.ftc_date
@@ -2162,7 +2340,7 @@ export default function ModuleDeliveriesPage() {
                   );
                 })}
                 <Td align="right" className="text-foreground tabular-nums font-bold">
-                  {MW(sum(filtered, p => p.balance_ordering_mwp || 0))}
+                  {MW(sum(filtered, p => Object.values(p.month_mwp || {}).reduce((s: number, v: any) => s + (v as number), 0)))}
                 </Td>
                 </>}
                 {isColVisible('ftc_date') && <Td className={SECTION_EDGE} />}
@@ -2242,16 +2420,18 @@ export default function ModuleDeliveriesPage() {
               <thead>
                 <tr>
                   <Th className="min-w-[120px] text-left">Source</Th>
-                  <Th className="min-w-[70px]">Quota (MWac)</Th>
+                  <Th className="min-w-[70px]">Quota {unitToggle === 'mwp' ? '(MWp)' : unitToggle === 'mwac' ? '(MWac)' : '(MWp / MWac)'}</Th>
                   {FORECAST_MONTHS.map(mo => <Th key={mo} className="min-w-[64px]">{mo}</Th>)}
-                  <Th className="min-w-[110px]">Peak (MWac)</Th>
+                  <Th className="min-w-[110px]">Peak {unitToggle === 'mwp' ? '(MWp)' : unitToggle === 'mwac' ? '(MWac)' : '(MWp / MWac)'}</Th>
                 </tr>
               </thead>
               <tbody>
                 {capacitySources.map(([source, v]) => (
                   <tr key={source} className="hover:bg-[var(--surface-sunken)]">
                     <Td align="left" className="font-semibold text-foreground">{source}</Td>
-                    <Td align="right" className="text-muted-foreground">{MW(v.monthly_cap_mwp)}</Td>
+                    <Td align="right" className="text-muted-foreground whitespace-nowrap">
+                      {unitToggle === 'mwp' ? MW(v.monthly_cap_mwp) : unitToggle === 'mwac' ? MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp) : `${MW(v.monthly_cap_mwp)} / ${MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp)}`}
+                    </Td>
                     {v.allocated_by_month.map((val, i) => {
                       const pctUsed = v.utilization_pct_by_month[i] ?? 0;
                       const tone = pctUsed >= 100 ? 'critical' : pctUsed >= 80 ? 'risk' : pctUsed >= 50 ? 'watch' : 'healthy';
@@ -2260,7 +2440,9 @@ export default function ModuleDeliveriesPage() {
                           tip={val > 0 ? `${source} in ${FORECAST_MONTHS[i]}\nConsuming: ${MW(v.allocated_by_month_mwac?.[i] ?? 0)} MWac of ${MW(v.monthly_cap_mwac ?? v.monthly_cap_mwp)} MWac quota (${Math.round(pctUsed)}%)` : undefined}>
                           {val > 0 ? (
                             <div className="flex flex-col items-end gap-0.5 py-0.5">
-                              <span className="tabular-nums">{MW(v.allocated_by_month_mwac?.[i] ?? 0)}</span>
+                              <span className="tabular-nums whitespace-nowrap">
+                                {unitToggle === 'mwp' ? MW(val) : unitToggle === 'mwac' ? MW(v.allocated_by_month_mwac?.[i] ?? 0) : `${MW(val)} / ${MW(v.allocated_by_month_mwac?.[i] ?? 0)}`}
+                              </span>
                               <MiniMeter pct={pctUsed} tone={tone} className="w-10" />
                             </div>
                           ) : <span className="text-muted-foreground/25">-</span>}
@@ -2268,20 +2450,32 @@ export default function ModuleDeliveriesPage() {
                       );
                     })}
                     <Td align="right" className="text-muted-foreground">
-                      {v.peak_mwac > 0 ? `${MW(v.peak_mwac)} in ${v.peak_month}` : '-'}
+                      {unitToggle === 'mwp'
+                        ? (v.peak_mwp > 0 ? `${MW(v.peak_mwp)} in ${v.peak_month}` : '-')
+                        : unitToggle === 'mwac'
+                          ? (v.peak_mwac > 0 ? `${MW(v.peak_mwac)} in ${v.peak_month}` : '-')
+                          : (v.peak_mwp > 0 ? `${MW(v.peak_mwp)} / ${MW(v.peak_mwac)} in ${v.peak_month}` : '-')}
                     </Td>
                   </tr>
                 ))}
                 <tr className="border-t-2 border-[var(--neutral-700)] bg-[var(--neutral-200)] font-bold">
                   <Td className="text-muted-foreground">Σ Total</Td>
-                  <Td align="right" className="text-foreground tabular-nums">
-                    {MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? v.monthly_cap_mwp), 0))}
+                  <Td align="right" className="text-foreground tabular-nums whitespace-nowrap">
+                    {unitToggle === 'mwp' 
+                      ? MW(capacitySources.reduce((s, [, v]) => s + v.monthly_cap_mwp, 0)) 
+                      : unitToggle === 'mwac' 
+                        ? MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? v.monthly_cap_mwp), 0))
+                        : `${MW(capacitySources.reduce((s, [, v]) => s + v.monthly_cap_mwp, 0))} / ${MW(capacitySources.reduce((s, [, v]) => s + (v.monthly_cap_mwac ?? v.monthly_cap_mwp), 0))}`}
                   </Td>
-                  {FORECAST_MONTHS.map((mo, i) => (
-                    <Td key={mo} align="right" className="text-foreground tabular-nums">
-                      {MW(capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month_mwac?.[i] || 0), 0))}
-                    </Td>
-                  ))}
+                  {FORECAST_MONTHS.map((mo, i) => {
+                    const mwpTotal = capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month[i] || 0), 0);
+                    const mwacTotal = capacitySources.reduce((s, [, v]) => s + (v.allocated_by_month_mwac?.[i] || 0), 0);
+                    return (
+                      <Td key={mo} align="right" className="text-foreground tabular-nums whitespace-nowrap">
+                        {unitToggle === 'mwp' ? MW(mwpTotal) : unitToggle === 'mwac' ? MW(mwacTotal) : `${MW(mwpTotal)} / ${MW(mwacTotal)}`}
+                      </Td>
+                    );
+                  })}
                   <Td />
                 </tr>
               </tbody>
