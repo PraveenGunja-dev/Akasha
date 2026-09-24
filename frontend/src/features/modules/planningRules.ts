@@ -71,6 +71,12 @@ export const PLANNING_RULES: RuleGroup[] = [
         source: 'module_planner.py',
       },
       {
+        name: 'A moved order moves everything after it',
+        detail:
+          'When vendor quota pushes an order into a later month, its TC and FTC move by the same amount — the lead time and the 45-day install run from the date the order is actually placed, not from the original plan. The tooltip shows the new date with the original struck through beneath it.',
+        source: 'module_planner.py',
+      },
+      {
         name: 'A phase split across months',
         detail:
           'Vendor quota can spread one phase over two consecutive months. The sequence still holds: the next phase does not start until the current one is ordered in full.',

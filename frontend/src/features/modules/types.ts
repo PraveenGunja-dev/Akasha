@@ -22,10 +22,21 @@ export interface MonthPhase {
   mwp: number;
   /** The phase's own AC capacity, as stated in its P6 milestone name. */
   mw_ac: number;
-  /** When the order must be placed to hold the phase's FTC. */
+  /** As PLANNED: backward-scheduled from the phase's P6 FTC milestone. */
   order_date: string;
   tc_date: string;
   ftc_date: string;
+  /** As it now FALLS, given the month the order can actually be placed.
+   *  When vendor quota moves an order later, everything downstream moves with
+   *  it — an order placed in Nov cannot have its TC in Aug. These are derived
+   *  from the placed month using the same lead time and 45-day install offset. */
+  placed_order_date: string;
+  placed_tc_date: string;
+  placed_ftc_date: string;
+  /** Months between the planned order date and the placed one. */
+  slip_months: number;
+  /** slip_months !== 0 — the placed dates differ from the plan. */
+  revised: boolean;
   /** The ordering window has already closed — this is a catch-up order. */
   overdue: boolean;
   /** Vendor quota moved it out of its target month. */

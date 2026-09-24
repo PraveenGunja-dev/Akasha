@@ -1796,23 +1796,42 @@ export default function ModuleDeliveriesPage() {
 
                                   /* One stack of phase chips under a milestone heading. The
                                      date shown is that phase's own date for this milestone. */
+                                  /* Each milestone shows the date as it NOW falls. When vendor
+                                     quota moved the order later, every downstream step moved with
+                                     it, so the planned date is kept underneath, struck through, and
+                                     the slip is stated. Showing only the original produced rows
+                                     where the TC preceded the order that caused it. */
                                   const Stack = ({ field, text, border, bg }: {
-                                    field: 'order_date' | 'tc_date' | 'ftc_date';
+                                    field: 'order' | 'tc' | 'ftc';
                                     text: string; border: string; bg: string;
                                   }) => (
                                     <div className="space-y-1">
-                                      {phases.map((ph, i) => (
-                                        <div key={`${ph.phase_label}-${i}`}
-                                          className={`rounded-md border px-1.5 py-1 ${border} ${bg}`}>
-                                          <div className="flex items-baseline justify-between gap-1.5">
-                                            <span className={`text-[9px] font-semibold ${text}`}>{ph.phase_label}</span>
-                                            <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
+                                      {phases.map((ph, i) => {
+                                        const planned = field === 'order' ? ph.order_date : field === 'tc' ? ph.tc_date : ph.ftc_date;
+                                        const placed = field === 'order' ? ph.placed_order_date : field === 'tc' ? ph.placed_tc_date : ph.placed_ftc_date;
+                                        return (
+                                          <div key={`${ph.phase_label}-${i}`}
+                                            className={`rounded-md border px-1.5 py-1 ${border} ${bg}`}>
+                                            <div className="flex items-baseline justify-between gap-1.5">
+                                              <span className={`text-[9px] font-semibold ${text}`}>{ph.phase_label}</span>
+                                              <span className="font-mono text-[9px] tabular-nums text-fg-tertiary">{qty(ph)}</span>
+                                            </div>
+                                            <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
+                                              {placed}
+                                            </div>
+                                            {ph.revised && (
+                                              <div className="mt-0.5 flex items-baseline gap-1">
+                                                <span className="font-mono text-[9px] tabular-nums text-fg-tertiary line-through">
+                                                  {planned}
+                                                </span>
+                                                <span className="font-mono text-[9px] font-bold tabular-nums text-status-critical-fg">
+                                                  {ph.slip_months > 0 ? `+${ph.slip_months}` : ph.slip_months}mo
+                                                </span>
+                                              </div>
+                                            )}
                                           </div>
-                                          <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
-                                            {ph[field]}
-                                          </div>
-                                        </div>
-                                      ))}
+                                        );
+                                      })}
                                     </div>
                                   );
 
@@ -1854,7 +1873,7 @@ export default function ModuleDeliveriesPage() {
                                         {(milestoneFilter === 'all' || milestoneFilter === 'module') && (
                                           <>
                                             <Col title="Module Order" text="text-primary">
-                                              <Stack field="order_date" text="text-primary"
+                                              <Stack field="order" text="text-primary"
                                                 border="border-primary/30" bg="bg-primary/[0.07]" />
                                             </Col>
                                             {milestoneFilter === 'all' && (
@@ -1866,7 +1885,7 @@ export default function ModuleDeliveriesPage() {
                                         {(milestoneFilter === 'all' || milestoneFilter === 'tc') && (
                                           <>
                                             <Col title="TC Date" text="text-status-risk-fg">
-                                              <Stack field="tc_date" text="text-status-risk-fg"
+                                              <Stack field="tc" text="text-status-risk-fg"
                                                 border="border-status-risk-border" bg="bg-status-risk-bg/60" />
                                             </Col>
                                             {milestoneFilter === 'all' && <Arrow label="45d Install" />}
@@ -1875,7 +1894,7 @@ export default function ModuleDeliveriesPage() {
 
                                         {(milestoneFilter === 'all' || milestoneFilter === 'ftc') && (
                                           <Col title="FTC Date" text="text-status-healthy-fg">
-                                            <Stack field="ftc_date" text="text-status-healthy-fg"
+                                            <Stack field="ftc" text="text-status-healthy-fg"
                                               border="border-status-healthy-border" bg="bg-status-healthy-bg/60" />
                                           </Col>
                                         )}
@@ -1898,6 +1917,15 @@ export default function ModuleDeliveriesPage() {
 
                                       {/* Flags belong on the phase, not the project: only some of
                                           a month's phases may be overdue or quota-moved. */}
+                                      {phases.some(x => x.revised) && (
+                                        <div className="mt-2 text-[10px] leading-relaxed text-fg-secondary">
+                                          Struck-through dates are the original plan. Where the order
+                                          moved, its TC and FTC moved by the same amount &mdash; the lead
+                                          time and 45-day install run from the date the order is
+                                          actually placed.
+                                        </div>
+                                      )}
+
                                       {phases.some(x => x.overdue || x.shifted) && (
                                         <div className="mt-2 flex flex-wrap items-center gap-1">
                                           {phases.filter(x => x.overdue).map((x, i) => (

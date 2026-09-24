@@ -71,6 +71,49 @@ def _parse_date_str(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
+def _phase_record(d, month_idx, mwp, base_month_dt, overdue):
+    """One phase's share of one month's order, with its dates cascaded.
+
+    The order date a phase was PLANNED for and the month it can actually be
+    placed in are different things once vendor quota moves it. Everything
+    downstream moves with it: an order placed in Nov cannot have its TC in
+    Aug. Reporting the original TC/FTC beside a moved order date produced
+    impossible rows -- one showed an order placed in Mar-27 against a TC of
+    23-Aug-26, ten months earlier (user 2026-09-24).
+
+    So the placed date keeps the phase's own day-of-month but moves into the
+    month the order actually lands in, and TC and FTC are re-derived from it
+    using the same lead time and 45-day install offset as the original plan.
+    Both sets are returned: `*_date` is what was planned, `placed_*` is what
+    now happens, and the UI shows the second where they differ.
+    """
+    lead = d.get('lead_time', DEFAULT_LEAD_TIME)
+    placed_order = (base_month_dt + relativedelta(months=month_idx)
+                    + relativedelta(day=d['tc_dt'].day))
+    placed_tc = placed_order + timedelta(days=lead)
+    placed_ftc = placed_tc + timedelta(days=TC_OFFSET_DAYS)
+    slip = ((placed_order.year - d['tc_dt'].year) * 12
+            + (placed_order.month - d['tc_dt'].month))
+    f = lambda x: x.strftime('%d-%b-%y')
+    return {
+        'phase_label': d['phase_label'],
+        'mwp': round(mwp, 1),
+        'mw_ac': d.get('mw_ac') or 0.0,
+        # As planned, backward-scheduled from the P6 FTC milestone.
+        'order_date': f(d['tc_dt']),
+        'tc_date': f(d['mod_dt']),
+        'ftc_date': f(d['ftc_dt']),
+        # As it now falls, given the month the order can actually be placed.
+        'placed_order_date': f(placed_order),
+        'placed_tc_date': f(placed_tc),
+        'placed_ftc_date': f(placed_ftc),
+        'slip_months': slip,
+        'revised': slip != 0,
+        'overdue': overdue,
+        'shifted': month_idx != d['target_month_idx'],
+    }
+
+
 def _calc_month_idx(dt: datetime, base_dt: datetime, max_months: int = 13) -> int:
     """Calculates 0-indexed month offset from base_dt. Returns negative if dt is in past."""
     diff = (dt.year - base_dt.year) * 12 + (dt.month - base_dt.month)
@@ -401,16 +444,8 @@ def run_module_planning_engine(
                     project_allocations[pid][curr_m] += take_mwp
                     if is_overdue_demand:
                         project_overdue_alloc[pid][curr_m] += take_mwp
-                    project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append({
-                        'phase_label': d['phase_label'],
-                        'mwp': round(take_mwp, 1),
-                        'mw_ac': d.get('mw_ac') or 0.0,
-                        'order_date': d['tc_dt'].strftime('%d-%b-%y'),
-                        'tc_date': d['mod_dt'].strftime('%d-%b-%y'),
-                        'ftc_date': d['ftc_dt'].strftime('%d-%b-%y'),
-                        'overdue': is_overdue_demand,
-                        'shifted': curr_m != d['target_month_idx'],
-                    })
+                    project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append(
+                        _phase_record(d, curr_m, take_mwp, base_month_dt, is_overdue_demand))
                     rem -= take_mwp
                     if curr_m < target_m:
                         project_pulled_details.setdefault(pid, []).append({
@@ -452,16 +487,8 @@ def run_module_planning_engine(
                         project_allocations[pid][curr_m] += take_mwp
                         if is_overdue_demand:
                             project_overdue_alloc[pid][curr_m] += take_mwp
-                        project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append({
-                            'phase_label': d['phase_label'],
-                            'mwp': round(take_mwp, 1),
-                            'mw_ac': d.get('mw_ac') or 0.0,
-                            'order_date': d['tc_dt'].strftime('%d-%b-%y'),
-                            'tc_date': d['mod_dt'].strftime('%d-%b-%y'),
-                            'ftc_date': d['ftc_dt'].strftime('%d-%b-%y'),
-                            'overdue': is_overdue_demand,
-                            'shifted': curr_m != d['target_month_idx'],
-                        })
+                        project_phase_alloc.setdefault(pid, {}).setdefault(curr_m, []).append(
+                            _phase_record(d, curr_m, take_mwp, base_month_dt, is_overdue_demand))
                         rem -= take_mwp
 
                         if curr_m <= lta_m:
@@ -490,16 +517,8 @@ def run_module_planning_engine(
                 project_allocations[pid][num_months - 1] += rem
                 if is_overdue_demand:
                     project_overdue_alloc[pid][num_months - 1] += rem
-                project_phase_alloc.setdefault(pid, {}).setdefault(num_months - 1, []).append({
-                    'phase_label': d['phase_label'],
-                    'mwp': round(rem, 1),
-                    'mw_ac': d.get('mw_ac') or 0.0,
-                    'order_date': d['tc_dt'].strftime('%d-%b-%y'),
-                    'tc_date': d['mod_dt'].strftime('%d-%b-%y'),
-                    'ftc_date': d['ftc_dt'].strftime('%d-%b-%y'),
-                    'overdue': is_overdue_demand,
-                    'shifted': True,
-                })
+                project_phase_alloc.setdefault(pid, {}).setdefault(num_months - 1, []).append(
+                    _phase_record(d, num_months - 1, rem, base_month_dt, is_overdue_demand))
                 project_capacity_delayed_details.setdefault(pid, []).append({
                     'pushed_from': forecast_months[target_m],
                     'pushed_to': forecast_months[num_months - 1],
@@ -544,9 +563,16 @@ def run_module_planning_engine(
             for part in phase_allocs.get(m_i, []):
                 cur = merged.get(part['phase_label'])
                 if cur:
+                    # Same phase, same month, two allocation passes: add the
+                    # MWp, keep the worse flags, and keep the LATER placed
+                    # dates, since that is when the phase actually completes.
                     cur['mwp'] = round(cur['mwp'] + part['mwp'], 1)
                     cur['overdue'] = cur['overdue'] or part['overdue']
                     cur['shifted'] = cur['shifted'] or part['shifted']
+                    if part['slip_months'] > cur['slip_months']:
+                        for k in ('placed_order_date', 'placed_tc_date',
+                                  'placed_ftc_date', 'slip_months', 'revised'):
+                            cur[k] = part[k]
                 else:
                     merged[part['phase_label']] = dict(part)
             p['month_phases'][mo] = sorted(
