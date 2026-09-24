@@ -587,6 +587,30 @@ def run_module_planning_engine(
             p['month_phases'][mo] = sorted(
                 merged.values(), key=lambda x: (_parse_date_str(x['order_date']) or datetime.max))
 
+        # ── The planner's verdict on what it has just scheduled ──────────
+        # Placing an order into a month that cannot reach the phase's FTC is
+        # not a plan that works, and neither is one whose FTC lands past the
+        # LTA. Both were previously judged only at render time, so the engine
+        # could emit a schedule it had never tested and describe it as on
+        # track (user 2026-09-24). They are decided here now, once, and the
+        # UI and the export both read the result.
+        all_ph = [x for rows in p['month_phases'].values() for x in rows]
+        unreachable = [x for x in all_ph if not x['ftc_reachable']]
+        p['ftc_at_risk_mwp'] = round(sum(x['mwp'] for x in unreachable), 1)
+        p['ftc_max_short_days'] = max((x['ftc_short_days'] for x in unreachable), default=0)
+        if unreachable and 'ftc_unreachable' not in p['planning_flags']:
+            p['planning_flags'].append('ftc_unreachable')
+
+        # A phase can reach its FTC and still miss the transmission window.
+        lta_dt = _parse_date_str(p.get('lta'))
+        past_lta = []
+        if lta_dt:
+            past_lta = [x for x in all_ph
+                        if (_parse_date_str(x['ftc_date']) or lta_dt) > lta_dt]
+        p['ftc_past_lta_mwp'] = round(sum(x['mwp'] for x in past_lta), 1)
+        if past_lta and 'ftc_past_lta' not in p['planning_flags']:
+            p['planning_flags'].append('ftc_past_lta')
+
         # Fix minor rounding discrepancies against active_demand — the MWp
         # actually queued for leveling, which the sequential phase fill now
         # draws from the Balance Ordering column, so it equals bal for every
@@ -655,6 +679,22 @@ def run_module_planning_engine(
                 diag = (f"Allocated to {months_str} aligned with FTC schedule (-45d TC, -{lead_time}d {source} lead time). "
                         f"Demand fits comfortably within monthly {source} capacity.{excl_note}")
             sugg = (f"Maintain planned procurement cycle. Issue formal PO intimation at least {lead_time} days prior to {first_mo}.")
+
+        # The hard finding leads: a reader who stops after one sentence should
+        # still learn that the schedule does not hold.
+        if unreachable:
+            n_ph = len(unreachable)
+            diag = (f"FTC AT RISK: {p['ftc_at_risk_mwp']:.1f} MWp across {n_ph} phase order(s) "
+                    f"cannot reach their P6 FTC from the month the order can be placed "
+                    f"(up to {p['ftc_max_short_days']} days short). " + diag)
+            sugg = (f"The FTC dates for these {n_ph} phase(s) will slip by at least "
+                    f"{p['ftc_max_short_days']} days unless the order is expedited or the "
+                    f"lead time is shortened. Re-baseline the milestone or escalate the "
+                    f"vendor slot. " + sugg)
+        elif past_lta:
+            diag = (f"FTC PAST LTA: {p['ftc_past_lta_mwp']:.1f} MWp reaches its FTC only after "
+                    f"the LTA of {p.get('lta')}, so transmission, not supply, becomes the "
+                    f"binding constraint. " + diag)
 
         p['remarks'] = diag
         p['ai_suggestion'] = sugg

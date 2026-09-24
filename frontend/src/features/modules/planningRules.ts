@@ -79,7 +79,13 @@ export const PLANNING_RULES: RuleGroup[] = [
       {
         name: 'FTC achievability',
         detail:
-          'The P6 FTC is checked against the month the order can actually be placed: an order needs its full lead time plus the 45-day install before FTC. Where less than that remains the milestone is marked not achievable, with how many days short. 47 of 56 phase orders currently fail this check.',
+          'The planner checks its own output: every P6 FTC is tested against the month its order can actually be placed, since an order needs its full lead time plus the 45-day install. Where less than that remains, the phase is flagged not achievable with the shortfall in days, and the project remark leads with it. Currently 21 projects / 5,014 MWp fail this test.',
+        source: 'module_planner.py',
+      },
+      {
+        name: 'FTC after LTA',
+        detail:
+          'A phase can reach its FTC and still charge after the LTA. Those are flagged separately, because the constraint there is transmission rather than supply and the fix is a different one. Currently 10 projects / 1,845 MWp.',
         source: 'module_planner.py',
       },
       {

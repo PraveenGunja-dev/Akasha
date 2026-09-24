@@ -1681,6 +1681,21 @@ export default function ModuleDeliveriesPage() {
                       {isColVisible('month_wise') && FORECAST_MONTHS.map((mo, i) => {
                         const val = p.month_mwp?.[mo] || 0;
                         const overdueVal = p.month_overdue_mwp?.[mo] || 0;
+                        const cellPhases = p.month_phases?.[mo] ?? [];
+                        /* Whether THIS month's order can still hold its FTC. The
+                           footer used to read project-level planning flags, which
+                           do not know about per-phase reachability, so a month whose
+                           FTC was 92 days out of reach still printed "in time to
+                           support FTC" directly under the box saying it was not. */
+                        const unreachable = cellPhases.filter(x => !x.ftc_reachable);
+                        const worstShort = unreachable.reduce((a, x) => Math.max(a, x.ftc_short_days), 0);
+                        /* A phase can reach its FTC and still charge after the LTA. The
+                           audit found 2 month-cells reading "on time" in exactly that
+                           state, so it gets its own verdict rather than being folded
+                           into success. */
+                        const ltaDue = p.lta ? Date.parse(p.lta.replace(/-/g, ' ')) : NaN;
+                        const ltaLate = Number.isNaN(ltaDue) ? [] : cellPhases.filter(
+                          x => Date.parse(x.ftc_date.replace(/-/g, ' ')) > ltaDue);
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags, overdueVal > 0);
                         
                         const getShiftMonths = () => {
@@ -1765,8 +1780,8 @@ export default function ModuleDeliveriesPage() {
                                 {/* Say plainly how much of the figure is already late */}
                                 {overdueVal > 0 && (
                                   <div className="text-[10.5px] leading-relaxed text-status-critical-fg">
-                                    <b>{MW(overdueVal)} MWp</b> of this is overdue — its ordering date has already passed.
-                                    {mo} is the earliest month still open, not a date that meets the original FTC.
+                                    <b>{MW(overdueVal)} MWp</b> of this is overdue — its ordering date has already passed.{' '}
+                                    {mo} is the earliest month still open.
                                   </div>
                                 )}
 
@@ -1943,14 +1958,6 @@ export default function ModuleDeliveriesPage() {
 
                                       {/* Flags belong on the phase, not the project: only some of
                                           a month's phases may be overdue or quota-moved. */}
-                                      {phases.some(x => !x.ftc_reachable) && (
-                                        <div className="mt-2 text-[10px] leading-relaxed text-status-critical-fg">
-                                          Dates shown are the P6 plan. Where the order can only be placed
-                                          later, the FTC above can no longer be met from that month &mdash;
-                                          an order needs its full lead time plus 45 days to install.
-                                        </div>
-                                      )}
-
                                       {phases.some(x => x.overdue || x.shifted) && (
                                         <div className="mt-2 flex flex-wrap items-center gap-1">
                                           {phases.filter(x => x.overdue).map((x, i) => (
@@ -1969,26 +1976,43 @@ export default function ModuleDeliveriesPage() {
                                   );
                                 })()}
 
-                                {p.planning_flags?.includes('extended_to_lta') ? (
-                                  <div className="text-[10.5px] text-status-risk-fg leading-relaxed pt-2 border-t border-border-subtle">
-                                    ⚠️ Due to vendor capacity limits in earlier months, this order was extended to <span className="font-semibold">{mo}</span>. This misses the original TC date, but is still safe for transmission (LTA).
+                                {/* One verdict for this month, read off the phases above. An
+                                    unreachable FTC outranks everything else: it is the fact that
+                                    decides whether the order, as scheduled, still works. */}
+                                {unreachable.length > 0 ? (
+                                  <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-critical-fg">
+                                    Ordering in <span className="font-semibold">{mo}</span> cannot meet the FTC for{' '}
+                                    <span className="font-semibold">
+                                      {unreachable.length} of {cellPhases.length} phase{cellPhases.length === 1 ? '' : 's'}
+                                    </span>{' '}
+                                    &mdash; up to <span className="font-semibold">{worstShort} days short</span>.
+                                    The FTC dates above are the P6 plan and will slip by at least that much;
+                                    an order needs its full lead time plus 45 days to install.
                                   </div>
-                                ) : p.planning_flags?.includes('capacity_delayed') ? (
-                                  <div className="text-[10.5px] text-status-critical-fg leading-relaxed pt-2 border-t border-border-subtle">
-                                    🚨 Due to vendor capacity limits, this order was delayed to <span className="font-semibold">{mo}</span>, which misses BOTH the FTC and LTA timelines! Critical commercial risk.
+                                ) : ltaLate.length > 0 ? (
+                                  <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-risk-fg">
+                                    Every FTC above is reachable, but{' '}
+                                    <span className="font-semibold">
+                                      {ltaLate.length} of {cellPhases.length} phase{cellPhases.length === 1 ? '' : 's'}
+                                    </span>{' '}
+                                    charges only after the LTA of <span className="font-semibold">{p.lta}</span> &mdash;
+                                    transmission, not supply, is the binding constraint here.
+                                  </div>
+                                ) : p.planning_flags?.includes('extended_to_lta') ? (
+                                  <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-risk-fg">
+                                    Vendor capacity in the earlier months was full, so this order was extended to{' '}
+                                    <span className="font-semibold">{mo}</span>. It misses the original TC date but is
+                                    still inside the LTA, so transmission is not the constraint.
                                   </div>
                                 ) : p.planning_flags?.includes('leveled_early') ? (
-                                  <div className="text-[10.5px] text-status-ai-fg leading-relaxed pt-2 border-t border-border-subtle">
-                                    ✨ To avoid vendor capacity limits in later months, this order was proactively pulled early to <span className="font-semibold">{mo}</span>. Materials will arrive ahead of schedule.
+                                  <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-ai-fg">
+                                    Pulled early to <span className="font-semibold">{mo}</span> to stay inside the vendor's
+                                    monthly limit. Material arrives ahead of schedule &mdash; check laydown space.
                                   </div>
                                 ) : (
-                                  <div className="text-[10.5px] text-fg-secondary leading-relaxed pt-2 border-t border-border-subtle">
-                                    Ordering in <span className="text-status-healthy-fg font-semibold">{mo}</span> lands the material on site by Module Delivery Date, in time to support FTC.
-                                  </div>
-                                )}
-                                {p.planning_flags?.includes('leveled_early') && (
-                                  <div className="text-[10.5px] text-status-ai-fg pt-2 border-t border-border-subtle">
-                                    ⚡ Leveled early to protect vendor monthly capacity limits
+                                  <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-fg-secondary">
+                                    Ordering in <span className="font-semibold text-status-healthy-fg">{mo}</span> lands the
+                                    material on site in time to support every FTC above.
                                   </div>
                                 )}
                               </div>

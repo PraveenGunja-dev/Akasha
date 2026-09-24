@@ -112,6 +112,14 @@ export interface ModuleProject {
    *  because its module date already passed — authoritative from the
    *  planning engine, not re-derived from the date string on this side. */
   excluded_module_date_mwp?: number;
+  /** MWp whose P6 FTC cannot be reached from the month its order can be
+   *  placed. Decided by the planner, not by the view. */
+  ftc_at_risk_mwp?: number;
+  /** Worst shortfall in days across those phases. */
+  ftc_max_short_days?: number;
+  /** MWp whose FTC lands after the LTA — reachable, but past the
+   *  transmission window, so transmission becomes the binding constraint. */
+  ftc_past_lta_mwp?: number;
   /** SAP figures are this project's capacity share of a WBS element shared
    *  with other projects, not a measured per-project number. */
   po_apportioned: boolean;
