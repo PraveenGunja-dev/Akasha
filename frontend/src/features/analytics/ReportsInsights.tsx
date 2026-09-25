@@ -1,8 +1,9 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Loader2, AlertTriangle, Battery, Sun, Wind, ArrowLeft, Presentation, ChevronRight, FileText, BarChart3, ShieldCheck } from 'lucide-react';
 import { cx } from '../../components/ui/primitives';
-import CPAGSlideViewer, { buildSlides, type Slide } from '../projects/CPAGSlides';
+import CPAGSlideViewer from '../projects/CPAGSlides';
+import { useCPAGPack } from '../projects/useCPAGPack';
 
 type ViewState = 'directory' | 'portfolio_select' | 'viewer';
 type Scope = 'solar' | 'wind' | 'bess' | null;
@@ -37,55 +38,10 @@ export default function ReportsInsights(props: any) {
   const [view, setView] = useState<ViewState>('directory');
   const [scope, setScope] = useState<Scope>(null);
   
-  const [portfolio, setPortfolio] = useState<any>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  // Fetch BESS data when we hit 'viewer' and scope is 'bess'
-  useEffect(() => {
-    if (view !== 'viewer') return;
-    if (scope !== 'bess') return;
-    if (portfolio) return;
-
-    let live = true;
-    setLoading(true);
-    setError(null);
-    
-    fetch('/akasha/api/bess/portfolio/cpag')
-      .then(async (r) => {
-        if (!r.ok) throw new Error(`CPAG pack unavailable (${r.status})`);
-        return r.json();
-      })
-      .then((json) => {
-        if (!live) return;
-        setPortfolio(json);
-      })
-      .catch((e: Error) => { if (live) setError(e.message); })
-      .finally(() => { if (live) setLoading(false); });
-    return () => { live = false; };
-  }, [view, scope, portfolio]);
-
-  const retry = useCallback(() => {
-    setError(null);
-    setPortfolio(null);
-  }, []);
-
-  const { slides, deckTitle, downloadHref } = useMemo((): {
-    slides: Slide[]; deckTitle: string; downloadHref: string;
-  } => {
-    if (scope === 'bess' && portfolio) {
-      return {
-        slides: buildSlides({
-          projects: portfolio.projects, meta: portfolio.meta,
-          commercial: portfolio.commercial, manpower: portfolio.manpower,
-          single: false,
-        }),
-        deckTitle: `BESS portfolio · ${portfolio.meta.projectCount} projects · CPAG pack`,
-        downloadHref: '/akasha/api/bess/portfolio/cpag.pptx',
-      };
-    }
-    return { slides: [], deckTitle: '', downloadHref: '' };
-  }, [scope, portfolio]);
+  /* The BESS pack is the downloadable deck's own pages, rendered by the
+     backend from the approved template. */
+  const pack = useCPAGPack(view === 'viewer' && scope === 'bess');
+  const { loading, error, retry } = pack;
 
   return (
     <div className={cx(
@@ -250,6 +206,7 @@ export default function ReportsInsights(props: any) {
                 <span className="text-sm font-medium tracking-wide text-slate-600">
                   Building the {scope?.toUpperCase()} portfolio pack from P6, SAP and Pulse…
                 </span>
+                <span className="text-xs text-slate-400">The first build after a data change takes about a minute.</span>
               </div>
             )}
 
@@ -273,7 +230,7 @@ export default function ReportsInsights(props: any) {
               </div>
             )}
 
-            {!loading && !error && slides.length > 0 && (
+            {!loading && !error && pack.pages.length > 0 && (
               <div className="flex min-h-0 flex-1 flex-col">
                 <div className="flex shrink-0 items-center justify-between px-5 pt-4 pb-2 border-b border-slate-100">
                   <button
@@ -288,9 +245,8 @@ export default function ReportsInsights(props: any) {
                 </div>
                 <div className="min-h-0 flex-1 p-0">
                   <CPAGSlideViewer
-                    slides={slides}
-                    deckTitle={deckTitle}
-                    downloadHref={downloadHref}
+                    pack={pack}
+                    deckTitle="BESS · CPAG pack · all projects"
                     onClose={() => {
                       setScope(null);
                       setView('directory');

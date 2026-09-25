@@ -941,3 +941,40 @@ class EInvoiceRecord(Base):
     submittedOn = Column(DateTime)
     currentApprover = Column(String)
     latestAction = Column(String)
+
+
+# ------------------------------------------
+# CPAG review pack
+# ------------------------------------------
+class CPAGBaselineAssignment(Base):
+    """One resource assignment of the P6 baseline a CPAG project is planned
+    against (the latest "- B2" re-baseline where one exists, else B1). The
+    live schedule only carries the original baseline's dates, and the pack's
+    plan line is drawn from the re-baseline."""
+    __tablename__ = "cpag_baseline_assignment"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_object_id = Column(Integer, index=True, nullable=False)
+    baseline_object_id = Column(Integer, nullable=False)
+    baseline_name = Column(String)
+    activity_code = Column(String, index=True)
+    resource_type = Column(String, index=True)
+    resource_name = Column(String, index=True)
+    planned_units = Column(Float)
+    planned_start = Column(DateTime)
+    planned_finish = Column(DateTime)
+    synced_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CPAGManualEntry(Base):
+    """Values for the CPAG slides no connected system holds (commissioning
+    plan, engineering document log, contractor headcount, critical issues,
+    EAC financials, ordering status...), entered by the project team. Keyed by
+    slide; `payload` mirrors that slide's table."""
+    __tablename__ = "cpag_manual_entry"
+
+    id = Column(Integer, primary_key=True, index=True)
+    slide_key = Column(String, unique=True, index=True, nullable=False)
+    payload = Column(JSON, nullable=False)
+    updated_by = Column(String)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

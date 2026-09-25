@@ -1106,7 +1106,19 @@ class P6Service:
             activities_synced += self.sync_activities_to_db(db, proj.p6_object_id)
             self.sync_resource_assignments_to_db(db, proj.p6_object_id)
             self.sync_activity_risks_to_db(db, proj.p6_object_id)
-        
+
+        # The CPAG pack plans against each BESS project's re-baseline, which
+        # lives in separate baseline projects the loop above never reads.
+        try:
+            from routers.bess import BESS_PROJECTS
+            from services.cpag_baseline import sync_cpag_baselines
+            cpag_ids = [p.p6_object_id for p in projects if p.project_id in BESS_PROJECTS]
+            if cpag_ids:
+                sync_cpag_baselines(db, cpag_ids, p6=self)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"CPAG baseline sync failed: {e}")
+
         # New: Post-sync check for Trial Run vs COD discrepancy
         self.check_trial_cod_discrepancy(db)
 
