@@ -78,6 +78,23 @@ def _contract_token(p6_name: Optional[str]) -> Optional[str]:
 NON_EPC_EPS_LABELS = {"Khavda", "Rajasthan", "AGEL Projects", "Superseded", "Other (Outside Khavda)"}
 
 
+# These three projects are fully ordered and delivered in reality, confirmed
+# by planning, but SAP carries no PO at all under any WBS code these rows
+# have (checked 2026-09-25: module_wbs 'B-0331-01-01' and 'ARE41L_A01-C_HSAT
+# ...' both have zero rows in mt_poamount under any material, not just
+# modules — this is an absent SAP record, not a WBS-matching bug). Ordered
+# and delivered are set to full capacity for exactly these three P6 names, so
+# Balance Ordering reads 0 instead of the full capacity. Keyed on the P6 name
+# (stable and unique here) rather than the mapping id, matching the MANUAL_LTA
+# convention in scripts/update_lta_from_123.py. Remove an entry the moment a
+# real SAP PO appears for it, so this stops shadowing the source of truth.
+FULLY_ORDERED_NO_SAP_RECORD = {
+    "ARE55L_A15b_HSAT_50MW_PPA",       # MSEDCL PPA Ph-1, ACL/A15b — SAP already agrees (67.5/67.5); listed for completeness.
+    "ACL_A01_E_FT_25MW_GROUP_NEW",     # Group - Cement (Hybrid - Solar), ACL/A01e — 34 MWp
+    "ARE41L_A01-C_HSAT_25MW_MERCHANT",  # AESL PPA (C&I) - Solar, ARE41L/A01c — 33.8 MWp
+}
+
+
 # A project_id can carry MORE THAN ONE p6_project row: a superseded schedule and
 # the current one (FY25-BAIYA_600MW and FY25-BANDHA_500MW each have two,
 # data_date 2026-07-18 vs 2026-09-12). Joining on project_id alone mixes both
@@ -511,6 +528,15 @@ def get_module_deliveries_summary(
         if m.project_id in erected_by_pid:
             pid_cap = cap_by_pid.get(m.project_id, 0.0)
             erected = erected_by_pid[m.project_id] * ((cap_mwp / pid_cap) if pid_cap > 0 else 1.0)
+
+        # Confirmed complete with no SAP PO record to compute it from — see
+        # FULLY_ORDERED_NO_SAP_RECORD. Applied last, after the WBS lookup
+        # above, so a real SAP record (should one appear later) is what this
+        # is compared against, not silently skipped.
+        if (m.project_name_from_p6 or "") in FULLY_ORDERED_NO_SAP_RECORD and cap_mwp > 0:
+            ordered = cap_mwp
+            delivered = cap_mwp
+            in_transit = 0.0
 
         # Balance calculations. Dispatch is what is ordered but neither received
         # nor already on its way (user definition 2026-09-20) — subtracting only
