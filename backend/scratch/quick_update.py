@@ -9,27 +9,33 @@ from models import ProjectMapping
 def main():
     db = SessionLocal()
     project_name = "ASEJ6PL_S07_FT_300MW_PPA"
-    project = db.query(ProjectMapping).filter(ProjectMapping.project_name == project_name).first()
+    
+    # Try searching by project, project_name_from_p6, project_id
+    project = db.query(ProjectMapping).filter(ProjectMapping.project == project_name).first()
+    if not project:
+        project = db.query(ProjectMapping).filter(ProjectMapping.project_name_from_p6 == project_name).first()
     
     if project:
-        print(f"Found project: {project.project_name}, old OL: {getattr(project, 'ol', None)}, old type: {getattr(project, 'type', None)}")
+        print(f"Found project: {project.project} (P6: {project.project_name_from_p6}), old OL: {project.ol}, old type (source_of_origin): {project.source_of_origin}")
         
-        if hasattr(project, 'ol'):
-            project.ol = 1.36
-        if hasattr(project, 'type'):
-            project.type = "China"
+        project.ol = "1.36"
+        project.source_of_origin = "China"
             
-        if hasattr(project, 'capacity_mwac') and getattr(project, 'capacity_mwac', None) is not None:
-             if hasattr(project, 'capacity_mwdc'):
-                 project.capacity_mwdc = project.capacity_mwac * 1.36
+        if project.capacity_mwac is not None:
+             project.capacity_mwdc = project.capacity_mwac * 1.36
                  
         db.commit()
         print("Updated successfully.")
     else:
         print("Project not found by exact name. Searching by contains...")
-        projects = db.query(ProjectMapping).filter(ProjectMapping.project_name.like(f"%{project_name}%")).all()
+        projects = db.query(ProjectMapping).filter(ProjectMapping.project.like(f"%{project_name}%")).all()
         for p in projects:
-            print(p.project_name)
+            print(p.project)
+        
+        print("Searching P6 name by contains...")
+        projects_p6 = db.query(ProjectMapping).filter(ProjectMapping.project_name_from_p6.like(f"%{project_name}%")).all()
+        for p in projects_p6:
+            print(p.project_name_from_p6)
 
 if __name__ == "__main__":
     main()
