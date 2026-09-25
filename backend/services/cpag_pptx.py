@@ -764,6 +764,16 @@ def fill_scurve(slide, p, d) -> None:
             _label_last(line.series[s_i], last, f"{vals[last] * 100:.2f}%", colour)
 
 
+def _cdd(sap_rows) -> str:
+    """The SAP PO delivery date; a range where the PO lines differ."""
+    firsts = [r["cddFirst"] for r in sap_rows if r.get("cddFirst")]
+    lasts = [r["cddLast"] for r in sap_rows if r.get("cddLast")]
+    if not firsts:
+        return "-"
+    a, b = _d(min(firsts)), _d(max(lasts))
+    return a if a == b else f"{a}\n{b}"
+
+
 def _package_rows(p, fc_months: List[str]) -> List[Dict[str, Any]]:
     pkgs = list(p.get("packages") or [])
     sap = {r["material"]: r for r in (p.get("sap") or [])}
@@ -813,6 +823,7 @@ def _package_rows(p, fc_months: List[str]) -> List[Dict[str, Any]]:
             "uom": uom, "scope": scope, "placed": placed,
             "po": ", ".join(r["poNumbers"] for r in sap_rows) if sap_rows else "-",
             "poDate": _af(order),
+            "cdd": _cdd(sap_rows),
             "start": "\n".join(_af(m, "Start") for m in receipts) or "-",
             "finish": "\n".join(_af(m) for m in receipts) or "-",
             "mdcc": _af(mdcc[-1]) if mdcc else "-",
@@ -839,17 +850,59 @@ PROC_CAPACITY = 11
 PROC_LINE_BUDGET = 34
 
 
+def _cdd_after_po_date(t) -> None:
+    """Review mail 2026-09-25: CDD (Commercial Delivery Date, from the SAP PO)
+    is its own column straight after PO Date, and Manufacturing Status covers
+    MDCC Date only. The template's "QAP Acceptance Date" column is moved into
+    that slot, so the column count and widths stay the template's."""
+    tbl = t.table._tbl
+    table = t.table
+    head1 = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
+    if "QAP Acceptance Date" not in head1:
+        return
+    head0 = [re.sub(r"\s+", " ", table.cell(0, c).text).strip() for c in range(len(table.columns))]
+    src = head1.index("QAP Acceptance Date")
+    dst = head0.index("PO Date") + 1
+    trs = tbl.findall(qn("a:tr"))
+    po_head0 = copy.deepcopy(trs[0].findall(qn("a:tc"))[dst - 1])  # "PO Date", rowSpan=2
+    po_head1 = copy.deepcopy(trs[1].findall(qn("a:tc"))[dst - 1])  # its vMerge half
+    mfg_head = copy.deepcopy(trs[0].findall(qn("a:tc"))[src])      # "Manufacturing Status"
+    mfg_head.attrib.pop("gridSpan", None)
+
+    grid = tbl.find(qn("a:tblGrid"))
+    col = grid.findall(qn("a:gridCol"))[src]
+    grid.remove(col)
+    grid.findall(qn("a:gridCol"))[dst].addprevious(col)
+    for tr in trs:
+        tcs = tr.findall(qn("a:tc"))
+        cell = tcs[src]
+        tr.remove(cell)
+        tr.findall(qn("a:tc"))[dst].addprevious(cell)
+
+    def swap(tr, idx, new):
+        old = tr.findall(qn("a:tc"))[idx]
+        old.addprevious(new)
+        tr.remove(old)
+
+    # Header: CDD spans both header rows like PO Date; the Manufacturing
+    # Status group now sits over MDCC Date alone.
+    # After the move the old "MC Date" column sits at src + 1; the columns
+    # between dst and src each shifted right by one.
+    mdcc = src + 1
+    swap(trs[0], dst, po_head0)
+    swap(trs[1], dst, po_head1)
+    swap(trs[0], mdcc, mfg_head)
+    set_text(table.cell(0, dst), "CDD")
+    set_text(table.cell(1, mdcc), "MDCC Date")
+
+
 def fill_procurement(prs, slide, p, d, as_of: str) -> None:
     t = tables(slide)[0]
+    _cdd_after_po_date(t)
     table = t.table
     head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
     fc_cols = [c for c, h in enumerate(head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
     fc_months = [_add_months(as_of, i) for i in range(len(fc_cols))]
-    for c, h in enumerate(head):
-        if h == "QAP Acceptance Date":
-            set_text(table.cell(1, c), "CDD")
-        elif h == "MC Date":
-            set_text(table.cell(1, c), "MDCC Date")
     for c, ym in zip(fc_cols, fc_months):
         set_text(table.cell(1, c), _mon(ym))
 
@@ -861,8 +914,8 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
                    else scope if r["placed"] else 0)
         balance = (scope - ordered) if (scope is not None and ordered is not None) else None
         row = [str(i), r["label"], r["vendor"], r["uom"] if scope is not None else "-",
-               _n(scope), _n(ordered), _n(balance), r["po"], r["poDate"],
-               r["start"], r["finish"], "-", r["mdcc"], _n(r["delivered"])]
+               _n(scope), _n(ordered), _n(balance), r["po"], r["poDate"], r["cdd"],
+               r["start"], r["finish"], r["mdcc"], _n(r["delivered"])]
         row += (["Completed"] + [""] * (len(fc_cols) - 1)) if r["completed"] else r["forecast"]
         row.append(remarks.get(r["label"]) or r["remark"])
         rows.append(row)

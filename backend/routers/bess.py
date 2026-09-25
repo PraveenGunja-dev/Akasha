@@ -1147,7 +1147,8 @@ def _procurement(db: Session, poid: int, cfg) -> Dict[str, Any]:
                            string_agg(distinct purchasing_document, ', '),
                            sum(net_order_value_inr)/1e7,
                            sum(delivered_value_inr_cr),
-                           sum(po_quantities), sum(delivered_qty)
+                           sum(po_quantities), sum(delivered_qty),
+                           min(delivery_date), max(delivery_date)
                     from mt_poamount
                     where left(wbs_element,6) = :w and doc_type = 'POrd'
                     group by 1 order by 5 desc"""),
@@ -1159,6 +1160,10 @@ def _procurement(db: Session, poid: int, cfg) -> Dict[str, Any]:
         # Quantities across multi-line POs do not reconcile and mix units of
         # measure, so they are returned for reference but never charted.
         "orderQtyRaw": _f(r[6]), "deliveredQtyRaw": _f(r[7]),
+        # CDD (Commercial Delivery Date) is the PO's own delivery date. The
+        # ZPSPS007 and ME2J extracts carry no delivery-date column today, so
+        # this stays empty until the extract does.
+        "cddFirst": _iso(r[8]), "cddLast": _iso(r[9]),
     } for r in sap_rows]
 
     note = None
