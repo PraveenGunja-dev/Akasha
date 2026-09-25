@@ -578,15 +578,18 @@ export async function exportModuleDeliveriesXLSX(
     views: [{ state: 'frozen', ySplit: 2 }],
     pageSetup: { orientation: 'portrait', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
   });
-  rs.mergeCells('A1:D1');
+  rs.mergeCells('A1:C1');
   const rTitle = rs.getCell('A1');
-  rTitle.value = 'How this plan is built — every rule applied, and where it is enforced';
+  rTitle.value = 'How this plan is built — every rule applied';
   rTitle.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
   rTitle.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
   rTitle.alignment = { horizontal: 'left', vertical: 'middle' };
   rs.getRow(1).height = 20;
 
-  const rHead = rs.addRow(['Area', 'Rule', 'What it does', 'Enforced in']);
+  // Where a rule is enforced in the source (rule.source) is left off this
+  // sheet on purpose — a filename tells a planner nothing and reads like an
+  // error message, not an explanation (user 2026-09-25).
+  const rHead = rs.addRow(['Area', 'Rule', 'What it does']);
   rHead.eachCell(cell => {
     cell.font = { bold: true, size: 9, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
     cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
@@ -595,23 +598,18 @@ export async function exportModuleDeliveriesXLSX(
   });
   rs.getColumn(1).width = 24;
   rs.getColumn(2).width = 28;
-  rs.getColumn(3).width = 95;
-  rs.getColumn(4).width = 24;
+  rs.getColumn(3).width = 110;
 
   PLANNING_RULES.forEach(group => {
-    const gr = rs.addRow([group.title, '', '', '']);
-    rs.mergeCells(`A${gr.number}:D${gr.number}`);
+    const gr = rs.addRow([group.title, '', '']);
+    rs.mergeCells(`A${gr.number}:C${gr.number}`);
     gr.getCell(1).font = { bold: true, size: 9, color: { argb: INK }, name: 'Adani' };
     gr.getCell(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFEAECF0' } };
     gr.getCell(1).border = border;
     group.rules.forEach(rule => {
-      const r = rs.addRow(['', rule.name, rule.detail, rule.source || '']);
+      const r = rs.addRow(['', rule.name, rule.detail]);
       r.eachCell((cell, col) => {
-        cell.font = {
-          size: 9, name: 'Adani', bold: col === 2,
-          color: { argb: col === 4 ? 'FF667085' : INK },
-          italic: col === 4,
-        };
+        cell.font = { size: 9, name: 'Adani', bold: col === 2, color: { argb: INK } };
         cell.border = border;
         cell.alignment = { vertical: 'top', wrapText: col === 3, horizontal: 'left' };
       });

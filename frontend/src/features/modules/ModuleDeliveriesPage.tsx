@@ -1510,15 +1510,13 @@ export default function ModuleDeliveriesPage() {
                         <dt className="text-[11px] font-semibold leading-snug text-fg-primary">
                           {rule.name}
                         </dt>
+                        {/* Where a rule is enforced (rule.source) stays out of this view —
+                            a source-code filename means nothing to the person reading this
+                            to understand the plan, and reads as an error message rather than
+                            an explanation (user 2026-09-25). It is still on the data for
+                            engineers, just not rendered here or in the export. */}
                         <dd className="mt-0.5 text-[10.5px] leading-[1.55] text-fg-secondary">
                           {rule.detail}
-                          {rule.source && (
-                            /* Kept on one line so it reads as a citation rather than
-                               stray text wrapping onto its own row. */
-                            <span className="ml-1.5 inline-block whitespace-nowrap rounded border border-border-subtle bg-surface-2 px-1 py-px font-mono text-[9px] text-fg-tertiary">
-                              {rule.source}
-                            </span>
-                          )}
                         </dd>
                       </div>
                     ))}
