@@ -11,7 +11,7 @@ from database import engine
 # Import Routers
 from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations, module_deliveries, bess
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
 
 # --- FIX FOR CORPORATE PROXIES (SSL CERTIFICATE VERIFY FAILED) ---

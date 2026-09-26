@@ -31,7 +31,7 @@ from lxml import etree
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE
+from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.opc.packuri import PackURI
 from pptx.oxml import parse_xml
@@ -56,7 +56,6 @@ GROUPS = [
      "service": [59, 60], "approvals_section": 64, "approvals": [65, 66]},
 ]
 S_PHASE1 = [67, 68, 69]
-S_MAJOR_MILESTONES = 43
 
 HEADER_PURPLE = RGBColor(0xA0, 0x2B, 0x93)
 PEACH = RGBColor(0xFC, 0xE4, 0xD6)
@@ -504,10 +503,13 @@ def _series_fill(chart, colours: Sequence[RGBColor], line_from: Optional[int] = 
             i += 1
 
 
-def _label_last(series, idx: int, text: str, colour: RGBColor) -> None:
+def _label_last(series, idx: int, text: str, colour: RGBColor,
+                position: Optional[XL_LABEL_POSITION] = None) -> None:
     dl = series.points[idx].data_label
     dl.has_text_frame = True
     dl.text_frame.text = text
+    if position is not None:
+        dl.position = position
     for r in dl.text_frame.paragraphs[0].runs:
         r.font.bold = True
         r.font.size = Pt(9)
@@ -755,11 +757,17 @@ def fill_scurve(slide, p, d) -> None:
     _add_data_table(chart)
     _series_fill(chart, [SERIES_BLUE, SERIES_GREEN, SERIES_BLUE, LINE_GREEN], line_from=2)
     line = chart.plots[1]
-    for s_i, (key, colour) in enumerate((("planCumPct", SERIES_BLUE), ("actualCumPct", SERIES_GREEN))):
+    # Plan and Actual sit above/below each other, not side by side - fixed
+    # opposite label positions so the two percentages never sit on top of
+    # each other when the values are close (2026-09-26).
+    label_positions = (XL_LABEL_POSITION.ABOVE, XL_LABEL_POSITION.BELOW)
+    for s_i, (key, colour, pos) in enumerate(
+            (("planCumPct", SERIES_BLUE, label_positions[0]),
+             ("actualCumPct", SERIES_GREEN, label_positions[1]))):
         vals = col(key)
         last = max((i for i, v in enumerate(vals) if v is not None), default=None)
         if last is not None:
-            _label_last(line.series[s_i], last, f"{vals[last] * 100:.2f}%", colour)
+            _label_last(line.series[s_i], last, f"{vals[last] * 100:.2f}%", colour, pos)
 
 
 def _cdd(sap_rows) -> str:
@@ -939,8 +947,13 @@ def _package_rows(p, fc_months: List[str], wbs_rows: Optional[List[Dict[str, Any
     return rows
 
 
-PROC_CAPACITY = 11
-PROC_LINE_BUDGET = 34
+# The template's own table runs from 0.71in to 7.21in on a 7.5in slide; at
+# the compact row height fill_procurement uses (274320 EMU), that fits ~20
+# body rows before overflowing - verified geometrically, 2026-09-26. The old
+# 11-row cap paginated projects (e.g. 19 rows) onto a mostly-empty second
+# slide well before the real limit.
+PROC_CAPACITY = 19
+PROC_LINE_BUDGET = 38
 
 
 def _cdd_after_po_date(t) -> None:
@@ -989,9 +1002,47 @@ def _cdd_after_po_date(t) -> None:
     set_text(table.cell(1, mdcc), "MDCC Date")
 
 
+PROC_FORECAST_MONTHS = 3  # present + next 2 - BESS PMAG, 2026-09-26
+
+
+def _normalize_forecast_columns(t, target: int = PROC_FORECAST_MONTHS) -> None:
+    """Every project's Forecast Delivery Schedule shows the same `target`
+    month columns. The reference template was authored per project and is
+    inconsistent - 1 to 4 month columns depending on the slide - so this
+    clones or drops columns until every slide has exactly the same count
+    before the months get relabelled to the live rolling window."""
+    tbl = t.table._tbl
+    table = t.table
+    head1 = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
+    fc = [c for c, h in enumerate(head1) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
+    if not fc or len(fc) == target:
+        return
+    grid = tbl.find(qn("a:tblGrid"))
+    cols = grid.findall(qn("a:gridCol"))
+    trs = tbl.findall(qn("a:tr"))
+    span_cell = trs[0].findall(qn("a:tc"))[fc[0]]
+    span = int(span_cell.get("gridSpan") or "1")
+
+    if len(fc) < target:
+        last = fc[-1]
+        for _ in range(target - len(fc)):
+            cols[last].addnext(copy.deepcopy(cols[last]))
+            for tr in trs:
+                tcs = tr.findall(qn("a:tc"))
+                tcs[last].addnext(copy.deepcopy(tcs[last]))
+        span_cell.set("gridSpan", str(span + (target - len(fc))))
+    else:
+        for idx in sorted(fc[target:], reverse=True):
+            grid.remove(cols[idx])
+            for tr in trs:
+                tr.remove(tr.findall(qn("a:tc"))[idx])
+        span_cell.set("gridSpan", str(span - (len(fc) - target)))
+
+
 def fill_procurement(prs, slide, p, d, as_of: str) -> None:
     t = tables(slide)[0]
     _cdd_after_po_date(t)
+    _normalize_forecast_columns(t)
     table = t.table
     head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
     fc_cols = [c for c, h in enumerate(head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
@@ -1231,9 +1282,13 @@ def _weeks(ym: str) -> int:
 
 def fill_contractor(slide, p, d, as_of: str) -> None:
     pics = pictures(slide)
-    if not pics:
-        return
     man = _manual(d, f"contractor.{pss_key(p['pss'])}") or {}
+    if not pics or not man:
+        # No one has entered this project's contractor manpower yet - the
+        # template's own picture stays rather than swapping in an empty
+        # table (BESS PMAG, 2026-09-26): a blank table looks broken, and
+        # nothing here is measured data to show instead.
+        return
     months = man.get("months") or [_add_months(as_of, i - 8) for i in range(9)]
     n_weeks = sum(_weeks(m) for m in months)
     contractors = man.get("rows") or [{"description": "", "contractor": ""} for _ in range(3)]
@@ -1310,6 +1365,10 @@ def fill_critical(slide, d) -> None:
 
 def fill_financial(slide, d) -> None:
     man = _manual(d, "financial") or {}
+    if not man:
+        # No spend/EAC figures entered yet - leave the template's own table
+        # and chart untouched rather than blanking every row (2026-09-26).
+        return
     t = tables(slide)[0]
     table = t.table
     months = man.get("months") or [table.cell(0, c).text for c in range(1, len(table.columns))]
@@ -1495,7 +1554,10 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     by = {pss_key(p["pss"]): p for p in projects}
     as_of = max((p.get("lastActualMonth") for p in projects if p.get("lastActualMonth")),
                 default=date.today().strftime("%Y-%m"))
-    drop = {S_MAJOR_MILESTONES}
+    # Major Milestones is curated commentary, not a system feed - it keeps the
+    # reference template's own text untouched, the same as Contractor
+    # Manpower/Financial S-Curve when nothing has been entered (2026-09-26).
+    drop: set = set()
     one = projects[0] if single else None
     scope_label = one["pss"] if single else None
 

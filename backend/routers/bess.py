@@ -774,21 +774,26 @@ def _electrical(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]
     for label, candidates, uom in ELECTRICAL_ELEMENTS:
         found = [r for r in (_find_res(res, c) for c in candidates) if r and r["scope"] > 0]
         r = max(found, key=lambda x: x["scope"]) if found else None
+        # Progress is P6 weightage (Nonlabor) on the element's own activities -
+        # the same measure the Civil table and the S-curve use - not a ratio
+        # of Material quantity, so a project's Progress % never disagrees with
+        # itself across slides (user, 2026-09-26).
+        plan_pct, act_pct = _weightage_progress(db, poid, r["activities"], data_date) if r else (None, None)
         # Every row of the pack's table is kept; one P6 does not carry reads "-".
         items.append({
             "element": label, "uom": uom,
             "scope": round(r["scope"]) if r else None,
             "plan": round(r["planToDate"]) if r else None,
             "actual": round(r["actual"]) if r else None,
-            "planPct": _pct(r["planToDate"], r["scope"]) if r else None,
-            "actualPct": _pct(r["actual"], r["scope"]) if r else None,
+            "planPct": plan_pct,
+            "actualPct": act_pct,
         })
     return {
         "items": items,
         "dataDate": _iso(data_date),
         "basis": "P6 Material resources on Construction activities, as of the "
                  "P6 data date. Plan is quantity whose baseline finish has "
-                 "passed.",
+                 "passed. Progress is P6 weightage of the element's activities.",
     }
 
 
@@ -1282,16 +1287,35 @@ def _spread_monthly(acc: Dict[str, float], start, finish, units: float) -> None:
         cur = end
 
 
+# P6 stores resource assignment Units in hours, not days - the pack's own
+# reference figures are mandays. Confirmed live against P6 (2026-09-26): every
+# activity on all six BESS projects sits on the same "7 Days x 8 Hours"
+# calendar (3,389 of 3,389 checked on PSS-11 alone), so a flat divide is safe
+# today; if a project ever carries a different calendar this needs to become
+# a per-activity lookup instead of one constant.
+HOURS_PER_DAY = 8.0
+
+
 def _manpower(db: Session, poid: int) -> Dict[str, Any]:
     """Planned and earned mandays per month from P6 Labor units.
 
-    Plan is each activity's Labor units spread over its baseline dates.  P6
-    does not post actual labour units (PSS-11: 258 of 703,464); it reduces
+    Plan is each activity's Labor units spread over its own baseline dates -
+    P6's plain BaselineStartDate/BaselineFinishDate, i.e. the project's
+    officially-assigned CurrentBaselineProjectObjectId ("B1", the original
+    schedule), not a later re-baseline. Checked against the pack's own
+    reference numbers (2026-09-26): a later re-baseline ("B2"/"B3") retroactively
+    mirrors already-completed activities' dates onto its own creation date
+    instead of preserving what was originally planned, which produced 0-15x
+    swings; B1 tracks the reference within a stable ~1.5x for the months it
+    covers, before thinning out for activities scheduled past its own horizon.
+
+    P6 does not post actual labour units (PSS-11: 258 of 703,464); it reduces
     *remaining* units as the activity progresses, so the done portion is
     planned x percent complete - spread over the activity's actual start to
-    its actual finish (or the data date while it is still running).  Manpower
-    is mandays divided by the days in the month, the ratio the pack's own two
-    graphs carry.
+    its actual finish (or the data date while it is still running).  Units are
+    hours in P6; divided by the project's calendar (HOURS_PER_DAY) to read as
+    mandays. Manpower is mandays divided by the days in the month, the ratio
+    the pack's own two graphs carry.
     """
     data_date = db.execute(
         text("select data_date from p6_project where p6_object_id = :o"),
@@ -1307,22 +1331,14 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
                 group by 1, 2, 3, 4, 5, 6"""),
         {"o": poid},
     ).fetchall()
-    from services.cpag_baseline import baseline_rows
-
-    # Labour units were revised in P6 after the re-baseline (PSS-11: 450k in
-    # B2, 701k live), so today's units are phased on the re-baseline's dates
-    # for the same activity; activities new since then keep their own dates.
-    bl_dates: Dict[str, Any] = {}
-    for code, _n, _u, start, finish in baseline_rows(db, poid, "Nonlabor"):
-        bl_dates[code] = (start, finish)
-    total = sum(_f(r[6]) for r in rows)
-    posted = sum(_f(r[7]) for r in rows)
+    total = sum(_f(r[6]) for r in rows) / HOURS_PER_DAY
+    posted = sum(_f(r[7]) for r in rows) / HOURS_PER_DAY
     plan_m: Dict[str, float] = defaultdict(float)
     earn_m: Dict[str, float] = defaultdict(float)
     for code, bs, bf, as_, af, pct, planned, _posted in rows:
-        ps, pf = bl_dates.get(code, (bs, bf))
-        _spread_monthly(plan_m, ps, pf, _f(planned))
-        earned = _f(planned) * float(pct)
+        planned = _f(planned) / HOURS_PER_DAY
+        _spread_monthly(plan_m, bs, bf, planned)
+        earned = planned * float(pct)
         if earned:
             _spread_monthly(earn_m, as_ or bs, af or data_date, earned)
 
