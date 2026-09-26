@@ -875,22 +875,22 @@ def _package_rows(p, fc_months: List[str], wbs_rows: Optional[List[Dict[str, Any
     wbs_by_pkg: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
     for r in wbs_rows or []:
         wbs_by_pkg[r["package"]].append(r)
-    covered_template_labels = {lab for labs in WBS_TO_TEMPLATE_LABELS.values() for lab in labs}
+    # Template label -> the uploaded WBS label covering it, so row order can
+    # follow the approved pack's own package sequence (TEMPLATE_PACKAGES),
+    # never the upload's or any other ordering (user, 2026-09-26).
+    label_to_wbs = {lab: wbs_label for wbs_label, labs in WBS_TO_TEMPLATE_LABELS.items() for lab in labs}
+    emitted_wbs: set = set()
 
-    if wbs_rows:
-        # Packages-through-PO-Date come only from the uploaded WBS/ZPS021
-        # mapping (user decision, 2026-09-26) - one row per PO, never
-        # merged, never backed by P6 or the live SAP sync. Row order follows
-        # the project's own uploaded package order (its sheet's Sr.No), not a
-        # fixed list - anything the mapping doesn't cover (CSS) prints after,
-        # via the P6 fallback loop below.
-        wbs_order = list(dict.fromkeys(r["package"] for r in wbs_rows))
-        for wbs_label in wbs_order:
+    for label, needles, uom in TEMPLATE_PACKAGES:
+        wbs_label = label_to_wbs.get(label)
+        if wbs_label and wbs_rows:
+            if wbs_label in emitted_wbs:
+                continue
+            emitted_wbs.add(wbs_label)
             po_rows = wbs_by_pkg.get(wbs_label)
             if not po_rows:
                 continue
-            template_labels = WBS_TO_TEMPLATE_LABELS.get(wbs_label, [])
-            members = match_p6(template_labels)
+            members = match_p6(WBS_TO_TEMPLATE_LABELS[wbs_label])
             sched = _schedule_cols(members, sap, fc_months)
             for po in po_rows:
                 rows.append({
@@ -902,19 +902,35 @@ def _package_rows(p, fc_months: List[str], wbs_rows: Optional[List[Dict[str, Any
                     "poDate": _d(po["poDate"]) if po["poDate"] else "-",
                     "cdd": "-",
                 })
-
-    # Anything the upload doesn't cover (CSS today - "keep under manual
-    # provision", BESS PMAG mail 2026-09-22) keeps coming from P6, exactly
-    # as when no WBS file has been uploaded at all.
-    for label, needles, uom in TEMPLATE_PACKAGES:
-        if label in covered_template_labels and wbs_rows:
             continue
+        # Not covered by the upload (CSS today - "keep under manual
+        # provision", BESS PMAG mail 2026-09-22) - or no upload yet - keeps
+        # coming straight from P6, in the template's own package slot.
         members = [pk for pk in pkgs if id(pk) not in used and any(
             (pk.get("packageBase") or pk["package"]).lower().startswith(n) for n in needles)]
         if not members:
             continue
         used.update(id(pk) for pk in members)
         rows.append(build(label, members, uom))
+
+    # Anything genuinely outside the approved pack's package list - an
+    # uploaded label with no template slot, or a leftover P6 package - has
+    # nowhere else to sit, so it prints last.
+    for wbs_label, po_rows in wbs_by_pkg.items():
+        if wbs_label in emitted_wbs or not po_rows:
+            continue
+        members = match_p6(WBS_TO_TEMPLATE_LABELS.get(wbs_label, []))
+        sched = _schedule_cols(members, sap, fc_months)
+        for po in po_rows:
+            rows.append({
+                **sched,
+                "label": wbs_label,
+                "vendor": _vendor(po["vendor"]) if po["vendor"] else "-",
+                "uom": po["uom"] or "-", "scope": po["qty"], "placed": True,
+                "po": po["poNumber"] or "-",
+                "poDate": _d(po["poDate"]) if po["poDate"] else "-",
+                "cdd": "-",
+            })
     for pk in pkgs:
         if id(pk) in used:
             continue
