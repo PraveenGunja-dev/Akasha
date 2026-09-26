@@ -56,6 +56,7 @@ GROUPS = [
      "service": [59, 60], "approvals_section": 64, "approvals": [65, 66]},
 ]
 S_PHASE1 = [67, 68, 69]
+S_THANK_YOU = 46
 
 HEADER_PURPLE = RGBColor(0xA0, 0x2B, 0x93)
 PEACH = RGBColor(0xFC, 0xE4, 0xD6)
@@ -343,6 +344,15 @@ def delete_slide(prs, slide) -> None:
         if prs.part.related_part(sld_id.rId) is slide.part:
             prs.part.drop_rel(sld_id.rId)
             lst.remove(sld_id)
+            return
+
+
+def move_slide_to_end(prs, slide) -> None:
+    lst = prs.slides._sldIdLst
+    for sld_id in list(lst):
+        if prs.part.related_part(sld_id.rId) is slide.part:
+            lst.remove(sld_id)
+            lst.append(sld_id)
             return
 
 
@@ -1525,17 +1535,6 @@ def fill_approvals(prs, pool, projects, d, label: str) -> None:
     _pool_fill(prs, pool, rows, 9, title)
 
 
-def fill_phase1(slide, d) -> None:
-    t = tables(slide)[0]
-    name = _title_shape(slide, "S-Curve")
-    man = _manual(d, f"phase1.{name.text_frame.text if name else ''}") or {}
-    rows = man.get("rows") or []
-    for r in range(2, len(t.table.rows)):
-        set_row(t, r, rows[r - 2] if r - 2 < len(rows) else ["", "", "", "", ""], 1)
-    for pic in pictures(slide):
-        remove_shape(pic)
-
-
 def _relabel(slide, text: str, paragraph: Optional[int] = None) -> None:
     sh = next((s for s in slide.shapes if s.has_text_frame and s.text_frame.text.strip()
                and not s.name.startswith("Slide Number")), None)
@@ -1601,10 +1600,10 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     if single:
         _relabel(T[13], f"Procurement Status: {scope_label}")
         _relabel(T[34], f"Manpower & Mandays Status: {scope_label}")
-        drop.update(S_PHASE1)
-    else:
-        for i in S_PHASE1:
-            fill_phase1(T[i], d)
+    # Physical Progress : PSS 10A/5A/8A S-Curve - a leftover phase-1 naming
+    # that predates the current six projects (10B/05B/08B), manual-entry-only
+    # and never populated. Dropped unconditionally (2026-09-26).
+    drop.update(S_PHASE1)
 
     for i in sorted(drop):
         delete_slide(prs, T[i])
@@ -1612,6 +1611,8 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     _strip_comments(prs)
     _strip_title_highlights(prs)
     _add_missing_page_numbers(prs)
+    if S_THANK_YOU not in drop:
+        move_slide_to_end(prs, T[S_THANK_YOU])
     buf = BytesIO()
     prs.save(buf)
     return buf.getvalue()
