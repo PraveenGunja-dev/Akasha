@@ -21,6 +21,7 @@ native chart/table is drawn in exactly the picture's box.
 import copy
 import re
 from calendar import monthrange
+from collections import defaultdict
 from datetime import date, datetime
 from io import BytesIO
 from pathlib import Path
@@ -35,7 +36,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.opc.packuri import PackURI
 from pptx.oxml import parse_xml
 from pptx.oxml.ns import nsdecls, qn
-from pptx.util import Emu, Pt
+from pptx.util import Emu, Inches, Pt
 
 REFERENCE = Path(__file__).resolve().parent.parent / "assets" / "cpag_reference.pptx"
 
@@ -715,15 +716,12 @@ def fill_scurve(slide, p, d) -> None:
     t = tables(slide)[0]
     buckets = p.get("buckets") or []
     man = _manual(d, f"scurve.{pss_key(p['pss'])}") or {}
+    # Remarks are the reviewer's own commentary on the variance - manual
+    # entry only, blank until someone writes one.
     remarks = man.get("remarks") or []
-    done, tot = p.get("approvalsDone", 0), p.get("approvalsTotal", 0)
-    default = [
-        f"Total approvals {tot}; {done} approvals are Completed; {tot - done} pending.",
-        "Refer Slide no. 12", "", "", "",
-    ]
     for i, b in enumerate(buckets[:4]):
         w, pp, aa = b.get("weightPct") or 0, b.get("planToDatePct") or 0, b.get("earnedPct") or 0
-        rem = remarks[i] if i < len(remarks) and remarks[i] else default[i]
+        rem = remarks[i] if i < len(remarks) and remarks[i] else ""
         set_row(t, 2 + i, [_p(w), _p(pp), _p(aa), _p(pp - aa), rem], 1)
     # The Total row is the graph's own FTM point, so the table and the curve
     # above it cannot disagree by a rounding step.
@@ -731,7 +729,7 @@ def fill_scurve(slide, p, d) -> None:
     ftm = next((s for s in series if s["month"] == p.get("lastActualMonth")), None)
     pl = (ftm or {}).get("planCumPct") or sum(b.get("planToDatePct") or 0 for b in buckets)
     ac = (ftm or {}).get("actualCumPct") or sum(b.get("earnedPct") or 0 for b in buckets)
-    rem = remarks[4] if len(remarks) > 4 and remarks[4] else default[4]
+    rem = remarks[4] if len(remarks) > 4 and remarks[4] else ""
     set_row(t, 6, [_p(100), _p(pl), _p(ac), _p(pl - ac), rem], 1)
 
     pics = pictures(slide)
@@ -774,64 +772,143 @@ def _cdd(sap_rows) -> str:
     return a if a == b else f"{a}\n{b}"
 
 
-def _package_rows(p, fc_months: List[str]) -> List[Dict[str, Any]]:
+def _schedule_cols(members, sap, fc_months: List[str]) -> Dict[str, Any]:
+    """Expected Delivery / MDCC / Delivered / Forecast - always P6 (plus the
+    SAP delivered-quantity fallback for containers/PCS), unmoved by where a
+    row's Packages-through-PO-Date columns come from: the BESS PMAG mapping
+    (2026-09-26) scopes SAP-as-source to those columns only."""
+    receipts = sorted((m for pk in members for m in _receipts(pk)),
+                      key=lambda m: m.get("baselineFinish") or m.get("forecastFinish") or "")
+    mdcc = sorted((m for pk in members for m in _mdcc(pk)), key=lambda m: m.get("baselineFinish") or "")
+    sap_rows = [sap[pk["sapMaterial"]] for pk in members if pk.get("sapMaterial") in sap]
+    # A combined/split row (e.g. DC + LT + Control cable folded into one line)
+    # has scope spread across every matched P6 package - summed, not just the
+    # first one found, or the row under-reports (BESS PMAG, 2026-09-26).
+    scope_vals = [pk["scopeQty"] for pk in members if pk.get("scopeQty")]
+    scope = sum(scope_vals) if scope_vals else None
+    lot_q = [_lot_qty(m["name"]) for m in receipts]
+    if scope is None and receipts and all(q is not None for q in lot_q):
+        scope = sum(lot_q)
+    delivered = None
+    if receipts and all(q is not None for q in lot_q):
+        delivered = sum(q for q, m in zip(lot_q, receipts) if m.get("actualFinish"))
+    elif sap_rows and sap_rows[0]["material"] in ("BESS Containers", "PCS Supply"):
+        delivered = sap_rows[0].get("deliveredQtyRaw")
+    elif receipts and scope and all(m.get("actualFinish") for m in receipts):
+        delivered = scope
+    all_in = bool(receipts) and all(m.get("actualFinish") for m in receipts)
+    if scope and delivered is not None and delivered >= scope:
+        all_in = True
+    fc = []
+    for ym in fc_months:
+        q, hit = 0.0, False
+        for qty, m in zip(lot_q, receipts):
+            if not m.get("actualFinish") and (m.get("forecastFinish") or "")[:7] == ym:
+                hit = True
+                q += qty or 0
+        fc.append(_n(q) if hit and q else ("Lot" if hit else "-"))
+    # Start/finish collapse to a single actual range across every lot of this
+    # package (BESS PMAG, 2026-09-26): earliest actual start, latest actual-or-
+    # forecast finish. A lot still pending contributes its forecast finish -
+    # shown in blue - rather than leaving the row incomplete.
+    starts = [m["actualStart"] for m in receipts if m.get("actualStart")]
+    start = _d(min(starts)) if starts else "-"
+    finish_pairs = [(m["actualFinish"], False) for m in receipts if m.get("actualFinish")]
+    finish_pairs += [(m["forecastFinish"], True) for m in receipts
+                     if not m.get("actualFinish") and m.get("forecastFinish")]
+    if finish_pairs:
+        finish_iso, finish_forecast = max(finish_pairs, key=lambda t: t[0])
+        finish = (_d(finish_iso) + "*", PLAN_BLUE) if finish_forecast else _d(finish_iso)
+    else:
+        finish = "-"
+    return {
+        "scope": scope,
+        "start": start,
+        "finish": finish,
+        "mdcc": _af(mdcc[-1]) if mdcc else "-",
+        "delivered": delivered, "completed": all_in, "forecast": fc,
+    }
+
+
+# WBS-baseline package label -> the TEMPLATE_PACKAGES label(s) covering the
+# same scope in P6, so an uploaded row can still carry P6's Expected
+# Delivery / MDCC / Delivered / Forecast. Two P6 packages fold into one
+# uploaded WBS package where SAP books them as a single PO (DC/LT/Control
+# cable; SCADA/FO cable) - confirmed against the WBS mapping file, 2026-09-26.
+WBS_TO_TEMPLATE_LABELS = {
+    "BESS Containers": ["Battery Container"], "PCS Supply": ["PCS"], "EMS Supply": ["EMS"],
+    "Converter Transformer": ["Converter Transformer"],
+    "HT Panel Supply (MV Switchgear)": ["MV Switchgear"],
+    "DC Cable, LT Cable & Control Cable Supply": ["DC & LT Cables", "Control Cable"],
+    "HT Cable Supply": ["HT Cable"],
+    "SCADA & FO Cable Supply": ["SCADA Cable", "FO Cable"],
+}
+
+
+def _package_rows(p, fc_months: List[str], wbs_rows: Optional[List[Dict[str, Any]]] = None
+                  ) -> List[Dict[str, Any]]:
     pkgs = list(p.get("packages") or [])
     sap = {r["material"]: r for r in (p.get("sap") or [])}
     used, rows = set(), []
 
+    def match_p6(template_labels: List[str]):
+        needles = [n for lab in template_labels for l2, ns, _u in TEMPLATE_PACKAGES if l2 == lab for n in ns]
+        members = [pk for pk in pkgs if id(pk) not in used and any(
+            (pk.get("packageBase") or pk["package"]).lower().startswith(n) for n in needles)]
+        used.update(id(pk) for pk in members)
+        return members
+
     def build(label, members, uom):
-        receipts = sorted((m for pk in members for m in _receipts(pk)),
-                          key=lambda m: m.get("baselineFinish") or m.get("forecastFinish") or "")
-        mdcc = sorted((m for pk in members for m in _mdcc(pk)), key=lambda m: m.get("baselineFinish") or "")
         order = next((_placement(pk) for pk in members if _placement(pk)), None)
         sap_rows = [sap[pk["sapMaterial"]] for pk in members if pk.get("sapMaterial") in sap]
-        scope = next((pk.get("scopeQty") for pk in members if pk.get("scopeQty")), None)
-        lot_q = [_lot_qty(m["name"]) for m in receipts]
-        if scope is None and receipts and all(q is not None for q in lot_q):
-            scope = sum(lot_q)
-        placed = None if order is None else bool(order.get("actualFinish"))
-        delivered = None
-        if receipts and all(q is not None for q in lot_q):
-            delivered = sum(q for q, m in zip(lot_q, receipts) if m.get("actualFinish"))
-        elif sap_rows and sap_rows[0]["material"] in ("BESS Containers", "PCS Supply"):
-            delivered = sap_rows[0].get("deliveredQtyRaw")
-        elif receipts and scope and all(m.get("actualFinish") for m in receipts):
-            delivered = scope
-        all_in = bool(receipts) and all(m.get("actualFinish") for m in receipts)
-        if scope and delivered is not None and delivered >= scope:
-            all_in = True
-        fc = []
-        for ym in fc_months:
-            q, hit = 0.0, False
-            for qty, m in zip(lot_q, receipts):
-                if not m.get("actualFinish") and (m.get("forecastFinish") or "")[:7] == ym:
-                    hit = True
-                    q += qty or 0
-            fc.append(_n(q) if hit and q else ("Lot" if hit else "-"))
-        got = [m for m in receipts if m.get("actualFinish")]
-        pending = [m for m in receipts if not m.get("actualFinish") and m.get("forecastFinish")]
-        remark = []
-        if receipts:
-            remark.append(f"{len(got)}/{len(receipts)} lots recd")
-        if pending:
-            remark.append(f"next {_d(min(m['forecastFinish'] for m in pending), star=True)}")
-        elif got:
-            remark.append(f"last {_d(max(m['actualFinish'] for m in got))}")
+        sched = _schedule_cols(members, sap, fc_months)
         return {
+            **sched,
             "label": label,
             "vendor": _vendor(sap_rows[0]["vendor"]) if sap_rows else "-",
-            "uom": uom, "scope": scope, "placed": placed,
+            "uom": uom,
+            "placed": None if order is None else bool(order.get("actualFinish")),
             "po": ", ".join(r["poNumbers"] for r in sap_rows) if sap_rows else "-",
-            "poDate": _af(order),
-            "cdd": _cdd(sap_rows),
-            "start": "\n".join(_af(m, "Start") for m in receipts) or "-",
-            "finish": "\n".join(_af(m) for m in receipts) or "-",
-            "mdcc": _af(mdcc[-1]) if mdcc else "-",
-            "delivered": delivered, "completed": all_in, "forecast": fc,
-            "remark": "; ".join(remark) if remark else "-",
+            "poDate": _af(order), "cdd": _cdd(sap_rows),
         }
 
+    wbs_by_pkg: Dict[str, List[Dict[str, Any]]] = defaultdict(list)
+    for r in wbs_rows or []:
+        wbs_by_pkg[r["package"]].append(r)
+    covered_template_labels = {lab for labs in WBS_TO_TEMPLATE_LABELS.values() for lab in labs}
+
+    if wbs_rows:
+        # Packages-through-PO-Date come only from the uploaded WBS/ZPS021
+        # mapping (user decision, 2026-09-26) - one row per PO, never
+        # merged, never backed by P6 or the live SAP sync. Row order follows
+        # the project's own uploaded package order (its sheet's Sr.No), not a
+        # fixed list - anything the mapping doesn't cover (CSS) prints after,
+        # via the P6 fallback loop below.
+        wbs_order = list(dict.fromkeys(r["package"] for r in wbs_rows))
+        for wbs_label in wbs_order:
+            po_rows = wbs_by_pkg.get(wbs_label)
+            if not po_rows:
+                continue
+            template_labels = WBS_TO_TEMPLATE_LABELS.get(wbs_label, [])
+            members = match_p6(template_labels)
+            sched = _schedule_cols(members, sap, fc_months)
+            for po in po_rows:
+                rows.append({
+                    **sched,
+                    "label": wbs_label,
+                    "vendor": _vendor(po["vendor"]) if po["vendor"] else "-",
+                    "uom": po["uom"] or "-", "scope": po["qty"], "placed": True,
+                    "po": po["poNumber"] or "-",
+                    "poDate": _d(po["poDate"]) if po["poDate"] else "-",
+                    "cdd": "-",
+                })
+
+    # Anything the upload doesn't cover (CSS today - "keep under manual
+    # provision", BESS PMAG mail 2026-09-22) keeps coming from P6, exactly
+    # as when no WBS file has been uploaded at all.
     for label, needles, uom in TEMPLATE_PACKAGES:
+        if label in covered_template_labels and wbs_rows:
+            continue
         members = [pk for pk in pkgs if id(pk) not in used and any(
             (pk.get("packageBase") or pk["package"]).lower().startswith(n) for n in needles)]
         if not members:
@@ -907,8 +984,9 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
         set_text(table.cell(1, c), _mon(ym))
 
     remarks = (_manual(d, f"procurement.{pss_key(p['pss'])}") or {}).get("remarks") or {}
+    wbs_rows = ((_manual(d, "procurement_wbs") or {}).get("projects") or {}).get(pss_key(p["pss"]))
     rows, completed = [], []
-    for i, r in enumerate(_package_rows(p, fc_months), start=1):
+    for i, r in enumerate(_package_rows(p, fc_months, wbs_rows), start=1):
         scope = r["scope"]
         ordered = (None if scope is None or r["placed"] is None
                    else scope if r["placed"] else 0)
@@ -916,8 +994,8 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
         row = [str(i), r["label"], r["vendor"], r["uom"] if scope is not None else "-",
                _n(scope), _n(ordered), _n(balance), r["po"], r["poDate"], r["cdd"],
                r["start"], r["finish"], r["mdcc"], _n(r["delivered"])]
-        row += (["Completed"] + [""] * (len(fc_cols) - 1)) if r["completed"] else r["forecast"]
-        row.append(remarks.get(r["label"]) or r["remark"])
+        row += ([("Completed", GREEN)] + [""] * (len(fc_cols) - 1)) if r["completed"] else r["forecast"]
+        row.append(remarks.get(r["label"]) or "")
         rows.append(row)
         completed.append(r["completed"])
 
@@ -1046,6 +1124,8 @@ def fill_civil(slide, p) -> None:
         _colour_points(chart.plots[0].series[0], colours)
         chart.value_axis.minimum_scale = 0
         chart.value_axis.maximum_scale = 1
+
+    _polish_civil_legend(slide)
 
 
 def fill_electrical(slide, p) -> None:
@@ -1238,8 +1318,15 @@ def fill_financial(slide, d) -> None:
 def fill_engineering(slide, d, as_of: str) -> None:
     t = tables(slide)[0]
     table = t.table
-    set_text(table.cell(0, 3), f"Overall Status up to {_mon(as_of)}")
-    man = (_manual(d, "engineering") or {}).get("rows") or {}
+    mdl = _manual(d, "engineering") or {}
+    # The MDL's own "as of" label where one was uploaded - the P6 data date
+    # otherwise, so the header is never left as the template's stale month.
+    set_text(table.cell(0, 3), f"Overall Status up to {mdl.get('asOfLabel') or _mon(as_of)}")
+    mdl_link = _title_shape(slide, "MDL Link")
+    if mdl_link is not None:
+        set_text(mdl_link, f"MDL: {mdl['sourceFile']}, uploaded {_d(mdl['uploadedAt'])}"
+                 if mdl.get("sourceFile") else "MDL: not yet uploaded")
+    man = mdl.get("rows") or {}
     for r in range(4, len(table.rows)):
         m = man.get(table.cell(r, 0).text.strip()) or {}
         cats = list(m.get("cat") or []) + [None] * 5
@@ -1346,18 +1433,12 @@ def fill_approvals(prs, pool, projects, d, label: str) -> None:
         _p_, a = max(by_name[norm], key=lambda e: e[1].get("actualFinish") or e[1].get("forecastFinish") or "")
         owner = next((v for k, v in APPROVAL_OWNERS.items() if k in norm), ("", ""))
         ov = meta.get(a["name"]) or {}
-        if a["status"] == "Completed":
-            remark = f"Completed on {_d(a['actualFinish'])}."
-        elif a["status"] == "In Progress":
-            remark = f"In progress; forecast completion {_d(a.get('forecastFinish'))}."
-        else:
-            remark = f"Not started; forecast start {_d(a.get('forecastStart'))}."
         colour = GREEN if a["status"] == "Completed" else BLACK
         rows.append([(v, colour) for v in (
             str(i), a["name"], ov.get("responsible", owner[0]), ov.get("authority", owner[1]),
             _d(a.get("baselineStart")), _d(a.get("baselineFinish")),
             _d(a["actualStart"]) if a.get("actualStart") else _d(a.get("forecastStart"), star=True),
-            _af(a), ov.get("remarks") or remark)])
+            _af(a), ov.get("remarks") or "")])
 
     def title(sl, k, total):
         sh = _title_shape(sl, "Approvals (")
@@ -1449,9 +1530,108 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
 
     for i in sorted(drop):
         delete_slide(prs, T[i])
+    _strip_link_boxes(prs)
+    _strip_comments(prs)
+    _strip_title_highlights(prs)
+    _add_missing_page_numbers(prs)
     buf = BytesIO()
     prs.save(buf)
     return buf.getvalue()
+
+
+def _strip_link_boxes(prs) -> None:
+    """The template's "Link" text boxes (Civil/Electrical pages) point at the
+    old SharePoint workbooks those pages were pasted from - meaningless now
+    that the numbers are live. Dropped everywhere, not just those pages, so
+    a copy that turns up elsewhere is caught too."""
+    for slide in prs.slides:
+        for sh in list(slide.shapes):
+            if sh.has_text_frame and sh.text_frame.text.strip().lower() == "link":
+                remove_shape(sh)
+
+
+def _strip_title_highlights(prs) -> None:
+    """The template marks most of its own titles with a text highlight (green
+    on 53 slides, yellow on 2 more inconsistently) - a review-draft artefact,
+    not something the approved pack's own titles should carry. Dropped
+    everywhere, not just where it was first noticed."""
+    for slide in prs.slides:
+        for sh in slide.shapes:
+            if not sh.has_text_frame:
+                continue
+            for hl in list(sh._element.iter(qn("a:highlight"))):
+                hl.getparent().remove(hl)
+
+
+def _polish_civil_legend(slide) -> None:
+    """The Civil slide's own Plan/Actual colour key, shrunk and tidied: the
+    template's own 9pt, top-anchored, 0.51in-tall table reads as an
+    afterthought pinned under the charts above it."""
+    for sh in slide.shapes:
+        if not (getattr(sh, "has_table", False) and sh.has_table):
+            continue
+        tbl = sh.table
+        if len(tbl.rows) != 2 or tbl.cell(0, 1).text.strip() != "Plan":
+            continue
+        row_h = Inches(0.15)
+        sh.height = row_h * 2
+        for r in range(2):
+            tbl.rows[r].height = row_h
+        for r in range(2):
+            for c in range(5):
+                cell = tbl.cell(r, c)
+                cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                cell.margin_top = cell.margin_bottom = Emu(0)
+                cell.margin_left = cell.margin_right = Emu(45720)
+                for para in cell.text_frame.paragraphs:
+                    for run in para.runs:
+                        run.font.size = Pt(8)
+        break
+
+
+def _strip_comments(prs) -> None:
+    """The template carries its own reviewers' comments (13 in the reference
+    deck) as modern-comment parts linked from individual slides. Those are
+    internal review notes on the approved template, not on this run's
+    numbers, and must not travel into a deck someone downloads. Dropping the
+    relationship is enough - a part no slide points to is never written."""
+    reltype = "http://schemas.microsoft.com/office/2018/10/relationships/comments"
+    for slide in prs.slides:
+        for rid in [rid for rid, rel in slide.part.rels.items() if rel.reltype == reltype]:
+            slide.part.drop_rel(rid)
+
+
+def _add_missing_page_numbers(prs) -> None:
+    """A page number on every slide. The template leaves it off about a
+    third of its own slides (inconsistently - some pairs of project pages
+    have it, some don't), which reads as broken once reviewers cite a page
+    by number. The stamp is cloned from the template's own placeholder, so
+    an added number looks native and stays correct via the same auto-paging
+    field every other slide already uses."""
+    def has_page_field(sh):
+        return sh.has_text_frame and sh._element.find(".//" + qn("a:fld")) is not None
+
+    donor = None
+    for slide in prs.slides:
+        # The real PLACEHOLDER (not the couple of slides where the template
+        # itself used a plain text box) is the most common shape, so it is
+        # the one every added stamp should look like.
+        found = next((sh for sh in slide.shapes if sh.is_placeholder and has_page_field(sh)), None)
+        if found is not None:
+            donor = found._element
+            break
+    if donor is None:
+        return
+    for slide in prs.slides:
+        if any(has_page_field(sh) for sh in slide.shapes):
+            continue
+        stamp = copy.deepcopy(donor)
+        # A cloned shape id must be unique on its new slide, not just valid
+        # on the donor's.
+        used = {sh.shape_id for sh in slide.shapes}
+        cNvPr = stamp.find(".//" + qn("p:cNvPr"))
+        cNvPr.set("id", str(max(used, default=0) + 1))
+        slide.shapes._spTree.append(stamp)
 
 
 def _project_from_single(d: Dict[str, Any]) -> Dict[str, Any]:

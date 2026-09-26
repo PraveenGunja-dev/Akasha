@@ -18,7 +18,7 @@ Sourcing notes (verified against the database, 2026-09-22):
   by the CPAG pack and are returned tagged with a source so the UI can label
   them; everything else on the screen is measured.
 """
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from sqlalchemy import text
@@ -794,9 +794,20 @@ def _electrical(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]
 
 def _manual_entries(db: Session) -> Dict[str, Any]:
     from models import CPAGManualEntry
-    return {e.slide_key: {"payload": e.payload, "updatedBy": e.updated_by,
-                          "updatedAt": _iso(e.updated_at)}
-            for e in db.query(CPAGManualEntry).all()}
+    from services.cpag_procurement_wbs import procurement_wbs_rows, procurement_wbs_meta
+
+    out = {e.slide_key: {"payload": e.payload, "updatedBy": e.updated_by,
+                        "updatedAt": _iso(e.updated_at)}
+          for e in db.query(CPAGManualEntry).all()}
+    # Procurement's WBS mapping lives in its own tables (mt_zps021,
+    # cpag_wbs_baseline), not a JSON blob, so it is assembled fresh here
+    # rather than read back from cpag_manual_entry.
+    rows = procurement_wbs_rows(db)
+    if rows:
+        meta = procurement_wbs_meta(db)
+        out["procurement_wbs"] = {"payload": {"projects": rows}, "updatedBy": None,
+                                  "updatedAt": meta.get("uploadedAt")}
+    return out
 
 
 @router.get("/cpag/manual")
@@ -823,6 +834,53 @@ def put_manual_entry(slide_key: str, body: Dict[str, Any],
     return {"slideKey": slide_key, "updatedAt": _iso(entry.updated_at)}
 
 
+@router.post("/cpag/manual/engineering/upload")
+async def upload_engineering_mdl(file: UploadFile = File(...),
+                                 db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """The Engineering Progress page comes from whatever Master Document List
+    was last uploaded here - no copy is kept beyond that. Re-upload a newer
+    MDL to refresh the page; nothing else changes on this route."""
+    from services.cpag_engineering_mdl import parse_engineering_mdl
+    from models import CPAGManualEntry
+
+    blob = await file.read()
+    try:
+        payload = parse_engineering_mdl(blob, file.filename or "upload.xlsx")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+
+    entry = db.query(CPAGManualEntry).filter(
+        CPAGManualEntry.slide_key == "engineering").first()
+    if not entry:
+        entry = CPAGManualEntry(slide_key="engineering")
+        db.add(entry)
+    entry.payload = payload
+    entry.updated_by = file.filename
+    entry.updated_at = datetime.utcnow()
+    db.commit()
+    return {"slideKey": "engineering", "projects": sorted(payload["rows"]),
+            "asOfLabel": payload.get("asOfLabel"), "updatedAt": _iso(entry.updated_at)}
+
+
+@router.post("/cpag/manual/procurement/upload")
+async def upload_procurement_wbs(file: UploadFile = File(...),
+                                 db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Procurement's Packages-through-PO-Date columns come from whatever WBS/
+    ZPS021 mapping was last uploaded here (BESS PMAG mail, 2026-09-22/26),
+    stored as real rows (mt_zps021, cpag_wbs_baseline) - a fresh upload
+    replaces every row, the same convention the ZPSPS007 sync uses. CSS has
+    no WBS in this mapping yet and stays on P6, as does every column after
+    PO Date."""
+    from services.cpag_procurement_wbs import ingest_procurement_wbs
+
+    blob = await file.read()
+    try:
+        result = ingest_procurement_wbs(db, blob, file.filename or "upload.xlsx")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return result
+
+
 @router.post("/cpag/baselines/sync")
 def sync_baselines(db: Session = Depends(get_db)) -> Dict[str, Any]:
     """Re-read each project's plan baseline from P6."""
@@ -839,7 +897,11 @@ def preview_portfolio(db: Session = Depends(get_db)) -> Dict[str, Any]:
     from services.cpag_render import render
     data = get_portfolio_cpag(db)
     data["manual"] = _manual_entries(db)
-    return render(data, build_portfolio_pptx)
+    out = render(data, build_portfolio_pptx)
+    p6_dates = [(p.get("civil") or {}).get("dataDate") for p in data["projects"]]
+    sap = db.execute(text("select max(data_as_on) from sync_log where status = 'success'")).scalar()
+    out["asOf"] = {"p6": max((x for x in p6_dates if x), default=None), "sap": _iso(sap)}
+    return out
 
 
 def _cache_key(key: str) -> str:

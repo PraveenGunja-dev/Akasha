@@ -966,6 +966,41 @@ class CPAGBaselineAssignment(Base):
     synced_at = Column(DateTime, default=datetime.utcnow)
 
 
+class MTZps021(Base):
+    """SAP T-code ZPS021 dump - PO lines by WBS element, at the sub-package
+    granularity the CPAG Procurement mapping needs (BESS PMAG mail,
+    2026-09-22). A fresh upload replaces every row: this is a full snapshot
+    from the team, not an incremental feed like the ZPSPS007 sync."""
+    __tablename__ = "mt_zps021"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_definition = Column(String, index=True)
+    wbs_element = Column(String, index=True)
+    description = Column(String)
+    document_date = Column(DateTime)
+    vendor_name = Column(String)
+    purchasing_document = Column(String, index=True)
+    item = Column(String)
+    item_description = Column(String)
+    order_unit = Column(String)
+    order_quantity = Column(Float)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
+class CPAGWbsBaseline(Base):
+    """Package name <-> WBS element per BESS project - the Procurement
+    page's own package list and order, from the WBS-baseline sheets in the
+    same upload as mt_zps021. Small, stable reference data."""
+    __tablename__ = "cpag_wbs_baseline"
+
+    id = Column(Integer, primary_key=True, index=True)
+    pss = Column(String, index=True)  # short key: "11", "10B", "05B"...
+    package = Column(String)
+    wbs_element = Column(String, index=True)
+    sort_order = Column(Integer)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
 class CPAGManualEntry(Base):
     """Values for the CPAG slides no connected system holds (commissioning
     plan, engineering document log, contractor headcount, critical issues,

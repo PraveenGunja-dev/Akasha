@@ -3,12 +3,13 @@
    the same file. */
 import { useCallback, useEffect, useState } from 'react';
 
-export interface PackPage { n: number; title: string; section: string }
+export interface PackPage { n: number; title: string; section: string; source: string[] }
 
 export interface CPAGPack {
   loading: boolean;
   error: string | null;
   pages: PackPage[];
+  asOf: { p6: string | null; sap: string | null } | null;
   pageSrc: (n: number) => string;
   downloadHref: string;
   retry: () => void;
@@ -19,6 +20,7 @@ const API = '/akasha/api/bess';
 export function useCPAGPack(enabled: boolean): CPAGPack {
   const [key, setKey] = useState<string | null>(null);
   const [pages, setPages] = useState<PackPage[]>([]);
+  const [asOf, setAsOf] = useState<CPAGPack['asOf']>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
@@ -33,10 +35,11 @@ export function useCPAGPack(enabled: boolean): CPAGPack {
         if (!r.ok) throw new Error(`CPAG pack unavailable (${r.status})`);
         return r.json();
       })
-      .then((d: { key: string; slides: PackPage[] }) => {
+      .then((d: { key: string; slides: PackPage[]; asOf?: CPAGPack['asOf'] }) => {
         if (!live) return;
         setKey(d.key);
         setPages(d.slides);
+        setAsOf(d.asOf ?? null);
       })
       .catch((e: Error) => { if (live) setError(e.message); })
       .finally(() => { if (live) setLoading(false); });
@@ -46,7 +49,7 @@ export function useCPAGPack(enabled: boolean): CPAGPack {
   const retry = useCallback(() => { setKey(null); setAttempt((a) => a + 1); }, []);
 
   return {
-    loading, error, pages, retry,
+    loading, error, pages, asOf, retry,
     pageSrc: (n: number) => (key ? `${API}/cpag/preview/${key}/${n}.png` : ''),
     downloadHref: key ? `${API}/cpag/preview/${key}/deck.pptx` : '',
   };
