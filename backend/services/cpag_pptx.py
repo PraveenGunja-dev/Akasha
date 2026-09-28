@@ -1440,45 +1440,6 @@ def fill_manpower(slide, projects, d, key_plan: str, key_act: str, label_suffix:
         set_text(title, f"{base}- {label_suffix}")
 
 
-def _contractor_manpower(d, p) -> List[Dict[str, Any]]:
-    """Monthly manpower from the project's Contractor Manpower entries - the
-    approved pack's own method (checked on PSS-11, 2026-09-28: Aug plan =
-    mean of weekly forecast totals 662/617/586/676 = 635, actual = mean of
-    289/349/383/384 = 351). Manpower is the average weekly headcount in the
-    month; mandays = that average x the days in the month. Empty when the
-    project has no entries."""
-    man = _manual(d, f"contractor.{pss_key(p['pss'])}") or {}
-    months = man.get("months") or []
-    rows = man.get("rows") or []
-    if not months or not rows:
-        return []
-    n_weeks = sum(_weeks(m) for m in months)
-    tot_f, tot_a = [None] * n_weeks, [None] * n_weeks
-    for c in rows:
-        for tot, key in ((tot_f, "forecast"), (tot_a, "actual")):
-            vals = list(c.get(key) or [])
-            for j in range(min(n_weeks, len(vals))):
-                if vals[j] is not None:
-                    tot[j] = (tot[j] or 0) + vals[j]
-    out, j = [], 0
-    for m in months:
-        w = _weeks(m)
-        fs = [v for v in tot_f[j:j + w] if v is not None]
-        as_ = [v for v in tot_a[j:j + w] if v is not None]
-        j += w
-        days = monthrange(int(m[:4]), int(m[5:7]))[1]
-        pm = sum(fs) / len(fs) if fs else None
-        am = sum(as_) / len(as_) if as_ else None
-        out.append({
-            "month": m,
-            "planManpower": round(pm) if pm is not None else None,
-            "earnedManpower": round(am) if am is not None else None,
-            "planMonth": round(pm * days) if pm is not None else None,
-            "earnedMonth": round(am * days) if am is not None else None,
-        })
-    return out
-
-
 def _weeks(ym: str) -> int:
     """Weeks in a month as the pack counts them - one per Monday."""
     y, m = int(ym[:4]), int(ym[5:7])
@@ -1767,12 +1728,10 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     fill_engineering(T[12], d, as_of)
     fill_critical(T[44], d)
     fill_financial(T[45], d)
-    # Manpower / Mandays come from the Contractor Manpower entries, as the
-    # approved pack builds them; with none entered the deck's own charts stay.
-    mp_projects = [dict(p, manpower=_contractor_manpower(d, p)) for p in projects]
-    if any(p["manpower"] for p in mp_projects):
-        fill_manpower(T[35], mp_projects, d, "planMonth", "earnedMonth", scope_label or "")
-        fill_manpower(T[36], mp_projects, d, "planManpower", "earnedManpower", scope_label or "")
+    # Manpower / Mandays from our own P6 data (user, 2026-09-28), not the
+    # reference deck's contractor averages.
+    fill_manpower(T[35], projects, d, "planMonth", "earnedMonth", scope_label or "")
+    fill_manpower(T[36], projects, d, "planManpower", "earnedManpower", scope_label or "")
 
     for key in PSS_KEYS:
         p = by.get(key)

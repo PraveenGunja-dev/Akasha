@@ -79,8 +79,8 @@ SOURCES = [
     ]),
     ("mandays", "", [
         "P6 Labor units per project, stacked.",
-        "Plan: today's labour units phased on the plan baseline's activity dates.",
-        "Actual: planned units x % complete, spread over actual dates - P6 does not post actual labour units; it reduces remaining units as work progresses.",
+        "Plan: P6 Labor units (hours / 8 = mandays) phased on the plan baseline's activity dates (B2 for PSS-11/12/10B, B1 for the rest).",
+        "Actual: P6 actual Labor units (hours / 8 = mandays) over actual dates; planned x % complete only where P6 posted none.",
     ]),
     ("manpower deployment", "", [
         "Mandays divided by the days in the month - the same ratio the approved pack uses.",

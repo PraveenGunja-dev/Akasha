@@ -1542,13 +1542,12 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
     the March re-baseline read lumpier against the pack's reference than B1
     did.
 
-    P6 does not post actual labour units (PSS-11: 258 of 703,464); it reduces
-    *remaining* units as the activity progresses, so the done portion is
-    planned x percent complete - spread over the activity's actual start to
-    its actual finish (or the data date while it is still running).  Units are
-    hours in P6; divided by the project's calendar (HOURS_PER_DAY) to read as
-    mandays. Manpower is mandays divided by the days in the month, the ratio
-    the pack's own two graphs carry.
+    Actual is P6's posted actual labour hours (posted since the Sep-26 update),
+    spread over the activity's actual start to its actual finish (or the data
+    date while it is still running); planned x percent complete only where
+    none is posted. Units are hours in P6; divided by the project's calendar
+    (HOURS_PER_DAY) to read as mandays (days basis). Manpower is mandays
+    divided by the days in the month - so mandays = manpower x days.
     """
     data_date = db.execute(
         text("select data_date from p6_project where p6_object_id = :o"),
@@ -1569,11 +1568,19 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
     plan_m: Dict[str, float] = defaultdict(float)
     earn_m: Dict[str, float] = defaultdict(float)
     bl = _baseline_of(db, poid)
-    for code, bs, bf, as_, af, pct, planned, _posted in rows:
+    derived = 0
+    for code, bs, bf, as_, af, pct, planned, act_units in rows:
         bs, bf = bl(code, bs, bf)
         planned = _f(planned) / HOURS_PER_DAY
         _spread_monthly(plan_m, bs, bf, planned)
-        earned = planned * float(pct)
+        # P6 posts actual labour hours since the Sep-26 update (PSS-11: 1.42M
+        # of 1.98M); use them. Only where nothing is posted fall back to
+        # planned x percent complete.
+        if _f(act_units) > 0:
+            earned = _f(act_units) / HOURS_PER_DAY
+        else:
+            earned = planned * float(pct)
+            derived += 1 if earned else 0
         if earned:
             _spread_monthly(earn_m, as_ or bs, af or data_date, earned)
 
@@ -1592,11 +1599,11 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
                        "earnedManpower": round(earn_m[m] / days)})
     return {"series": series, "totalPlannedMandays": round(total),
             "earnedMandays": round(ce), "postedActualUnits": round(posted),
-            "asOf": as_of, "derived": True,
-            "basis": "Plan: P6 Labor units spread over baseline dates. Actual: "
-                     "planned Labor units x percent complete (P6 reduces "
-                     "remaining units instead of posting actuals). Manpower = "
-                     "mandays / days in month."}
+            "asOf": as_of, "derived": derived > 0,
+            "basis": "Plan: P6 Labor hours / 8 spread over plan-baseline dates. "
+                     "Actual: P6 actual Labor hours / 8 over actual dates "
+                     "(planned x % complete only where P6 posted none). "
+                     "Manpower = mandays / days in month."}
 
 
 def _contractors(db: Session, cfg) -> Dict[str, Any]:
