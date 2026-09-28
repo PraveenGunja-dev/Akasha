@@ -808,7 +808,17 @@ def _schedule_cols(members, sap, fc_months: List[str]) -> Dict[str, Any]:
     if scope is None and receipts and all(q is not None for q in lot_q):
         scope = sum(lot_q)
     delivered = None
-    if receipts and all(q is not None for q in lot_q):
+    # First choice: P6 Material "Receipt at Site" units on the package. P6
+    # carries no UoM; cables are booked in metres on some schedules (PSS-11
+    # HT 54,000) and km on others (PSS-05(B) HT 104), while no counted item
+    # reaches 1,000 (largest: 448 containers) - so >= 1,000 is metres, shown
+    # in the pack's Kms.
+    rec = [pk for pk in members if pk.get("receiptPlanned")]
+    if rec:
+        def _kms(pk, v):
+            return v / 1000.0 if (pk.get("receiptPlanned") or 0) >= 1000 else v
+        delivered = round(sum(_kms(pk, pk.get("receiptActual") or 0) for pk in rec), 1)
+    elif receipts and all(q is not None for q in lot_q):
         delivered = sum(q for q, m in zip(lot_q, receipts) if m.get("actualFinish"))
     elif sap_rows and sap_rows[0]["material"] in ("BESS Containers", "PCS Supply"):
         delivered = sap_rows[0].get("deliveredQtyRaw")
@@ -1423,8 +1433,13 @@ def fill_contractor(slide, p, d, as_of: str) -> None:
 
 
 def fill_critical(slide, d) -> None:
+    rows = (_manual(d, "critical") or {}).get("rows")
+    if not rows:
+        # Issues come from the approved deck itself until the team enters
+        # their own - the template's table is left as the deck has it
+        # (user, 2026-09-28), as fill_financial does.
+        return
     t = tables(slide)[0]
-    rows = (_manual(d, "critical") or {}).get("rows") or [[""] * 7 for _ in range(3)]
     set_body(t, 2, [[str(i), *r] for i, r in enumerate(rows, start=1)], proto=2)
 
 

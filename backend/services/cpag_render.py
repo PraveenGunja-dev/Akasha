@@ -42,7 +42,7 @@ SOURCES = [
     ]),
     ("physical progress", "scurve", [
         "P6 weightage units (the Nonlabor resource each schedule is loaded with = 100%).",
-        "Plan: the P6 re-baseline B2 (B1 where the project has no B2), each activity's units spread over its planned duration - the method that reproduces the approved pack's plan line.",
+        "Plan: P6 baseline B2 for PSS-11, 12 and 10(B); B1 for PSS-09, 05(B) and 08(B) - each activity's units spread over its planned duration. Every baseline date in this pack is from the same baseline.",
         "Actual: P6 actual units up to the P6 data date, spread over each activity's actual dates.",
         "FTM = the month of the P6 data date. The table's Total row is the graph's value for that month.",
         "Wtg. = each area's share of the schedule. Variance = Plan - Actual.",
@@ -65,6 +65,7 @@ SOURCES = [
         "P6 Material resources (installed quantity) under Construction, by element and stage, as of the P6 data date.",
         "Plan = quantity due by the data date on the plan baseline; Actual = P6 actual quantity. Stages P6 counts in sub-units (piles, m3) are shown in the element's own unit.",
         "Progress % = P6 weightage of the element's activities. Colours: 80%+ of plan green, 40-80% yellow, below 40% red.",
+        "Since the Sep-26 P6 update civil work is booked as Labor (man-hours), not quantity, so each stage is counted in activities: one activity = one unit (BCF: containers per activity). Actual = completed activities plus the done share of those in progress; Plan = activities due by the data date on the plan baseline.",
     ]),
     ("construction progress", "", [
         "P6 Material resources (installed quantity) under Construction, by element and stage, as of the P6 data date.",
@@ -89,7 +90,7 @@ SOURCES = [
         "Manual entry - weekly forecast and actual headcount per contractor. No connected system holds it.",
         "Shortfall, totals and past-month average are calculated from the entries.",
     ]),
-    ("critical issues", "", ["Manual entry - the issue register has no system of record."]),
+    ("critical issues", "", ["From the approved deck until issues are entered here - the issue register has no system of record."]),
     ("financial s curve", "", ["Manual entry from the EAC sheet until the automated EAC link is live."]),
     ("ordering status", "", [
         "P6 (Procurement WBS): package, quantity, Release of PO / SO ('Placement of the order') and the 'Order placed' update.",

@@ -946,11 +946,28 @@ class EInvoiceRecord(Base):
 # ------------------------------------------
 # CPAG review pack
 # ------------------------------------------
+class CPAGBaselineActivity(Base):
+    """One activity's planned dates in the P6 baseline a CPAG project is
+    planned against (services.cpag_baseline.PLAN_BASELINE). These are the
+    project's "baseline dates" on every CPAG slide - P6's own BaselineStart/
+    FinishDate is the planned date of the same activity in the assigned
+    baseline project, so this is the same field on a different baseline."""
+    __tablename__ = "cpag_baseline_activity"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_object_id = Column(Integer, index=True, nullable=False)
+    baseline_object_id = Column(Integer, nullable=False)
+    baseline_name = Column(String)
+    activity_code = Column(String, index=True)
+    planned_start = Column(DateTime)
+    planned_finish = Column(DateTime)
+    synced_at = Column(DateTime, default=datetime.utcnow)
+
+
 class CPAGBaselineAssignment(Base):
     """One resource assignment of the P6 baseline a CPAG project is planned
-    against (the latest "- B2" re-baseline where one exists, else B1). The
-    live schedule only carries the original baseline's dates, and the pack's
-    plan line is drawn from the re-baseline."""
+    against (services.cpag_baseline.PLAN_BASELINE - B2 or B1 per project).
+    The live schedule only carries the assigned (B1) baseline's dates."""
     __tablename__ = "cpag_baseline_assignment"
 
     id = Column(Integer, primary_key=True, index=True)

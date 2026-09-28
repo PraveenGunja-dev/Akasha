@@ -281,31 +281,39 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
     # on 2026-09-11 that resolved 349 NCs where the UUID resolves 884.
     nc_by_uuid = {row[0]: row[1] for row in db.query(models.PulseNC.project_id, func.count(models.PulseNC.id)).group_by(models.PulseNC.project_id).all() if row[0]}
     rfi_by_uuid = {row[0]: row[1] for row in db.query(models.PulseRFI.project_id, func.count(models.PulseRFI.id)).group_by(models.PulseRFI.project_id).all() if row[0]}
-    inv_aggs = db.query(func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6), func.count(func.distinct(models.EInvoiceRecord.id))).join(models.EInvoiceRecord, models.MTEInvoicePOLookup.purchasing_document == models.EInvoiceRecord.workOrderNo).group_by(func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6)).all()
+    # Each prefix expression is built once and reused in SELECT and GROUP BY.
+    # Two separate func.substr(..., 1, 6) calls bind their 1 and 6 as distinct
+    # parameters ($1,$2 vs $4,$5), which Postgres treats as different
+    # expressions and rejects with a GroupingError.
+    inv_prefix = func.substr(models.MTEInvoicePOLookup.wbs_element, 1, 6)
+    inv_aggs = db.query(inv_prefix, func.count(func.distinct(models.EInvoiceRecord.id))).join(models.EInvoiceRecord, models.MTEInvoicePOLookup.purchasing_document == models.EInvoiceRecord.workOrderNo).group_by(inv_prefix).all()
     invoice_by_prefix = {row[0]: row[1] for row in inv_aggs if row[0]}
 
+    po_prefix = func.substr(models.MTPOAmount.wbs_element, 1, 6)
     mtpo_aggs = db.query(
-        func.substr(models.MTPOAmount.wbs_element, 1, 6).label('prefix'),
+        po_prefix.label('prefix'),
         func.sum(models.MTPOAmount.order_quantity).label('ordered_qty'),
         func.sum(models.MTPOAmount.net_order_value_inr).label('budget_inr'),
         func.sum(models.MTPOAmount.still_to_deliver_qty).label('in_transit_qty')
-    ).group_by(func.substr(models.MTPOAmount.wbs_element, 1, 6)).all()
+    ).group_by(po_prefix).all()
 
     mtpo_by_prefix = {row.prefix: row for row in mtpo_aggs if row.prefix}
 
+    mb51_prefix = func.substr(models.MTMaterialDocument.wbs_element, 1, 6)
     mb51_aggs = db.query(
-        func.substr(models.MTMaterialDocument.wbs_element, 1, 6).label('prefix'),
+        mb51_prefix.label('prefix'),
         func.sum(models.MTMaterialDocument.quantity).label('consumed_qty'),
         func.sum(models.MTMaterialDocument.amount_in_lc).label('expenditure_inr')
-    ).group_by(func.substr(models.MTMaterialDocument.wbs_element, 1, 6)).all()
+    ).group_by(mb51_prefix).all()
 
     mb51_by_prefix = {row.prefix: row for row in mb51_aggs if row.prefix}
 
+    mb52_prefix = func.substr(models.MTInventory.wbs_element, 1, 6)
     mb52_aggs = db.query(
-        func.substr(models.MTInventory.wbs_element, 1, 6).label('prefix'),
+        mb52_prefix.label('prefix'),
         func.sum(models.MTInventory.quantity_inv).label('inventory_qty'),
         func.sum(models.MTInventory.value_unrestricted).label('inventory_value_inr')
-    ).filter(models.MTInventory.quantity_inv > 0).group_by(func.substr(models.MTInventory.wbs_element, 1, 6)).all()
+    ).filter(models.MTInventory.quantity_inv > 0).group_by(mb52_prefix).all()
 
     mb52_by_prefix = {row.prefix: row for row in mb52_aggs if row.prefix}
 

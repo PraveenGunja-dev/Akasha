@@ -278,6 +278,10 @@ def _map_p6_response(raw: Dict[str, Any], field_map: Dict[str, str], date_fields
                 mapped[db_column] = value.lower() == 'true'
             else:
                 mapped[db_column] = bool(value)
+        elif db_column.endswith('object_id') and isinstance(value, str) and value.isdigit():
+            # The P6 REST API returns ObjectIds as strings; the columns are
+            # integers, and Postgres will not compare bigint = varchar.
+            mapped[db_column] = int(value)
         else:
             mapped[db_column] = value
     return mapped
@@ -696,18 +700,26 @@ class P6Service:
         labor_actual = 0.0
         labor_planned = 0.0
             
+        # One read of this project's rows instead of a query per assignment.
+        existing_by_id = {a.p6_object_id: a for a in db.query(P6ResourceAssignment).filter(
+            P6ResourceAssignment.project_object_id == int(project_object_id)).all()}
+
         for raw_ass in raw_assignments:
             p6_object_id = raw_ass.get('ObjectId')
             if not p6_object_id:
                 continue
-                
-            ass_node = db.query(P6ResourceAssignment).filter(P6ResourceAssignment.p6_object_id == p6_object_id).first()
+            # P6 returns ObjectIds as strings; the columns are integers.
+            p6_object_id = int(p6_object_id)
+
+            ass_node = existing_by_id.get(p6_object_id)
             if not ass_node:
                 ass_node = P6ResourceAssignment(p6_object_id=p6_object_id)
-                
+
             for p6_field, db_col in RESOURCE_ASSIGNMENT_FIELD_MAP.items():
                 if p6_field in raw_ass:
                     value = raw_ass[p6_field]
+                    if db_col.endswith('object_id') and isinstance(value, str) and value.isdigit():
+                        value = int(value)
                     if hasattr(ass_node, db_col):
                         setattr(ass_node, db_col, value)
             
@@ -760,8 +772,15 @@ class P6Service:
                     db.add(notif)
                     db.flush()
             
+        # Assignments deleted or re-keyed in P6 must go too - left behind they
+        # are summed alongside their replacements (2,916 such on PSS-09 by
+        # 2026-09-28, roughly 40% on top of the live 7,234).
+        live_ids = {int(r['ObjectId']) for r in raw_assignments if r.get('ObjectId')}
+        stale = [a for oid, a in existing_by_id.items() if oid not in live_ids]
+        for a in stale:
+            db.delete(a)
         db.commit()
-        logger.info(f"Finished syncing {len(raw_assignments)} Resource Assignments for project {project_object_id}.")
+        logger.info(f"Finished syncing {len(raw_assignments)} Resource Assignments for project {project_object_id} ({len(stale)} stale removed).")
 
     # ------------------------------------------
     # 8. Map & Store Activities to DB

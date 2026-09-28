@@ -220,7 +220,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
         contractors = _contractors(db, cfg)
         engineering = _engineering(db, poid, roots)
         construction = _construction(db, poid, roots)
-        civil = _civil(db, poid, roots)
+        civil = _civil(db, poid, roots, cfg["containers"])
         electrical = _electrical(db, poid, roots)
         commissioning = _commissioning(db, poid)
         quality = _quality(db, cfg)
@@ -344,18 +344,23 @@ def _engineering(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any
         return {"groups": [], "items": [], "total": 0, "completed": 0,
                 "monthly": [], "basis": ""}
     rows = db.execute(
-        text("""select a.wbs_name, a.name, a.status, a.baseline_finish_date,
-                       a.actual_finish_date, a.finish_date
-                from p6_activity a where a.wbs_object_id = any(:w)
-                order by a.baseline_finish_date nulls last"""),
+        text("""select a.wbs_name, a.name, a.status, a.baseline_start_date,
+                       a.baseline_finish_date, a.actual_finish_date,
+                       a.finish_date, a.activity_id
+                from p6_activity a where a.wbs_object_id = any(:w)"""),
         {"w": ids},
     ).fetchall()
-    items = [{
-        "group": r[0], "name": r[1], "status": r[2],
-        "baselineFinish": _iso(r[3]), "actualFinish": _iso(r[4]),
-        "forecastFinish": _iso(r[5]),
-        "slipDays": (r[4] - r[3]).days if r[3] and r[4] else None,
-    } for r in rows]
+    bl = _baseline_of(db, poid)
+    items = []
+    for r in rows:
+        bf = bl(r[7], r[3], r[4])[1]
+        items.append({
+            "group": r[0], "name": r[1], "status": r[2],
+            "baselineFinish": _iso(bf), "actualFinish": _iso(r[5]),
+            "forecastFinish": _iso(r[6]),
+            "slipDays": (r[5] - bf).days if bf and r[5] else None,
+        })
+    items.sort(key=_by_baseline("baselineFinish"))
 
     groups: Dict[str, List[int]] = defaultdict(lambda: [0, 0])
     plan_m: Dict[str, int] = defaultdict(int)
@@ -399,7 +404,7 @@ def _commissioning(db: Session, poid: int) -> Dict[str, Any]:
     """
     rows = db.execute(
         text("""select name, status, baseline_finish_date, actual_finish_date,
-                       finish_date
+                       finish_date, activity_id, baseline_start_date
                 from p6_activity
                 where project_object_id = :o
                   and (name ilike :comm or name ilike :proj or name ilike :trial)
@@ -407,11 +412,15 @@ def _commissioning(db: Session, poid: int) -> Dict[str, Any]:
         {"o": poid, "comm": "%commissioning phase%",
          "proj": "%project commissioning%", "trial": "%trial run%"},
     ).fetchall()
-    items = [{
-        "name": r[0], "status": r[1], "baselineFinish": _iso(r[2]),
-        "actualFinish": _iso(r[3]), "forecastFinish": _iso(r[4]),
-        "slipDays": (r[4] - r[2]).days if r[2] and r[4] else None,
-    } for r in rows]
+    bl = _baseline_of(db, poid)
+    items = []
+    for r in rows:
+        bf = bl(r[5], r[6], r[2])[1]
+        items.append({
+            "name": r[0], "status": r[1], "baselineFinish": _iso(bf),
+            "actualFinish": _iso(r[3]), "forecastFinish": _iso(r[4]),
+            "slipDays": (r[4] - bf).days if bf and r[4] else None,
+        })
 
     by_month: Dict[str, int] = defaultdict(int)
     for it in items:
@@ -571,7 +580,7 @@ CIVIL_GROUPS = [
             # Harmonic Filter work is identified by its WBS (Construction
             # Works > Harmonic Filter), not by resource name - its resources
             # are unprefixed ("PCC") and other WBS reuse the same names.
-            ("HF", "HF - HF - Receipt at Site", [
+            ("HF", "HF - PCC", [
                 ["HF - Marking & Excavation", "HF - PCC"], [], [], [], ["HF - Raft"]]),
         ],
     },
@@ -582,7 +591,8 @@ CIVIL_GROUPS = [
             ("BCF", "BCF - Precast Erection", [
                 ["BCF - Driven Cast in-situ Piling"], ["BCF - Pile Built Up"],
                 ["BCF - Precast Erection"],
-                ["BCF - Precast Connection with Pile"]]),
+                ["BCF - Precast Connection with Pile",
+                 "BCF - Precast Connection with Pile and Leveling"]]),
         ],
     },
 ]
@@ -620,7 +630,9 @@ def _material_by_resource(db: Session, poid: int, roots: Dict[int, str]):
     out: Dict[str, Dict[str, Any]] = {}
     live_plan: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
     hf_codes = set()
+    bl = _baseline_of(db, poid)
     for name, code, planned, actual, bs, bf, is_hf in rows:
+        bs, bf = bl(code, bs, bf)
         # Harmonic Filter work reuses generic names ("PCC", "Raft"); tag it by
         # its WBS so it cannot be mistaken for other civil work.
         if is_hf:
@@ -647,6 +659,78 @@ def _material_by_resource(db: Session, poid: int, roots: Dict[int, str]):
         total = sum(phased.values())
         done = sum(v for m, v in phased.items() if m <= as_of)
         r["planToDate"] = r["scope"] * (done / total) if total else 0.0
+    return out, data_date
+
+
+def _civil_units(db: Session, poid: int, roots: Dict[int, str]):
+    """Per civil work item: scope, planned-to-date and actual in *activities*.
+
+    Since the Sep-26 P6 update civil items ("PCS - Column Casting", "SGR -
+    PCC") are Labor resources in man-hours, not Material quantities, so the
+    unit is the activity: P6 schedules one per element (PSS-12: 48 PCS
+    activities = 48 PCS, 8 SGR = 8 SGR). Actual is completed activities plus
+    the done share of those in progress; plan is activities whose plan-baseline
+    finish is on or before the data date. Same shape as _material_by_resource,
+    so the Civil table reads either."""
+    ids = [k for k, v in roots.items() if v in CONSTRUCTION_BRANCHES]
+    data_date = db.execute(
+        text("select data_date from p6_project where p6_object_id = :o"),
+        {"o": poid}).scalar()
+    if not ids:
+        return {}, data_date
+    # Every construction activity with its Labor/Material resource names. An
+    # activity is filed under each resource name *and* under its own name:
+    # some schedules put the stage only in the activity name, behind a generic
+    # resource ("PCS", "LAB - CIVIL") - PSS-08(B) "BLK 1:CIV:CT - CT - PCC of
+    # CT", and Harmonic Filter's bare "PCC" / "Raft".
+    rows = db.execute(
+        text("""select a.activity_id, a.name, a.status,
+                       a.baseline_start_date, a.baseline_finish_date,
+                       coalesce(a.percent_complete, 0),
+                       array_remove(array_agg(distinct r.resource_name), null),
+                       sum(r.planned_units), sum(r.actual_units),
+                       bool_or(coalesce(w.wbs_name, '') ilike '%harmonic%'
+                               or coalesce(pw.wbs_name, '') ilike '%harmonic%')
+                from p6_activity a
+                left join p6_resource_assignment r
+                       on r.activity_object_id = a.p6_object_id
+                      and r.resource_type in ('Labor', 'Material')
+                left join p6_wbs_node w on w.p6_object_id = a.wbs_object_id
+                left join p6_wbs_node pw on pw.p6_object_id = w.parent_object_id
+                where a.project_object_id = :o
+                  and (a.wbs_object_id = any(:w)
+                       or coalesce(w.wbs_name, '') ilike '%harmonic%'
+                       or coalesce(pw.wbs_name, '') ilike '%harmonic%')
+                group by 1, 2, 3, 4, 5, 6"""),
+        {"o": poid, "w": ids},
+    ).fetchall()
+    bl = _baseline_of(db, poid)
+    out: Dict[str, Dict[str, Any]] = {}
+    for code, act_name, status, bs, bf, pct, res_names, planned, actual, is_hf in rows:
+        # "BLK 1:CIV:CT - CT - PCC of CT" -> "CT - CT - PCC of CT",
+        # "CT - PCC of CT", "PCC of CT": every " - " suffix is a candidate.
+        tail = (act_name or "").split(":")[-1].strip()
+        parts = tail.split(" - ")
+        keys = set(res_names or []) | {" - ".join(parts[i:]) for i in range(len(parts))}
+        if is_hf:
+            keys = {f"HF - {k}" for k in keys}
+        if status == "Completed":
+            done = 1.0
+        elif _f(planned) > 0:
+            done = min(1.0, _f(actual) / _f(planned))
+        else:
+            done = min(1.0, float(pct))
+        finish = bl(code, bs, bf)[1]
+        due = finish is not None and data_date is not None and finish <= data_date
+        for key in keys:
+            r = out.setdefault(key, {"scope": 0.0, "planToDate": 0.0,
+                                     "actual": 0.0, "activities": set()})
+            if code in r["activities"]:
+                continue
+            r["activities"].add(code)
+            r["scope"] += 1
+            r["actual"] += done
+            r["planToDate"] += 1 if due else 0
     return out, data_date
 
 
@@ -700,11 +784,21 @@ def _weightage_progress(db: Session, poid: int, activity_codes, data_date):
     return plan_pct, (min(100.0, act_pct) if act_pct is not None else None)
 
 
-def _civil(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
+def _civil(db: Session, poid: int, roots: Dict[int, str],
+           containers: Optional[int] = None) -> Dict[str, Any]:
     """The pack's Civil Construction table: per element, a Plan row
     (planned-to-date) and an Actual row, one column per stage, in the element's
-    own unit, plus Plan/Actual progress %."""
-    res, data_date = _material_by_resource(db, poid, roots)
+    own unit, plus Plan/Actual progress %. Counted in activities
+    (_civil_units); BCF is scaled to the container count, as P6 schedules
+    several containers' foundations per activity (PSS-12: 48 for 384)."""
+    res, data_date = _civil_units(db, poid, roots)
+    # Harmonic Filter civil is one activity per stage for every filter; the
+    # filter count is its receipt quantity ("HF - Receipt at Site").
+    hf_count = int(_f(db.execute(
+        text("""select sum(planned_units) from p6_resource_assignment
+                where project_object_id = :o and resource_type = 'Material'
+                  and resource_name ilike 'HF - Receipt at Site'"""),
+        {"o": poid}).scalar()))
     groups = []
     for g in CIVIL_GROUPS:
         elements = []
@@ -719,6 +813,10 @@ def _civil(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
                                  "planPct": None, "actualPct": None})
                 continue
             scope = round(scope_r["scope"])
+            if element == "BCF" and containers:
+                scope = containers
+            elif element == "HF" and hf_count:
+                scope = hf_count
             plan_row, act_row = [], []
             acts: set = set()
             for names in stage_resources:
@@ -740,8 +838,9 @@ def _civil(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
         groups.append({"stages": g["stages"], "elements": elements})
     return {
         "groups": groups, "dataDate": _iso(data_date),
-        "basis": "P6 Material resources as of the P6 data date. Plan is "
-                 "quantity whose baseline finish has passed; Progress is P6 "
+        "basis": "P6 civil activities as of the P6 data date, one activity = "
+                 "one unit (BCF scaled to containers). Plan is activities due "
+                 "by the data date on the plan baseline; Progress is P6 "
                  "weightage of the element's activities.",
     }
 
@@ -751,17 +850,23 @@ def _civil(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
 # Where projects book the same work on different resources (PSS-11 carries
 # DC/LT cable quantity on "Support erection", PSS-12 and 05(B) on "Cable
 # layling"), the candidate with the largest scope is the one in use.
+# Resource names differ by project and were renamed in P6 by Sep-26 (PSS-09
+# books "HT - Cable", PSS-11 "HT - Cable Laying"), so each row lists every name
+# in use; matching is case-insensitive (_find_res).
 ELECTRICAL_ELEMENTS = [
-    ("HT Cable Laying", ["HT - Cable Laying"], "RM"),
+    ("HT Cable Laying", ["HT - Cable Laying", "HT - Cable"], "RM"),
     ("FO Cable Laying", ["PPC - FO Cable"], "RM"),
-    ("DC Cable Laying", ["DC - Cable laying", "DC - Support erection"], "RM"),
-    ("LT Cable Laying", ["AC - Cable laying", "AC - Support erection"], "RM"),
-    ("Aux Cable Laying", ["AUX - LT Cable Laying"], "RM"),
-    ("Control Cable Laying", ["AUX - Control cable laying"], "RM"),
-    ("Battery Container Erection", ["Container Erection"], "NOS"),
-    ("PCS Erection", ["PCS Erection"], "NOS"),
-    ("CT Erection", ["Converter Transformer Erection"], "NOS"),
-    ("CSS Erection", ["CSS - CSS Erection"], "NOS"),
+    ("DC Cable Laying", ["DC - Cable laying", "DC - Support erection", "DC - Cable"], "RM"),
+    ("LT Cable Laying", ["AC - Cable laying", "AC - Support erection", "LT - Cable"], "RM"),
+    ("Aux Cable Laying", ["AUX - LT Cable Laying", "AUX Cable Laying", "AUX Cable"], "RM"),
+    ("Control Cable Laying", ["AUX - Control cable laying",
+                              "Control & Communication Cable Laying",
+                              "Control & Communication cable"], "RM"),
+    ("Battery Container Erection", ["Container Erection", "Battery Container Erection",
+                                    "Battery Container"], "NOS"),
+    ("PCS Erection", ["PCS Erection", "PCS"], "NOS"),
+    ("CT Erection", ["Converter Transformer Erection", "Converter Transformer"], "NOS"),
+    ("CSS Erection", ["CSS - CSS Erection", "CSS"], "NOS"),
 ]
 
 
@@ -774,11 +879,11 @@ def _electrical(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]
     for label, candidates, uom in ELECTRICAL_ELEMENTS:
         found = [r for r in (_find_res(res, c) for c in candidates) if r and r["scope"] > 0]
         r = max(found, key=lambda x: x["scope"]) if found else None
-        # Progress is P6 weightage (Nonlabor) on the element's own activities -
-        # the same measure the Civil table and the S-curve use - not a ratio
-        # of Material quantity, so a project's Progress % never disagrees with
-        # itself across slides (user, 2026-09-26).
-        plan_pct, act_pct = _weightage_progress(db, poid, r["activities"], data_date) if r else (None, None)
+        # Plan % and Actual % are Material quantity over scope - the approved
+        # pack's own arithmetic (PSS-11 HT: 34,844 / 54,668 = 64%), not P6
+        # weightage (user, 2026-09-28).
+        plan_pct = _pct(r["planToDate"], r["scope"]) if r else None
+        act_pct = _pct(r["actual"], r["scope"]) if r else None
         # Every row of the pack's table is kept; one P6 does not carry reads "-".
         items.append({
             "element": label, "uom": uom,
@@ -792,8 +897,8 @@ def _electrical(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]
         "items": items,
         "dataDate": _iso(data_date),
         "basis": "P6 Material resources on Construction activities, as of the "
-                 "P6 data date. Plan is quantity whose baseline finish has "
-                 "passed. Progress is P6 weightage of the element's activities.",
+                 "P6 data date. Plan is quantity due by the data date on the "
+                 "plan baseline. Plan % and Actual % are of scope.",
     }
 
 
@@ -986,7 +1091,7 @@ def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
         "approvals": _approvals(db, poid, roots),
         "engineering": _engineering(db, poid, roots),
         "construction": _construction(db, poid, roots),
-        "civil": _civil(db, poid, roots),
+        "civil": _civil(db, poid, roots, cfg["containers"]),
         "electrical": _electrical(db, poid, roots),
         "commissioning": _commissioning(db, poid),
         "quality": _quality(db, cfg),
@@ -1025,8 +1130,9 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
     - from one set of monthly figures, so the table's FTM row is by
     construction the curve's value for that month.
 
-    Plan: the plan baseline's Nonlabor weightage (B2 re-baseline, else B1),
-    each activity's units spread over its planned duration - the method that
+    Plan: the plan baseline's Nonlabor weightage (B2 or B1 per project,
+    cpag_baseline.PLAN_BASELINE), each activity's units spread over its
+    planned duration - the method that
     reproduces the pack's PSS-11 plan line to 0.1 point.  Actual: live P6
     actual weightage units spread over each activity's actual start to actual
     finish (or the data date while running).  FTM is the data date's month.
@@ -1049,6 +1155,8 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
                 group by 1, 2, 3, 4, 5, 6"""),
         {"o": poid},
     ).fetchall()
+    bl_of = _baseline_of(db, poid)
+    live = [(r[0], r[1], *bl_of(r[0], r[2], r[3]), *r[4:]) for r in live]
     bucket_of = {r[0]: BUCKETS.get(roots.get(r[1], ""), "construction") for r in live}
 
     plan_m: Dict[str, float] = defaultdict(float)
@@ -1072,7 +1180,7 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
                 plan_m[m] += v
                 plan_b[bucket_of[code]][m] += v
         plan_total = sum(_f(r[6]) for r in live)
-        plan_basis = "P6 project baseline"
+        plan_basis = "P6 assigned baseline (B1)"
 
     act_m: Dict[str, float] = defaultdict(float)
     act_b: Dict[str, float] = defaultdict(float)
@@ -1157,6 +1265,26 @@ def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
         {"o": poid, "p": parent[0]},
     ).fetchall()
     out: List[Dict[str, Any]] = []
+    bl = _baseline_of(db, poid)
+    # Delivered at site = P6 Material "Receipt at Site" units. Most packages
+    # carry theirs on their own activities; Battery Container and PCS book it
+    # on a separate "Receipt at Site" WBS ("BC - Receipt at Site", "PCS
+    # Reciept at site" - P6's spelling), so those are taken by name.
+    receipt_by_wbs = {r[0]: (_f(r[1]), _f(r[2])) for r in db.execute(
+        text("""select a.wbs_object_id, sum(r.planned_units), sum(r.actual_units)
+                from p6_resource_assignment r
+                join p6_activity a on a.p6_object_id = r.activity_object_id
+                where r.project_object_id = :o and r.resource_type = 'Material'
+                  and r.resource_name ~* 'rec(ei|ie)pt'
+                group by 1"""), {"o": poid})}
+    receipt_by_kind = {r[0]: (_f(r[1]), _f(r[2])) for r in db.execute(
+        text("""select case when resource_name ~* '^bc\\M' then 'battery container'
+                            else 'pcs' end,
+                       sum(planned_units), sum(actual_units)
+                from p6_resource_assignment
+                where project_object_id = :o and resource_type = 'Material'
+                  and resource_name ~* '^(bc|pcs)\\M.*rec(ei|ie)pt'
+                group by 1"""), {"o": poid})}
     for node_id, name in nodes:
         # Every activity attached to this WBS node - not a named subset of
         # milestones - so a tracking step added under a package is picked up
@@ -1164,11 +1292,14 @@ def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
         acts = db.execute(
             text("""select name, status, baseline_finish_date,
                            actual_finish_date, finish_date,
-                           baseline_start_date, actual_start_date, start_date
-                    from p6_activity where wbs_object_id = :w
-                    order by baseline_start_date nulls last"""),
+                           baseline_start_date, actual_start_date, start_date,
+                           activity_id
+                    from p6_activity where wbs_object_id = :w"""),
             {"w": node_id},
         ).fetchall()
+        acts = [(a[0], a[1], bl(a[8], a[5], a[2])[1], a[3], a[4],
+                 bl(a[8], a[5], a[2])[0], a[6], a[7]) for a in acts]
+        acts.sort(key=lambda a: (a[5] is None, a[5] or datetime.min))
         if not acts:
             continue
         if any(t in name.lower() for t in PACKAGE_EXCLUDE):
@@ -1179,9 +1310,15 @@ def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
         m = re.search(r"-\s*([\d,]+)\s*(nos|set|sets|kms|km)", name, re.I)
         if m:
             qty = int(m.group(1).replace(",", ""))
+        receipt = receipt_by_wbs.get(node_id) or next(
+            (v for k, v in receipt_by_kind.items() if base.lower().startswith(k)), None)
         out.append({
             "package": name, "packageBase": base, "scopeQty": qty,
             "sapMaterial": PACKAGE_SAP.get(base),
+            # P6 Material receipt units (planned, received); P6 carries no
+            # unit of measure, so the pack's own UoM applies downstream.
+            "receiptPlanned": receipt[0] if receipt else None,
+            "receiptActual": receipt[1] if receipt else None,
             "milestones": [{
                 "name": a[0], "status": a[1],
                 "baselineStart": _iso(a[5]), "actualStart": _iso(a[6]),
@@ -1249,11 +1386,13 @@ def _approvals(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
     rows = db.execute(
         text("""select name, status, baseline_start_date, baseline_finish_date,
                        actual_start_date, actual_finish_date, finish_date,
-                       start_date
-                from p6_activity where wbs_object_id = any(:w)
-                order by baseline_start_date nulls last"""),
+                       start_date, activity_id
+                from p6_activity where wbs_object_id = any(:w)"""),
         {"w": ids},
     ).fetchall()
+    bl = _baseline_of(db, poid)
+    rows = [(r[0], r[1], *bl(r[8], r[2], r[3]), *r[4:8]) for r in rows]
+    rows.sort(key=lambda r: (r[2] is None, r[2] or datetime.min))
     items = [{
         "name": r[0], "status": r[1],
         "baselineStart": _iso(r[2]), "baselineFinish": _iso(r[3]),
@@ -1264,6 +1403,23 @@ def _approvals(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
     return {"items": items, "total": len(items),
             "completed": sum(1 for i in items if i["status"] == "Completed"),
             "inProgress": sum(1 for i in items if i["status"] == "In Progress")}
+
+
+def _baseline_of(db: Session, poid: int):
+    """(activity_code, live baseline start, live baseline finish) -> the
+    baseline dates CPAG uses: the project's plan baseline (B2 or B1, per
+    services.cpag_baseline.PLAN_BASELINE) once synced, else the live
+    schedule's own - the assigned B1."""
+    from services.cpag_baseline import baseline_dates
+    bl = baseline_dates(db, poid)
+    if bl is None:
+        return lambda code, start, finish: (start, finish)
+    return lambda code, start, finish: bl.get(code, (None, None))
+
+
+def _by_baseline(key):
+    """Sort key: earliest baseline date first, undated last."""
+    return lambda it: (it[key] is None, it[key] or "")
 
 
 def _spread_monthly(acc: Dict[str, float], start, finish, units: float) -> None:
@@ -1299,15 +1455,14 @@ HOURS_PER_DAY = 8.0
 def _manpower(db: Session, poid: int) -> Dict[str, Any]:
     """Planned and earned mandays per month from P6 Labor units.
 
-    Plan is each activity's Labor units spread over its own baseline dates -
-    P6's plain BaselineStartDate/BaselineFinishDate, i.e. the project's
-    officially-assigned CurrentBaselineProjectObjectId ("B1", the original
-    schedule), not a later re-baseline. Checked against the pack's own
-    reference numbers (2026-09-26): a later re-baseline ("B2"/"B3") retroactively
-    mirrors already-completed activities' dates onto its own creation date
-    instead of preserving what was originally planned, which produced 0-15x
-    swings; B1 tracks the reference within a stable ~1.5x for the months it
-    covers, before thinning out for activities scheduled past its own horizon.
+    Plan is each activity's Labor units spread over its baseline dates on the
+    project's plan baseline - B2 for PSS-11/12/10(B), B1 for the rest
+    (cpag_baseline.PLAN_BASELINE, decided 2026-09-28, the same baseline every
+    other CPAG slide uses). Caveat checked 2026-09-26: a re-baseline carries
+    already-completed activities' dates at its own data date rather than
+    when they were originally planned, so on B2 projects the months before
+    the March re-baseline read lumpier against the pack's reference than B1
+    did.
 
     P6 does not post actual labour units (PSS-11: 258 of 703,464); it reduces
     *remaining* units as the activity progresses, so the done portion is
@@ -1335,7 +1490,9 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
     posted = sum(_f(r[7]) for r in rows) / HOURS_PER_DAY
     plan_m: Dict[str, float] = defaultdict(float)
     earn_m: Dict[str, float] = defaultdict(float)
+    bl = _baseline_of(db, poid)
     for code, bs, bf, as_, af, pct, planned, _posted in rows:
+        bs, bf = bl(code, bs, bf)
         planned = _f(planned) / HOURS_PER_DAY
         _spread_monthly(plan_m, bs, bf, planned)
         earned = planned * float(pct)
