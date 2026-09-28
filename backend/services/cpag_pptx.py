@@ -840,7 +840,13 @@ def _schedule_cols(members, sap, fc_months: List[str]) -> Dict[str, Any]:
     # forecast finish. A lot still pending contributes its forecast finish -
     # shown in blue - rather than leaving the row incomplete.
     starts = [m["actualStart"] for m in receipts if m.get("actualStart")]
-    start = _d(min(starts)) if starts else "-"
+    if starts:
+        start = _d(min(starts))
+    else:
+        # Nothing has arrived yet: P6's forecast start of the first lot, blue
+        # and starred like a forecast finish (was "-", 2026-09-28).
+        f_starts = [m["forecastStart"] for m in receipts if m.get("forecastStart")]
+        start = (_d(min(f_starts)) + "*", PLAN_BLUE) if f_starts else "-"
     finish_pairs = [(m["actualFinish"], False) for m in receipts if m.get("actualFinish")]
     finish_pairs += [(m["forecastFinish"], True) for m in receipts
                      if not m.get("actualFinish") and m.get("forecastFinish")]
