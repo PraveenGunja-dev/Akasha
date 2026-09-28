@@ -1002,17 +1002,75 @@ def sync_baselines(db: Session = Depends(get_db)) -> Dict[str, Any]:
     return {str(k): v for k, v in sync_cpag_baselines(db, ids).items()}
 
 
+def _source_stamp(db: Session) -> str:
+    """Cheap fingerprint of everything the pack is built from - P6 schedule
+    and baselines for the BESS projects, every sync (SAP, Pulse, ...), manual
+    entries, the procurement upload and the builder code. Well under a
+    second, against ~25s to assemble the payload and ~3 min to render, so an
+    unchanged pack opens straight from cache."""
+    import hashlib
+    from pathlib import Path
+    ids = [r[0] for r in db.execute(
+        text("select p6_object_id from p6_project where project_id = any(:p)"),
+        {"p": list(BESS_PROJECTS)})]
+    q = {
+        "proj": "select max(data_date), max(last_synced_at) from p6_project where p6_object_id = any(:o)",
+        "act": """select count(*), sum(coalesce(percent_complete, 0)), max(actual_finish_date),
+                         max(finish_date), count(actual_finish_date)
+                  from p6_activity where project_object_id = any(:o)""",
+        "res": """select count(*), sum(coalesce(planned_units, 0)), sum(coalesce(actual_units, 0))
+                  from p6_resource_assignment where project_object_id = any(:o)""",
+        "wbs": "select count(*) from p6_wbs_node where project_object_id = any(:o)",
+        "base": "select count(*), max(synced_at) from cpag_baseline_activity",
+        "sync": "select max(id) from sync_log where status = 'success'",
+        "manual": "select count(*), max(updated_at) from cpag_manual_entry",
+        "wbs_up": "select count(*), max(uploaded_at) from cpag_wbs_baseline",
+    }
+    h = hashlib.sha1()
+    for k, sql in q.items():
+        h.update(f"{k}={db.execute(text(sql), {'o': ids}).fetchone()}".encode())
+    here = Path(__file__).resolve().parent.parent
+    for f in ("routers/bess.py", "services/cpag_pptx.py", "services/cpag_render.py",
+              "services/cpag_baseline.py", "assets/cpag_reference.pptx"):
+        h.update(str((here / f).stat().st_mtime_ns).encode())
+    return h.hexdigest()[:16]
+
+
 @router.get("/portfolio/cpag/preview")
 def preview_portfolio(db: Session = Depends(get_db)) -> Dict[str, Any]:
-    """The pack as page images of the downloadable deck itself."""
-    from services.cpag_render import render
+    """The pack as page images of the downloadable deck itself. Served from
+    cache while the sources are unchanged (_source_stamp); rebuilt - and
+    re-rendered only if the deck content actually changed - otherwise."""
+    import json
+    from services.cpag_render import render, CACHE, page_path
+    stamp = _source_stamp(db)
+    stamp_file = CACHE / f"stamp_{stamp}.json"
+    if stamp_file.exists():
+        out = json.loads(stamp_file.read_text())
+        if page_path(out["key"], 1).exists():
+            return out
     data = get_portfolio_cpag(db)
     data["manual"] = _manual_entries(db)
     out = render(data, build_portfolio_pptx)
     p6_dates = [(p.get("civil") or {}).get("dataDate") for p in data["projects"]]
     sap = db.execute(text("select max(data_as_on) from sync_log where status = 'success'")).scalar()
     out["asOf"] = {"p6": max((x for x in p6_dates if x), default=None), "sap": _iso(sap)}
+    CACHE.mkdir(parents=True, exist_ok=True)
+    stamp_file.write_text(json.dumps(out))
     return out
+
+
+def warm_cpag_preview() -> None:
+    """Build the preview ahead of anyone opening it - called after syncs, so
+    the ~3 min PowerPoint render happens in the background, not on a click."""
+    from database import SessionLocal
+    db = SessionLocal()
+    try:
+        preview_portfolio(db)
+    except Exception as e:
+        logger.warning(f"CPAG preview warm-up failed: {e}")
+    finally:
+        db.close()
 
 
 def _cache_key(key: str) -> str:

@@ -186,6 +186,13 @@ def _execute(source: str):
         db.close()
         _running.pop(source, None)
         lock.release()
+    # Any sync can change what the CPAG pack shows; rebuild its preview now
+    # (a no-op when the pack is unchanged) so nobody waits on a click.
+    try:
+        from routers.bess import warm_cpag_preview
+        warm_cpag_preview()
+    except Exception as e:
+        logger.warning(f"[scheduler] CPAG preview warm-up skipped: {e}")
 
 
 def _tick():

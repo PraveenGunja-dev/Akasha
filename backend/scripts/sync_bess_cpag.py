@@ -66,6 +66,14 @@ def main() -> None:
         print(f"FAIL baselines: {e}")
         failed.append("baselines")
     print("\nAll synced." if not failed else f"\nFAILED: {', '.join(failed)} - re-run once P6 is reachable.")
+    if not failed:
+        # Pre-render the CPAG preview so the first person to open it after this
+        # sync does not wait ~3 minutes for PowerPoint.
+        from routers.bess import warm_cpag_preview
+        t = time.time()
+        print("Rendering CPAG preview ...", flush=True)
+        warm_cpag_preview()
+        print(f"CPAG preview ready ({time.time() - t:.0f}s).")
     sys.exit(1 if failed else 0)
 
 
