@@ -57,7 +57,7 @@ SOURCES = [
     ("procurement", "", [
         "Packages through PO Date: the WBS/ZPS021 mapping uploaded on this page (BESS PMAG, 2026-09-22/26) - Package, Manufacturer, UOM, Scope and PO Date all come from that upload, never from P6 or the live SAP sync. One PO under a package is one row; CSS has no WBS mapping yet and stays on P6, marked manual provision until it does.",
         "Expected Delivery Start/Finish, MDCC Date, Delivered At Site and the forecast months stay P6 (Procurement > Ordering & Delivery): Start/Finish = each 'Receipt at Site' lot, MDCC Date = latest 'MDCC LOT', forecast months = lots whose forecast receipt falls in that month.",
-        "CDD (Commercial Delivery Date) = SAP PO delivery date; no connected extract carries that field, so it shows '-'.",
+        
         "Remarks are manual entry - blank until the reviewer writes one.",
         _STAR,
     ]),
