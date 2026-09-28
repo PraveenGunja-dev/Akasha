@@ -967,14 +967,11 @@ def _package_rows(p, fc_months: List[str], wbs_rows: Optional[List[Dict[str, Any
     return rows
 
 
-# The template's own table runs from 0.71in to 7.21in on a 7.5in slide; at
-# the compact row height fill_procurement uses (274320 EMU), that fits ~17
-# body rows before overflowing.  Long package labels ("Precast Structure
-# ordering", "Converter Transformer") wrap to 2+ lines in the narrow
-# Packages column (~12 chars), so the effective capacity is lower than a
-# naive row count suggests.  Reduced from 19 -> 17 after QA, 2026-09-28.
-PROC_CAPACITY = 17
-PROC_LINE_BUDGET = 34
+# Procurement pages: the body must end above the footer rule (~6.9in = 495pt).
+# fill_procurement turns the space below each slide's own header into a line
+# budget - ~10.8pt a line at 8pt (2-line row = 274320 EMU, 21.6pt), 9pt at the
+# compact 7pt (2-line row = 228600 EMU, 18pt) - one line held back.
+PROC_BODY_BOTTOM_PT = 495
 
 
 def _cdd_after_po_date(t) -> None:
@@ -1122,41 +1119,70 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
         rows.append(row)
         completed.append(r["completed"])
 
-    # Column character widths (approximate) used for wrap estimation.
-    # Packages col (~12 chars), Vendor (~10), PO Number (~12), Remarks (~14);
-    # other cols are short numeric values that rarely wrap.
-    _COL_WIDTHS = {1: 12, 2: 10, 7: 12}  # column index -> char width
-    _REMARKS_WIDTH = 14
+    # Characters per line at 8pt from this slide's own column widths - they
+    # differ by project (Packages is 70pt on PSS-11, 50pt on PSS-10B). ~3.2pt
+    # per character, measured on the rendered page (2026-09-28): PSS-11's
+    # 70pt column holds "DC Cable, LT Cable &" (22) per line. The previous
+    # fixed 12/10 guesses counted 2-line rows as 4 and split half-empty pages.
+    widths = [c.width / 12700 for c in tables(slide)[0].table.columns]
+    last = len(rows[0]) - 1 if rows else 0
+    col_chars = {i: max(6, int(widths[i] / 3.2)) for i in (1, 2, 7, last) if i < len(widths)}
 
-    def _est_lines(row):
-        """Estimate the number of visual lines a row occupies, considering
-        both explicit newlines and text wrapping in narrow columns."""
-        nl = max(str(v).count("\n") + 1 for v in row)  # explicit newlines
-        for col_i, cw in _COL_WIDTHS.items():
+    def _est_lines(row, scale: float = 1.0):
+        """Visual lines a row takes: explicit newlines, or word-wrap in the
+        narrow text columns; never under 2 (the row height holds 2)."""
+        nl = max(str(v).count("\n") + 1 for v in row)
+        for col_i, cw in col_chars.items():
             if col_i < len(row):
                 txt = str(row[col_i][0]) if isinstance(row[col_i], tuple) else str(row[col_i])
-                nl = max(nl, (len(txt) + cw - 1) // cw)
-        nl = max(nl, (len(str(row[-1])) + _REMARKS_WIDTH - 1) // _REMARKS_WIDTH)
+                cap = int(cw * scale)
+                nl = max(nl, (len(txt) + cap - 1) // cap)
         return max(nl, 2)
 
-    chunks, flags, cur, cur_f, used = [], [], [], [], 0
-    for row, done in zip(rows, completed):
-        lines = _est_lines(row)
-        if cur and (used + lines > PROC_LINE_BUDGET or len(cur) >= PROC_CAPACITY):
-            chunks.append(cur)
-            flags.append(cur_f)
-            cur, cur_f, used = [], [], 0
-        cur.append(row)
-        cur_f.append(done)
-        used += lines
-    chunks.append(cur)
-    flags.append(cur_f)
+    def _paginate(scale: float, budget: int):
+        chunks, flags, cur, cur_f, used = [], [], [], [], 0
+        for row, done in zip(rows, completed):
+            lines = _est_lines(row, scale)
+            if cur and used + lines > budget:
+                chunks.append(cur)
+                flags.append(cur_f)
+                cur, cur_f, used = [], [], 0
+            cur.append(row)
+            cur_f.append(done)
+            used += lines
+        chunks.append(cur)
+        flags.append(cur_f)
+        return chunks, flags
+
+    # Normal: 8pt, 2-line rows of 21.6pt. If that needs a second page but the
+    # table fits one at 7pt / 18pt rows, use the compact size instead - a
+    # page split only when even that cannot hold it.
+    # Budget from this slide's own geometry: its header height varies by
+    # project (PSS-10B's wraps taller than PSS-11's), and a fixed budget let
+    # 10B's page run past the footer rule.
+    tt0 = tables(slide)[0]
+    body_top = (tt0.top + sum(r.height for r in list(tt0.table.rows)[:2])) / 12700
+    avail = PROC_BODY_BOTTOM_PT - body_top
+    budget, budget_compact = int(avail / 10.8) - 1, int(avail / 9.0) - 1
+    chunks, flags = _paginate(1.0, budget)
+    compact = False
+    if len(chunks) > 1:
+        c_chunks, c_flags = _paginate(8 / 7, budget_compact)
+        if len(c_chunks) == 1:
+            chunks, flags, compact = c_chunks, c_flags, True
     targets = [slide]
     for _ in chunks[1:]:
         targets.append(duplicate_slide(prs, targets[-1]))
     for sl, chunk, done in zip(targets, chunks, flags):
         tt = tables(sl)[0]
-        set_body(tt, 2, chunk, proto=2, row_height=Emu(274320))
+        set_body(tt, 2, chunk, proto=2,
+                 row_height=Emu(228600) if compact else Emu(274320))
+        if compact:
+            for r_i in range(len(chunk)):
+                for cell in tt.table.rows[2 + r_i].cells:
+                    for para in cell.text_frame.paragraphs:
+                        for run in para.runs:
+                            run.font.size = Pt(7)
         if len(fc_cols) > 1:
             for r_i, is_done in enumerate(done):
                 if is_done:
