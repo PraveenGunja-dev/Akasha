@@ -533,7 +533,7 @@ CIVIL_GROUPS = [
                    "Slab Casting", "Staircase & Finishing"],
         "elements": [
             ("PCS", "PCS - Column Casting", [
-                ["PCS - Driven Cast in-situ Pile"], ["PCS - PCC"],
+                ["PCS - Driven Cast in-situ Pile"], [],
                 ["PCS - Footing & Pile Beam Casting", "PCS - Column Casting"],
                 ["PCS - Slab casting"], ["PCS - Stairecase Installation"]]),
             ("SGR", "SGR - Column Casting", [

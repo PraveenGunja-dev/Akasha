@@ -1666,7 +1666,7 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     _strip_arrows(prs)
     _strip_comments(prs)
     _strip_title_highlights(prs)
-    _add_missing_page_numbers(prs)
+    _uniform_page_numbers(prs)
     if S_THANK_YOU not in drop:
         move_slide_to_end(prs, T[S_THANK_YOU])
     buf = BytesIO()
@@ -1747,33 +1747,33 @@ def _strip_comments(prs) -> None:
             slide.part.drop_rel(rid)
 
 
-def _add_missing_page_numbers(prs) -> None:
-    """A page number on every slide. The template leaves it off about a
-    third of its own slides (inconsistently - some pairs of project pages
-    have it, some don't), which reads as broken once reviewers cite a page
-    by number. The stamp is cloned from the template's own placeholder, so
-    an added number looks native and stays correct via the same auto-paging
-    field every other slide already uses."""
+def _uniform_page_numbers(prs) -> None:
+    """A page number on every slide in the exact same bottom-right position.
+    The template leaves it off some slides and misaligns it on others. This
+    finds the first correct placeholder, strips all existing page numbers
+    (misaligned or otherwise), and stamps every slide with a uniform clone."""
     def has_page_field(sh):
         return sh.has_text_frame and sh._element.find(".//" + qn("a:fld")) is not None
 
     donor = None
     for slide in prs.slides:
         # The real PLACEHOLDER (not the couple of slides where the template
-        # itself used a plain text box) is the most common shape, so it is
-        # the one every added stamp should look like.
+        # itself used a plain text box) is the most common shape. We want
+        # one positioned cleanly on the right side of the slide.
         found = next((sh for sh in slide.shapes if sh.is_placeholder and has_page_field(sh)), None)
-        if found is not None:
+        if found is not None and found.left > 10000000:
             donor = found._element
             break
     if donor is None:
         return
     for slide in prs.slides:
-        if any(has_page_field(sh) for sh in slide.shapes):
-            continue
+        # Strip all existing page numbers (both properly placed and misaligned)
+        for sh in list(slide.shapes):
+            if has_page_field(sh):
+                remove_shape(sh)
+        
+        # Stamp the uniform one
         stamp = copy.deepcopy(donor)
-        # A cloned shape id must be unique on its new slide, not just valid
-        # on the donor's.
         used = {sh.shape_id for sh in slide.shapes}
         cNvPr = stamp.find(".//" + qn("p:cNvPr"))
         cNvPr.set("id", str(max(used, default=0) + 1))
