@@ -1560,6 +1560,15 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
                 from p6_resource_assignment r
                 join p6_activity a on a.p6_object_id = r.activity_object_id
                 where r.project_object_id = :o and r.resource_type = 'Labor'
+                  -- "LAB - GENERAL" is not site manpower: P6 loads it on office
+                  -- and procurement milestones (Release of PR, Placement of
+                  -- order, Manufacturing, MDCC, HOTO, Contract Closure) at flat
+                  -- 17,080 / 26,368 units - a one-day PR release read as 2,135
+                  -- men/day. "LAB - CIVIL" / "LAB - ELECTRICAL" are site work
+                  -- (PSS-08(B) books all its piling, casting and laying on
+                  -- them) and stay. Site Labor tracks the pack's reported
+                  -- headcount (PSS-11 May 207 = 207).
+                  and r.resource_name !~* '^lab\\s*-\\s*general'
                 group by 1, 2, 3, 4, 5, 6"""),
         {"o": poid},
     ).fetchall()
