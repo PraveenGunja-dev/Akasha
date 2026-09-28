@@ -31,7 +31,7 @@ from lxml import etree
 from pptx import Presentation
 from pptx.chart.data import CategoryChartData
 from pptx.dml.color import RGBColor
-from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION
+from pptx.enum.chart import XL_CHART_TYPE, XL_LABEL_POSITION, XL_TICK_LABEL_POSITION
 from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.opc.packuri import PackURI
 from pptx.oxml import parse_xml
@@ -1179,6 +1179,33 @@ def _legend_colour(actual, plan) -> RGBColor:
     return GREEN if r >= 0.8 else LEGEND_YELLOW if r >= 0.4 else RED
 
 
+def _upright_labels(chart, size: int = 8) -> None:
+    """Value labels turned vertical above each bar. With a Plan and an Actual
+    bar per element (18-20 bars) a horizontal "100%" is wider than its bar
+    and runs into the next one; stood on end it only needs the bar's own
+    width. The template's per-point label overrides are dropped so every
+    label follows the one style, and the axis gets headroom so a label on
+    a 100% bar stays inside the plot."""
+    for plot in chart.plots:
+        for s in plot.series:
+            dl = s.data_labels
+            el = dl._element
+            for point_lbl in el.findall(qn("c:dLbl")):
+                el.remove(point_lbl)
+            dl.show_value = True
+            dl.number_format = "0%"
+            dl.number_format_is_linked = False
+            dl.position = XL_LABEL_POSITION.OUTSIDE_END
+            dl.font.size = Pt(size)
+            body = el.find(qn("c:txPr")).find(qn("a:bodyPr"))
+            body.set("rot", "-5400000")
+            body.set("vert", "horz")
+    axis = chart.value_axis
+    axis.minimum_scale = 0
+    axis.maximum_scale = 1.2
+    axis.major_unit = 0.2
+
+
 def _colour_points(series, colours) -> None:
     for i, c in enumerate(colours):
         fmt = series.points[i].format
@@ -1264,8 +1291,15 @@ def fill_civil(slide, p) -> None:
         for e in elements:
             colours += [PLAN_BLUE, _legend_colour(e["actualPct"] or 0, e["planPct"] or 0)]
         _colour_points(chart.plots[0].series[0], colours)
-        chart.value_axis.minimum_scale = 0
-        chart.value_axis.maximum_scale = 1
+        if len(elements) > 1:
+            _upright_labels(chart)
+        else:
+            # BCF: two bars, no crowding - but the box is too short for axis
+            # ticks (0%/100% print on top of each other on PSS-09/08(B)), and
+            # each bar already carries its value, so the tick labels go.
+            chart.value_axis.minimum_scale = 0
+            chart.value_axis.maximum_scale = 1
+            chart.value_axis.tick_label_position = XL_TICK_LABEL_POSITION.NONE
 
     _polish_civil_legend(slide)
 
@@ -1294,6 +1328,7 @@ def fill_electrical(slide, p) -> None:
         _colour_points(chart.plots[0].series[0], [PLAN_BLUE] * len(items))
         _colour_points(chart.plots[0].series[1],
                        [_legend_colour(it["actualPct"] or 0, it["planPct"] or 0) for it in items])
+        _upright_labels(chart)
 
 
 MANPOWER_STACK = ["11", "12", "05B", "08B", "09", "10B"]
