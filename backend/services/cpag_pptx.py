@@ -958,12 +958,13 @@ def _package_rows(p, fc_months: List[str], wbs_rows: Optional[List[Dict[str, Any
 
 
 # The template's own table runs from 0.71in to 7.21in on a 7.5in slide; at
-# the compact row height fill_procurement uses (274320 EMU), that fits ~20
-# body rows before overflowing - verified geometrically, 2026-09-26. The old
-# 11-row cap paginated projects (e.g. 19 rows) onto a mostly-empty second
-# slide well before the real limit.
-PROC_CAPACITY = 19
-PROC_LINE_BUDGET = 38
+# the compact row height fill_procurement uses (274320 EMU), that fits ~17
+# body rows before overflowing.  Long package labels ("Precast Structure
+# ordering", "Converter Transformer") wrap to 2+ lines in the narrow
+# Packages column (~12 chars), so the effective capacity is lower than a
+# naive row count suggests.  Reduced from 19 -> 17 after QA, 2026-09-28.
+PROC_CAPACITY = 17
+PROC_LINE_BUDGET = 34
 
 
 def _cdd_after_po_date(t) -> None:
@@ -1015,12 +1016,32 @@ def _cdd_after_po_date(t) -> None:
 PROC_FORECAST_MONTHS = 3  # present + next 2 - BESS PMAG, 2026-09-26
 
 
+def _clamp_table_width(t, max_width_emu: int) -> None:
+    """Scale all grid column widths proportionally so the table fits within
+    `max_width_emu`.  Called after column additions (CDD, forecast months)
+    to prevent the table from overflowing the slide's right edge."""
+    tbl = t.table._tbl
+    grid = tbl.find(qn("a:tblGrid"))
+    cols = grid.findall(qn("a:gridCol"))
+    total = sum(int(c.get("w", "0")) for c in cols)
+    if total <= max_width_emu or total == 0:
+        return
+    scale = max_width_emu / total
+    for c in cols:
+        c.set("w", str(int(int(c.get("w", "0")) * scale)))
+
+
 def _normalize_forecast_columns(t, target: int = PROC_FORECAST_MONTHS) -> None:
     """Every project's Forecast Delivery Schedule shows the same `target`
     month columns. The reference template was authored per project and is
     inconsistent - 1 to 4 month columns depending on the slide - so this
     clones or drops columns until every slide has exactly the same count
-    before the months get relabelled to the live rolling window."""
+    before the months get relabelled to the live rolling window.
+
+    The total width occupied by the forecast group is preserved: when
+    columns are added the group's width is split evenly, when removed the
+    remaining columns absorb the freed space.  This prevents the table
+    from growing beyond the slide edge."""
     tbl = t.table._tbl
     table = t.table
     head1 = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
@@ -1032,6 +1053,10 @@ def _normalize_forecast_columns(t, target: int = PROC_FORECAST_MONTHS) -> None:
     trs = tbl.findall(qn("a:tr"))
     span_cell = trs[0].findall(qn("a:tc"))[fc[0]]
     span = int(span_cell.get("gridSpan") or "1")
+
+    # Total width of the existing forecast columns — to redistribute.
+    fc_total_w = sum(int(cols[c].get("w", "0")) for c in fc)
+    per_col_w = str(max(fc_total_w // target, 1))
 
     if len(fc) < target:
         last = fc[-1]
@@ -1048,11 +1073,22 @@ def _normalize_forecast_columns(t, target: int = PROC_FORECAST_MONTHS) -> None:
                 tr.remove(tr.findall(qn("a:tc"))[idx])
         span_cell.set("gridSpan", str(span - (len(fc) - target)))
 
+    # Redistribute forecast column widths evenly within the original group width.
+    new_cols = grid.findall(qn("a:gridCol"))
+    new_head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
+    new_fc = [c for c, h in enumerate(new_head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
+    for c in new_fc:
+        new_cols[c].set("w", per_col_w)
+
 
 def fill_procurement(prs, slide, p, d, as_of: str) -> None:
     t = tables(slide)[0]
     _cdd_after_po_date(t)
     _normalize_forecast_columns(t)
+    # Clamp grid widths so the table never exceeds the shape's own width
+    # (which matches the template's slide layout).  Column manipulations
+    # above may have added width; this scales everything back.
+    _clamp_table_width(t, t.width)
     table = t.table
     head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
     fc_cols = [c for c, h in enumerate(head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
@@ -1076,9 +1112,26 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
         rows.append(row)
         completed.append(r["completed"])
 
+    # Column character widths (approximate) used for wrap estimation.
+    # Packages col (~12 chars), Vendor (~10), PO Number (~12), Remarks (~14);
+    # other cols are short numeric values that rarely wrap.
+    _COL_WIDTHS = {1: 12, 2: 10, 7: 12}  # column index -> char width
+    _REMARKS_WIDTH = 14
+
+    def _est_lines(row):
+        """Estimate the number of visual lines a row occupies, considering
+        both explicit newlines and text wrapping in narrow columns."""
+        nl = max(str(v).count("\n") + 1 for v in row)  # explicit newlines
+        for col_i, cw in _COL_WIDTHS.items():
+            if col_i < len(row):
+                txt = str(row[col_i][0]) if isinstance(row[col_i], tuple) else str(row[col_i])
+                nl = max(nl, (len(txt) + cw - 1) // cw)
+        nl = max(nl, (len(str(row[-1])) + _REMARKS_WIDTH - 1) // _REMARKS_WIDTH)
+        return max(nl, 2)
+
     chunks, flags, cur, cur_f, used = [], [], [], [], 0
     for row, done in zip(rows, completed):
-        lines = max(max(str(v).count("\n") + 1 for v in row), len(row[-1]) // 14 + 1, 2)
+        lines = _est_lines(row)
         if cur and (used + lines > PROC_LINE_BUDGET or len(cur) >= PROC_CAPACITY):
             chunks.append(cur)
             flags.append(cur_f)
@@ -1134,11 +1187,13 @@ def _civil_rows(elements):
     out = []
     for e in elements:
         plan = [("-" if v is None else _n(v)) for v in e["plan"]]
-        act = [("-" if v is None else (_n(v), _achievement(v, pv)))
-               for v, pv in zip(e["actual"], e["plan"])]
+        # All actual values in black font - no per-cell achievement colouring.
+        act = [("-" if v is None else _n(v)) for v in e["actual"]]
         out.append([e["element"], "Plan", _n(e["scope"]), *plan, _p(e["planPct"])])
+        # Progress column: green only when the element is fully complete.
+        is_complete = e["actualPct"] is not None and e["actualPct"] >= 100
         act_pct = (_p(e["actualPct"]) if e["actualPct"] is None
-                   else (_p(e["actualPct"]), _achievement(e["actualPct"], e["planPct"] or 0)))
+                   else ((_p(e["actualPct"]), GREEN) if is_complete else _p(e["actualPct"])))
         out.append(["", "Actual", _n(e["scope"]), *act, act_pct])
     return out
 
@@ -1608,6 +1663,7 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     for i in sorted(drop):
         delete_slide(prs, T[i])
     _strip_link_boxes(prs)
+    _strip_arrows(prs)
     _strip_comments(prs)
     _strip_title_highlights(prs)
     _add_missing_page_numbers(prs)
@@ -1626,6 +1682,17 @@ def _strip_link_boxes(prs) -> None:
     for slide in prs.slides:
         for sh in list(slide.shapes):
             if sh.has_text_frame and sh.text_frame.text.strip().lower() == "link":
+                remove_shape(sh)
+
+
+def _strip_arrows(prs) -> None:
+    """The template's navigation arrows (Arrow: Right / Left / Bent) at the
+    bottom-right of Civil, Electrical, Contractor and other paired slides
+    are review-draft aids.  They clutter the final output and break
+    uniformity.  Removed from every slide; page numbers are untouched."""
+    for slide in prs.slides:
+        for sh in list(slide.shapes):
+            if (sh.name or "").startswith("Arrow:"):
                 remove_shape(sh)
 
 

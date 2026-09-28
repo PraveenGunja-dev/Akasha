@@ -8,8 +8,11 @@ redis
 python-dotenv
 openai
 langchain-openai
+langchain-community
 groq
 requests
+httpx
+psycopg[binary]
 psycopg2-binary
 
 msal
@@ -21,3 +24,5 @@ alembic
 PyMuPDF
 matplotlib
 python-pptx==1.0.2
+python-docx
+pdfplumber
