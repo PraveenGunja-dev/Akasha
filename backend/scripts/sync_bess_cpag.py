@@ -35,18 +35,38 @@ def main() -> None:
     rows = db.execute(
         text("select p6_object_id, project_id from p6_project where project_id = any(:p)"),
         {"p": list(BESS_PROJECTS)}).fetchall()
+    failed = []
     for poid, pid in rows:
         t = time.time()
-        p6.sync_projects_to_db(db, poid)
-        p6.sync_wbs_to_db(db, poid)
-        p6.sync_activities_to_db(db, poid)
-        p6.sync_resource_assignments_to_db(db, poid)
-        db.commit()
-        dd = db.execute(text("select data_date from p6_project where p6_object_id = :o"),
-                        {"o": poid}).scalar()
-        print(f"{pid}: P6 data date {dd:%d-%b-%Y} ({time.time() - t:.0f}s)")
-    for poid, res in sync_cpag_baselines(db, [r[0] for r in rows], p6=p6).items():
-        print(f"baseline {poid}: {res}")
+        try:
+            p6.sync_projects_to_db(db, poid)
+            wbs = p6.sync_wbs_to_db(db, poid)
+            acts = p6.sync_activities_to_db(db, poid)
+            # The fetchers log and return [] on a network/SSL error rather than
+            # raising, so an empty result is the failure signal.
+            n_ras = len(p6.fetch_resource_assignments(poid) or [])
+            p6.sync_resource_assignments_to_db(db, poid)
+            db.commit()
+            dd = db.execute(text("select data_date from p6_project where p6_object_id = :o"),
+                            {"o": poid}).scalar()
+            ok = bool(wbs and acts and n_ras)
+            print(f"{'OK  ' if ok else 'FAIL'} {pid}: P6 data date {dd:%d-%b-%Y}, "
+                  f"{wbs} WBS, {acts} activities, {n_ras} assignments ({time.time() - t:.0f}s)")
+            if not ok:
+                failed.append(pid)
+        except Exception as e:  # keep going - one project must not stop the rest
+            db.rollback()
+            print(f"FAIL {pid}: {e}")
+            failed.append(pid)
+    try:
+        for poid, res in sync_cpag_baselines(db, [r[0] for r in rows], p6=p6).items():
+            print(f"baseline {poid}: {res}")
+    except Exception as e:
+        db.rollback()
+        print(f"FAIL baselines: {e}")
+        failed.append("baselines")
+    print("\nAll synced." if not failed else f"\nFAILED: {', '.join(failed)} - re-run once P6 is reachable.")
+    sys.exit(1 if failed else 0)
 
 
 if __name__ == "__main__":

@@ -614,7 +614,7 @@ class P6Service:
         logger.info(f"[REAL P6 API] Fetching WBS for Project {project_object_id}")
         
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:
@@ -638,7 +638,7 @@ class P6Service:
         logger.info(f"[REAL P6 API] Fetching Resource Assignments for Project {project_object_id}")
         
         try:
-            response = requests.get(endpoint, headers=self.headers, params=params, timeout=60)
+            response = requests.get(endpoint, headers=self.headers, params=params, timeout=180, verify=False, proxies=self.proxies)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.HTTPError as e:
@@ -1394,7 +1394,7 @@ class P6Service:
             
             # If 405 Method Not Allowed, fallback to POST
             if response.status_code == 405:
-                response = requests.post(endpoint, headers=self.headers, json=p6_payload, timeout=30)
+                response = requests.post(endpoint, headers=self.headers, json=p6_payload, timeout=30, verify=False, proxies=self.proxies)
                 
             response.raise_for_status()
             logger.info(f"[REAL P6 API] Successfully pushed updates for {project_id} to Oracle P6")
@@ -1479,7 +1479,7 @@ class P6Service:
             
             # If 405 Method Not Allowed, fallback to POST
             if response.status_code == 405:
-                response = requests.post(endpoint, headers=self.headers, json=p6_payload, timeout=30)
+                response = requests.post(endpoint, headers=self.headers, json=p6_payload, timeout=30, verify=False, proxies=self.proxies)
                 
             response.raise_for_status()
             logger.info(f"[REAL P6 API] Successfully pushed updates for Activity {p6_object_id} to Oracle P6")
