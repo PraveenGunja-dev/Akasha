@@ -1271,6 +1271,24 @@ def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
     # carry theirs on their own activities; Battery Container and PCS book it
     # on a separate "Receipt at Site" WBS ("BC - Receipt at Site", "PCS
     # Reciept at site" - P6's spelling), so those are taken by name.
+    # A package's activities can sit in sub-WBS folders: Battery Container and
+    # PCS keep their lots under "<package> > Receipt at Site" and "> MDCC".
+    # Reading only the package node itself left their delivery and MDCC dates
+    # blank, so each package reads its whole subtree.
+    children: Dict[int, List[int]] = defaultdict(list)
+    for nid, pid in db.execute(
+            text("select p6_object_id, parent_object_id from p6_wbs_node "
+                 "where project_object_id = :o"), {"o": poid}):
+        children[pid].append(nid)
+
+    def _subtree(root: int) -> List[int]:
+        out_ids, stack = [], [root]
+        while stack:
+            n = stack.pop()
+            out_ids.append(n)
+            stack.extend(children.get(n, []))
+        return out_ids
+
     receipt_by_wbs = {r[0]: (_f(r[1]), _f(r[2])) for r in db.execute(
         text("""select a.wbs_object_id, sum(r.planned_units), sum(r.actual_units)
                 from p6_resource_assignment r
@@ -1295,8 +1313,8 @@ def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
                            actual_finish_date, finish_date,
                            baseline_start_date, actual_start_date, start_date,
                            activity_id
-                    from p6_activity where wbs_object_id = :w"""),
-            {"w": node_id},
+                    from p6_activity where wbs_object_id = any(:w)"""),
+            {"w": _subtree(node_id)},
         ).fetchall()
         acts = [(a[0], a[1], bl(a[8], a[5], a[2])[1], a[3], a[4],
                  bl(a[8], a[5], a[2])[0], a[6], a[7]) for a in acts]
@@ -1311,7 +1329,8 @@ def _wbs_children_as_packages(db: Session, poid: int, wbs_name: str
         m = re.search(r"-\s*([\d,]+)\s*(nos|set|sets|kms|km)", name, re.I)
         if m:
             qty = int(m.group(1).replace(",", ""))
-        receipt = receipt_by_wbs.get(node_id) or next(
+        sub = [receipt_by_wbs[w] for w in _subtree(node_id) if w in receipt_by_wbs]
+        receipt = ((sum(p for p, _a in sub), sum(a for _p, a in sub)) if sub else None) or next(
             (v for k, v in receipt_by_kind.items() if base.lower().startswith(k)), None)
         out.append({
             "package": name, "packageBase": base, "scopeQty": qty,
