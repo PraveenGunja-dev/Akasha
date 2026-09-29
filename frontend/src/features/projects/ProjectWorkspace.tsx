@@ -1606,7 +1606,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                     {slrTypes.map((t: string) => (
                                       <button
                                         key={t}
-                                        onClick={() => setSlrTypeFilter(t)}
+                                        onClick={() => {
+                                          setSlrTypeFilter(t);
+                                          // PRs have no Closed tile; don't leave the list filtered to it.
+                                          if (t === 'PReq' && slrStatusFilter === 'Closed') setSlrStatusFilter('ALL');
+                                        }}
                                         className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${slrTypeFilter === t ? 'bg-primary/15 border-primary/30 text-primary font-semibold' : 'border-border text-muted-foreground hover:text-foreground hover:bg-muted'}`}
                                       >
                                         {t}
@@ -1614,10 +1618,13 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                     ))}
                                   </div>
                                 )}
-                                <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                                <div className={`grid grid-cols-2 ${slrTypeFilter === 'PReq' ? 'md:grid-cols-4' : 'md:grid-cols-5'} gap-4`}>
                                   <HeroMetric label={slrTypeFilter === 'PReq' ? "Total PRs" : "Total POs"} value={slrFiltered.length} icon={FileText} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
                                   <HeroMetric label={slrTypeFilter === 'PReq' ? "Open PRs" : "Open POs"} value={filteredOpen} icon={Activity} color="text-primary dark:text-primary" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
-                                  <HeroMetric label={slrTypeFilter === 'PReq' ? "Closed PRs" : "Closed POs"} value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
+                                  {/* A requisition has no closed state - the tile read 0 for PRs. */}
+                                  {slrTypeFilter !== 'PReq' && (
+                                    <HeroMetric label="Closed POs" value={filteredClosed} icon={Check} color="text-muted-foreground dark:text-muted-foreground" hasBreakdown onClick={() => handleSlrTileClick('Closed')} active={expandedMetric === 'slr' && slrStatusFilter === 'Closed'} />
+                                  )}
                                   <HeroMetric label={slrTypeFilter === 'PReq' ? "Open PR Amount" : "Open PO Amount"} value={`₹${filteredOpenAmount ? (filteredOpenAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-warning dark:text-warning" hasBreakdown onClick={() => handleSlrTileClick('Open')} active={expandedMetric === 'slr' && slrStatusFilter === 'Open'} />
                                   <HeroMetric label="Total Amount" value={`₹${filteredAmount ? (filteredAmount / 10000000).toFixed(2) : 0}`} unit="Cr" icon={IndianRupee} color="text-pink-500 dark:text-pink-400" hasBreakdown onClick={() => handleSlrTileClick('ALL')} active={expandedMetric === 'slr' && slrStatusFilter === 'ALL'} />
                                 </div>
