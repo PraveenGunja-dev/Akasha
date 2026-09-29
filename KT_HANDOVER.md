@@ -270,7 +270,7 @@ That last rule exists because of a real, painful bug: the UI sent `phase` to six
 
 Related: `normalise_phase()` **defaults to `all`, not `ongoing`**. Defaulting to `ongoing` would mean an integrator calling `/api/v1/projects` silently receives 48 of 63 projects with nothing in the response saying so — the single most common cause of *"why is our data missing"* reports.
 
-**v1 endpoints:** `/projects`, `/projects/{id}`, `/projects/{id}/identity`, `/coverage`, plus per-source reads: `/p6`, `/sap`, `/slr`, `/pulse`, `/transmission`, `/inventory`, `/material-documents`, `/trial-run`, `/einvoice`, `/activities`.
+**v1 endpoints:** `/projects`, `/projects/{id}`, `/projects/{id}/identity`, `/coverage`, plus per-source reads: `/p6`, `/sap`, `/slr`, `/pulse`, `/transmission`, `/inventory`, `/material-documents`, `/trial-run`, `/einvoice`, `/activities`, `/resources` (P6 Labor / Nonlabor / Material with units - Labor/Nonlabor in hours, Material in its P6 unit of measure or null where P6 has none).
 
 ### 6.2 All 19 routers
 
