@@ -132,7 +132,9 @@ def get_project_identity(project_id: str, db: Session = Depends(get_db)):
     data["keys"] = {
         "canonical": identity.project_id,
         "p6": {"project_id": identity.p6_project_id, "object_id": identity.p6_object_id},
-        "sap": {"plant_code": identity.sap_plant_code, "wbs_prefixes": identity.sap_wbs_prefixes},
+        "sap": {"plant_code": identity.sap_plant_code, "wbs_prefixes": identity.sap_wbs_prefixes,
+                "agel_wbs": identity.agel_wbs, "age6l_wbs": identity.age6l_wbs,
+                "module_wbs": identity.module_wbs},
         "tc": {"mapping_id": identity.tc_mapping_id},
         "pulse": {"project_name": identity.pulse_project_name},
     }

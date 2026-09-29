@@ -17,6 +17,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import ComplianceTab from '../compliance/ComplianceTab';
 import CPAGModal from './CPAGModal';
+import EACView, { useEAC, exportEAC } from './EACView';
 import ActivityInvestigationModal from '../intelligence/ActivityInvestigationModal';
 import { formatProjectName } from '../../lib/projectName';
 
@@ -364,11 +365,10 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [isBess, setIsBess] = useState(false);
   const [isBessLabel, setIsBessLabel] = useState<string | null>(null);
   const [cpagOpen, setCpagOpen] = useState(false);
-  /* EAC (Estimate at Completion) - BESS only, beside the SAP entity tabs.
-     Button placed; the EAC logic is to be written. */
-  const openEac = () => {
-    // TODO: EAC logic
-  };
+  /* EAC (Estimate at Completion) - BESS only: a second view of the SAP tab,
+     switched with the EAC / SAP Data button; Export follows the view. */
+  const [sapView, setSapView] = useState<'sap' | 'eac'>('sap');
+  const eac = useEAC(isBess ? projectId || undefined : undefined, isBess && sapView === 'eac');
 
   /* Is this one of the six BESS projects that carry a CPAG pack? */
   useEffect(() => {
@@ -1497,9 +1497,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                   {/* SAP Summary Header */}
                   <div className="flex items-center justify-between mb-2">
                     <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-                      <Database className="w-5 h-5 text-primary/70" /> SAP Intelligence
+                      {isBess && sapView === 'eac'
+                        ? <><Calculator className="w-5 h-5 text-primary/70" /> Estimate at Completion{isBessLabel ? ` · ${isBessLabel}` : ''}</>
+                        : <><Database className="w-5 h-5 text-primary/70" /> SAP Intelligence</>}
                     </h2>
                     <div className="flex items-center gap-3">
+                      {!(isBess && sapView === 'eac') && (
                       <div className="flex items-center bg-muted border border-border rounded-lg p-0.5">
                         {[
                           { key: 'all' as const, label: 'All', disabled: false },
@@ -1535,27 +1538,32 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           </button>
                         ))}
                       </div>
-                      {/* EAC (Estimate at Completion) - BESS projects only. Logic to follow. */}
+                      )}
+                      {/* EAC <-> SAP Data - BESS projects only. */}
                       {isBess && (
                         <button
                           type="button"
-                          onClick={openEac}
+                          onClick={() => setSapView(sapView === 'eac' ? 'sap' : 'eac')}
+                          aria-pressed={sapView === 'eac'}
                           className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                         >
-                          <Calculator className="w-4 h-4" />
-                          EAC
+                          {sapView === 'eac'
+                            ? <><Database className="w-4 h-4" /> SAP Data</>
+                            : <><Calculator className="w-4 h-4" /> EAC</>}
                         </button>
                       )}
                       <button
-                        onClick={downloadSAPReport}
-                        className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2 text-sm font-semibold"
+                        onClick={() => (isBess && sapView === 'eac' ? eac.data && exportEAC(eac.data) : downloadSAPReport())}
+                        disabled={isBess && sapView === 'eac' && !eac.data}
+                        className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2 text-sm font-semibold disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                       >
                         <Download className="w-4 h-4" />
-                        Export SAP Report
+                        {isBess && sapView === 'eac' ? 'Export EAC' : 'Export SAP Report'}
                       </button>
                     </div>
                   </div>
 
+                  {isBess && sapView === 'eac' ? <EACView eac={eac} /> : (
                   <>
                     <>
                       {!sap || (sap.summary.totalPOs === 0 && sap.summary.totalConsumedQty === 0 && sap.summary.totalInventoryQty === 0) ? (
@@ -2440,6 +2448,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       )}
                     </>
                   </>
+                  )}
 
 
                 </div>

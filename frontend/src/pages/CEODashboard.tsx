@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Wrench } from 'lucide-react';
@@ -103,8 +103,13 @@ export default function CEODashboard() {
     navigate(`/ceo-dashboard/project/${id}`);
   };
 
-  // Fetch Data
+  // Fetch Data. Only the newest load may write to the screen: changing the
+  // portfolio or phase leaves the previous load in flight, and without this the
+  // slower all-portfolio responses landed last and replaced the BESS ones.
+  const loadSeq = useRef(0);
   const loadAllData = async () => {
+    const seq = ++loadSeq.current;
+    const stale = () => seq !== loadSeq.current;
     setLoading(true);
     try {
       const queryParams = new URLSearchParams();
@@ -134,6 +139,7 @@ export default function CEODashboard() {
         qualityRes.json()
       ]);
 
+      if (stale()) return;
       // Use the true Quality Command Center endpoint data to guarantee consistency
       if (dash && dash.summary) {
         dash.summary.quality = qualityData;
@@ -166,7 +172,7 @@ export default function CEODashboard() {
     } catch (error) {
       console.error("Failed to fetch dashboard data:", error);
     } finally {
-      setLoading(false);
+      if (!stale()) setLoading(false);
     }
   };
 

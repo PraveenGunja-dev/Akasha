@@ -45,13 +45,14 @@ def sync_sap_from_local(db: Session, zsps_path: str | None = None,
     try:
         ingest_data(files={"zsps": paths["zsps"]}, max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         slr_rows = ingest_slr(file_path=paths["zsps"], max_drop_pct=max_drop_pct, allow_drop=allow_drop)
+        co_note = _ingest_co_source()
         from routers.sap import _CACHE as sap_cache
         sap_cache.clear()
 
         used = [{"name": os.path.basename(p), "modified": datetime.utcfromtimestamp(os.path.getmtime(p)).isoformat(),
                  "size_mb": round(os.path.getsize(p) / 1e6, 1)} for p in paths.values() if p]
         as_on = datetime.utcfromtimestamp(os.path.getmtime(paths["zsps"]))
-        msg = f"Ingested local files (ZSPS: {os.path.basename(paths['zsps'])}); SLR rebuilt ({slr_rows} rows)"
+        msg = f"Ingested local files (ZSPS: {os.path.basename(paths['zsps'])}); SLR rebuilt ({slr_rows} rows){co_note}"
         finish("success", msg, files=used, data_as_on=as_on)
         return {"status": "success", "message": msg, "files": used, "data_as_on": as_on.isoformat(),
                 "ingested": True, "slr_rows": slr_rows}
@@ -59,6 +60,28 @@ def sync_sap_from_local(db: Session, zsps_path: str | None = None,
         logger.error(f"Local SAP ingest failed: {e}")
         finish("failed", str(e)[:1000])
         raise
+
+
+def _ingest_co_source() -> str:
+    """Load the CO Commitment + Actual extracts and, while they are the PO
+    source (AKASHA_PO_SOURCE, default "co"), rebuild mt_poamount / mt_slr_data
+    from them. Runs after the ZPSPS ingest, which still loads ME2J, MB51/MB52
+    and the e-invoice lookup. Returns a note for the sync log; a failure here
+    leaves whatever the previous run built in place."""
+    try:
+        from scripts.ingest_sap_co import ingest_co, build_po_tables, po_source
+        co = ingest_co()
+        note = f"; CO lines {co['lines']}"
+        if po_source() == "co":
+            built = build_po_tables()
+            note += (f"; PO tables built from CO: {built['po_count']} POs, "
+                     f"Rs {built['po_value_cr']} Cr, SLR {built['slr_rows']} rows")
+        return note
+    except FileNotFoundError as e:
+        return f"; CO extracts missing ({e}) - PO tables left from ZPSPS"
+    except Exception as e:
+        logger.error(f"CO ingest / PO table build failed: {e}")
+        return f"; CO ingest failed ({str(e)[:120]}) - previous PO tables kept"
 
 
 def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop: bool = False) -> dict:
@@ -88,9 +111,12 @@ def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop
     try:
         sp = SharePointService()
         files = sp.list_files_in_target_folder()
-        # Only the extracts the ingest consumes; the folder also carries CJI3/ZPS021 etc.
+        # Only the extracts the ingest consumes, plus the CO Commitment / Actual
+        # line items (Commitment* / Actual*) the PO source is built from.
+        from scripts.ingest_sap_co import CO_FILE_PATTERNS
+        patterns = list(SAP_FILE_PATTERNS.values()) + list(CO_FILE_PATTERNS.values())
         wanted = [f for f in files if f.get("download_url")
-                  and any(p.match(f["name"]) for p in SAP_FILE_PATTERNS.values())]
+                  and any(p.match(f["name"]) for p in patterns)]
         if not any(SAP_FILE_PATTERNS["zsps"].match(f["name"]) for f in wanted):
             raise RuntimeError(f"ZPSPS007 (PO book of record) not found in {sp.target_folder}")
 
@@ -103,6 +129,9 @@ def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop
         ingest_data(max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         # SLR is the same ZPSPS007 extract through its own filters, so it refreshes with it.
         slr_rows = ingest_slr(max_drop_pct=max_drop_pct, allow_drop=allow_drop)
+        # CO line items (planned replacement source): built alongside, never
+        # allowed to fail the ZPSPS sync that everything on screen still reads.
+        co_note = _ingest_co_source()
         # Prefix index, filter facets and insights were built on the old tables.
         from routers.sap import _CACHE as sap_cache
         sap_cache.clear()
@@ -110,7 +139,7 @@ def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop
         # The data date is the newest extract's own modified time, not our clock.
         as_on = max(datetime.fromisoformat(f["modified"].replace("Z", "+00:00")).replace(tzinfo=None)
                     for f in downloaded if f.get("modified"))
-        msg = f"Ingested {len(downloaded)} SAP extracts from SharePoint; SLR rebuilt ({slr_rows} rows)"
+        msg = f"Ingested {len(downloaded)} SAP extracts from SharePoint; SLR rebuilt ({slr_rows} rows){co_note}"
         finish("success", msg, files=downloaded, data_as_on=as_on)
         return {"status": "success", "message": msg, "folder": sp.target_folder,
                 "files": downloaded, "data_as_on": as_on.isoformat(), "ingested": True, "slr_rows": slr_rows}

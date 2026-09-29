@@ -227,6 +227,11 @@ class MTPOAmount(Base):
     # ZSPS 'Type': POrd (purchase order) or PReq (requisition). Constant per
     # document. PO-value metrics count POrd only — see slr_rules.zsps_po_lines_only.
     doc_type = Column(String, nullable=True, index=True)
+    # Unit of the quantity columns. Set when the table is built from the SAP CO
+    # extracts (scripts/ingest_sap_co.build_po_tables); ZPSPS carried none.
+    unit_of_measure = Column(String, nullable=True)
+    # Which extract produced the row: "co" (CO Commitment + Actual) or "zsps".
+    source = Column(String, nullable=True, index=True)
     # ZSPS 'C.Document line'. Without it a PO line has no identity of its own:
     # one document legitimately carries many lines with the same material and
     # the same amounts (86 identical cement bulker deliveries on 4510019805),
@@ -593,6 +598,82 @@ class SyncLog(Base):
     data_as_on = Column(DateTime, nullable=True)
     files = Column(JSON, nullable=True)                   # [{name, modified, size_mb}]
     message = Column(Text, nullable=True)
+
+
+class BESSEACSapLine(Base):
+    """SAP lines behind the BESS EAC's Incurred and Committed columns
+    (services/bess_eac.py): CJI3 actuals without the Value Type 11 stock-side
+    postings, and S_ALR_87013558 purchase-order commitments. Kept apart from
+    the app's PO tables so the EAC extracts never move a PO figure."""
+    __tablename__ = "bess_eac_sap_line"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, index=True)            # incurred | committed
+    wbs_element = Column(String, index=True)
+    value_inr = Column(Float)                    # Val/COArea Crcy
+    value_type = Column(String)                  # CJI3 Value Type
+    ref_category = Column(String)                # S_ALR: POrd
+    document = Column(String)                    # PO number
+    source_file = Column(String)
+    upload_time = Column(DateTime, default=datetime.utcnow)
+
+
+class BESSEACEntry(Base):
+    """The editable columns of one BESS EAC row: Approved Capex (overrides the
+    CAPEX-sheet figure; null = use the sheet), Balance to Completion, Remarks."""
+    __tablename__ = "bess_eac_entry"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(String, index=True)      # BESS P6 project id
+    line_key = Column(String, index=True)        # services/bess_eac.TEMPLATE key
+    approved_capex_cr = Column(Float, nullable=True)
+    balance_cr = Column(Float, nullable=True)
+    remarks = Column(Text, nullable=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class SAPCOLine(Base):
+    """One line of the SAP CO line-item extracts - Commitment.xlsx and
+    Actual.xlsx (not the CJI3 file on SharePoint) - the replacement for ZPSPS007 as the PO and
+    SLR source (decided 2026-09-29). Built alongside mt_poamount / mt_slr_data;
+    nothing reads it for on-screen figures until a full-scope export reconciles.
+
+    Every SLR rule is stored as a flag rather than applied by deleting lines,
+    so each figure is auditable; `counts_as_po` is their conjunction and is
+    what slr_rules.co_po_lines_only() filters on."""
+    __tablename__ = "sap_co_line"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String, index=True)                 # commitment | actual
+    company_code = Column(String, index=True)
+    ref_category = Column(String, index=True)         # commitment: POrd | PReq
+    po_document = Column(String, index=True)          # PO / PR number; null for non-PO actuals
+    po_item = Column(String)
+    document_number = Column(String)                  # actual: CO document
+    document_type = Column(String, index=True)        # actual: WE (goods receipt), RE, KR, SA ...
+    document_date = Column(DateTime)
+    posting_date = Column(DateTime)
+    wbs_element = Column(String, index=True)
+    wbs_description = Column(String)                  # "CO object name" - ZPSPS's Description
+    project_definition = Column(String, index=True)   # H-xxxx
+    master_prefix = Column(String, index=True)        # SAP Master match, as the SLR ingest does
+    material = Column(String)
+    material_description = Column(String)
+    cost_element = Column(String)
+    cost_element_descr = Column(String)
+    quantity = Column(Float)
+    uom = Column(String)
+    value_inr = Column(Float)                         # Val/COArea Crcy
+    supplier_code = Column(String)
+    vendor_name = Column(String)                      # from ME2J by PO number
+    # Rule flags
+    is_goods_receipt = Column(Boolean, default=False, index=True)   # actual, document type WE
+    is_module = Column(Boolean, default=False, index=True)          # PV module line
+    is_overhead_po = Column(Boolean, default=False)                 # PO has an SPGS/PMC/ISA line
+    counts_as_po = Column(Boolean, default=False, index=True)       # all PO-value rules pass
+    source_file = Column(String)
+    upload_time = Column(DateTime, default=datetime.utcnow)
 
 
 class MTME2JPO(Base):

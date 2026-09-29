@@ -220,6 +220,9 @@ export default function KnowledgeGraph() {
   const phase = searchParams.get('phase');
 
   useEffect(() => {
+    // Ignore a response from an earlier portfolio/phase selection.
+    const ctrl = new AbortController();
+    let live = true;
     (async () => {
       setLoading(true);
       try {
@@ -229,8 +232,9 @@ export default function KnowledgeGraph() {
         const qs = params.toString() ? `?${params.toString()}` : '';
         const url = `/akasha/api/dashboard/knowledge-graph${qs}`;
 
-        const res = await fetch(url);
+        const res = await fetch(url, { signal: ctrl.signal });
         const data = await res.json();
+        if (!live) return;
         rootDataRef.current = data;
         const c = containerRef.current;
         if (c) { 
@@ -241,9 +245,10 @@ export default function KnowledgeGraph() {
             processData(); 
             startTimeRef.current = performance.now() / 1000;
         }
-      } catch (e) { console.error(e); }
-      finally { setLoading(false); }
+      } catch (e: any) { if (live && e?.name !== 'AbortError') console.error(e); }
+      finally { if (live) setLoading(false); }
     })();
+    return () => { live = false; ctrl.abort(); };
   }, [portfolio, phase]); // Removed processData from dependencies to fix infinite loop
 
   // Re-process when expanded nodes or search changes

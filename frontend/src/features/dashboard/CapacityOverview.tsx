@@ -289,10 +289,17 @@ export default function CapacityOverview() {
     const qs = params.toString() ? `?${params.toString()}` : '';
     const url = `/akasha/api/dashboard/capacity-overview${qs}`;
 
-    fetch(url)
+    // Ignore a response from an earlier portfolio/phase selection.
+    const ctrl = new AbortController();
+    let live = true;
+    fetch(url, { signal: ctrl.signal })
       .then(res => res.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(e => { console.error(e); setError("Failed to load Capacity Overview data."); setLoading(false); });
+      .then(d => { if (live) { setData(d); setLoading(false); } })
+      .catch(e => {
+        if (!live || e?.name === 'AbortError') return;
+        console.error(e); setError("Failed to load Capacity Overview data."); setLoading(false);
+      });
+    return () => { live = false; ctrl.abort(); };
   }, [portfolio, phase]);
 
   /* ── Derived values ──────────────────────────────────────────────────── */

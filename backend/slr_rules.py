@@ -66,3 +66,25 @@ PO_ORDER_TYPE = "POrd"
 def zsps_po_lines_only():
     """Criterion every PO-value metric on mt_poamount must use."""
     return models.MTPOAmount.doc_type == PO_ORDER_TYPE
+
+
+# ── The same definition on the SAP CO line-item extracts (sap_co_line) ──
+# Planned replacement for ZPSPS007 (decided 2026-09-29). The Commitment and
+# Actual extracts are line items, so the rules are applied per line at ingest
+# and stored as flags (scripts/ingest_sap_co.py):
+#   * the export's own subtotal rows (blank WBS, no document) are dropped;
+#   * commitment counts only as POrd - a PReq is a requisition, not an order;
+#   * an actual counts only when booked against a PO (Purchasing Document) -
+#     bank charges, settlements and other postings are not PO spend;
+#   * a PO with any SPGS / PMC / ISA line, in either file, is excluded whole;
+#   * the WBS must match the SAP Master, as the ZPSPS SLR ingest requires;
+#   * zero-value lines do not count.
+# PV module supply counts like any other PO (decided 2026-09-29) - in ZPSPS it
+# sat on blank-type cost lines and was excluded.
+# PO value = Actual + Commitment over counts_as_po; delivered = the goods-
+# receipt (WE) actuals; still to deliver = the commitment.
+
+
+def co_po_lines_only():
+    """Criterion every PO-value metric on sap_co_line must use."""
+    return models.SAPCOLine.counts_as_po.is_(True)

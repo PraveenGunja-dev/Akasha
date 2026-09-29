@@ -52,6 +52,29 @@ class ProjectIdentity:
     is_commissioned: bool = False
     capacity_mwac: Optional[float] = None
 
+    # ── project master (ProjectMapping), exposed as-is ──
+    project_name: Optional[str] = None       # business name, e.g. "MSEDCL PPA Ph-3"
+    p6_project_name: Optional[str] = None    # P6's name; `name` above prefers it
+    spv_name: Optional[str] = None
+    cluster: Optional[str] = None
+    subcluster: Optional[str] = None
+    category: Optional[str] = None           # PPA / Merchant / ...
+    plot_no: Optional[str] = None
+    mms_type: Optional[str] = None           # HSAT / fixed tilt / ...
+    capacity_mwdc: Optional[float] = None
+    dc_ac_ratio: Optional[float] = None      # master column "OL"
+    priority: Optional[str] = None
+    source_of_origin: Optional[str] = None
+    lta_date: Optional[str] = None
+    manual_scod: Optional[str] = None
+    manual_scod_is_lta: Optional[bool] = None
+
+    # ── SAP / WBS keys from the master ──
+    spv_plant_code: Optional[str] = None
+    agel_wbs: Optional[str] = None
+    age6l_wbs: Optional[str] = None
+    module_wbs: Optional[str] = None
+
     # ── per-system keys; None means the project is not linked there ──
     p6_project_id: Optional[str] = None
     p6_object_id: Optional[int] = None
@@ -77,6 +100,26 @@ class ProjectIdentity:
     @property
     def unlinked(self) -> list[str]:
         return [s for s in SOURCE_SYSTEMS if s not in self.linked]
+
+    def context(self) -> dict:
+        """The compact project block carried on every /api/v1 source row, so a
+        row can be read without a second call. Always from the project master,
+        so it is identical on every endpoint."""
+        return {
+            "project_id": self.project_id,
+            "project_name": self.project_name,
+            "p6_project_name": self.p6_project_name,
+            "spv_name": self.spv_name,
+            "cluster": self.cluster,
+            "subcluster": self.subcluster,
+            "category": self.category,
+            "plot_no": self.plot_no,
+            "capacity_mwac": self.capacity_mwac,
+            "capacity_mwdc": self.capacity_mwdc,
+            "is_commissioned": self.is_commissioned,
+            "sap_wbs_prefixes": self.sap_wbs_prefixes,
+            "p6_project_id": self.p6_project_id,
+        }
 
     def to_dict(self) -> dict:
         """Wire format. `linked` / `unlinked` are the important part: they let a
@@ -104,6 +147,24 @@ def _wbs_prefixes(m: models.ProjectMapping) -> list[str]:
 
 def _clean(v) -> str:
     return str(v).strip() if v is not None else ""
+
+
+_BLANKS = {"", "-", "--", "na", "n/a", "nan", "none", "null"}
+
+
+def _text(v) -> Optional[str]:
+    """Master text value, or None for the placeholders the sheet uses for
+    blank ("-", "NA", ...), so an API caller never has to special-case them."""
+    t = _clean(v)
+    return None if t.lower() in _BLANKS else t
+
+
+def _num(v) -> Optional[float]:
+    """Master numerics are sometimes stored as text ("1.35")."""
+    try:
+        return float(str(v).strip()) if v not in (None, "") else None
+    except ValueError:
+        return None
 
 
 def resolve(db: Session, ref: str | int) -> Optional[ProjectIdentity]:
@@ -180,6 +241,25 @@ def _build(db: Session, m: models.ProjectMapping) -> ProjectIdentity:
         capacity_mwac=m.capacity_mwac,
         sap_plant_code=m.spv_plant_code,
         sap_wbs_prefixes=_wbs_prefixes(m),
+        project_name=_text(m.project),
+        p6_project_name=_text(m.project_name_from_p6),
+        spv_name=_text(m.spv_name),
+        cluster=_text(m.cluster),
+        subcluster=_text(m.subcluster),
+        category=_text(m.category),
+        plot_no=_text(m.plot_no),
+        mms_type=_text(m.mms_type),
+        capacity_mwdc=m.capacity_mwdc,
+        dc_ac_ratio=_num(m.ol),
+        priority=_text(m.priority),
+        source_of_origin=_text(m.source_of_origin),
+        lta_date=m.lta_date.isoformat() if hasattr(m.lta_date, "isoformat") else (_text(m.lta_date)),
+        manual_scod=m.manual_scod.isoformat() if hasattr(m.manual_scod, "isoformat") else (_text(m.manual_scod)),
+        manual_scod_is_lta=m.manual_scod_is_lta,
+        spv_plant_code=_text(m.spv_plant_code),
+        agel_wbs=_text(m.agel),
+        age6l_wbs=_text(m.age6l),
+        module_wbs=_text(m.module_wbs),
     )
 
     p6 = (

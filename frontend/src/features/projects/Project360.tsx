@@ -692,11 +692,17 @@ export default function Project360({ onOpenProject }: { onOpenProject?: (id: str
   useEffect(() => {
     setLoading(true);
     const url = portfolio ? `/akasha/api/project-360?portfolio=${encodeURIComponent(portfolio)}&nocache=true` : '/akasha/api/project-360?nocache=true';
-    fetch(url)
+    // Switching portfolio leaves the previous request in flight. The full
+    // (all-portfolio) response is larger and slower, so without this it landed
+    // after the BESS one and replaced it: BESS showed first, then all 63.
+    const ctrl = new AbortController();
+    let live = true;
+    fetch(url, { signal: ctrl.signal })
       .then(res => res.json())
-      .then(json => setData(json))
-      .catch(console.error)
-      .finally(() => setLoading(false));
+      .then(json => { if (live) setData(json); })
+      .catch(err => { if (live && err?.name !== 'AbortError') console.error(err); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; ctrl.abort(); };
   }, [portfolio]);
 
   // ── Filtering ──

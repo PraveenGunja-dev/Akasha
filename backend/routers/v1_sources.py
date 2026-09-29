@@ -41,6 +41,15 @@ class Scope:
     def linked(self, system: str):
         return [i for i in self.identities if system in i.linked]
 
+    def attach(self, data: list) -> list:
+        """Add the project-master block (`project`) to every row, keyed on the
+        row's canonical project_id. Nested so it can never overwrite a source
+        column of the same name (Pulse rows carry their own `project_name`)."""
+        ctx = {i.project_id: i.context() for i in self.identities}
+        for item in data:
+            item["project"] = ctx.get(item.get("project_id"))
+        return data
+
 
 def scope(
     project_id: Optional[str] = Query(
@@ -143,7 +152,7 @@ def get_p6(
         item["project_id"] = wanted.get(row.project_id, row.project_id)
         data.append(item)
     return envelope(
-        data, filters=sc.filters, sources=["P6"],
+        sc.attach(data), filters=sc.filters, sources=["P6"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -158,7 +167,7 @@ def get_sap(
     """SAP purchase orders. Each row is attributed to exactly one project."""
     data, total = _by_prefix(db, models.MTPOAmount, _wbs_owners(sc), page, page_size)
     return envelope(
-        data, filters=sc.filters, sources=["SAP"],
+        sc.attach(data), filters=sc.filters, sources=["SAP"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -173,7 +182,7 @@ def get_slr(
     """SLR ledger, under the same single-owner WBS rule as /sap."""
     data, total = _by_prefix(db, models.MTSLRData, _wbs_owners(sc), page, page_size)
     return envelope(
-        data, filters=sc.filters, sources=["SAP"],
+        sc.attach(data), filters=sc.filters, sources=["SAP"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -229,7 +238,7 @@ def get_pulse(
         data.append(item)
 
     return envelope(
-        data, filters={**sc.filters, "kind": kind}, sources=["Pulse"],
+        sc.attach(data), filters={**sc.filters, "kind": kind}, sources=["Pulse"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -262,7 +271,7 @@ def get_transmission(
         item["project_id"] = owners.get(row.mapping_id)
         data.append(item)
     return envelope(
-        data, filters=sc.filters, sources=["TC"],
+        sc.attach(data), filters=sc.filters, sources=["TC"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -282,7 +291,7 @@ def get_inventory(
     """SAP inventory / GRN rows, under the single-owner WBS rule."""
     data, total = _by_prefix(db, models.MTInventory, _wbs_owners(sc), page, page_size)
     return envelope(
-        data, filters=sc.filters, sources=["SAP"],
+        sc.attach(data), filters=sc.filters, sources=["SAP"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -297,7 +306,7 @@ def get_material_documents(
     """SAP MB51 consumption documents, under the single-owner WBS rule."""
     data, total = _by_prefix(db, models.MTMaterialDocument, _wbs_owners(sc), page, page_size)
     return envelope(
-        data, filters=sc.filters, sources=["SAP"],
+        sc.attach(data), filters=sc.filters, sources=["SAP"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -345,7 +354,7 @@ def get_trial_run(
         item["project_id"] = by_name.get(row.project_name_p6) or by_plant.get(row.spv_plant_code)
         data.append(item)
     return envelope(
-        data, filters=sc.filters, sources=["SAP"],
+        sc.attach(data), filters=sc.filters, sources=["SAP"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -376,7 +385,7 @@ def get_einvoice(
         item["project_id"] = by_name.get(row.p6ProjectName)
         data.append(item)
     return envelope(
-        data, filters=sc.filters, sources=["SAP"],
+        sc.attach(data), filters=sc.filters, sources=["SAP"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -412,7 +421,7 @@ def get_activities(
         item["project_id"] = owners.get(row.project_object_id)
         data.append(item)
     return envelope(
-        data, filters=sc.filters, sources=["P6"],
+        sc.attach(data), filters=sc.filters, sources=["P6"],
         page=page, page_size=page_size, total=total,
     )
 
@@ -494,6 +503,6 @@ def get_resources(
             item["actual_mandays"] = (r.actual_units or 0) / _HOURS_PER_DAY
         data.append(item)
     return envelope(
-        data, filters={**sc.filters, "resource_type": wanted_type}, sources=["P6"],
+        sc.attach(data), filters={**sc.filters, "resource_type": wanted_type}, sources=["P6"],
         page=page, page_size=page_size, total=total,
     )

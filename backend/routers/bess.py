@@ -1130,6 +1130,48 @@ def download_project_pptx(project_id: str, db: Session = Depends(get_db)) -> Res
     )
 
 
+@router.post("/eac/reload")
+def reload_eac_sap(db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Re-read the EAC's SAP extracts (CJI3 -> Incurred, S_ALR_87013558 ->
+    Committed) from Data/EAC_BEES."""
+    from services.bess_eac import ingest_eac_sap
+    try:
+        return ingest_eac_sap(db)
+    except FileNotFoundError as e:
+        raise HTTPException(404, str(e))
+
+
+@router.get("/{project_id}/eac")
+def get_eac(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """The EAC table for one BESS project (services/bess_eac.py)."""
+    from services import bess_eac
+    if project_id not in bess_eac.ROOTS:
+        raise HTTPException(404, f"{project_id} has no EAC")
+    # First read after a deploy: load the SAP extracts if nothing is loaded yet.
+    if not db.execute(text("select exists(select 1 from bess_eac_sap_line)")).scalar():
+        try:
+            bess_eac.ingest_eac_sap(db)
+        except FileNotFoundError:
+            pass    # the table still renders; Incurred / Committed read 0 with no source listed
+    data = bess_eac.build(db, project_id)
+    data["pss"] = BESS_PROJECTS[project_id]["pss"]
+    return data
+
+
+@router.put("/{project_id}/eac/{line_key}")
+def put_eac_row(project_id: str, line_key: str, body: Dict[str, Any],
+                db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Save a row's editable columns: approved, balance, remarks."""
+    from services import bess_eac
+    try:
+        bess_eac.save_entry(db, project_id, line_key, body)
+    except KeyError:
+        raise HTTPException(404, f"No EAC row {line_key} for {project_id}")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    return bess_eac.build(db, project_id)
+
+
 @router.get("/{project_id}/cpag")
 def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     ctx = _resolve(db, project_id)

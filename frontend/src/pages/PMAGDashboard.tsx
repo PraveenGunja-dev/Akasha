@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -76,18 +76,24 @@ export default function PMAGDashboard() {
   useEffect(() => {
   }, [theme]);
 
+  // Only the newest load may write to the screen: changing portfolio or phase
+  // leaves the previous load in flight, and its (slower, all-portfolio)
+  // responses could land last and replace the selected portfolio's.
+  const loadSeq = useRef(0);
   const loadAllData = () => {
+    const seq = ++loadSeq.current;
+    const stale = () => seq !== loadSeq.current;
     setLoading(true);
     const phase = searchParams.get('phase') || 'Ongoing';
     const queryParams = new URLSearchParams();
     if (portfolio) queryParams.append('portfolio', portfolio);
     if (phase && phase !== 'ALL') queryParams.append('phase', phase);
     const portfolioQuery = queryParams.toString() ? `?${queryParams.toString()}` : '';
-    
+
     fetch(`/akasha/api/pmag/dashboard${portfolioQuery}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
-      .catch(() => setLoading(false));
+      .then(d => { if (!stale()) { setData(d); setLoading(false); } })
+      .catch(() => { if (!stale()) setLoading(false); });
 
     // Fetch data for the integrated deep-dive modules
     Promise.all([
@@ -96,10 +102,12 @@ export default function PMAGDashboard() {
       fetch(`/akasha/api/financials${portfolioQuery}`),
       fetch(`/akasha/api/financials/details${portfolioQuery}`)
     ]).then(async ([dashRes, p6Res, sapRes, finDetRes]) => {
-      setDashboardData(await dashRes.json());
-      setP6Data(await p6Res.json());
-      setSapData(await sapRes.json());
-      setFinDetails(await finDetRes.json());
+      const [dash, p6, sap, fin] = await Promise.all([dashRes.json(), p6Res.json(), sapRes.json(), finDetRes.json()]);
+      if (stale()) return;
+      setDashboardData(dash);
+      setP6Data(p6);
+      setSapData(sap);
+      setFinDetails(fin);
     }).catch(console.error);
 
     Promise.all([
@@ -107,9 +115,11 @@ export default function PMAGDashboard() {
       fetch(`/akasha/api/pmag/team${portfolioQuery}`),
       fetch(`/akasha/api/pmag/site-monitoring${portfolioQuery}`)
     ]).then(async ([repRes, teamRes, siteRes]) => {
-      setReportsData(await repRes.json());
-      setTeamData(await teamRes.json());
-      setSiteMonitoringData(await siteRes.json());
+      const [rep, team, site] = await Promise.all([repRes.json(), teamRes.json(), siteRes.json()]);
+      if (stale()) return;
+      setReportsData(rep);
+      setTeamData(team);
+      setSiteMonitoringData(site);
     }).catch(console.error);
   };
 

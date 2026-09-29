@@ -74,11 +74,15 @@ def _run_sharepoint(db):
     from services.sharepoint_service import SharePointService
     from services.sap_sync import sync_sap_from_sharepoint
     from scripts.ingest_sap_data import SAP_FILE_PATTERNS
+    from scripts.ingest_sap_co import CO_FILE_PATTERNS
     from services.sync_log_util import run_logged
 
     sp = SharePointService()
+    # A new CO Commitment / Actual extract alone must also count as new data,
+    # or uploading just those would be reported "nothing newer" and never load.
+    patterns = list(SAP_FILE_PATTERNS.values()) + list(CO_FILE_PATTERNS.values())
     files = [f for f in sp.list_files_in_target_folder()
-             if any(p.match(f["name"]) for p in SAP_FILE_PATTERNS.values()) and f.get("modified")]
+             if any(p.match(f["name"]) for p in patterns) and f.get("modified")]
     newest = max((datetime.fromisoformat(f["modified"].replace("Z", "+00:00")).replace(tzinfo=None) for f in files), default=None)
     SL = models.SyncLog
     last = db.query(SL).filter(SL.source.in_(["sharepoint", "local"]), SL.status == "success").order_by(SL.finished_at.desc()).first()

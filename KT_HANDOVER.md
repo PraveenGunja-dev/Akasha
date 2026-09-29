@@ -272,6 +272,8 @@ Related: `normalise_phase()` **defaults to `all`, not `ongoing`**. Defaulting to
 
 **v1 endpoints:** `/projects`, `/projects/{id}`, `/projects/{id}/identity`, `/coverage`, plus per-source reads: `/p6`, `/sap`, `/slr`, `/pulse`, `/transmission`, `/inventory`, `/material-documents`, `/trial-run`, `/einvoice`, `/activities`, `/resources` (P6 Labor / Nonlabor / Material with units - Labor/Nonlabor in hours, Material in its P6 unit of measure or null where P6 has none).
 
+**Project context on every row.** `/projects` and `/projects/{id}` return the full project master - business `project_name`, `p6_project_name`, `spv_name`, `cluster` / `subcluster`, `category`, `plot_no`, `mms_type`, `capacity_mwac` / `capacity_mwdc` / `dc_ac_ratio`, `priority`, `source_of_origin`, `lta_date`, `manual_scod`, and the SAP/WBS keys `spv_plant_code`, `agel_wbs`, `age6l_wbs`, `module_wbs`, `sap_wbs_prefixes`. Every source endpoint adds the same compact block as a nested `project` object on each row (nested so it never collides with a source's own column, e.g. Pulse's `project_name`). Sheet placeholders (`-`, `NA`) come back as `null`.
+
 ### 6.2 All 19 routers
 
 | Router | Prefix | Purpose |

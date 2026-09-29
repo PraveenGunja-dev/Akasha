@@ -2397,7 +2397,7 @@ export default function ModuleDeliveriesPage() {
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
                   Monthly ordering plan by origin, respecting factory quotas.
                   <InfoTip
-                    info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWp) are planning assumptions built into the engine. Confirm against contracts before relying on them as hard limits."
+                    info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWac) are planning assumptions built into the engine. Orders are shown in MWp; each is converted to MWac with the project's DC/AC ratio before it counts against the quota."
                     align="left"
                   />
                 </p>

@@ -569,7 +569,11 @@ class P6Service:
         # Deduplicate and filter by mapped projects
         raw_baselines = {}
         for base in raw_baselines_list:
-            if "ObjectId" in base and base.get("OriginalProjectObjectId") in mapped_p6_objs:
+            # P6 returns ObjectIds as strings, the DB holds integers: compared
+            # raw, nothing ever matched and every sync since July reported
+            # 'baselines_synced': 0 (table last updated 2026-07-03).
+            orig = base.get("OriginalProjectObjectId")
+            if "ObjectId" in base and orig is not None and str(orig).isdigit() and int(orig) in mapped_p6_objs:
                 raw_baselines[base["ObjectId"]] = base
 
         synced_count = 0

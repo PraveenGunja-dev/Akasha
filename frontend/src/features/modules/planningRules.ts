@@ -131,7 +131,7 @@ export const PLANNING_RULES: RuleGroup[] = [
     rules: [
       {
         name: 'Monthly ceilings',
-        detail: 'China 750 MW, SEA 500 MW, ALMM 500 MW, ALCM 100 MW, DCR 100 MW per month.',
+        detail: 'China 750 MWac, SEA 500 MWac, ALMM 500 MWac, ALCM 100 MWac, DCR 100 MWac per month. Orders are in MWp and are converted with the DC/AC ratio of each project before counting against the quota.',
         source: 'module_planner.py',
       },
       {
