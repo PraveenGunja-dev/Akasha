@@ -460,8 +460,13 @@ def get_resources(
     )
     if wanted_type:
         q = q.filter(R.resource_type == wanted_type)
-    rows = q.all() if owners else []
-    window, total = _page(sorted(rows, key=lambda t: t[0].id), page, page_size)
+    # Paged in SQL: portfolio-wide this is ~270k rows, and loading them all to
+    # slice one page took ~9s per request.
+    if owners:
+        total = q.order_by(None).count()
+        window = q.order_by(R.id).offset((page - 1) * page_size).limit(page_size).all()
+    else:
+        total, window = 0, []
     data = []
     for r, activity_id, activity_name, status in window:
         timed = r.resource_type in _TIME_UNITS
