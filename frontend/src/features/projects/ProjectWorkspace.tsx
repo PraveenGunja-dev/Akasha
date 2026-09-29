@@ -1922,9 +1922,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                 type: 'pie',
                                                 radius: ['50%', '70%'],
                                                 center: ['50%', '45%'],
+                                                // POs only: the server's open_pos/closed_pos count
+                                                // requisitions too, and every PReq reads "Open".
                                                 data: [
-                                                  { value: slrData.open_pos, name: 'Open' },
-                                                  { value: slrData.closed_pos, name: 'Closed' }
+                                                  { value: slrData.data.filter((r: any) => r.type === 'POrd' && r.status === 'Open').length, name: 'Open' },
+                                                  { value: slrData.data.filter((r: any) => r.type === 'POrd' && r.status === 'Closed').length, name: 'Closed' }
                                                 ]
                                               }]
                                             }}
