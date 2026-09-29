@@ -12,6 +12,7 @@ several endpoints keyed on different identifiers — `project_name` on financial
     GET /api/v1/slr           ?project_id=  SLR ledger
     GET /api/v1/pulse         ?project_id=  quality (kind=nc|rfi)
     GET /api/v1/transmission  ?project_id=  grid entries
+    GET /api/v1/resources     ?project_id=  P6 Labor / Nonlabor / Material, with units
 
 Omit `project_id` and the endpoint returns the whole portfolio under the
 standard portfolio/phase scoping.
@@ -412,5 +413,78 @@ def get_activities(
         data.append(item)
     return envelope(
         data, filters=sc.filters, sources=["P6"],
+        page=page, page_size=page_size, total=total,
+    )
+
+
+# P6 counts Labor and Nonlabor in hours; the BESS schedules run a 7-day x 8-hour
+# calendar, so a labour hour / 8 is a manday (see routers/bess.HOURS_PER_DAY).
+_TIME_UNITS = {"Labor", "Nonlabor"}
+_HOURS_PER_DAY = 8.0
+_RESOURCE_TYPES = {"labor": "Labor", "nonlabor": "Nonlabor", "material": "Material"}
+
+
+@router.get("/resources")
+def get_resources(
+    sc: Scope = Depends(scope),
+    resource_type: Optional[str] = Query(
+        None, description="labor | nonlabor | material. Omit for all three."
+    ),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
+    db: Session = Depends(get_db),
+):
+    """P6 resource assignments - Labor, Nonlabor and Material - per activity.
+
+    Units and their basis are stated on every row rather than left implied:
+    Labor and Nonlabor are P6 time units, so `unit` is "h" (Labor also carries
+    the manday equivalent); Material takes the resource's own P6 unit of
+    measure, which is null where P6 has none set - it is never guessed.
+    """
+    wanted_type = None
+    if resource_type:
+        wanted_type = _RESOURCE_TYPES.get(resource_type.strip().lower())
+        if wanted_type is None:
+            raise HTTPException(status_code=422,
+                                detail="resource_type must be labor, nonlabor or material")
+    owners = {
+        i.p6_object_id: i.project_id
+        for i in sc.linked("p6")
+        if i.p6_object_id is not None
+    }
+    R, A = models.P6ResourceAssignment, models.P6Activity
+    q = (
+        db.query(R, A.activity_id, A.name, A.status)
+        .outerjoin(A, A.p6_object_id == R.activity_object_id)
+        .filter(R.project_object_id.in_(list(owners)))
+    )
+    if wanted_type:
+        q = q.filter(R.resource_type == wanted_type)
+    rows = q.all() if owners else []
+    window, total = _page(sorted(rows, key=lambda t: t[0].id), page, page_size)
+    data = []
+    for r, activity_id, activity_name, status in window:
+        timed = r.resource_type in _TIME_UNITS
+        item = {
+            "project_id": owners.get(r.project_object_id),
+            "activity_id": activity_id,
+            "activity_name": activity_name,
+            "activity_status": status,
+            "resource_name": r.resource_name,
+            "resource_type": r.resource_type,
+            "planned_units": r.planned_units,
+            "actual_units": r.actual_units,
+            "remaining_units": r.remaining_units,
+            "unit": "h" if timed else r.unit_of_measure,
+            "unit_basis": ("P6 time units (hours)" if timed
+                           else "P6 resource unit of measure" if r.unit_of_measure
+                           else "not set in P6"),
+        }
+        if r.resource_type == "Labor":
+            item["planned_mandays"] = (r.planned_units or 0) / _HOURS_PER_DAY
+            item["actual_mandays"] = (r.actual_units or 0) / _HOURS_PER_DAY
+        data.append(item)
+    return envelope(
+        data, filters={**sc.filters, "resource_type": wanted_type}, sources=["P6"],
         page=page, page_size=page_size, total=total,
     )

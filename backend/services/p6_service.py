@@ -91,7 +91,7 @@ ACTIVITY_FIELDS = (
 WBS_FIELDS = "ObjectId,ParentObjectId,ProjectObjectId,Name,Code"
 
 # Resource Assignment fields
-RESOURCE_ASSIGNMENT_FIELDS = "ObjectId,ActivityObjectId,ProjectObjectId,ResourceName,ResourceType,PlannedUnits,ActualUnits"
+RESOURCE_ASSIGNMENT_FIELDS = "ObjectId,ActivityObjectId,ProjectObjectId,ResourceObjectId,ResourceName,ResourceType,PlannedUnits,ActualUnits,RemainingUnits"
 
 # ==========================================
 # P6 → Database Field Mapping
@@ -232,7 +232,9 @@ RESOURCE_ASSIGNMENT_FIELD_MAP: Dict[str, str] = {
     'ResourceName': 'resource_name',
     'ResourceType': 'resource_type',
     'PlannedUnits': 'planned_units',
-    'ActualUnits': 'actual_units'
+    'ActualUnits': 'actual_units',
+    'RemainingUnits': 'remaining_units',
+    'ResourceObjectId': 'resource_object_id',
 }
 
 DATE_FIELDS_BASELINE = {
@@ -625,6 +627,25 @@ class P6Service:
             logger.error(f"[REAL P6 API] Error fetching WBS: {e}")
             return []
 
+    def fetch_resource_uoms(self) -> Dict[int, Optional[str]]:
+        """Resource ObjectId -> P6 unit of measure (abbreviation), read once
+        per service instance from the resource master. Empty where P6 has
+        none set; P6 carries no UoM on Labor/Nonlabor (they are in hours)."""
+        if getattr(self, "_uoms", None) is not None:
+            return self._uoms
+        self._uoms = {}
+        try:
+            response = requests.get(
+                f"{self.base_url}/resource", headers=self.headers,
+                params={"Fields": "ObjectId,UnitOfMeasureAbbreviation"},
+                timeout=180, verify=False, proxies=self.proxies)
+            response.raise_for_status()
+            self._uoms = {int(r["ObjectId"]): (r.get("UnitOfMeasureAbbreviation") or None)
+                          for r in response.json() if r.get("ObjectId")}
+        except Exception as e:
+            logger.error(f"[REAL P6 API] Error fetching resource units of measure: {e}")
+        return self._uoms
+
     def fetch_resource_assignments(self, project_object_id: int) -> List[Dict[str, Any]]:
         """
         Fetches all Resource Assignments for a given project from Oracle Primavera P6.
@@ -703,6 +724,7 @@ class P6Service:
         # One read of this project's rows instead of a query per assignment.
         existing_by_id = {a.p6_object_id: a for a in db.query(P6ResourceAssignment).filter(
             P6ResourceAssignment.project_object_id == int(project_object_id)).all()}
+        uoms = self.fetch_resource_uoms()
 
         for raw_ass in raw_assignments:
             p6_object_id = raw_ass.get('ObjectId')
@@ -722,6 +744,7 @@ class P6Service:
                         value = int(value)
                     if hasattr(ass_node, db_col):
                         setattr(ass_node, db_col, value)
+            ass_node.unit_of_measure = uoms.get(ass_node.resource_object_id)
             
             # Only count Material and Labor resources for Scope check (exclude Nonlabor)
             r_type = (ass_node.resource_type or "").lower()

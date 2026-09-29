@@ -500,6 +500,12 @@ class P6ResourceAssignment(Base):
     
     planned_units = Column(Float, nullable=True)
     actual_units = Column(Float, nullable=True)
+    remaining_units = Column(Float, nullable=True)
+    # P6 resource master: which resource, and its unit of measure. P6 counts
+    # Labor and Nonlabor in hours; a Material resource's unit is its own
+    # UnitOfMeasureAbbreviation (empty on every BESS resource, 2026-09-29).
+    resource_object_id = Column(BigInteger, nullable=True, index=True)
+    unit_of_measure = Column(String, nullable=True)
     
     last_synced_at = Column(DateTime, default=datetime.utcnow)
 
