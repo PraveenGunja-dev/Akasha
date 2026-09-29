@@ -481,8 +481,12 @@ def get_resources(
             "actual_units": r.actual_units,
             "remaining_units": r.remaining_units,
             "unit": "h" if timed else r.unit_of_measure,
+            # resource_object_id is written by the same sync that reads the
+            # unit, so a null there means "not synced since the UoM field was
+            # added", not "P6 has no unit" - say which.
             "unit_basis": ("P6 time units (hours)" if timed
                            else "P6 resource unit of measure" if r.unit_of_measure
+                           else "pending P6 resource sync" if r.resource_object_id is None
                            else "not set in P6"),
         }
         if r.resource_type == "Labor":
