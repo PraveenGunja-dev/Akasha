@@ -5,7 +5,7 @@ import ReactECharts from 'echarts-for-react';
 import {
   ArrowLeft, Activity, Calendar, Clock, BarChart3, TrendingUp, AlertTriangle, CheckCircle, Database, FileText, X,
   Layers, ChevronDown, ChevronUp, RefreshCcw, DollarSign, IndianRupee, Target, Truck, Shield, Box, LayoutDashboard, Cpu, Network, Check,
-  Loader2, Brain, CheckCircle2, BrainCircuit, Presentation, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt, HardHat
+  Loader2, Brain, CheckCircle2, BrainCircuit, Presentation, Flag, CalendarClock, Download, Users, Package, Zap, MapPin, ChevronRight, ExternalLink, Play, Maximize2, Receipt, HardHat, Calculator
 } from 'lucide-react';
 import InstallationProcurementTab from './InstallationProcurementTab';
 import { ProjectWBS } from './ProjectWBS';
@@ -364,6 +364,11 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const [isBess, setIsBess] = useState(false);
   const [isBessLabel, setIsBessLabel] = useState<string | null>(null);
   const [cpagOpen, setCpagOpen] = useState(false);
+  /* EAC (Estimate at Completion) - BESS only, beside the SAP entity tabs.
+     Button placed; the EAC logic is to be written. */
+  const openEac = () => {
+    // TODO: EAC logic
+  };
 
   /* Is this one of the six BESS projects that carry a CPAG pack? */
   useEffect(() => {
@@ -1530,6 +1535,17 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           </button>
                         ))}
                       </div>
+                      {/* EAC (Estimate at Completion) - BESS projects only. Logic to follow. */}
+                      {isBess && (
+                        <button
+                          type="button"
+                          onClick={openEac}
+                          className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                        >
+                          <Calculator className="w-4 h-4" />
+                          EAC
+                        </button>
+                      )}
                       <button
                         onClick={downloadSAPReport}
                         className="flex items-center gap-2 bg-primary/20 hover:bg-primary/30 text-primary border border-primary/30 transition-colors rounded-lg px-4 py-2 text-sm font-semibold"
