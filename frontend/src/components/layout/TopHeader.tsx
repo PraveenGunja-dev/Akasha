@@ -7,6 +7,20 @@ import { toast } from 'sonner';
 import NotificationDropdown from './NotificationDropdown';
 import PMAGThreadPanel from './PMAGThreadPanel';
 
+/* The portfolio / phase filters live in the URL, and any link that navigates to
+   a bare path dropped them - the header then read "Ongoing / All Portfolios"
+   again. The last choice is kept here and put back when a page opens without
+   it. Choosing the defaults explicitly is stored too, so it is never mistaken
+   for a dropped filter; a URL that carries filters (a shared link) wins. */
+const FILTER_KEY = 'akasha.filters';
+type StoredFilters = { portfolio?: string; phase?: string };
+const readFilters = (): StoredFilters => {
+  try { return JSON.parse(localStorage.getItem(FILTER_KEY) || '{}') || {}; } catch { return {}; }
+};
+const writeFilters = (patch: StoredFilters) => {
+  try { localStorage.setItem(FILTER_KEY, JSON.stringify({ ...readFilters(), ...patch })); } catch { /* storage unavailable */ }
+};
+
 export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing, onNavigateToSimulation }: any) {
   const [theme, , toggleTheme] = useTheme();
   const navigate = useNavigate();
@@ -15,6 +29,24 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const [searchParams, setSearchParams] = useSearchParams();
   const currentPortfolio = searchParams.get('portfolio') || 'All Portfolios';
   const currentPhase = searchParams.get('phase') || 'Ongoing';
+
+  useEffect(() => {
+    const urlPortfolio = searchParams.get('portfolio');
+    const urlPhase = searchParams.get('phase');
+    const saved = readFilters();
+    const restorePortfolio = !urlPortfolio && saved.portfolio && saved.portfolio !== 'All Portfolios';
+    const restorePhase = !urlPhase && saved.phase && saved.phase !== 'Ongoing';
+    if (restorePortfolio || restorePhase) {
+      setSearchParams(prev => {
+        if (restorePortfolio) prev.set('portfolio', saved.portfolio as string);
+        if (restorePhase) prev.set('phase', saved.phase as string);
+        return prev;
+      }, { replace: true });
+      return;
+    }
+    // The URL is the truth from here (including a shared link); remember it.
+    writeFilters({ portfolio: urlPortfolio || 'All Portfolios', phase: urlPhase || 'Ongoing' });
+  }, [searchParams, setSearchParams]);
   const [isPortfolioOpen, setIsPortfolioOpen] = useState(false);
   const [isPhaseOpen, setIsPhaseOpen] = useState(false);
 
@@ -115,6 +147,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
               <button
                 key={p}
                 onClick={() => {
+                  writeFilters({ phase: p });
                   setSearchParams(prev => {
                     if (p === 'Ongoing') {
                       prev.delete('phase'); // Ongoing is default
@@ -150,6 +183,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
               <button
                 key={p}
                 onClick={() => {
+                  writeFilters({ portfolio: p });
                   setSearchParams(prev => {
                     if (p === 'All Portfolios') {
                       prev.delete('portfolio');

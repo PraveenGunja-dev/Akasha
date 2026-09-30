@@ -1,9 +1,11 @@
 import React, { useState, useRef, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MapContainer, TileLayer, Marker, Popup, Polyline, Tooltip, useMapEvents } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 import { MapPin, Layers, ChevronDown, Zap, Search, Thermometer, Wind, Loader2, CloudLightning, CloudRain, X, Activity, Sun, Maximize2, Minimize2, Cloud, Globe, Factory, Target } from 'lucide-react';
 import { formatProjectName } from '../../lib/projectName';
+import useTheme from '../../hooks/useTheme';
 
 // ─── OIM-style voltage color scale ───
 const getVoltageColor = (voltageTag?: string): string => {
@@ -246,9 +248,11 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
   };
 
   if (isExpanded) {
-    return (
+    // Portalled to <body>: inside the page's animated container a "fixed" overlay
+    // is boxed in by the transform, and the page header showed through it.
+    return createPortal(
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/40 backdrop-blur-md p-4 sm:p-8 animate-fade-in" onWheel={(e) => e.stopPropagation()}>
-        <div className="w-full max-w-7xl bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] border border-white/20 dark:border-slate-800/50">
+        <div className="w-full max-w-7xl bg-white dark:bg-slate-900 shadow-2xl rounded-3xl flex flex-col overflow-hidden max-h-[95vh] border border-white/20 dark:border-slate-800/50">
           <div className="p-6 border-b border-slate-200/50 dark:border-slate-700/50 flex justify-between items-center bg-gradient-to-r from-slate-50 to-white dark:from-slate-900 dark:to-slate-800">
             <div>
               <h3 className="font-extrabold text-2xl text-slate-900 dark:text-white flex items-center gap-3">
@@ -356,7 +360,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
           </div>
         </div>
       </div>
-    );
+    , document.body);
   }
 
   return (
@@ -442,7 +446,7 @@ interface ProjectMapProps {
   theme?: 'light' | 'dark';
 }
 
-const MAP_STYLES = [
+const MAP_STYLES: { id: string; name: string; url: string; labels?: string }[] = [
   { id: 'osm-standard', name: 'OSM Detailed View', url: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png' },
   { id: 'osm-hot', name: 'OSM Infrastructure (HOT)', url: 'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png' },
   { id: 'open-topo', name: 'OpenTopo Contours', url: 'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png' },
@@ -452,7 +456,15 @@ const MAP_STYLES = [
   { id: 'esri-street', name: 'ESRI Street Map', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Street_Map/MapServer/tile/{z}/{y}/{x}' },
   { id: 'esri-natgeo', name: 'ESRI National Geographic', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/NatGeo_World_Map/MapServer/tile/{z}/{y}/{x}' },
   { id: 'esri-light-gray', name: 'ESRI Minimalist Light', url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Light_Gray_Base/MapServer/tile/{z}/{y}/{x}' },
+  // Same free ESRI canvas family as Minimalist Light (CARTO's dark tiles now
+  // need an API key). The base carries no text, so place names come from its
+  // reference layer drawn on top.
+  { id: 'esri-dark-gray', name: 'ESRI Minimalist Dark',
+    url: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    labels: 'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}' },
 ];
+// The basemap each theme opens on; a layer the user picks overrides it.
+const DEFAULT_STYLE = { light: MAP_STYLES[0], dark: MAP_STYLES[MAP_STYLES.length - 1] };
 
 // Curated Substation Coordinates provided by the user
 const SUBSTATION_COORDS = [
@@ -536,8 +548,12 @@ const getProjectCoordinates = (project: any, index: number) => {
   return null;
 };
 
-export default function ProjectMap({ projects = [], onOpenProject, theme }: ProjectMapProps) {
-  const [activeStyle, setActiveStyle] = useState(MAP_STYLES[0]);
+export default function ProjectMap({ projects = [], onOpenProject, theme: themeProp }: ProjectMapProps) {
+  const [appTheme] = useTheme();
+  const theme = themeProp ?? appTheme;
+  // Follows the theme until the user picks a layer from Map Layers.
+  const [pickedStyle, setActiveStyle] = useState<(typeof MAP_STYLES)[number] | null>(null);
+  const activeStyle = pickedStyle ?? DEFAULT_STYLE[theme === 'dark' ? 'dark' : 'light'];
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [showTransmission, setShowTransmission] = useState(false); // Hidden by default to reduce clutter
   const [showProjects, setShowProjects] = useState(false);
@@ -1002,6 +1018,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme }: Proj
             key={activeStyle.id} // Re-render when changing styles
             url={activeStyle.url}
           />
+          {activeStyle.labels && <TileLayer key={`${activeStyle.id}-labels`} url={activeStyle.labels} />}
           <ZoomTracker />
           <MapEventsHandler />
 

@@ -263,21 +263,48 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
 
   type LocatedEdge = { edge: TcEdge; from: SubstationCoord; to: SubstationCoord };
 
+  // Great-circle km between two points, and along a traced path.
+  const kmBetween = (a: [number, number], b: [number, number]) => {
+    const r = Math.PI / 180;
+    const h = Math.sin((b[0] - a[0]) * r / 2) ** 2
+      + Math.cos(a[0] * r) * Math.cos(b[0] * r) * Math.sin((b[1] - a[1]) * r / 2) ** 2;
+    return 6371 * 2 * Math.asin(Math.sqrt(h));
+  };
+  const drawnKm = ({ edge, from, to }: LocatedEdge) => {
+    const path = edge.path ?? [];
+    if (path.length >= 2) {
+      let km = 0;
+      for (let i = 1; i < path.length; i++) km += kmBetween(path[i - 1] as [number, number], path[i] as [number, number]);
+      return km;
+    }
+    return kmBetween([from.lat, from.lng], [to.lat, to.lng]);
+  };
+
   // Edges whose endpoints share a campus (HVDC terminal at a pooling station, a LILO tap,
   // a GIS bay) have zero length on the map. Drawing them would render nothing at all, so
   // they are pulled out and reported on the substation marker instead.
-  const { geoEdges, colocatedEdges, unmappedCount } = useMemo(() => {
+  const { geoEdges, colocatedEdges, doubtfulEdges, unmappedCount } = useMemo(() => {
     const located = filteredEdges
       .map(e => ({ edge: e, from: findSubstationCoord(e.from_label), to: findSubstationCoord(e.to_label) }))
       .filter(x => x.from && x.to) as LocatedEdge[];
     const drawable: LocatedEdge[] = [];
     const sameSite: LocatedEdge[] = [];
+    const doubtful: LocatedEdge[] = [];
     for (const item of located) {
-      (item.from.lat === item.to.lat && item.from.lng === item.to.lng ? sameSite : drawable).push(item);
+      if (item.from.lat === item.to.lat && item.from.lng === item.to.lng) { sameSite.push(item); continue; }
+      // Not drawn when the route between the two named substations is far longer
+      // than the line's declared length (Indore-Bhopal: 12.5 km declared, 176 km
+      // between them) - most likely a LILO or partial scope, and drawing the whole
+      // corridor would misstate it. Audited 2026-09-30: 8 lines, all 2.5x+ over;
+      // every other line sits within 1.0-1.4x of its declared length.
+      const declared = parseLengthKm(item.edge.length);
+      if (declared > 0 && drawnKm(item) > 2.5 * declared + 5) { doubtful.push(item); continue; }
+      drawable.push(item);
     }
     return {
       geoEdges: drawable,
       colocatedEdges: sameSite,
+      doubtfulEdges: doubtful,
       unmappedCount: filteredEdges.length - located.length,
     };
   }, [filteredEdges]);
@@ -519,10 +546,15 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
                 </div>
               </div>
 
-              {(unmappedCount > 0 || colocatedEdges.length > 0) && (
+              {(unmappedCount > 0 || colocatedEdges.length > 0 || doubtfulEdges.length > 0) && (
                 <div className="pt-1.5 border-t border-border/50 text-[10px] text-muted-foreground space-y-0.5">
                   {colocatedEdges.length > 0 && <div>{colocatedEdges.length} in-campus link{colocatedEdges.length === 1 ? '' : 's'} shown on the substation</div>}
                   {unmappedCount > 0 && <div>{unmappedCount} line{unmappedCount === 1 ? '' : 's'} without coordinates</div>}
+                  {doubtfulEdges.length > 0 && (
+                    <div title={doubtfulEdges.map(({ edge }) => `${edge.from_label} - ${edge.to_label}: ${edge.length} km declared`).join('\n')}>
+                      {doubtfulEdges.length} line{doubtfulEdges.length === 1 ? '' : 's'} not drawn: declared length doesn't match the route
+                    </div>
+                  )}
                 </div>
               )}
             </div>

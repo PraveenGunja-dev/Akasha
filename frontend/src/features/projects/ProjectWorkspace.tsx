@@ -908,17 +908,21 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
   const downloadSLRReport = async () => {
     if (!slrData || !slrData.data) return;
 
+    const isPR = slrTypeFilter === 'PReq';
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Purchase Orders');
+    const worksheet = workbook.addWorksheet(isPR ? 'Purchase Requisitions' : 'Purchase Orders');
 
+    // A requisition has no vendor and nothing spent or committed against it.
     worksheet.columns = [
-      { header: 'PO Number', key: 'po', width: 18 },
-      { header: 'Vendor Name', key: 'vendor', width: 35 },
+      { header: isPR ? 'PR Number' : 'PO Number', key: 'po', width: 18 },
+      ...(isPR ? [] : [{ header: 'Vendor Name', key: 'vendor', width: 35 }]),
       { header: 'Type', key: 'type', width: 12 },
       { header: 'Description', key: 'desc', width: 45 },
       { header: 'Total Amount', key: 'total', width: 18, style: { numFmt: '₹#,##0.00' } },
-      { header: 'Actual', key: 'actual', width: 18, style: { numFmt: '₹#,##0.00' } },
-      { header: 'Commitment', key: 'commit', width: 18, style: { numFmt: '₹#,##0.00' } },
+      ...(isPR ? [] : [
+        { header: 'Actual', key: 'actual', width: 18, style: { numFmt: '₹#,##0.00' } },
+        { header: 'Commitment', key: 'commit', width: 18, style: { numFmt: '₹#,##0.00' } },
+      ]),
       { header: 'Status', key: 'status', width: 15 }
     ];
 
@@ -1001,10 +1005,12 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
     analyticsSheet.getColumn(2).width = 25;
 
     analyticsSheet.addRow(['OVERVIEW KPIs', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });
-    analyticsSheet.addRow(['Total Purchase Orders', slrFiltered.length]);
+    analyticsSheet.addRow([isPR ? 'Total Purchase Requisitions' : 'Total Purchase Orders', slrFiltered.length]);
     analyticsSheet.addRow(['Total Amount', totalAmount]).getCell(2).numFmt = '₹#,##0.00';
-    analyticsSheet.addRow(['Total Actual', totalActual]).getCell(2).numFmt = '₹#,##0.00';
-    analyticsSheet.addRow(['Total Commitment', totalCommit]).getCell(2).numFmt = '₹#,##0.00';
+    if (!isPR) {
+      analyticsSheet.addRow(['Total Actual', totalActual]).getCell(2).numFmt = '₹#,##0.00';
+      analyticsSheet.addRow(['Total Commitment', totalCommit]).getCell(2).numFmt = '₹#,##0.00';
+    }
     analyticsSheet.addRow([]);
 
     analyticsSheet.addRow(['AMOUNT BY PO TYPE', '']).eachCell(c => { c.font = headerStyle.font; c.fill = headerStyle.fill as any; });
@@ -1671,7 +1677,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                   {expandedMetric === 'utilized' && 'Consumed on site by material'}
                                   {expandedMetric === 'remaining' && 'Still to deliver by material'}
                                   {expandedMetric === 'transit' && 'In-Transit Breakdown'}
-                                  {expandedMetric === 'slr' && 'Purchase Orders Breakdown'}
+                                  {expandedMetric === 'slr' && (slrTypeFilter === 'PReq' ? 'Purchase Requisitions Breakdown' : 'Purchase Orders Breakdown')}
                                 </h4>
                                 <div className="flex items-center gap-2">
                                   {expandedMetric === 'slr' && (
@@ -2029,7 +2035,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
 
                                   <div className="overflow-hidden flex flex-col rounded-xl border border-border/50 mt-4">
                                     <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
-                                      <h3 className="text-sm font-semibold text-foreground">Purchase Orders ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>
+                                      <h3 className="text-sm font-semibold text-foreground">{slrTypeFilter === 'PReq' ? 'Purchase Requisitions' : 'Purchase Orders'} ({slrData.data.filter((r: any) => (slrTypeFilter === 'ALL' || r.type === slrTypeFilter) && (slrStatusFilter === 'ALL' || r.status === slrStatusFilter)).length})</h3>
                                       <div className="flex items-center gap-2">
                                         <select
                                           value={slrStatusFilter}
@@ -2055,14 +2061,14 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                       <table className="w-full text-sm text-left relative">
                                         <thead className="bg-muted border-b border-border sticky top-0 z-10">
                                           <tr>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground">PO Number</th>
+                                            <th className="px-4 py-3 font-semibold text-muted-foreground">{slrTypeFilter === 'PReq' ? 'PR Number' : 'PO Number'}</th>
                                             {slrTypeFilter !== 'PReq' && <th className="px-4 py-3 font-semibold text-muted-foreground">Vendor Name</th>}
                                             <th className="px-4 py-3 font-semibold text-muted-foreground">Type</th>
                                             <th className="px-4 py-3 font-semibold text-muted-foreground">Description</th>
                                             <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Lines</th>
                                             <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Total Amount</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Actual</th>
-                                            <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Commitment</th>
+                                            {slrTypeFilter !== 'PReq' && <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Actual</th>}
+                                            {slrTypeFilter !== 'PReq' && <th className="px-4 py-3 font-semibold text-muted-foreground text-right">Commitment</th>}
                                             <th className="px-4 py-3 font-semibold text-muted-foreground text-center">Status</th>
                                           </tr>
                                         </thead>
@@ -2085,8 +2091,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                   <td className="px-4 py-3 text-muted-foreground truncate max-w-[250px]" title={row.description}>{row.description || '—'}</td>
                                                   <td className="px-4 py-3 text-center"><span className="text-[10px] bg-muted px-1.5 py-0.5 rounded font-medium">{row.line_count || 1}</span></td>
                                                   <td className="px-4 py-3 text-right font-mono">₹{row.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                  <td className="px-4 py-3 text-right text-status-healthy-fg font-mono">₹{row.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                  <td className="px-4 py-3 text-right text-status-risk-fg font-mono">₹{row.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                  {slrTypeFilter !== 'PReq' && <td className="px-4 py-3 text-right text-status-healthy-fg font-mono">₹{row.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>}
+                                                  {slrTypeFilter !== 'PReq' && <td className="px-4 py-3 text-right text-status-risk-fg font-mono">₹{row.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>}
                                                   <td className="px-4 py-3 text-center">
                                                     <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest ${row.status === 'Open' ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
                                                       }`}>
@@ -2102,8 +2108,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                                     <td className="px-4 py-2 text-[11px] text-muted-foreground truncate max-w-[250px]" title={item.description}>{item.description || '—'}</td>
                                                     <td className="px-4 py-2 text-center text-[11px] text-muted-foreground">{item.wbs_element}</td>
                                                     <td className="px-4 py-2 text-right text-[11px] text-muted-foreground font-mono">₹{item.total.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2 text-right text-[11px] text-status-healthy-fg font-mono">₹{item.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
-                                                    <td className="px-4 py-2 text-right text-[11px] text-status-risk-fg font-mono">₹{item.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>
+                                                    {slrTypeFilter !== 'PReq' && <td className="px-4 py-2 text-right text-[11px] text-status-healthy-fg font-mono">₹{item.actual.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>}
+                                                    {slrTypeFilter !== 'PReq' && <td className="px-4 py-2 text-right text-[11px] text-status-risk-fg font-mono">₹{item.commitment.toLocaleString(undefined, { maximumFractionDigits: 2 })}</td>}
                                                     <td className="px-4 py-2"></td>
                                                   </tr>
                                                 ))}

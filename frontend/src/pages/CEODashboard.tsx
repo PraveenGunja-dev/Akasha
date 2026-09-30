@@ -355,7 +355,13 @@ export default function CEODashboard() {
                           alt="Akasha Solar Dashboard" 
                           className="absolute inset-0 w-full h-full object-cover object-center opacity-100"
                         />
-                        <div className="absolute inset-0 bg-gradient-to-r from-background from-10% via-background/80 via-30% via-background/40 via-50% via-background/10 via-70% to-transparent to-90% pointer-events-none"></div>
+                        {/* Solid behind the title, then the photo shows from ~40% across.
+                            Explicit stops: Tailwind keeps only one `via-`, which had
+                            held the fade out to 70% and hidden most of the image. */}
+                        <div
+                          className="absolute inset-0 pointer-events-none"
+                          style={{ background: 'linear-gradient(90deg, var(--background) 0%, color-mix(in srgb, var(--background) 85%, transparent) 22%, color-mix(in srgb, var(--background) 45%, transparent) 38%, color-mix(in srgb, var(--background) 10%, transparent) 55%, transparent 70%)' }}
+                        ></div>
                       
                       <div className="relative z-10 px-8 sm:px-10 max-w-2xl drop-shadow-sm">
                         <h1 className="text-3xl sm:text-[42px] font-black mb-3 tracking-tight leading-none flex items-center flex-wrap gap-x-3 transition-all duration-500 group-hover:drop-shadow-[0_0_15px_rgba(118,72,157,0.5)]">

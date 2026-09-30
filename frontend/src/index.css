@@ -599,6 +599,27 @@
   }
   .map-clean .leaflet-control-attribution a { color: var(--fg-tertiary); }
 
+  /* Leaflet's popups and zoom buttons are white by default; in dark mode they
+     take the raised surface so their text (theme foreground) stays readable. */
+  .dark .leaflet-popup-content-wrapper,
+  .dark .leaflet-popup-tip {
+    background: var(--surface-2);
+    color: var(--fg-primary);
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
+  }
+  .dark .leaflet-popup-content-wrapper { border: 1px solid var(--border-subtle); }
+  .dark .leaflet-container a.leaflet-popup-close-button { color: var(--fg-tertiary); }
+  .dark .leaflet-container a.leaflet-popup-close-button:hover { color: var(--fg-primary); }
+  .dark .leaflet-bar a,
+  .dark .leaflet-bar a:hover {
+    background: var(--surface-2);
+    color: var(--fg-primary);
+    border-bottom-color: var(--border-subtle);
+  }
+  .dark .leaflet-bar a:hover { background: var(--surface-sunken); }
+  .dark .leaflet-bar { border-color: var(--border-subtle); }
+  .dark .leaflet-container { background: #0e1117; }
+
   /* ── KPI surface ──
      THE KPI card treatment, shared by every screen. An Adani-blue wash rising
      from the foot, a hairline sheen along the top edge, and a lit bottom rule.

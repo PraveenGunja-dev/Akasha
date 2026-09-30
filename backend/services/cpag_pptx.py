@@ -1279,9 +1279,13 @@ def _achievement(actual, plan) -> RGBColor:
 def _civil_rows(elements):
     out = []
     for e in elements:
-        plan = [("-" if v is None else _n(v)) for v in e["plan"]]
+        # "*" marks a stage P6 has no activity for, inferred from its
+        # prerequisite (footnoted under the table).
+        star = set(e.get("inferred") or [])
+        cell = lambda i, v: "-" if v is None else _n(v) + ("*" if i in star else "")
+        plan = [cell(i, v) for i, v in enumerate(e["plan"])]
         # All actual values in black font - no per-cell achievement colouring.
-        act = [("-" if v is None else _n(v)) for v in e["actual"]]
+        act = [cell(i, v) for i, v in enumerate(e["actual"])]
         out.append([e["element"], "Plan", _n(e["scope"]), *plan, _p(e["planPct"])])
         # Progress column: green only when the element is fully complete.
         is_complete = e["actualPct"] is not None and e["actualPct"] >= 100
@@ -1315,6 +1319,16 @@ def fill_civil(slide, p) -> None:
             tb.cell(r, 0).merge(tb.cell(r + 1, 0))
         for r in heads:
             tb.cell(r, 0).merge(tb.cell(r, 1))
+        notes = []
+        if any(e.get("inferred") for g in groups[:2] for e in g["elements"]):
+            notes.append("* No P6 activity - taken from Footing & Pile Beam Casting.")
+        notes.append("Progress: stage-weighted (Staircase & Finishing 4%, other stages equal).")
+        cap = slide.shapes.add_textbox(x, y + cy, cx, Inches(0.22))
+        cap.text_frame.margin_top = cap.text_frame.margin_bottom = 0
+        run = cap.text_frame.paragraphs[0].add_run()
+        run.text = "  ".join(notes)
+        run.font.size, run.font.name, run.font.italic = Pt(7), "Arial", True
+        run.font.color.rgb = RGBColor(0x59, 0x59, 0x59)
 
     if bcf_pic is not None and len(groups) >= 3 and groups[2]["elements"]:
         g = groups[2]
@@ -1388,6 +1402,106 @@ def fill_electrical(slide, p) -> None:
 
 
 MANPOWER_STACK = ["11", "12", "05B", "08B", "09", "10B"]
+
+
+# Actual-vs-plan text colour on white. The legend's yellow is a bar fill and
+# unreadable as text, so the 40-80% band reads in dark amber.
+AMBER_TEXT = RGBColor(0xB8, 0x86, 0x0B)
+
+
+def _achieved_text(actual, plan) -> RGBColor:
+    r = (actual / plan) if plan else 1.0
+    return GREEN if r >= 0.8 else AMBER_TEXT if r >= 0.4 else RED
+
+
+def fill_manpower_table(slide, projects, d, label_suffix: str, key_plan: str = "planManpower",
+                        key_act: str = "earnedManpower", size: float = 9,
+                        max_months: int = 12) -> None:
+    """Manpower / Mandays Deployment as a table (user, 2026-09-30): one row
+    per BESS project plus Total, one Plan / Actual column pair per month.
+    Manpower is average daily manpower (mandays in the month / days in it);
+    Mandays is the month's total. Construction activities only, plan phased
+    on each project's plan baseline.
+    Styled like the pack's other tables: purple header, peach Plan columns,
+    Actual coloured by the pack's legend (80%+ of plan green, 40-80% amber,
+    below 40% red)."""
+    pics = pictures(slide)
+    by = {pss_key(p["pss"]): p for p in projects}
+    months = sorted({s["month"] for p in projects for s in (p.get("manpower") or [])
+                     if s.get(key_plan) or s.get(key_act)})[-max_months:]
+    if not pics or not months:
+        return
+    order = [k for k in PSS_KEYS if k in by]
+
+    head0, head1 = ["Project"], [""]
+    for m in months:
+        head0 += [_mon(m), ""]
+        head1 += ["Plan", "Actual"]
+    rows = [head0, head1]
+    tot_p, tot_a = [0.0] * len(months), [0.0] * len(months)
+    for k in order:
+        s_by = {s["month"]: s for s in by[k].get("manpower") or []}
+        row = [by[k]["pss"]]
+        for i, m in enumerate(months):
+            s = s_by.get(m) or {}
+            pv, av = s.get(key_plan) or 0, s.get(key_act) or 0
+            tot_p[i] += pv
+            tot_a[i] += av
+            row += [_n(pv) if pv else "-", (_n(av), _achieved_text(av, pv)) if av else "-"]
+        rows.append(row)
+    total = ["Total"]
+    for i in range(len(months)):
+        total += [_n(round(tot_p[i])), (_n(round(tot_a[i])), _achieved_text(tot_a[i], tot_p[i]))]
+    rows.append(total)
+
+    box = pics[0]
+    x, y, cx, cy = box.left, box.top, box.width, box.height
+    remove_shape(box)
+    height = min(cy, int(Inches(0.36)) * len(rows))
+    gf = new_table(slide, x, y, cx, height, rows, [1.25] + [0.6] * (2 * len(months)),
+                   size=size, header_rows=(0, 1), header_fill=HEADER_PURPLE, header_color=WHITE,
+                   bold_cols=(0,))
+    tb = gf.table
+    tb.cell(0, 0).merge(tb.cell(1, 0))
+    for i in range(len(months)):
+        tb.cell(0, 1 + 2 * i).merge(tb.cell(0, 2 + 2 * i))
+    last = len(rows) - 1
+    for r in range(2, len(rows)):
+        for i in range(len(months)):
+            cell = tb.cell(r, 1 + 2 * i)
+            cell.fill.solid()
+            cell.fill.fore_color.rgb = PEACH
+        if r == last:
+            for c in range(len(rows[0])):
+                for para in tb.cell(r, c).text_frame.paragraphs:
+                    for run in para.runs:
+                        run.font.bold = True
+
+    # Say which months follow the site's weekly method and which are rebuilt,
+    # so the two are never read as the same measurement.
+    weekly = [m for m in months if any(
+        s.get("month") == m and s.get("planBasis") == "weekly"
+        for p in projects for s in (p.get("manpower") or []))]
+    basis = ("Plan: P6 construction labour phased on the plan baseline. Actual: P6 actual "
+             "labour over activity actual dates. 8 h = 1 manday.")
+    if weekly:
+        basis = (f"From {_mon(weekly[0])}: average of weekly P6 updates (Plan = labour "
+                 f"scheduled in the next 7 days; Actual = labour booked between updates). "
+                 f"Earlier months: " + basis[0].lower() + basis[1:])
+    cap = slide.shapes.add_textbox(x, y + height + Inches(0.08), cx, Inches(0.3))
+    cap.text_frame.word_wrap = True
+    run = cap.text_frame.paragraphs[0].add_run()
+    run.text = basis
+    run.font.size, run.font.name, run.font.italic = Pt(9), "Arial", True
+    run.font.color.rgb = RGBColor(0x59, 0x59, 0x59)
+
+    note = _title_shape(slide, "Note:")
+    if note is not None:
+        set_text(note, (_manual(d, "manpower") or {}).get("note") or "")
+    title = _title_shape(slide, "Deployment")
+    if title is not None and label_suffix:
+        base = title.text_frame.text.split("- PSS")[0].rstrip()
+        set_text(title, f"{base}- {label_suffix}")
 
 
 def fill_manpower(slide, projects, d, key_plan: str, key_act: str, label_suffix: str) -> None:
@@ -1730,8 +1844,8 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     fill_financial(T[45], d)
     # Manpower / Mandays from our own P6 data (user, 2026-09-28), not the
     # reference deck's contractor averages.
-    fill_manpower(T[35], projects, d, "planMonth", "earnedMonth", scope_label or "")
-    fill_manpower(T[36], projects, d, "planManpower", "earnedManpower", scope_label or "")
+    fill_manpower_table(T[35], projects, d, scope_label or "", "planMonth", "earnedMonth", size=8)
+    fill_manpower_table(T[36], projects, d, scope_label or "")
 
     for key in PSS_KEYS:
         p = by.get(key)

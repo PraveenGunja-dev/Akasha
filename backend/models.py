@@ -1051,6 +1051,25 @@ class CPAGBaselineActivity(Base):
     synced_at = Column(DateTime, default=datetime.utcnow)
 
 
+class CPAGManpowerSnapshot(Base):
+    """One P6 update of a CPAG project's construction labour, taken at every
+    sync (services.cpag_manpower). P6 keeps no weekly history - no period
+    actuals, and each update overwrites the last look-ahead - so the weekly
+    Forecast / Actual the site reports are rebuilt from consecutive rows:
+    actual = the rise in actual hours between two updates, forecast = the
+    hours the schedule placed in the 7 days after the data date. One row per
+    data date; a re-sync on the same data date replaces it."""
+    __tablename__ = "cpag_manpower_snapshot"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_object_id = Column(BigInteger, index=True, nullable=False)
+    data_date = Column(DateTime, nullable=False, index=True)
+    actual_hours = Column(Float, nullable=False)        # cumulative, construction Labor
+    forecast_hours_7d = Column(Float, nullable=False)   # scheduled in [data date, +7 d)
+    planned_hours = Column(Float, nullable=True)        # at completion, for reference
+    taken_at = Column(DateTime, default=datetime.utcnow)
+
+
 class CPAGBaselineAssignment(Base):
     """One resource assignment of the P6 baseline a CPAG project is planned
     against (services.cpag_baseline.PLAN_BASELINE - B2 or B1 per project).

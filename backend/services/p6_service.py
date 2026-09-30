@@ -1165,6 +1165,17 @@ class P6Service:
             db.rollback()
             logger.error(f"CPAG baseline sync failed: {e}")
 
+        # Weekly manpower: P6 keeps no history, so each update is recorded.
+        try:
+            from routers.bess import BESS_PROJECTS
+            from services.cpag_manpower import take_snapshot
+            for p in projects:
+                if p.project_id in BESS_PROJECTS:
+                    take_snapshot(db, p.p6_object_id)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"CPAG manpower snapshot failed: {e}")
+
         # New: Post-sync check for Trial Run vs COD discrepancy
         self.check_trial_cod_discrepancy(db)
 
@@ -1281,6 +1292,17 @@ class P6Service:
         activities_synced = self.sync_activities_to_db(db, project_object_id=project_object_id)
         self.sync_resource_assignments_to_db(db, project_object_id=project_object_id)
         self.sync_activity_risks_to_db(db, project_object_id=project_object_id)
+        try:
+            from routers.bess import BESS_PROJECTS
+            from services.cpag_manpower import take_snapshot
+            from models import P6Project
+            pid = (db.query(P6Project.project_id)
+                   .filter(P6Project.p6_object_id == project_object_id).scalar())
+            if pid in BESS_PROJECTS:
+                take_snapshot(db, project_object_id)
+        except Exception as e:
+            db.rollback()
+            logger.error(f"CPAG manpower snapshot failed: {e}")
 
         result = {
             "projects_synced": projects_synced,

@@ -4,8 +4,8 @@
    Incurred and Committed come from SAP; EAC and Variance are formulas.
    Everything is computed server-side (services/bess_eac.py) so the screen and
    the export can never disagree. */
-import React, { useCallback, useEffect, useState } from 'react';
-import { Loader2, AlertTriangle, RefreshCcw, Landmark, Receipt, FileSignature, Calculator, Scale, Table2 } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { Loader2, AlertTriangle, RefreshCcw, Landmark, Receipt, FileSignature, Calculator, Scale, Table2, Columns3 } from 'lucide-react';
 import { Card, CardHeader, KPITile } from '../../components/ui/primitives';
 
 const API = '/akasha/api/bess';
@@ -31,12 +31,111 @@ export const cr = (v: number | null | undefined) =>
   v === null || v === undefined ? '—'
     : (Math.abs(v) < 0.005 ? 0 : v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-const HEADERS: [string, string][] = [
-  ['Sr', 'w-14'], ['Description', ''], ['WBS', 'w-44'],
-  ['Approved Capex', 'w-32 text-right'], ['Incurred', 'w-28 text-right'],
-  ['Committed', 'w-28 text-right'], ['Balance to Completion', 'w-32 text-right'],
-  ['EAC', 'w-28 text-right'], ['Variance', 'w-28 text-right'], ['EAC Remarks', 'w-64'],
+/* Columns. The money columns and the formula inputs are always shown; the
+   three WBS columns (one per company) and Remarks can be switched on or off
+   from the Columns menu - AGE6L starts hidden to keep the table compact. */
+type ColKey = 'sr' | 'description' | 'agel' | 'age6l' | 'spv' | 'approved' | 'incurred'
+  | 'committed' | 'balance' | 'eac' | 'variance' | 'remarks';
+const COLUMNS: { key: ColKey; label: string; cls: string; optional?: boolean }[] = [
+  { key: 'sr', label: 'Sr', cls: 'w-14' },
+  { key: 'description', label: 'Description', cls: '' },
+  { key: 'agel', label: 'AGEL WBS', cls: 'w-40', optional: true },
+  { key: 'age6l', label: 'AGE6L WBS', cls: 'w-40', optional: true },
+  { key: 'spv', label: 'SPV WBS', cls: 'w-40', optional: true },
+  { key: 'approved', label: 'Approved Capex', cls: 'w-32 text-right' },
+  { key: 'incurred', label: 'Incurred', cls: 'w-28 text-right' },
+  { key: 'committed', label: 'Committed', cls: 'w-28 text-right' },
+  { key: 'balance', label: 'Balance to Completion', cls: 'w-32 text-right' },
+  { key: 'eac', label: 'EAC', cls: 'w-28 text-right' },
+  { key: 'variance', label: 'Variance', cls: 'w-28 text-right' },
+  { key: 'remarks', label: 'EAC Remarks', cls: 'w-64', optional: true },
 ];
+const OPTIONAL = COLUMNS.filter((c) => c.optional);
+const DEFAULT_ON: ColKey[] = ['agel', 'spv', 'remarks'];
+const COLS_KEY = 'akasha.eac.columns';
+
+/* Which optional columns are on - remembered per browser; storage may be
+   unavailable (private window), so every access is guarded. */
+function useEACColumns() {
+  const [on, setOn] = useState<Set<ColKey>>(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLS_KEY) || 'null');
+      if (Array.isArray(saved)) {
+        return new Set(saved.filter((k: string) => OPTIONAL.some((c) => c.key === k)) as ColKey[]);
+      }
+    } catch { /* fall back to the defaults */ }
+    return new Set(DEFAULT_ON);
+  });
+  const persist = (next: Set<ColKey>) => {
+    setOn(next);
+    try { localStorage.setItem(COLS_KEY, JSON.stringify([...next])); } catch { /* not remembered */ }
+  };
+  const toggle = (k: ColKey) => {
+    const n = new Set(on);
+    if (n.has(k)) n.delete(k); else n.add(k);
+    persist(n);
+  };
+  return { on, toggle, reset: () => persist(new Set(DEFAULT_ON)) };
+}
+
+/* One company's WBS codes for a line: all of them when few, else the first
+   two and a count - the full list is in the tooltip. */
+const WbsCell: React.FC<{ codes: string[] }> = ({ codes }) => {
+  if (!codes.length) return <span className="text-muted-foreground/50">—</span>;
+  const shown = codes.length > 3 ? codes.slice(0, 2) : codes;
+  return (
+    <span title={codes.join('\n')} className="block font-mono text-[11px] leading-snug text-muted-foreground">
+      {shown.map((c) => <span key={c} className="block truncate">{c}</span>)}
+      {codes.length > shown.length && (
+        <span className="block text-muted-foreground/70">+{codes.length - shown.length} more</span>
+      )}
+    </span>
+  );
+};
+
+const ColumnsMenu: React.FC<{ cols: ReturnType<typeof useEACColumns> }> = ({ cols }) => {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('keydown', esc);
+    };
+  }, [open]);
+  return (
+    <div ref={ref} className="relative">
+      <button onClick={() => setOpen((o) => !o)} aria-haspopup="dialog" aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium
+                   text-muted-foreground transition-colors hover:bg-muted hover:text-foreground
+                   focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+        <Columns3 className="h-3.5 w-3.5" /> Columns
+        <span className="tabular-nums text-muted-foreground/70">{cols.on.size}/{OPTIONAL.length}</span>
+      </button>
+      {open && (
+        <div role="dialog" aria-label="Choose columns"
+          className="absolute right-0 top-full z-30 mt-1 w-52 rounded-lg border border-border bg-card p-1.5 shadow-xl">
+          <div className="flex items-center justify-between px-2 pb-1.5 pt-1">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Show columns</span>
+            <button onClick={cols.reset} className="text-[11px] font-medium text-primary hover:underline">Reset</button>
+          </div>
+          {OPTIONAL.map((c) => (
+            <label key={c.key}
+              className="flex cursor-pointer select-none items-center gap-2.5 rounded-md px-2 py-1.5 text-[12px] text-foreground hover:bg-muted/60">
+              <input type="checkbox" checked={cols.on.has(c.key)} onChange={() => cols.toggle(c.key)}
+                className="h-3.5 w-3.5 cursor-pointer accent-[var(--primary)]" />
+              <span className={cols.on.has(c.key) ? 'font-medium' : 'text-muted-foreground'}>{c.label}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export function useEAC(projectId: string | undefined, active: boolean) {
   const [data, setData] = useState<EACData | null>(null);
@@ -109,6 +208,8 @@ const EditCell: React.FC<{
 
 export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) => {
   const { data, loading, error, saving, load, save } = eac;
+  const cols = useEACColumns();
+  const visible = COLUMNS.filter((c) => !c.optional || cols.on.has(c.key));
   const total = data?.rows.find((r) => r.key === 'L63');
   const src = data?.sources || {};
 
@@ -157,12 +258,15 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                 title="Cost breakdown by activity"
                 eyebrow="INR Cr · dashed cells are editable"
                 right={
-                  <button onClick={load} disabled={loading}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium
-                               text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50
-                               focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-                    <RefreshCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <ColumnsMenu cols={cols} />
+                    <button onClick={load} disabled={loading}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium
+                                 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50
+                                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
+                      <RefreshCcw className={`h-3.5 w-3.5 ${loading ? 'animate-spin' : ''}`} /> Refresh
+                    </button>
+                  </div>
                 }
               />
             </div>
@@ -172,10 +276,10 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
               <table className="w-full min-w-[1200px] border-separate border-spacing-0 text-[13px]">
                 <thead>
                   <tr className="text-left text-[11px] uppercase tracking-wide text-muted-foreground">
-                    {HEADERS.map(([h, w]) => (
-                      <th key={h} scope="col"
-                        className={`sticky top-0 z-10 border-b border-border bg-muted px-3 py-2.5 font-semibold ${w}`}>
-                        {h}
+                    {visible.map((c) => (
+                      <th key={c.key} scope="col"
+                        className={`sticky top-0 z-10 border-b border-border bg-muted px-3 py-2.5 font-semibold ${c.cls}`}>
+                        {c.label}
                       </th>
                     ))}
                   </tr>
@@ -184,48 +288,66 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                   {data.rows.map((r) => {
                     const isTotal = r.kind === 'total';
                     const isGroup = r.kind === 'group';
-                    const wbs = [...r.wbs.agel, ...r.wbs.age6l, ...r.wbs.spv];
                     const rowCls = isTotal ? 'bg-muted/70 font-semibold' : isGroup ? 'bg-muted/30 font-semibold' : '';
                     const cell = `border-b border-border/60 ${isTotal ? 'border-t border-t-border' : ''}`;
+                    const td = (c: ColKey) => {
+                      switch (c) {
+                        case 'sr':
+                          return <td key={c} className={`${cell} px-3 py-1.5 align-middle text-muted-foreground`}>{isTotal ? '' : r.sr}</td>;
+                        case 'description':
+                          return (
+                            <td key={c} className={`${cell} px-3 py-1.5 align-middle text-foreground ${r.kind === 'item' && r.sr.includes('.') ? 'pl-7' : ''}`}>
+                              {r.description}
+                            </td>
+                          );
+                        case 'agel': case 'age6l': case 'spv':
+                          return <td key={c} className={`${cell} px-3 py-1.5 align-middle`}><WbsCell codes={r.wbs[c]} /></td>;
+                        case 'approved':
+                          return (
+                            <td key={c} className={`${cell} px-1 py-1 text-right align-middle tabular-nums`}>
+                              {r.editable.approved && !isTotal ? (
+                                <div title={r.approvedSource ? `Source: ${r.approvedSource}` : 'Not set'}>
+                                  <EditCell value={r.approved} numeric placeholder="—" label={`Approved capex, ${r.description}`}
+                                    saving={saving === `${r.key}:approved`} onCommit={(v) => save(r, 'approved', v)} />
+                                </div>
+                              ) : <span className="px-2">{cr(r.approved)}</span>}
+                            </td>
+                          );
+                        case 'incurred':
+                          return <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums`}>{cr(r.incurred)}</td>;
+                        case 'committed':
+                          return <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums`}>{cr(r.committed)}</td>;
+                        case 'balance':
+                          return (
+                            <td key={c} className={`${cell} px-1 py-1 text-right align-middle tabular-nums`}>
+                              {r.editable.balance ? (
+                                <EditCell value={r.balance || null} numeric placeholder="0.00"
+                                  label={`Balance to completion, ${r.description}`}
+                                  saving={saving === `${r.key}:balance`} onCommit={(v) => save(r, 'balance', v)} />
+                              ) : <span className="px-2">{cr(r.balance)}</span>}
+                            </td>
+                          );
+                        case 'eac':
+                          return <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle font-medium tabular-nums`}>{cr(r.eac)}</td>;
+                        case 'variance':
+                          return (
+                            <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums ${r.variance !== null && r.variance < -0.005
+                              ? 'text-status-critical-fg' : ''}`}>{cr(r.variance)}</td>
+                          );
+                        case 'remarks':
+                          return (
+                            <td key={c} className={`${cell} px-1 py-1 align-middle`}>
+                              {!isTotal && (
+                                <EditCell value={r.remarks} placeholder="Add remark" label={`Remarks, ${r.description}`}
+                                  saving={saving === `${r.key}:remarks`} onCommit={(v) => save(r, 'remarks', v)} />
+                              )}
+                            </td>
+                          );
+                      }
+                    };
                     return (
                       <tr key={r.key} className={`${rowCls} hover:bg-muted/40`}>
-                        <td className={`${cell} px-3 py-1.5 align-middle text-muted-foreground`}>{isTotal ? '' : r.sr}</td>
-                        <td className={`${cell} px-3 py-1.5 align-middle text-foreground ${r.kind === 'item' && r.sr.includes('.') ? 'pl-7' : ''}`}>
-                          {r.description}
-                        </td>
-                        <td className={`${cell} px-3 py-1.5 align-middle`}>
-                          {wbs.length > 0 && (
-                            <span title={wbs.join('\n')} className="block truncate font-mono text-[11px] text-muted-foreground">
-                              {wbs[0]}{wbs.length > 1 ? ` +${wbs.length - 1}` : ''}
-                            </span>
-                          )}
-                        </td>
-                        <td className={`${cell} px-1 py-1 text-right align-middle tabular-nums`}>
-                          {r.editable.approved && !isTotal ? (
-                            <div title={r.approvedSource ? `Source: ${r.approvedSource}` : 'Not set'}>
-                              <EditCell value={r.approved} numeric placeholder="—" label={`Approved capex, ${r.description}`}
-                                saving={saving === `${r.key}:approved`} onCommit={(v) => save(r, 'approved', v)} />
-                            </div>
-                          ) : <span className="px-2">{cr(r.approved)}</span>}
-                        </td>
-                        <td className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums`}>{cr(r.incurred)}</td>
-                        <td className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums`}>{cr(r.committed)}</td>
-                        <td className={`${cell} px-1 py-1 text-right align-middle tabular-nums`}>
-                          {r.editable.balance ? (
-                            <EditCell value={r.balance || null} numeric placeholder="0.00"
-                              label={`Balance to completion, ${r.description}`}
-                              saving={saving === `${r.key}:balance`} onCommit={(v) => save(r, 'balance', v)} />
-                          ) : <span className="px-2">{cr(r.balance)}</span>}
-                        </td>
-                        <td className={`${cell} px-3 py-1.5 text-right align-middle font-medium tabular-nums`}>{cr(r.eac)}</td>
-                        <td className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums ${r.variance !== null && r.variance < -0.005
-                          ? 'text-status-critical-fg' : ''}`}>{cr(r.variance)}</td>
-                        <td className={`${cell} px-1 py-1 align-middle`}>
-                          {!isTotal && (
-                            <EditCell value={r.remarks} placeholder="Add remark" label={`Remarks, ${r.description}`}
-                              saving={saving === `${r.key}:remarks`} onCommit={(v) => save(r, 'remarks', v)} />
-                          )}
-                        </td>
+                        {visible.map((c) => td(c.key))}
                       </tr>
                     );
                   })}

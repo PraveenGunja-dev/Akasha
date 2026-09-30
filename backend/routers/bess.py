@@ -214,7 +214,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
         prog = _weightage(db, poid, roots)
         curve = prog
         appr = _approvals(db, poid, roots)
-        man = _manpower(db, poid)
+        man = _manpower(db, poid, roots)
         comm = _commercial(db, cfg)
         proc = _procurement(db, poid, cfg)
         contractors = _contractors(db, cfg)
@@ -784,6 +784,49 @@ def _weightage_progress(db: Session, poid: int, activity_codes, data_date):
     return plan_pct, (min(100.0, act_pct) if act_pct is not None else None)
 
 
+# A stage P6 schedules no activity for, taken from the stage it cannot be done
+# without. PCS has no PCC activity on any BESS project (2026-09-30) - PCS goes
+# pile -> footing & pile beam - but the pack reports PCS PCC with the footing
+# (PSS-11: 54 = 54), and a footing is not cast before its PCC.
+INFERRED_STAGES = {"PCC": "Footing & Column Casting"}
+
+# Progress weights per stage, matched to the pack's Progress column
+# (2026-09-30): it is not P6's weightage (PCS 85.7% vs the pack's 98%) nor a
+# plain count (88.9%). Staircase & Finishing at 4% with the other stages equal
+# reproduces PCS 98 / SGR 98 / MCR 97 on PSS-11 exactly; HF 7 of 8 = 88.
+STAGE_WEIGHTS = {"Staircase & Finishing": 0.04}
+
+
+def _infer_stages(stages, plan_row, act_row) -> List[int]:
+    """Fill a stage P6 has no activity for from INFERRED_STAGES; returns the
+    indexes filled, so the slide can mark them as inferred."""
+    filled = []
+    for i, st in enumerate(stages):
+        src = INFERRED_STAGES.get(st)
+        if src in stages and plan_row[i] is None and act_row[i] is None:
+            j = stages.index(src)
+            if plan_row[j] is not None or act_row[j] is not None:
+                plan_row[i], act_row[i] = plan_row[j], act_row[j]
+                filled.append(i)
+    return filled
+
+
+def _stage_progress(stages, row, scope) -> Optional[float]:
+    """Stage-weighted % complete of one Plan or Actual row: STAGE_WEIGHTS where
+    set, the rest shared equally across the stages the element has ("-"
+    stages carry no weight)."""
+    idx = [i for i, v in enumerate(row) if v is not None]
+    if not idx or not scope:
+        return None
+    fixed = {i: STAGE_WEIGHTS[stages[i]] for i in idx if stages[i] in STAGE_WEIGHTS}
+    free = [i for i in idx if i not in fixed]
+    share = (1 - sum(fixed.values())) / len(free) if free else 0.0
+    w = {**fixed, **{i: share for i in free}}
+    total = sum(w.values())
+    pct = sum(w[i] * min(1.0, row[i] / scope) for i in idx) / total * 100
+    return round(min(100.0, pct), 2)
+
+
 def _civil(db: Session, poid: int, roots: Dict[int, str],
            containers: Optional[int] = None) -> Dict[str, Any]:
     """The pack's Civil Construction table: per element, a Plan row
@@ -829,19 +872,27 @@ def _civil(db: Session, poid: int, roots: Dict[int, str],
                     acts |= p["activities"]
                 plan_row.append(round(min(p["planToDate"] / p["scope"] for p in parts) * scope))
                 act_row.append(int(min(p["actual"] / p["scope"] for p in parts) * scope))
-            plan_pct, act_pct = _weightage_progress(db, poid, acts, data_date)
+            inferred = _infer_stages(g["stages"], plan_row, act_row)
+            p6_plan_pct, p6_act_pct = _weightage_progress(db, poid, acts, data_date)
             elements.append({
                 "element": element, "scope": scope,
-                "plan": plan_row, "actual": act_row,
-                "planPct": plan_pct, "actualPct": act_pct,
+                "plan": plan_row, "actual": act_row, "inferred": inferred,
+                "planPct": _stage_progress(g["stages"], plan_row, scope),
+                "actualPct": _stage_progress(g["stages"], act_row, scope),
+                # P6's own activity weightage, kept for audit.
+                "p6PlanPct": p6_plan_pct, "p6ActualPct": p6_act_pct,
             })
         groups.append({"stages": g["stages"], "elements": elements})
     return {
         "groups": groups, "dataDate": _iso(data_date),
         "basis": "P6 civil activities as of the P6 data date, one activity = "
                  "one unit (BCF scaled to containers). Plan is activities due "
-                 "by the data date on the plan baseline; Progress is P6 "
-                 "weightage of the element's activities.",
+                 "by the data date on the plan baseline. A stage P6 has no "
+                 "activity for is inferred from its prerequisite (PCS PCC = "
+                 "Footing & Pile Beam) and listed in `inferred`. Progress is "
+                 "stage-weighted (Staircase & Finishing 4%, the other stages "
+                 "equal), matched to the pack; P6's own weightage is kept in "
+                 "p6PlanPct / p6ActualPct.",
     }
 
 
@@ -1196,7 +1247,7 @@ def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
         "electrical": _electrical(db, poid, roots),
         "commissioning": _commissioning(db, poid),
         "quality": _quality(db, cfg),
-        "manpower": _manpower(db, poid),
+        "manpower": _manpower(db, poid, roots),
         "contractors": _contractors(db, cfg),
         "commercial": comm,
         "financial": _merge_financial([budget], comm["receiptSeries"]),
@@ -1572,8 +1623,10 @@ def _spread_monthly(acc: Dict[str, float], start, finish, units: float) -> None:
 HOURS_PER_DAY = 8.0
 
 
-def _manpower(db: Session, poid: int) -> Dict[str, Any]:
-    """Planned and earned mandays per month from P6 Labor units.
+def _manpower(db: Session, poid: int, roots: Optional[Dict[int, str]] = None) -> Dict[str, Any]:
+    """Planned and earned mandays per month from P6 Labor units - on the
+    construction activities (WBS in CONSTRUCTION_BRANCHES) when `roots` is
+    given, the CPAG manpower basis (user, 2026-09-30).
 
     Plan is each activity's Labor units spread over its baseline dates on the
     project's plan baseline - B2 for PSS-11/12/10(B), B1 for the rest
@@ -1611,8 +1664,11 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
                   -- them) and stay. Site Labor tracks the pack's reported
                   -- headcount (PSS-11 May 207 = 207).
                   and r.resource_name !~* '^lab\\s*-\\s*general'
+                  -- Construction activities only (the CPAG manpower basis).
+                  and (:all_wbs or a.wbs_object_id = any(:w))
                 group by 1, 2, 3, 4, 5, 6"""),
-        {"o": poid},
+        {"o": poid, "all_wbs": roots is None,
+         "w": [k for k, v in (roots or {}).items() if v in CONSTRUCTION_BRANCHES]},
     ).fetchall()
     total = sum(_f(r[6]) for r in rows) / HOURS_PER_DAY
     posted = sum(_f(r[7]) for r in rows) / HOURS_PER_DAY
@@ -1635,15 +1691,34 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
         if earned:
             _spread_monthly(earn_m, as_ or bs, af or data_date, earned)
 
+    # From the first fully covered month on, the site's weekly method replaces
+    # the rebuilt figures: the average of the weekly P6 updates, x days.
+    # Construction basis only - the snapshots are taken on that labour.
+    from services.cpag_manpower import weekly_by_month
+    weekly = weekly_by_month(db, poid, HOURS_PER_DAY) if roots is not None else {}
+
+    def _days(m: str) -> int:
+        y, mo = int(m[:4]), int(m[5:7])
+        return (date(y + (mo == 12), mo % 12 + 1, 1) - date(y, mo, 1)).days
+
+    for m, wk in weekly.items():
+        if wk["plan"] is not None:
+            plan_m[m] = wk["plan"] * _days(m)
+        if wk["actual"] is not None:
+            earn_m[m] = wk["actual"] * _days(m)
+
     as_of = data_date.strftime("%Y-%m") if data_date else None
     months = sorted(m for m in set(plan_m) | set(earn_m) if not as_of or m <= as_of)
     series, cp, ce = [], 0.0, 0.0
     for m in months:
         cp += plan_m[m]
         ce += earn_m[m]
-        y, mo = int(m[:4]), int(m[5:7])
-        days = (date(y + (mo == 12), mo % 12 + 1, 1) - date(y, mo, 1)).days
-        series.append({"month": m, "planMonth": round(plan_m[m]),
+        days = _days(m)
+        wk = weekly.get(m) or {}
+        series.append({"month": m,
+                       "planBasis": "weekly" if wk.get("plan") is not None else "baseline",
+                       "actualBasis": "weekly" if wk.get("actual") is not None else "activity",
+                       "planMonth": round(plan_m[m]),
                        "planCum": round(cp), "earnedMonth": round(earn_m[m]),
                        "earnedCum": round(ce), "earnedPct": _pct(ce, total),
                        "planManpower": round(plan_m[m] / days),
@@ -1654,7 +1729,11 @@ def _manpower(db: Session, poid: int) -> Dict[str, Any]:
             "basis": "Plan: P6 Labor hours / 8 spread over plan-baseline dates. "
                      "Actual: P6 actual Labor hours / 8 over actual dates "
                      "(planned x % complete only where P6 posted none). "
-                     "Manpower = mandays / days in month."}
+                     "Manpower = mandays / days in month. From the first month "
+                     "fully covered by weekly P6 snapshots: the average of the "
+                     "weekly updates (actual = rise in actual hours between "
+                     "updates, plan = hours scheduled in the next 7 days) - "
+                     "the site's weekly method (services.cpag_manpower)."}
 
 
 def _contractors(db: Session, cfg) -> Dict[str, Any]:
