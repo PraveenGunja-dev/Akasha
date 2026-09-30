@@ -731,7 +731,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
             It may have been renamed or removed from the portfolio. Check the portfolio list for the current name.
           </p>
           <button
-            onClick={() => navigate('/ceo-dashboard')}
+            onClick={() => navigate({ pathname: '/ceo-dashboard', search: window.location.search })}
             className="mt-5 rounded-lg bg-primary px-4 py-2.5 text-[14px] font-semibold text-primary-foreground transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             Back to portfolio
@@ -1154,7 +1154,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
       {/* ── Top Bar ── */}
       <header className="sticky top-0 z-50 border-b border-border-subtle bg-surface-1 px-6 py-3">
         <div className="flex w-full items-center gap-4">
-          <button onClick={() => onBack ? onBack() : navigate('/ceo-dashboard')}
+          <button onClick={() => onBack ? onBack() : navigate({ pathname: '/ceo-dashboard', search: window.location.search })}
             className="flex items-center gap-1.5 rounded-md px-1.5 py-1 -ml-1.5 text-[14px] font-medium text-fg-secondary transition-colors hover:text-fg-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <ArrowLeft className="h-4 w-4" strokeWidth={1.75} />
             Back to portfolio

@@ -80,7 +80,8 @@ export default function CEODashboard() {
     if (!projectId && location.state?.reset) {
       setSelectedProject("All");
       // Clear the state so it doesn't trigger again on a simple refresh
-      navigate('/ceo-dashboard', { replace: true, state: {} });
+      // Keep ?portfolio=&phase= - the filters live in the URL.
+      navigate({ pathname: '/ceo-dashboard', search: window.location.search }, { replace: true, state: {} });
     }
   }, [projectId, location, navigate]);
 
@@ -100,7 +101,7 @@ export default function CEODashboard() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   const handleOpenProject = (id: string) => {
-    navigate(`/ceo-dashboard/project/${id}`);
+    navigate({ pathname: `/ceo-dashboard/project/${id}`, search: window.location.search });
   };
 
   // Fetch Data. Only the newest load may write to the screen: changing the
@@ -226,7 +227,7 @@ export default function CEODashboard() {
       }
       setActiveTab('simulation_lab');
       sessionStorage.setItem('ceoActiveTab', 'simulation_lab');
-      navigate('/ceo-dashboard');
+      navigate({ pathname: '/ceo-dashboard', search: window.location.search });
     };
     window.addEventListener('open-simulation-lab', handleOpenSimulation);
     return () => window.removeEventListener('open-simulation-lab', handleOpenSimulation);
@@ -273,7 +274,7 @@ export default function CEODashboard() {
       setSimulationContext(null);
     }
     if (projectId) {
-      navigate('/ceo-dashboard');
+      navigate({ pathname: '/ceo-dashboard', search: window.location.search });
     }
   };
 
@@ -336,7 +337,7 @@ export default function CEODashboard() {
                 <div className="w-full h-full min-h-[calc(100vh-120px)]">
                   <ProjectWorkspace 
                     projectId={projectId} 
-                    onBack={() => navigate('/ceo-dashboard', { state: { reset: true } })} 
+                    onBack={() => navigate({ pathname: '/ceo-dashboard', search: window.location.search }, { state: { reset: true } })} 
                   />
                 </div>
               ) : (
