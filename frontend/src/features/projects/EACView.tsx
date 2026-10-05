@@ -4,7 +4,7 @@
    Incurred and Committed come from SAP; EAC and Variance are formulas.
    Everything is computed server-side (services/bess_eac.py) so the screen and
    the export can never disagree. */
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Loader2, AlertTriangle, RefreshCcw, Landmark, Receipt, FileSignature, Calculator, Scale, Table2, Columns3, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, KPITile } from '../../components/ui/primitives';
 
@@ -20,6 +20,8 @@ export interface EACRow {
   sumOf: string[];
   /** One per WBS suffix on the line, named from SAP's CO object name. */
   subLines: EACSubLine[];
+  /** Each WBS code's own [incurred, committed POrd, committed PReq], counted or not. */
+  byCode: Record<string, [number, number, number]>;
   incurred: number; committed: number; committedPOrd: number; committedPReq: number; balance: number;
   eac: number; variance: number | null; remarks: string | null;
   editable: { approved: boolean; balance: boolean; remarks: boolean };
@@ -36,6 +38,47 @@ export interface EACSettings {
   excluded: Record<string, string[]>;
   updatedBy: string | null; updatedAt: string | null;
 }
+/* The figures a draft of WBS ticks would give, worked out in the browser from
+   each code's own amounts so a tick shows its effect at once; Save stores it
+   and the server recomputes. Lines without WBS add up their sub-lines' lines
+   (sumOf), exactly as the server rolls them. */
+type Vals = { incurred: number; committedPOrd: number; committedPReq: number; committed: number; eac: number; variance: number | null };
+function buildPreview(rows: EACRow[], left: Record<string, string[]>) {
+  const bySr: Record<string, EACRow> = {};
+  rows.forEach((r) => { bySr[r.sr] = r; });
+  const out: Record<string, Vals> = {};
+  const subs: Record<string, Vals> = {};
+  const sumCodes = (r: EACRow, codes: string[]) => {
+    const skip = new Set(left[r.key] || []);
+    let inc = 0, po = 0, pr = 0;
+    codes.forEach((w) => { const v = r.byCode[w]; if (v && !skip.has(w)) { inc += v[0]; po += v[1]; pr += v[2]; } });
+    return { inc, po, pr };
+  };
+  const calc = (r: EACRow): Vals => {
+    if (out[r.key]) return out[r.key];
+    let inc = 0, po = 0, pr = 0;
+    if (r.sumOf.length) {
+      r.sumOf.forEach((sr) => { const k = bySr[sr]; if (k) { const v = calc(k); inc += v.incurred; po += v.committedPOrd; pr += v.committedPReq; } });
+    } else {
+      ({ inc, po, pr } = sumCodes(r, Object.keys(r.byCode)));
+    }
+    const committed = po + pr;
+    const eac = inc + committed + (r.balance || 0);
+    const v = { incurred: inc, committedPOrd: po, committedPReq: pr, committed, eac,
+      variance: r.approved === null ? null : r.approved - eac };
+    out[r.key] = v;
+    r.subLines.forEach((sub) => {
+      const s = sumCodes(r, [...sub.wbs.agel, ...sub.wbs.age6l, ...sub.wbs.spv]);
+      subs[`${r.key}${sub.suffix}`] = { incurred: s.inc, committedPOrd: s.po, committedPReq: s.pr,
+        committed: s.po + s.pr, eac: s.inc + s.po + s.pr, variance: null };
+    });
+    return v;
+  };
+  rows.forEach(calc);
+  return { rows: out, subs };
+}
+const moved = (a: number | null, b: number | null) => Math.abs((a ?? 0) - (b ?? 0)) > 0.005;
+
 export interface EACData {
   projectId: string; pss: string; rows: EACRow[]; settings: EACSettings;
   roots: Record<Company, string>;
@@ -331,10 +374,21 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
   // Draft of what counts; reset whenever the saved settings change.
   const savedKey = data ? JSON.stringify(data.settings) : '';
   const [draftLeft, setDraftLeft] = useState<Record<string, string[]>>({});
+  // Distinguish user toggles from server-sync resets to prevent infinite save loops.
+  const isUserChangeRef = useRef(false);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
     if (!data) return;
+    isUserChangeRef.current = false;
     setDraftLeft(data.settings.excluded);
   }, [savedKey]);   // eslint-disable-line react-hooks/exhaustive-deps
+  // Auto-save when draftLeft changes due to a user toggle (debounced 300ms).
+  useEffect(() => {
+    if (!data || !isUserChangeRef.current) return;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => { void saveSettings(draftLeft); }, 300);
+    return () => { if (saveTimerRef.current) clearTimeout(saveTimerRef.current); };
+  }, [draftLeft]);   // eslint-disable-line react-hooks/exhaustive-deps
   // Lines whose WBS sub-lines are folded away. Shown by default: an EAC line
   // often combines distinct SAP items (BESS Containers + Logistics).
   const [folded, setFolded] = useState<Set<string>>(new Set());
@@ -352,17 +406,23 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
     if (n.has(key)) n.delete(key); else n.add(key);
     return n;
   });
-  // Count (or leave out) every code of one company on one line.
-  const setLineCompany = (key: string, codes: string[], count: boolean) => setDraftLeft((prev) => {
-    const keep = (prev[key] || []).filter((x) => !codes.includes(x));
-    const next = count ? keep : [...keep, ...codes];
-    const out = { ...prev };
-    if (next.length) out[key] = next; else delete out[key];
-    return out;
-  });
+  // Count (or leave out) every code of one company on one line. Marks as user
+  // change so the auto-save effect fires.
+  const setLineCompany = (key: string, codes: string[], count: boolean) => {
+    isUserChangeRef.current = true;
+    setDraftLeft((prev) => {
+      const keep = (prev[key] || []).filter((x) => !codes.includes(x));
+      const next = count ? keep : [...keep, ...codes];
+      const out = { ...prev };
+      if (next.length) out[key] = next; else delete out[key];
+      return out;
+    });
+  };
   const lineChanges = !data ? 0 : data.rows.reduce((n, r) =>
     n + (Object.keys(COMPANY) as Company[]).filter((c) => r.wbs[c].some(
       (code) => (draftLeft[r.key] || []).includes(code) !== (data.settings.excluded[r.key] || []).includes(code))).length, 0);
+  const pv = useMemo(() => (data ? buildPreview(data.rows, draftLeft) : null), [data, draftLeft]);
+  const tv: Vals | undefined = total && pv ? pv.rows[total.key] : undefined;
   const src = data?.sources || {};
 
   if (loading && !data) {
@@ -389,19 +449,20 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
             <KPITile label="Approved Capex" icon={Landmark} size="supporting"
               value={total.approved === null ? '—' : `₹${cr(total.approved)}`} unit="Cr"
               subtext={total.approved === null ? 'Enter approved capex per line' : 'Project CAPEX sheet, editable'} />
-            <KPITile label="Incurred" icon={Receipt} size="supporting" value={`₹${cr(total.incurred)}`} unit="Cr"
+            <KPITile label="Incurred" icon={Receipt} size="supporting" value={`₹${cr(tv?.incurred ?? total.incurred)}`} unit="Cr"
               info={data.basis.incurred} subtext={src.incurred?.file || 'No CJI3 loaded'} />
-            <KPITile label="Committed" icon={FileSignature} size="supporting" value={`₹${cr(total.committed)}`} unit="Cr"
+            <KPITile label="Committed" icon={FileSignature} size="supporting" value={`₹${cr(tv?.committed ?? total.committed)}`} unit="Cr"
               info={data.basis.committed}
-              subtext={`POrd ₹${cr(total.committedPOrd)} + PReq ₹${cr(total.committedPReq)} Cr`} />
-            <KPITile label="EAC" icon={Calculator} size="supporting" value={`₹${cr(total.eac)}`} unit="Cr"
+              subtext={`POrd ₹${cr(tv?.committedPOrd ?? total.committedPOrd)} + PReq ₹${cr(tv?.committedPReq ?? total.committedPReq)} Cr`
+                + (saving === 'settings' ? ' · saving…' : '')} />
+            <KPITile label="EAC" icon={Calculator} size="supporting" value={`₹${cr(tv?.eac ?? total.eac)}`} unit="Cr"
               info={data.basis.eac} subtext="Incurred + Committed + Balance" />
             <KPITile label="Variance" icon={Scale} size="supporting" infoAlign="right"
-              value={total.variance === null ? '—' : `₹${cr(total.variance)}`} unit="Cr"
-              tone={total.variance !== null && total.variance < -0.005 ? 'critical' : 'neutral'}
+              value={total.variance === null ? '—' : `₹${cr(tv?.variance ?? total.variance)}`} unit="Cr"
+              tone={(tv?.variance ?? total.variance) !== null && (tv?.variance ?? total.variance ?? 0) < -0.005 ? 'critical' : 'neutral'}
               info={data.basis.variance}
               subtext={total.variance === null ? 'Needs approved capex'
-                : total.variance < -0.005 ? 'Over approved capex' : 'Within approved capex'} />
+                : (tv?.variance ?? total.variance) < -0.005 ? 'Over approved capex' : 'Within approved capex'} />
           </div>
 
           <Card pad="none" className="overflow-hidden">
@@ -412,23 +473,10 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                 eyebrow="INR Cr · dashed cells are editable · tick a company's WBS to count it on that line"
                 right={
                   <div className="flex items-center gap-2">
-                    {lineChanges > 0 ? (
-                      <>
-                        <span className="text-[11px] text-status-watch-fg">
-                          {lineChanges} unsaved WBS change{lineChanges === 1 ? '' : 's'}
-                        </span>
-                        <button type="button" disabled={saving === 'settings'} onClick={() => setDraftLeft(data.settings.excluded)}
-                          className="rounded-lg border border-border px-2.5 py-1 text-[12px] font-medium text-muted-foreground
-                                     hover:bg-muted hover:text-foreground disabled:opacity-50">
-                          Cancel
-                        </button>
-                        <button type="button" disabled={saving === 'settings'} onClick={() => { void saveSettings(draftLeft); }}
-                          className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1 text-[12px] font-semibold
-                                     text-primary-foreground hover:bg-primary/90 disabled:opacity-50
-                                     focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50">
-                          {saving === 'settings' && <Loader2 className="h-3.5 w-3.5 animate-spin" />} Save
-                        </button>
-                      </>
+                    {saving === 'settings' ? (
+                      <span className="inline-flex items-center gap-1.5 text-[11px] text-muted-foreground">
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+                      </span>
                     ) : data.settings.updatedAt ? (
                       <span className="text-[11px] text-muted-foreground">WBS choice saved {data.settings.updatedAt.slice(0, 10)}</span>
                     ) : null}
@@ -479,6 +527,11 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                   {data.rows.filter((r) => showHeaders || r.kind !== 'group').map((r) => {
                     const isTotal = r.kind === 'total';
                     const isGroup = r.kind === 'group';
+                    const v: Vals = pv?.rows[r.key] ?? r;
+                    const mark = (now: number | null, saved: number | null) =>
+                      moved(now, saved) ? 'text-primary italic' : '';
+                    const tip = (now: number | null, saved: number | null) =>
+                      moved(now, saved) ? `Preview - saved figure ${cr(saved)}. Save to apply.` : undefined;
                     const rowCls = isTotal ? 'bg-muted/70 font-semibold'
                       : isGroup ? 'bg-brand-purple/10 font-semibold text-brand-purple dark:text-foreground' : '';
                     const cell = `border-b border-border/60 ${isTotal ? 'border-t border-t-border' : ''}`;
@@ -537,16 +590,16 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                             </td>
                           );
                         case 'incurred':
-                          return <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums`}>{cr(r.incurred)}</td>;
+                          return <td key={c} title={tip(v.incurred, r.incurred)} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums ${mark(v.incurred, r.incurred)}`}>{cr(v.incurred)}</td>;
                         case 'committed':
                           return (
                             <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums`}>
-                              <CommittedValue row={r} />
+                              <span title={tip(v.committed, r.committed)} className={mark(v.committed, r.committed)}><CommittedValue row={v} /></span>
                             </td>
                           );
                         case 'committedPOrd': case 'committedPReq': {
                           return (
-                            <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums text-muted-foreground`}>{cr(r[c])}</td>
+                            <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums text-muted-foreground ${mark(v[c], r[c])}`}>{cr(v[c])}</td>
                           );
                         }
                         case 'balance':
@@ -560,11 +613,11 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                             </td>
                           );
                         case 'eac':
-                          return <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle font-medium tabular-nums`}>{cr(r.eac)}</td>;
+                          return <td key={c} title={tip(v.eac, r.eac)} className={`${cell} px-3 py-1.5 text-right align-middle font-medium tabular-nums ${mark(v.eac, r.eac)}`}>{cr(v.eac)}</td>;
                         case 'variance':
                           return (
-                            <td key={c} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums ${r.variance !== null && r.variance < -0.005
-                              ? 'text-status-critical-fg' : ''}`}>{cr(r.variance)}</td>
+                            <td key={c} title={tip(v.variance, r.variance)} className={`${cell} px-3 py-1.5 text-right align-middle tabular-nums ${v.variance !== null && v.variance < -0.005
+                              ? 'text-status-critical-fg' : ''} ${mark(v.variance, r.variance)}`}>{cr(v.variance)}</td>
                           );
                         case 'remarks':
                           return (
@@ -577,7 +630,8 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
                           );
                       }
                     };
-                    const subTd = (sub: EACSubLine, c: ColKey) => {
+                    const subTd = (sub0: EACSubLine, c: ColKey) => {
+                      const sub = { ...sub0, ...(pv?.subs[`${r.key}${sub0.suffix}`] ?? {}) };
                       const sc = 'border-b border-border/40 py-1 align-middle text-[12px]';
                       switch (c) {
                         case 'description':
