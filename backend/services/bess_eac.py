@@ -408,6 +408,11 @@ def build(db: Session, project_id: str, apply_settings: bool = True) -> Dict[str
                 sub[col] = cr(sub[col])
             subs.append(sub)
         r["subLines"] = subs
+        # Each WBS code's own figures (counted or not), so the view can preview
+        # a tick change before it is saved: [incurred, committed POrd, PReq].
+        r["byCode"] = {w: [cr(sap_sum("incurred", [w])), cr(sap_sum("committed", [w], "POrd")),
+                           cr(sap_sum("committed", [w], "PReq"))]
+                       for ws in r["wbs"].values() for w in ws}
 
     def roll(key: str) -> None:
         if key not in GROUPS:
