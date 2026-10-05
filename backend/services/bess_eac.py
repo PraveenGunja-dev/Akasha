@@ -29,6 +29,7 @@ its own "Other SAP cost" row with its codes, so totals never drop it.
 from __future__ import annotations
 
 import glob
+from collections import defaultdict
 import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
@@ -72,6 +73,9 @@ TEMPLATE: List[Tuple[str, str, str, tuple]] = [
     ('L09', '5.3', 'HT Cable', (('agel', '-06-03'), ('age6l', '-06-03'))),
     ('L10', '5.4', 'Scada Cable & FO', (('agel', '-06-05'), ('age6l', '-06-05'))),
     ('L11', '5.5', 'ACDC/ Electrical Erection & Fire Alarm system', (('agel', '-06-04'), ('age6l', '-06-04'), ('agel', '-06-06'))),
+    # Not in the EAC format: SAP's "Misc Domestic BOS Elec Supply", routed here
+    # by name (NAME_ROUTES). No approved capex in the CAPEX sheet.
+    ('L65', '5.6', 'Misc BOS Elec Supply', ()),
     ('L12', '6', 'Installation and Comissioning', (('age6l', '-05-01'), ('age6l', '-05-02'), ('age6l', '-05-03'))),
     ('L13', '7', 'BOP Civil', ()),
     ('L14', '7.1', 'Battery container', (('age6l', '-08-01-01'),)),
@@ -104,8 +108,12 @@ TEMPLATE: List[Tuple[str, str, str, tuple]] = [
     ('L41', '12.08', 'Security', (('spv', '-10-08'),)),
     ('L42', '12.09', 'IT Infrastructure', (('spv', '-10-09'),)),
     ('L43', '12.10', 'Manpower & Equipment Hiring', (('spv', '-10-10'),)),
-    ('L44', '12.11', 'Professional & Consultancy Fees', (('spv', '-10-11'),)),
-    ('L45', '12.12', 'Rates & Taxes', (('spv', '-10-12'),)),
+    # The EAC format's SAP Working sheet has these two WBS the other way round;
+    # SAP names -10-11 "Rates & Taxes" and -10-12 "Professional & Consultancy
+    # Fees" (CJI3 and S_ALR CO object name, 2026-10-05), so each line takes the
+    # WBS SAP gives its name.
+    ('L44', '12.11', 'Professional & Consultancy Fees', (('spv', '-10-12'),)),
+    ('L45', '12.12', 'Rates & Taxes', (('spv', '-10-11'),)),
     ('L46', '12.13', 'Quality Charges', (('spv', '-10-13'),)),
     ('L47', '12.14', 'Geo Tech Charges', (('spv', '-10-14'),)),
     ('L48', '12.15', 'Commissioning Manpower', (('spv', '-10-15'),)),
@@ -129,7 +137,7 @@ TEMPLATE: List[Tuple[str, str, str, tuple]] = [
 # Sum rows and what they sum.
 GROUPS: Dict[str, List[str]] = {
     "L04": ["L01", "L02", "L03"],
-    "L06": ["L07", "L08", "L09", "L10", "L11"],
+    "L06": ["L07", "L08", "L09", "L10", "L11", "L65"],
     "L13": [f"L{i:02d}" for i in range(14, 28)],
     "L33": [f"L{i:02d}" for i in range(34, 57)],
     "L57": ["L58", "L59", "L60"],
@@ -137,6 +145,24 @@ GROUPS: Dict[str, List[str]] = {
     "L63": ["L32", "L33", "L57", "L61", "L62", "L64"],
 }
 TOTALS = {"L32", "L63"}
+
+# WBS outside the EAC format are routed to a line by SAP's own name for them
+# (CJI3 / S_ALR "CO object name"), never by their code: the suffixes past -14
+# mean different things per company and per project (checked 2026-10-05 -
+# SPV -19 is "EMS Supply" on PSS-11, "HT Panel" on PSS-12, "Misc Domestic BOS
+# Elec Supply" on PSS-10B; AGEL -18 is COGS where SPV -18 is the NIFPS).
+# Anything not named here - COGS, Forex, Depreciation-Buildings, Manual
+# Provision, Service Package - stays on "Other SAP cost".
+NAME_ROUTES: Dict[str, str] = {
+    "EMS SUPPLY": "L03",
+    "IDT TRANSFORMER": "L05",
+    "NITROGEN BASED FIRE FIGHTING SYSTEM": "L05",
+    "HT PANEL": "L07",
+    "DC CABLE & LT CABLE": "L08",
+    "HT CABLE": "L09",
+    "MISC DOMESTIC BOS ELEC SUPPLY": "L65",
+    "IDC - GROUP": "L59",
+}
 # BOP Civil and Pre-Ops are broken down differently in the CAPEX sheets, so
 # their approved figure can be held on the group row until items are entered.
 GROUP_APPROVED_EDITABLE = {"L13", "L33"}
@@ -168,18 +194,24 @@ def ingest_eac_sap(db: Session, incurred_path: str = None, committed_path: str =
     a["vt"] = a.get("Value Type", pd.Series("", index=a.index)).fillna("").str.strip()
     kept = a[(a["wbs"] != "") & (a["vt"] != "11") & (a["v"] != 0)]
     a_doc = kept.get("Purchasing Document", pd.Series("", index=kept.index)).fillna("").str.strip()
-    for wbs, v, vt, doc in zip(kept["wbs"], kept["v"], kept["vt"], a_doc):
+    a_name = kept.get("CO object name", pd.Series("", index=kept.index)).fillna("").str.strip()
+    for wbs, v, vt, doc, name in zip(kept["wbs"], kept["v"], kept["vt"], a_doc, a_name):
         rows.append(dict(kind="incurred", wbs_element=wbs, value_inr=float(v), value_type=vt or None,
-                         document=doc or None, source_file=os.path.basename(incurred_path), upload_time=now))
+                         wbs_name=name or None, document=doc or None,
+                         source_file=os.path.basename(incurred_path), upload_time=now))
     c = pd.read_excel(committed_path, dtype=str)
     c["v"] = pd.to_numeric(c["Val/COArea Crcy"], errors="coerce").fillna(0.0)
     c["wbs"] = c["WBS Element"].fillna("").str.strip()
     c["cat"] = c["Reference document category"].fillna("").str.strip()
-    ckept = c[(c["wbs"] != "") & (c["cat"] == "POrd") & (c["v"] != 0)]
+    # POrd and PReq both kept; which of them count is a per-project setting
+    # (bess_eac_setting, saved from the EAC view - user, 2026-10-05).
+    ckept = c[(c["wbs"] != "") & c["cat"].isin(CATEGORIES) & (c["v"] != 0)]
     c_doc = ckept.get("Ref Document Number", pd.Series("", index=ckept.index)).fillna("").str.strip()
-    for wbs, v, cat, doc in zip(ckept["wbs"], ckept["v"], ckept["cat"], c_doc):
+    c_name = ckept.get("CO object name", pd.Series("", index=ckept.index)).fillna("").str.strip()
+    for wbs, v, cat, doc, name in zip(ckept["wbs"], ckept["v"], ckept["cat"], c_doc, c_name):
         rows.append(dict(kind="committed", wbs_element=wbs, value_inr=float(v), ref_category=cat,
-                         document=doc or None, source_file=os.path.basename(committed_path), upload_time=now))
+                         wbs_name=name or None, document=doc or None,
+                         source_file=os.path.basename(committed_path), upload_time=now))
     db.query(models.BESSEACSapLine).delete()
     db.bulk_insert_mappings(models.BESSEACSapLine, rows)
     db.commit()
@@ -187,7 +219,8 @@ def ingest_eac_sap(db: Session, incurred_path: str = None, committed_path: str =
     return {"incurred_file": os.path.basename(incurred_path), "committed_file": os.path.basename(committed_path),
             "incurred_lines": int(len(kept)), "committed_lines": int(len(ckept)),
             "incurred_excluded_stock_lines": int((a["vt"] == "11").sum()),
-            "committed_excluded_preq_lines": int((c["cat"] == "PReq").sum()),
+            "committed_porder_lines": int((ckept["cat"] == "POrd").sum()),
+            "committed_preq_lines": int((ckept["cat"] == "PReq").sum()),
             "incurred_posting_from": str(pdates.min().date()) if pdates.notna().any() else None,
             "incurred_posting_to": str(pdates.max().date()) if pdates.notna().any() else None}
 
@@ -226,55 +259,155 @@ def _codes(project_id: str, wbs: tuple) -> List[str]:
     return [root + suffix for suffix in _suffixes(wbs) for root in roots.values()]
 
 
-def build(db: Session, project_id: str) -> Dict[str, Any]:
+COMPANIES = ("agel", "age6l", "spv")
+CATEGORIES = ("POrd", "PReq")
+# Committed is always purchase orders + requisitions (user, 2026-10-05); the
+# split is shown on hover and in the export. Until a project saves its own
+# choice, every WBS code counts on every line.
+DEFAULT_CATEGORIES = list(CATEGORIES)
+
+
+def get_settings(db: Session, project_id: str) -> Dict[str, Any]:
+    import json
+    import models
+    row = db.query(models.BESSEACSetting).filter(models.BESSEACSetting.project_id == project_id).first()
+    if row is None:
+        return {"categories": list(DEFAULT_CATEGORIES), "excluded": {}, "updatedBy": None, "updatedAt": None}
+    try:
+        excluded = json.loads(row.excluded or "{}")
+    except ValueError:
+        excluded = {}
+    return {"categories": list(CATEGORIES),
+            "excluded": {k: list(v) for k, v in excluded.items() if v},
+            "updatedBy": row.updated_by, "updatedAt": row.updated_at.isoformat() if row.updated_at else None}
+
+
+def save_settings(db: Session, project_id: str, excluded: Dict[str, List[str]],
+                  user: Optional[str] = None) -> None:
+    """Store, per line, the WBS codes not counted. Codes that are not on the
+    line are dropped rather than stored."""
+    import json
+    import models
+    if project_id not in ROOTS:
+        raise KeyError(project_id)
+    line_codes = {r["key"]: {c for codes in r["wbs"].values() for c in codes}
+                  for r in build(db, project_id, apply_settings=False)["rows"]}
+    clean = {}
+    for key, codes in (excluded or {}).items():
+        keep = sorted(set(codes or []) & line_codes.get(key, set()))
+        if keep:
+            clean[key] = keep
+    row = db.query(models.BESSEACSetting).filter(models.BESSEACSetting.project_id == project_id).first()
+    if row is None:
+        row = models.BESSEACSetting(project_id=project_id)
+        db.add(row)
+    row.categories, row.excluded = ",".join(CATEGORIES), json.dumps(clean)
+    row.updated_by, row.updated_at = user, datetime.utcnow()
+    db.commit()
+
+
+def build(db: Session, project_id: str, apply_settings: bool = True) -> Dict[str, Any]:
     """The EAC table for one BESS project, every figure computed on read."""
     import models
     if project_id not in ROOTS:
         raise KeyError(project_id)
     roots = ROOTS[project_id]
+    setting = (get_settings(db, project_id) if apply_settings else
+               {"categories": list(CATEGORIES), "excluded": {}, "updatedBy": None, "updatedAt": None})
     sap = db.execute(text(
-        "select kind, wbs_element, sum(value_inr) from bess_eac_sap_line "
-        "where left(wbs_element, 6) = any(:r) group by 1, 2"), {"r": list(roots.values())}).fetchall()
+        "select kind, coalesce(ref_category, ''), wbs_element, sum(value_inr) from bess_eac_sap_line "
+        "where left(wbs_element, 6) = any(:r) group by 1, 2, 3"), {"r": list(roots.values())}).fetchall()
+    # SAP's own name for each WBS code ("CO object name"); the most frequent
+    # wins where postings disagree (-05-01 carries a few "IDT Transformer").
+    wbs_names: Dict[str, str] = {}
+    for w, n, _cnt in db.execute(text(
+            "select wbs_element, wbs_name, count(*) from bess_eac_sap_line "
+            "where left(wbs_element, 6) = any(:r) and wbs_name is not null "
+            "group by 1, 2 order by 1, 3 desc"), {"r": list(roots.values())}).fetchall():
+        wbs_names.setdefault(w, n)
     sap_meta = db.execute(text(
         "select kind, max(source_file), max(upload_time) from bess_eac_sap_line group by 1")).fetchall()
     entries = {e.line_key: e for e in db.query(models.BESSEACEntry).filter(
         models.BESSEACEntry.project_id == project_id)}
     seed = capex_seed(project_id)
 
-    def sap_sum(kind: str, codes: List[str]) -> float:
+    def sap_sum(kind: str, codes: List[str], category: Optional[str] = None) -> float:
         total = 0.0
-        for k, wbs, v in sap:
-            if k == kind and any(wbs == c or wbs.startswith(c + "-") for c in codes):
+        for k, cat, wbs, v in sap:
+            if (k == kind and (category is None or cat == category)
+                    and any(wbs == c or wbs.startswith(c + "-") for c in codes)):
                 total += float(v or 0)
         return total / 1e7
 
     cr = lambda x: None if x is None else round(x, 4)
     # SAP WBS no template row maps - shown on L64 so the totals keep them.
     mapped = [c for _k, _s, _d, w in TEMPLATE for c in _codes(project_id, w)]
-    unmapped = sorted({wbs for _k, wbs, _v in sap
+    unmapped = sorted({wbs for _k, _c, wbs, _v in sap
                        if not any(wbs == c or wbs.startswith(c + "-") for c in mapped)})
+    routed: Dict[str, List[str]] = defaultdict(list)
+    for w in list(unmapped):
+        line = NAME_ROUTES.get((wbs_names.get(w) or "").strip().upper())
+        if line:
+            routed[line].append(w)
+            unmapped.remove(w)
+    company_of = {root: c for c, root in roots.items()}
     rows: Dict[str, Dict[str, Any]] = {}
+    sr_of = {k: sr for k, sr, _d, _w in TEMPLATE}
     for key, sr, desc, wbs in TEMPLATE:
         e = entries.get(key)
-        codes = unmapped if key == "L64" else _codes(project_id, wbs)
+        # The line's WBS, less the codes this project chose not to count on it.
+        left_out = set(setting["excluded"].get(key, []))
+        own = unmapped if key == "L64" else _codes(project_id, wbs)
+        codes = [c for c in own + routed.get(key, []) if c not in left_out]
         approved = e.approved_capex_cr if (e and e.approved_capex_cr is not None) else seed.get(key)
         rows[key] = {
             "key": key, "sr": sr, "description": desc,
             "kind": "total" if key in TOTALS else ("group" if key in GROUPS else "item"),
+            # A group / total line has no WBS of its own: it is the sum of these lines.
+            "sumOf": [sr_of[k] for k in GROUPS.get(key, [])],
             "wbs": ({c: [w for w in unmapped if w.startswith(roots[c])] for c in ("agel", "age6l", "spv")}
                     if key == "L64" else
-                    {c: [roots[c] + s for s in _suffixes(wbs)] for c in ("agel", "age6l", "spv")}),
+                    {c: [roots[c] + s for s in _suffixes(wbs)] + [w for w in routed.get(key, []) if w[:6] == roots[c]]
+                     for c in ("agel", "age6l", "spv")}),
+            "excluded": sorted(left_out),
             "approved": approved,
             "approvedSource": ("edited" if (e and e.approved_capex_cr is not None)
                                else "capex sheet" if key in seed else None),
             "incurred": sap_sum("incurred", codes) if codes else 0.0,
-            "committed": sap_sum("committed", codes) if codes else 0.0,
+            "committedPOrd": sap_sum("committed", codes, "POrd") if codes else 0.0,
+            "committedPReq": sap_sum("committed", codes, "PReq") if codes else 0.0,
             "balance": (e.balance_cr if e and e.balance_cr is not None else 0.0),
             "remarks": e.remarks if e else None,
             "updatedBy": e.updated_by if e else None,
             "editable": {"approved": key not in GROUPS or key in GROUP_APPROVED_EDITABLE,
                          "balance": key not in GROUPS, "remarks": True},
         }
+        r = rows[key]
+        r["committed"] = sum(r["committed" + c] for c in setting["categories"])
+        # One sub-line per WBS suffix, named from SAP, with its own figures -
+        # an EAC line often combines distinct items (Battery Containers =
+        # "BESS Containers" -01-01 + "Logistics" -01-02). Approved Capex and
+        # Balance stay on the line itself.
+        suffixes = (sorted({w[6:] for w in unmapped}) if key == "L64" else _suffixes(wbs))
+        # A routed code is its own sub-line: its suffix means nothing elsewhere.
+        groups = [(suf, {c: ([w for w in unmapped if w[:6] == roots[c] and w[6:] == suf] if key == "L64"
+                             else [roots[c] + suf]) for c in ("agel", "age6l", "spv")}) for suf in suffixes]
+        groups += [(w[6:], {c: ([w] if company_of[w[:6]] == c else []) for c in ("agel", "age6l", "spv")})
+                   for w in routed.get(key, [])]
+        subs = []
+        for suf, by_co in groups:
+            sub_codes = [w for ws in by_co.values() for w in ws if w not in left_out]
+            name = next((wbs_names[w] for ws in by_co.values() for w in ws if w in wbs_names), None)
+            sub = {"suffix": suf, "name": name, "wbs": by_co,
+                   "incurred": sap_sum("incurred", sub_codes),
+                   "committedPOrd": sap_sum("committed", sub_codes, "POrd"),
+                   "committedPReq": sap_sum("committed", sub_codes, "PReq")}
+            sub["committed"] = sum(sub["committed" + c] for c in setting["categories"])
+            sub["eac"] = sub["incurred"] + sub["committed"]
+            for col in ("incurred", "committedPOrd", "committedPReq", "committed", "eac"):
+                sub[col] = cr(sub[col])
+            subs.append(sub)
+        r["subLines"] = subs
 
     def roll(key: str) -> None:
         if key not in GROUPS:
@@ -283,7 +416,7 @@ def build(db: Session, project_id: str) -> Dict[str, Any]:
         for k in kids:
             roll(k)
         r = rows[key]
-        for col in ("incurred", "committed", "balance"):
+        for col in ("incurred", "committed", "committedPOrd", "committedPReq", "balance"):
             r[col] = sum(rows[k][col] or 0 for k in kids)
         kid_approved = [rows[k]["approved"] for k in kids if rows[k]["approved"] is not None]
         if key in GROUP_APPROVED_EDITABLE and not kid_approved:
@@ -297,15 +430,20 @@ def build(db: Session, project_id: str) -> Dict[str, Any]:
     for r in rows.values():
         r["eac"] = (r["incurred"] or 0) + (r["committed"] or 0) + (r["balance"] or 0)
         r["variance"] = (r["approved"] - r["eac"]) if r["approved"] is not None else None
-        for col in ("approved", "incurred", "committed", "balance", "eac", "variance"):
+        for col in ("approved", "incurred", "committed", "committedPOrd", "committedPReq",
+                    "balance", "eac", "variance"):
             r[col] = cr(r[col])
     return {
-        "projectId": project_id, "roots": roots,
+        "projectId": project_id, "roots": roots, "settings": setting,
         "rows": [rows[k] for k, *_ in TEMPLATE],
         "sources": {k: {"file": f, "loadedAt": t.isoformat() if t else None} for k, f, t in sap_meta},
         "basis": {
-            "incurred": "SAP CJI3 Val/COArea Crcy on the row's WBS and below; Value Type 11 (stock-side) excluded",
-            "committed": "SAP S_ALR_87013558 Val/COArea Crcy on the row's WBS and below; purchase orders (POrd) only",
+            "incurred": "SAP CJI3 Val/COArea Crcy on the row's counted WBS and below; "
+                        "Value Type 11 (stock-side) excluded",
+            "committed": "SAP S_ALR_87013558 Val/COArea Crcy on the row's counted WBS and below; "
+                         + " + ".join({"POrd": "purchase orders (POrd)",
+                                                "PReq": "purchase requisitions (PReq)"}[c]
+                                               for c in setting["categories"]),
             "eac": "Incurred + Committed + Balance to Completion",
             "variance": "Approved Capex - EAC",
             "unit": "INR Cr",

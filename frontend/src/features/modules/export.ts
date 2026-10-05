@@ -349,7 +349,7 @@ export async function exportModuleDeliveriesXLSX(
       const ftcText = p.ftc_date || (p.ftc_all_charged ? 'No pending FTC' : '');
       const tcText = p.tc_date || '';
       const modText = p.module_date || '';
-      const remarksText = p.remarks ? (p.ai_suggestion ? `${p.remarks} | AI Suggestion: ${p.ai_suggestion}` : p.remarks) : '';
+      const remarksText = p.remarks ? (p.ai_suggestion ? `${p.remarks} | Suggested action: ${p.ai_suggestion}` : p.remarks) : '';
 
       const row = ws.addRow([
         idx + 1,

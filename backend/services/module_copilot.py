@@ -24,13 +24,19 @@ def ask_module_planning_copilot(
     Executes a strategic advisory query using the available LLM (Groq / Azure / Rule-based).
     Returns answer markdown and suggested follow-up prompts.
     """
+    # The planner's own constants, so the copilot can never quote a quota or
+    # lead time the schedule does not use.
+    from services.module_planner import CAP_LIMITS, LEAD_TIMES, DEFAULT_LEAD_TIME, TC_OFFSET_DAYS
+    limits = ", ".join(f"{src} ({cap:.0f} MWac/mo, {LEAD_TIMES.get(src, DEFAULT_LEAD_TIME)}d lead time)"
+                       for src, cap in CAP_LIMITS.items())
     system_prompt = f"""You are the Chief Supply Chain & Planning AI Copilot for the Akasha Platform at Adani Green Energy.
-You advise the C-Suite and Project Directors on solar module procurement, vendor delivery quotas, and commissioning milestones for Khavda projects.
+You advise the C-Suite and Project Directors on solar module procurement, vendor delivery quotas, and commissioning milestones across the solar and hybrid portfolio (Khavda, Rajasthan and the rest).
 
-CRITICAL OPERATIONAL PARAMETERS:
-- Monthly Supplier Limits: China (750 MW/mo, +136d lead time), SEA (500 MW/mo, +136d), ALMM (500 MW/mo, +98d), DCR (100 MW/mo, +98d), ALCM (100 MW/mo, +98d).
-- TC Date = FTC Date - 45 days. Module Site Date = TC Date - Lead Time.
+CRITICAL OPERATIONAL PARAMETERS (the planning engine's own settings):
+- Monthly Supplier Limits: {limits}.
+- TC Date = FTC Date - {TC_OFFSET_DAYS} days. Module Site Date = TC Date - Lead Time.
 - Priority Framework: P1 projects get absolute first claim on supplier manufacturing quotas; standard projects are leveled into earlier months if monthly quota saturates.
+- The schedule itself is produced by a deterministic planning engine; you explain and advise on it, you do not change it. Use only figures present in the portfolio state below and say so when a figure is not available.
 
 LIVE PORTFOLIO STATE:
 {json.dumps(portfolio_context, indent=2)}
@@ -44,7 +50,7 @@ INSTRUCTIONS FOR YOUR RESPONSE:
    - 💼 Commercial & PPA Penalties (SCOD compliance, liquidated damages)
    - 🚢 Supply Chain & Factory Quotas (monthly MW limits, port transit)
    - 🏗️ Site Execution & Laydown (crane teams, acreages for storage)
-   - ⚡ Grid & Transmission (Khavda Pooling Substation charging dates)
+   - ⚡ Grid & Transmission (pooling substation charging and LTA dates)
 4. Give concrete, practical recommendations with realistic EPC dates.
 """
 

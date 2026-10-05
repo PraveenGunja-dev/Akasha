@@ -2,7 +2,7 @@
 Load the BESS EAC's SAP extracts from Data/EAC_BEES:
 
     CJI3*.xlsx            -> Incurred  (Val/COArea Crcy, Value Type 11 excluded)
-    S_alr_87013558*.xlsx  -> Committed (Val/COArea Crcy, POrd only)
+    S_alr_87013558*.xlsx  -> Committed (Val/COArea Crcy, POrd and PReq)
 
 The newest file of each is used. Approved Capex comes from
 "EAC Format_AND_WBS Structure.xlsx" in the same folder and is read when the
@@ -35,7 +35,8 @@ def main() -> None:
               f"(stock-side Value Type 11 excluded: {loaded['incurred_excluded_stock_lines']}; "
               f"postings {loaded['incurred_posting_from']} to {loaded['incurred_posting_to']})")
         print(f"Committed: {loaded['committed_file']} - {loaded['committed_lines']} lines "
-              f"(PReq excluded: {loaded['committed_excluded_preq_lines']})")
+              f"(POrd {loaded['committed_porder_lines']}, PReq {loaded['committed_preq_lines']}; "
+              f"which count is set per project in the EAC view)")
         print()
         print(f"{'Project':<22} {'Approved':>11} {'Incurred':>10} {'Committed':>11} {'EAC':>11} {'Variance':>11}")
         f = lambda v: "-" if v is None else f"{v:,.2f}"

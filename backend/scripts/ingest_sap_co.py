@@ -227,8 +227,11 @@ def zsps_kept_prefixes(db) -> set:
     are to follow (user, 2026-09-29). So BESS WBS - the CPAG register's supply
     and civil WBS plus every prefix of a project the master puts in the BESS
     cluster - keep their ZPSPS rows. A prefix drops off this list by itself as
-    soon as the CO extracts carry PO lines for it, so loading the BESS CO files
-    switches BESS over with no code change."""
+    soon as the Commitment extract carries PO lines for it, so loading the BESS
+    CO files switches BESS over with no code change. Commitment, not just any
+    CO line: PO value is Actual + Commitment, and the 2026-10-05 Actual already
+    carries BESS (Rs 6,027 Cr) while Commitment does not - switching on Actual
+    alone would drop every open order from the BESS PO value."""
     from sqlalchemy import text
     from routers.bess import BESS_PROJECTS
     from services import project_identity
@@ -237,7 +240,8 @@ def zsps_kept_prefixes(db) -> set:
         if (ident.cluster or ident.portfolio or "").strip().upper() == "BESS":
             bess.update(ident.sap_wbs_prefixes)
     in_co = {r[0] for r in db.execute(text(
-        "select distinct left(wbs_element, 6) from sap_co_line where counts_as_po"))}
+        "select distinct left(wbs_element, 6) from sap_co_line "
+        "where counts_as_po and kind = 'commitment'"))}
     return {p for p in bess if p not in in_co}
 
 

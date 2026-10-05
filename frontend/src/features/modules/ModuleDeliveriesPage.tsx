@@ -282,14 +282,14 @@ const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transitio
 function renderHighlightedText(rawText: string) {
   if (!rawText) return null;
 
-  // Split into Primary Remark vs AI Suggestion
-  const parts = rawText.split(/(?=💡 AI Suggestion:)/g);
+  // Split into the remark vs its suggested action (both rule-based, written by the planning engine)
+  const parts = rawText.split(/(?=💡 Suggested action:)/g);
 
   return (
     <div className="space-y-2">
       {parts.map((part, pIdx) => {
-        const isSuggestion = part.trim().startsWith('💡 AI Suggestion:');
-        const contentText = isSuggestion ? part.replace('💡 AI Suggestion:', '').trim() : part.trim();
+        const isSuggestion = part.trim().startsWith('💡 Suggested action:');
+        const contentText = isSuggestion ? part.replace('💡 Suggested action:', '').trim() : part.trim();
 
         // Match exact DD-Mon-YY, Mon-YY, X days overdue, X days remaining, due today, gain X days, lead times, and plain days
         const regex = /(\b\d{1,2}-[A-Za-z]{3}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}\b|\b\d+\s*days?\s*(?:overdue|remaining)\b|\bdue\s*today\b|\bgain\s*\d+\s*days\b|\b\d+d\b|\b\d+\s*days\b)/gi;
@@ -360,7 +360,7 @@ function renderHighlightedText(rawText: string) {
           return (
             <div key={pIdx} className="mt-2.5 pt-2 border-t border-border-default bg-primary/10 -mx-1 px-3 py-2 rounded-lg border border-primary/30">
               <div className="flex items-center gap-1.5 text-[11px] font-bold text-status-risk-fg mb-1">
-                <span>💡 AI Strategic Recommendation</span>
+                <span>💡 Suggested action</span>
               </div>
               <div className="text-[11px] leading-relaxed text-fg-primary font-normal">
                 {renderedTokens}
@@ -409,7 +409,7 @@ function Tip({
 
   if (!text && !content) return <>{children}</>;
 
-  const isDetailed = wide || (text && (text.length > 60 || text.includes('FTC') || text.includes('AI Suggestion')));
+  const isDetailed = wide || (text && (text.length > 60 || text.includes('FTC') || text.includes('Suggested action')));
   const targetWidth = isDetailed ? 900 : 260;
 
   const toggleTip = (e: React.MouseEvent) => {
@@ -2274,7 +2274,7 @@ export default function ModuleDeliveriesPage() {
                               </Tip>
                             )}
                             <Tip 
-                              text={p.remarks ? `${p.remarks}${p.ai_suggestion ? `\n\n💡 AI Suggestion:\n${p.ai_suggestion}` : ''}` : undefined}
+                              text={p.remarks ? `${p.remarks}${p.ai_suggestion ? `\n\n💡 Suggested action:\n${p.ai_suggestion}` : ''}` : undefined}
                               className="overflow-hidden flex-1"
                             >
                               <span className={`block truncate text-[10px] ${p.remarks ? (p.perspectives ? 'text-primary/90 font-medium' : 'text-foreground/90') : 'text-muted-foreground'}`}>

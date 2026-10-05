@@ -612,7 +612,8 @@ class BESSEACSapLine(Base):
     wbs_element = Column(String, index=True)
     value_inr = Column(Float)                    # Val/COArea Crcy
     value_type = Column(String)                  # CJI3 Value Type
-    ref_category = Column(String)                # S_ALR: POrd
+    ref_category = Column(String)                # S_ALR: POrd / PReq
+    wbs_name = Column(String)                    # SAP "CO object name" - what the WBS is
     document = Column(String)                    # PO number
     source_file = Column(String)
     upload_time = Column(DateTime, default=datetime.utcnow)
@@ -629,6 +630,23 @@ class BESSEACEntry(Base):
     approved_capex_cr = Column(Float, nullable=True)
     balance_cr = Column(Float, nullable=True)
     remarks = Column(Text, nullable=True)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow)
+
+
+class BESSEACSetting(Base):
+    """What one BESS project's EAC counts (services/bess_eac.py), saved from
+    the EAC view: which S_ALR commitment categories (POrd / PReq) go into
+    Committed, and per EAC line the WBS codes left out of that line - each
+    line chooses its own (user, 2026-10-05). `companies` is unused, kept from
+    the first, project-wide version."""
+    __tablename__ = "bess_eac_setting"
+
+    id = Column(Integer, primary_key=True, index=True)
+    project_id = Column(String, unique=True, index=True)
+    companies = Column(String)                   # comma list: agel,age6l,spv
+    categories = Column(String)                  # comma list: POrd,PReq
+    excluded = Column(Text, nullable=True)       # JSON {line_key: [WBS codes not counted]}
     updated_by = Column(String, nullable=True)
     updated_at = Column(DateTime, default=datetime.utcnow)
 

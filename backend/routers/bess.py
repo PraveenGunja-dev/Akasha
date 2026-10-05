@@ -1209,6 +1209,24 @@ def get_eac(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return data
 
 
+# Declared before /eac/{line_key} so "settings" is not read as a row key.
+@router.put("/{project_id}/eac/settings")
+def put_eac_settings(project_id: str, body: Dict[str, Any],
+                     db: Session = Depends(get_db)) -> Dict[str, Any]:
+    """Save, per line, the WBS codes the project's EAC leaves out
+    ({"excluded": {line_key: [codes]}}). Committed is always POrd + PReq."""
+    from services import bess_eac
+    try:
+        bess_eac.save_settings(db, project_id, body.get("excluded") or {}, body.get("user"))
+    except KeyError:
+        raise HTTPException(404, f"{project_id} has no EAC")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    data = bess_eac.build(db, project_id)
+    data["pss"] = BESS_PROJECTS[project_id]["pss"]
+    return data
+
+
 @router.put("/{project_id}/eac/{line_key}")
 def put_eac_row(project_id: str, line_key: str, body: Dict[str, Any],
                 db: Session = Depends(get_db)) -> Dict[str, Any]:
@@ -1220,7 +1238,9 @@ def put_eac_row(project_id: str, line_key: str, body: Dict[str, Any],
         raise HTTPException(404, f"No EAC row {line_key} for {project_id}")
     except ValueError as e:
         raise HTTPException(422, str(e))
-    return bess_eac.build(db, project_id)
+    data = bess_eac.build(db, project_id)
+    data["pss"] = BESS_PROJECTS[project_id]["pss"]     # the export names its sheet from it
+    return data
 
 
 @router.get("/{project_id}/cpag")
