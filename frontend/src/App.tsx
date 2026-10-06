@@ -7,6 +7,7 @@ import FloatingCopilot from './components/ui/FloatingCopilot';
 import KnowledgeGraphPage from './pages/KnowledgeGraphPage';
 import AdminDashboard from './pages/AdminDashboard';
 import PMAGDashboard from './pages/PMAGDashboard';
+import WindDashboard from './pages/WindDashboard';
 import { Toaster } from 'sonner';
 
 function App() {
@@ -23,6 +24,7 @@ function App() {
             <Route path="/ceo-dashboard/knowledge-graph" element={<KnowledgeGraphPage />} />
             {/* PMAG Dashboard */}
             <Route path="/pmag" element={<PMAGDashboard />} />
+            <Route path="/wind-dashboard" element={<WindDashboard />} />
             {/* Placeholder routes for other roles */}
             <Route path="/projects" element={<PMAGDashboard />} />
             <Route path="/tc-ordering" element={<PMAGDashboard />} />

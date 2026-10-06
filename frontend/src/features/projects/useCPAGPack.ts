@@ -15,15 +15,19 @@ export interface CPAGPack {
   retry: () => void;
 }
 
-const API = '/akasha/api/bess';
-
-export function useCPAGPack(enabled: boolean): CPAGPack {
+export function useCPAGPack(enabled: boolean, scope: 'solar' | 'wind' | 'bess' | null): CPAGPack {
+  const API = scope ? `/akasha/api/${scope}` : '/akasha/api/bess';
   const [key, setKey] = useState<string | null>(null);
   const [pages, setPages] = useState<PackPage[]>([]);
   const [asOf, setAsOf] = useState<CPAGPack['asOf']>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [attempt, setAttempt] = useState(0);
+
+  useEffect(() => {
+    setKey(null);
+    setPages([]);
+  }, [API]);
 
   useEffect(() => {
     if (!enabled || key) return;
@@ -44,7 +48,7 @@ export function useCPAGPack(enabled: boolean): CPAGPack {
       .catch((e: Error) => { if (live) setError(e.message); })
       .finally(() => { if (live) setLoading(false); });
     return () => { live = false; };
-  }, [enabled, key, attempt]);
+  }, [enabled, key, attempt, API]);
 
   const retry = useCallback(() => { setKey(null); setAttempt((a) => a + 1); }, []);
 

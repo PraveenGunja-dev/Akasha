@@ -14,7 +14,8 @@ const ScopeCard: React.FC<{
   detail: string;
   onClick?: () => void;
   disabled?: boolean;
-}> = ({ icon: Icon, title, detail, onClick, disabled }) => (
+  extraAction?: React.ReactNode;
+}> = ({ icon: Icon, title, detail, onClick, disabled, extraAction }) => (
   <button
     onClick={disabled ? undefined : onClick}
     disabled={disabled}
@@ -33,6 +34,11 @@ const ScopeCard: React.FC<{
         {disabled && <span className="rounded border border-border-subtle px-1.5 py-px text-[10px] font-medium uppercase tracking-wide text-fg-tertiary">Soon</span>}
       </span>
       <span className="mt-1 block text-[13px] leading-relaxed text-fg-secondary">{detail}</span>
+      {extraAction && (
+        <div className="mt-4" onClick={(e) => e.stopPropagation()}>
+          {extraAction}
+        </div>
+      )}
     </span>
   </button>
 );
@@ -40,10 +46,10 @@ const ScopeCard: React.FC<{
 export default function ReportsInsights(props: any) {
   const [view, setView] = useState<ViewState>('directory');
   const [scope, setScope] = useState<Scope>(null);
-  
-  /* The BESS pack is the downloadable deck's own pages, rendered by the
+
+  /* The pack is the downloadable deck's own pages, rendered by the
      backend from the approved template. */
-  const pack = useCPAGPack(view === 'viewer' && scope === 'bess');
+  const pack = useCPAGPack(view === 'viewer' && (scope === 'bess' || scope === 'wind'), scope);
   const { loading, error, retry } = pack;
 
   return (
@@ -51,7 +57,7 @@ export default function ReportsInsights(props: any) {
       "flex flex-col mx-auto animate-in fade-in duration-500 pb-6 pt-2 h-full min-h-[calc(100vh-100px)]",
       view === 'viewer' ? "w-full" : "w-full gap-6"
     )}>
-      
+
       <AnimatePresence mode="wait">
         {view === 'directory' && (
           <motion.div
@@ -147,7 +153,7 @@ export default function ReportsInsights(props: any) {
               >
                 <ArrowLeft className="w-4 h-4" /> Back to Directory
               </button>
-              
+
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-brand-blue mb-1">
                   CPAG review pack
@@ -160,7 +166,7 @@ export default function ReportsInsights(props: any) {
                 </p>
               </div>
             </div>
-            
+
             <div className="p-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
               <ScopeCard
                 icon={Sun}
@@ -170,17 +176,16 @@ export default function ReportsInsights(props: any) {
                 onClick={() => {
                   setScope('solar');
                   setView('viewer');
-                }} 
+                }}
               />
               <ScopeCard
                 icon={Wind}
                 title="Wind Portfolio"
-                detail="CPAG packs for wind projects are currently being integrated into the data pipeline."
-                disabled={true}
+                detail="The whole pack across all Wind projects, plus the combined corporate order book."
                 onClick={() => {
                   setScope('wind');
                   setView('viewer');
-                }} 
+                }}
               />
               <ScopeCard
                 icon={Battery}
@@ -189,7 +194,7 @@ export default function ReportsInsights(props: any) {
                 onClick={() => {
                   setScope('bess');
                   setView('viewer');
-                }} 
+                }}
               />
             </div>
           </motion.div>
@@ -224,9 +229,9 @@ export default function ReportsInsights(props: any) {
                     Retry
                   </button>
                   <button onClick={() => {
-                      setScope(null);
-                      setView('portfolio_select');
-                    }}
+                    setScope(null);
+                    setView('portfolio_select');
+                  }}
                     className="rounded-lg border border-border-default bg-surface-1 px-4 py-2 text-sm font-medium text-fg-primary transition-colors hover:bg-surface-sunken">
                     Change portfolio
                   </button>
@@ -234,12 +239,12 @@ export default function ReportsInsights(props: any) {
               </div>
             )}
 
-            {!loading && !error && pack.pages.length > 0 && (
+            {!loading && !error && pack.pages?.length > 0 && (
               /* Opens over the whole window; closing it (X or Esc) returns to
                  the portfolio choice, minimising keeps it on the page. */
               <CPAGSlideViewer
                 pack={pack}
-                deckTitle="BESS · CPAG pack · all projects"
+                deckTitle={scope === 'wind' ? "Wind · CPAG pack · all projects" : "BESS · CPAG pack · all projects"}
                 initialFull
                 onClose={() => {
                   setScope(null);
