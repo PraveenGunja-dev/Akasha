@@ -50,6 +50,11 @@ def _classify_wbs(wbs_name: Optional[str]) -> Optional[str]:
         return "Engineering+ System Study"
     if "CONSTRUCTION" in up or up in _CONSTRUCTION_EXACT_WBS:
         return "Construction"
+    if "PROCUREMENT" in up or "SUPPLY" in up or "LOGISTICS" in up or up in (
+        "MODULE", "INVERTER", "LT PANEL", "HT PANEL", "HT PANEL INDOOR", 
+        "POWER TRANSFORMER", "STATIC VAR GENRATOR", "EARTHING FLAT"
+    ) or "CABLE" in up or "FASTNER" in up:
+        return "Procurement"
     return None
 
 
@@ -117,18 +122,6 @@ def _gap_analysis(db: Session, acts: list, module_wbs: Optional[str], as_of: dat
     plan_sum = plan_wt = act_sum = act_wt = 0.0
     for label in SCURVE_ROW_ORDER:
         weight = SCURVE_WEIGHTS[label]
-        if label == "Procurement":
-            sap = _sap_procurement_pct(db, module_wbs)
-            if sap is None:
-                rows.append({"label": label, "weight": weight, "plan": None, "actual": None,
-                             "variance": None, "remark": "", "po_count": None})
-            else:
-                act_pct, po_count = sap
-                act_sum += act_pct * weight
-                act_wt += weight
-                rows.append({"label": label, "weight": weight, "plan": None, "actual": act_pct,
-                             "variance": None, "remark": "", "po_count": po_count})
-            continue
 
         prog = _category_progress(buckets[label], as_of)
         if prog is None:

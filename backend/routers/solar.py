@@ -23,16 +23,16 @@ def _build_project_list(db: Session) -> List[Dict[str, Any]]:
     with their Salient Features fields plus the Overall S Curve data."""
     query = text("""
         SELECT p6.name,
-               MAX(p6.scheduled_finish_date) as cod_actual,
-               MAX(p6.baseline_finish_date) as cod_plan,
-               MAX(p6.duration_percent_complete) as progress_actual,
-               MIN(p6.duration_percent_complete) as progress_plan,
-               MIN(p6.planned_start_date) as start_date,
-               MAX(pm.spv_name) as spv_name
+               p6.scheduled_finish_date as cod_actual,
+               p6.baseline_finish_date as cod_plan,
+               p6.duration_percent_complete as progress_actual,
+               p6.duration_percent_complete as progress_plan,
+               p6.planned_start_date as start_date,
+               pm.spv_name as spv_name
         FROM p6_project p6
         LEFT JOIN project_mapping pm ON p6.name = pm.project_name_from_p6
-        WHERE p6.name ILIKE '%bandha%' OR p6.name ILIKE '%baiya%'
-        GROUP BY p6.name
+        WHERE (p6.name ILIKE '%bandha%' OR p6.name ILIKE '%baiya%')
+          AND EXISTS (SELECT 1 FROM p6_activity a WHERE a.project_object_id = p6.p6_object_id LIMIT 1)
         ORDER BY p6.name
     """)
     projects = db.execute(query).fetchall()
