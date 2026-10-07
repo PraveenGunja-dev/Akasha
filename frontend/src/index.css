@@ -1244,3 +1244,42 @@
   from { opacity: 0; transform: translate(-50%, -100%) scale(0.95); }
   to   { opacity: 1; transform: translate(-50%, -100%) scale(1); }
 }
+
+/* ── Loader (components/ui/primitives/Loader.tsx) ─────────────────────────
+   Five bars rise and fall while a ball climbs them, after the Uiverse
+   "Nawsome" loader. Drawn at 75x100 and scaled for sm / md, so the
+   animation keeps its proportions. Bars take the theme foreground, the ball
+   the brand blue; under reduced motion it holds still. */
+.ak-loader{position:relative;display:inline-block;flex:none}
+.ak-loader--lg{width:75px;height:100px}
+.ak-loader--md{width:45px;height:60px}
+.ak-loader--sm{width:27px;height:36px}
+.ak-loader__inner{position:absolute;left:0;top:0;width:75px;height:100px;transform-origin:0 0}
+.ak-loader--md .ak-loader__inner{transform:scale(.6)}
+.ak-loader--sm .ak-loader__inner{transform:scale(.36)}
+.ak-loader__bar{position:absolute;bottom:0;width:10px;height:50%;border-radius:2px;
+  background:var(--fg-primary);opacity:.82;transform-origin:center bottom}
+.ak-loader__bar:nth-child(1){left:0;transform:scale(1,.2);animation:akBarUp1 4s infinite}
+.ak-loader__bar:nth-child(2){left:15px;transform:scale(1,.4);animation:akBarUp2 4s infinite}
+.ak-loader__bar:nth-child(3){left:30px;transform:scale(1,.6);animation:akBarUp3 4s infinite}
+.ak-loader__bar:nth-child(4){left:45px;transform:scale(1,.8);animation:akBarUp4 4s infinite}
+.ak-loader__bar:nth-child(5){left:60px;transform:scale(1,1);animation:akBarUp5 4s infinite}
+.ak-loader--invert .ak-loader__bar{background:#fff}
+.ak-loader__ball{position:absolute;bottom:10px;left:0;width:10px;height:10px;border-radius:50%;
+  background:var(--brand-blue);box-shadow:0 0 10px color-mix(in srgb,var(--brand-blue) 55%,transparent);
+  animation:akBall 4s infinite}
+@keyframes akBall{0%{transform:translate(0,0)}5%{transform:translate(8px,-14px)}10%{transform:translate(15px,-10px)}
+  17%{transform:translate(23px,-24px)}20%{transform:translate(30px,-20px)}27%{transform:translate(38px,-34px)}
+  30%{transform:translate(45px,-30px)}37%{transform:translate(53px,-44px)}40%{transform:translate(60px,-40px)}
+  50%{transform:translate(60px,0)}57%{transform:translate(53px,-14px)}60%{transform:translate(45px,-10px)}
+  67%{transform:translate(37px,-24px)}70%{transform:translate(30px,-20px)}77%{transform:translate(22px,-34px)}
+  80%{transform:translate(15px,-30px)}87%{transform:translate(7px,-44px)}90%{transform:translate(0,-40px)}
+  100%{transform:translate(0,0)}}
+@keyframes akBarUp1{0%,40%{transform:scale(1,.2)}50%,90%{transform:scale(1,1)}100%{transform:scale(1,.2)}}
+@keyframes akBarUp2{0%,40%{transform:scale(1,.4)}50%,90%{transform:scale(1,.8)}100%{transform:scale(1,.4)}}
+@keyframes akBarUp3{0%,100%{transform:scale(1,.6)}}
+@keyframes akBarUp4{0%,40%{transform:scale(1,.8)}50%,90%{transform:scale(1,.4)}100%{transform:scale(1,.8)}}
+@keyframes akBarUp5{0%,40%{transform:scale(1,1)}50%,90%{transform:scale(1,.2)}100%{transform:scale(1,1)}}
+@media (prefers-reduced-motion: reduce){
+  .ak-loader__bar,.ak-loader__ball{animation:none}
+}

@@ -10,6 +10,7 @@ import { findSubstationCoord } from '../analytics/transmission/gridCoords';
 import type { TcEdge } from '../analytics/transmission/gridHelpers';
 import { useChartTheme } from '../../lib/chartTheme';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 /* ═══════════════════════════════════════════════════════════════════════════
    NETWORK OVERVIEW — transmission mini-map
 
@@ -153,7 +154,7 @@ export default function TransmissionMiniMap({ onTabChange }: { onTabChange?: (ta
   if (loading) {
     return (
       <div className="flex min-h-[400px] flex-1 flex-col items-center justify-center gap-2 rounded-xl border border-border bg-card text-muted-foreground shadow-sm">
-        <Loader2 className="h-5 w-5 animate-spin" />
+        <AkLoader size="sm" />
         <span className="text-sm font-medium">Loading grid network…</span>
       </div>
     );

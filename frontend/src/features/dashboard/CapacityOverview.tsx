@@ -12,6 +12,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { formatProjectName } from '../../lib/projectName';
 import { useChartTheme } from '../../lib/chartTheme';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 /* ═══════════════════════════════════════════════════════════════════════════
    CAPACITY OVERVIEW — premium dashboard
    Matches the reference design: 4 KPI cards + AI sidebar, trajectory chart,
@@ -589,7 +590,7 @@ export default function CapacityOverview() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[500px] w-full">
-        <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
+        <AkLoader size="md" className="mb-4" />
         <p className="text-fg-tertiary font-medium">Analyzing Capacity Metrics…</p>
       </div>
     );

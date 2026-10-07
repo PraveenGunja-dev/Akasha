@@ -6,6 +6,7 @@ import {
   MapPin, Box, Filter, Search, ChevronDown, ChevronUp, Calendar, PieChart
 } from 'lucide-react';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 export default function EInvoiceIntelligence() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -36,7 +37,7 @@ export default function EInvoiceIntelligence() {
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center h-[500px] text-muted-foreground">
-        <div className="w-8 h-8 border-4 border-primary border-t-transparent rounded-full animate-spin mb-4" />
+        <AkLoader size="md" className="mb-4" />
         <p>Loading E-Invoice Intelligence...</p>
       </div>
     );

@@ -2,6 +2,7 @@ import React from 'react';
 import ReactECharts from 'echarts-for-react';
 import { RefreshCw, Activity, Box, BarChart3 } from 'lucide-react';
 
+import { Loader as AkLoader } from '../ui/primitives';
 export default function HomeView({ p6Data, logisticsData, sapData, loading }: any) {
   const totalActiveProjects = p6Data.length || 0;
   const criticalDelays = p6Data.filter((p: any) => p.status === 'Critical').length || 0;
@@ -53,7 +54,7 @@ export default function HomeView({ p6Data, logisticsData, sapData, loading }: an
     <div className="grid w-full grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 pb-10">
       <div className="col-span-1 md:col-span-2 lg:col-span-3 grid grid-cols-3 gap-6">
         <div className="kpi-card bg-card text-card-foreground border border-border rounded-2xl p-4 shadow-sm relative overflow-hidden">
-          {loading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center backdrop-blur-sm z-10"><RefreshCw className="w-5 h-5 animate-spin text-[#0B74B0]" /></div>}
+          {loading && <div className="absolute inset-0 bg-background/50 flex items-center justify-center backdrop-blur-sm z-10"><AkLoader size="sm" /></div>}
           <h3 className="text-muted-foreground text-sm font-medium mb-2 uppercase tracking-wider">Total Active Projects</h3>
           <p className="text-4xl font-light">{totalActiveProjects}</p>
         </div>

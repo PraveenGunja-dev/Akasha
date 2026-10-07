@@ -6,6 +6,7 @@ import { formatProjectName } from '../../lib/projectName';
 
 import { useSearchParams } from 'react-router-dom';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 export default function ComplianceDashboard() {
   const [loading, setLoading] = useState(true);
   const [summaryData, setSummaryData] = useState<any>(null);
@@ -99,7 +100,7 @@ export default function ComplianceDashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12 h-screen">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <AkLoader size="sm" />
         <span className="ml-3 text-muted-foreground font-medium">Loading Compliance Data...</span>
       </div>
     );

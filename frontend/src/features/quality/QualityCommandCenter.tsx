@@ -8,6 +8,7 @@ import {
   ClipboardCheck, RotateCcw, Layers
 } from 'lucide-react';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 /* ── Status config ── */
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; border: string }> = {
   raised: { label: 'Raised', color: 'text-status-critical-fg', bg: 'bg-status-critical-bg', border: 'border-status-critical-border' },
@@ -284,7 +285,7 @@ export default function QualityCommandCenter() {
     return (
       <div className="flex items-center justify-center h-[500px]">
         <div className="flex flex-col items-center gap-3">
-          <RefreshCw className="w-8 h-8 text-primary animate-spin" />
+          <AkLoader size="md" />
           <span className="text-sm text-muted-foreground">Loading Quality Data...</span>
         </div>
       </div>

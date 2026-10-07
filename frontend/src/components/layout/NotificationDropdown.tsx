@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { CheckCircle2, AlertCircle, Clock, CalendarDays, TrendingUp, Filter, Play, Sparkles, Loader2, Maximize2, Minimize2, X } from 'lucide-react';
 import { formatProjectName } from '../../lib/projectName';
 
+import { Loader as AkLoader } from '../ui/primitives';
 export default function NotificationDropdown({ notifications, onClose, onMarkAllRead, onSimulate }: any) {
   const [activeTab, setActiveTab] = useState('All');
   const [aiSuggestions, setAiSuggestions] = useState<{[key: number]: string}>({});
@@ -150,7 +151,7 @@ export default function NotificationDropdown({ notifications, onClose, onMarkAll
       <div className="overflow-y-auto flex-1 bg-card">
         {isLoadingTab ? (
           <div className="p-12 flex flex-col items-center justify-center text-muted-foreground">
-            <Loader2 className="w-8 h-8 mb-3 animate-spin text-primary opacity-50" />
+            <AkLoader size="sm" className="mb-3" />
             <p className="text-[13px] font-medium text-muted-foreground">Loading {activeTab} notifications...</p>
           </div>
         ) : tabNotifications.length === 0 ? (

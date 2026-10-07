@@ -9,6 +9,7 @@ import {
   AlertTriangle
 } from 'lucide-react';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 export default function DataIntegrationHub() {
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -349,7 +350,7 @@ export default function DataIntegrationHub() {
         <div className="overflow-x-auto flex-1 relative min-h-[400px]">
           {loading && (
             <div className="absolute inset-0 z-50 bg-background/50 backdrop-blur-[2px] flex flex-col items-center justify-center">
-              <RefreshCw className="w-8 h-8 text-primary animate-spin mb-4" />
+              <AkLoader size="md" className="mb-4" />
               <h3 className="text-sm font-medium text-foreground">Syncing Enterprise Data</h3>
             </div>
           )}
@@ -467,7 +468,7 @@ export default function DataIntegrationHub() {
             <div className="p-5">
               {loadingDetails ? (
                 <div className="flex flex-col items-center justify-center py-12">
-                  <RefreshCw className="w-6 h-6 text-muted-foreground animate-spin mb-3" />
+                  <AkLoader size="sm" className="mb-3" />
                   <p className="text-sm text-muted-foreground">Loading details...</p>
                 </div>
               ) : (

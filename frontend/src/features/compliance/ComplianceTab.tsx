@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { formatDate } from '../../lib/utils';
 import { Shield, FileText, CheckCircle, AlertTriangle, XCircle, Loader2, Calendar, Clock } from 'lucide-react';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 interface ComplianceTabProps {
   projectId: string;
 }
@@ -60,7 +61,7 @@ export default function ComplianceTab({ projectId }: ComplianceTabProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-12">
-        <Loader2 className="w-8 h-8 animate-spin text-primary" />
+        <AkLoader size="sm" />
         <span className="ml-3 text-muted-foreground font-medium">Loading Compliance & Approvals...</span>
       </div>
     );

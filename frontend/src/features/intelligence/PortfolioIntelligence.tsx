@@ -5,6 +5,7 @@ import { formatProjectName } from '../../lib/projectName';
 import IntelligenceProjectsDrawer, { type IntelProject } from './IntelligenceProjectsDrawer';
 import { cx } from '../../components/ui/primitives/cx';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 export default function PortfolioIntelligence() {
   const [data, setData] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -30,8 +31,8 @@ export default function PortfolioIntelligence() {
 
   if (loading) {
     return (
-      <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center animate-pulse">
-        <Brain className="w-12 h-12 text-primary/50 mb-4 animate-spin-slow" />
+      <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
+        <AkLoader size="md" className="mb-5" />
         <h3 className="text-xl font-semibold mb-2">Analyzing Portfolio Telemetry...</h3>
         <p className="text-muted-foreground max-w-md">The Intelligence Engine is processing data across all active projects.</p>
       </div>

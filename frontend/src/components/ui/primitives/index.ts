@@ -19,4 +19,5 @@ export type { MeterProps } from './Meter';
 export { ChartFrame } from './ChartFrame';
 export type { ChartFrameProps } from './ChartFrame';
 export { PageHeader } from './PageHeader';
-export { containerVariants, itemVariants } from './motion';
+export { containerVariants, itemVariants } from './motion';export { Loader } from './Loader';
+export type { LoaderSize } from './Loader';

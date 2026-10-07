@@ -31,6 +31,7 @@ import TeamManagement from './pmag/TeamManagement';
 import SiteMonitoring from './pmag/SiteMonitoring';
 import ProjectWorkspace from '../features/projects/ProjectWorkspace';
 
+import { Loader as AkLoader } from '../components/ui/primitives';
 interface DashboardData {
   summary: {
     total_projects: number; on_track: number; at_risk: number; delayed: number;
@@ -275,7 +276,7 @@ export default function PMAGDashboard() {
     return (
       <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-3 border-primary border-t-transparent rounded-full animate-spin" />
+          <AkLoader size="lg" />
           <p className="text-sm font-medium text-muted-foreground">Loading PMAG Dashboard...</p>
         </div>
       </div>

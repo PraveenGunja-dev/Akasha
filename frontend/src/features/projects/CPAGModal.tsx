@@ -12,13 +12,14 @@ import { Loader2, AlertTriangle } from 'lucide-react';
 import CPAGSlideViewer from './CPAGSlides';
 import { useCPAGPack } from './useCPAGPack';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 export const PackStatus: React.FC<{
   pack: ReturnType<typeof useCPAGPack>; onClose: () => void;
 }> = ({ pack, onClose }) => (
   <>
     {pack.loading && (
       <div className="flex flex-col items-center justify-center gap-3 py-32 text-white/60">
-        <Loader2 className="h-5 w-5 animate-spin" strokeWidth={1.5} />
+        <AkLoader size="md" invert />
         <span className="text-sm">Building the CPAG pack from P6, SAP and Pulse…</span>
         <span className="text-xs text-white/40">The first build after a data change takes about a minute.</span>
       </div>

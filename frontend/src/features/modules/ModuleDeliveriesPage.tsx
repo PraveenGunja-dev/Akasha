@@ -15,6 +15,7 @@ import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from '.
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 /* ═══════════════════════════════════════════════════════════════════════════
    MODULE DELIVERIES & FORECAST
    CEO-grade view replicating the PDF tracker with live SAP/P6/TC data.
@@ -1142,7 +1143,7 @@ export default function ModuleDeliveriesPage() {
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px] gap-3">
-        <RefreshCw className="w-5 h-5 animate-spin text-primary" />
+        <AkLoader size="sm" />
         <span className="text-muted-foreground text-sm">Loading module deliveries data...</span>
       </div>
     );

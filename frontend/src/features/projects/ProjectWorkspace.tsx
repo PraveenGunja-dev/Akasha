@@ -21,6 +21,7 @@ import EACView, { useEAC, exportEAC } from './EACView';
 import ActivityInvestigationModal from '../intelligence/ActivityInvestigationModal';
 import { formatProjectName } from '../../lib/projectName';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 /* ── Circular Gauge ── */
 const Gauge = ({ value, label, color, size = 72, stroke = 5 }: any) => {
   const radius = (size - stroke) / 2;
@@ -1272,7 +1273,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                 <div className="border-l-2 border-primary/30 pl-4 min-h-[80px]">
                   {diagLoading ? (
                     <div className="flex items-center gap-3">
-                      <div className="w-4 h-4 rounded-full border-2 border-primary border-t-transparent animate-spin"></div>
+                      <AkLoader size="sm" />
                       <span className="text-sm text-muted-foreground/60 animate-pulse">Analyzing project data...</span>
                     </div>
                   ) : diagnostic ? (
@@ -1494,7 +1495,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <AkLoader size="sm" />
                     <span className="text-sm text-muted-foreground/60">Loading SAP data...</span>
                   </div>
                 </div>
@@ -1618,7 +1619,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                           {/* SLR KPIs */}
                           {slrLoading ? (
                             <div className="flex items-center justify-center gap-3 mt-4 pt-4 border-t border-border">
-                              <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                              <AkLoader size="sm" />
                               <span className="text-sm text-muted-foreground/60">Loading SLR data...</span>
                             </div>
                           ) : slrData && slrData.data?.length > 0 && (() => {
@@ -2468,7 +2469,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <AkLoader size="sm" />
                     <span className="text-sm text-muted-foreground/60">Loading E-Invoice data...</span>
                   </div>
                 </div>
@@ -2605,7 +2606,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <AkLoader size="sm" />
                     <span className="text-sm text-muted-foreground/60">Loading P6 data...</span>
                   </div>
                 </div>
@@ -2995,7 +2996,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="flex items-center gap-3">
-                    <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                    <AkLoader size="sm" />
                     <span className="text-sm text-muted-foreground/60">Loading Transmission data...</span>
                   </div>
                 </div>

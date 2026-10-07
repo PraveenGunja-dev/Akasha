@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { formatDate } from '../../lib/utils';
 import { FileText, AlertTriangle, TrendingDown, Clock, ShieldAlert, CheckCircle2, ChevronRight, Play, ServerCrash } from 'lucide-react';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 export default function ExecutiveBriefing() {
   const [loading, setLoading] = useState(true);
   const [briefing, setBriefing] = useState<any>(null);
@@ -56,10 +57,7 @@ export default function ExecutiveBriefing() {
 
       {loading ? (
         <div className="flex-1 flex flex-col items-center justify-center space-y-6">
-           <div className="w-16 h-16 relative">
-              <div className="absolute inset-0 border-4 border-muted rounded-full"></div>
-              <div className="absolute inset-0 border-4 border-primary rounded-full border-t-transparent animate-spin"></div>
-           </div>
+           <AkLoader size="lg" />
            <div className="text-muted-foreground font-mono text-sm tracking-widest uppercase animate-pulse">
              Generating Executive Intelligence via AKASHA AI...
            </div>

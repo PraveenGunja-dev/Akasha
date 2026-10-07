@@ -7,6 +7,7 @@ import remarkGfm from 'remark-gfm';
 import ReactECharts from 'echarts-for-react';
 import ProjectStoryView from './ProjectStoryView';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 interface Props {
   projectId: string;
 }
@@ -56,8 +57,8 @@ export default function ProjectIntelligence({ projectId }: Props) {
 
   if (loading) {
     return (
-      <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center animate-pulse">
-        <Brain className="w-12 h-12 text-primary/50 mb-4 animate-spin-slow" />
+      <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
+        <AkLoader size="md" className="mb-5" />
         <h3 className="text-xl font-semibold mb-2">Analyzing Project Telemetry...</h3>
         <p className="text-muted-foreground max-w-md">The Akasha Intelligence Engine is synthesizing schedule, materials, transmission, quality, financial, drone, and weather data.</p>
       </div>

@@ -8,6 +8,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Loader2, AlertTriangle, RefreshCcw, Landmark, Receipt, FileSignature, Calculator, Scale, Table2, Columns3, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, KPITile } from '../../components/ui/primitives';
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 const API = '/akasha/api/bess';
 
 type Kind = 'item' | 'group' | 'total';
@@ -428,7 +429,7 @@ export const EACView: React.FC<{ eac: ReturnType<typeof useEAC> }> = ({ eac }) =
   if (loading && !data) {
     return (
       <div className="flex items-center justify-center gap-2 py-24 text-sm text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" /> Loading EAC…
+        <AkLoader size="md" label="Loading EAC…" />
       </div>
     );
   }

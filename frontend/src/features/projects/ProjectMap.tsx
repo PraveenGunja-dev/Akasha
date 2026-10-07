@@ -89,6 +89,7 @@ const createGeneratorIcon = (type: string) => {
 import ReactECharts from 'echarts-for-react';
 
 
+import { Loader as AkLoader } from '../../components/ui/primitives';
 // Factory to create standard tear-drop markers
 const createMarkerIcon = (color: string) => new L.DivIcon({
   html: `<div style="display: flex; align-items: center; justify-content: center;">
@@ -280,7 +281,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
 
             {loading ? (
               <div className="h-[400px] flex flex-col items-center justify-center gap-4 bg-white/50 dark:bg-slate-800/50 rounded-2xl border border-slate-200/50 dark:border-slate-700/50 shadow-sm backdrop-blur-sm">
-                <Loader2 className="w-12 h-12 animate-spin text-blue-500" />
+                <AkLoader size="md" />
                 <span className="text-lg font-semibold text-slate-600 dark:text-slate-300">Running Environmental Simulation...</span>
               </div>
             ) : data ? (
@@ -388,7 +389,7 @@ function WeatherSimulationPanel({ location, onClose }: { location: { lat: number
       <div className="p-3 bg-slate-50/50 dark:bg-slate-900/50 flex-1 overflow-hidden">
         {loading ? (
           <div className="h-44 flex flex-col items-center justify-center gap-3">
-            <Loader2 className="w-6 h-6 animate-spin text-blue-500" />
+            <AkLoader size="sm" />
             <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">Running Simulation...</span>
           </div>
         ) : (
@@ -1181,7 +1182,7 @@ export default function ProjectMap({ projects = [], onOpenProject, theme: themeP
 
                 {overpassLoading ? (
                   <div className="flex flex-col items-center justify-center p-4 gap-2 text-muted-foreground">
-                    <Loader2 className="w-5 h-5 animate-spin text-primary" />
+                    <AkLoader size="sm" />
                     <span className="text-xs">Extracting OSM data...</span>
                   </div>
                 ) : overpassData && overpassData.length > 0 ? (

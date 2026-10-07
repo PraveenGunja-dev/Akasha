@@ -9,6 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import TopHeader from '../components/layout/TopHeader';
 
+import { Loader as AkLoader } from '../components/ui/primitives';
 export default function WindDashboard() {
   const navigate = useNavigate();
   const [data, setData] = useState<any>(null);
@@ -70,7 +71,7 @@ export default function WindDashboard() {
 
           {loading && (
             <div className="flex flex-col items-center justify-center h-64 bg-surface-1 rounded-xl border border-border-subtle">
-              <Loader2 className="w-8 h-8 text-brand-blue animate-spin mb-4" />
+              <AkLoader size="md" className="mb-4" />
               <p className="text-fg-secondary font-medium">Loading S-Curve Data...</p>
             </div>
           )}
