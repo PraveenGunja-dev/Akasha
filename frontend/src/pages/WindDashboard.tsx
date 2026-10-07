@@ -126,7 +126,7 @@ export default function WindDashboard() {
                       <Tooltip 
                         contentStyle={{ backgroundColor: 'hsl(var(--surface-1))', borderColor: 'hsl(var(--border-subtle))', borderRadius: '8px' }}
                         itemStyle={{ fontSize: '13px' }}
-                        formatter={(value: number, name: string) => [`${value.toFixed(2)}%`, name]}
+                        formatter={(value, name) => [`${Number(value ?? 0).toFixed(2)}%`, String(name)]}
                       />
                       <Legend wrapperStyle={{ paddingTop: '20px' }} />
                       <Bar yAxisId="left" dataKey="monthly_plan" name="Monthly Plan" fill="#5b9bd5" barSize={20} radius={[2, 2, 0, 0]} />

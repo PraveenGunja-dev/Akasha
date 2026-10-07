@@ -50,7 +50,7 @@ export const CPAGModal: React.FC<{
   projectLabel?: string;
   onClose: () => void;
 }> = ({ open, onClose }) => {
-  const pack = useCPAGPack(open);
+  const pack = useCPAGPack(open, 'bess');   // this modal is the BESS pack
 
   useEffect(() => {
     if (!open) return;
