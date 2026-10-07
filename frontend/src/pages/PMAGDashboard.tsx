@@ -145,7 +145,7 @@ export default function PMAGDashboard() {
     setIsSyncing(false);
   };
 
-  const handleLogout = () => { logout(); navigate('/', { replace: true }); };
+  const handleLogout = () => { logout(); navigate('/login', { replace: true }); };
 
   // ─── Sidebar Groups ───
   const sidebarGroups = [

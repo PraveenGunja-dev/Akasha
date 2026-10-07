@@ -106,7 +106,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
 
   const handleSignOut = () => {
     logout();
-    navigate('/', { replace: true });
+    navigate('/login', { replace: true });
   };
 
   useEffect(() => {

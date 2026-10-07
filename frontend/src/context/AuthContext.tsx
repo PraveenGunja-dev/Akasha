@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import type { ReactNode } from 'react';
 
 interface User {
@@ -14,61 +14,75 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const API = '/akasha/api/auth';
+
+// Storage can be unavailable (private window, blocked site data): every
+// access is guarded, and without it the session simply lasts the tab.
+const store = {
+  get: (k: string) => { try { return localStorage.getItem(k); } catch { return null; } },
+  set: (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* tab-only session */ } },
+  del: (k: string) => { try { localStorage.removeItem(k); } catch { /* nothing stored */ } },
+};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // Restore session from localStorage on mount
-  useEffect(() => {
-    const savedUser = localStorage.getItem('akasha_user');
-    const savedToken = localStorage.getItem('akasha_token');
-    if (savedUser && savedToken) {
-      setUser(JSON.parse(savedUser));
-      setToken(savedToken);
-    }
-    setIsLoading(false);
+  const clear = useCallback(() => {
+    setUser(null);
+    setToken(null);
+    store.del('akasha_user');
+    store.del('akasha_token');
   }, []);
 
-  const login = async (username: string, password: string): Promise<{ success: boolean; message: string }> => {
+  // Restore the session, then confirm it with the server: a token from a
+  // signed-out or expired session must not keep the dashboards open.
+  useEffect(() => {
+    const savedToken = store.get('akasha_token');
+    const savedUser = store.get('akasha_user');
+    if (!savedToken) { setIsLoading(false); return; }
+    if (savedUser) { try { setUser(JSON.parse(savedUser)); } catch { /* re-read below */ } }
+    setToken(savedToken);
+    fetch(`${API}/me`, { headers: { Authorization: `Bearer ${savedToken}` } })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d: { user: User }) => { setUser(d.user); store.set('akasha_user', JSON.stringify(d.user)); })
+      .catch((status) => { if (status === 401) clear(); })   // offline: keep the local session
+      .finally(() => setIsLoading(false));
+  }, [clear]);
+
+  const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
-      const res = await fetch('/akasha/api/auth/login', {
+      const res = await fetch(`${API}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ email, password }),
       });
-
-      if (!res.ok) {
-        const err = await res.json();
-        return { success: false, message: err.detail || 'Login failed' };
-      }
-
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) return { success: false, message: data.detail || 'Sign-in failed. Please try again.' };
       setUser(data.user);
       setToken(data.token);
-      localStorage.setItem('akasha_user', JSON.stringify(data.user));
-      localStorage.setItem('akasha_token', data.token);
+      store.set('akasha_user', JSON.stringify(data.user));
+      store.set('akasha_token', data.token);
       return { success: true, message: data.message };
     } catch {
-      return { success: false, message: 'Network error. Please try again.' };
+      return { success: false, message: 'Cannot reach the server. Check your connection and try again.' };
     }
   };
 
   const logout = () => {
-    setUser(null);
-    setToken(null);
-    localStorage.removeItem('akasha_user');
-    localStorage.removeItem('akasha_token');
+    const t = token;
+    clear();
+    if (t) fetch(`${API}/logout`, { method: 'POST', headers: { Authorization: `Bearer ${t}` } }).catch(() => {});
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, isAuthenticated: !!user, isLoading, login, logout }}>
+    <AuthContext.Provider value={{ user, token, isAuthenticated: !!user && !!token, isLoading, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

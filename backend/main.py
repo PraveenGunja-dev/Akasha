@@ -29,6 +29,12 @@ requests.Session.request = new_request
 from auto_migrate import auto_upgrade_schema
 auto_upgrade_schema()
 
+# Sign-in account(s) the app ships with (routers/auth.py).
+try:
+    auth.ensure_default_users()
+except Exception as e:  # never block start-up on it
+    logging.getLogger(__name__).warning(f"Default user setup skipped: {e}")
+
 app = FastAPI(
     title="Akasha Intelligence API",
     description="Cross-Platform Intelligence System Backend",

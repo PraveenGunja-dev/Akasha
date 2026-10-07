@@ -19,6 +19,17 @@ class AkashaUser(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
 
 
+class AkashaSession(Base):
+    """A signed-in session: the bearer token the browser holds, so /auth/me can
+    confirm it and sign-out can end it (routers/auth.py)."""
+    __tablename__ = "akasha_session"
+
+    token = Column(String, primary_key=True)
+    user_id = Column(Integer, index=True, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=False)
+
+
 # ==========================================
 # SQLAlchemy Database Models (PostgreSQL)
 # ==========================================

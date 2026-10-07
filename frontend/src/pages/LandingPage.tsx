@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { Lock, X, ArrowRight } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import { AnimatePresence, motion } from "framer-motion";
+import { Lock, Mail, X, ArrowRight, Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
 import PresentationModal from "../components/ui/PresentationModal";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from '../hooks/useTheme';
@@ -69,17 +70,40 @@ const SQUARES = [
 export default function LandingPage() {
   const [theme, setTheme] = useTheme();
   const [showPresentation, setShowPresentation] = useState(false);
-  const [showLogin, setShowLogin] = useState(false);
   const navigate = useNavigate();
-  const { isAuthenticated, user } = useAuth();
+  const location = useLocation();
+  // /login is this page with the sign-in panel open (protected pages send
+  // people here, and back to where they were going afterwards).
+  const [showLogin, setShowLogin] = useState(location.pathname === '/login');
+  const from = (location.state as { from?: string } | null)?.from;
+  const { isAuthenticated, user, login } = useAuth();
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [loginError, setLoginError] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { if (location.pathname === '/login') setShowLogin(true); }, [location.pathname]);
+  const closeLogin = () => {
+    setShowLogin(false);
+    setLoginError('');
+    if (location.pathname === '/login') navigate('/', { replace: true });
+  };
+  const submitLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoginError('');
+    setBusy(true);
+    const r = await login(email.trim(), password);
+    setBusy(false);
+    if (!r.success) setLoginError(r.message);
+  };
   const isDark = theme === "dark";
 
   useEffect(() => {
   }, [isDark]);
 
   useEffect(() => {
-    if (isAuthenticated && user) navigate(ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
-  }, [isAuthenticated, user, navigate]);
+    if (isAuthenticated && user) navigate(from || ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
+  }, [isAuthenticated, user, navigate, from]);
 
   return (
     <>
@@ -91,6 +115,20 @@ export default function LandingPage() {
 
 /* ══════════ ROOT ══════════ */
 .lp{position:relative;width:100%;min-height:100vh;overflow:hidden;font-family:"Adani",system-ui,sans-serif;transition:background .7s ease,color .5s}
+/* Sign-in open: one page. The background keeps the full width; the hero
+   moves into the left part and the sign-in form sits on the same background
+   on the right - no second surface, no seam. */
+.lp-hero,.lp-foot,.lp-topbar{transition:padding .6s cubic-bezier(.22,1,.36,1)}
+.lp-brand,.lp-title{transition:font-size .6s cubic-bezier(.22,1,.36,1),color .5s}
+.lp-cta{transition:opacity .3s ease,transform .3s ease,background-position .4s ease,box-shadow .3s ease}
+.lp-open .lp-cta{opacity:0;transform:translateY(6px);pointer-events:none}
+@media(min-width:1024px){
+  .lp-open .lp-hero{padding-left:48px;padding-right:calc(42vw + 24px)}
+  .lp-open .lp-foot{z-index:210}   /* stays bottom-right, above the sign-in side */
+  .lp-open .lp-topbar{padding-right:calc(42vw + 40px)}
+  .lp-open .lp-brand{font-size:clamp(3.2rem,6.6vw,6.4rem)}
+  .lp-open .lp-title{font-size:clamp(1.25rem,1.9vw,1.85rem)}
+}
 .lp.dk{background:radial-gradient(ellipse 100% 74% at 50% 122%,#173163 0%,#0d1a3a 34%,#070c1c 64%,#03050d 100%);color:#fff}
 .lp.lt{background:radial-gradient(ellipse 104% 66% at 50% 126%,#e4edf9 0%,#f4f8fd 32%,#fff 62%,#fff 100%);color:#0f172a}
 
@@ -262,7 +300,7 @@ export default function LandingPage() {
 }
       `}</style>
 
-      <div className={`lp ${isDark ? 'dk' : 'lt'}`}>
+      <div className={`lp ${isDark ? 'dk' : 'lt'} ${showLogin ? 'lp-open' : ''}`}>
         {/* Background layers */}
         <Starfield isDark={isDark} />
         <div className="lp-grid" />
@@ -291,12 +329,14 @@ export default function LandingPage() {
         {/* Planet arc */}
         <div className="lp-planet" />
 
-        {/* ── Top bar — theme toggle only ── */}
-        <div className="lp-topbar">
-          <button className="lp-theme" onClick={() => setTheme(isDark ? 'light' : 'dark')} title="Toggle theme">
-            {isDark ? '☀' : '☾'}
-          </button>
-        </div>
+        {/* ── Top bar — theme toggle only; moves into the sign-in header while that is open ── */}
+        {!showLogin && (
+          <div className="lp-topbar">
+            <button className="lp-theme" onClick={() => setTheme(isDark ? 'light' : 'dark')} title="Toggle theme">
+              {isDark ? '☀' : '☾'}
+            </button>
+          </div>
+        )}
 
         {/* ── Hero — centred stack ── */}
         <div className="lp-hero">
@@ -328,9 +368,6 @@ export default function LandingPage() {
                 Get Started
                 <ArrowRight size={18} className="lp-cta-arrow" />
               </button>
-              <button className="lp-login" onClick={() => setShowLogin(true)}>
-                Login
-              </button>
             </div>
           </div>
         </div>
@@ -346,41 +383,97 @@ export default function LandingPage() {
         {/* ── Presentation Modal ── */}
         <PresentationModal isOpen={showPresentation} onClose={() => setShowPresentation(false)} totalSlides={10} />
 
-        {/* ── Login Modal ── */}
-        {showLogin && (
-          <div className="fixed inset-0 z-[200] flex items-center justify-center">
-            <div className="absolute inset-0 bg-black/60 backdrop-blur-md" onClick={() => setShowLogin(false)} />
-            <div className="relative z-10 w-full max-w-[420px] mx-4">
-              <div className="backdrop-blur-2xl bg-white/[0.06] border border-white/[0.1] rounded-[28px] p-8 shadow-2xl shadow-black/40">
-                <button onClick={() => setShowLogin(false)} className="absolute top-5 right-5 p-2 rounded-full text-white/30 hover:text-white/70 hover:bg-white/10 transition-all">
-                  <X className="w-5 h-5" />
+        {/* ── Sign-in panel: slides in on the right while the landing page
+             narrows to the left and keeps running beside it (desktop); covers
+             the screen on small displays. ── */}
+        <AnimatePresence>
+          {showLogin && (
+            <motion.aside key="login" role="dialog" aria-modal="false" aria-labelledby="signin-title"
+              className={`fixed inset-y-0 right-0 z-[200] flex w-full flex-col overflow-y-auto lg:w-[42vw]
+                          ${isDark ? 'text-white max-lg:bg-[#070c1c]' : 'text-slate-900 max-lg:bg-white'}`}
+              initial={{ x: 48, opacity: 0 }} animate={{ x: 0, opacity: 1 }} exit={{ x: 48, opacity: 0 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
+              onKeyDown={(e) => { if (e.key === 'Escape') closeLogin(); }}>
+
+              {/* Header: close, then theme toggle last */}
+              <header className="flex shrink-0 items-center justify-end gap-3 px-8 pt-7 sm:px-12">
+                <button type="button" onClick={closeLogin} aria-label="Close sign-in"
+                  className={`rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4aa3dd]/50
+                              ${isDark ? 'text-white/40 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}>
+                  <X className="h-5 w-5" />
                 </button>
-                <div className="mb-7">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-primary via-[#75479c] to-accent flex items-center justify-center shadow-lg shadow-primary/30">
-                      <Lock className="w-5 h-5 text-white" />
-                    </div>
-                    <div>
-                      <h2 className="text-xl font-bold text-white">Sign In</h2>
-                      <p className="text-xs text-white/40 font-medium">Access your Akasha dashboard</p>
-                    </div>
-                  </div>
-                </div>
-                <div className="space-y-4">
-                  <button onClick={() => navigate('/ceo-dashboard')} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-primary to-[#75479c] text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(11,116,176,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2">
-                    Login as CEO
-                  </button>
-                  <button onClick={() => navigate('/pmag')} className="w-full py-3.5 rounded-xl bg-gradient-to-r from-[#4a60c5] to-accent text-white font-bold text-[15px] transition-all duration-300 hover:shadow-[0_0_30px_rgba(74,96,197,0.4)] hover:scale-[1.01] active:scale-[0.99] flex items-center justify-center gap-2">
-                    Login as PMAG
-                  </button>
-                </div>
-                <p className="text-center text-[11px] text-white/20 mt-5">
-                  Akasha Execution Platform — Adani Green Energy Limited
-                </p>
+                <button className="lp-theme" onClick={() => setTheme(isDark ? 'light' : 'dark')} title="Toggle theme">
+                  {isDark ? '☀' : '☾'}
+                </button>
+              </header>
+
+              {/* Form, centred in the remaining height */}
+              <div className="flex flex-1 items-center px-8 py-10 sm:px-12">
+                <motion.div className="mx-auto w-full max-w-[380px]"
+                  initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
+                  transition={{ duration: 0.45, delay: 0.2, ease: 'easeOut' }}>
+                  <p className={`text-[12px] font-semibold uppercase tracking-[0.14em] ${isDark ? 'text-[#4aa3dd]' : 'text-[#0b74b1]'}`}>Welcome back</p>
+                  <h2 id="signin-title" className="mt-2 text-[26px] font-semibold leading-tight tracking-tight">Sign in to your account</h2>
+                  <p className={`mt-2 text-[14px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>
+                    Use your Adani work email and password.
+                  </p>
+
+                  <form onSubmit={submitLogin} className="mt-8 space-y-5" noValidate>
+                    {[
+                      { id: 'lp-email', label: 'Email', icon: Mail, type: 'email', value: email, set: setEmail,
+                        ph: 'name@adani.com', auto: 'username' },
+                      { id: 'lp-password', label: 'Password', icon: Lock, type: showPw ? 'text' : 'password', value: password,
+                        set: setPassword, ph: 'Enter your password', auto: 'current-password' },
+                    ].map(({ id, label, icon: Icon, type, value, set, ph, auto }) => (
+                      <div key={id}>
+                        <label htmlFor={id} className={`mb-2 block text-[13px] font-medium ${isDark ? 'text-white/80' : 'text-slate-700'}`}>{label}</label>
+                        <div className="relative">
+                          <Icon className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${isDark ? 'text-white/35' : 'text-slate-400'}`} />
+                          <input id={id} type={type} value={value} onChange={(e) => set(e.target.value)} placeholder={ph}
+                            autoComplete={auto} autoFocus={id === 'lp-email'} required aria-invalid={!!loginError}
+                            className={`h-11 w-full rounded-xl border pl-10 text-[14px] transition-colors focus:outline-none focus:ring-2
+                                        ${id === 'lp-password' ? 'pr-11' : 'pr-3.5'}
+                                        ${isDark ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-white/25 hover:border-white/20 focus:border-[#4aa3dd]/70 focus:ring-[#4aa3dd]/20'
+                                          : 'border-slate-200 bg-slate-50/60 text-slate-900 placeholder:text-slate-400 hover:border-slate-300 focus:border-[#0b74b1] focus:bg-white focus:ring-[#0b74b1]/15'}`} />
+                          {id === 'lp-password' && (
+                            <button type="button" onClick={() => setShowPw((v) => !v)} aria-label={showPw ? 'Hide password' : 'Show password'}
+                              className={`absolute right-2 top-1/2 -translate-y-1/2 rounded-lg p-2 transition-colors ${isDark ? 'text-white/40 hover:text-white' : 'text-slate-400 hover:text-slate-700'}`}>
+                              {showPw ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+
+                    <AnimatePresence>
+                      {loginError && (
+                        <motion.div role="alert" initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }}
+                          exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }}
+                          className="flex items-start gap-2 overflow-hidden rounded-xl border border-[#bc3860]/30 bg-[#bc3860]/10 px-3.5 py-3 text-[13px] text-[#e05a82]">
+                          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" /> {loginError}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+
+                    <button type="submit" disabled={busy || !email.trim() || !password}
+                      className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0b74b1] to-[#75479c]
+                                 text-[14px] font-semibold text-white transition-all hover:shadow-[0_6px_24px_rgba(117,71,156,0.35)]
+                                 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none
+                                 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4aa3dd]/60 focus-visible:ring-offset-2
+                                 focus-visible:ring-offset-transparent">
+                      {busy ? <><Loader2 className="h-4 w-4 animate-spin" /> Signing in…</> : <>Sign in <ArrowRight className="h-4 w-4" /></>}
+                    </button>
+                  </form>
+
+                  <p className={`mt-6 text-[12px] leading-relaxed ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
+                    Access is managed by the Akasha team. Contact them if you need an account.
+                  </p>
+                </motion.div>
               </div>
-            </div>
-          </div>
-        )}
+
+            </motion.aside>
+          )}
+        </AnimatePresence>
       </div>
     </>
   );
