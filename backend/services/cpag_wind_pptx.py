@@ -56,10 +56,15 @@ def _remove_shape(shape):
 
 # ── Slide builders ──────────────────────────────────────────────────────────
 
+def _ordinal_date(d: datetime.date) -> str:
+    suffix = "th" if 11 <= d.day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(d.day % 10, "th")
+    return f"{d.day}{suffix} {d.strftime('%b %y')}"
+
 def _fill_slide_1(prs, data: Dict[str, Any]):
     """Slide 1: CPAG – Energy Cluster cover. Replace date."""
     slide = prs.slides[0]
-    current_date = datetime.now().strftime("%d-%b-%Y") # Always use today's date
+    import datetime
+    current_date = _ordinal_date(datetime.date.today())
     for shape in slide.shapes:
         _replace_text_preserve_format(shape, "Aug-26", current_date)
 

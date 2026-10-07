@@ -39,11 +39,13 @@ def _source_stamp(db: Session) -> str:
     from pathlib import Path
     h = hashlib.sha1()
     here = Path(__file__).resolve().parent.parent
+    from datetime import date
     for f in ("routers/wind.py", "services/cpag_wind_pptx.py", "services/cpag_wind_render.py",
               "assets/cpag_wind_reference.pptx"):
         p = here / f
         if p.exists():
             h.update(str(p.stat().st_mtime_ns).encode())
+    h.update(date.today().isoformat().encode())
     return h.hexdigest()[:16]
 
 

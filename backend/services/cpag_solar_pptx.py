@@ -616,13 +616,17 @@ def _populate_project_slides(prs, start_idx: int, proj: dict):
             chart.legend.font.size = Pt(9)
 
 
+def _ordinal_date(d: date) -> str:
+    suffix = "th" if 11 <= d.day <= 13 else {1: "st", 2: "nd", 3: "rd"}.get(d.day % 10, "th")
+    return f"{d.day}{suffix} {d.strftime('%b %y')}"
+
 def build_portfolio_pptx(data: Dict[str, Any] = None) -> bytes:
     """Build the CPAG Solar pack by injecting live data into the template."""
     prs = Presentation(REFERENCE)
     
     # Update cover slide date
     slide = prs.slides[0]
-    current_date = datetime.now().strftime("%d-%b-%Y")
+    current_date = _ordinal_date(date.today())
     for shape in slide.shapes:
         if getattr(shape, "has_text_frame", False):
             for p in shape.text_frame.paragraphs:

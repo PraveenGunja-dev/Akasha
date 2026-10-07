@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List
 
+from datetime import date
 from database import get_db
 from services.cpag_solar_pptx import build_portfolio_pptx, fetch_scurve_data, fetch_manpower_data
 from services.cpag_solar_render import render, page_path, deck_path
@@ -71,7 +72,8 @@ def preview_portfolio(db: Session = Depends(get_db)) -> Dict[str, Any]:
     proj_list = _build_project_list(db)
     data: Dict[str, Any] = {
         "project_names": [p["name"] for p in proj_list],
-        "projects": proj_list
+        "projects": proj_list,
+        "generation_date": date.today().isoformat()
     }
     out = render(data, build_portfolio_pptx)
     out["asOf"] = {"p6": None, "sap": None}
@@ -98,7 +100,7 @@ def preview_deck(key: str):
     if not path.exists():
         raise HTTPException(404, "No such file")
     return FileResponse(path, media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        filename="CPAG_Solar_Rajasthan.pptx",
+                        filename="CPAG_RAJASTHAN_SOLAR.pptx",
                         headers={"Cache-Control": "no-store"})
 
 
@@ -108,10 +110,11 @@ def download_portfolio_pptx(db: Session = Depends(get_db)):
     proj_list = _build_project_list(db)
     data: Dict[str, Any] = {
         "project_names": [p["name"] for p in proj_list],
-        "projects": proj_list
+        "projects": proj_list,
+        "generation_date": date.today().isoformat()
     }
     return Response(
         content=build_portfolio_pptx(data),
         media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-        headers={"Content-Disposition": 'attachment; filename="CPAG_Solar_Rajasthan.pptx"'},
+        headers={"Content-Disposition": 'attachment; filename="CPAG_RAJASTHAN_SOLAR.pptx"'},
     )
