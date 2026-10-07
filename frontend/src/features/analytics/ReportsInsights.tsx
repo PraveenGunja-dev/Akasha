@@ -49,7 +49,7 @@ export default function ReportsInsights(props: any) {
 
   /* The pack is the downloadable deck's own pages, rendered by the
      backend from the approved template. */
-  const pack = useCPAGPack(view === 'viewer' && (scope === 'bess' || scope === 'wind'), scope);
+  const pack = useCPAGPack(view === 'viewer' && (scope === 'bess' || scope === 'wind' || scope === 'solar'), scope);
   const { loading, error, retry } = pack;
 
   return (
@@ -171,8 +171,7 @@ export default function ReportsInsights(props: any) {
               <ScopeCard
                 icon={Sun}
                 title="Solar Portfolio"
-                detail="CPAG packs for solar projects are currently being integrated into the data pipeline."
-                disabled={true}
+                detail="The whole pack across all Solar projects, plus the combined corporate order book."
                 onClick={() => {
                   setScope('solar');
                   setView('viewer');

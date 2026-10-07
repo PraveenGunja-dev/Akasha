@@ -130,9 +130,20 @@ def _fill_slide_5(prs, data: Dict[str, Any]):
         
         # Clear out the hardcoded commissioning values at the bottom of the template table
         if len(tbl.rows) > 11 and len(tbl.columns) > 5:
+            from pptx.enum.text import PP_ALIGN
+            try:
+                from pptx.enum.text import MSO_ANCHOR
+            except ImportError:
+                MSO_ANCHOR = None
+                
             for r_idx in (10, 11):
                 for c_idx in range(1, 6):
                     _set_cell_text(tbl, r_idx, c_idx, "-")
+                    cell = tbl.cell(r_idx, c_idx)
+                    if MSO_ANCHOR:
+                        cell.vertical_anchor = MSO_ANCHOR.MIDDLE
+                    for p in cell.text_frame.paragraphs:
+                        p.alignment = PP_ALIGN.CENTER
         break
 
 
@@ -358,6 +369,58 @@ def _fill_slide_7(prs, data: Dict[str, Any]):
                 _label_last(line.series[s_i], last, f"{vals[last] * 100:.2f}%", colour, pos)
 
 
+def _fill_slide_11(prs, data: Dict[str, Any]):
+    """Slide 11 (Index 10): Manpower — inject chart data."""
+    if len(prs.slides) <= 10:
+        return
+    manpower = data.get("manpower", [])
+    if not manpower:
+        return
+        
+    slide = prs.slides[10]
+    chart_shape = next((sh for sh in slide.shapes if getattr(sh, "has_chart", False)), None)
+    if not chart_shape:
+        return
+        
+    from pptx.chart.data import CategoryChartData
+    from pptx.enum.chart import XL_CHART_TYPE
+    from pptx.util import Pt
+    from services.cpag_pptx import (
+        _chart_in_box, _move_to_line, _light_gridlines, 
+        _add_data_table, _series_fill,
+        SERIES_BLUE, SERIES_GREEN, LINE_GREEN
+    )
+    
+    cd = CategoryChartData(number_format="#,##0")
+    cats = []
+    plan_vals = []
+    actual_vals = []
+    
+    for m in manpower:
+        cats.append(m.get("month", ""))
+        plan_vals.append(m.get("planManpower", 0))
+        # If it's a future month with no earned data, use None so the line stops
+        actual = m.get("earnedManpower")
+        if actual == 0 and m.get("earnedMonth") == 0:
+            actual_vals.append(None)
+        else:
+            actual_vals.append(actual)
+            
+    cd.categories = cats
+    cd.add_series("Plan Manpower", plan_vals)
+    cd.add_series("Actual Manpower", actual_vals)
+    cd.add_series("Plan", plan_vals)
+    cd.add_series("Actual", actual_vals)
+    
+    chart = _chart_in_box(slide, chart_shape, XL_CHART_TYPE.COLUMN_CLUSTERED, cd)
+    chart.has_legend = False
+    chart.font.size = Pt(9)
+    _move_to_line(chart, 2, secondary=False)
+    _light_gridlines(chart)
+    _add_data_table(chart)
+    _series_fill(chart, [SERIES_BLUE, SERIES_GREEN, SERIES_BLUE, LINE_GREEN], line_from=2)
+
+
 # ── Main builder ────────────────────────────────────────────────────────────
 
 def build_portfolio_pptx(data: Dict[str, Any]) -> bytes:
@@ -391,11 +454,8 @@ def build_portfolio_pptx(data: Dict[str, Any]) -> bytes:
     # ── Slide 10 (Index 9): Major Milestones — inject P6 data ──
     _fill_slide_10(prs, data)
 
-    # ── Slide 11 (Index 10): Manpower — remove chart ──
-    if len(prs.slides) > 10:
-        for sh in list(prs.slides[10].shapes):
-            if getattr(sh, "has_chart", False):
-                _remove_shape(sh)
+    # ── Slide 11 (Index 10): Manpower — inject chart data ──
+    _fill_slide_11(prs, data)
 
     # ── Slide 12 (Index 11): Issues — clear for now ──
     if len(prs.slides) > 11:

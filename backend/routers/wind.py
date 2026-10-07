@@ -328,6 +328,14 @@ def get_portfolio_cpag(db: Session) -> Dict[str, Any]:
     sap_summary = _fetch_sap_summary(db)
     p6_data_date = _fetch_p6_data_date(db)
     s_curve = _fetch_s_curve_data(db)
+    
+    from routers.bess import _manpower
+    try:
+        manpower_data = _manpower(db, MUNDRA_NORTH["p6_object_id"], None)
+        manpower_series = manpower_data.get("series", [])
+    except Exception as e:
+        print(f"Error fetching manpower: {e}")
+        manpower_series = []
 
     data = {
         "project": project_info,
@@ -337,6 +345,7 @@ def get_portfolio_cpag(db: Session) -> Dict[str, Any]:
         "sap_summary": sap_summary,
         "p6_data_date": p6_data_date,
         "s_curve": s_curve,
+        "manpower": manpower_series,
     }
     return data
 
