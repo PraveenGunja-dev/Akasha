@@ -1165,3 +1165,32 @@ class CPAGManualEntry(Base):
     payload = Column(JSON, nullable=False)
     updated_by = Column(String)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class AribaInboundDelivery(Base):
+    """Stores inbound delivery transit state and Checklist (finance handover) 
+    state from ARIBA ZIBDSESREP data."""
+    __tablename__ = "ariba_inbound_delivery"
+
+    id = Column(Integer, primary_key=True, index=True)
+    po_number = Column(String, index=True)
+    item = Column(String)
+    material_number = Column(String, index=True)
+    material_description = Column(String)
+    po_quantity = Column(Float)
+    uom = Column(String)
+    company_code = Column(String)
+    vendor_code = Column(String)
+    vendor_name = Column(String, index=True)
+    inbound_delivery_quantity = Column(Float)
+    rejected_quantity = Column(Float)
+    ibd_creation_date = Column(DateTime)
+    plant = Column(String, index=True)
+    gr_posting_date = Column(DateTime)
+    grn_quantity = Column(Float)
+    currency = Column(String)
+    ariba_invoice_date = Column(DateTime)
+    checklist_number = Column(String)
+    checklist_status = Column(String, index=True)
+    checklist_date = Column(DateTime)
+    uploaded_at = Column(DateTime, default=datetime.utcnow)
