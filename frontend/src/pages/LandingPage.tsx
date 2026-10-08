@@ -455,7 +455,7 @@ export default function LandingPage() {
                       )}
                     </AnimatePresence>
 
-                    <button type="submit" disabled={busy || !email.trim() || !password}
+                    <button type="submit" disabled={busy || !username.trim() || !password}
                       className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0b74b1] to-[#75479c]
                                  text-[14px] font-semibold text-white transition-all hover:shadow-[0_6px_24px_rgba(117,71,156,0.35)]
                                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none
