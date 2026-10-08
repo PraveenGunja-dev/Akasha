@@ -59,13 +59,17 @@ def ensure_default_users() -> None:
     db = SessionLocal()
     try:
         for u in DEFAULT_USERS:
-            exists = db.query(AkashaUser).filter(
+            user = db.query(AkashaUser).filter(
                 (func.lower(AkashaUser.email) == u["email"].lower()) | (AkashaUser.username == u["username"])
             ).first()
-            if not exists:
+            if not user:
                 db.add(AkashaUser(username=u["username"], email=u["email"],
                                   password_hash=hash_password(u["password"]),
                                   display_name=u["display_name"], role=u["role"]))
+            else:
+                user.username = u["username"]
+                user.password_hash = hash_password(u["password"])
+                user.role = u["role"]
         db.commit()
     finally:
         db.close()
