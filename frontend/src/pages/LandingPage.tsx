@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Lock, Mail, X, ArrowRight, Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
+import { Lock, Mail, X, ArrowRight, Eye, EyeOff, Loader2, AlertTriangle, User } from "lucide-react";
 import PresentationModal from "../components/ui/PresentationModal";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from '../hooks/useTheme';
@@ -77,7 +77,7 @@ export default function LandingPage() {
   const [showLogin, setShowLogin] = useState(location.pathname === '/login');
   const from = (location.state as { from?: string } | null)?.from;
   const { isAuthenticated, user, login } = useAuth();
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -92,7 +92,7 @@ export default function LandingPage() {
     e.preventDefault();
     setLoginError('');
     setBusy(true);
-    const r = await login(email.trim(), password);
+    const r = await login(username.trim(), password);
     setBusy(false);
     if (!r.success) setLoginError(r.message);
   };
@@ -415,13 +415,13 @@ export default function LandingPage() {
                   <p className={`text-[12px] font-semibold uppercase tracking-[0.14em] ${isDark ? 'text-[#4aa3dd]' : 'text-[#0b74b1]'}`}>Welcome back</p>
                   <h2 id="signin-title" className="mt-2 text-[26px] font-semibold leading-tight tracking-tight">Sign in to your account</h2>
                   <p className={`mt-2 text-[14px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>
-                    Use your Adani work email and password.
+                    Use your Adani work username and password.
                   </p>
 
                   <form onSubmit={submitLogin} className="mt-8 space-y-5" noValidate>
                     {[
-                      { id: 'lp-email', label: 'Email', icon: Mail, type: 'email', value: email, set: setEmail,
-                        ph: 'name@adani.com', auto: 'username' },
+                      { id: 'lp-username', label: 'Username', icon: User, type: 'text', value: username, set: setUsername,
+                        ph: 'Admin_akasha', auto: 'username' },
                       { id: 'lp-password', label: 'Password', icon: Lock, type: showPw ? 'text' : 'password', value: password,
                         set: setPassword, ph: 'Enter your password', auto: 'current-password' },
                     ].map(({ id, label, icon: Icon, type, value, set, ph, auto }) => (
@@ -430,7 +430,7 @@ export default function LandingPage() {
                         <div className="relative">
                           <Icon className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${isDark ? 'text-white/35' : 'text-slate-400'}`} />
                           <input id={id} type={type} value={value} onChange={(e) => set(e.target.value)} placeholder={ph}
-                            autoComplete={auto} autoFocus={id === 'lp-email'} required aria-invalid={!!loginError}
+                            autoComplete={auto} autoFocus={id === 'lp-username'} required aria-invalid={!!loginError}
                             className={`h-11 w-full rounded-xl border pl-10 text-[14px] transition-colors focus:outline-none focus:ring-2
                                         ${id === 'lp-password' ? 'pr-11' : 'pr-3.5'}
                                         ${isDark ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-white/25 hover:border-white/20 focus:border-[#4aa3dd]/70 focus:ring-[#4aa3dd]/20'

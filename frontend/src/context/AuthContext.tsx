@@ -14,7 +14,7 @@ interface AuthContextType {
   token: string | null;
   isAuthenticated: boolean;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; message: string }>;
+  login: (username: string, password: string) => Promise<{ success: boolean; message: string }>;
   logout: () => void;
 }
 
@@ -56,12 +56,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .finally(() => setIsLoading(false));
   }, [clear]);
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; message: string }> => {
+  const login = async (username: string, password: string): Promise<{ success: boolean; message: string }> => {
     try {
       const res = await fetch(`${API}/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ username, password }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) return { success: false, message: data.detail || 'Sign-in failed. Please try again.' };
