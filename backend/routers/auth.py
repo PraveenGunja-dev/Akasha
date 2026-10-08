@@ -29,6 +29,8 @@ PBKDF2_ROUNDS = 200_000
 DEFAULT_USERS = [
     {"username": "akashaceo", "email": "Akashaceo@adani.com", "password": "admin123",
      "display_name": "Akasha CEO", "role": "executive"},
+    {"username": "admin", "email": "admin.akasha@adani.com", "password": "Dash!admin@18J1",
+     "display_name": "Akasha Admin", "role": "executive"},
 ]
 
 
