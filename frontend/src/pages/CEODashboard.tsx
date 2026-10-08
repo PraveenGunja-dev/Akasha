@@ -35,7 +35,7 @@ import QualityCommandCenter from '../features/quality/QualityCommandCenter';
 import EInvoiceIntelligence from '../features/analytics/EInvoiceIntelligence';
 import PortfolioIntelligence from '../features/intelligence/PortfolioIntelligence';
 import ComplianceDashboard from '../features/compliance/ComplianceDashboard';
-import ModuleDeliveriesPage from '../features/modules/ModuleDeliveriesPage';
+import OrderingPlanner from '../features/modules/OrderingPlanner';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -406,7 +406,7 @@ export default function CEODashboard() {
                     {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} briefing={briefing} />}
                     
                     {activeTab === 'capacity_overview' && <CapacityOverviewPage />}
-                    {activeTab === 'installation_planner' && <ModuleDeliveriesPage />}
+                    {activeTab === 'installation_planner' && <OrderingPlanner />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}

@@ -818,6 +818,44 @@ class CopilotChatRequest(BaseModel):
     current_project_id: Optional[int] = None
     context_filter: Optional[str] = None
 
+@router.get("/block-plan")
+def get_block_level_plan(
+    portfolio: Optional[str] = None,
+    phase: Optional[str] = "ongoing",
+    buffer_days: int = 15,
+    db: Session = Depends(get_db),
+):
+    """Construction-level (block-by-block) module ordering plan
+    (services/block_ordering.py): each block's P6 Module Installation window,
+    held back by its MMS erection and checked against SCOD / LTA, netted
+    against SAP's module pipeline and moved back by supplier lead time.
+    Same projects and SAP figures as /summary; the FTC plan is kept alongside
+    for comparison only."""
+    from services.block_ordering import build_block_plan
+    summary = get_module_deliveries_summary(scenario="baseline", priorities=None,
+                                            portfolio=portfolio, phase=phase, db=db)
+    return build_block_plan(db, summary.get("projects") or [], buffer_days=buffer_days)
+
+
+class BlockPlanExplainRequest(BaseModel):
+    """What to explain: the whole plan, or one project of it. The page sends
+    back the plan it is showing, so the words match the screen exactly."""
+    scope: str = "portfolio"            # portfolio | project
+    plan: Optional[dict] = None
+    project: Optional[dict] = None
+
+
+@router.post("/block-plan/explain")
+def explain_block_plan(req: BlockPlanExplainRequest):
+    """Plain-language explanation of the block plan (services/block_plan_ai.py):
+    written by the AI model from the plan's own figures, or by a fixed template
+    when no model is reachable."""
+    from services.block_plan_ai import explain_portfolio, explain_project
+    if req.scope == "project" and req.project:
+        return explain_project(req.project)
+    return explain_portfolio(req.plan or {})
+
+
 @router.post("/copilot-chat")
 def module_planning_copilot_chat(req: CopilotChatRequest, db: Session = Depends(get_db)):
     """

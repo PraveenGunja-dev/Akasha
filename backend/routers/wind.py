@@ -21,7 +21,7 @@ router = APIRouter(prefix="/api/wind", tags=["Wind", "CPAG"])
 # Mundra North Wind project identifiers (from project_mapping + p6_project)
 MUNDRA_NORTH = {
     "project_name": "MUNDRA NORTH-NEW",
-    "project_id": "MNW - B3",
+    "project_id": "MNW",   # renamed in P6 from "MNW - B3" (2026-10-08)
     "p6_object_id": 5266,
     "capacity_mw": 323.4,
     "wtg_count": 98,
@@ -308,7 +308,7 @@ def _fetch_s_curve_data(db: Session) -> dict:
 def get_portfolio_cpag(db: Session) -> Dict[str, Any]:
     """Fetch all data needed for Wind CPAG pack from P6 + SAP."""
     import models
-    proj = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == "MNW - B3").first()
+    proj = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == "MNW").first()
     
     project_info = dict(MUNDRA_NORTH)
     if proj:

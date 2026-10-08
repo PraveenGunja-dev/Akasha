@@ -1680,7 +1680,7 @@
     {
         "project": "Wind - AGE25CL PSS-18 (49 Loc.) - Phase-4",
         "spv_name": "AGE25CL",
-        "project_id": "AGE25CL (PH-4)",
+        "project_id": "ASEJ2L (PH-4)",
         "project_name_from_p6": "AGE25CL PSS-18 (49 Loc.) - Phase-4",
         "plot_no": null,
         "category": null,
@@ -1746,7 +1746,7 @@
     {
         "project": "Wind - MUNDRA NORTH-NEW",
         "spv_name": "MUNDRA NORTH-NEW",
-        "project_id": "MNW - B3",
+        "project_id": "MNW",
         "project_name_from_p6": "MUNDRA NORTH-NEW",
         "plot_no": null,
         "category": null,
