@@ -13,6 +13,13 @@ import { PLANNING_RULES } from './planningRules';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
+<<<<<<< Updated upstream
+=======
+import { DeliveryLedger, aribaMatch, fmtIsoDate } from './DeliveryLedger';
+import { SiteProductivityPanel, SignalPill } from './SiteProductivity';
+import { Tip, HelpCard } from './ModuleTip';
+import { COLUMN_HELP } from './columnHelp';
+>>>>>>> Stashed changes
 import { MiniMeter } from '../../components/ui/primitives/Meter';
 
 import { Loader as AkLoader } from '../../components/ui/primitives';
@@ -43,9 +50,16 @@ const SECTION_EDGE = 'border-l border-border';
 // A hardcoded 40 here silently went stale when FTC/TC/Module moved after the
 // month block — the grouped-by-EPC header row then stopped short of the new
 // columns, leaving them uncoloured (user report 2026-09-20). 25 lead columns
+<<<<<<< Updated upstream
 // (Sr..Status) + the month block (FORECAST_MONTHS + its Total) + FTC/TC/Module
 // + Remarks.
 const TABLE_COLUMN_COUNT = 26 + (FORECAST_MONTHS.length + 1) + 3 + 1;
+=======
+// (Sr..Status) + the 6 Ariba proof columns + the 5 site-progress columns + the
+// month block (FORECAST_MONTHS + its Total) + FTC / Module Ordering / PO Placed /
+// TC + Remarks.
+const TABLE_COLUMN_COUNT = 26 + 6 + 7 + (FORECAST_MONTHS.length + 1) + 4 + 1;
+>>>>>>> Stashed changes
 
 /** '07-Mar-27' -> '2027-03-07' for an <input type="date"> value */
 function scodToInputValue(scod: string): string {
@@ -279,195 +293,6 @@ function getChipsForMonth(p: any, mo: string, cellVal: number, milestoneFilter: 
 const container = { hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.04 } } };
 const item = { hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: 0.25 } } };
 
-/* ── Rich Tooltip Content Formatter with Vibrant Date & Days Styling ────── */
-function renderHighlightedText(rawText: string) {
-  if (!rawText) return null;
-
-  // Split into the remark vs its suggested action (both rule-based, written by the planning engine)
-  const parts = rawText.split(/(?=💡 Suggested action:)/g);
-
-  return (
-    <div className="space-y-2">
-      {parts.map((part, pIdx) => {
-        const isSuggestion = part.trim().startsWith('💡 Suggested action:');
-        const contentText = isSuggestion ? part.replace('💡 Suggested action:', '').trim() : part.trim();
-
-        // Match exact DD-Mon-YY, Mon-YY, X days overdue, X days remaining, due today, gain X days, lead times, and plain days
-        const regex = /(\b\d{1,2}-[A-Za-z]{3}-\d{2}\b|\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}\b|\b\d+\s*days?\s*(?:overdue|remaining)\b|\bdue\s*today\b|\bgain\s*\d+\s*days\b|\b\d+d\b|\b\d+\s*days\b)/gi;
-        const tokens = contentText.split(regex);
-
-        const renderedTokens = tokens.map((tok, tIdx) => {
-          if (!tok) return null;
-          // Exact date DD-Mon-YY (e.g. 20-Sep-26, 30-Apr-26)
-          if (/^\d{1,2}-[A-Za-z]{3}-\d{2}$/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-mono font-bold text-status-risk-fg bg-status-risk-bg border border-status-risk-border">
-                {tok}
-              </span>
-            );
-          }
-          // Month-Year (e.g. Sep-26, May-26)
-          if (/^(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)-\d{2}$/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-mono font-bold text-status-healthy-fg bg-status-healthy-bg border border-status-healthy-border">
-                {tok}
-              </span>
-            );
-          }
-          // X days overdue
-          if (/days?\s*overdue/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-status-critical-fg bg-status-critical-bg border border-status-critical-border shadow-sm">
-                ⚠️ {tok}
-              </span>
-            );
-          }
-          // X days remaining / due today
-          if (/days?\s*remaining|due\s*today/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-cyan-300 bg-cyan-500/20 border border-cyan-500/40">
-                ⏱️ {tok}
-              </span>
-            );
-          }
-          // gain X days
-          if (/gain\s*\d+\s*days/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-bold text-status-healthy-fg bg-status-healthy-bg border border-status-healthy-border">
-                ⚡ {tok}
-              </span>
-            );
-          }
-          // Lead time (e.g. 98d, 136d, 45d)
-          if (/^\d+d$/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1.5 py-0.5 mx-0.5 rounded font-mono font-bold text-status-ai-fg bg-status-ai-bg border border-status-ai-border">
-                {tok}
-              </span>
-            );
-          }
-          // General days mention (e.g. 30 days, 45 days)
-          if (/^\d+\s*days$/i.test(tok)) {
-            return (
-              <span key={tIdx} className="inline-block px-1 py-0.5 mx-0.5 rounded font-medium text-status-risk-fg bg-status-risk-bg border border-status-risk-border">
-                {tok}
-              </span>
-            );
-          }
-          return <span key={tIdx}>{tok}</span>;
-        });
-
-        if (isSuggestion) {
-          return (
-            <div key={pIdx} className="mt-2.5 pt-2 border-t border-border-default bg-primary/10 -mx-1 px-3 py-2 rounded-lg border border-primary/30">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold text-status-risk-fg mb-1">
-                <span>💡 Suggested action</span>
-              </div>
-              <div className="text-[11px] leading-relaxed text-fg-primary font-normal">
-                {renderedTokens}
-              </div>
-            </div>
-          );
-        }
-
-        return (
-          <div key={pIdx} className="text-[11px] leading-relaxed text-fg-primary font-normal">
-            {renderedTokens}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-function Tip({
-  text,
-  content,
-  children,
-  className = '',
-  wide = false,
-}: {
-  text?: string | null;
-  content?: React.ReactNode;
-  children: React.ReactNode;
-  className?: string;
-  wide?: boolean;
-}) {
-  const [show, setShow] = useState(false);
-  const [pos, setPos] = useState<{ x: number; y: number; below: boolean }>({ x: 0, y: 0, below: false });
-  const wrapRef = React.useRef<HTMLSpanElement>(null);
-
-  useEffect(() => {
-    if (!show) return;
-    const handleGlobalClick = (e: MouseEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
-        setShow(false);
-      }
-    };
-    document.addEventListener('mousedown', handleGlobalClick);
-    return () => document.removeEventListener('mousedown', handleGlobalClick);
-  }, [show]);
-
-  if (!text && !content) return <>{children}</>;
-
-  const isDetailed = wide || (text && (text.length > 60 || text.includes('FTC') || text.includes('Suggested action')));
-  const targetWidth = isDetailed ? 900 : 260;
-
-  const toggleTip = (e: React.MouseEvent) => {
-    if (show) {
-      setShow(false);
-      return;
-    }
-    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-    const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
-    
-    // Effective tooltip width clamped to available screen width
-    const effectiveW = Math.min(targetWidth, vw - 32);
-    const halfW = effectiveW / 2;
-
-    // Ideal center over trigger element
-    const idealX = rect.left + rect.width / 2;
-
-    // Strictly clamp left position so [left - halfW, left + halfW] is fully within [16, vw - 16]
-    const clampedX = Math.max(halfW + 16, Math.min(vw - halfW - 16, idealX));
-
-    // Vertical placement: if element is near the top of viewport, render tooltip below.
-    const clearanceThreshold = content ? 380 : (isDetailed ? 250 : 150);
-    const showBelow = rect.top < clearanceThreshold;
-    const targetY = showBelow ? rect.bottom + 8 : rect.top - 8;
-
-    setPos({ x: clampedX, y: targetY, below: showBelow });
-    setShow(true);
-  };
-
-  const vw = typeof window !== 'undefined' ? window.innerWidth : 1200;
-  const renderWidth = Math.min(targetWidth, vw - 32);
-
-  return (
-    <span
-      ref={wrapRef}
-      className={`cursor-pointer ${className}`}
-      onClick={toggleTip}
-    >
-      {children}
-      {show && (
-        <span
-          style={{ left: pos.x, top: pos.y }}
-          className={`fixed z-[9999] -translate-x-1/2 ${pos.below ? 'translate-y-0' : '-translate-y-full'} animate-[tipIn_150ms_ease-out]`}
-          onClick={(e) => e.stopPropagation()}
-        >
-          <span
-            style={{ width: 'max-content', maxWidth: `${renderWidth}px` }}
-            className="block rounded-xl border border-border-default bg-popover/95 p-3.5 text-left text-[11px] font-medium leading-relaxed text-fg-primary shadow-lg shadow-black/10 backdrop-blur-md dark:shadow-black/40 whitespace-pre-line break-words cursor-auto"
-          >
-            {content ? content : text ? renderHighlightedText(text) : null}
-          </span>
-        </span>
-      )}
-    </span>
-  );
-}
-
 // Every MWp figure across this table (capacity, ordered, erected, FTC
 // completed, the AI's month-wise allocations, ...) is rounded to a whole
 // number — one decimal place read as false precision on what are mostly
@@ -549,8 +374,10 @@ function ThLabel({ label, unit }: { label: string; unit?: string }) {
   );
 }
 
-function Th({ children, className = '', stickyLeft, rowSpan, colSpan, tip }: {
+function Th({ children, className = '', stickyLeft, rowSpan, colSpan, tip, tipContent, tipWidth }: {
   children: React.ReactNode; className?: string; stickyLeft?: number; rowSpan?: number; colSpan?: number; tip?: string;
+  /** Rich tooltip (a HelpCard); wins over `tip`. */
+  tipContent?: React.ReactNode; tipWidth?: number;
 }) {
   const inner = (
     <th
@@ -558,7 +385,7 @@ function Th({ children, className = '', stickyLeft, rowSpan, colSpan, tip }: {
       style={stickyLeft !== undefined ? { left: stickyLeft } : undefined}
       className={`px-1.5 py-1.5 align-middle text-center text-[9px] font-bold leading-[1.2] tracking-tight border-b border-r border-[var(--neutral-700)] bg-[var(--neutral-900)] text-[var(--neutral-50)] ${stickyLeft !== undefined ? 'sticky z-30' : ''} ${className}`}
     >
-      {tip ? <Tip text={tip}>{children}</Tip> : children}
+      {tipContent ? <Tip content={tipContent} width={tipWidth ?? 320}>{children}</Tip> : tip ? <Tip text={tip}>{children}</Tip> : children}
     </th>
   );
   return inner;
@@ -566,8 +393,8 @@ function Th({ children, className = '', stickyLeft, rowSpan, colSpan, tip }: {
 
 /** Centre is the default — the tracker centres every short code, date and
     flag, and only the name and remarks columns run left. */
-function Td({ children, className = '', stickyLeft, align = 'center', tip, tipContent, tipWide, colSpan }: {
-  children?: React.ReactNode; className?: string; stickyLeft?: number; align?: 'left' | 'center' | 'right'; tip?: string; tipContent?: React.ReactNode; tipWide?: boolean; colSpan?: number;
+function Td({ children, className = '', stickyLeft, align = 'center', tip, tipContent, tipWide, tipWidth, colSpan }: {
+  children?: React.ReactNode; className?: string; stickyLeft?: number; align?: 'left' | 'center' | 'right'; tip?: string; tipContent?: React.ReactNode; tipWide?: boolean; tipWidth?: number; colSpan?: number;
 }) {
   const alignCls = align === 'right' ? 'text-right' : align === 'left' ? 'text-left' : 'text-center';
   return (
@@ -576,7 +403,7 @@ function Td({ children, className = '', stickyLeft, align = 'center', tip, tipCo
       style={stickyLeft !== undefined ? { left: stickyLeft } : undefined}
       className={`px-1.5 py-[3px] text-[10px] leading-[1.35] tabular-nums whitespace-nowrap ${GRID_LINE} ${alignCls} ${stickyLeft !== undefined ? 'sticky z-20' : ''} ${className}`}
     >
-      {tipContent ? <Tip content={tipContent} wide={tipWide}>{children}</Tip> : tip ? <Tip text={tip}>{children}</Tip> : children}
+      {tipContent ? <Tip content={tipContent} wide={tipWide} width={tipWidth}>{children}</Tip> : tip ? <Tip text={tip}>{children}</Tip> : children}
     </td>
   );
 }
@@ -695,8 +522,16 @@ type ColumnKey =
   | 'epc' | 'priority' | 'ol' | 'capacity_mwac' | 'capacity_mwp'
   | 'ftc_completed' | 'connectivity' | 'lta' | 'scod' | 'aop'
   | 'ordered' | 'balance_ordering' | 'total_receipt' | 'erection_done'
+<<<<<<< Updated upstream
   | 'module_inventory' | 'under_transit' | 'balance_dispatch' | 'status'
   | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'tc_delivery_date' | 'remarks';
+=======
+  | 'module_inventory' | 'under_transit'
+  | 'ariba_match' | 'ariba_grn' | 'last_grn' | 'awaiting_grn' | 'checklist_status' | 'deliveries'
+  | 'site_piling' | 'site_tracker' | 'site_module' | 'behind_plan' | 'front_ready' | 'ordering_signal' | 'ftc_forecast'
+  | 'balance_dispatch' | 'status'
+  | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'po_placed' | 'tc_delivery_date' | 'remarks';
+>>>>>>> Stashed changes
 
 const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'project', label: 'Project' },
@@ -722,6 +557,22 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'erection_done', label: 'Erection Done' },
   { key: 'module_inventory', label: 'Module Inventory' },
   { key: 'under_transit', label: 'Under Transit' },
+<<<<<<< Updated upstream
+=======
+  { key: 'ariba_match', label: 'Ariba matched by (plant / PO)' },
+  { key: 'ariba_grn', label: 'Received · Ariba (MWp)' },
+  { key: 'last_grn', label: 'Last receipt (GRN date)' },
+  { key: 'awaiting_grn', label: 'Dispatched, no GRN (MWp)' },
+  { key: 'checklist_status', label: 'Finance checklist' },
+  { key: 'deliveries', label: 'Deliveries (lots)' },
+  { key: 'site_piling', label: 'Piles installed (%)' },
+  { key: 'site_tracker', label: 'Structure built (%)' },
+  { key: 'site_module', label: 'Modules mounted (%)' },
+  { key: 'behind_plan', label: 'Behind plan (P6 baseline)' },
+  { key: 'front_ready', label: 'Structure ready, no modules (MWdc)' },
+  { key: 'ordering_signal', label: 'Module supply vs site' },
+  { key: 'ftc_forecast', label: 'FTC forecast (site speed)' },
+>>>>>>> Stashed changes
   { key: 'balance_dispatch', label: 'Balance Dispatch' },
   { key: 'status', label: 'Status' },
   { key: 'month_wise', label: 'Month Wise Allocation' },
@@ -736,9 +587,22 @@ const DEFAULT_VISIBLE: Set<ColumnKey> = new Set([
   'capacity_mwac', 'capacity_mwp', 'ftc_completed',
   'lta', 'scod', 'aop',
   'ordered', 'balance_ordering', 'total_receipt',
+<<<<<<< Updated upstream
   'erection_done', 'module_inventory', 'under_transit', 'balance_dispatch',
   'month_wise', 'remarks',
 ]);
+=======
+  'erection_done', 'module_inventory', 'under_transit',
+  'ariba_match', 'ariba_grn', 'last_grn', 'awaiting_grn', 'checklist_status', 'deliveries',
+  'site_piling', 'site_tracker', 'site_module', 'behind_plan', 'front_ready', 'ordering_signal', 'ftc_forecast', 'balance_dispatch',
+  'month_wise', 'remarks',
+]);
+const ALL_COLUMN_KEYS = new Set<string>(ALL_COLUMNS.map(c => c.key));
+const COLS_STORAGE_KEY = 'akasha_mod_cols_v6';
+/** Older layouts predate these columns: they are shown on top of the saved choice once. */
+const COLS_LEGACY_KEYS = ['akasha_mod_cols_v5', 'akasha_mod_cols_v4'];
+const COLUMNS_ADDED_SINCE_V4: ColumnKey[] = ['ariba_match', 'last_grn', 'site_piling', 'site_tracker', 'site_module', 'behind_plan', 'front_ready', 'ordering_signal', 'ftc_forecast'];
+>>>>>>> Stashed changes
 
 export default function ModuleDeliveriesPage() {
   const [data, setData] = useState<ModuleDeliveriesSummary | null>(null);
@@ -760,7 +624,39 @@ export default function ModuleDeliveriesPage() {
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'module' | 'tc' | 'ftc'>('module');
   const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
   const [rulesOpen, setRulesOpen] = useState(false);
+<<<<<<< Updated upstream
   const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
+=======
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => {
+    try {
+      const current = localStorage.getItem(COLS_STORAGE_KEY);
+      const legacy = current ? null : COLS_LEGACY_KEYS.map(k => localStorage.getItem(k)).find(Boolean) ?? null;
+      const saved = current ?? legacy;
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Drop keys of columns that no longer exist, so a saved layout cannot
+        // hide a renamed column or reference a removed one.
+        const keys = Array.isArray(parsed) ? parsed.filter((k): k is ColumnKey => ALL_COLUMN_KEYS.has(k)) : [];
+        // A layout saved before the new Ariba and site columns existed shows
+        // them rather than silently hiding them.
+        if (legacy) COLUMNS_ADDED_SINCE_V4.forEach(k => { if (!keys.includes(k)) keys.push(k); });
+        if (keys.length > 0) return new Set(keys);
+      }
+    } catch { /* storage unavailable — fall back to the defaults */ }
+    return new Set(DEFAULT_VISIBLE);
+  });
+
+  const saveColumnsLayout = () => {
+    try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(Array.from(visibleCols))); } catch { /* not persisted */ }
+  };
+  // Projects whose delivery ledger is open under their row.
+  const [openLedgers, setOpenLedgers] = useState<Set<number>>(new Set());
+  const toggleLedger = (id: number) => setOpenLedgers(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
+>>>>>>> Stashed changes
   const [colDropdownOpen, setColDropdownOpen] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -1067,12 +963,16 @@ export default function ModuleDeliveriesPage() {
   // Type breakdown pie chart
   const typeChart = useMemo(() => {
     if (!data || !data.type_breakdowns) return {};
-    const types = Object.keys(data.type_breakdowns);
+    // A type with no MWp draws no slice, so it is left out of the legend too.
+    // 'Unknown' = Source of origin blank in the project master: shown as such,
+    // never guessed from the vendor.
+    const allTypes = Object.keys(data.type_breakdowns);
+    const types = allTypes.filter(t => data.type_breakdowns[t].mwp > 0);
     const colors: Record<string, string> = Object.fromEntries(
-      types.map((t, i) => [t, t === 'Unknown' ? chartTheme.status.neutral : chartTheme.categorical[i % chartTheme.categorical.length]])
+      allTypes.map((t, i) => [t, t === 'Unknown' ? chartTheme.status.neutral : chartTheme.categorical[i % chartTheme.categorical.length]])
     );
     const pieData = types.map(t => ({
-      name: t,
+      name: t === 'Unknown' ? 'Origin not set' : t,
       value: data.type_breakdowns[t].mwp,
       itemStyle: { color: colors[t] },
     }));
@@ -1204,6 +1104,18 @@ export default function ModuleDeliveriesPage() {
           <div className="h-[220px]">
             <ReactECharts notMerge theme={chartTheme.themeName} option={typeChart} style={{ height: '100%', width: '100%' }} />
           </div>
+          {(() => {
+            const unset = data?.projects.filter(p => p.type === 'Unknown') ?? [];
+            if (!unset.length) return null;
+            const mwp = unset.reduce((s, p) => s + (p.capacity_mwp || 0), 0);
+            return (
+              <p className="mt-2 text-[10px] leading-snug text-muted-foreground"
+                title={unset.map(p => p.project_name).join('\n')}>
+                {unset.length} project{unset.length > 1 ? 's have' : ' has'} no source of origin in the project master and no module PO yet
+                {mwp > 0 ? ` (${MW(mwp)} MWp, shown as “Origin not set”)` : ', so they are not in this chart'}.
+              </p>
+            );
+          })()}
         </div>
       </motion.div>
 
@@ -1528,6 +1440,18 @@ export default function ModuleDeliveriesPage() {
           </div>
         )}
 
+        {/* How to read the site columns: the build order of a block. */}
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 border-b border-border px-3 py-1.5 text-[10px] text-muted-foreground">
+          <span className="font-semibold uppercase tracking-wider text-[9px]">Build order per block</span>
+          <span><b className="font-semibold text-foreground">Piles</b> in the ground</span>
+          <span aria-hidden>→</span>
+          <span><b className="font-semibold text-foreground">Structure</b> (tracker: torque tube, bracing, purlin)</span>
+          <span aria-hidden>→</span>
+          <span><b className="font-semibold text-foreground">Modules</b> mounted on the purlins</span>
+          <span aria-hidden>→</span>
+          <span><b className="font-semibold text-foreground">Stringing</b> (cabling; not in P6)</span>
+          <span className="ml-auto">Modules are only useful once the structure under them is built, so <b className="font-semibold text-foreground">Module supply vs site</b> compares the two.</span>
+        </div>
         <div className="max-h-[72vh] overflow-auto custom-scrollbar">
           <table className="min-w-full text-left border-separate border-spacing-0">
             <thead className="sticky top-0 z-40">
@@ -1561,6 +1485,48 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('erection_done') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>}
                 {isColVisible('module_inventory') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>}
                 {isColVisible('under_transit') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>}
+<<<<<<< Updated upstream
+=======
+                {isColVisible('ariba_match') && <Th rowSpan={2} className={`min-w-[96px] ${SECTION_EDGE}`}
+                  tipContent={COLUMN_HELP.ariba_match}>
+                  <ThLabel label="Ariba matched by" unit="(plant / PO)" /></Th>}
+                {isColVisible('ariba_grn') && <Th rowSpan={2} className={`min-w-[70px] ${isColVisible('ariba_match') ? '' : SECTION_EDGE}`}
+                  tipContent={COLUMN_HELP.ariba_grn}>
+                  <ThLabel label="Received · Ariba" unit="(MWp)" /></Th>}
+                {isColVisible('last_grn') && <Th rowSpan={2} className="min-w-[66px]"
+                  tipContent={COLUMN_HELP.last_grn}>
+                  <ThLabel label="Last receipt" unit="(GRN date)" /></Th>}
+                {isColVisible('awaiting_grn') && <Th rowSpan={2} className="min-w-[66px]"
+                  tipContent={COLUMN_HELP.awaiting_grn}>
+                  <ThLabel label="Dispatched, no GRN" unit="(MWp)" /></Th>}
+                {isColVisible('checklist_status') && <Th rowSpan={2} className="min-w-[64px]"
+                  tipContent={COLUMN_HELP.checklist_status}>
+                  <ThLabel label="Finance checklist" unit="(raised / due)" /></Th>}
+                {isColVisible('deliveries') && <Th rowSpan={2} className="min-w-[64px]"
+                  tipContent={COLUMN_HELP.deliveries}>
+                  <ThLabel label="Deliveries" unit="(lots)" /></Th>}
+                {isColVisible('site_piling') && <Th rowSpan={2} className={`min-w-[56px] ${SECTION_EDGE}`}
+                  tipContent={COLUMN_HELP.site_piling}>
+                  <ThLabel label="Piles installed" unit="(%)" /></Th>}
+                {isColVisible('site_tracker') && <Th rowSpan={2} className="min-w-[56px]"
+                  tipContent={COLUMN_HELP.site_tracker}>
+                  <ThLabel label="Structure built" unit="(tracker, %)" /></Th>}
+                {isColVisible('site_module') && <Th rowSpan={2} className="min-w-[56px]"
+                  tipContent={COLUMN_HELP.site_module}>
+                  <ThLabel label="Modules mounted" unit="(%)" /></Th>}
+                {isColVisible('behind_plan') && <Th rowSpan={2} className="min-w-[66px]"
+                  tipContent={COLUMN_HELP.behind_plan}>
+                  <ThLabel label="Behind plan" unit="(P6 baseline)" /></Th>}
+                {isColVisible('front_ready') && <Th rowSpan={2} className="min-w-[62px]"
+                  tipContent={COLUMN_HELP.front_ready}>
+                  <ThLabel label="Structure ready," unit="no modules (MWdc)" /></Th>}
+                {isColVisible('ordering_signal') && <Th rowSpan={2} className="min-w-[110px]"
+                  tipContent={COLUMN_HELP.ordering_signal}>
+                  <ThLabel label="Module supply" unit="vs site" /></Th>}
+                {isColVisible('ftc_forecast') && <Th rowSpan={2} className="min-w-[78px]"
+                  tipContent={COLUMN_HELP.ftc_forecast}>
+                  <ThLabel label="FTC forecast" unit="(site speed)" /></Th>}
+>>>>>>> Stashed changes
                 {isColVisible('balance_dispatch') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>}
                 {isColVisible('status') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>}
                 {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
@@ -1809,6 +1775,206 @@ export default function ModuleDeliveriesPage() {
                         {p.module_inventory_mwp > 0 ? MW(p.module_inventory_mwp) : '-'}
                       </Td>}
                       {isColVisible('under_transit') && <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>}
+<<<<<<< Updated upstream
+=======
+                      {isColVisible('ariba_match') && (() => {
+                        const am = aribaMatch(proc);
+                        if (!am.text) return <Td className={`text-muted-foreground ${SECTION_EDGE}`}>-</Td>;
+                        const missing = proc?.ariba_state === 'not_in_ariba';
+                        return (
+                          <Td align="left" className={`whitespace-nowrap ${SECTION_EDGE} ${missing ? 'text-[var(--status-watch-fg)]' : 'text-foreground'}`} tipWidth={320} tipContent={<HelpCard title={am.text} source="Ariba ZIBDSESREP, matched to SAP purchase orders">{am.detail}</HelpCard>}>
+                            {am.text}
+                          </Td>
+                        );
+                      })()}
+                      {isColVisible('ariba_grn') && (() => {
+                        const edge = isColVisible('ariba_match') ? '' : SECTION_EDGE;
+                        if (!proc?.lots) {
+                          return p.total_receipt_mwp > 0
+                            ? <Td align="right" className={`text-muted-foreground ${edge}`}
+                                tip={`SAP shows ${MW(p.total_receipt_mwp)} MWp received, but none of this project's ${proc?.pos.length ?? 0} module PO(s) appear in the Ariba extract, so the receipt is unproven`}>Not in Ariba</Td>
+                            : <Td align="right" className={`text-muted-foreground ${edge}`}>-</Td>;
+                        }
+                        const cov = p.total_receipt_mwp > 0 ? proc.received_mwp / p.total_receipt_mwp : null;
+                        return (
+                          <Td align="right" className={edge}
+                            tipWidth={300} tipContent={
+                              <HelpCard title="Received at site, proven in Ariba"
+                                facts={[
+                                  ['Received in Ariba', `${MW(proc.received_mwp)} MWp`],
+                                  ['Received per SAP', `${MW(p.total_receipt_mwp)} MWp`],
+                                  ...(cov != null ? [['Ariba covers', `${Math.round(cov * 100)}%`] as [string, string]] : []),
+                                  ['Last receipt', fmtIsoDate(proc.last_receipt)],
+                                ]}
+                                action={cov != null && cov < 0.9 ? 'Part of the SAP receipt has no Ariba receipt behind it. Check with stores that every delivery is booked in Ariba.' : undefined}
+                                source="Ariba goods receipts; SAP Total Receipt">
+                                {cov != null && cov < 0.9 ? 'Ariba proves less than SAP shows as received.' : 'Ariba proves the receipts SAP shows.'}
+                              </HelpCard>}>
+                            {MW(proc.received_mwp)}
+                            {cov != null && <span className={`ml-1 text-[9px] ${cov < 0.9 ? 'text-[var(--status-watch-fg)]' : 'text-muted-foreground'}`}>{Math.round(cov * 100)}%</span>}
+                          </Td>
+                        );
+                      })()}
+                      {isColVisible('last_grn') && (proc?.last_receipt
+                        ? <Td tipWidth={280} tipContent={
+                            <HelpCard title="Last module receipt"
+                              facts={[
+                                ['Last received', fmtIsoDate(proc.last_receipt)],
+                                ...(proc.last_dispatch ? [['Last dispatched', fmtIsoDate(proc.last_dispatch)] as [string, string]] : []),
+                                ['Deliveries so far', `${proc.lots}`],
+                              ]}
+                              source="Ariba goods receipts">
+                              The most recent date modules were booked as received at site.
+                            </HelpCard>}>{fmtIsoDate(proc.last_receipt)}</Td>
+                        : <Td className="text-muted-foreground">-</Td>)}
+                      {isColVisible('awaiting_grn') && (proc && proc.awaiting_grn_mwp > 0
+                        ? <Td align="right"
+                            className={(proc.oldest_awaiting_days ?? 0) > 30 ? 'text-[var(--status-risk-fg)] font-medium' : 'text-[var(--status-watch-fg)]'}
+                            tipWidth={300} tipContent={
+                              <HelpCard title="Dispatched, not yet received"
+                                facts={[
+                                  ['Consignments', `${proc.awaiting_grn_lots}`],
+                                  ['Modules', `${MW(proc.awaiting_grn_mwp)} MWp`],
+                                  ['Oldest dispatched', `${proc.oldest_awaiting_days} days ago`],
+                                ]}
+                                action={(proc.oldest_awaiting_days ?? 0) > 30 ? 'Over 30 days is too long to be on the road. Ask site stores whether these arrived and still need a goods receipt.' : undefined}
+                                source="Ariba inbound deliveries without a goods receipt">
+                                The vendor has sent these modules but site has not booked them as received.
+                              </HelpCard>}>
+                            {MW(proc.awaiting_grn_mwp)}
+                          </Td>
+                        : <Td align="right" className="text-muted-foreground">-</Td>)}
+                      {isColVisible('checklist_status') && (proc && proc.checklist_due > 0
+                        ? <Td className={proc.checklist_created < proc.checklist_due ? 'text-[var(--status-risk-fg)] font-medium' : 'text-muted-foreground'}
+                            tipWidth={280} tipContent={
+                              <HelpCard title="Finance checklist"
+                                facts={[
+                                  ['Receipts', `${proc.checklist_due}`],
+                                  ['Checklists raised', `${proc.checklist_created}`],
+                                  ...(proc.checklist_created < proc.checklist_due ? [['Still missing', `${proc.checklist_due - proc.checklist_created}`] as [string, string]] : []),
+                                ]}
+                                action={proc.checklist_created < proc.checklist_due ? 'Raise the missing checklists so the vendor payment is not held up.' : undefined}
+                                source="Ariba checklist on each receipt">
+                                {proc.checklist_created < proc.checklist_due ? 'Some receipts have no finance checklist yet.' : 'Every receipt has its checklist.'}
+                              </HelpCard>}>
+                            {proc.checklist_created}/{proc.checklist_due}
+                          </Td>
+                        : <Td className="text-muted-foreground">-</Td>)}
+                      {isColVisible('deliveries') && <Td>
+                        {(proc && (proc.lots > 0 || proc.pos.length > 0)) || p.site ? (
+                          <button type="button" onClick={() => toggleLedger(p.id)} aria-expanded={ledgerOpen}
+                            className="inline-flex items-center gap-0.5 rounded px-1 py-px font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+                            {ledgerOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {proc && proc.lots > 0 ? `${proc.lots} lot${proc.lots > 1 ? 's' : ''}` : proc && proc.pos.length > 0 ? 'POs' : 'Site progress'}
+                          </button>
+                        ) : <span className="text-muted-foreground">-</span>}
+                      </Td>}
+                      {(['piling', 'tracker', 'module'] as const).map((ak, ai) => {
+                        const col = (['site_piling', 'site_tracker', 'site_module'] as const)[ai];
+                        if (!isColVisible(col)) return null;
+                        const area = p.site?.areas[ak];
+                        if (!area) return <Td key={col} align="right" className={`text-muted-foreground ${ai === 0 ? SECTION_EDGE : ''}`}>-</Td>;
+                        const late = !!(area.predicted_finish && p.site?.final_ftc && area.predicted_finish > p.site.final_ftc);
+                        return (
+                          <Td key={col} align="right" className={`${ai === 0 ? SECTION_EDGE : ''} ${area.pct >= 99.5 ? 'text-muted-foreground' : late ? 'text-[var(--status-risk-fg)] font-medium' : 'text-foreground'}`}
+                            tipWidth={320} tipContent={
+                              <HelpCard title={`${area.label}: ${area.pct}%`}
+                                facts={[
+                                  ['Blocks finished', `${area.blocks_done} of ${area.blocks}`],
+                                  ...(area.plan_pct != null ? [['Planned by now (P6 baseline)', `${area.plan_pct}%`] as [string, string]] : []),
+                                  ['Speed so far', `${area.pace_mwdc_per_day.toFixed(2)} MWdc a day`],
+                                  ...(area.required_mwdc_per_day != null ? [['Speed needed for FTC', `${area.required_mwdc_per_day.toFixed(2)} MWdc a day`] as [string, string]] : []),
+                                  ...(area.predicted_finish && area.pct < 99.5 ? [['Finishes at this speed', fmtIsoDate(area.predicted_finish)] as [string, string]] : []),
+                                  ...(p.site?.final_ftc ? [['Final FTC', fmtIsoDate(p.site.final_ftc)] as [string, string]] : []),
+                                  ...(area.manpower_needed_per_day ? [['People needed a day (norm)', `${area.manpower_needed_per_day}`] as [string, string]] : []),
+                                ]}
+                                action={late ? `At today's speed this finishes after FTC. Add crews or materials, or plan the FTC slip.` : undefined}
+                                source={`P6 block progress, updated ${fmtIsoDate(p.site?.data_date)}. Speed is the average since work started; the finish date is an estimate.`}>
+                                {area.pct >= 99.5 ? 'Finished on every block.' : late ? 'Moving slower than the FTC date needs.' : 'Progress across all blocks of this project.'}
+                              </HelpCard>}>
+                            {area.pct.toFixed(area.pct >= 99.5 || area.pct === 0 ? 0 : 1)}%
+                          </Td>
+                        );
+                      })}
+                      {isColVisible('behind_plan') && (() => {
+                        const areas = (['piling', 'tracker', 'module'] as const)
+                          .map(k => p.site?.areas[k]).filter((a): a is NonNullable<typeof a> => !!a && a.behind_pts != null);
+                        if (!areas.length) return <Td className="text-muted-foreground">-</Td>;
+                        const worst = areas.reduce((w, a) => ((a.behind_pts ?? 0) > (w.behind_pts ?? 0) ? a : w));
+                        const gap = worst.behind_pts ?? 0;
+                        if (gap < 1) return <Td className="text-[var(--status-healthy-fg)]" tip="Every stage is at or ahead of what the P6 baseline planned by now">On plan</Td>;
+                        return (
+                          <Td align="right" className={gap >= 20 ? 'font-medium text-[var(--status-risk-fg)]' : 'text-[var(--status-watch-fg)]'}
+                            tipWidth={320} tipContent={
+                              <HelpCard title={`${worst.label} is ${gap.toFixed(0)} points behind plan`}
+                                facts={areas.map(a => [a.label, `${a.pct}% done of ${a.plan_pct}% planned`] as [string, string])}
+                                action={gap >= 20 ? 'This stage is well behind the baseline. Check crews and material for it before ordering more modules.' : undefined}
+                                source={`P6 baseline dates, at the P6 update of ${fmtIsoDate(p.site?.data_date)}`}>
+                                What the baseline expected done by now, against what is done. The worst stage is shown.
+                              </HelpCard>}>
+                            −{gap.toFixed(0)} pts
+                          </Td>
+                        );
+                      })()}
+                      {isColVisible('front_ready') && (p.site
+                        ? <Td align="right" className={p.site.front_ready_mwdc > 0 ? 'text-foreground' : 'text-muted-foreground'}
+                            tipWidth={300} tipContent={
+                              <HelpCard title="Structure ready, waiting for panels"
+                                facts={[
+                                  ['Structure ready, no panels', `${p.site.front_ready_mwdc.toFixed(1)} MWdc`],
+                                  ['Modules in yard', `${MW(Math.max(p.module_inventory_mwp, 0))} MWp`],
+                                ]}
+                                source="P6: blocks with purlin done, minus modules mounted; SAP receipts">
+                                Finished structures with no panels yet. Mounting can start here as soon as modules arrive.
+                              </HelpCard>}>
+                            {p.site.front_ready_mwdc > 0 ? MW(p.site.front_ready_mwdc) : '-'}
+                          </Td>
+                        : <Td className="text-muted-foreground">-</Td>)}
+                      {isColVisible('ordering_signal') && <Td align="left">
+                        {p.ordering_signal && p.ordering_signal.state !== 'no_progress'
+                          ? <span className="inline-flex items-center gap-1">
+                              <Tip width={340} content={
+                                <HelpCard title={p.ordering_signal.text} action={p.ordering_signal.action}
+                                  source="P6 site progress compared with SAP receipts and open orders">
+                                  {p.ordering_signal.detail}
+                                </HelpCard>}>
+                                <SignalPill signal={p.ordering_signal} />
+                              </Tip>
+                              <button type="button" onClick={() => toggleLedger(p.id)} aria-expanded={ledgerOpen} aria-label="Open site progress"
+                                className="rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+                                {ledgerOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                              </button>
+                            </span>
+                          : <span className="text-muted-foreground">-</span>}
+                      </Td>}
+                      {isColVisible('ftc_forecast') && (() => {
+                        const s = p.site;
+                        if (!s?.final_ftc) return <Td className="text-muted-foreground">-</Td>;
+                        if (s.ftc_note) {
+                          return <Td className="text-[var(--status-critical-fg)]" tipWidth={300} tipContent={
+                            <HelpCard title="Too slow to forecast" action="This project needs a recovery plan; at today's speed no FTC date is realistic."
+                              source={`P6 block progress, updated ${fmtIsoDate(s.data_date)}`}>{s.ftc_note} P6 FTC is {fmtIsoDate(s.final_ftc)}.</HelpCard>}>Too slow</Td>;
+                        }
+                        if (!s.ftc_forecast) return <Td className="text-muted-foreground" tip="No stage is moving yet, so there is no speed to forecast from">-</Td>;
+                        const d = s.ftc_delay_days ?? 0;
+                        return (
+                          <Td className={d > 30 ? 'font-medium text-[var(--status-risk-fg)]' : d > 0 ? 'text-[var(--status-watch-fg)]' : 'text-[var(--status-healthy-fg)]'}
+                            tipWidth={320} tipContent={
+                              <HelpCard title={d > 0 ? `FTC likely ${d} days late` : 'FTC holds at site speed'}
+                                facts={[
+                                  ['FTC in P6', fmtIsoDate(s.final_ftc)],
+                                  ['Forecast at site speed', fmtIsoDate(s.ftc_forecast)],
+                                  ...(d > 0 && s.ftc_driver ? [['Held back by', s.ftc_driver] as [string, string]] : []),
+                                ]}
+                                action={d > 30 ? `Speed up ${s.ftc_driver?.toLowerCase() ?? 'the slowest stage'}, or plan for the FTC slip. Modules for the later blocks can be ordered later to match.` : undefined}
+                                source={`P6 block progress, updated ${fmtIsoDate(s.data_date)}. An estimate: the P6 FTC moved by how late the slowest moving stage runs against P6's own plan.`}>
+                                {d > 0 ? 'If the site keeps its current speed, FTC moves to the forecast date.' : 'At the current speed the site keeps to the P6 FTC.'}
+                              </HelpCard>}>
+                            {fmtIsoDate(s.ftc_forecast)}{d > 0 && <span className="ml-1 text-[9px]">+{d}d</span>}
+                          </Td>
+                        );
+                      })()}
+>>>>>>> Stashed changes
                       {isColVisible('balance_dispatch') && <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
@@ -2144,6 +2310,16 @@ export default function ModuleDeliveriesPage() {
                                         })}
                                       </div>
 
+                                      {phases.some(x => x.basis === 'site') && (
+                                        <div className="mt-2 rounded-md border-l-2 border-primary bg-primary/5 px-2 py-1 text-[10px] leading-snug text-fg-primary">
+                                          <b className="font-semibold text-primary">Timed by site speed. </b>
+                                          These modules are planned to arrive when the structure is ready for them (P6 progress), ordered {p.type === 'China' || p.type === 'SEA' ? 136 : 98} days ahead.
+                                          {(() => {
+                                            const f = phases.find(x => x.basis === 'site' && x.ftc_order_date && x.ftc_order_date !== x.order_date);
+                                            return f ? <> The FTC date alone would have ordered on {f.ftc_order_date}.</> : null;
+                                          })()}
+                                        </div>
+                                      )}
                                       {/* Flags belong on the phase, not the project: only some of
                                           a month's phases may be overdue or quota-moved. */}
                                       {phases.some(x => x.overdue || x.shifted) && (
@@ -2298,6 +2474,22 @@ export default function ModuleDeliveriesPage() {
                         </div>
                       </Td>}
                     </tr>
+<<<<<<< Updated upstream
+=======
+                    {ledgerOpen && (proc || p.site) && (
+                      <tr>
+                        <td colSpan={TABLE_COLUMN_COUNT} className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)] p-0">
+                          {/* Pinned to the viewport's left edge so the ledger stays in
+                              view however far the wide table is scrolled. */}
+                          <div className="sticky left-0 max-w-[min(1200px,calc(100vw-3rem))] divide-y divide-[var(--border-default)]">
+                            <SiteProductivityPanel site={p.site} signal={p.ordering_signal} modulesAtSiteMwp={p.module_inventory_mwp} />
+                            {proc && <DeliveryLedger proc={proc} sapReceivedMwp={p.total_receipt_mwp} sharePct={p.po_apportioned ? p.po_share_pct : null} />}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
+>>>>>>> Stashed changes
                   );})}
 
                 </React.Fragment>
@@ -2331,6 +2523,22 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('erection_done') && <Td align="right" className="text-foreground tabular-nums">{MW(t.erection_mwp)}</Td>}
                 {isColVisible('module_inventory') && <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>}
                 {isColVisible('under_transit') && <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>}
+<<<<<<< Updated upstream
+=======
+                {isColVisible('ariba_match') && <Td className={SECTION_EDGE} />}
+                {isColVisible('ariba_grn') && <Td align="right" className={`text-foreground tabular-nums ${isColVisible('ariba_match') ? '' : SECTION_EDGE}`}>{MW(t.ariba_received_mwp)}</Td>}
+                {isColVisible('last_grn') && <Td />}
+                {isColVisible('awaiting_grn') && <Td align="right" className="text-foreground tabular-nums">{MW(t.awaiting_grn_mwp)}</Td>}
+                {isColVisible('checklist_status') && <Td />}
+                {isColVisible('deliveries') && <Td />}
+                {isColVisible('site_piling') && <Td className={SECTION_EDGE} />}
+                {isColVisible('site_tracker') && <Td />}
+                {isColVisible('site_module') && <Td />}
+                {isColVisible('behind_plan') && <Td />}
+                {isColVisible('front_ready') && <Td align="right" className="text-foreground tabular-nums">{MW(filtered.reduce((s, p) => s + (p.site?.front_ready_mwdc ?? 0), 0))}</Td>}
+                {isColVisible('ordering_signal') && <Td />}
+                {isColVisible('ftc_forecast') && <Td />}
+>>>>>>> Stashed changes
                 {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
                 {isColVisible('status') && <Td className={SECTION_EDGE} />}
                 {isColVisible('month_wise') && <>

@@ -14,6 +14,10 @@ import type { ModuleDeliveriesSummary, ModuleProject, ModuleTotals } from './typ
 // exceljs's PaperSize enum omits code 8 (A3), which this wide landscape
 // table needs — the numeric OOXML code is still valid at runtime.
 import { PLANNING_RULES } from './planningRules';
+<<<<<<< Updated upstream
+=======
+import { aribaMatch, fmtIsoDate } from './DeliveryLedger';
+>>>>>>> Stashed changes
 
 const A3: PaperSize = 8 as PaperSize;
 
@@ -55,6 +59,22 @@ const LEAD_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
   { label: 'Erection\ndone\n(MWp)', width: 10, numeric: true },
   { label: 'Module\nInventory\n(MWp)', width: 11, numeric: true },
   { label: 'Under\nTransit\n(MWp)', width: 10, numeric: true },
+<<<<<<< Updated upstream
+=======
+  { label: 'Ariba matched by\n(plant / PO)', width: 20 },
+  { label: 'Received ·\nAriba\n(MWp)', width: 10, numeric: true },
+  { label: 'Last receipt\n(GRN date)', width: 11 },
+  { label: 'Dispatched,\nno GRN\n(MWp)', width: 10, numeric: true },
+  { label: 'Finance\nchecklist\n(raised / due)', width: 11 },
+  { label: 'Piles\ninstalled\n(%)', width: 9, numeric: true },
+  { label: 'Structure\nbuilt\n(tracker, %)', width: 10, numeric: true },
+  { label: 'Modules\nmounted\n(%)', width: 9, numeric: true },
+  { label: 'Behind plan\n(P6 baseline,\npoints)', width: 11, numeric: true },
+  { label: 'Structure ready,\nno modules\n(MWdc)', width: 12, numeric: true },
+  { label: 'Module supply\nvs site', width: 26 },
+  { label: 'FTC forecast\n(site speed)', width: 13 },
+  { label: 'Monthly plan\ntimed by', width: 12 },
+>>>>>>> Stashed changes
   { label: 'Balance\nDispatch\n(MWp)', width: 11, numeric: true },
   { label: 'Status', width: 12 },
 ];
@@ -72,10 +92,63 @@ const DATE_COLUMNS: { label: string; width: number }[] = [
   { label: 'FTC\nDate', width: 24 },
   { label: 'TC\nDate', width: 24 },
   { label: 'Module\nDate', width: 24 },
+<<<<<<< Updated upstream
+=======
+  { label: 'PO Placed\n(Actual)', width: 14 },
+  { label: 'First Dispatch\n(Ariba IBD)', width: 13 },
+  { label: 'Ariba deliveries by PO\n(dispatch → receipt · lots in the Ariba Ledger sheet)', width: 58 },
+>>>>>>> Stashed changes
 ];
+
+/** Points the furthest-behind stage trails the P6 baseline (0 = on plan). */
+function worstBehind(p: ModuleProject): number | null {
+  const gaps = (['piling', 'tracker', 'module'] as const)
+    .map(k => p.site?.areas[k]?.behind_pts).filter((g): g is number => g != null);
+  return gaps.length ? Math.max(0, Math.round(Math.max(...gaps))) : null;
+}
+
+/** "14-Nov-27 (+227d, Structure built)" / "On time" / "Too slow to forecast". */
+function ftcForecastText(p: ModuleProject): string {
+  const s = p.site;
+  if (!s?.final_ftc) return '';
+  if (s.ftc_note) return 'Too slow to forecast';
+  if (!s.ftc_forecast) return '';
+  const d = s.ftc_delay_days ?? 0;
+  return d > 0 ? `${fmtIsoDate(s.ftc_forecast)} (+${d}d, ${s.ftc_driver})` : `${fmtIsoDate(s.ftc_forecast)} (on time)`;
+}
+
+/** One line per module PO: its Ariba lots, first dispatch → last receipt and
+ *  MWp received, plus open GRNs. Every individual lot is on the Ariba Ledger
+ *  sheet; POs the extract does not carry are listed as such. */
+function aribaByPoText(p: ModuleProject): string {
+  const proc = p.procurement;
+  if (!proc || proc.ariba_state === 'no_po') return '';
+  const lines: string[] = [];
+  for (const po of proc.pos) {
+    const ev = proc.events.filter(e => e.po === po.po);
+    if (!ev.length) continue;
+    const disp = ev.map(e => e.dispatch_date).filter(Boolean).sort() as string[];
+    const recv = ev.filter(e => e.status === 'received');
+    const rec = recv.map(e => e.receipt_date).filter(Boolean).sort() as string[];
+    const mwp = recv.reduce((s, e) => s + e.mwp, 0);
+    const open = ev.length - recv.length;
+    lines.push(`${po.po} · ${ev.length} lot${ev.length > 1 ? 's' : ''} · ${fmtIsoDate(disp[0])} → ${rec.length ? fmtIsoDate(rec[rec.length - 1]) : '—'}`
+      + ` · ${mwp.toLocaleString('en-IN', { maximumFractionDigits: 1 })} MWp${open ? ` · ${open} awaiting GRN` : ''}`);
+  }
+  if (proc.pos_not_in_ariba.length) lines.push(`Not in Ariba: ${proc.pos_not_in_ariba.join(', ')}`);
+  return lines.join('\n');
+}
 const TRAIL_COLUMN = { label: 'Remarks', width: 70 };
 
-const LEAD_COUNT = LEAD_COLUMNS.length;                       // 24
+const LEAD_COUNT = LEAD_COLUMNS.length;
+const leadCol = (prefix: string) => LEAD_COLUMNS.findIndex(c => c.label.startsWith(prefix)) + 1;
+const SITE_PCT_COLS = [leadCol('Piles\ninstalled'), leadCol('Structure\nbuilt'), leadCol('Modules\nmounted')];
+const SIGNAL_COL = leadCol('Module supply');
+/** Ordering signal fills: state, so the status palette's light washes. */
+const SIGNAL_FILL: Record<string, string> = {
+  modules_short: 'FFFEE4E2', order_now: 'FFFEE4E2', stock_building: 'FFFEF0C7', records_conflict: 'FFFEF0C7', on_track: 'FFD1FADF',
+  complete: 'FFD1E9FF',
+};                       // 24
 const MONTH_COUNT = FORECAST_MONTHS.length + 1;               // 13 + Total
 const DATE_COUNT = DATE_COLUMNS.length;                       // FTC, TC, Module
 const TOTAL_COLS = LEAD_COUNT + MONTH_COUNT + DATE_COUNT + 1; // + Remarks
@@ -350,6 +423,7 @@ export async function exportModuleDeliveriesXLSX(
       const tcText = p.tc_date || '';
       const modText = p.module_date || '';
       const remarksText = p.remarks ? (p.ai_suggestion ? `${p.remarks} | Suggested action: ${p.ai_suggestion}` : p.remarks) : '';
+      const aribaText = aribaByPoText(p);
 
       const row = ws.addRow([
         idx + 1,
@@ -375,6 +449,22 @@ export async function exportModuleDeliveriesXLSX(
         num(p.erection_done_mwp),
         num(p.module_inventory_mwp),
         num(p.under_transit_mwp),
+<<<<<<< Updated upstream
+=======
+        aribaMatch(p.procurement).text,
+        p.procurement?.lots ? num(p.procurement.received_mwp) : (p.total_receipt_mwp > 0 ? 'Not in Ariba' : null),
+        p.procurement?.last_receipt ? fmtIsoDate(p.procurement.last_receipt) : '',
+        num(p.procurement?.awaiting_grn_mwp ?? 0),
+        p.procurement?.checklist_due ? `${p.procurement.checklist_created}/${p.procurement.checklist_due}` : '',
+        p.site?.areas.piling ? p.site.areas.piling.pct : null,
+        p.site?.areas.tracker ? p.site.areas.tracker.pct : null,
+        p.site?.areas.module ? p.site.areas.module.pct : null,
+        worstBehind(p),
+        p.site ? num(p.site.front_ready_mwdc) : null,
+        p.ordering_signal && p.ordering_signal.state !== 'no_progress' ? p.ordering_signal.text : '',
+        ftcForecastText(p),
+        p.allocation_basis === 'site' ? 'Site speed' : p.allocation_basis === 'ftc' ? 'FTC date' : '',
+>>>>>>> Stashed changes
         num(p.balance_dispatch_mwp),
         STATUS_LABEL[p.status] ?? p.status,
         ...FORECAST_MONTHS.map(mo => monthCellRichText(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter, unitToggle)),
@@ -382,6 +472,14 @@ export async function exportModuleDeliveriesXLSX(
         dateCellRichText(ftcText),
         dateCellRichText(tcText),
         dateCellRichText(modText),
+<<<<<<< Updated upstream
+=======
+        p.procurement?.po_first_date
+          ? `${fmtIsoDate(p.procurement.po_first_date)}${(p.procurement.order_variance_days ?? 0) > 0 ? ` (+${p.procurement.order_variance_days}d)` : ''}`
+          : '',
+        p.procurement?.first_dispatch ? fmtIsoDate(p.procurement.first_dispatch) : '',
+        aribaText,
+>>>>>>> Stashed changes
         remarksText,
       ]);
 
@@ -396,6 +494,7 @@ export async function exportModuleDeliveriesXLSX(
         splitPhases(ftcText).length,
         splitPhases(tcText).length,
         splitPhases(modText).length,
+        aribaText ? aribaText.split('\n').length : 1,
         estimateWrappedLines(remarksText, TRAIL_COLUMN.width),
         ...FORECAST_MONTHS.map(mo => Math.max(1, getChipsForMonth(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter, unitToggle).length))
       );
@@ -423,6 +522,11 @@ export async function exportModuleDeliveriesXLSX(
 
       ws.getCell(row.number, 2).font = { size: 8, bold: true, color: { argb: INK }, name: 'Adani' };
       ws.getCell(row.number, 11).numFmt = '0.00';
+      for (const c of SITE_PCT_COLS) ws.getCell(row.number, c).numFmt = '0.0"%"';
+      const sig = p.ordering_signal?.state;
+      if (sig && SIGNAL_FILL[sig]) {
+        ws.getCell(row.number, SIGNAL_COL).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: SIGNAL_FILL[sig] } };
+      }
       const st = ws.getCell(row.number, LEAD_COUNT);
       st.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: STATUS_FILL[p.status] ?? BAND } };
       st.alignment = { horizontal: 'center', vertical: 'middle' };
@@ -437,6 +541,11 @@ export async function exportModuleDeliveriesXLSX(
     '', '', '', '',
     num(totals.ordered_mwp), num(totals.balance_ordering_mwp), num(totals.received_mwp),
     num(totals.erection_mwp), num(totals.inventory_mwp), num(totals.under_transit_mwp),
+<<<<<<< Updated upstream
+=======
+    '', num(totals.ariba_received_mwp), '', num(totals.awaiting_grn_mwp), '',
+    null, null, null, null, num(Object.values(grouped).flat().reduce((s, p) => s + (p.site?.front_ready_mwdc ?? 0), 0)), '', '', '',
+>>>>>>> Stashed changes
     num(totals.balance_dispatch_mwp),
     '',
     ...FORECAST_MONTHS.map(mo => {
@@ -445,7 +554,11 @@ export async function exportModuleDeliveriesXLSX(
       return num(mTot);
     }),
     num(Object.values(grouped).flat().reduce((s, p) => s + (p.balance_ordering_mwp || 0), 0)),
+<<<<<<< Updated upstream
     '', '', '',
+=======
+    '', '', '', '', '', '',
+>>>>>>> Stashed changes
     '',
   ]);
   totalRow.height = 18;
@@ -483,7 +596,163 @@ export async function exportModuleDeliveriesXLSX(
   const note2 = ws.addRow(['Month-wise module requirement at site is generated by the Akasha AI Planning Engine: backward-scheduled from P6 FTC milestones (-45d TC, -lead time) and leveled against source supplier monthly limits.']);
   note2.getCell(1).font = { size: 8, italic: true, color: { argb: 'FF667085' }, name: 'Adani' };
 
-  /* ── Sheet 2: the order, phase by phase ──────────────────────────────
+  /* ── Sheet 2: Ariba delivery ledger ───────────────────────────────────
+     The proof behind each project's receipts: one row per consignment, each
+     on its own dispatch / receipt / checklist dates — never summed. */
+  const ls = wb.addWorksheet('Ariba Ledger', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  const LEDGER_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
+    { label: 'Project', width: 30 }, { label: 'PO', width: 12 }, { label: 'PO date (SAP)', width: 12 },
+    { label: 'Line(s)', width: 10 },
+    { label: 'Vendor', width: 30 }, { label: 'Dispatched (IBD)', width: 13 }, { label: 'Received (GRN)', width: 13 },
+    { label: 'Transit (days)', width: 10, numeric: true }, { label: 'Qty', width: 11, numeric: true },
+    { label: 'UoM', width: 6 }, { label: 'MWp', width: 9, numeric: true }, { label: 'Status', width: 18 },
+    { label: 'Checklist no.', width: 26 }, { label: 'Checklist date', width: 13 }, { label: 'WBS share', width: 9 },
+    { label: 'Ariba plant', width: 10 }, { label: 'Matched by', width: 12 }, { label: 'Match rule', width: 52 },
+  ];
+  const lHead = ls.addRow(LEDGER_COLUMNS.map(c => c.label));
+  lHead.eachCell(cell => {
+    cell.font = { bold: true, size: 9, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = border;
+  });
+  lHead.height = 30;
+  LEDGER_COLUMNS.forEach((c, i) => { ls.getColumn(i + 1).width = c.width; });
+  ls.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: LEDGER_COLUMNS.length } };
+  const MWP_COL = LEDGER_COLUMNS.findIndex(c => c.label === 'MWp') + 1;
+  const STATUS_COL = LEDGER_COLUMNS.findIndex(c => c.label === 'Status') + 1;
+  // Open GRNs and POs missing from Ariba are the rows that need follow-up.
+  const LEDGER_FILL: Record<string, string> = { awaiting: 'FFFEF0C7', missing: 'FFF2F4F7' };
+  const ledgerRow = (values: unknown[], fill?: string) => {
+    const r = ls.addRow(values);
+    r.eachCell({ includeEmpty: true }, (cell, col) => {
+      cell.font = { size: 9, name: 'Adani', color: { argb: INK } };
+      cell.border = border;
+      cell.alignment = { vertical: 'middle', horizontal: LEDGER_COLUMNS[col - 1]?.numeric ? 'right' : 'left' };
+      if (typeof cell.value === 'number') cell.numFmt = col === MWP_COL ? '#,##0.00' : '#,##0';
+      if (fill && col === STATUS_COL) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: fill } };
+    });
+  };
+  Object.values(grouped).flat().forEach(p => {
+    const proc = p.procurement;
+    if (!proc) return;
+    const poDate = new Map(proc.pos.map(po => [po.po, po.po_date]));
+    const project = p.project_name || p.p6_name;
+    // Each consignment on its own dispatch / receipt dates, in dispatch order.
+    proc.events.forEach(e => {
+      ledgerRow([
+        project, e.po, fmtIsoDate(poDate.get(e.po) ?? null), e.lines.join(', '), e.vendor,
+        fmtIsoDate(e.dispatch_date), e.receipt_date ? fmtIsoDate(e.receipt_date) : '',
+        e.transit_days, Math.round(e.qty), e.uom, e.mwp_known ? Math.round(e.mwp * 100) / 100 : null,
+        e.status === 'received' ? 'Received' : `Awaiting GRN${e.age_days != null ? ` (${e.age_days}d since dispatch)` : ''}`,
+        e.checklist_numbers.join(', '), e.checklist_date ? fmtIsoDate(e.checklist_date) : '',
+        e.share < 0.999 ? `${Math.round(e.share * 100)}%` : '',
+        e.plant, e.basis === 'plant' ? 'Plant' : e.basis === 'po' ? 'PO line WBS' : '', e.match,
+      ], e.status === 'received' ? undefined : LEDGER_FILL.awaiting);
+    });
+    // Module POs SAP has but the Ariba extract does not: listed, not hidden.
+    proc.pos.filter(po => proc.pos_not_in_ariba.includes(po.po)).forEach(po => {
+      ledgerRow([
+        project, po.po, fmtIsoDate(po.po_date), '', po.vendor, '', '', null, null, '',
+        null, 'Not in Ariba extract', '', '', '', '', '',
+        `No dispatch or receipt for this PO in ZIBDSESREP (${po.ordered_mwp.toLocaleString('en-IN', { maximumFractionDigits: 1 })} MWp ordered in SAP)`,
+      ], LEDGER_FILL.missing);
+    });
+  });
+
+  /* ── Sheet 3: site productivity ───────────────────────────────────────
+     Why the order should move: how far piling, tracker (torque tube, shaft,
+     purlin) and module erection have got per project, their measured pace,
+     the pace and manpower the final FTC needs (site norms), and the signal. */
+  const sp = wb.addWorksheet('Site Productivity', {
+    views: [{ state: 'frozen', ySplit: 1, xSplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0, paperSize: A3 },
+  });
+  const SITE_COLUMNS: { label: string; width: number; numeric?: boolean; fmt?: string }[] = [
+    { label: 'Project', width: 30 }, { label: 'MMS type', width: 9 }, { label: 'P6 data date', width: 11 },
+    { label: 'Final FTC (P6)', width: 11 }, { label: 'Area', width: 15 }, { label: 'Code', width: 6 },
+    { label: 'Activity', width: 34 }, { label: 'Unit', width: 7 }, { label: 'Blocks done', width: 9 },
+    { label: 'Scope', width: 11, numeric: true, fmt: '#,##0.0' }, { label: 'Done', width: 11, numeric: true, fmt: '#,##0.0' },
+    { label: 'Done %', width: 8, numeric: true, fmt: '0.0"%"' },
+    { label: 'Planned %\n(P6 baseline)', width: 11, numeric: true, fmt: '0.0"%"' },
+    { label: 'Behind\n(points)', width: 9, numeric: true, fmt: '0.0' },
+    { label: 'Pace / day\n(average since start)', width: 13, numeric: true, fmt: '#,##0.00' },
+    { label: 'Needed / day\n(to final FTC)', width: 13, numeric: true, fmt: '#,##0.00' },
+    { label: 'Finish at pace\n(estimate)', width: 12 },
+    { label: 'Norm\n(units / manday)', width: 11, numeric: true, fmt: '0.000' },
+    { label: 'Mandays left\n(norm)', width: 11, numeric: true, fmt: '#,##0' },
+    { label: 'Manpower / day\nneeded', width: 11, numeric: true, fmt: '#,##0' },
+    { label: 'Structure ready,\nno modules (MWdc)', width: 13, numeric: true, fmt: '#,##0.0' },
+    { label: 'Module supply vs site', width: 26 }, { label: 'Why', width: 70 },
+  ];
+  const siteHead = sp.addRow(SITE_COLUMNS.map(c => c.label));
+  siteHead.eachCell(cell => {
+    cell.font = { bold: true, size: 9, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = border;
+  });
+  siteHead.height = 30;
+  SITE_COLUMNS.forEach((c, i) => { sp.getColumn(i + 1).width = c.width; });
+  sp.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: SITE_COLUMNS.length } };
+  const siteRow = (values: unknown[], area = false) => {
+    const r = sp.addRow(values);
+    r.eachCell({ includeEmpty: true }, (cell, col) => {
+      const c = SITE_COLUMNS[col - 1];
+      cell.font = { size: 9, name: 'Adani', color: { argb: INK }, bold: area };
+      cell.border = border;
+      cell.alignment = { vertical: 'middle', horizontal: c?.numeric ? 'right' : 'left', wrapText: col === SITE_COLUMNS.length };
+      if (typeof cell.value === 'number' && c?.fmt) cell.numFmt = c.fmt;
+      if (area) cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF2F4F7' } };
+    });
+  };
+  Object.values(grouped).flat().forEach(p => {
+    const site = p.site;
+    if (!site) return;
+    const project = p.project_name || p.p6_name;
+    const mms = site.mms_kind ? `${site.mms_kind}${site.mms_source === 'P6 name' ? ' (P6 name)' : ''}` : 'Not set';
+    const head = [project, mms, fmtIsoDate(site.data_date), site.final_ftc ? fmtIsoDate(site.final_ftc) : ''];
+    const signal = p.ordering_signal && p.ordering_signal.state !== 'no_progress' ? p.ordering_signal : null;
+    (['piling', 'tracker', 'module'] as const).forEach((key, idx) => {
+      const area = site.areas[key];
+      if (area) {
+        siteRow([
+          ...head, area.label, '', `${area.label} · total, in module MWdc`, 'MWdc',
+          `${area.blocks_done}/${area.blocks}`, site.module_scope_mwdc, area.done_mwdc, area.pct,
+          area.plan_pct, area.behind_pts != null ? Math.max(0, area.behind_pts) : null,
+          area.pace_mwdc_per_day, area.required_mwdc_per_day,
+          area.predicted_finish ? fmtIsoDate(area.predicted_finish) : '', null,
+          area.mandays_left, area.manpower_needed_per_day,
+          idx === 0 ? site.front_ready_mwdc : null,
+          idx === 0 && signal ? signal.text : '', idx === 0 && signal ? signal.detail : '',
+        ], true);
+      }
+      site.activities.filter(a => a.area === key).forEach(a => {
+        siteRow([
+          ...head, area?.label ?? key, a.code, a.label, a.uom, `${a.blocks_done}/${a.blocks}`,
+          a.planned, a.done, a.pct, a.plan_pct, a.behind_pts != null ? Math.max(0, a.behind_pts) : null,
+          a.pace_per_day, a.required_per_day,
+          a.days_to_finish == null ? '' : a.days_to_finish === 0 ? 'Done' : `${a.days_to_finish} days`,
+          a.norm_units_per_manday, a.mandays_left, a.manpower_needed_per_day, null, '', '',
+        ]);
+      });
+    });
+  });
+  const sNote = sp.addRow([]);
+  sp.mergeCells(sNote.number + 1, 1, sNote.number + 1, SITE_COLUMNS.length);
+  const sNoteCell = sp.getCell(sNote.number + 1, 1);
+  sNoteCell.value = 'Quantities: P6 block activities on the latest schedule (Block-NN - Piling / MMS Erection / Module Installation). Pace is measured: done ÷ days since the first block started, up to the P6 data date. '
+    + 'Build order per block: piles, then the structure (tracker: torque tube, bracing, purlin), then modules mounted on the purlins, then stringing (not in P6). '
+    + 'Bold rows are in module MWdc; a block\'s structure counts as done when its purlin is done. Finish at pace, mandays and manpower are estimates from the site norms (HSAT / FT), '
+    + 'because P6 manpower follows progress and is not a site count. Structure ready, no modules = blocks with the structure complete whose modules are not yet mounted.';
+  sNoteCell.font = { size: 8, italic: true, color: { argb: 'FF667085' }, name: 'Adani' };
+  sNoteCell.alignment = { wrapText: true, vertical: 'top' };
+  sp.getRow(sNote.number + 1).height = 36;
+
+  /* ── Sheet 4: the order, phase by phase ──────────────────────────────
      The grid gives one MWp figure per month. A planner placing the order
      needs to know which phases that figure is made of and when each must
      actually be raised, so the breakdown gets a sheet of its own rather
@@ -571,7 +840,7 @@ export async function exportModuleDeliveriesXLSX(
     });
   });
 
-  /* ── Sheet 3: every rule behind the numbers ──────────────────────────
+  /* ── Sheet 5: every rule behind the numbers ──────────────────────────
      So a figure questioned in a meeting can be traced to the rule that
      produced it, and to the file that enforces it. */
   const rs = wb.addWorksheet('Planning Rules', {

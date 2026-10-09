@@ -15,6 +15,11 @@ from datetime import datetime, timedelta
 from database import get_db
 import models
 from services.module_planner import run_module_planning_engine
+<<<<<<< Updated upstream
+=======
+from services.ariba_service import assign_to_projects, delivery_events, load_ariba_allocations, plant_codes as ariba_plant_codes
+from services import site_productivity
+>>>>>>> Stashed changes
 
 router = APIRouter(prefix="/api/module-deliveries", tags=["Module Deliveries"])
 
@@ -235,6 +240,48 @@ def get_module_deliveries_summary(
             c = _safe_float(m.capacity_mwdc) or _safe_float(m.capacity_mwac) * _safe_float(m.ol or "1.35", 1.35)
             cap_by_pid[m.project_id] = cap_by_pid.get(m.project_id, 0.0) + c
 
+<<<<<<< Updated upstream
+=======
+    # 4. Ariba inbound deliveries (dispatch / GRN / finance checklist) on
+    #    module PO lines. Placed on projects plant first, then by the PO
+    #    line's WBS where the plant is shared (ariba_service.assign_to_projects).
+    #    A shared WBS is split by the same capacity share the SAP figures use.
+    by_id = {m.id: m for m in mappings}
+    plant_owners: dict[str, list] = {}
+    wbs_owner_ids: dict[str, list] = {}
+    cap_by_key: dict[str, float] = {}
+    for m in mappings:
+        for code in ariba_plant_codes(m.spv_plant_code, m.agel, m.age6l):
+            plant_owners.setdefault(code, []).append(m.id)
+        for key in _project_wbs_keys(m):
+            wbs_owner_ids.setdefault(key, []).append(m.id)
+            cap_by_key[key] = cap_by_key.get(key, 0.0) + _project_cap_mwp(m)
+
+    def _wbs_share(mid: int, wbs: str) -> float:
+        key = _wbs_key(wbs)
+        owners = wbs_owner_ids.get(key, [])
+        total = cap_by_key.get(key, 0.0)
+        return _project_cap_mwp(by_id[mid]) / total if total > 0 else 1.0 / max(len(owners), 1)
+
+    ariba_module_rows = [r for r in load_ariba_allocations(db)["rows"] if r["is_module"]]
+    assign_to_projects(ariba_module_rows, plant_owners,
+                       lambda w: wbs_owner_ids.get(_wbs_key(w), []), _wbs_share)
+    ariba_by_project: dict[int, list] = {}
+    for r in ariba_module_rows:
+        for mid in r["assign"]:
+            ariba_by_project.setdefault(mid, []).append(r)
+    ariba_pos = {r["po_number"] for r in ariba_module_rows}
+
+    # 5. Site productivity from P6 block progress (services/site_productivity).
+    #    Several mapping rows can share one P6 schedule; each takes its
+    #    capacity share of the block quantities.
+    p6_blocks = site_productivity.load_blocks(db)
+    prod_cap_by_pid: dict[str, float] = {}
+    for m in mappings:
+        if m.project_id in p6_blocks:
+            prod_cap_by_pid[m.project_id] = prod_cap_by_pid.get(m.project_id, 0.0) + _project_cap_mwp(m)
+
+>>>>>>> Stashed changes
     # Both P6 lookups below join on p6_project.project_id, NOT p.name. P6's
     # project names have inconsistent spacing and suffixes against the
     # mapping sheet ("250MW" vs "250 MW", extra "_Commissioned", "A01e" vs
@@ -523,6 +570,17 @@ def get_module_deliveries_summary(
             plant_codes = [pc.strip() for pc in m.spv_plant_code.split(',')]
         inv = sum(inv_by_plant.get(pc, 0) for pc in plant_codes)
 
+<<<<<<< Updated upstream
+=======
+        # Ariba delivery events placed on this project (plant first, then PO),
+        # each at the project's share. One entry per distinct dispatch/receipt date.
+        events = delivery_events(ariba_by_project.get(m.id, []), lambda r: r["assign"].get(m.id, 0.0))
+        module_pos = sorted(
+            ({**p, "ordered_mwp": p["ordered_mwp"] * key_share[k]}
+             for k in key_share for p in module_pos_by_key.get(k, {}).values()),
+            key=lambda p: (p["po_date"] or datetime.max, p["po"]))
+
+>>>>>>> Stashed changes
         # Erection done: this project's share of the P6-measured erected MWp.
         erected = 0.0
         if m.project_id in erected_by_pid:
@@ -676,6 +734,63 @@ def get_module_deliveries_summary(
         elif spv in ("", "-"):
             spv = ""
 
+<<<<<<< Updated upstream
+=======
+        # Plan vs actual for the module supply chain. "order_by" is inferred
+        # (FTC - 45d - lead time); every other date here is a measurement from
+        # SAP (PO date) or Ariba (dispatch, GRN, checklist).
+        received_ev = [e for e in events if e["status"] == "received"]
+        awaiting_ev = [e for e in events if e["status"] == "awaiting_grn"]
+        first_po = next((p["po_date"] for p in module_pos if p["po_date"]), None)
+        first_order_by = min(order_by_dates) if order_by_dates else None
+        procurement = {
+            "order_by": first_order_by.date().isoformat() if first_order_by else None,
+            "po_first_date": first_po.date().isoformat() if first_po else None,
+            # Positive = the first module PO was placed after the earliest
+            # pending order-by date. Null when either date is missing.
+            "order_variance_days": (first_po.date() - first_order_by.date()).days
+                                   if first_po and first_order_by else None,
+            "pos": [{"po": p["po"], "vendor": p["vendor"],
+                     "po_date": p["po_date"].date().isoformat() if p["po_date"] else None,
+                     "ordered_mwp": round(p["ordered_mwp"], 1)} for p in module_pos],
+            "events": events,
+            "lots": len(events),
+            "first_dispatch": events[0]["dispatch_date"] if events else None,
+            "last_dispatch": max((e["dispatch_date"] for e in events if e["dispatch_date"]), default=None),
+            "last_receipt": max((e["receipt_date"] for e in received_ev), default=None),
+            "received_mwp": round(sum(e["mwp"] for e in received_ev), 1),
+            "awaiting_grn_mwp": round(sum(e["mwp"] for e in awaiting_ev), 1),
+            "awaiting_grn_lots": len(awaiting_ev),
+            "oldest_awaiting_days": max((e["age_days"] for e in awaiting_ev if e["age_days"] is not None), default=None),
+            # Checklists are raised on receipt, so only received rows count.
+            "checklist_created": sum(e["checklist_created"] for e in received_ev),
+            "checklist_due": sum(e["rows"] for e in received_ev),
+            "median_transit_days": (sorted(t)[len(t) // 2] if (t := [e["transit_days"] for e in received_ev
+                                                                    if e["transit_days"] is not None]) else None),
+            "shared": any(e["share"] < 0.999 for e in events),
+            # Coverage: which of the project's module POs the Ariba extract
+            # carries at all. "not_in_ariba" = SAP has module POs, Ariba has
+            # no delivery on any of them (nor on the project's plants).
+            "pos_in_ariba": sorted({p["po"] for p in module_pos} & ariba_pos),
+            "pos_not_in_ariba": sorted({p["po"] for p in module_pos} - ariba_pos),
+            "ariba_state": "proven" if events else "not_in_ariba" if module_pos else "no_po",
+            "plants": sorted({pl for e in events for pl in e["plant"].split(", ") if pl}),
+            "matched_by_plant_mwp": round(sum(e["mwp"] for e in received_ev if e["basis"] == "plant"), 1),
+            "matched_by_po_mwp": round(sum(e["mwp"] for e in received_ev if e["basis"] == "po"), 1),
+        }
+
+        # Site productivity and what it means for ordering. The final pending
+        # FTC is the target the remaining work must make.
+        pid_cap = prod_cap_by_pid.get(m.project_id, 0.0)
+        final_ftc = max((p["dt"] for p in pending), default=None)
+        site = site_productivity.project_productivity(
+            p6_blocks.get(m.project_id), (_project_cap_mwp(m) / pid_cap) if pid_cap > 0 else 1.0,
+            m.mms_type, p6_name, original_cap_mwac, final_ftc)
+        ordering_signal = site_productivity.ordering_signal(
+            site, modules_at_site_mwp=delivered - erected, in_transit_mwp=in_transit,
+            balance_ordering_mwp=balance_ordering, lead_time_days=lead_time)
+
+>>>>>>> Stashed changes
         row = {
             "sr": i + 1,
             "id": m.id,
@@ -723,6 +838,12 @@ def get_module_deliveries_summary(
             "under_transit_mwp": round(in_transit, 1),
             "balance_dispatch_mwp": round(balance_dispatch, 1),
             "completed_ftc_mwp": round(completed_ftc_mwp, 1),
+<<<<<<< Updated upstream
+=======
+            "procurement": procurement,
+            "site": site,
+            "ordering_signal": ordering_signal,
+>>>>>>> Stashed changes
             "status": status,
             "p6_name": p6_name,
             "remarks": "",

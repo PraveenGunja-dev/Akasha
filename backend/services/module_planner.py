@@ -126,7 +126,81 @@ def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
         'next_ftc_date': f(next_ftc),
         'overdue': overdue,
         'shifted': month_idx != d['target_month_idx'],
+        # 'site': timed by the structure's measured speed; 'ftc': by the FTC
+        # date. ftc_order_date is what the FTC-only plan would have used.
+        'basis': d.get('basis', 'ftc'),
+        'ftc_order_date': f(d.get('ftc_tc_dt') or planned_order),
     }
+
+
+# Site pacing (user rule 2026-10-09): modules are only useful once the
+# structure under them is built, so the order follows the structure's measured
+# speed wherever P6 shows it. Used only when that speed is real and current.
+SITE_STALE_DAYS = 45          # P6 not updated for longer: its speed is not current
+SITE_MIN_PACE = 0.05          # MWdc/day; below this the structure is effectively not moving
+SITE_CHUNK_DAYS = 30          # one order per month of structure output
+
+
+def site_basis(p: Dict[str, Any]) -> tuple[Optional[Dict[str, Any]], str]:
+    """(structure area, '') when the site can pace the order, else (None, why not)."""
+    site = p.get('site')
+    if not site:
+        return None, 'No block-level progress in P6, so the plan follows the FTC date.'
+    trk = (site.get('areas') or {}).get('tracker')
+    if not trk:
+        return None, 'P6 has no structure activities for this project, so the plan follows the FTC date.'
+    if trk['pct'] >= 99.5:
+        return None, 'Structure is complete, so the plan follows the FTC date.'
+    if (site.get('data_age_days') or 0) > SITE_STALE_DAYS:
+        return None, f"P6 was last updated {site['data_age_days']} days ago, too old to set the pace; the plan follows the FTC date."
+    if (trk.get('pace_mwdc_per_day') or 0) < SITE_MIN_PACE:
+        return None, 'Structure work has not started, so there is no site speed yet; the plan follows the FTC date.'
+    return trk, ''
+
+
+def _site_paced_orders(p: Dict[str, Any], phases: List[Dict[str, Any]], lead_time: int,
+                       base_month_dt: datetime, num_months: int) -> Optional[List[Dict[str, Any]]]:
+    """The balance to order, split into monthly orders that arrive as the
+    structure becomes ready for them. None when the site cannot pace it.
+
+    Position x (MWp, counted from the project's first module) is needed when
+    the structure ready reaches x: modules already ordered cover the first
+    `ordered_mwp`, so the balance starts there. With S MWdc of structure done
+    and v MWdc built a day (P6, average since start), x is needed on
+    data_date + (x - S) / v - today if S already passed x. Each order covers
+    one month of structure output; it must be placed lead_time days earlier."""
+    trk, why = site_basis(p)
+    p['allocation_basis'] = 'site' if trk else 'ftc'
+    p['allocation_basis_note'] = why
+    if not trk:
+        return None
+    site = p['site']
+    pace = float(trk['pace_mwdc_per_day'])
+    done = float(trk['done_mwdc'])
+    dd = datetime.fromisoformat(site['data_date'])
+    pos = float(p.get('ordered_mwp') or 0.0)
+    chunk = max(pace * SITE_CHUNK_DAYS, 1.0)
+    orders: List[Dict[str, Any]] = []
+    for ph in phases:
+        need_total = float(ph['req_mwp'] or 0.0)
+        end = pos + need_total
+        x = pos
+        while x < end - 1e-6:
+            take = min(chunk, end - x)
+            arrive = dd + timedelta(days=max(0.0, (x - done) / pace))
+            orders.append({'ph': ph, 'mwp': take, 'mod_dt': arrive,
+                           'tc_dt': arrive - timedelta(days=lead_time),
+                           'basis': 'site', 'ftc_tc_dt': ph['tc_dt']})
+            x += take
+        pos = end
+    p['site_pace_mwdc_per_day'] = round(pace, 2)
+    p['site_structure_done_mwdc'] = round(done, 1)
+    p['p6_data_date'] = site['data_date']
+    p['allocation_basis_note'] = (
+        f"Paced by the site: structure is built at {pace:.2f} MWdc a day (P6, average since start) and "
+        f"{done:,.0f} MWdc is done. Each month's order arrives when the structure is ready for it, "
+        f"ordered {lead_time} days ahead.")
+    return orders
 
 
 def _calc_month_idx(dt: datetime, base_dt: datetime, max_months: int = 13) -> int:
@@ -354,12 +428,26 @@ def run_module_planning_engine(
         # back in part 3 so a project's remark names its own first phase.
         project_phases_map[p['id']] = active_phases
 
-        for ph in active_phases:
-            req_mwp = ph['req_mwp']
+        # Pace the order by the site where P6 shows the structure being built
+        # (user rule 2026-10-09: monthly ordering follows site productivity).
+        # Otherwise each phase keeps its FTC-based order date.
+        orders = _site_paced_orders(p, active_phases, lead_time, base_month_dt, num_months)
+        if orders is None:
+            orders = [{'ph': ph, 'mwp': ph['req_mwp'], 'tc_dt': ph['tc_dt'], 'mod_dt': ph['mod_dt'],
+                       'basis': 'ftc', 'ftc_tc_dt': ph['tc_dt']} for ph in active_phases]
+
+        for o in orders:
+            ph = o['ph']
+            req_mwp = round(o['mwp'], 1)
             if req_mwp <= 0:
                 continue
 
-            raw_idx = _calc_month_idx(ph['tc_dt'], base_month_dt, num_months)
+            raw_idx = _calc_month_idx(o['tc_dt'], base_month_dt, num_months)
+            # Needed after the forecast window at the site's pace: reported,
+            # not crammed into the last month as if it were due then.
+            if o['basis'] == 'site' and raw_idx > num_months - 1:
+                p['beyond_window_mwp'] = round(p.get('beyond_window_mwp', 0.0) + req_mwp, 1)
+                continue
 
             # An ordering date that has already passed is still real demand:
             # the modules are owed whether or not the window was missed. It is
@@ -374,7 +462,7 @@ def run_module_planning_engine(
                 project_excluded_phases.setdefault(p['id'], []).append({
                     'phase_label': ph['phase_label'],
                     'ftc_dt': ph['ftc_dt'],
-                    'mod_dt': ph['tc_dt'],  # Ordering Date has passed
+                    'mod_dt': o['tc_dt'],  # Ordering Date has passed
                     'mwp': req_mwp,
                 })
 
@@ -385,8 +473,10 @@ def run_module_planning_engine(
                 'priority': proj_priority,
                 'phase_label': ph['phase_label'],
                 'ftc_dt': ph['ftc_dt'],
-                'tc_dt': ph['tc_dt'],
-                'mod_dt': ph['mod_dt'],
+                'tc_dt': o['tc_dt'],
+                'mod_dt': o['mod_dt'],
+                'basis': o['basis'],
+                'ftc_tc_dt': o['ftc_tc_dt'],
                 'mwp': req_mwp,
                 'mw_ac': ph.get('mw_ac') or 0.0,
                 'raw_month_idx': raw_idx,
@@ -695,9 +785,39 @@ def run_module_planning_engine(
                         f"Demand fits comfortably within monthly {source} capacity.{excl_note}")
             sugg = (f"Maintain planned procurement cycle. Issue formal PO intimation at least {lead_time} days prior to {first_mo}.")
 
+        site_paced = p.get('allocation_basis') == 'site'
+        beyond = float(p.get('beyond_window_mwp') or 0.0)
+        if site_paced:
+            # Timed by the structure, not the FTC date: say so first, and say
+            # what the FTC-only plan would have done differently.
+            shifts = [x for x in all_ph if x.get('ftc_order_date') and x['ftc_order_date'] != x['order_date']]
+            ftc_first = min((_parse_date_str(x['ftc_order_date']) for x in all_ph if x.get('ftc_order_date')), default=None)
+            site_first = min((_parse_date_str(x['order_date']) for x in all_ph), default=None)
+            compare = ''
+            if ftc_first and site_first and abs((site_first - ftc_first).days) > 15:
+                direction = 'later' if site_first > ftc_first else 'earlier'
+                compare = (f" Ordering by the FTC date alone would start {ftc_first.strftime('%b-%y')}; the site's speed "
+                           f"moves the first order to {site_first.strftime('%b-%y')} ({direction}).")
+            diag = (f"{p.get('allocation_basis_note', '')}{compare} "
+                    f"Planned into {months_str}.{excl_note}")
+            if beyond > 0:
+                diag += (f" At this speed a further {beyond:.1f} MWp is needed only after "
+                         f"{forecast_months[-1]}, beyond this plan.")
+            sugg = (f"Order month by month as the structure progresses; if the site speeds up, these orders move earlier. "
+                    f"Raise each order at least {lead_time} days before it is needed.")
+            p['planning_flags'].append('site_paced')
+            del shifts
+
         # The hard finding leads: a reader who stops after one sentence should
         # still learn that the schedule does not hold.
-        if unreachable:
+        if unreachable and site_paced:
+            # Late because the structure is slow, not because of supply.
+            diag = (f"FTC AT RISK FROM SITE SPEED: at the structure's current speed, {p['ftc_at_risk_mwp']:.1f} MWp of "
+                    f"modules is needed too late for the P6 FTC (up to {p['ftc_max_short_days']} days). "
+                    f"Ordering earlier would not help; the modules would wait for structures. " + diag)
+            sugg = ("Speed up structure work (steel supply, more crews) or plan the FTC slip. Ordering modules earlier "
+                    "only adds stock in the yard. " + sugg)
+        elif unreachable:
             n_ph = len(unreachable)
             diag = (f"FTC AT RISK: {p['ftc_at_risk_mwp']:.1f} MWp across {n_ph} phase order(s) "
                     f"cannot reach their P6 FTC from the month the order can be placed "
