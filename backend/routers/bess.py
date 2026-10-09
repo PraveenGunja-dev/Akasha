@@ -7,7 +7,7 @@ from live P6, SAP and Pulse data instead of the hand-maintained deck.
 Sourcing notes (verified against the database, 2026-09-22):
 
 * Progress is **units based**, not activity-count based.  Each BESS schedule
-  carries one Nonlabor resource normalised to ~80,000,000 planned units = 100%,
+  carries one Labor resource normalised to ~80,000,000 planned units = 100%,
   and rolling that up by WBS branch reproduces the pack's 2 / 5 / 38 / 55
   weightages exactly.  Counting completed activities instead reads the
   construction bucket roughly twice as high and must not be used here.
@@ -768,13 +768,13 @@ def _weightage_progress(db: Session, poid: int, activity_codes, data_date):
         text("""select sum(r.planned_units), sum(r.actual_units)
                 from p6_resource_assignment r
                 join p6_activity a on a.p6_object_id = r.activity_object_id
-                where r.project_object_id = :o and r.resource_type = 'Nonlabor'
+                where r.project_object_id = :o and r.resource_type = 'Labor'
                   and a.activity_id = any(:c)"""),
         {"o": poid, "c": list(codes)},
     ).fetchone()
     planned, actual = (_f(row[0]), _f(row[1])) if row else (0.0, 0.0)
     phased: Dict[str, float] = defaultdict(float)
-    for code, _n, units, start, finish in baseline_rows(db, poid, "Nonlabor"):
+    for code, _n, units, start, finish in baseline_rows(db, poid, "Labor"):
         if code in codes:
             _spread_monthly(phased, start, finish, _f(units))
     total = sum(phased.values())
@@ -1302,7 +1302,7 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
     - from one set of monthly figures, so the table's FTM row is by
     construction the curve's value for that month.
 
-    Plan: the plan baseline's Nonlabor weightage (B2 or B1 per project,
+    Plan: the plan baseline's Labor weightage (B2 or B1 per project,
     cpag_baseline.PLAN_BASELINE), each activity's units spread over its
     planned duration - the method that
     reproduces the pack's PSS-11 plan line to 0.1 point.  Actual: live P6
@@ -1323,7 +1323,7 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
                        sum(r.actual_units)
                 from p6_resource_assignment r
                 join p6_activity a on a.p6_object_id = r.activity_object_id
-                where r.project_object_id = :o and r.resource_type = 'Nonlabor'
+                where r.project_object_id = :o and r.resource_type = 'Labor'
                 group by 1, 2, 3, 4, 5, 6"""),
         {"o": poid},
     ).fetchall()
@@ -1333,7 +1333,7 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
 
     plan_m: Dict[str, float] = defaultdict(float)
     plan_b: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
-    bl = baseline_rows(db, poid, "Nonlabor")
+    bl = baseline_rows(db, poid, "Labor")
     if bl:
         for code, _name, units, start, finish in bl:
             acc: Dict[str, float] = defaultdict(float)
