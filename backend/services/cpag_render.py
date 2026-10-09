@@ -41,9 +41,9 @@ SOURCES = [
         "Table and graph are manual entry.",
     ]),
     ("physical progress", "scurve", [
-        "P6 weightage units (the Nonlabor resource each schedule is loaded with = 100%).",
-        "Plan: P6 baseline B2 for PSS-11, 12 and 10(B); B1 for PSS-09, 05(B) and 08(B) - each activity's units spread over its planned duration. Every baseline date in this pack is from the same baseline.",
-        "Actual: P6 actual units up to the P6 data date, spread over each activity's actual dates.",
+        "P6 Labor units: the plan baseline's total BL Project Labor Units = 100%.",
+        "Plan: the 21-Sep-26 P6 re-baseline on all six projects - each activity's BL Labor units spread over its baseline dates. Every baseline date in this pack is from the same baseline.",
+        "Actual: P6 Actual Labor Units up to the P6 data date, spread over each activity's actual dates, / the same BL total.",
         "FTM = the month of the P6 data date. The table's Total row is the graph's value for that month.",
         "Wtg. = each area's share of the schedule. Variance = Plan - Actual.",
         "Remarks are manual entry - blank until the reviewer writes one.",
@@ -64,13 +64,13 @@ SOURCES = [
     ("civil construction", "", [
         "P6 Material resources (installed quantity) under Construction, by element and stage, as of the P6 data date.",
         "Plan = quantity due by the data date on the plan baseline; Actual = P6 actual quantity. Stages P6 counts in sub-units (piles, m3) are shown in the element's own unit.",
-        "Progress % = P6 weightage of the element's activities. Colours: 80%+ of plan green, 40-80% yellow, below 40% red.",
+        "Progress % = Actual / BL Labor units of the element's activities. Colours: 80%+ of plan green, 40-80% yellow, below 40% red.",
         "Since the Sep-26 P6 update civil work is booked as Labor (man-hours), not quantity, so each stage is counted in activities: one activity = one unit (BCF: containers per activity). Actual = completed activities plus the done share of those in progress; Plan = activities due by the data date on the plan baseline.",
     ]),
     ("construction progress", "", [
         "P6 Material resources (installed quantity) under Construction, by element and stage, as of the P6 data date.",
         "Plan = quantity due by the data date on the plan baseline; Actual = P6 actual quantity.",
-        "Progress % = P6 weightage of the element's activities. Colours: 80%+ of plan green, 40-80% yellow, below 40% red.",
+        "Progress % = Actual / BL Labor units of the element's activities. Colours: 80%+ of plan green, 40-80% yellow, below 40% red.",
         "'-' = this project's P6 has no such work.",
     ]),
     ("electrical", "", [
@@ -79,7 +79,7 @@ SOURCES = [
     ]),
     ("mandays", "", [
         "P6 Labor units per project, stacked.",
-        "Plan: P6 Labor units (hours / 8 = mandays) phased on the plan baseline's activity dates (B2 for PSS-11/12/10B, B1 for the rest).",
+        "Plan: P6 Labor units (hours / 8 = mandays) phased on the plan baseline's activity dates (the 21-Sep-26 re-baseline).",
         "Actual: P6 actual Labor units (hours / 8 = mandays) over actual dates; planned x % complete only where P6 posted none.",
     ]),
     ("manpower deployment", "", [

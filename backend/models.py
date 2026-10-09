@@ -1176,8 +1176,8 @@ class CPAGManpowerSnapshot(Base):
 
 class CPAGBaselineAssignment(Base):
     """One resource assignment of the P6 baseline a CPAG project is planned
-    against (services.cpag_baseline.PLAN_BASELINE - B2 or B1 per project).
-    The live schedule only carries the assigned (B1) baseline's dates."""
+    against (services.cpag_baseline.PLAN_BASELINE - the 21-Sep-26 re-baseline).
+    The live schedule only carries the assigned (Nov B1) baseline's dates."""
     __tablename__ = "cpag_baseline_assignment"
 
     id = Column(Integer, primary_key=True, index=True)
