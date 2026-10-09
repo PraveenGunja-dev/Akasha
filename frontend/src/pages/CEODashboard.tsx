@@ -36,6 +36,7 @@ import EInvoiceIntelligence from '../features/analytics/EInvoiceIntelligence';
 import PortfolioIntelligence from '../features/intelligence/PortfolioIntelligence';
 import ComplianceDashboard from '../features/compliance/ComplianceDashboard';
 import OrderingPlanner from '../features/modules/OrderingPlanner';
+import OrderingPlannerBeta from '../features/modules_beta/OrderingPlannerBeta';
 
 export default function CEODashboard() {
   const { projectId } = useParams();
@@ -236,7 +237,7 @@ export default function CEODashboard() {
   // To cleanly track which modules are implemented
   const implementedModules = [
     'overview', 'project360', 'health', 'schedule', 'financial', 'procurement', 'material', 
-    'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview', 'installation_planner',
+    'risk', 'predictive', 'admin', 'reports', 'transmission_data', 'capacity_overview', 'installation_planner', 'installation_planner_beta',
     'ai_copilot', 'executive_brief', 'smart_search', 'project_map', 'knowledge_graph', 'simulation_lab',
     'quality', 'einvoice_intelligence', 'portfolio_intelligence', 'dpr', 'approvals', 'module_deliveries'
   ];
@@ -247,6 +248,7 @@ export default function CEODashboard() {
     quality: { part1: "Quality", part2: "Command Center", sub: "Ensure uncompromising standards across all project phases." },
     capacity_overview: { part1: "Capacity", part2: "Overview", sub: "Optimize resource allocation and workforce planning." },
     installation_planner: { part1: "Ordering", part2: "Schedule", sub: "Manage module deliveries and site execution." },
+    installation_planner_beta: { part1: "Ordering", part2: "Schedule · Beta", sub: "Beta copy of the Ordering Schedule — changes are trialled here before the live page." },
     financial: { part1: "SAP", part2: "Intelligence", sub: "Real-time financial tracking and ERP integration." },
     einvoice_intelligence: { part1: "E-Invoice", part2: "Intelligence", sub: "Automated vendor payments and cash flow visibility." },
     transmission_data: { part1: "Transmission", part2: "Data", sub: "Monitor grid connectivity and substation progress." },
@@ -283,8 +285,9 @@ export default function CEODashboard() {
       
       {/* 1. Left Navigation Rail */}
       <div className="sticky top-0 h-screen shrink-0 z-[80]">
-        <LeftSidebar 
-          activeTab={activeTab} 
+        <LeftSidebar
+          // The Beta copy is still the Ordering Schedule as far as navigation goes.
+          activeTab={activeTab === 'installation_planner_beta' ? 'installation_planner' : activeTab}
           setActiveTab={handleTabChange} 
           isMobileOpen={isSidebarOpen}
           onCloseMobile={() => setIsSidebarOpen(false)}
@@ -305,6 +308,13 @@ export default function CEODashboard() {
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             onSyncData={handleSyncData}
             isSyncing={isSyncing}
+            // Beta toggle exists only on the Ordering Schedule (live or beta), and not inside a project.
+            betaToggle={!projectId && (activeTab === 'installation_planner' || activeTab === 'installation_planner_beta')
+              ? {
+                  active: activeTab === 'installation_planner_beta',
+                  onToggle: () => handleTabChange(activeTab === 'installation_planner_beta' ? 'installation_planner' : 'installation_planner_beta'),
+                }
+              : undefined}
           />
         </div>
 
@@ -407,6 +417,7 @@ export default function CEODashboard() {
                     
                     {activeTab === 'capacity_overview' && <CapacityOverviewPage />}
                     {activeTab === 'installation_planner' && <OrderingPlanner />}
+                    {activeTab === 'installation_planner_beta' && <OrderingPlannerBeta />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}

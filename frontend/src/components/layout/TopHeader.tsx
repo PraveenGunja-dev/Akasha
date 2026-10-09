@@ -1,6 +1,6 @@
 import { useTheme } from '../../hooks/useTheme';
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, RefreshCw, BookOpen } from 'lucide-react';
+import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, RefreshCw, BookOpen, FlaskConical } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { toast } from 'sonner';
@@ -21,7 +21,9 @@ const writeFilters = (patch: StoredFilters) => {
   try { localStorage.setItem(FILTER_KEY, JSON.stringify({ ...readFilters(), ...patch })); } catch { /* storage unavailable */ }
 };
 
-export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing, onNavigateToSimulation }: any) {
+/* betaToggle is passed only on pages that have a Beta copy (the Ordering
+   Schedule); without it the button is not rendered. */
+export default function TopHeader({ selectedProject, setSelectedProject, masterProjects, onOpenCopilot, onToggleSidebar, onSyncData, isSyncing, onNavigateToSimulation, betaToggle }: any) {
   const [theme, , toggleTheme] = useTheme();
   const navigate = useNavigate();
   const { projectId } = useParams();
@@ -129,7 +131,21 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
 
       {/* Right: project selector + actions */}
       <div className="flex items-center gap-1 sm:gap-2">
-        
+
+        {/* Beta toggle - Ordering Schedule only */}
+        {betaToggle && (
+          <button
+            type="button"
+            onClick={betaToggle.onToggle}
+            aria-pressed={betaToggle.active}
+            title={betaToggle.active ? 'Back to the live Ordering Schedule' : 'Open the Beta Ordering Schedule'}
+            className={`flex items-center gap-1.5 px-3 py-1.5 mr-1 rounded-lg border text-[12px] font-semibold transition-colors shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${betaToggle.active ? 'border-primary-400 bg-primary-100 text-primary-700' : 'border-border bg-card hover:bg-muted text-foreground'}`}
+          >
+            <FlaskConical className="w-3.5 h-3.5" />
+            <span>Beta</span>
+          </button>
+        )}
+
         {/* Phase Dropdown */}
         <div 
           className="relative mr-1"
