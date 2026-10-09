@@ -13,6 +13,7 @@ import { PLANNING_RULES } from './planningRules';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
+import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
 
 import { Loader as AkLoader } from '../../components/ui/primitives';
@@ -43,9 +44,9 @@ const SECTION_EDGE = 'border-l border-border';
 // A hardcoded 40 here silently went stale when FTC/TC/Module moved after the
 // month block — the grouped-by-EPC header row then stopped short of the new
 // columns, leaving them uncoloured (user report 2026-09-20). 25 lead columns
-// (Sr..Status) + the month block (FORECAST_MONTHS + its Total) + FTC/TC/Module
-// + Remarks.
-const TABLE_COLUMN_COUNT = 26 + (FORECAST_MONTHS.length + 1) + 3 + 1;
+// (Sr..Status) + the 4 Ariba proof columns + the month block (FORECAST_MONTHS +
+// its Total) + FTC / Module Ordering / PO Placed / TC + Remarks.
+const TABLE_COLUMN_COUNT = 26 + 4 + (FORECAST_MONTHS.length + 1) + 4 + 1;
 
 /** '07-Mar-27' -> '2027-03-07' for an <input type="date"> value */
 function scodToInputValue(scod: string): string {
@@ -695,8 +696,10 @@ type ColumnKey =
   | 'epc' | 'priority' | 'ol' | 'capacity_mwac' | 'capacity_mwp'
   | 'ftc_completed' | 'connectivity' | 'lta' | 'scod' | 'aop'
   | 'ordered' | 'balance_ordering' | 'total_receipt' | 'erection_done'
-  | 'module_inventory' | 'under_transit' | 'balance_dispatch' | 'status'
-  | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'tc_delivery_date' | 'remarks';
+  | 'module_inventory' | 'under_transit'
+  | 'ariba_grn' | 'awaiting_grn' | 'checklist_status' | 'deliveries'
+  | 'balance_dispatch' | 'status'
+  | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'po_placed' | 'tc_delivery_date' | 'remarks';
 
 const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'project', label: 'Project' },
@@ -722,11 +725,16 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'erection_done', label: 'Erection Done' },
   { key: 'module_inventory', label: 'Module Inventory' },
   { key: 'under_transit', label: 'Under Transit' },
+  { key: 'ariba_grn', label: 'Ariba GRN (proof)' },
+  { key: 'awaiting_grn', label: 'Awaiting GRN' },
+  { key: 'checklist_status', label: 'Finance Checklist' },
+  { key: 'deliveries', label: 'Delivery Ledger' },
   { key: 'balance_dispatch', label: 'Balance Dispatch' },
   { key: 'status', label: 'Status' },
   { key: 'month_wise', label: 'Month Wise Allocation' },
   { key: 'ftc_date', label: 'FTC Date' },
-  { key: 'module_ordering_date', label: 'Module Ordering Date' },
+  { key: 'module_ordering_date', label: 'Module Ordering Date (Plan)' },
+  { key: 'po_placed', label: 'PO Placed (Actual)' },
   { key: 'tc_delivery_date', label: 'TC Delivery Date' },
   { key: 'remarks', label: 'Remarks' },
 ];
@@ -736,9 +744,12 @@ const DEFAULT_VISIBLE: Set<ColumnKey> = new Set([
   'capacity_mwac', 'capacity_mwp', 'ftc_completed',
   'lta', 'scod', 'aop',
   'ordered', 'balance_ordering', 'total_receipt',
-  'erection_done', 'module_inventory', 'under_transit', 'balance_dispatch',
+  'erection_done', 'module_inventory', 'under_transit',
+  'ariba_grn', 'awaiting_grn', 'checklist_status', 'deliveries', 'balance_dispatch',
   'month_wise', 'remarks',
 ]);
+const ALL_COLUMN_KEYS = new Set<string>(ALL_COLUMNS.map(c => c.key));
+const COLS_STORAGE_KEY = 'akasha_mod_cols_v4';
 
 export default function ModuleDeliveriesPage() {
   const [data, setData] = useState<ModuleDeliveriesSummary | null>(null);
@@ -760,7 +771,30 @@ export default function ModuleDeliveriesPage() {
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'module' | 'tc' | 'ftc'>('module');
   const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => {
+    try {
+      const saved = localStorage.getItem(COLS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Drop keys of columns that no longer exist, so a saved layout cannot
+        // hide a renamed column or reference a removed one.
+        const keys = Array.isArray(parsed) ? parsed.filter((k): k is ColumnKey => ALL_COLUMN_KEYS.has(k)) : [];
+        if (keys.length > 0) return new Set(keys);
+      }
+    } catch { /* storage unavailable — fall back to the defaults */ }
+    return new Set(DEFAULT_VISIBLE);
+  });
+
+  const saveColumnsLayout = () => {
+    try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(Array.from(visibleCols))); } catch { /* not persisted */ }
+  };
+  // Projects whose delivery ledger is open under their row.
+  const [openLedgers, setOpenLedgers] = useState<Set<number>>(new Set());
+  const toggleLedger = (id: number) => setOpenLedgers(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [colDropdownOpen, setColDropdownOpen] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -1023,6 +1057,8 @@ export default function ModuleDeliveriesPage() {
     erection_mwp: sum(filtered, p => p.erection_done_mwp),
     inventory_mwp: sum(filtered, p => p.module_inventory_mwp),
     under_transit_mwp: sum(filtered, p => p.under_transit_mwp),
+    ariba_received_mwp: sum(filtered, p => p.procurement?.received_mwp ?? 0),
+    awaiting_grn_mwp: sum(filtered, p => p.procurement?.awaiting_grn_mwp ?? 0),
     balance_dispatch_mwp: sum(filtered, p => p.balance_dispatch_mwp),
     completed_ftc_mwp: sum(filtered, p => p.completed_ftc_mwp),
   }), [filtered]);
@@ -1142,10 +1178,7 @@ export default function ModuleDeliveriesPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] gap-3">
-        <AkLoader size="sm" />
-        <span className="text-muted-foreground text-sm">Loading module deliveries data...</span>
-      </div>
+      <AkLoader size="md" label="Loading module deliveries…" className="min-h-[60vh] w-full" />
     );
   }
 
@@ -1387,10 +1420,16 @@ export default function ModuleDeliveriesPage() {
               <div className="absolute right-0 top-full mt-1 z-50 w-56 max-h-[400px] overflow-y-auto rounded-lg border border-border bg-card shadow-xl custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="sticky top-0 bg-card border-b border-border px-3 py-2 flex items-center justify-between z-10">
                   <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Show / Hide Columns</span>
-                  <button
-                    onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
-                    className="text-[10px] text-primary hover:underline font-medium"
-                  >Reset</button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
+                      className="text-[10px] text-muted-foreground hover:text-foreground font-medium transition-colors"
+                    >Reset</button>
+                    <button
+                      onClick={saveColumnsLayout}
+                      className="text-[10px] text-primary hover:text-primary/80 font-semibold transition-colors"
+                    >Save</button>
+                  </div>
                 </div>
                 {ALL_COLUMNS.map(col => (
                   <label
@@ -1561,6 +1600,18 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('erection_done') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>}
                 {isColVisible('module_inventory') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>}
                 {isColVisible('under_transit') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>}
+                {isColVisible('ariba_grn') && <Th rowSpan={2} className={`min-w-[70px] ${SECTION_EDGE}`}
+                  tip="Ariba proof of receipt: GRN posted at site on this project's module PO lines, in MWp, with its share of SAP's Total Receipt underneath">
+                  <ThLabel label="Ariba GRN" unit="(MWp)" /></Th>}
+                {isColVisible('awaiting_grn') && <Th rowSpan={2} className="min-w-[64px]"
+                  tip="Dispatched in Ariba (IBD created) with no GR posting yet: on the way or not yet booked at site">
+                  <ThLabel label="Awaiting GRN" unit="(MWp)" /></Th>}
+                {isColVisible('checklist_status') && <Th rowSpan={2} className="min-w-[64px]"
+                  tip="Finance checklist raised after receipt, the handover for PO release: raised / receipts">
+                  <ThLabel label="Checklist" unit="(Raised)" /></Th>}
+                {isColVisible('deliveries') && <Th rowSpan={2} className="min-w-[78px]"
+                  tip="Every dispatch and receipt, each on its own dates. Click a row's count to open its ledger">
+                  <ThLabel label="Delivery" unit="Ledger" /></Th>}
                 {isColVisible('balance_dispatch') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>}
                 {isColVisible('status') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>}
                 {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
@@ -1574,14 +1625,20 @@ export default function ModuleDeliveriesPage() {
                 </Th>}
                 {isColVisible('module_ordering_date') && <Th rowSpan={2} className="min-w-[76px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
-                    <ThLabel label="Module Ordering" unit="Date" />
-                    <InfoTip info={<span>Trial Commissioning.<br/><b>Calculation:</b> FTC Date - 45 days.</span>} align="center" />
+                    <ThLabel label="Module Ordering" unit="(Plan)" />
+                    <InfoTip info={<span>Latest date to place the module order. Inferred, not recorded.<br/><b>Calculation:</b> TC Date − lead time (98 days domestic, 136 days China / SEA).</span>} align="center" />
+                  </div>
+                </Th>}
+                {isColVisible('po_placed') && <Th rowSpan={2} className="min-w-[76px]">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <ThLabel label="PO Placed" unit="(Actual)" />
+                    <InfoTip info={<span>Document date of the first module PO in SAP, against the earliest pending ordering date. Hover a cell for every PO.</span>} align="center" />
                   </div>
                 </Th>}
                 {isColVisible('tc_delivery_date') && <Th rowSpan={2} className="min-w-[76px]">
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="TC Delivery" unit="Date" />
-                    <InfoTip info={<span>Target delivery date at site.<br/><b>Calculation:</b> TC Date - Lead Time (98 or 136 days based on origin).</span>} align="center" />
+                    <InfoTip info={<span>Modules needed at site by Trial Commissioning.<br/><b>Calculation:</b> FTC Date − 45 days.</span>} align="center" />
                   </div>
                 </Th>}
                 {isColVisible('remarks') && <Th rowSpan={2} className="min-w-[210px] text-left">Remarks</Th>}
@@ -1620,8 +1677,11 @@ export default function ModuleDeliveriesPage() {
                       columns, so any alpha lets that content bleed through. */}
                   {!collapsed.has(group) && projects.map((p, idx) => {
                     const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : (p.is_tracked !== false);
+                    const proc = p.procurement;
+                    const ledgerOpen = openLedgers.has(p.id);
                     return (
-                    <tr key={p.id} className="group hover:bg-[var(--surface-sunken)]">
+                    <React.Fragment key={p.id}>
+                    <tr className="group hover:bg-[var(--surface-sunken)]">
                       <Td stickyLeft={0} className="bg-card group-hover:bg-[var(--surface-sunken)] text-muted-foreground font-mono">{idx + 1}</Td>
                       {isColVisible('project') && <Td stickyLeft={34} align="left" className="bg-card group-hover:bg-[var(--surface-sunken)] font-medium text-foreground shadow-[1px_0_0_0_var(--border-default)]">
                         <div className="flex items-center gap-2">
@@ -1809,6 +1869,46 @@ export default function ModuleDeliveriesPage() {
                         {p.module_inventory_mwp > 0 ? MW(p.module_inventory_mwp) : '-'}
                       </Td>}
                       {isColVisible('under_transit') && <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>}
+                      {isColVisible('ariba_grn') && (() => {
+                        if (!proc?.lots) {
+                          return p.total_receipt_mwp > 0
+                            ? <Td align="right" className={`text-muted-foreground ${SECTION_EDGE}`}
+                                tip={`SAP shows ${MW(p.total_receipt_mwp)} MWp received, but none of this project's ${proc?.pos.length ?? 0} module PO(s) appear in the Ariba extract, so the receipt is unproven`}>No record</Td>
+                            : <Td align="right" className={`text-muted-foreground ${SECTION_EDGE}`}>-</Td>;
+                        }
+                        const cov = p.total_receipt_mwp > 0 ? proc.received_mwp / p.total_receipt_mwp : null;
+                        return (
+                          <Td align="right" className={SECTION_EDGE}
+                            tip={`Ariba GRN ${MW(proc.received_mwp)} MWp against SAP Total Receipt ${MW(p.total_receipt_mwp)} MWp${cov != null ? ` (${Math.round(cov * 100)}%)` : ''}. Last receipt ${fmtIsoDate(proc.last_receipt)}`}>
+                            {MW(proc.received_mwp)}
+                            {cov != null && <span className={`ml-1 text-[9px] ${cov < 0.9 ? 'text-[var(--status-watch-fg)]' : 'text-muted-foreground'}`}>{Math.round(cov * 100)}%</span>}
+                          </Td>
+                        );
+                      })()}
+                      {isColVisible('awaiting_grn') && (proc && proc.awaiting_grn_mwp > 0
+                        ? <Td align="right"
+                            className={(proc.oldest_awaiting_days ?? 0) > 30 ? 'text-[var(--status-risk-fg)] font-medium' : 'text-[var(--status-watch-fg)]'}
+                            tip={`${proc.awaiting_grn_lots} consignment(s) dispatched with no GRN; oldest dispatched ${proc.oldest_awaiting_days} days ago`}>
+                            {MW(proc.awaiting_grn_mwp)}
+                          </Td>
+                        : <Td align="right" className="text-muted-foreground">-</Td>)}
+                      {isColVisible('checklist_status') && (proc && proc.checklist_due > 0
+                        ? <Td className={proc.checklist_created < proc.checklist_due ? 'text-[var(--status-risk-fg)] font-medium' : 'text-muted-foreground'}
+                            tip={proc.checklist_created < proc.checklist_due
+                              ? `${proc.checklist_due - proc.checklist_created} receipt(s) without a finance checklist`
+                              : 'A checklist is raised for every receipt'}>
+                            {proc.checklist_created}/{proc.checklist_due}
+                          </Td>
+                        : <Td className="text-muted-foreground">-</Td>)}
+                      {isColVisible('deliveries') && <Td>
+                        {proc && (proc.lots > 0 || proc.pos.length > 0) ? (
+                          <button type="button" onClick={() => toggleLedger(p.id)} aria-expanded={ledgerOpen}
+                            className="inline-flex items-center gap-0.5 rounded px-1 py-px font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+                            {ledgerOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {proc.lots > 0 ? `${proc.lots} lot${proc.lots > 1 ? 's' : ''}` : 'POs'}
+                          </button>
+                        ) : <span className="text-muted-foreground">-</span>}
+                      </Td>}
                       {isColVisible('balance_dispatch') && <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
@@ -2255,8 +2355,25 @@ export default function ModuleDeliveriesPage() {
                             ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
                             : '-'}
                       </Td>}
-                      {isColVisible('module_ordering_date') && <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>}
-                      {isColVisible('tc_delivery_date') && <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>}
+                      {isColVisible('module_ordering_date') && <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>}
+                      {isColVisible('po_placed') && (proc?.po_first_date
+                        ? <Td tipWide tipContent={
+                            <div className="min-w-[260px] space-y-0.5 text-[10px]">
+                              <div className="mb-1 font-semibold">Module POs (SAP)</div>
+                              {proc.pos.map(po => (
+                                <div key={po.po} className="flex justify-between gap-3 tabular-nums">
+                                  <span><span className="font-mono">{po.po}</span> <span className="text-muted-foreground">{po.vendor}</span></span>
+                                  <span className="whitespace-nowrap">{fmtIsoDate(po.po_date)} · {MW(po.ordered_mwp)} MWp</span>
+                                </div>
+                              ))}
+                            </div>}>
+                            {fmtIsoDate(proc.po_first_date)}
+                            {proc.order_variance_days != null && proc.order_variance_days > 0 && (
+                              <span className="ml-1 text-[9px] font-medium text-[var(--status-risk-fg)]">+{proc.order_variance_days}d</span>
+                            )}
+                          </Td>
+                        : <Td className="text-muted-foreground">-</Td>)}
+                      {isColVisible('tc_delivery_date') && <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>}
                       {isColVisible('remarks') && <Td align="left" className="min-w-[240px] max-w-[280px]">
                         <div className={`flex items-center justify-between gap-1.5 overflow-hidden transition-all duration-200 ${
                           p.perspectives 
@@ -2298,6 +2415,18 @@ export default function ModuleDeliveriesPage() {
                         </div>
                       </Td>}
                     </tr>
+                    {ledgerOpen && proc && (
+                      <tr>
+                        <td colSpan={TABLE_COLUMN_COUNT} className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)] p-0">
+                          {/* Pinned to the viewport's left edge so the ledger stays in
+                              view however far the wide table is scrolled. */}
+                          <div className="sticky left-0 max-w-[min(1200px,calc(100vw-3rem))]">
+                            <DeliveryLedger proc={proc} sapReceivedMwp={p.total_receipt_mwp} sharePct={p.po_apportioned ? p.po_share_pct : null} />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );})}
 
                 </React.Fragment>
@@ -2331,6 +2460,10 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('erection_done') && <Td align="right" className="text-foreground tabular-nums">{MW(t.erection_mwp)}</Td>}
                 {isColVisible('module_inventory') && <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>}
                 {isColVisible('under_transit') && <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>}
+                {isColVisible('ariba_grn') && <Td align="right" className={`text-foreground tabular-nums ${SECTION_EDGE}`}>{MW(t.ariba_received_mwp)}</Td>}
+                {isColVisible('awaiting_grn') && <Td align="right" className="text-foreground tabular-nums">{MW(t.awaiting_grn_mwp)}</Td>}
+                {isColVisible('checklist_status') && <Td />}
+                {isColVisible('deliveries') && <Td />}
                 {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
                 {isColVisible('status') && <Td className={SECTION_EDGE} />}
                 {isColVisible('month_wise') && <>
@@ -2360,6 +2493,7 @@ export default function ModuleDeliveriesPage() {
                 </>}
                 {isColVisible('ftc_date') && <Td className={SECTION_EDGE} />}
                 {isColVisible('module_ordering_date') && <Td />}
+                {isColVisible('po_placed') && <Td />}
                 {isColVisible('tc_delivery_date') && <Td />}
                 {isColVisible('remarks') && <Td />}
               </tr>

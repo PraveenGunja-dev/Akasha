@@ -9,6 +9,7 @@ import os
 from database import engine
 
 # Import Routers
+from routers import admin as admin_router
 from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations, module_deliveries, bess, wind, solar
 
 logging.basicConfig(level=logging.INFO, force=True)
@@ -29,11 +30,12 @@ requests.Session.request = new_request
 from auto_migrate import auto_upgrade_schema
 auto_upgrade_schema()
 
-# Sign-in account(s) the app ships with (routers/auth.py).
+# Roles, and the first superadmin when AKASHA_BOOTSTRAP_SUPERADMIN_* is set
+# (routers/auth.py). No account or password is defined in code.
 try:
-    auth.ensure_default_users()
+    auth.bootstrap()
 except Exception as e:  # never block start-up on it
-    logging.getLogger(__name__).warning(f"Default user setup skipped: {e}")
+    logging.getLogger(__name__).warning(f"Auth bootstrap skipped: {e}")
 
 app = FastAPI(
     title="Akasha Intelligence API",
@@ -60,16 +62,25 @@ class AkashaPathRewriteMiddleware:
                     scope["raw_path"] = new_path.encode("utf-8")
         await self.app(scope, receive, send)
 
+# Access control for every /api call (middleware/auth_guard.py). Added BEFORE
+# the rewrite so it sits inside it and sees /api/..., not /akasha/api/....
+from middleware.auth_guard import AuthGuardMiddleware
+app.add_middleware(AuthGuardMiddleware)
 app.add_middleware(AkashaPathRewriteMiddleware)
 
-# CORS config to allow frontend
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# CORS. The app is served same-origin (nginx /akasha in production, the Vite
+# proxy in development), so no cross-origin caller is needed. A wildcard with
+# credentials would let any website make signed-in calls with a user's cookie;
+# list extra origins explicitly in AKASHA_ALLOWED_ORIGINS (comma-separated).
+_origins = [o.strip() for o in os.getenv("AKASHA_ALLOWED_ORIGINS", "").split(",") if o.strip()]
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 
 # Include Routers
@@ -82,6 +93,7 @@ app.include_router(tc_router.router)
 app.include_router(dashboard.router)
 app.include_router(mappings.router)
 app.include_router(auth.router)
+app.include_router(admin_router.router)
 app.include_router(pmag.router)
 app.include_router(notifications.router)
 app.include_router(quality.router)

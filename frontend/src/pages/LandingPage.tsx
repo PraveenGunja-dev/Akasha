@@ -4,15 +4,9 @@ import { AnimatePresence, motion } from "framer-motion";
 import { Lock, Mail, X, ArrowRight, Eye, EyeOff, Loader2, AlertTriangle, User } from "lucide-react";
 import PresentationModal from "../components/ui/PresentationModal";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
 import { useTheme } from '../hooks/useTheme';
 
-const ROLE_ROUTES: Record<string, string> = {
-  executive: '/ceo-dashboard',
-  pmag: '/pmag',
-  projects: '/projects',
-  tc_ordering: '/tc-ordering',
-  tc_stores: '/tc-stores',
-};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    STARFIELD — twinkling dots
@@ -76,7 +70,7 @@ export default function LandingPage() {
   // people here, and back to where they were going afterwards).
   const [showLogin, setShowLogin] = useState(location.pathname === '/login');
   const from = (location.state as { from?: string } | null)?.from;
-  const { isAuthenticated, user, login } = useAuth();
+  const { isAuthenticated, user, login, homeFor } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -94,7 +88,13 @@ export default function LandingPage() {
     setBusy(true);
     const r = await login(username.trim(), password);
     setBusy(false);
-    if (!r.success) setLoginError(r.message);
+    if (!r.success) { setLoginError(r.message); return; }
+    if (r.user) {
+      const first = r.user.display_name.split(' ')[0];
+      const h = new Date().getHours();
+      const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+      toast.success(`${part}, ${first}`, { description: 'Welcome back to Akasha.' });
+    }
   };
   const isDark = theme === "dark";
 
@@ -102,8 +102,11 @@ export default function LandingPage() {
   }, [isDark]);
 
   useEffect(() => {
-    if (isAuthenticated && user) navigate(from || ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
-  }, [isAuthenticated, user, navigate, from]);
+    // Where the role leads: a pending password change first, then the page the
+    // user was heading to (if their role opens it), then their one dashboard,
+    // or the dashboard picker when they have several.
+    if (isAuthenticated && user) navigate(homeFor(user, from), { replace: true });
+  }, [isAuthenticated, user, navigate, from, homeFor]);
 
   return (
     <>
@@ -421,7 +424,7 @@ export default function LandingPage() {
                   <form onSubmit={submitLogin} className="mt-8 space-y-5" noValidate>
                     {[
                       { id: 'lp-username', label: 'Username', icon: User, type: 'text', value: username, set: setUsername,
-                        ph: 'Admin_akasha', auto: 'username' },
+                        ph: 'Enter your username', auto: 'username' },
                       { id: 'lp-password', label: 'Password', icon: Lock, type: showPw ? 'text' : 'password', value: password,
                         set: setPassword, ph: 'Enter your password', auto: 'current-password' },
                     ].map(({ id, label, icon: Icon, type, value, set, ph, auto }) => (
@@ -466,7 +469,8 @@ export default function LandingPage() {
                   </form>
 
                   <p className={`mt-6 text-[12px] leading-relaxed ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                    Access is managed by the Akasha team. Contact them if you need an account.
+                    Access is managed by the Akasha team. Contact them if you need an account or a password reset.
+                    Five wrong attempts lock the account for 15 minutes.
                   </p>
                 </motion.div>
               </div>

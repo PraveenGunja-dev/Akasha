@@ -31,11 +31,7 @@ export default function PortfolioIntelligence() {
 
   if (loading) {
     return (
-      <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
-        <AkLoader size="md" className="mb-5" />
-        <h3 className="text-xl font-semibold mb-2">Analyzing Portfolio Telemetry...</h3>
-        <p className="text-muted-foreground max-w-md">The Intelligence Engine is processing data across all active projects.</p>
-      </div>
+      <AkLoader size="md" label="Analysing the portfolio…" detail="Reading schedule, materials, quality and financial data across active projects." className="min-h-[60vh] w-full" />
     );
   }
 

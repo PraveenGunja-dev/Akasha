@@ -11,10 +11,12 @@ from typing import Optional
 import re
 import json
 from datetime import datetime, timedelta
+from services import portfolio as portfolio_svc
 
 from database import get_db
 import models
 from services.module_planner import run_module_planning_engine
+from services.ariba_service import load_ariba_allocations, delivery_events
 
 router = APIRouter(prefix="/api/module-deliveries", tags=["Module Deliveries"])
 
@@ -41,6 +43,24 @@ def _wbs_key(wbs: str) -> Optional[str]:
     if key.startswith('H-'):
         return key[:6]
     return key or None
+
+
+def _project_wbs_keys(m) -> list[str]:
+    """The project's distinct WBS keys, in column order (module_wbs, age6l,
+    spv_plant_code). Distinct, so two columns naming one WBS count it once."""
+    keys: list[str] = []
+    for col in (m.module_wbs, m.age6l, m.spv_plant_code):
+        key = _wbs_key(col)
+        if key and key not in keys:
+            keys.append(key)
+    return keys
+
+
+def _project_cap_mwp(m) -> float:
+    """Project capacity in MWp: MWac x OL, else the sheet's MWdc. The one basis
+    for apportioning a shared WBS — numerator and denominator alike."""
+    ol = _safe_float(m.ol, 0.0)
+    return _safe_float(m.capacity_mwac) * ol if ol > 0 else _safe_float(m.capacity_mwdc)
 
 
 def _safe_float(v, default=0.0):
@@ -133,8 +153,7 @@ def get_module_deliveries_summary(
         or_(models.ProjectMapping.mms_type.is_(None), models.ProjectMapping.mms_type != 'Wind'),
     )
 
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(models.ProjectMapping.cluster == portfolio)
+    query = portfolio_svc.filter_mappings(query, portfolio)
 
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":
@@ -173,19 +192,44 @@ def get_module_deliveries_summary(
         bucket["delivered"] += _safe_float(row[2])
         bucket["in_transit"] += _safe_float(row[3])
 
+    # 2a. The module POs themselves, per WBS key: the actual order date sits
+    #     beside the back-scheduled "order by" date so plan and actual can be
+    #     compared. Same filter as the aggregate above.
+    module_pos_by_key: dict[str, dict] = {}
+    for wbs, po, po_date, vendor, mw in db.execute(text("""
+        SELECT wbs_element, purchasing_document, MIN(document_date), MAX(vendor_name), SUM(po_quantities_mw)
+        FROM mt_poamount
+        WHERE (material_name ILIKE '%module%' OR short_text ILIKE '%module%')
+          AND mw_multiplication_factor > 0 AND doc_type = 'POrd'
+        GROUP BY wbs_element, purchasing_document
+    """)).fetchall():
+        key = _wbs_key(wbs or "")
+        if not key or not po:
+            continue
+        entry = module_pos_by_key.setdefault(key, {}).setdefault(
+            po, {"po": po, "vendor": re.sub(r"^\d+\s+", "", (vendor or "").strip()),
+                 "po_date": po_date, "ordered_mwp": 0.0})
+        entry["ordered_mwp"] += _safe_float(mw)
+        if po_date and (entry["po_date"] is None or po_date < entry["po_date"]):
+            entry["po_date"] = po_date
+
     # 2b. Several projects can carry the SAME WBS element (e.g. H-54S2-01-01 is
     #     on both ARE55L_A01 150MW and ARE55L_A02 125MW), and SAP cannot tell
     #     them apart. Giving each the full bucket double-counted the portfolio
     #     by ~21% ordered / ~24% received, so the bucket is apportioned by
     #     capacity instead (user decision 2026-09-19). One project on a WBS
     #     keeps 100% of it, so the common case is unaffected.
+    #     The denominator MUST use the same capacity as each project's
+    #     numerator (_project_cap_mwp). It used capacity_mwdc while the share
+    #     used MWac x OL, so on a shared WBS the shares summed past 100% and
+    #     the WBS was over-counted (caught by scripts/check_ariba.py,
+    #     2026-10-08). Keys are de-duplicated per project for the same reason:
+    #     module_wbs and age6l can resolve to one key.
     cap_share_by_wbs: dict[str, float] = {}
     for m in mappings:
-        for wbs_col in (m.module_wbs, m.age6l, m.spv_plant_code):
-            key = _wbs_key(wbs_col)
-            if key and key in po_by_wbs:
-                cap = _safe_float(m.capacity_mwdc) or _safe_float(m.capacity_mwac) * _safe_float(m.ol or "1.35", 1.35)
-                cap_share_by_wbs[key] = cap_share_by_wbs.get(key, 0.0) + cap
+        for key in _project_wbs_keys(m):
+            if key in po_by_wbs:
+                cap_share_by_wbs[key] = cap_share_by_wbs.get(key, 0.0) + _project_cap_mwp(m)
 
     # 3. Pre-fetch inventory for modules
     all_module_inv = db.execute(text("""
@@ -234,6 +278,18 @@ def get_module_deliveries_summary(
         if m.project_id in erected_by_pid:
             c = _safe_float(m.capacity_mwdc) or _safe_float(m.capacity_mwac) * _safe_float(m.ol or "1.35", 1.35)
             cap_by_pid[m.project_id] = cap_by_pid.get(m.project_id, 0.0) + c
+
+    # 4. Ariba inbound deliveries (dispatch / GRN / finance checklist) on
+    #    module PO lines, indexed by WBS key. Each row reaches its WBS through
+    #    its own (PO, item) - see services/ariba_service.py - because a PO
+    #    alone can span several projects.
+    ariba_by_key: dict[str, list] = {}
+    for r in load_ariba_allocations(db)["rows"]:
+        if not r["is_module"]:
+            continue
+        for key in {_wbs_key(w) for w, _ in r["allocations"]}:
+            if key:
+                ariba_by_key.setdefault(key, []).append(r)
 
     # Both P6 lookups below join on p6_project.project_id, NOT p.name. P6's
     # project names have inconsistent spacing and suffixes against the
@@ -301,8 +357,7 @@ def get_module_deliveries_summary(
           AND (a.wbs_name ILIKE '%MILESTONE%' OR a.wbs_name ILIKE 'PHASE-%')
         ORDER BY COALESCE(a.planned_finish_date, a.actual_finish_date) ASC, a.p6_object_id ASC
     """)).fetchall()
-    
-    import re
+
     # Dictionary mapping project_id -> wbs_object_id -> list of phase dicts
     ftc_phases_by_pid: dict[str, dict[int, list[dict]]] = {}
     for row in all_p6_ftc:
@@ -501,14 +556,15 @@ def get_module_deliveries_summary(
         in_transit = 0.0
         po_shared = False
         share = 0.0
-        
-        for wbs_col in (m.module_wbs, m.age6l, m.spv_plant_code):
-            wbs_key = _wbs_key(wbs_col)
-            po_data = po_by_wbs.get(wbs_key, {}) if wbs_key else {}
+        key_share: dict[str, float] = {}
+
+        for wbs_key in _project_wbs_keys(m):
+            po_data = po_by_wbs.get(wbs_key, {})
             if po_data:
-                wbs_total_cap = cap_share_by_wbs.get(wbs_key, 0.0) if wbs_key else 0.0
-                curr_share = (cap_mwp / wbs_total_cap) if wbs_total_cap > 0 else 0.0
-                
+                wbs_total_cap = cap_share_by_wbs.get(wbs_key, 0.0)
+                curr_share = (_project_cap_mwp(m) / wbs_total_cap) if wbs_total_cap > 0 else 0.0
+                key_share[wbs_key] = curr_share
+
                 ordered += _safe_float(po_data.get("ordered", 0)) * curr_share
                 delivered += _safe_float(po_data.get("delivered", 0)) * curr_share
                 in_transit += _safe_float(po_data.get("in_transit", 0)) * curr_share
@@ -517,11 +573,21 @@ def get_module_deliveries_summary(
                     po_shared = True
                     share = curr_share
 
-        # Inventory
+        # Inventory & Ariba Deliveries
         plant_codes = []
         if m.spv_plant_code:
             plant_codes = [pc.strip() for pc in m.spv_plant_code.split(',')]
         inv = sum(inv_by_plant.get(pc, 0) for pc in plant_codes)
+
+        # Ariba delivery events on this project's module PO lines, each scaled
+        # by the project's capacity share of its WBS (the same share the SAP
+        # figures above use). One entry per distinct dispatch/receipt date.
+        ariba_rows = {id(r): r for k in key_share for r in ariba_by_key.get(k, [])}.values()
+        events = delivery_events(list(ariba_rows), lambda w: key_share.get(_wbs_key(w), 0.0))
+        module_pos = sorted(
+            ({**p, "ordered_mwp": p["ordered_mwp"] * key_share[k]}
+             for k in key_share for p in module_pos_by_key.get(k, {}).values()),
+            key=lambda p: (p["po_date"] or datetime.max, p["po"]))
 
         # Erection done: this project's share of the P6-measured erected MWp.
         erected = 0.0
@@ -628,6 +694,7 @@ def get_module_deliveries_summary(
         ambiguous_labels = {lab for lab in _seen if lab and _seen.count(lab) > 1}
 
         ftc_strs, tc_strs, mod_strs = [], [], []
+        order_by_dates = []
         completed_ftc_mwac = 0.0
         for idx, phase_info in enumerate(ftc_list):
             ph_name = phase_info["phase"]
@@ -653,6 +720,7 @@ def get_module_deliveries_summary(
             ftc_strs.append(f"{prefix}{dt.strftime('%d-%b-%y')}")
             tc_strs.append(f"{prefix}{tc_dt.strftime('%d-%b-%y')}")
             mod_strs.append(f"{prefix}{mod_dt.strftime('%d-%b-%y')}")
+            order_by_dates.append(mod_dt)
             
         # Convert completed MWac to MWp
         completed_ftc_mwp = 0.0
@@ -675,6 +743,40 @@ def get_module_deliveries_summary(
             spv = p6_name.split("_")[0]
         elif spv in ("", "-"):
             spv = ""
+
+        # Plan vs actual for the module supply chain. "order_by" is inferred
+        # (FTC - 45d - lead time); every other date here is a measurement from
+        # SAP (PO date) or Ariba (dispatch, GRN, checklist).
+        received_ev = [e for e in events if e["status"] == "received"]
+        awaiting_ev = [e for e in events if e["status"] == "awaiting_grn"]
+        first_po = next((p["po_date"] for p in module_pos if p["po_date"]), None)
+        first_order_by = min(order_by_dates) if order_by_dates else None
+        procurement = {
+            "order_by": first_order_by.date().isoformat() if first_order_by else None,
+            "po_first_date": first_po.date().isoformat() if first_po else None,
+            # Positive = the first module PO was placed after the earliest
+            # pending order-by date. Null when either date is missing.
+            "order_variance_days": (first_po.date() - first_order_by.date()).days
+                                   if first_po and first_order_by else None,
+            "pos": [{"po": p["po"], "vendor": p["vendor"],
+                     "po_date": p["po_date"].date().isoformat() if p["po_date"] else None,
+                     "ordered_mwp": round(p["ordered_mwp"], 1)} for p in module_pos],
+            "events": events,
+            "lots": len(events),
+            "first_dispatch": events[0]["dispatch_date"] if events else None,
+            "last_dispatch": max((e["dispatch_date"] for e in events if e["dispatch_date"]), default=None),
+            "last_receipt": max((e["receipt_date"] for e in received_ev), default=None),
+            "received_mwp": round(sum(e["mwp"] for e in received_ev), 1),
+            "awaiting_grn_mwp": round(sum(e["mwp"] for e in awaiting_ev), 1),
+            "awaiting_grn_lots": len(awaiting_ev),
+            "oldest_awaiting_days": max((e["age_days"] for e in awaiting_ev if e["age_days"] is not None), default=None),
+            # Checklists are raised on receipt, so only received rows count.
+            "checklist_created": sum(e["checklist_created"] for e in received_ev),
+            "checklist_due": sum(e["rows"] for e in received_ev),
+            "median_transit_days": (sorted(t)[len(t) // 2] if (t := [e["transit_days"] for e in received_ev
+                                                                    if e["transit_days"] is not None]) else None),
+            "shared": any(e["share"] < 0.999 for e in events),
+        }
 
         row = {
             "sr": i + 1,
@@ -723,6 +825,7 @@ def get_module_deliveries_summary(
             "under_transit_mwp": round(in_transit, 1),
             "balance_dispatch_mwp": round(balance_dispatch, 1),
             "completed_ftc_mwp": round(completed_ftc_mwp, 1),
+            "procurement": procurement,
             "status": status,
             "p6_name": p6_name,
             "remarks": "",

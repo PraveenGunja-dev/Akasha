@@ -79,6 +79,11 @@ const ScopeCard: React.FC<{
 );
 
 export default function ReportsInsights(props: any) {
+  /* `allowedScopes`: the CPAG packs this user may open (portfolio-scoped
+     dashboards pass the user's own). Omitted = every pack, as on Executive.
+     The server refuses the others regardless. */
+  const allowed: string[] | undefined = props.allowedScopes;
+  const canOpen = (sc: 'solar' | 'wind' | 'bess') => !allowed || allowed.includes(sc);
   const [view, setView] = useState<ViewState>('directory');
   const [scope, setScope] = useState<Scope>(null);
   const [region, setRegion] = useState<string | null>(null);
@@ -139,7 +144,7 @@ export default function ReportsInsights(props: any) {
                   className="absolute inset-0 h-full w-full object-cover object-bottom transition-transform duration-500 group-hover:scale-[1.03]"
                 />
                 <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-md bg-black/55 px-2 py-1 text-[11px] font-semibold text-white backdrop-blur-sm">
-                  <span className="h-1.5 w-1.5 rounded-full bg-status-healthy-solid" /> Live · BESS · Solar · Wind
+                  <span className="h-1.5 w-1.5 rounded-full bg-status-healthy-solid" /> Live · {(['bess', 'solar', 'wind'] as const).filter(canOpen).map(sc => SCOPE_NAME[sc]).join(' · ') || 'No pack for your portfolios'}
                 </span>
               </div>
 
@@ -159,7 +164,8 @@ export default function ReportsInsights(props: any) {
                   <div>
                     <dt className="text-[11px] font-medium uppercase tracking-wide text-fg-tertiary">Portfolios</dt>
                     <dd className="mt-1 space-y-0.5 text-fg-primary">
-                      {([['BESS', REGIONS.bess], ['Solar', REGIONS.solar], ['Wind', REGIONS.wind]] as [string, Region[]][]).map(([name, rs]) => (
+                      {([['BESS', REGIONS.bess, 'bess'], ['Solar', REGIONS.solar, 'solar'], ['Wind', REGIONS.wind, 'wind']] as [string, Region[], 'bess' | 'solar' | 'wind'][])
+                        .filter(([, , sc]) => canOpen(sc)).map(([name, rs]) => (
                         <div key={name} className="flex flex-wrap items-baseline gap-x-1.5">
                           <span className="w-11 shrink-0 font-medium">{name}</span>
                           <span className="text-fg-secondary">{rs.filter((r) => r.live).map((r) => r.name).join(', ')}</span>
@@ -233,27 +239,32 @@ export default function ReportsInsights(props: any) {
             </div>
 
             <div className="p-6 grid grid-cols-1 gap-5 sm:grid-cols-3">
-              <ScopeCard
+              {allowed && allowed.length === 0 && (
+                <p className="text-sm text-fg-secondary sm:col-span-3">
+                  No CPAG pack covers your portfolios yet. Packs exist for Solar Rajasthan, Wind (Mundra North) and BESS.
+                </p>
+              )}
+              {canOpen('solar') && <ScopeCard
                 icon={Sun}
                 title="Solar Portfolio"
                 detail="The Rajasthan solar pack, built from P6, SAP and Pulse."
                 regions={REGIONS.solar}
                 onClick={() => choosePortfolio('solar')}
-              />
-              <ScopeCard
+              />}
+              {canOpen('wind') && <ScopeCard
                 icon={Wind}
                 title="Wind Portfolio"
                 detail="The Mundra North wind pack, built from P6, SAP and Pulse."
                 regions={REGIONS.wind}
                 onClick={() => choosePortfolio('wind')}
-              />
-              <ScopeCard
+              />}
+              {canOpen('bess') && <ScopeCard
                 icon={Battery}
                 title="BESS Portfolio"
                 detail="The whole pack across all six BESS projects, plus the combined corporate order book."
                 regions={REGIONS.bess}
                 onClick={() => choosePortfolio('bess')}
-              />
+              />}
             </div>
           </motion.div>
         )}

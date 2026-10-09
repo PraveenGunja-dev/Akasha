@@ -5,6 +5,7 @@ from typing import Optional
 from database import get_db
 import models
 import time
+from services import portfolio as portfolio_svc
 
 _FIN_CACHE = {}
 _FIN_TTL = 300  # 5 minutes
@@ -41,11 +42,7 @@ def get_financials(project_name: Optional[str] = None, portfolio: Optional[str] 
     
     # 1. Global Portfolio Filter
     map_query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        map_query = map_query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    map_query = portfolio_svc.filter_mappings(map_query, portfolio)
         
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":
@@ -314,11 +311,7 @@ def get_financials_details(project_name: Optional[str] = None, portfolio: Option
     query = db.query(models.MTPOAmount)
     
     map_query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        map_query = map_query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    map_query = portfolio_svc.filter_mappings(map_query, portfolio)
         
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":

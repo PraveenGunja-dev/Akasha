@@ -57,11 +57,7 @@ export default function ProjectIntelligence({ projectId }: Props) {
 
   if (loading) {
     return (
-      <div className="intelligence-card p-12 flex flex-col items-center justify-center text-center">
-        <AkLoader size="md" className="mb-5" />
-        <h3 className="text-xl font-semibold mb-2">Analyzing Project Telemetry...</h3>
-        <p className="text-muted-foreground max-w-md">The Akasha Intelligence Engine is synthesizing schedule, materials, transmission, quality, financial, drone, and weather data.</p>
-      </div>
+      <AkLoader size="md" label="Analysing the project…" detail="Reading schedule, materials, transmission, quality and financial data." className="min-h-[60vh] w-full" />
     );
   }
 

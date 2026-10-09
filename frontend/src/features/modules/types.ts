@@ -91,6 +91,9 @@ export interface ModuleProject {
   /** Measured MB52 stock on hand, for reconciling against the derived figure. */
   module_inventory_sap_mwp: number;
   under_transit_mwp: number;
+  /** Plan vs actual for the module supply chain, with Ariba as the proof of
+   *  dispatch, receipt and finance handover. */
+  procurement?: ModuleProcurement;
   balance_dispatch_mwp: number;
   completed_ftc_mwp: number;
   status: 'pending' | 'ordered' | 'in_progress' | 'delivered' | 'needs_ordering';
@@ -136,6 +139,59 @@ export interface ModuleProject {
   is_tracked: boolean;
 }
 
+/** One Ariba delivery event: a PO's consignment that left and landed on the
+ *  same days. A different dispatch or receipt date is a separate event. */
+export interface AribaDeliveryEvent {
+  po: string;
+  vendor: string;
+  /** IBD creation date (ISO). */
+  dispatch_date: string | null;
+  /** GR posting date (ISO); null while awaiting GRN. */
+  receipt_date: string | null;
+  transit_days: number | null;
+  /** Days since dispatch, for events still awaiting GRN. */
+  age_days: number | null;
+  status: 'received' | 'awaiting_grn';
+  /** Received GRN qty, or the dispatched IBD qty while awaiting GRN. */
+  qty: number;
+  mwp: number;
+  /** False when a line's module wattage could not be read — MWp understated. */
+  mwp_known: boolean;
+  rejected_qty: number;
+  uom: string;
+  rows: number;
+  checklist_created: number;
+  checklist_numbers: string[];
+  checklist_date: string | null;
+  /** This project's capacity share of the WBS the line is booked to (1 = sole). */
+  share: number;
+  lines: string[];
+}
+
+export interface ModuleProcurement {
+  /** Earliest pending order-by date: FTC − 45d − lead time. Inferred, not measured. */
+  order_by: string | null;
+  /** Earliest module PO document date in SAP. */
+  po_first_date: string | null;
+  /** po_first_date − order_by in days; positive = ordered after the plan date. */
+  order_variance_days: number | null;
+  pos: { po: string; vendor: string; po_date: string | null; ordered_mwp: number }[];
+  events: AribaDeliveryEvent[];
+  lots: number;
+  first_dispatch: string | null;
+  last_dispatch: string | null;
+  last_receipt: string | null;
+  received_mwp: number;
+  /** Dispatched with no GR posting yet. A lower bound — see the ledger note. */
+  awaiting_grn_mwp: number;
+  awaiting_grn_lots: number;
+  oldest_awaiting_days: number | null;
+  checklist_created: number;
+  checklist_due: number;
+  median_transit_days: number | null;
+  shared: boolean;
+}
+
 export interface ModuleTotals {
   total_mwac: number;
   total_mwp: number;
@@ -145,6 +201,8 @@ export interface ModuleTotals {
   erection_mwp: number;
   inventory_mwp: number;
   under_transit_mwp: number;
+  ariba_received_mwp: number;
+  awaiting_grn_mwp: number;
   balance_dispatch_mwp: number;
   completed_ftc_mwp: number;
 }

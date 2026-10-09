@@ -56,12 +56,7 @@ export default function ExecutiveBriefing() {
       </div>
 
       {loading ? (
-        <div className="flex-1 flex flex-col items-center justify-center space-y-6">
-           <AkLoader size="lg" />
-           <div className="text-muted-foreground font-mono text-sm tracking-widest uppercase animate-pulse">
-             Generating Executive Intelligence via AKASHA AI...
-           </div>
-        </div>
+        <AkLoader size="lg" label="Generating the executive briefing…" className="flex-1 min-h-[60vh] w-full" />
       ) : error ? (
         <div className="flex-1 flex flex-col items-center justify-center space-y-4">
            <ServerCrash className="w-12 h-12 text-destructive" />

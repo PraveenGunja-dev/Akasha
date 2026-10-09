@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from services.progress import nonlabor_units_by_project, project_progress
+from services import portfolio as portfolio_svc
 
 router = APIRouter(prefix="/api/metrics", tags=["metrics"])
 
@@ -88,8 +89,7 @@ def _scoped_mappings(
     keeping the row with the longest spv_plant_code.
     """
     query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(models.ProjectMapping.cluster == portfolio)
+    query = portfolio_svc.filter_mappings(query, portfolio)
     # The header defaults to Ongoing, and omitting it was the whole gap: 62
     # projects against a tile reading 48. With it applied the two agree.
     if phase == "Ongoing":

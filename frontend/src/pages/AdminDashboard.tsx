@@ -1,70 +1,86 @@
 import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchMappings, createMapping, updateMapping, deleteMapping, fetchUnmappedOptions } from '../services/mappingApi';
 import type { ProjectMapping, ProjectMappingCreate, UnmappedOptions } from '../services/mappingApi';
-import { Plus, Edit2, Trash2, X, Search, Save, AlertCircle, Map, Users, Settings, Database, Activity } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Search, Save, AlertCircle, Map, Users, Settings, Database, ShieldCheck, ScrollText, KeyRound, Activity, LayoutGrid } from 'lucide-react';
+import { useAuth } from '../context/AuthContext';
+import { AppFrame, AppHeader, AppRail } from '../components/layout/AppRail';
+import HeroBanner from '../components/layout/HeroBanner';
+import UsersPanel from '../features/admin/UsersPanel';
+import RolesPanel from '../features/admin/RolesPanel';
+import AuditPanel from '../features/admin/AuditPanel';
+import ApiKeysPanel from '../features/admin/ApiKeysPanel';
+
+/* Admin console. Each tab shows only for the permission behind it, and the
+   server checks the same permission on every call the tab makes. The tab is
+   in the URL (/admin/users) so it survives a reload and can be linked. */
+const TABS: { id: string; label: string; group: 'Access' | 'Data'; icon: React.JSX.Element; anyOf: string[] }[] = [
+  { id: 'users', label: 'Users', group: 'Access', icon: <Users />, anyOf: ['users.manage'] },
+  { id: 'roles', label: 'Roles & permissions', group: 'Access', icon: <ShieldCheck />, anyOf: ['roles.manage', 'users.manage'] },
+  { id: 'api-keys', label: 'API keys', group: 'Access', icon: <KeyRound />, anyOf: ['users.manage'] },
+  { id: 'audit', label: 'Audit log', group: 'Access', icon: <ScrollText />, anyOf: ['audit.view'] },
+  { id: 'mappings', label: 'Project mappings', group: 'Data', icon: <Map />, anyOf: ['data.edit'] },
+  { id: 'integrations', label: 'Data integrations', group: 'Data', icon: <Database />, anyOf: ['data.sync'] },
+  { id: 'settings', label: 'System settings', group: 'Data', icon: <Settings />, anyOf: ['users.manage'] },
+];
+
+const TAB_SUB: Record<string, string> = {
+  users: 'Who can sign in, what role they hold and which portfolios they see.',
+  roles: 'What each role can open and do - dashboards, data and administration.',
+  'api-keys': 'Read-only keys for systems that use the integration API.',
+  audit: 'Every sign-in and every change to users, roles and keys.',
+  mappings: 'The project master every dashboard joins on.',
+  integrations: 'Source systems and their sync status.',
+  settings: 'Platform settings.',
+};
 
 const AdminDashboard: React.FC = () => {
-  const [activeTab, setActiveTab] = useState('mappings');
+  const { canAny } = useAuth();
+  const { pathname } = useLocation();
+  const navigate = useNavigate();
+  const tabs = TABS.filter(t => canAny(t.anyOf));
+  const requested = pathname.replace(/^\/admin\/?/, '').split('/')[0];
+  const activeTab = tabs.find(t => t.id === requested)?.id ?? tabs[0]?.id;
 
-  const tabs = [
-    { id: 'mappings', label: 'Project Mappings', icon: <Map size={18} /> },
-    { id: 'users', label: 'User Management', icon: <Users size={18} /> },
-    { id: 'settings', label: 'System Settings', icon: <Settings size={18} /> },
-    { id: 'integrations', label: 'Data Integrations', icon: <Database size={18} /> },
-  ];
+  useEffect(() => {
+    if (activeTab && requested !== activeTab) navigate(`/admin/${activeTab}`, { replace: true });
+  }, [activeTab, requested, navigate]);
+
+  const groups = (['Access', 'Data'] as const)
+    .map(g => ({ title: g, items: tabs.filter(tab => tab.group === g).map(({ id, label, icon }) => ({ id, label, icon })) }))
+    .filter(g => g.items.length > 0);
+  const current = tabs.find(tab => tab.id === activeTab);
 
   return (
-    <div className="flex h-screen bg-background text-foreground overflow-hidden">
-      {/* Sidebar Navigation */}
-      <div className="w-64 bg-card border-r border-border shrink-0 flex flex-col shadow-sm z-10">
-        <div className="p-6 border-b border-border flex items-center gap-3">
-          <div className="p-2 bg-primary/10 rounded-lg">
-            <Activity className="text-primary w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-semibold tracking-wide text-base">AKASHA Admin</h1>
-            <p className="text-muted-foreground text-xs">Control Center</p>
-          </div>
-        </div>
-        
-        <nav className="flex-1 p-4 space-y-1">
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition-colors ${
-                activeTab === tab.id 
-                  ? 'bg-primary/10 text-primary font-medium' 
-                  : 'text-muted-foreground hover:bg-secondary hover:text-foreground'
-              }`}
-            >
-              {tab.icon}
-              {tab.label}
-            </button>
-          ))}
-        </nav>
+    <AppFrame
+      rail={<AppRail subtitle="Admin console" groups={groups}
+        footer={[{ id: 'home', label: 'All dashboards', icon: <LayoutGrid /> }]}
+        active={activeTab ?? ''} onSelect={id => navigate(id === 'home' ? '/workspaces' : `/admin/${id}`)} />}
+      header={<AppHeader kicker="Admin console" title={current?.label ?? 'Administration'} />}>
+      <div className="mb-5">
+        <HeroBanner compact part1="Admin" part2="Console"
+          sub={TAB_SUB[activeTab ?? ''] ?? 'Access and data administration for Akasha.'} />
       </div>
-
-      {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto bg-background p-8">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={activeTab}
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.2 }}
-            className="w-full"
-          >
-            {activeTab === 'mappings' && <MappingsTab />}
-            {activeTab === 'users' && <PlaceholderTab title="User Management" />}
-            {activeTab === 'settings' && <PlaceholderTab title="System Settings" />}
-            {activeTab === 'integrations' && <PlaceholderTab title="Data Integrations" />}
-          </motion.div>
-        </AnimatePresence>
-      </main>
-    </div>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.15 }}
+          className="w-full"
+        >
+          {activeTab === 'users' && <UsersPanel />}
+          {activeTab === 'roles' && <RolesPanel />}
+          {activeTab === 'audit' && <AuditPanel />}
+          {activeTab === 'api-keys' && <ApiKeysPanel />}
+          {activeTab === 'mappings' && <MappingsTab />}
+          {activeTab === 'settings' && <PlaceholderTab title="System Settings" />}
+          {activeTab === 'integrations' && <PlaceholderTab title="Data Integrations" />}
+        </motion.div>
+      </AnimatePresence>
+    </AppFrame>
   );
 };
 

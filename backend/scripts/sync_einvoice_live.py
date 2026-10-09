@@ -62,10 +62,8 @@ def sync_einvoice_live():
         print("No invoices returned. Aborting sync.")
         return
 
-    print("Dropping old table if exists to load fresh live data...")
-    models.EInvoiceRecord.__table__.drop(bind=engine, checkfirst=True)
-
-    print("Creating tables if not exists...")
+    # The table is no longer dropped: _sync_einvoice_records replaces its rows
+    # in one transaction, so a failed run keeps the previous invoices.
     models.Base.metadata.create_all(bind=engine)
 
     db = SessionLocal()
@@ -85,9 +83,8 @@ def _sync_einvoice_records(db, results):
     print("Pre-loading PO to WBS mappings from ZSPS/ME2J E-Invoice lookup table...")
     po_wbs = {po.purchasing_document: po.wbs_element for po in db.query(models.MTEInvoicePOLookup.purchasing_document, models.MTEInvoicePOLookup.wbs_element).all() if po.purchasing_document}
 
-    print(f"Found {len(results)} invoice records. Clearing old records in DB...")
+    print(f"Found {len(results)} invoice records. Replacing old records in one transaction...")
     db.query(models.EInvoiceRecord).delete()
-    db.commit()
 
     print("Inserting new records...")
     records = []
@@ -134,20 +131,24 @@ def _sync_einvoice_records(db, results):
             invoiceDate=parse_date(inv.get('invoiceDate')),
             currentApprover=inv.get('currentApprover'),
             latestAction=inv.get('lastActionDate'),
-            p6ProjectName=p6_proj_name
+            p6ProjectName=p6_proj_name,
+            # Sent by the source on every invoice (createdAt) or most of them;
+            # they were not copied before, so the API showed them empty.
+            createdAt=parse_date(inv.get('createdAt') or inv.get('createdOn')),
+            completionDate=parse_date(inv.get('completionDate') or inv.get('completedOn')),
+            workDescription=inv.get('workDescription') or inv.get('workDesc'),
         )
         records.append(record)
-        
-        # Batch insert to avoid huge memory spike
-        if len(records) >= 500:
-            db.add_all(records)
-            db.commit()
-            records = []
-            
-    if records:
-        db.add_all(records)
+
+    try:
+        for i in range(0, len(records), 500):
+            db.add_all(records[i:i + 500])
+            db.flush()
         db.commit()
-        
+    except Exception:
+        db.rollback()
+        raise
+
     print(f"Live Ingestion complete! Total records inserted: {len(results)}")
 
 if __name__ == "__main__":

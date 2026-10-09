@@ -14,6 +14,7 @@ import type { ModuleDeliveriesSummary, ModuleProject, ModuleTotals } from './typ
 // exceljs's PaperSize enum omits code 8 (A3), which this wide landscape
 // table needs — the numeric OOXML code is still valid at runtime.
 import { PLANNING_RULES } from './planningRules';
+import { fmtIsoDate } from './DeliveryLedger';
 
 const A3: PaperSize = 8 as PaperSize;
 
@@ -55,6 +56,9 @@ const LEAD_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
   { label: 'Erection\ndone\n(MWp)', width: 10, numeric: true },
   { label: 'Module\nInventory\n(MWp)', width: 11, numeric: true },
   { label: 'Under\nTransit\n(MWp)', width: 10, numeric: true },
+  { label: 'Ariba\nGRN\n(MWp)', width: 10, numeric: true },
+  { label: 'Awaiting\nGRN\n(MWp)', width: 10, numeric: true },
+  { label: 'Finance\nChecklist\n(Raised)', width: 11 },
   { label: 'Balance\nDispatch\n(MWp)', width: 11, numeric: true },
   { label: 'Status', width: 12 },
 ];
@@ -72,12 +76,13 @@ const DATE_COLUMNS: { label: string; width: number }[] = [
   { label: 'FTC\nDate', width: 24 },
   { label: 'TC\nDate', width: 24 },
   { label: 'Module\nDate', width: 24 },
+  { label: 'PO Placed\n(Actual)', width: 14 },
 ];
 const TRAIL_COLUMN = { label: 'Remarks', width: 70 };
 
 const LEAD_COUNT = LEAD_COLUMNS.length;                       // 24
 const MONTH_COUNT = FORECAST_MONTHS.length + 1;               // 13 + Total
-const DATE_COUNT = DATE_COLUMNS.length;                       // FTC, TC, Module
+const DATE_COUNT = DATE_COLUMNS.length;                       // FTC, TC, Module, PO Placed
 const TOTAL_COLS = LEAD_COUNT + MONTH_COUNT + DATE_COUNT + 1; // + Remarks
 
 const STATUS_LABEL: Record<string, string> = {
@@ -375,6 +380,9 @@ export async function exportModuleDeliveriesXLSX(
         num(p.erection_done_mwp),
         num(p.module_inventory_mwp),
         num(p.under_transit_mwp),
+        p.procurement?.lots ? num(p.procurement.received_mwp) : (p.total_receipt_mwp > 0 ? 'No record' : null),
+        num(p.procurement?.awaiting_grn_mwp ?? 0),
+        p.procurement?.checklist_due ? `${p.procurement.checklist_created}/${p.procurement.checklist_due}` : '',
         num(p.balance_dispatch_mwp),
         STATUS_LABEL[p.status] ?? p.status,
         ...FORECAST_MONTHS.map(mo => monthCellRichText(p, mo, p.month_mwp?.[mo] || 0, milestoneFilter, unitToggle)),
@@ -382,6 +390,9 @@ export async function exportModuleDeliveriesXLSX(
         dateCellRichText(ftcText),
         dateCellRichText(tcText),
         dateCellRichText(modText),
+        p.procurement?.po_first_date
+          ? `${fmtIsoDate(p.procurement.po_first_date)}${(p.procurement.order_variance_days ?? 0) > 0 ? ` (+${p.procurement.order_variance_days}d)` : ''}`
+          : '',
         remarksText,
       ]);
 
@@ -437,6 +448,7 @@ export async function exportModuleDeliveriesXLSX(
     '', '', '', '',
     num(totals.ordered_mwp), num(totals.balance_ordering_mwp), num(totals.received_mwp),
     num(totals.erection_mwp), num(totals.inventory_mwp), num(totals.under_transit_mwp),
+    num(totals.ariba_received_mwp), num(totals.awaiting_grn_mwp), '',
     num(totals.balance_dispatch_mwp),
     '',
     ...FORECAST_MONTHS.map(mo => {
@@ -445,7 +457,7 @@ export async function exportModuleDeliveriesXLSX(
       return num(mTot);
     }),
     num(Object.values(grouped).flat().reduce((s, p) => s + (p.balance_ordering_mwp || 0), 0)),
-    '', '', '',
+    '', '', '', '',
     '',
   ]);
   totalRow.height = 18;
@@ -614,6 +626,48 @@ export async function exportModuleDeliveriesXLSX(
         cell.alignment = { vertical: 'top', wrapText: col === 3, horizontal: 'left' };
       });
       r.height = Math.max(14, Math.ceil(rule.detail.length / 95) * 12);
+    });
+  });
+
+  /* ── Sheet 4: Ariba delivery ledger ───────────────────────────────────
+     The proof behind each project's receipts: one row per consignment, each
+     on its own dispatch / receipt / checklist dates — never summed. */
+  const ls = wb.addWorksheet('Ariba Ledger', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+    pageSetup: { orientation: 'landscape', fitToPage: true, fitToWidth: 1, fitToHeight: 0 },
+  });
+  const LEDGER_COLUMNS: { label: string; width: number; numeric?: boolean }[] = [
+    { label: 'Project', width: 30 }, { label: 'PO', width: 12 }, { label: 'Line(s)', width: 10 },
+    { label: 'Vendor', width: 30 }, { label: 'Dispatched (IBD)', width: 13 }, { label: 'Received (GRN)', width: 13 },
+    { label: 'Transit (days)', width: 10, numeric: true }, { label: 'Qty', width: 11, numeric: true },
+    { label: 'UoM', width: 6 }, { label: 'MWp', width: 9, numeric: true }, { label: 'Status', width: 18 },
+    { label: 'Checklist no.', width: 26 }, { label: 'Checklist date', width: 13 }, { label: 'WBS share', width: 9 },
+  ];
+  const lHead = ls.addRow(LEDGER_COLUMNS.map(c => c.label));
+  lHead.eachCell(cell => {
+    cell.font = { bold: true, size: 9, color: { argb: 'FFFFFFFF' }, name: 'Adani' };
+    cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: HEADER_BG } };
+    cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+    cell.border = border;
+  });
+  lHead.height = 18;
+  LEDGER_COLUMNS.forEach((c, i) => { ls.getColumn(i + 1).width = c.width; });
+  Object.values(grouped).flat().forEach(p => {
+    (p.procurement?.events ?? []).forEach(e => {
+      const r = ls.addRow([
+        p.project_name || p.p6_name, e.po, e.lines.join(', '), e.vendor,
+        fmtIsoDate(e.dispatch_date), e.receipt_date ? fmtIsoDate(e.receipt_date) : '',
+        e.transit_days, Math.round(e.qty), e.uom, e.mwp_known ? Math.round(e.mwp * 100) / 100 : null,
+        e.status === 'received' ? 'Received' : `Awaiting GRN${e.age_days != null ? ` (${e.age_days}d)` : ''}`,
+        e.checklist_numbers.join(', '), e.checklist_date ? fmtIsoDate(e.checklist_date) : '',
+        e.share < 0.999 ? `${Math.round(e.share * 100)}%` : '',
+      ]);
+      r.eachCell({ includeEmpty: true }, (cell, col) => {
+        cell.font = { size: 9, name: 'Adani', color: { argb: INK } };
+        cell.border = border;
+        cell.alignment = { vertical: 'middle', horizontal: LEDGER_COLUMNS[col - 1]?.numeric ? 'right' : 'left' };
+        if (typeof cell.value === 'number') cell.numFmt = col === 10 ? '#,##0.00' : '#,##0';
+      });
     });
   });
 

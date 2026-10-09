@@ -6,6 +6,7 @@ from database import get_db
 import models
 from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm, build_evm_index
 import time
+from services import portfolio as portfolio_svc
 
 _SUMMARY_CACHE = {}
 _SUMMARY_TTL = 300  # 5 minutes
@@ -34,11 +35,7 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
         ~models.ProjectMapping.project.ilike("%demo%")
     )
     
-    if portfolio and portfolio.lower() != "all portfolios":
-        map_query = map_query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    map_query = portfolio_svc.filter_mappings(map_query, portfolio)
         
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":

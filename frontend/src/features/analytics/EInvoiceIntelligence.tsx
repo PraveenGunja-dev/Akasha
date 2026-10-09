@@ -36,10 +36,7 @@ export default function EInvoiceIntelligence() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[500px] text-muted-foreground">
-        <AkLoader size="md" className="mb-4" />
-        <p>Loading E-Invoice Intelligence...</p>
-      </div>
+      <AkLoader size="md" label="Loading e-invoices…" className="min-h-[60vh] w-full" />
     );
   }
 

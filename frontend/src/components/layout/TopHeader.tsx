@@ -1,8 +1,9 @@
 import { useTheme } from '../../hooks/useTheme';
 import React, { useState, useEffect, useRef } from 'react';
-import { Bell, User, ChevronDown, Moon, Sun, LogOut, Sparkles, Menu, Activity, RefreshCw, BookOpen } from 'lucide-react';
+import { Bell, ChevronDown, Moon, Sun, Sparkles, Menu, Activity, RefreshCw, BookOpen } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
+import DashboardSwitcher from '../auth/DashboardSwitcher';
 import { toast } from 'sonner';
 import NotificationDropdown from './NotificationDropdown';
 import PMAGThreadPanel from './PMAGThreadPanel';
@@ -25,9 +26,12 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
   const [theme, , toggleTheme] = useTheme();
   const navigate = useNavigate();
   const { projectId } = useParams();
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
+  const portfolioOptions = user?.portfolio_access.all === false
+    ? user.portfolio_access.clusters
+    : ['All Portfolios', ...(user?.portfolio_access.clusters ?? [])];
   const [searchParams, setSearchParams] = useSearchParams();
-  const currentPortfolio = searchParams.get('portfolio') || 'All Portfolios';
+  const currentPortfolio = searchParams.get('portfolio') || (user?.portfolio_access.all === false ? user.portfolio_access.clusters[0] ?? '' : 'All Portfolios');
   const currentPhase = searchParams.get('phase') || 'Ongoing';
 
   useEffect(() => {
@@ -104,10 +108,6 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
     return () => clearInterval(interval);
   }, [projectId, currentPhase]);
 
-  const handleSignOut = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
 
   useEffect(() => {
   }, [theme]);
@@ -179,7 +179,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
             <ChevronDown className={`w-3.5 h-3.5 text-muted-foreground transition-transform ${isPortfolioOpen ? 'rotate-180' : ''}`} />
           </button>
           <div className={`absolute top-full right-0 mt-1 w-48 py-1 bg-card rounded-lg shadow-lg border border-border transition-all z-50 ${isPortfolioOpen ? 'opacity-100 visible translate-y-0' : 'opacity-0 invisible -translate-y-2'}`}>
-            {['All Portfolios', 'Solar Khavda', 'Solar Rajasthan', 'Wind', 'BESS'].map(p => (
+            {portfolioOptions.map(p => (
               <button
                 key={p}
                 onClick={() => {
@@ -203,7 +203,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         </div>
 
         {/* Sync Data Button */}
-        {onSyncData && (
+        {onSyncData && user?.permissions.includes('data.sync') && (
           <button 
             onClick={onSyncData}
             disabled={isSyncing}
@@ -263,24 +263,8 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
             )}
         </div>
         
-        {/* Avatar */}
-        <div className="relative group ml-0.5">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-sky-400 to-purple-500 p-[1.5px] cursor-pointer shadow-[0_0_10px_rgba(14,165,233,0.2)]">
-            <div className="w-full h-full rounded-full bg-background flex items-center justify-center">
-               <User className="w-3.5 h-3.5 text-muted-foreground" />
-            </div>
-          </div>
-          <div className="absolute right-0 top-full mt-1.5 w-44 bg-card border border-border rounded-lg shadow-lg py-1 z-50 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all origin-top-right scale-95 group-hover:scale-100">
-             <div className="px-3 py-2 border-b border-border">
-               <p className="text-[12px] font-semibold text-foreground">{user?.display_name || 'User'}</p>
-               <p className="text-[11px] text-muted-foreground truncate">{user?.role || 'executive'}</p>
-             </div>
-             <button onClick={handleSignOut} className="w-full text-left px-3 py-1.5 text-[12px] text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-1.5">
-               <LogOut className="w-3.5 h-3.5" />
-               Sign Out
-             </button>
-          </div>
-        </div>
+        {/* Account & dashboard switcher */}
+        <div className="ml-1"><DashboardSwitcher /></div>
       </div>
     </header>
 

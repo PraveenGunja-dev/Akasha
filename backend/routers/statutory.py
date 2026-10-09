@@ -7,6 +7,7 @@ from datetime import datetime
 
 from database import get_db
 import models
+from services import portfolio as portfolio_svc
 
 router = APIRouter(
     prefix="/api/statutory",
@@ -17,8 +18,7 @@ router = APIRouter(
 def _filter_statutory(query, model, portfolio: Optional[str], phase: Optional[str]):
     if (portfolio and portfolio.lower() != "all portfolios") or (phase and phase.lower() not in ("all", "")):
         query = query.join(models.ProjectMapping, model.project_id == models.ProjectMapping.project_id)
-        if portfolio and portfolio.lower() != "all portfolios":
-            query = query.filter(models.ProjectMapping.cluster == portfolio)
+        query = portfolio_svc.filter_mappings(query, portfolio)
         normalised = (phase or "all").strip().lower()
         if normalised == "ongoing":
             query = query.filter(models.ProjectMapping.is_commissioned.is_(False))

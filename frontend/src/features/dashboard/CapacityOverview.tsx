@@ -589,10 +589,7 @@ export default function CapacityOverview() {
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center h-[500px] w-full">
-        <AkLoader size="md" className="mb-4" />
-        <p className="text-fg-tertiary font-medium">Analyzing Capacity Metrics…</p>
-      </div>
+      <AkLoader size="md" label="Loading capacity…" className="min-h-[60vh] w-full" />
     );
   }
   if (error || !data) return <div className="text-destructive flex justify-center items-center h-64 font-bold">{error || "No data available"}</div>;
