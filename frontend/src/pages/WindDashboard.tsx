@@ -70,10 +70,7 @@ export default function WindDashboard() {
           </div>
 
           {loading && (
-            <div className="flex flex-col items-center justify-center h-64 bg-surface-1 rounded-xl border border-border-subtle">
-              <AkLoader size="md" className="mb-4" />
-              <p className="text-fg-secondary font-medium">Loading S-Curve Data...</p>
-            </div>
+            <AkLoader size="md" label="Loading S-curve…" className="min-h-[60vh] w-full" />
           )}
 
           {error && (

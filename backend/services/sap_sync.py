@@ -46,6 +46,7 @@ def sync_sap_from_local(db: Session, zsps_path: str | None = None,
         ingest_data(files={"zsps": paths["zsps"]}, max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         slr_rows = ingest_slr(file_path=paths["zsps"], max_drop_pct=max_drop_pct, allow_drop=allow_drop)
         co_note = _ingest_co_source()
+        co_note += _ingest_ariba(db)
         from routers.sap import _CACHE as sap_cache
         sap_cache.clear()
 
@@ -84,6 +85,22 @@ def _ingest_co_source() -> str:
         return f"; CO ingest failed ({str(e)[:120]}) - previous PO tables kept"
 
 
+def _ingest_ariba(db: Session) -> str:
+    """Reload the Ariba ZIBDSESREP inbound-delivery report (dispatch / GRN /
+    finance checklist) when an extract is present. Never fails the SAP sync:
+    a missing or bad file leaves the previous Ariba load in place."""
+    try:
+        from services.ariba_service import sync_ariba_inbound_deliveries
+        r = sync_ariba_inbound_deliveries(db)
+        return f"; Ariba IBD {r['loaded']} rows ({r['pos']} POs)"
+    except FileNotFoundError:
+        return "; Ariba extract not found - previous Ariba load kept"
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Ariba ingest failed: {e}")
+        return f"; Ariba ingest failed ({str(e)[:120]}) - previous load kept"
+
+
 def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop: bool = False) -> dict:
     """max_drop_pct / allow_drop: see services/sync_guard.py. If the bot's
     export narrows in scope again, this refuses the replace and logs a
@@ -114,7 +131,8 @@ def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop
         # Only the extracts the ingest consumes, plus the CO Commitment / Actual
         # line items (Commitment* / Actual*) the PO source is built from.
         from scripts.ingest_sap_co import CO_FILE_PATTERNS
-        patterns = list(SAP_FILE_PATTERNS.values()) + list(CO_FILE_PATTERNS.values())
+        from services.ariba_service import ARIBA_FILE_PATTERN
+        patterns = list(SAP_FILE_PATTERNS.values()) + list(CO_FILE_PATTERNS.values()) + [ARIBA_FILE_PATTERN]
         wanted = [f for f in files if f.get("download_url")
                   and any(p.match(f["name"]) for p in patterns)]
         if not any(SAP_FILE_PATTERNS["zsps"].match(f["name"]) for f in wanted):
@@ -132,6 +150,7 @@ def sync_sap_from_sharepoint(db: Session, max_drop_pct: float = 15.0, allow_drop
         # CO line items (planned replacement source): built alongside, never
         # allowed to fail the ZPSPS sync that everything on screen still reads.
         co_note = _ingest_co_source()
+        co_note += _ingest_ariba(db)
         # Prefix index, filter facets and insights were built on the old tables.
         from routers.sap import _CACHE as sap_cache
         sap_cache.clear()

@@ -30,8 +30,13 @@ SAP_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.p
 SAP_FILE_PATTERNS = {
     "zsps": re.compile(r"^ZPSPS007.*\.xlsx?$", re.I),
     "me2j": re.compile(r"^ME2J.*\.xlsx?$", re.I),
-    "mb52": re.compile(r"^MB52_Khavda_Live_Inventry.*\.xlsx?$", re.I),
-    "mb51": re.compile(r"^MB51_Khavda_Mat_Consumption.*\.xlsx?$", re.I),
+    # The bot's processed copies (MB52_Khavda_Live_Inventry / MB51_Khavda_...)
+    # and, since 2026-10-08, the raw SAP exports MB52.xlsx / MB51.xlsx. Both
+    # load the same way (headers are matched whatever their spelling); the
+    # newest file wins. Checked 2026-10-09: the raw files carry every column
+    # the ingest reads.
+    "mb52": re.compile(r"^MB52(_Khavda_Live_Inventry.*)?\.xlsx?$", re.I),
+    "mb51": re.compile(r"^MB51(_Khavda_Mat_Consumption.*)?\.xlsx?$", re.I),
 }
 
 # Everything the ingest reads from ME2J. The first line is what mt_poamount
@@ -346,6 +351,75 @@ def match_wbs_to_master(wbs_val, wbs_map):
     return None
 
 
+def _header_key(c) -> str:
+    """'WBS Element', 'WBS_Element' and 'Descr._of_Storage_Loc.' all match."""
+    return re.sub(r"[^a-z0-9]", "", str(c).lower())
+
+
+def ingest_mb52(db, path, wbs_map) -> int:
+    """Replace mt_inventory from an MB52 stock extract, in one transaction.
+
+    Headers are matched whatever their spelling, so the raw SAP export
+    (MB52.xlsx: "WBS Element") and the bot's processed copy
+    (MB52_Khavda_Live_Inventry: "WBS_Element") load the same way. Loads the
+    classification MB52 carries - material type and group, special stock,
+    plant name ("Name 1"), storage location description. MB52 is a stock
+    snapshot: it has no vendor, posting date, PO or company code, so those
+    stay empty rather than being guessed."""
+    df = pd.read_excel(path)
+    cols = {_header_key(c): c for c in df.columns}
+
+    def g(row, *names):
+        for n in names:
+            c = cols.get(_header_key(n))
+            if c is not None:
+                v = row.get(c)
+                if v is not None and not (isinstance(v, float) and pd.isna(v)):
+                    v = str(v).strip()
+                    if v and v.lower() not in ("nan", "none"):
+                        return v[:-2] if v.endswith(".0") and v[:-2].isdigit() else v
+        return None
+
+    rows = []
+    for _, row in df.iterrows():
+        mat_code = safe_sap_id(row.get(cols.get("material"), ""))
+        if not mat_code or mat_code.lower() == "nan" or "total" in mat_code.lower():
+            continue
+        wbs = g(row, "WBS Element")
+        if not wbs or not match_wbs_to_master(wbs, wbs_map):
+            continue
+        unrestricted = safe_float(g(row, "Unrestricted") or 0)
+        if unrestricted <= 0:
+            continue
+        desc = g(row, "Material Description") or ""
+        mw_mult = _extract_wattage_from_text(desc)
+        rows.append(models.MTInventory(
+            material_code=mat_code,
+            material_name=g(row, "Materail_Name", "Material_Name"),
+            plant_code=g(row, "Plant"),
+            plant_name=g(row, "Name 1"),
+            unrestricted_qty=unrestricted,
+            value_unrestricted=safe_float(g(row, "Value Unrestricted") or 0),
+            quantity_inv=unrestricted,
+            storage_location_mapping=g(row, "Storage Location"),
+            storage_location_desc=g(row, "Descr. of Storage Loc."),
+            wbs_element=wbs,
+            material_description=desc,
+            base_unit=g(row, "Base Unit of Measure"),
+            material_type=g(row, "Material Type"),
+            material_group=g(row, "Material Group"),
+            special_stock=g(row, "Special Stock"),
+            mw_multiplication_factor=mw_mult,
+            quantity_mw=(unrestricted * mw_mult) if mw_mult is not None else None,
+        ))
+    if not rows:
+        raise RuntimeError(f"{os.path.basename(path)} produced no inventory rows")
+    db.query(models.MTInventory).delete()
+    db.add_all(rows)
+    db.commit()
+    return len(rows)
+
+
 def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
     """files: optional {key: path} overriding the newest-file lookup, e.g.
     {'zsps': '.../ZPSPS0071.xlsx'} to load a specific extract.
@@ -383,7 +457,8 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
     # why a guard was added to the PO table specifically).
     print("Clearing old inventory/consumption data...")
     try:
-        db.query(models.MTInventory).delete()
+        # MTInventory is replaced inside ingest_mb52's own transaction, so a
+        # bad or missing MB52 leaves the previous stock in place.
         db.query(models.MTMaterialDocument).delete()
         db.commit()
     except Exception as e:
@@ -395,49 +470,11 @@ def ingest_data(files=None, max_drop_pct=15.0, allow_drop=False):
     mb52_path = pick("mb52", data_dir)
     if mb52_path and os.path.exists(mb52_path):
         try:
-            print(f"Processing {os.path.basename(mb52_path)}...")
-            df = pd.read_excel(mb52_path)
-            inventories = []
-            for _, row in df.iterrows():
-                mat_code = safe_sap_id(row.get('Material', ''))
-                # Skip Total rows and empty rows
-                if not mat_code or mat_code.lower() == 'nan' or 'total' in mat_code.lower():
-                    continue
-                    
-                wbs = str(row.get('WBS_Element', '')).strip()
-                if not wbs or wbs.lower() in ('nan', 'none'):
-                    continue
-                    
-                # --- Match WBS to SAP Master ---
-                master_info = match_wbs_to_master(wbs, wbs_map)
-                if not master_info:
-                    continue
-
-                    
-                unrestricted = safe_float(row.get('Unrestricted', 0))
-                if unrestricted > 0:
-                    mw_mult = _extract_wattage_from_text(str(row.get('Material_Description', '')))
-                    inv = models.MTInventory(
-                        material_code=mat_code,
-                        material_name=str(row.get('Materail_Name', '')),
-                        plant_code=str(row.get('Plant', '')),
-                        unrestricted_qty=unrestricted,
-                        value_unrestricted=safe_float(row.get('Value_Unrestricted', 0)),
-                        quantity_inv=unrestricted,
-                        storage_location_mapping=str(row.get('Storage_Location', '')),
-                        wbs_element=wbs,
-                        material_description=str(row.get('Material_Description', '')),
-                        base_unit=str(row.get('Base_Unit_of_Measure', '')),
-                        mw_multiplication_factor=mw_mult,
-                        quantity_mw=(unrestricted * mw_mult) if mw_mult is not None else None
-                    )
-                    inventories.append(inv)
-            db.add_all(inventories)
-            db.commit()
-            print(f"Inserted {len(inventories)} MB52 inventory records.")
+            n = ingest_mb52(db, mb52_path, wbs_map)
+            print(f"Inserted {n} MB52 inventory records.")
         except Exception as e:
             db.rollback()
-            print(f"Error processing MB52: {e}")
+            print(f"Error processing MB52 (previous inventory kept): {e}")
     else:
         print(f"File not found: {mb52_path}")
 

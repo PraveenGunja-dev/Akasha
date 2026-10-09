@@ -1,18 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Lock, Mail, X, ArrowRight, Eye, EyeOff, Loader2, AlertTriangle } from "lucide-react";
+import { Lock, Mail, X, ArrowRight, Eye, EyeOff, Loader2, AlertTriangle, User } from "lucide-react";
 import PresentationModal from "../components/ui/PresentationModal";
 import { useAuth } from "../context/AuthContext";
+import { toast } from "sonner";
 import { useTheme } from '../hooks/useTheme';
 
-const ROLE_ROUTES: Record<string, string> = {
-  executive: '/ceo-dashboard',
-  pmag: '/pmag',
-  projects: '/projects',
-  tc_ordering: '/tc-ordering',
-  tc_stores: '/tc-stores',
-};
 
 /* ═══════════════════════════════════════════════════════════════════════════
    STARFIELD — twinkling dots
@@ -76,8 +70,8 @@ export default function LandingPage() {
   // people here, and back to where they were going afterwards).
   const [showLogin, setShowLogin] = useState(location.pathname === '/login');
   const from = (location.state as { from?: string } | null)?.from;
-  const { isAuthenticated, user, login } = useAuth();
-  const [email, setEmail] = useState('');
+  const { isAuthenticated, user, login, homeFor } = useAuth();
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [loginError, setLoginError] = useState('');
@@ -92,9 +86,15 @@ export default function LandingPage() {
     e.preventDefault();
     setLoginError('');
     setBusy(true);
-    const r = await login(email.trim(), password);
+    const r = await login(username.trim(), password);
     setBusy(false);
-    if (!r.success) setLoginError(r.message);
+    if (!r.success) { setLoginError(r.message); return; }
+    if (r.user) {
+      const first = r.user.display_name.split(' ')[0];
+      const h = new Date().getHours();
+      const part = h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+      toast.success(`${part}, ${first}`, { description: 'Welcome back to Akasha.' });
+    }
   };
   const isDark = theme === "dark";
 
@@ -102,8 +102,11 @@ export default function LandingPage() {
   }, [isDark]);
 
   useEffect(() => {
-    if (isAuthenticated && user) navigate(from || ROLE_ROUTES[user.role] || '/ceo-dashboard', { replace: true });
-  }, [isAuthenticated, user, navigate, from]);
+    // Where the role leads: a pending password change first, then the page the
+    // user was heading to (if their role opens it), then their one dashboard,
+    // or the dashboard picker when they have several.
+    if (isAuthenticated && user) navigate(homeFor(user, from), { replace: true });
+  }, [isAuthenticated, user, navigate, from, homeFor]);
 
   return (
     <>
@@ -415,13 +418,13 @@ export default function LandingPage() {
                   <p className={`text-[12px] font-semibold uppercase tracking-[0.14em] ${isDark ? 'text-[#4aa3dd]' : 'text-[#0b74b1]'}`}>Welcome back</p>
                   <h2 id="signin-title" className="mt-2 text-[26px] font-semibold leading-tight tracking-tight">Sign in to your account</h2>
                   <p className={`mt-2 text-[14px] ${isDark ? 'text-white/55' : 'text-slate-500'}`}>
-                    Use your Adani work email and password.
+                    Use your Adani work username and password.
                   </p>
 
                   <form onSubmit={submitLogin} className="mt-8 space-y-5" noValidate>
                     {[
-                      { id: 'lp-email', label: 'Email', icon: Mail, type: 'email', value: email, set: setEmail,
-                        ph: 'name@adani.com', auto: 'username' },
+                      { id: 'lp-username', label: 'Username', icon: User, type: 'text', value: username, set: setUsername,
+                        ph: 'Enter your username', auto: 'username' },
                       { id: 'lp-password', label: 'Password', icon: Lock, type: showPw ? 'text' : 'password', value: password,
                         set: setPassword, ph: 'Enter your password', auto: 'current-password' },
                     ].map(({ id, label, icon: Icon, type, value, set, ph, auto }) => (
@@ -430,7 +433,7 @@ export default function LandingPage() {
                         <div className="relative">
                           <Icon className={`pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 ${isDark ? 'text-white/35' : 'text-slate-400'}`} />
                           <input id={id} type={type} value={value} onChange={(e) => set(e.target.value)} placeholder={ph}
-                            autoComplete={auto} autoFocus={id === 'lp-email'} required aria-invalid={!!loginError}
+                            autoComplete={auto} autoFocus={id === 'lp-username'} required aria-invalid={!!loginError}
                             className={`h-11 w-full rounded-xl border pl-10 text-[14px] transition-colors focus:outline-none focus:ring-2
                                         ${id === 'lp-password' ? 'pr-11' : 'pr-3.5'}
                                         ${isDark ? 'border-white/10 bg-white/[0.04] text-white placeholder:text-white/25 hover:border-white/20 focus:border-[#4aa3dd]/70 focus:ring-[#4aa3dd]/20'
@@ -455,7 +458,7 @@ export default function LandingPage() {
                       )}
                     </AnimatePresence>
 
-                    <button type="submit" disabled={busy || !email.trim() || !password}
+                    <button type="submit" disabled={busy || !username.trim() || !password}
                       className="mt-1 flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-[#0b74b1] to-[#75479c]
                                  text-[14px] font-semibold text-white transition-all hover:shadow-[0_6px_24px_rgba(117,71,156,0.35)]
                                  disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:shadow-none
@@ -466,7 +469,8 @@ export default function LandingPage() {
                   </form>
 
                   <p className={`mt-6 text-[12px] leading-relaxed ${isDark ? 'text-white/40' : 'text-slate-400'}`}>
-                    Access is managed by the Akasha team. Contact them if you need an account.
+                    Access is managed by the Akasha team. Contact them if you need an account or a password reset.
+                    Five wrong attempts lock the account for 15 minutes.
                   </p>
                 </motion.div>
               </div>

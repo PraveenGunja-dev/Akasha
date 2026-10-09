@@ -73,6 +73,7 @@ def _safe_parse_phase(projects_json):
     return "Unknown Phase"
 
 import re
+from services import portfolio as portfolio_svc
 def _extract_wbs_prefixes(m: models.ProjectMapping) -> list[str]:
     codes = []
     for val in [m.spv_plant_code, m.agel, m.age6l]:
@@ -104,16 +105,7 @@ def get_dashboard_summary(portfolio: Optional[str] = None, phase: Optional[str] 
             return entry["data"]
             
     query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        p_clean = portfolio.replace('+', ' ').strip().lower()
-        # Make filtering robust by splitting into words
-        parts = p_clean.split()
-        for part in parts:
-            query = query.filter(
-                (func.lower(models.ProjectMapping.cluster).contains(part)) |
-                (func.lower(models.ProjectMapping.category).contains(part)) |
-                (func.lower(models.ProjectMapping.project).contains(part))
-            )
+    query = portfolio_svc.filter_mappings(query, portfolio)
             
     if phase and phase != "ALL":
         is_comm = True if phase == "Commissioned" else False
@@ -673,11 +665,7 @@ def get_knowledge_graph(portfolio: Optional[str] = None, phase: Optional[str] = 
     })
     
     query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    query = portfolio_svc.filter_mappings(query, portfolio)
     
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":
@@ -760,7 +748,11 @@ def get_knowledge_graph(portfolio: Optional[str] = None, phase: Optional[str] = 
                 "start_date": str(p6.start_date) if p6.start_date else None,
                 "finish_date": str(p6.finish_date) if p6.finish_date else None,
                 "planned_finish": str(p6.scheduled_finish_date) if p6.scheduled_finish_date else None,
-                "variance_days": round(p6.finish_date_variance) if p6.finish_date_variance else 0,
+                # Calendar days, baseline finish minus current finish (negative =
+                # late). P6's finish_date_variance is in working HOURS (Bandha:
+                # -1048 h vs a 133-day slip), so it is not used as days.
+                "variance_days": ((p6.baseline_finish_date.date() - p6.finish_date.date()).days
+                                  if p6.baseline_finish_date and p6.finish_date else 0),
                 "duration_pct": progress,
                 "construction_pct": progress,
                 "schedule_pct": progress,
@@ -983,11 +975,7 @@ def get_capacity_overview(portfolio: Optional[str] = None, phase: Optional[str] 
 
     # Source 1: ProjectMapping for source of truth
     query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    query = portfolio_svc.filter_mappings(query, portfolio)
 
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":
@@ -1551,12 +1539,7 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
     from routers.sap import WBS_PREFIX
 
     query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        for part in portfolio.replace('+', ' ').strip().lower().split():
-            query = query.filter(
-                (func.lower(models.ProjectMapping.cluster).contains(part)) |
-                (func.lower(models.ProjectMapping.category).contains(part)) |
-                (func.lower(models.ProjectMapping.project).contains(part)))
+    query = portfolio_svc.filter_mappings(query, portfolio)
     if phase and phase != "ALL":
         query = query.filter(models.ProjectMapping.is_commissioned == (phase == "Commissioned"))
     # The mapping sync leaves duplicate project_ids (72 rows, 64 ids); keep one

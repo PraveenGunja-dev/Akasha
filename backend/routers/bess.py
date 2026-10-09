@@ -6,11 +6,14 @@ from live P6, SAP and Pulse data instead of the hand-maintained deck.
 
 Sourcing notes (verified against the database, 2026-09-22):
 
-* Progress is **units based**, not activity-count based.  Each BESS schedule
-  carries one Labor resource normalised to ~80,000,000 planned units = 100%,
-  and rolling that up by WBS branch reproduces the pack's 2 / 5 / 38 / 55
-  weightages exactly.  Counting completed activities instead reads the
-  construction bucket roughly twice as high and must not be used here.
+* Progress is **units based**, not activity-count based: the plan
+  baseline's Labor units ("BL Project Labor Units", user 2026-10-09).  Each
+  WBS bucket's share of the baseline's total Labor units is its weightage -
+  2 / 5 / 38 / 55; PSS-08(B)'s 2 / 5 / 37.8 / 35.0 on the four named WBS
+  branches matches the site's own table (09-Oct-26), and the fourth bucket's
+  other 20% is Commissioning Parts 1-3 and Contract Closure.  Counting
+  completed activities instead reads the construction bucket roughly twice
+  as high and must not be used here.
 * SAP scope sits under **two** WBS prefixes per project - supply (H-5X../H-51X9)
   and civil (H-63..).  The civil family carries the BOP contractors and is the
   only SAP scope PSS-12 has.
@@ -87,21 +90,36 @@ BESS_PROJECTS: Dict[str, Dict[str, Any]] = {
 TOTAL_NFA_CR = 16358.0
 TOTAL_DISPATCHABLE_MWH = sum(c["dispatchable_mwh"] for c in BESS_PROJECTS.values())
 
-# WBS branch code -> the CPAG pack's four weighted buckets.  Everything the map
-# does not name (Project Milestones, HOTO, Contract Closure, Pre-Construction)
-# belongs to the construction bucket - folding it in is what makes the weights
-# land on 2 / 5 / 38 / 55 rather than 2 / 5 / 38 / 47.
-BUCKETS = {
-    "2": "statutory", "3": "engineering", "4": "procurement",
-    "5": "construction", "6": "construction", "10": "construction",
-    "11": "construction", "12": "construction",
+# Top-level WBS name -> the CPAG pack's weighted buckets, matched on the name
+# because the codes differ by project (PSS-08(B)'s "12" is Pre-Construction,
+# PSS-11's is Commissioning Part-4).  Construction Works and the
+# "Pre-Commissioning & Commissioning Part-N" branches are separate rows so the
+# reader sees both (user, 2026-10-10).  Anything else - Contract Closure
+# (~4%), HOTO (~1%), Project Milestones, Pre-Construction - is in no bucket:
+# it stays in the baseline total, so the rows read 2 / 5 / 38 / 35 / 15 = 95%
+# on PSS-08(B), as in P6.
+BUCKET_WBS_NAMES = {
+    "statutory & other approvals": "statutory",
+    "engineering works": "engineering",
+    "procurement": "procurement",
+    "construction works": "construction",
 }
-BUCKET_ORDER = ["statutory", "engineering", "procurement", "construction"]
+
+
+def _bucket_of_wbs(name: Optional[str]) -> Optional[str]:
+    n = " ".join((name or "").split()).lower()
+    if n.startswith("pre-commissioning & commissioning"):
+        return "commissioning"
+    return BUCKET_WBS_NAMES.get(n)
+
+
+BUCKET_ORDER = ["statutory", "engineering", "procurement", "construction", "commissioning"]
 BUCKET_LABELS = {
     "statutory": "Statutory Approvals",
     "engineering": "Engineering",
     "procurement": "Ordering, Manufacturing & Supply",
-    "construction": "Construction, Electrical, Integration & Commissioning",
+    "construction": "Construction (Civil), Electrical & Integration",
+    "commissioning": "Pre-Commissioning & Commissioning",
 }
 
 # P6 package name -> SAP material_name, for joining the ordering plan to PO
@@ -171,6 +189,25 @@ def _wbs_roots(db: Session, poid: int) -> Dict[int, str]:
     return roots
 
 
+def _wbs_buckets(db: Session, poid: int) -> Dict[int, Optional[str]]:
+    """Map every WBS node to its CPAG bucket by its top-level branch's name
+    (None = in no bucket)."""
+    rows = db.execute(
+        text("select p6_object_id, parent_object_id, wbs_name "
+             "from p6_wbs_node where project_object_id = :o"),
+        {"o": poid},
+    ).fetchall()
+    by_id = {r[0]: r for r in rows}
+    out: Dict[int, Optional[str]] = {}
+    for node_id in by_id:
+        cur, seen = node_id, set()
+        while by_id[cur][1] in by_id and cur not in seen:
+            seen.add(cur)
+            cur = by_id[cur][1]
+        out[node_id] = _bucket_of_wbs(by_id[cur][2])
+    return out
+
+
 # -- Endpoints ---------------------------------------------------------------
 @router.get("/projects")
 def list_bess_projects(db: Session = Depends(get_db)) -> List[Dict[str, Any]]:
@@ -191,9 +228,8 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
 
     Declared before /{project_id}/cpag so "portfolio" is not read as a project
     id.  Progress is rolled up **weighted by dispatchable energy**, not by a
-    straight sum of weightage units: every schedule is normalised to the same
-    ~80,000,000 units, so summing them would give a 420 MW project the same
-    say as a 1,080 MW one.
+    straight sum of Labor units: each project's % is on its own baseline's
+    Labor total, and its unit pool reflects schedule build, not plant size.
     """
     projects: List[Dict[str, Any]] = []
     recv: Dict[str, float] = defaultdict(float)
@@ -238,6 +274,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
             "actualPct": round(actual, 2),
             "variancePct": round(actual - plan_to_date, 2),
             "buckets": prog["buckets"],
+            "scurveRemarks": _scurve_remarks(cfg, prog),
             "approvalsTotal": appr["total"], "approvalsDone": appr["completed"],
             "orderCr": comm["orderCr"], "deliveredCr": comm["deliveredCr"],
             "sapAvailable": bool(cfg["supply_wbs"]),
@@ -305,9 +342,9 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
             "containers": sum(p["containers"] for p in projects),
             "lastActualMonth": last_month,
             "declaredSource": "CPAG pack, 10-Sep-2026",
-            "progressBasis": "Weighted by dispatchable MWh. Each P6 schedule is "
-                             "normalised to the same unit pool, so an unweighted "
-                             "sum would over-count the smaller projects. Shown as a "
+            "progressBasis": "Weighted by dispatchable MWh. Each project's % is on "
+                             "its own baseline's Labor units, so summing units "
+                             "would not weight by plant size. Shown as a "
                              "portfolio summary only - each project keeps its own curve.",
         },
         # The pack's own project order (11, 12, 10B, 09, 05B, 08B), which is
@@ -755,32 +792,52 @@ def _find_res(res: Dict[str, Dict[str, Any]], name: str) -> Optional[Dict[str, A
     return None
 
 
+# The resource whose units weight CPAG progress: the plan baseline's Labor
+# units (user, 2026-10-09; Nonlabor before).
+WEIGHT_RESOURCE = "Labor"
+
+
+def _earned_units(db: Session, poid: int) -> Dict[str, Any]:
+    """activity code -> (wbs, live baseline start, live baseline finish,
+    actual start, actual finish, live planned units, actual units) on
+    WEIGHT_RESOURCE."""
+    rows = db.execute(
+        text("""select a.activity_id, a.wbs_object_id, a.baseline_start_date,
+                       a.baseline_finish_date, a.actual_start_date,
+                       a.actual_finish_date, sum(r.planned_units),
+                       sum(r.actual_units)
+                from p6_resource_assignment r
+                join p6_activity a on a.p6_object_id = r.activity_object_id
+                where r.project_object_id = :o and r.resource_type = :t
+                group by 1, 2, 3, 4, 5, 6"""),
+        {"o": poid, "t": WEIGHT_RESOURCE},
+    ).fetchall()
+    return {r[0]: r[1:] for r in rows}
+
+
 def _weightage_progress(db: Session, poid: int, activity_codes, data_date):
-    """Plan-to-date and actual % on P6's own weightage for a set of activities
-    - the same measure and plan baseline as the S-curve, so an element's
-    Progress column cannot disagree with the project curve."""
+    """Plan-to-date and earned % on the plan baseline's Labor units for a set
+    of activities - the same measure and plan baseline as the S-curve, so an
+    element's Progress column cannot disagree with the project curve."""
     from services.cpag_baseline import baseline_rows
     if not activity_codes:
         return None, None
     codes = set(activity_codes)
     as_of = data_date.strftime("%Y-%m") if data_date else "9999-99"
-    row = db.execute(
-        text("""select sum(r.planned_units), sum(r.actual_units)
-                from p6_resource_assignment r
-                join p6_activity a on a.p6_object_id = r.activity_object_id
-                where r.project_object_id = :o and r.resource_type = 'Labor'
-                  and a.activity_id = any(:c)"""),
-        {"o": poid, "c": list(codes)},
-    ).fetchone()
-    planned, actual = (_f(row[0]), _f(row[1])) if row else (0.0, 0.0)
+    live = _earned_units(db, poid)
     phased: Dict[str, float] = defaultdict(float)
-    for code, _n, units, start, finish in baseline_rows(db, poid, "Labor"):
+    bl_units: Dict[str, float] = defaultdict(float)
+    for code, _n, units, start, finish in baseline_rows(db, poid, WEIGHT_RESOURCE):
         if code in codes:
             _spread_monthly(phased, start, finish, _f(units))
-    total = sum(phased.values())
+            bl_units[code] += _f(units)
+    if not bl_units:   # plan baseline not synced: the live schedule's own units
+        bl_units = {c: _f(live[c][5]) for c in codes if c in live}
+    total = sum(bl_units.values())
     done = sum(v for m, v in phased.items() if m <= as_of)
-    plan_pct = min(100.0, round(done / total * 100, 2)) if total else None
-    act_pct = _pct(actual, planned)
+    earned = sum(_f(live[c][6]) for c in codes if c in live)
+    plan_pct = min(100.0, round(done / total * 100, 2)) if phased and total else None
+    act_pct = _pct(earned, total)
     return plan_pct, (min(100.0, act_pct) if act_pct is not None else None)
 
 
@@ -1257,7 +1314,8 @@ def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
     return {
         "meta": _meta(ctx),
         "progress": {"buckets": w["buckets"], "totalEarnedPct": w["totalEarnedPct"],
-                     "totalPlanPct": w["totalPlanPct"], "basis": w["basis"]},
+                     "totalPlanPct": w["totalPlanPct"], "basis": w["basis"],
+                     "remarks": _scurve_remarks(cfg, w)},
         "sCurve": curve,
         "procurement": _procurement(db, poid, cfg),
         "approvals": _approvals(db, poid, roots),
@@ -1272,6 +1330,17 @@ def get_cpag(project_id: str, db: Session = Depends(get_db)) -> Dict[str, Any]:
         "commercial": comm,
         "financial": _merge_financial([budget], comm["receiptSeries"]),
     }
+
+
+def _scurve_remarks(cfg, w: Dict[str, Any]) -> Dict[str, Any]:
+    """Variance remarks for the Physical Progress table, drafted from the
+    P6 facts in `w` (services.cpag_remarks).  The plan/actual are the FTM
+    point of the curve, as the table's Total row shows."""
+    from services.cpag_remarks import scurve_remarks
+    ftm = next((s for s in w["series"] if s["month"] == w["lastActualMonth"]), {})
+    plan = ftm.get("planCumPct") or w["totalPlanPct"]
+    actual = ftm.get("actualCumPct") or w["totalEarnedPct"]
+    return scurve_remarks(cfg["pss"], w["buckets"], plan, actual, w["dataDate"])
 
 
 def _meta(ctx) -> Dict[str, Any]:
@@ -1297,17 +1366,78 @@ def _meta(ctx) -> Dict[str, Any]:
     }
 
 
+def _elapsed(start, finish, at) -> float:
+    """Share of an activity's baseline duration elapsed at `at` (0-1)."""
+    if at is None or start is None or finish is None:
+        return 0.0
+    if at >= finish:
+        return 1.0
+    if at <= start or finish <= start:
+        return 0.0
+    return (at - start).total_seconds() / (finish - start).total_seconds()
+
+
+def _variance_drivers(db: Session, poid: int, bucket_of, bl_units, plan_td,
+                      plan_dd, bl_dates, live, plan_total, top: int = 3) -> Dict[str, Any]:
+    """Per bucket, the facts a variance remark is written from.
+
+    The table's plan runs to the end of the FTM month, actuals only to the
+    P6 data date, so part of a row's variance is work not yet due:
+    `afterDataDatePts`.  The activities named as behind are measured at the
+    data date - planned-to-date minus actual Labor units - so nothing is
+    called late before its baseline says it should have been done."""
+    pts = (lambda u: round(u / plan_total * 100, 2)) if plan_total else (lambda u: None)
+    gaps: Dict[str, List[tuple]] = defaultdict(list)
+    not_due: Dict[str, float] = defaultdict(float)
+    for code, units in bl_units.items():
+        b = bucket_of.get(code)
+        if b is None or not units:
+            continue
+        not_due[b] += max(0.0, plan_td.get(code, 0.0) - plan_dd.get(code, 0.0))
+        actual = _f(live[code][6]) if code in live else 0.0
+        gap = plan_dd.get(code, 0.0) - actual
+        if gap > 0:
+            gaps[b].append((gap, code, actual, units))
+    codes = [c for g in gaps.values() for _, c, _, _ in sorted(g, reverse=True)[:top]]
+    meta = {r[0]: r[1:] for r in db.execute(
+        text("""select activity_id, name, wbs_name, status
+                from p6_activity where project_object_id = :o
+                  and activity_id = any(:c)"""),
+        {"o": poid, "c": codes or [""]})}
+    out: Dict[str, Any] = {}
+    for b in set(gaps) | set(not_due):
+        g = sorted(gaps.get(b, []), reverse=True)
+        items = []
+        for gap, code, actual, units in g[:top]:
+            name, wbs, status = meta.get(code, (code, None, None))
+            start, finish = bl_dates.get(code, (None, None))
+            items.append({
+                "activity": name, "wbs": wbs, "code": code, "status": status,
+                "baselineStart": _iso(start.date() if start else None),
+                "baselineFinish": _iso(finish.date() if finish else None),
+                "plannedToDatePct": round(min(100.0, plan_dd[code] / units * 100), 1),
+                "actualPct": round(min(100.0, actual / units * 100), 1),
+                "gapPts": pts(gap),
+            })
+        out[b] = {"behindCount": len(g), "behindGapPts": pts(sum(x[0] for x in g)),
+                  "afterDataDatePts": pts(not_due.get(b, 0.0)), "top": items}
+    return out
+
+
 def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
     """The Physical Progress slide - its S-curve and its four-milestone table
     - from one set of monthly figures, so the table's FTM row is by
     construction the curve's value for that month.
 
-    Plan: the plan baseline's Labor weightage (B2 or B1 per project,
-    cpag_baseline.PLAN_BASELINE), each activity's units spread over its
-    planned duration - the method that
-    reproduces the pack's PSS-11 plan line to 0.1 point.  Actual: live P6
-    actual weightage units spread over each activity's actual start to actual
-    finish (or the data date while running).  FTM is the data date's month.
+    Weightage: each bucket's share of the plan baseline's total Labor units
+    (21-Sep-26 re-baseline, cpag_baseline.PLAN_BASELINE).  Work in no bucket
+    (Contract Closure, HOTO) stays in the total but off the curve and the
+    table, so both read 95% at completion, not 100 (user, 2026-10-10).  Plan: each
+    baseline activity's Labor units spread over its baseline dates.  Actual:
+    live P6 Actual Labor Units, spread over each activity's actual start to
+    actual finish (or the data date while running).  Plan and actual share
+    one denominator, the baseline's total Labor units - P6's Actual Labor
+    Units / BL Project Labor Units.  FTM is the data date's month.
     """
     from services.cpag_baseline import baseline_rows, baseline_name
 
@@ -1316,51 +1446,46 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
         {"o": poid}).scalar()
     as_of = data_date.strftime("%Y-%m") if data_date else None
 
-    live = db.execute(
-        text("""select a.activity_id, a.wbs_object_id, a.baseline_start_date,
-                       a.baseline_finish_date, a.actual_start_date,
-                       a.actual_finish_date, sum(r.planned_units),
-                       sum(r.actual_units)
-                from p6_resource_assignment r
-                join p6_activity a on a.p6_object_id = r.activity_object_id
-                where r.project_object_id = :o and r.resource_type = 'Labor'
-                group by 1, 2, 3, 4, 5, 6"""),
-        {"o": poid},
-    ).fetchall()
-    bl_of = _baseline_of(db, poid)
-    live = [(r[0], r[1], *bl_of(r[0], r[2], r[3]), *r[4:]) for r in live]
-    bucket_of = {r[0]: BUCKETS.get(roots.get(r[1], ""), "construction") for r in live}
+    live = _earned_units(db, poid)
+    wbs_bucket = _wbs_buckets(db, poid)
+    bucket_of = {c: wbs_bucket.get(r[0]) for c, r in live.items()}
+
+    bl = baseline_rows(db, poid, WEIGHT_RESOURCE)
+    if bl:
+        phasing = [(code, start, finish, _f(units))
+                   for code, _name, units, start, finish in bl]
+        plan_basis = baseline_name(db, poid)
+    else:   # plan baseline not synced: the live schedule's assigned baseline
+        phasing = [(code, r[1], r[2], _f(r[5])) for code, r in live.items()]
+        plan_basis = "P6 assigned baseline (Nov B1)"
 
     plan_m: Dict[str, float] = defaultdict(float)
     plan_b: Dict[str, Dict[str, float]] = defaultdict(lambda: defaultdict(float))
-    bl = baseline_rows(db, poid, "Labor")
-    if bl:
-        for code, _name, units, start, finish in bl:
-            acc: Dict[str, float] = defaultdict(float)
-            _spread_monthly(acc, start, finish, _f(units))
-            b = bucket_of.get(code, "construction")
-            for m, v in acc.items():
-                plan_m[m] += v
-                plan_b[b][m] += v
-        plan_total = sum(_f(r[2]) for r in bl)
-        plan_basis = baseline_name(db, poid)
-    else:
-        for code, _w, bs, bf, _as, _af, planned, _actual in live:
-            acc = defaultdict(float)
-            _spread_monthly(acc, bs, bf, _f(planned))
-            for m, v in acc.items():
-                plan_m[m] += v
-                plan_b[bucket_of[code]][m] += v
-        plan_total = sum(_f(r[6]) for r in live)
-        plan_basis = "P6 assigned baseline (B1)"
+    bl_units: Dict[str, float] = defaultdict(float)
+    plan_td: Dict[str, float] = defaultdict(float)      # per activity, to the FTM
+    plan_dd: Dict[str, float] = defaultdict(float)      # ... to the data date
+    bl_dates: Dict[str, Any] = {}
+    for code, start, finish, units in phasing:
+        acc: Dict[str, float] = defaultdict(float)
+        _spread_monthly(acc, start, finish, units)
+        bl_units[code] += units
+        plan_td[code] += sum(v for m, v in acc.items() if as_of and m <= as_of)
+        plan_dd[code] += units * _elapsed(start, finish, data_date)
+        bl_dates[code] = (start, finish)
+        b = bucket_of.get(code)
+        if b is None:
+            continue
+        for m, v in acc.items():
+            plan_m[m] += v
+            plan_b[b][m] += v
+    plan_total = sum(bl_units.values())
 
     act_m: Dict[str, float] = defaultdict(float)
     act_b: Dict[str, float] = defaultdict(float)
-    for code, _w, bs, _bf, as_, af, _planned, actual in live:
-        if _f(actual):
-            _spread_monthly(act_m, as_ or bs, af or data_date, _f(actual))
-            act_b[bucket_of[code]] += _f(actual)
-    live_total = sum(_f(r[6]) for r in live)
+    for code, r in live.items():
+        if _f(r[6]) and bucket_of[code] is not None:
+            _spread_monthly(act_m, r[3] or r[1], r[4] or data_date, _f(r[6]))
+            act_b[bucket_of[code]] += _f(r[6])
 
     months = sorted(m for m in set(plan_m) | set(act_m) if m)
     series, cp, ca = [], 0.0, 0.0
@@ -1372,33 +1497,41 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
             "month": m,
             "planMonthPct": _pct(plan_m[m], plan_total),
             "planCumPct": _pct(cp, plan_total),
-            "actualMonthPct": _pct(act_m[m], live_total) if reported else None,
-            "actualCumPct": _pct(ca, live_total) if reported else None,
+            "actualMonthPct": _pct(act_m[m], plan_total) if reported else None,
+            "actualCumPct": _pct(ca, plan_total) if reported else None,
         })
 
+    exact = {k: _pct(sum(plan_b[k].values()), plan_total) for k in BUCKET_ORDER}
+    drivers = _variance_drivers(db, poid, bucket_of, bl_units, plan_td, plan_dd,
+                                bl_dates, live, plan_total)
     buckets = []
     for key in BUCKET_ORDER:
         weight = sum(plan_b[key].values())
         to_date = sum(v for m, v in plan_b[key].items() if as_of and m <= as_of)
-        plan_pct, earned_pct = _pct(to_date, plan_total), _pct(act_b[key], live_total)
+        plan_pct, earned_pct = _pct(to_date, plan_total), _pct(act_b[key], plan_total)
         buckets.append({
             "key": key, "label": BUCKET_LABELS[key],
-            "weightPct": _pct(weight, plan_total),
+            # Whole percent, as the site states weightage (2 / 5 / 38 / 35 on
+            # PSS-08(B)); the unrounded share is kept for audit.
+            "weightPct": None if exact[key] is None else float(round(exact[key])),
+            "weightExactPct": exact[key],
             "planToDatePct": plan_pct, "earnedPct": earned_pct,
             "variancePct": (round(plan_pct - earned_pct, 2)
                             if plan_pct is not None and earned_pct is not None else None),
             "withinBucketPct": _pct(act_b[key], weight),
+            "drivers": drivers.get(key, {}),
         })
     total_plan = sum(b["planToDatePct"] or 0 for b in buckets)
     total_act = sum(b["earnedPct"] or 0 for b in buckets)
     return {
         "series": series, "lastActualMonth": as_of, "asOf": as_of,
+        "dataDate": _iso(data_date.date() if data_date else None),
         "planBasis": plan_basis,
         "buckets": buckets,
         "totalPlanPct": round(total_plan, 2), "totalEarnedPct": round(total_act, 2),
-        "basis": f"P6 weightage units. Plan: {plan_basis}, spread over each "
-                 f"activity's planned duration. Actual: P6 actual units to the "
-                 f"data date.",
+        "basis": f"P6 Labor units on {plan_basis}. Plan: BL Labor units over "
+                 f"baseline dates. Actual: P6 Actual Labor Units to the data "
+                 f"date. Both / BL Project Labor Units total.",
     }
 
 
@@ -1598,9 +1731,9 @@ def _approvals(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
 
 def _baseline_of(db: Session, poid: int):
     """(activity_code, live baseline start, live baseline finish) -> the
-    baseline dates CPAG uses: the project's plan baseline (B2 or B1, per
+    baseline dates CPAG uses: the project's plan baseline (21-Sep-26, per
     services.cpag_baseline.PLAN_BASELINE) once synced, else the live
-    schedule's own - the assigned B1."""
+    schedule's own - the assigned Nov B1."""
     from services.cpag_baseline import baseline_dates
     bl = baseline_dates(db, poid)
     if bl is None:
@@ -1649,12 +1782,12 @@ def _manpower(db: Session, poid: int, roots: Optional[Dict[int, str]] = None) ->
     given, the CPAG manpower basis (user, 2026-09-30).
 
     Plan is each activity's Labor units spread over its baseline dates on the
-    project's plan baseline - B2 for PSS-11/12/10(B), B1 for the rest
-    (cpag_baseline.PLAN_BASELINE, decided 2026-09-28, the same baseline every
+    project's plan baseline - the 21-Sep-26 re-baseline on all six
+    (cpag_baseline.PLAN_BASELINE, switched 2026-10-09, the same baseline every
     other CPAG slide uses). Caveat checked 2026-09-26: a re-baseline carries
     already-completed activities' dates at its own data date rather than
-    when they were originally planned, so on B2 projects the months before
-    the March re-baseline read lumpier against the pack's reference than B1
+    when they were originally planned, so the months before the re-baseline
+    data date read lumpier against the pack's reference than the Nov B1
     did.
 
     Actual is P6's posted actual labour hours (posted since the Sep-26 update),

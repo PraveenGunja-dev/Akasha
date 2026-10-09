@@ -47,11 +47,6 @@ export interface MonthPhase {
   next_ftc_date: string;
   /** The ordering window has already closed — this is a catch-up order. */
   overdue: boolean;
-  /** 'site': timed by when the structure will be ready (P6 speed);
-   *  'ftc': backward-scheduled from the FTC date. */
-  basis?: 'site' | 'ftc';
-  /** What an FTC-only plan would have used as the order date. */
-  ftc_order_date?: string;
   /** Vendor quota moved it out of its target month. */
   shifted: boolean;
 }
@@ -96,16 +91,9 @@ export interface ModuleProject {
   /** Measured MB52 stock on hand, for reconciling against the derived figure. */
   module_inventory_sap_mwp: number;
   under_transit_mwp: number;
-<<<<<<< Updated upstream
-=======
   /** Plan vs actual for the module supply chain, with Ariba as the proof of
    *  dispatch, receipt and finance handover. */
   procurement?: ModuleProcurement;
-  /** Site progress from P6 block activities; null when P6 has no block data. */
-  site?: SiteProductivity | null;
-  /** What the site's pace means for module ordering. */
-  ordering_signal?: OrderingSignal;
->>>>>>> Stashed changes
   balance_dispatch_mwp: number;
   completed_ftc_mwp: number;
   status: 'pending' | 'ordered' | 'in_progress' | 'delivered' | 'needs_ordering';
@@ -130,12 +118,6 @@ export interface ModuleProject {
    *  it — it marks a cell as overdue without changing the figure shown. */
   month_overdue_mwp?: Record<string, number>;
   planning_flags?: string[];
-  /** How the monthly plan was timed: by site speed, or by the FTC date. */
-  allocation_basis?: 'site' | 'ftc';
-  /** Plain explanation of the basis (or why the site could not set it). */
-  allocation_basis_note?: string;
-  /** MWp needed only after the forecast window at the site's speed. */
-  beyond_window_mwp?: number;
   /** MWp needing an immediate exception order, outside the monthly plan,
    *  because its module date already passed — authoritative from the
    *  planning engine, not re-derived from the date string on this side. */
@@ -157,8 +139,6 @@ export interface ModuleProject {
   is_tracked: boolean;
 }
 
-<<<<<<< Updated upstream
-=======
 /** One Ariba delivery event: a PO's consignment that left and landed on the
  *  same days. A different dispatch or receipt date is a separate event. */
 export interface AribaDeliveryEvent {
@@ -186,13 +166,6 @@ export interface AribaDeliveryEvent {
   /** This project's capacity share of the WBS the line is booked to (1 = sole). */
   share: number;
   lines: string[];
-  /** Ariba plant(s) of the lot, e.g. '51Y9'. */
-  plant: string;
-  /** How the lot was placed on this project: 'plant' (the plant is this
-   *  project's alone) or 'po' (plant shared; the PO line's WBS decided). */
-  basis: 'plant' | 'po' | null;
-  /** The rule spelled out, e.g. 'Plant 51Y9 shared - PO line WBS H-51YA-01-01'. */
-  match: string;
 }
 
 export interface ModuleProcurement {
@@ -217,19 +190,8 @@ export interface ModuleProcurement {
   checklist_due: number;
   median_transit_days: number | null;
   shared: boolean;
-  /** Module POs (from SAP) that do / do not appear in the Ariba extract. */
-  pos_in_ariba: string[];
-  pos_not_in_ariba: string[];
-  /** proven: Ariba deliveries found · not_in_ariba: SAP has module POs, Ariba
-   *  has none of them · no_po: no module PO mapped. */
-  ariba_state: 'proven' | 'not_in_ariba' | 'no_po';
-  plants: string[];
-  /** Received MWp placed by plant vs by PO line WBS (plant shared). */
-  matched_by_plant_mwp: number;
-  matched_by_po_mwp: number;
 }
 
->>>>>>> Stashed changes
 export interface ModuleTotals {
   total_mwac: number;
   total_mwp: number;
@@ -239,6 +201,8 @@ export interface ModuleTotals {
   erection_mwp: number;
   inventory_mwp: number;
   under_transit_mwp: number;
+  ariba_received_mwp: number;
+  awaiting_grn_mwp: number;
   balance_dispatch_mwp: number;
   completed_ftc_mwp: number;
 }
@@ -284,88 +248,4 @@ export interface ModuleDeliveriesSummary {
     forecast_months: string[];
     executive_takeaways: string[];
   };
-}
-
-/** One P6 block activity type (e.g. "MMS Erection - Purlin") summed over the
- *  project's blocks, with the site norm for its MMS type. */
-export interface SiteActivity {
-  key: string;
-  /** Norm sheet code, e.g. "06". */
-  code: string;
-  label: string;
-  area: 'piling' | 'tracker' | 'module';
-  uom: string;
-  blocks: number;
-  blocks_done: number;
-  planned: number;
-  done: number;
-  pct: number;
-  /** What the P6 baseline expected done by the data date, and the gap (points). */
-  plan_pct: number | null;
-  behind_pts: number | null;
-  /** Average since the first actual start, to the P6 data date. */
-  pace_per_day: number;
-  pace_days: number | null;
-  /** To finish by the final pending FTC. */
-  required_per_day: number | null;
-  days_to_finish: number | null;
-  norm_units_per_manday: number | null;
-  norm_mandays_per_mwac: number | null;
-  mandays_left: number | null;
-  manpower_needed_per_day: number | null;
-}
-
-export interface SiteArea {
-  label: string;
-  /** Weighted by the norm effort weights. */
-  pct: number;
-  /** What the P6 baseline expected done by the data date, and the gap (points). */
-  plan_pct: number | null;
-  behind_pts: number | null;
-  /** When P6's current schedule finishes this stage, and how late the
-   *  site's speed runs against it (days; estimate). */
-  p6_finish: string | null;
-  late_days: number | null;
-  blocks: number;
-  blocks_done: number;
-  done_mwdc: number;
-  pace_mwdc_per_day: number;
-  pace_days: number | null;
-  required_mwdc_per_day: number | null;
-  /** At the average pace. Inference. */
-  predicted_finish: string | null;
-  mandays_left: number | null;
-  manpower_needed_per_day: number | null;
-}
-
-export interface SiteProductivity {
-  data_date: string;
-  data_age_days: number;
-  mms_kind: 'HSAT' | 'FT' | null;
-  mms_source: string | null;
-  final_ftc: string | null;
-  days_to_ftc: number | null;
-  blocks: number;
-  module_scope_mwdc: number;
-  /** Blocks with the tracker complete (purlin done) whose modules are not yet erected. */
-  front_ready_mwdc: number;
-  /** P6 FTC moved by how late the slowest moving stage runs. Estimate. */
-  ftc_forecast: string | null;
-  ftc_delay_days: number | null;
-  ftc_driver: string | null;
-  /** Set instead of a date when the speed is too low to forecast. */
-  ftc_note: string | null;
-  areas: Partial<Record<'piling' | 'tracker' | 'module', SiteArea>>;
-  activities: SiteActivity[];
-}
-
-export type OrderingState = 'modules_short' | 'order_now' | 'stock_building' | 'records_conflict'
-  | 'complete' | 'not_started' | 'piling_only' | 'on_track' | 'no_progress';
-
-export interface OrderingSignal {
-  state: OrderingState;
-  text: string;
-  detail: string;
-  /** Plain next step for the user. */
-  action?: string;
 }

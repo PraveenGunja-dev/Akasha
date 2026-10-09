@@ -728,21 +728,51 @@ def fill_scurve(slide, p, d) -> None:
     t = tables(slide)[0]
     buckets = p.get("buckets") or []
     man = _manual(d, f"scurve.{pss_key(p['pss'])}") or {}
-    # Remarks are the reviewer's own commentary on the variance - manual
-    # entry only, blank until someone writes one.
+    # A reviewer's own remark wins; otherwise the remark drafted from the P6
+    # variance facts (routers.bess._scurve_remarks).
     remarks = man.get("remarks") or []
-    for i, b in enumerate(buckets[:4]):
+    auto = p.get("scurveRemarks") or {}
+    auto_rows = auto.get("rows") or []
+
+    # The template has four body rows (2-5) and Total at 6; clone the last
+    # body row for each extra bucket (Construction and Commissioning are
+    # separate rows), all at the template's shortest body-row height.
+    trs = t.table._tbl.findall(qn("a:tr"))
+    body_h = min(int(tr.get("h")) for tr in trs[2:6] if tr.get("h"))
+    for _ in range(len(buckets) - 4):
+        trs[5].addnext(copy.deepcopy(trs[5]))
+    body = t.table._tbl.findall(qn("a:tr"))[2:2 + len(buckets)]
+    first_pr = body[0].find(qn("a:tc")).find(qn("a:tcPr"))
+    for tr in body:
+        tr.set("h", str(body_h))
+        # the template's last row pads its label differently; align to row 1
+        pr = tr.find(qn("a:tc")).find(qn("a:tcPr"))
+        if first_pr is not None and pr is not None:
+            for k in ("marL", "marR", "anchor"):
+                if k in first_pr.attrib:
+                    pr.set(k, first_pr.get(k))
+                elif k in pr.attrib:
+                    del pr.attrib[k]
+    total_row = 2 + len(buckets)
+
+    def remark(i: int, fallback: str) -> str:
+        return remarks[i] if i < len(remarks) and remarks[i] else fallback
+
+    for i, b in enumerate(buckets):
         w, pp, aa = b.get("weightPct") or 0, b.get("planToDatePct") or 0, b.get("earnedPct") or 0
-        rem = remarks[i] if i < len(remarks) and remarks[i] else ""
-        set_row(t, 2 + i, [_p(w), _p(pp), _p(aa), _p(pp - aa), rem], 1)
+        rem = remark(i, auto_rows[i] if i < len(auto_rows) else "")
+        set_row(t, 2 + i, [b["label"], _p(w), _p(pp), _p(aa), _p(pp - aa), rem])
     # The Total row is the graph's own FTM point, so the table and the curve
     # above it cannot disagree by a rounding step.
     series = p.get("sCurve") or []
     ftm = next((s for s in series if s["month"] == p.get("lastActualMonth")), None)
     pl = (ftm or {}).get("planCumPct") or sum(b.get("planToDatePct") or 0 for b in buckets)
     ac = (ftm or {}).get("actualCumPct") or sum(b.get("earnedPct") or 0 for b in buckets)
-    rem = remarks[4] if len(remarks) > 4 and remarks[4] else ""
-    set_row(t, 6, [_p(100), _p(pl), _p(ac), _p(pl - ac), rem], 1)
+    rem = remark(len(buckets), auto.get("total") or "")
+    # The rows' exact total, rounded: ~95%, as Contract Closure and HOTO sit
+    # in no bucket. May differ by 1 from the sum of the rounded rows.
+    wt = round(sum(b.get("weightExactPct") or 0 for b in buckets))
+    set_row(t, total_row, [_p(wt), _p(pl), _p(ac), _p(pl - ac), rem], 1)
 
     pics = pictures(slide)
     if not series or not pics:
@@ -2010,6 +2040,7 @@ def _project_from_single(d: Dict[str, Any]) -> Dict[str, Any]:
         "dispatchableMwh": decl["dispatchableMwh"], "containers": decl["containers"],
         "batteryOem": decl["batteryOem"],
         "buckets": d["progress"]["buckets"], "sCurve": d["sCurve"]["series"],
+        "scurveRemarks": d["progress"].get("remarks"),
         "lastActualMonth": d["sCurve"].get("lastActualMonth"),
         "packages": d["procurement"]["packages"],
         "servicePackages": d["procurement"].get("servicePackages") or [],

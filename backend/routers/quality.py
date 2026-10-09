@@ -11,6 +11,7 @@ import logging
 
 from database import get_db
 import models
+from services import portfolio as portfolio_svc
 
 router = APIRouter(prefix="/api/quality")
 logger = logging.getLogger(__name__)
@@ -24,8 +25,7 @@ def get_quality_overview(
 ):
     """Portfolio-wide quality KPIs for the Quality Command Center."""
     q = db.query(models.PulseNC)
-    if portfolio and portfolio.lower() != "all portfolios":
-        q = q.filter(models.PulseNC.cluster_name == portfolio)
+    q = portfolio_svc.filter_pulse(q, models.PulseNC, portfolio)
 
     all_ncs = q.all()
     total = len(all_ncs)
@@ -36,9 +36,8 @@ def get_quality_overview(
     rfi_status_q = db.query(models.PulseRFI.status, func.count(models.PulseRFI.id))
     rfi_handler_q = db.query(models.PulseRFI.current_handler, func.count(models.PulseRFI.id)) \
         .filter(models.PulseRFI.status != "completed")
-    if portfolio and portfolio.lower() != "all portfolios":
-        rfi_status_q = rfi_status_q.filter(models.PulseRFI.cluster_name == portfolio)
-        rfi_handler_q = rfi_handler_q.filter(models.PulseRFI.cluster_name == portfolio)
+    rfi_status_q = portfolio_svc.filter_pulse(rfi_status_q, models.PulseRFI, portfolio)
+    rfi_handler_q = portfolio_svc.filter_pulse(rfi_handler_q, models.PulseRFI, portfolio)
 
     rfi_by_status = {
         (s or "unknown"): c
@@ -199,9 +198,9 @@ def get_quality_overview(
 
 
 @router.get("/contractors")
-def get_contractor_scorecard(db: Session = Depends(get_db)):
+def get_contractor_scorecard(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """Contractor quality scorecard — NCs, critical ratio, debits, avg resolution."""
-    all_ncs = db.query(models.PulseNC).all()
+    all_ncs = portfolio_svc.filter_pulse(db.query(models.PulseNC), models.PulseNC, portfolio).all()
 
     vendors = {}
     for nc in all_ncs:
@@ -271,7 +270,7 @@ def get_contractor_scorecard(db: Session = Depends(get_db)):
 
 
 @router.get("/by-project")
-def get_project_scorecard(db: Session = Depends(get_db)):
+def get_project_scorecard(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """Quality rolled up per PROJECT, named the way the rest of the platform
     names projects.
 
@@ -286,7 +285,7 @@ def get_project_scorecard(db: Session = Depends(get_db)):
     apart from "this project is not connected to Pulse" — which are otherwise
     the same empty row.
     """
-    mappings = db.query(models.ProjectMapping).all()
+    mappings = portfolio_svc.filter_mappings(db.query(models.ProjectMapping), portfolio).all()
 
     # Pulse identifier -> canonical project. UUID first; project name only as a
     # fallback, for mappings whose UUID has not been filled in yet.
@@ -336,7 +335,8 @@ def get_project_scorecard(db: Session = Depends(get_db)):
     orphans = {}
     shared = {}
 
-    for nc in db.query(models.PulseNC).all():
+    # Filtered too, or another portfolio's NCs would surface as "unmatched".
+    for nc in portfolio_svc.filter_pulse(db.query(models.PulseNC), models.PulseNC, portfolio).all():
         # Claimed by several projects: the NC belongs to the programme, not to
         # any one project, so it is reported separately instead of being
         # silently assigned to whichever mapping was iterated last.
@@ -604,6 +604,7 @@ def get_nc_list(
     status: Optional[str] = None,
     category: Optional[str] = None,
     cluster: Optional[str] = None,
+    portfolio: Optional[str] = None,
     project: Optional[str] = None,
     package: Optional[str] = None,
     page: int = Query(1, ge=1),
@@ -611,7 +612,7 @@ def get_nc_list(
     db: Session = Depends(get_db)
 ):
     """Paginated NC list with filters."""
-    q = db.query(models.PulseNC)
+    q = portfolio_svc.filter_pulse(db.query(models.PulseNC), models.PulseNC, portfolio)
     if status:
         q = q.filter(models.PulseNC.status == status)
     if category:
@@ -662,9 +663,9 @@ def get_nc_list(
 
 
 @router.get("/trends")
-def get_quality_trends(db: Session = Depends(get_db)):
+def get_quality_trends(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """Monthly NC creation and closure trends."""
-    all_ncs = db.query(models.PulseNC).all()
+    all_ncs = portfolio_svc.filter_pulse(db.query(models.PulseNC), models.PulseNC, portfolio).all()
 
     monthly_created = {}
     monthly_closed = {}

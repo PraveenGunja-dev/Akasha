@@ -245,6 +245,64 @@ def zsps_kept_prefixes(db) -> set:
     return {p for p in bess if p not in in_co}
 
 
+def _me2j_enrichment() -> dict:
+    """PO-line facts the CO extracts lack, from the newest ME2J: company code,
+    plant, storage location, buyer, vendor code and the deletion indicator.
+
+    Keyed three ways, most specific first: (PO, WBS, material), (PO, WBS), PO.
+    A value is offered only when every ME2J line under that key agrees, so a PO
+    that delivers to two plants never gets one of them guessed. ME2J repeats
+    two header names; the PO line is the first `Item`, and the deletion flag
+    (L = deleted, S = blocked) is in whichever `Deletion Indicator` is filled."""
+    from scripts.ingest_sap_data import find_sap_file
+    path = find_sap_file("me2j", SAP_DATA_DIR)
+    if not path:
+        return {}
+    head = list(pd.read_excel(path, nrows=0).columns)
+    wanted = {"Purchasing Document", "WBS Element", "Material", "Company Code", "Plant",
+              "Storage Location", "Buyer Name", "Vendor/supplying plant"}
+    idx = [i for i, c in enumerate(head) if str(c).split(".")[0] in wanted | {"Deletion Indicator"}]
+    df = pd.read_excel(path, usecols=idx, dtype=str)
+    dels = [c for c in df.columns if c.startswith("Deletion Indicator")]
+    df["_del"] = df[dels].bfill(axis=1).iloc[:, 0] if dels else None
+    # Plain identifiers, so itertuples keeps the names (it renames any column
+    # with a space or "/" to a positional _N).
+    df = df.rename(columns={c: str(c).split(".")[0].replace(" ", "_").replace("/", "_")
+                            for c in df.columns if not str(c).startswith("Deletion Indicator")})
+    df = df.loc[:, ~df.columns.duplicated()]
+    clean = lambda v: (str(v).strip() if v is not None and str(v).strip().lower() not in ("", "nan", "none") else None)
+    def code(v):
+        v = clean(v)
+        return v[:-2] if v and v.endswith(".0") else v
+    fields = {}
+    for r in df.itertuples(index=False):
+        row = r._asdict()
+        po = code(row.get("Purchasing_Document"))
+        if not po:
+            continue
+        vendor = clean(row.get("Vendor_supplying_plant"))
+        facts = {
+            "company_code": code(row.get("Company_Code")),
+            "plant_code": code(row.get("Plant")),
+            "storage_location": clean(row.get("Storage_Location")),
+            "buyer_name": clean(row.get("Buyer_Name")),
+            "vendor_code": (vendor.split()[0] if vendor and vendor.split()[0].isdigit() else None),
+            "deletion_indicator": clean(row.get("_del")),
+        }
+        wbs, mat = clean(row.get("WBS_Element")), code(row.get("Material"))
+        for key in ((po, wbs, mat), (po, wbs), (po,)):
+            bucket = fields.setdefault(key, {})
+            for f, v in facts.items():
+                bucket.setdefault(f, set()).add(v)
+    out = {}
+    for key, bucket in fields.items():
+        out[key] = {f: next(iter(vs)) for f, vs in bucket.items() if len(vs) == 1 and None not in vs}
+        # Deleted only when every line under the key is deleted.
+        if bucket.get("deletion_indicator") and bucket["deletion_indicator"] != {"L"}:
+            out[key].pop("deletion_indicator", None)
+    return out
+
+
 def build_po_tables() -> dict:
     """Rebuild mt_poamount and mt_slr_data - the two tables every PO / SLR
     figure in the app reads (dashboards, financials, CPAG, /api/v1/sap, /slr)
@@ -303,6 +361,17 @@ def build_po_tables() -> dict:
                 upload_time=now,
             ))
 
+        # Fill what the CO lines lack from ME2J; never overwrite a CO value.
+        enrich = _me2j_enrichment()
+        filled = 0
+        for r in po_rows:
+            po, wbs, mat = r["purchasing_document"], r["wbs_element"], r["material_code"]
+            for key in ((po, wbs, mat), (po, wbs), (po,)):
+                for f, v in enrich.get(key, {}).items():
+                    if not r.get(f):
+                        r[f] = v
+                        filled += 1
+
         slr = db.execute(text("""
             select po_document, master_prefix,
                    case when kind = 'commitment' and ref_category = 'PReq' then 'PReq' else 'POrd' end t,
@@ -333,6 +402,15 @@ def build_po_tables() -> dict:
             db.bulk_insert_mappings(models.MTPOAmount, po_rows[i:i + 5000])
         for i in range(0, len(slr_rows), 5000):
             db.bulk_insert_mappings(models.MTSLRData, slr_rows[i:i + 5000])
+        # The rows kept from ZPSPS (BESS WBS) get the same ME2J facts, also
+        # only where empty - descriptive fields only, never quantities/values.
+        for row in db.query(models.MTPOAmount).filter(
+                (models.MTPOAmount.source.is_(None)) | (models.MTPOAmount.source != "co")).all():
+            po = (row.purchasing_document or "").strip()
+            for key in ((po, row.wbs_element, row.material_code), (po, row.wbs_element), (po,)):
+                for f, v in enrich.get(key, {}).items():
+                    if not getattr(row, f, None):
+                        setattr(row, f, v)
         # E-invoice PO -> WBS lookup: add the CO POs it does not know yet
         # (ME2J already filled it; existing entries are left as they are).
         known = {r[0] for r in db.execute(text("select purchasing_document from mt_einvoice_po_lookup"))}

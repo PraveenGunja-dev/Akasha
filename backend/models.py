@@ -13,21 +13,95 @@ class AkashaUser(Base):
     username = Column(String, unique=True, index=True, nullable=False)
     password_hash = Column(String, nullable=False)
     display_name = Column(String, nullable=False)
-    role = Column(String, nullable=False, index=True)  # executive, pmag, projects, tc_ordering, tc_stores
+    role = Column(String, nullable=False, index=True)  # akasha_role.key
     email = Column(String, nullable=True)
     is_active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    # Security state (services/security.py). Columns added to an existing
+    # table arrive NULL, so every reader treats NULL as the default.
+    must_change_password = Column(Boolean, default=False)
+    password_changed_at = Column(DateTime, nullable=True)
+    failed_login_count = Column(Integer, default=0)
+    locked_until = Column(DateTime, nullable=True)
+    last_login_at = Column(DateTime, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+    created_by = Column(Integer, nullable=True)
+    # The portfolios (project_mapping clusters, e.g. ["Solar Khavda", "Wind"])
+    # whose projects this user may see. NULL or empty = every portfolio.
+    # A superadmin always sees every portfolio. services/portfolio.py.
+    portfolios = Column(JSON, nullable=True)
+    department = Column(String, nullable=True, index=True)   # e.g. "PMAG", "Projects - Solar", "TC Stores"
 
 
 class AkashaSession(Base):
-    """A signed-in session: the bearer token the browser holds, so /auth/me can
-    confirm it and sign-out can end it (routers/auth.py)."""
+    """A signed-in session. `token` holds the SHA-256 of the cookie value,
+    never the value itself, so a database read cannot be replayed as a login."""
     __tablename__ = "akasha_session"
 
     token = Column(String, primary_key=True)
     user_id = Column(Integer, index=True, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     expires_at = Column(DateTime, nullable=False)
+    last_seen_at = Column(DateTime, nullable=True)
+    ip = Column(String, nullable=True)
+    user_agent = Column(String, nullable=True)
+    # The screen the user last had open (sent by the app with each call), for
+    # the admin console's "Online now".
+    last_view = Column(String, nullable=True)
+
+
+class AkashaApiKey(Base):
+    """A key for a system (not a person) to read /api/v1. Only the SHA-256 of
+    the key is stored; the key itself is shown once, when created. Read-only,
+    optionally limited to portfolios, revocable, and every use is recorded."""
+    __tablename__ = "akasha_api_key"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)              # who uses it, e.g. "Analytics team"
+    prefix = Column(String, nullable=False, index=True)  # first characters, to recognise a key
+    key_hash = Column(String, nullable=False, unique=True)
+    portfolios = Column(JSON, nullable=True)           # NULL / [] = every portfolio
+    created_by = Column(Integer, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    expires_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
+    last_used_at = Column(DateTime, nullable=True)
+    use_count = Column(Integer, default=0)
+
+
+class AkashaRole(Base):
+    """A role and the permissions it grants (services/access.py holds the
+    permission catalogue). Editable by a superadmin; seeded once on start-up."""
+    __tablename__ = "akasha_role"
+
+    key = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    description = Column(String, nullable=True)
+    permissions = Column(JSON, nullable=False, default=list)
+    # System roles cannot be deleted; superadmin's permissions cannot be edited.
+    is_system = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class AkashaAuditLog(Base):
+    """Who did what to accounts and access: sign-ins, failures, lockouts,
+    user and role changes. Append-only."""
+    __tablename__ = "akasha_audit_log"
+
+    id = Column(Integer, primary_key=True, index=True)
+    at = Column(DateTime, default=datetime.utcnow, index=True)
+    actor_id = Column(Integer, nullable=True, index=True)
+    actor_username = Column(String, nullable=True)
+    action = Column(String, nullable=False, index=True)
+    target = Column(String, nullable=True)
+    detail = Column(JSON, nullable=True)
+    ip = Column(String, nullable=True)
+    # info / warning / critical. Warning and critical entries are security
+    # alerts until a superadmin acknowledges them.
+    severity = Column(String, nullable=True, index=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+    acknowledged_by = Column(String, nullable=True)
 
 
 # ==========================================
@@ -277,7 +351,8 @@ class MTInventory(Base):
     material_description = Column(String, nullable=True)
     value_unrestricted = Column(Float, nullable=True)
     plant_name = Column(String, nullable=True)
-    
+    storage_location_desc = Column(String, nullable=True)   # MB52 "Descr. of Storage Loc."
+
     # New columns from material logic update
     material_name = Column(String, nullable=True)
     unrestricted_qty = Column(Float, nullable=True)
@@ -1101,8 +1176,8 @@ class CPAGManpowerSnapshot(Base):
 
 class CPAGBaselineAssignment(Base):
     """One resource assignment of the P6 baseline a CPAG project is planned
-    against (services.cpag_baseline.PLAN_BASELINE - B2 or B1 per project).
-    The live schedule only carries the assigned (B1) baseline's dates."""
+    against (services.cpag_baseline.PLAN_BASELINE - the 21-Sep-26 re-baseline).
+    The live schedule only carries the assigned (Nov B1) baseline's dates."""
     __tablename__ = "cpag_baseline_assignment"
 
     id = Column(Integer, primary_key=True, index=True)

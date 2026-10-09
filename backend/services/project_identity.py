@@ -34,6 +34,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 import models
+from services import portfolio as portfolio_svc
 
 SOURCE_SYSTEMS = ("p6", "sap", "tc", "pulse")
 
@@ -68,6 +69,9 @@ class ProjectIdentity:
     lta_date: Optional[str] = None
     manual_scod: Optional[str] = None
     manual_scod_is_lta: Optional[bool] = None
+    # Transmission readiness from the TC tracker: foundation / erection /
+    # stringing %, lines charged (project_mapping.tc_progress, set by the TC sync).
+    tc_progress: Optional[dict] = None
 
     # ── SAP / WBS keys from the master ──
     spv_plant_code: Optional[str] = None
@@ -236,7 +240,9 @@ def _build(db: Session, m: models.ProjectMapping) -> ProjectIdentity:
         project_id=_clean(m.project_id),
         mapping_id=m.id,
         name=_clean(m.project_name_from_p6) or _clean(m.project) or _clean(m.project_id),
-        portfolio=m.cluster,
+        # Same rule as every dashboard filter: a Wind project left without a
+        # cluster takes it from its category (services/portfolio.py).
+        portfolio=portfolio_svc.mapping_cluster(m),
         is_commissioned=bool(m.is_commissioned),
         capacity_mwac=m.capacity_mwac,
         sap_plant_code=m.spv_plant_code,
@@ -260,6 +266,7 @@ def _build(db: Session, m: models.ProjectMapping) -> ProjectIdentity:
         agel_wbs=_text(m.agel),
         age6l_wbs=_text(m.age6l),
         module_wbs=_text(m.module_wbs),
+        tc_progress=m.tc_progress if isinstance(m.tc_progress, dict) and m.tc_progress else None,
     )
 
     p6 = (
@@ -318,8 +325,7 @@ def resolve_all(db: Session, portfolio: str = None, phase: str = None) -> list[P
     """
     query = db.query(models.ProjectMapping)
 
-    if portfolio and portfolio.lower() != "all portfolios":
-        query = query.filter(models.ProjectMapping.cluster == portfolio)
+    query = portfolio_svc.filter_mappings(query, portfolio)
 
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":
