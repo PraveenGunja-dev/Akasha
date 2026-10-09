@@ -45,8 +45,8 @@ SOURCES = [
         "Plan: the 21-Sep-26 P6 re-baseline on all six projects - each activity's BL Labor units spread over its baseline dates. Every baseline date in this pack is from the same baseline.",
         "Actual: P6 Actual Labor Units up to the P6 data date, spread over each activity's actual dates, / the same BL total.",
         "FTM = the month of the P6 data date. The table's Total row is the graph's value for that month.",
-        "Wtg. = each area's share of the schedule. Variance = Plan - Actual.",
-        "Remarks are manual entry - blank until the reviewer writes one.",
+        "Wtg. = each area's share of BL Labor units, by top-level P6 WBS: Statutory & Other Approvals, Engineering Works, Procurement, Construction Works, and Pre-Commissioning & Commissioning (all parts). Contract Closure and HOTO (~5%) are in no row, so Total reads ~95%. Variance = Plan - Actual.",
+        "Remarks: drafted from P6 by AI (Azure OpenAI) from the row's plan, actual, the part of the gap planned after the data date (Plan runs to month end, Actual to the data date) and the activities most behind at the data date. Every number must match P6 or a plain data sentence is used instead. P6 records no cause of delay, so the remark says where the gap is, not why - a reviewer's own remark replaces it.",
     ]),
     ("engineering progress", "", [
         "The project team's Master Document List (MDL Excel), uploaded here - no copy is kept beyond the most recent upload, so re-uploading a newer MDL is how this page refreshes.",
