@@ -10,7 +10,7 @@ from database import engine
 
 # Import Routers
 from routers import admin as admin_router
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations, module_deliveries, bess, wind, solar
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations, module_deliveries, bess, wind, solar, forecast
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
@@ -109,6 +109,7 @@ app.include_router(module_deliveries.router)
 app.include_router(bess.router)
 app.include_router(wind.router)
 app.include_router(solar.router)
+app.include_router(forecast.router)
 
 # Background sync scheduler — feeds refresh themselves on their own interval.
 # Starts once per worker process; AKASHA_SCHEDULER=0 disables it.

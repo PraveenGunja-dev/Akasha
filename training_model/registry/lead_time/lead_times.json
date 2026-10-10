@@ -1,0 +1,80 @@
+{
+  "generated_at": "2026-10-10T03:13:08",
+  "call_off_threshold_days": 180,
+  "by_origin": {
+    "import": {
+      "pos_with_receipts": 15,
+      "po_to_first_receipt": {
+        "n": 12,
+        "p50": 54,
+        "p80": 65,
+        "min": 23,
+        "max": 83
+      },
+      "transit": {
+        "n": 421,
+        "p50": 26,
+        "p80": 36,
+        "min": 0,
+        "max": 84
+      },
+      "delivery_span": {
+        "n": 12,
+        "p50": 28,
+        "p80": 69,
+        "min": 13,
+        "max": 118
+      },
+      "called_off_pos": [
+        {
+          "po": "5310000688",
+          "vendor": "307186     LONGI HK TRADING LTD",
+          "ordered_mw": 422.0,
+          "po_to_first_receipt": 353
+        },
+        {
+          "po": "5310000698",
+          "vendor": "309428     JINKO SOLAR VIETNAM INDU",
+          "ordered_mw": 111.8,
+          "po_to_first_receipt": 352
+        },
+        {
+          "po": "5310000890",
+          "vendor": "309429     JINKO SOLAR SHANGRAO COM",
+          "ordered_mw": 800.3,
+          "po_to_first_receipt": 339
+        }
+      ]
+    },
+    "domestic": {
+      "pos_with_receipts": 5,
+      "po_to_first_receipt": {
+        "n": 5,
+        "p50": 6,
+        "p80": 12,
+        "min": 4,
+        "max": 18
+      },
+      "transit": {
+        "n": 563,
+        "p50": 4,
+        "p80": 8,
+        "min": 0,
+        "max": 28
+      },
+      "delivery_span": {
+        "n": 5,
+        "p50": 59,
+        "p80": 92,
+        "min": 7,
+        "max": 158
+      },
+      "called_off_pos": []
+    }
+  },
+  "coverage": {
+    "module_pos": 57,
+    "pos_with_dated_receipts": 20,
+    "note": "Receipt dates exist only for POs in the Ariba extract; SAP goods-receipt documents carry no PO number."
+  }
+}

@@ -1,0 +1,210 @@
+{
+  "version": "v20261010_1027",
+  "trained_at": "2026-10-10T10:27:09",
+  "algorithm": "lightgbm",
+  "deployable": true,
+  "features": [
+    "kind",
+    "days_to_baseline",
+    "baseline_month",
+    "blk_done",
+    "blk_due",
+    "blk_sv",
+    "blk_started",
+    "blk_piling_done",
+    "blk_mms_done",
+    "blk_module_done",
+    "blk_idt_done",
+    "blk_cable_done",
+    "blk_scada_done",
+    "blk_slip_so_far",
+    "blk_overdue_n",
+    "blk_overdue_days_max",
+    "module_installation_done",
+    "ftc_application_done",
+    "ftc_approval_done",
+    "prj_done",
+    "prj_due",
+    "prj_sv",
+    "prj_blocks_charged",
+    "prj_ftc_slip_mean",
+    "prj_ftc_slip_last",
+    "prj_n_blocks",
+    "block_ftc_rank",
+    "capacity_mwdc",
+    "category",
+    "cluster",
+    "mms_type",
+    "source_of_origin",
+    "lta_gap_days",
+    "scod_gap_days",
+    "sup_ordered_frac",
+    "sup_import_share",
+    "sup_received_frac"
+  ],
+  "categorical": [
+    "kind",
+    "category",
+    "cluster",
+    "mms_type",
+    "source_of_origin"
+  ],
+  "categories": {
+    "kind": [
+      "ftc",
+      "ftc_application",
+      "ftc_approval",
+      "module_installation"
+    ],
+    "category": [
+      "GROUP",
+      "Group",
+      "Merchant",
+      "NA",
+      "PPA"
+    ],
+    "cluster": [
+      "Solar Khavda",
+      "Wind"
+    ],
+    "mms_type": [
+      "FT",
+      "HSAT",
+      "NA"
+    ],
+    "source_of_origin": [
+      "China",
+      "India",
+      "NA",
+      "SEA"
+    ]
+  },
+  "training": {
+    "rows": 2968,
+    "projects": 18,
+    "milestones": 486,
+    "ftc_blocks": 121
+  },
+  "evaluation": [
+    {
+      "horizon": "all",
+      "rows": 742,
+      "blocks": 121,
+      "p6_mae": 162.0,
+      "p6_within30": 3.6,
+      "naive_mae": 71.7,
+      "naive_within30": 24.0,
+      "lightgbm_p50_mae": 42.4,
+      "lightgbm_p50_within30": 35.7,
+      "catboost_p50_mae": 48.7,
+      "catboost_p50_within30": 41.5,
+      "lightgbm_band_cov": 25.3,
+      "lightgbm_p80_cov": 50.7,
+      "catboost_band_cov": 20.9,
+      "catboost_p80_cov": 53.6
+    },
+    {
+      "horizon": "0-45d",
+      "rows": 222,
+      "blocks": 121,
+      "p6_mae": 142.2,
+      "p6_within30": 11.7,
+      "naive_mae": 73.9,
+      "naive_within30": 23.4,
+      "lightgbm_p50_mae": 43.8,
+      "lightgbm_p50_within30": 32.0,
+      "catboost_p50_mae": 46.6,
+      "catboost_p50_within30": 40.1,
+      "lightgbm_band_cov": 27.0,
+      "lightgbm_p80_cov": 56.3,
+      "catboost_band_cov": 21.6,
+      "catboost_p80_cov": 60.4
+    },
+    {
+      "horizon": "100d+",
+      "rows": 86,
+      "blocks": 72,
+      "p6_mae": 170.5,
+      "p6_within30": 0.0,
+      "naive_mae": 68.5,
+      "naive_within30": 26.7,
+      "lightgbm_p50_mae": 44.4,
+      "lightgbm_p50_within30": 31.4,
+      "catboost_p50_mae": 57.4,
+      "catboost_p50_within30": 38.4,
+      "lightgbm_band_cov": 24.4,
+      "lightgbm_p80_cov": 52.3,
+      "catboost_band_cov": 16.3,
+      "catboost_p80_cov": 45.3
+    },
+    {
+      "horizon": "46-100d",
+      "rows": 169,
+      "blocks": 87,
+      "p6_mae": 172.0,
+      "p6_within30": 0.0,
+      "naive_mae": 69.2,
+      "naive_within30": 24.9,
+      "lightgbm_p50_mae": 50.8,
+      "lightgbm_p50_within30": 27.8,
+      "catboost_p50_mae": 56.6,
+      "catboost_p50_within30": 41.4,
+      "lightgbm_band_cov": 21.9,
+      "lightgbm_p80_cov": 47.9,
+      "catboost_band_cov": 17.8,
+      "catboost_p80_cov": 50.9
+    },
+    {
+      "horizon": "overdue",
+      "rows": 265,
+      "blocks": 99,
+      "p6_mae": 169.3,
+      "p6_within30": 0.4,
+      "naive_mae": 72.5,
+      "naive_within30": 23.0,
+      "lightgbm_p50_mae": 35.3,
+      "lightgbm_p50_within30": 45.3,
+      "catboost_p50_mae": 42.6,
+      "catboost_p50_within30": 43.8,
+      "lightgbm_band_cov": 26.4,
+      "lightgbm_p80_cov": 47.2,
+      "catboost_band_cov": 23.8,
+      "catboost_p80_cov": 52.5
+    }
+  ],
+  "calibration": {
+    "method": "split-conformal offsets around P50 from cross-validation errors, per horizon bucket",
+    "offsets": {
+      "all": {
+        "p20": -45.6,
+        "p80": 40.3,
+        "n": 742
+      },
+      "0-45d": {
+        "p20": -48.4,
+        "p80": 41.5,
+        "n": 222
+      },
+      "100d+": {
+        "p20": -58.5,
+        "p80": 49.1,
+        "n": 86
+      },
+      "46-100d": {
+        "p20": -61.6,
+        "p80": 49.9,
+        "n": 169
+      },
+      "overdue": {
+        "p20": -34.4,
+        "p80": 35.1,
+        "n": 265
+      }
+    },
+    "check_leave_fold_out": {
+      "band_p20_p80_coverage_pct": 55.1,
+      "p80_coverage_pct": 77.1,
+      "rows": 742
+    }
+  }
+}

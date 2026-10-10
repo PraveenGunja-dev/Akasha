@@ -1,0 +1,219 @@
+{
+  "version": "v20261010_1116",
+  "trained_at": "2026-10-10T11:16:55",
+  "algorithm": "lightgbm",
+  "deployable": true,
+  "features": [
+    "kind",
+    "days_to_baseline",
+    "baseline_month",
+    "blk_done",
+    "blk_due",
+    "blk_sv",
+    "blk_started",
+    "blk_piling_done",
+    "blk_mms_done",
+    "blk_module_done",
+    "blk_idt_done",
+    "blk_cable_done",
+    "blk_scada_done",
+    "blk_overdue_n",
+    "blk_overdue_days_max",
+    "blk_pace_30d",
+    "blk_pace_prev30d",
+    "prj_pace_30d",
+    "prj_pace_prev30d",
+    "plan_revisions",
+    "plan_total_shift_days",
+    "plan_last_shift_days",
+    "module_installation_done",
+    "ftc_application_done",
+    "ftc_approval_done",
+    "prj_done",
+    "prj_due",
+    "prj_sv",
+    "prj_blocks_charged",
+    "prj_ftc_slip_mean",
+    "prj_ftc_slip_last",
+    "prj_n_blocks",
+    "capacity_mwdc",
+    "category",
+    "cluster",
+    "mms_type",
+    "source_of_origin",
+    "lta_gap_days",
+    "scod_gap_days",
+    "sup_ordered_frac",
+    "sup_import_share",
+    "sup_received_frac",
+    "wx_rain_30d",
+    "wx_heavy_days_30d",
+    "wx_wet_days_next60",
+    "wx_wet_days_next120"
+  ],
+  "categorical": [
+    "kind",
+    "category",
+    "cluster",
+    "mms_type",
+    "source_of_origin"
+  ],
+  "categories": {
+    "kind": [
+      "ftc",
+      "ftc_application",
+      "ftc_approval",
+      "module_installation"
+    ],
+    "category": [
+      "GROUP",
+      "Group",
+      "Merchant",
+      "NA",
+      "PPA"
+    ],
+    "cluster": [
+      "Solar Khavda",
+      "Wind"
+    ],
+    "mms_type": [
+      "FT",
+      "HSAT",
+      "NA"
+    ],
+    "source_of_origin": [
+      "China",
+      "India",
+      "NA",
+      "SEA"
+    ]
+  },
+  "training": {
+    "rows": 7013,
+    "projects": 20,
+    "milestones": 812,
+    "ftc_blocks": 201
+  },
+  "evaluation": [
+    {
+      "horizon": "all",
+      "rows": 1758,
+      "blocks": 201,
+      "p6_mae": 176.6,
+      "p6_within30": 5.9,
+      "naive_mae": 56.7,
+      "naive_within30": 35.5,
+      "lightgbm_p50_mae": 37.6,
+      "lightgbm_p50_within30": 54.0,
+      "catboost_p50_mae": 40.8,
+      "catboost_p50_within30": 51.4,
+      "lightgbm_band_cov": 29.9,
+      "lightgbm_p80_cov": 65.2,
+      "catboost_band_cov": 31.2,
+      "catboost_p80_cov": 63.5
+    },
+    {
+      "horizon": "0-45d",
+      "rows": 380,
+      "blocks": 199,
+      "p6_mae": 135.5,
+      "p6_within30": 24.5,
+      "naive_mae": 76.6,
+      "naive_within30": 27.6,
+      "lightgbm_p50_mae": 32.5,
+      "lightgbm_p50_within30": 62.1,
+      "catboost_p50_mae": 35.1,
+      "catboost_p50_within30": 55.8,
+      "lightgbm_band_cov": 31.3,
+      "lightgbm_p80_cov": 68.2,
+      "catboost_band_cov": 30.8,
+      "catboost_p80_cov": 66.1
+    },
+    {
+      "horizon": "100d+",
+      "rows": 430,
+      "blocks": 194,
+      "p6_mae": 190.1,
+      "p6_within30": 0.2,
+      "naive_mae": 45.6,
+      "naive_within30": 41.4,
+      "lightgbm_p50_mae": 37.5,
+      "lightgbm_p50_within30": 48.4,
+      "catboost_p50_mae": 42.0,
+      "catboost_p50_within30": 46.0,
+      "lightgbm_band_cov": 35.1,
+      "lightgbm_p80_cov": 71.6,
+      "catboost_band_cov": 39.5,
+      "catboost_p80_cov": 68.8
+    },
+    {
+      "horizon": "46-100d",
+      "rows": 342,
+      "blocks": 195,
+      "p6_mae": 190.7,
+      "p6_within30": 0.0,
+      "naive_mae": 54.0,
+      "naive_within30": 35.4,
+      "lightgbm_p50_mae": 45.5,
+      "lightgbm_p50_within30": 46.2,
+      "catboost_p50_mae": 47.6,
+      "catboost_p50_within30": 46.8,
+      "lightgbm_band_cov": 29.5,
+      "lightgbm_p80_cov": 66.1,
+      "catboost_band_cov": 29.8,
+      "catboost_p80_cov": 62.0
+    },
+    {
+      "horizon": "overdue",
+      "rows": 606,
+      "blocks": 201,
+      "p6_mae": 184.9,
+      "p6_within30": 1.7,
+      "naive_mae": 53.7,
+      "naive_within30": 36.3,
+      "lightgbm_p50_mae": 36.5,
+      "lightgbm_p50_within30": 57.4,
+      "catboost_p50_mae": 39.7,
+      "catboost_p50_within30": 55.1,
+      "lightgbm_band_cov": 25.4,
+      "lightgbm_p80_cov": 58.4,
+      "catboost_band_cov": 26.2,
+      "catboost_p80_cov": 59.1
+    }
+  ],
+  "calibration": {
+    "method": "split-conformal offsets around P50 from cross-validation errors, per horizon bucket",
+    "offsets": {
+      "all": {
+        "p20": -32.9,
+        "p80": 34.8,
+        "n": 1758
+      },
+      "0-45d": {
+        "p20": -26.1,
+        "p80": 30.5,
+        "n": 380
+      },
+      "100d+": {
+        "p20": -38.2,
+        "p80": 33.9,
+        "n": 430
+      },
+      "46-100d": {
+        "p20": -42.2,
+        "p80": 36.8,
+        "n": 342
+      },
+      "overdue": {
+        "p20": -25.9,
+        "p80": 39.7,
+        "n": 606
+      }
+    },
+    "check_leave_fold_out": {
+      "band_p20_p80_coverage_pct": 59.2,
+      "p80_coverage_pct": 80.1,
+      "rows": 1758
+    }
+  }
+}

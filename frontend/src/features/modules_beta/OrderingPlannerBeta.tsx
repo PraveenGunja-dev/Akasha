@@ -11,16 +11,20 @@ import { useSearchParams } from 'react-router-dom';
 import { cx } from '../../components/ui/primitives';
 import ModuleDeliveriesPage from './ModuleDeliveriesPage';
 import BlockPlanView from './BlockPlanView';
+import ForecastPlanView from './ForecastPlanView';
+
+type View = 'current' | 'block' | 'forecast';
 
 export default function OrderingPlannerBeta() {
   const [params, setParams] = useSearchParams();
-  const view = params.get('plan') === 'block' ? 'block' : 'current';
-  const choose = (v: 'current' | 'block') => setParams((p) => {
-    if (v === 'block') p.set('plan', 'block'); else p.delete('plan');
+  const plan = params.get('plan');
+  const view: View = plan === 'block' || plan === 'forecast' ? plan : 'current';
+  const choose = (v: View) => setParams((p) => {
+    if (v === 'current') p.delete('plan'); else p.set('plan', v);
     return p;
   }, { replace: true });
 
-  const tab = (v: 'current' | 'block', label: string, hint: string) => (
+  const tab = (v: View, label: string, hint: string) => (
     <button type="button" role="tab" aria-selected={view === v} onClick={() => choose(v)}
       className={cx('flex flex-col items-start rounded-lg px-3.5 py-2 text-left transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50',
@@ -35,8 +39,9 @@ export default function OrderingPlannerBeta() {
       <div role="tablist" aria-label="Ordering plan" className="inline-flex w-fit gap-1 rounded-xl border border-border-subtle bg-surface-sunken p-1">
         {tab('current', 'Current schedule', 'Ordered for each phase’s charging date')}
         {tab('block', 'Block plan · new', 'Ordered block by block as the site builds')}
+        {tab('forecast', 'AI forecast & order plan', 'Real FTC per block, and when to order')}
       </div>
-      {view === 'block' ? <BlockPlanView /> : <ModuleDeliveriesPage />}
+      {view === 'block' ? <BlockPlanView /> : view === 'forecast' ? <ForecastPlanView /> : <ModuleDeliveriesPage />}
     </div>
   );
 }

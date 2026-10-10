@@ -1,0 +1,11 @@
+.venv/
+data/
+__pycache__/
+*.pyc
+# Model binaries and per-row predictions are rebuilt by the pipeline; the
+# evaluation summary (meta.json) and lead-time assumptions are kept.
+registry/**/cv_predictions.csv.gz
+registry/**/*.cbm
+registry/**/p20.txt
+registry/**/p50.txt
+registry/**/p80.txt

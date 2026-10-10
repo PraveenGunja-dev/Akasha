@@ -6,21 +6,21 @@ import { formatProjectName } from '../../lib/projectName';
 
 // Location coordinates for weather lookup (from ProjectMap)
 const SUBSTATION_COORDS: Record<string, { lat: number, lng: number }> = {
-  'khavda': { lat: 24.024, lng: 69.337 },
-  'bhuj': { lat: 23.379, lng: 69.592 },
-  'bhadla': { lat: 27.618, lng: 72.206 },
-  'fatehgarh': { lat: 26.285, lng: 71.100 },
-  'ramgarh': { lat: 27.471, lng: 70.494 },
-  'bikaner': { lat: 28.373, lng: 73.171 },
+  'khavda': { lat: 24.08331, lng: 69.4428 },
+  'bhuj': { lat: 23.45257, lng: 69.59224 },
+  'bhadla': { lat: 27.67231, lng: 72.20655 },
+  'fatehgarh': { lat: 26.35007, lng: 71.10011 },
+  'ramgarh': { lat: 27.47146, lng: 70.49399 },
+  'bikaner': { lat: 28.37293, lng: 73.17076 },
   'rajasthan': { lat: 27.0, lng: 74.2 },
   'gujarat': { lat: 23.0, lng: 72.5 },
-  'halvad': { lat: 22.911, lng: 71.231 },
-  'lakadia': { lat: 23.394, lng: 70.598 },
-  'banaskantha': { lat: 24.090, lng: 72.000 },
-  'sikar': { lat: 27.612, lng: 75.088 },
+  'halvad': { lat: 22.91108, lng: 71.23059 },
+  'lakadia': { lat: 23.39399, lng: 70.59772 },
+  'banaskantha': { lat: 24.13765, lng: 71.9989 },
+  'sikar': { lat: 27.69534, lng: 75.08824 },
   'mandvi': { lat: 22.833, lng: 69.355 },
-  'pirana': { lat: 22.872, lng: 72.557 },
-  'mandsaur': { lat: 24.207, lng: 75.171 },
+  'pirana': { lat: 22.9276, lng: 72.55684 },
+  'mandsaur': { lat: 24.20664, lng: 75.17084 },
 };
 
 export default function SimulationLab({ p6Data = [], dashboardData = {}, initialProject = 'All', simulationContext }: any) {

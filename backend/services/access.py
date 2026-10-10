@@ -112,6 +112,7 @@ ROUTE_POLICIES: list[tuple[set, re.Pattern, str]] = [(m, re.compile(p), perm) fo
     (_WRITE, r"^/api/bess/cpag/manual(/|$)", "data.edit"),
     (_WRITE, r"^/api/bess/[^/]+/eac/", "data.edit"),
     (_WRITE, r"^/api/statutory/upload$", "data.edit"),
+    (_WRITE, r"^/api/forecast/locks(/|$)", "data.edit"),   # saving / unlocking a forecast
 ]]
 
 # Reachable without a session.

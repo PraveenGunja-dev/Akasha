@@ -1269,3 +1269,29 @@ class AribaInboundDelivery(Base):
     checklist_status = Column(String, index=True)
     checklist_date = Column(DateTime)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
+class ForecastLock(Base):
+    """A forecast or order plan a planner has saved as correct.
+
+    Saved values are what the Ordering Schedule shows from then on - a model
+    retrain never overwrites them; the screen only notes when the model's own
+    figure has moved away. Every save is a new row: saving again supersedes
+    the previous one (superseded_at / superseded_by), so the full version
+    history stays (AI scenario 8, "Order freeze & lock").
+
+    scope: "block_ftc" (one block's FTC date; block set) or "order_plan"
+    (a project's order decision; block null)."""
+    __tablename__ = "forecast_lock"
+
+    id = Column(Integer, primary_key=True, index=True)
+    scope = Column(String, nullable=False, index=True)
+    project_id = Column(String, nullable=False, index=True)
+    block = Column(Integer, nullable=True, index=True)
+    payload = Column(JSON, nullable=False)        # the saved figures, as shown when saved
+    model_version = Column(String, nullable=True)  # model the saved figures came from
+    note = Column(Text, nullable=True)
+    locked_by = Column(String, nullable=False)
+    locked_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    superseded_at = Column(DateTime, nullable=True, index=True)   # null = the active save
+    superseded_by = Column(String, nullable=True)                 # who replaced or unlocked it

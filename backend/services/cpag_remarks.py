@@ -113,11 +113,17 @@ def _fallback_total(f: Dict[str, Any]) -> str:
 _NUM = re.compile(r"\d+(?:\.\d+)?")
 
 
-def _grounded(text: str, facts_json: str) -> bool:
-    """Every number the remark quotes must be in the facts (dates are
-    pre-formatted, so their day/year digits are in there too)."""
-    have = set(_NUM.findall(facts_json))
-    return all(n in have for n in _NUM.findall(text))
+MAX_WORDS = 35
+
+
+def _grounded(text: str, scope: Any) -> bool:
+    """Every number the remark quotes must be in `scope` - the facts of the
+    row it describes, not just anywhere in the payload, so a figure from
+    another row cannot be attached to this one (dates are pre-formatted, so
+    their day/year digits are in there too) - and it must be short."""
+    have = set(_NUM.findall(json.dumps(scope, ensure_ascii=False)))
+    return (len(text.split()) <= MAX_WORDS
+            and all(n in have for n in _NUM.findall(text)))
 
 
 SYSTEM = """You write the "Variance Remark" column of a construction progress \
@@ -147,11 +153,16 @@ Reply as JSON: {"rows": ["...", ...], "total": "..."}"""
 
 
 def _ai(facts: Dict[str, Any], facts_json: str) -> Optional[Dict[str, Any]]:
-    from routers.ai import call_azure_openai_curl
-    raw = call_azure_openai_curl(
-        [{"role": "system", "content": SYSTEM},
-         {"role": "user", "content": facts_json}],
-        temperature=0, max_tokens=900, json_response=True, timeout=AI_TIMEOUT_S)
+    """The app's configured LLM (AI_PROVIDER: azure, else Ollama), as every
+    other AI route uses."""
+    from routers.ai import call_azure_openai_curl, call_ollama, get_ai_provider
+    messages = [{"role": "system", "content": SYSTEM},
+                {"role": "user", "content": facts_json}]
+    if get_ai_provider() == "azure":
+        raw = call_azure_openai_curl(messages, temperature=0, max_tokens=900,
+                                     json_response=True, timeout=AI_TIMEOUT_S)
+    else:
+        raw = call_ollama(messages, temperature=0, max_tokens=900, json_response=True)
     out = json.loads(raw)
     rows = out.get("rows")
     if not isinstance(rows, list) or len(rows) != len(facts["rows"]):
@@ -175,12 +186,12 @@ def scurve_remarks(pss: str, buckets: List[Dict[str, Any]], plan: float,
         ai = _ai(facts, facts_json)
         kept = 0
         for i, txt in enumerate(ai["rows"]):
-            if txt and _grounded(txt, facts_json):
+            if txt and _grounded(txt, [facts["rows"][i], facts["dataDate"]]):
                 rows[i], kept = txt, kept + 1
             else:
                 logger.warning("CPAG remark for %s row %d not grounded, using data text: %s",
                                pss, i, txt)
-        if ai["total"] and _grounded(ai["total"], facts_json):
+        if ai["total"] and _grounded(ai["total"], facts):
             total, kept = ai["total"], kept + 1
         source = "ai" if kept else "data"
     except Exception as e:   # no AI configured, timeout, bad JSON

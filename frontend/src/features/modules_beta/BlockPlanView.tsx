@@ -159,7 +159,7 @@ export default function BlockPlanView() {
   const chart = useMemo(() => {
     if (!plan) return {};
     const origins = Array.from(new Set(blk.map((p) => p.type)));
-    const months = plan.months;
+    const months = plan.months || [];
     return {
       grid: { left: 48, right: 16, top: 36, bottom: 28 },
       legend: { top: 0, itemWidth: 10, itemHeight: 10 },

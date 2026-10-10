@@ -66,7 +66,7 @@ CLUSTER_STATE = {
 # km so the two bubbles do not sit on top of each other. Cluster-level, not
 # plot-level: ZSPS has no plot coordinates.
 CLUSTER_COORDS = {
-    "Solar Khavda": {"lat": 24.024, "lng": 69.337, "site": "Khavda RE Park, Kutch"},
+    "Solar Khavda": {"lat": 24.08331, "lng": 69.4428, "site": "Khavda RE Park, Kutch"},
     "BESS": {"lat": 23.80, "lng": 69.62, "site": "Khavda PSS (BESS), Kutch"},
     "Wind": {"lat": 22.83, "lng": 69.35, "site": "Mandvi / Mundra, Kutch"},
     "Solar Rajasthan": {"lat": 27.0, "lng": 74.2, "site": "Bandha / Baiya, Rajasthan"},

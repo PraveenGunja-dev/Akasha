@@ -469,26 +469,26 @@ const DEFAULT_STYLE = { light: MAP_STYLES[0], dark: MAP_STYLES[MAP_STYLES.length
 
 // Curated Substation Coordinates provided by the user
 const SUBSTATION_COORDS = [
-  { name: "Padghe", lat: 19.353, lng: 73.212 },         // 0
-  { name: "Pirana", lat: 22.872, lng: 72.557 },         // 1
-  { name: "South Olpad", lat: 21.890, lng: 73.086 },    // 2
-  { name: "Lakadia", lat: 23.394, lng: 70.598 },        // 3
-  { name: "Halvad", lat: 22.911, lng: 71.231 },         // 4
-  { name: "Boisar", lat: 19.742, lng: 72.785 },         // 5
-  { name: "Khavda", lat: 24.024, lng: 69.337 },         // 6
-  { name: "Bhuj", lat: 23.379, lng: 69.592 },           // 7
-  { name: "Pune", lat: 18.734, lng: 73.699 },           // 8
-  { name: "Banaskantha", lat: 24.090, lng: 72.000 },    // 9
-  { name: "Ramgarh", lat: 27.471, lng: 70.494 },        // 10
-  { name: "Bhadla", lat: 27.618, lng: 72.206 },         // 11
-  { name: "Fatehgarh", lat: 26.285, lng: 71.100 },      // 12
-  { name: "Sikar", lat: 27.612, lng: 75.088 },          // 13
-  { name: "Khetri", lat: 27.951, lng: 75.709 },         // 14
-  { name: "Narela", lat: 28.753, lng: 76.984 },         // 15
-  { name: "Jhatikara", lat: 28.462, lng: 76.937 },      // 16
-  { name: "Bikaner", lat: 28.373, lng: 73.171 },        // 17
-  { name: "Mandsaur", lat: 24.207, lng: 75.171 },       // 18
-  { name: "Indore", lat: 22.909, lng: 75.900 },         // 19
+  { name: "Padghe", lat: 19.40886, lng: 73.21122 },         // 0
+  { name: "Pirana", lat: 22.9276, lng: 72.55684 },         // 1
+  { name: "South Olpad", lat: 21.946, lng: 73.08565 },    // 2
+  { name: "Lakadia", lat: 23.39399, lng: 70.59772 },        // 3
+  { name: "Halvad", lat: 22.91108, lng: 71.23059 },         // 4
+  { name: "Boisar", lat: 19.79452, lng: 72.78501 },         // 5
+  { name: "Khavda", lat: 24.08331, lng: 69.4428 },         // 6
+  { name: "Bhuj", lat: 23.45257, lng: 69.59224 },           // 7
+  { name: "Pune", lat: 18.79438, lng: 73.69815 },           // 8
+  { name: "Banaskantha", lat: 24.13765, lng: 71.9989 },    // 9
+  { name: "Ramgarh", lat: 27.47146, lng: 70.49399 },        // 10
+  { name: "Bhadla", lat: 27.67231, lng: 72.20655 },         // 11
+  { name: "Fatehgarh", lat: 26.35007, lng: 71.10011 },      // 12
+  { name: "Sikar", lat: 27.69534, lng: 75.08824 },          // 13
+  { name: "Khetri", lat: 28.03292, lng: 75.7093 },         // 14
+  { name: "Narela", lat: 28.82341, lng: 76.9838 },         // 15
+  { name: "Jhatikara", lat: 28.53223, lng: 76.93624 },      // 16
+  { name: "Bikaner", lat: 28.37293, lng: 73.17076 },        // 17
+  { name: "Mandsaur", lat: 24.20664, lng: 75.17084 },       // 18
+  { name: "Indore", lat: 22.90884, lng: 75.89969 },         // 19
   { name: "Mandvi", lat: 22.833, lng: 69.355 },         // 20
 ];
 

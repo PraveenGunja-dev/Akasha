@@ -1,0 +1,10 @@
+# Training environment (training_model/.venv). Extraction runs with the
+# backend's own venv instead - it needs the backend's database connection.
+#
+# Deliberately NOT used: scikit-learn, scipy, pyarrow, shap - their DLLs are
+# blocked by Windows App Control on the development PC. Splits and metrics are
+# implemented directly; explanations use the models' own SHAP values.
+pandas>=2.2
+numpy>=2.0
+lightgbm>=4.5
+catboost>=1.2
