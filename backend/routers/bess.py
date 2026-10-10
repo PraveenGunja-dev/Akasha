@@ -965,8 +965,9 @@ ELECTRICAL_ELEMENTS = [
     ("HT Cable Laying", ["HT - Cable Laying", "HT - Cable"], "RM"),
     ("FO Cable Laying", ["FO Cable Laying", "PPC - FO Cable"], "RM"),
     ("DC Cable Laying", ["DC - Cable laying", "DC - Support erection", "DC - Cable"], "RM"),
-    ("LT Cable Laying", ["AC - Cable laying", "AC - Support erection", "LT - Cable",
-                         "LT Cable"], "RM"),
+    # PSS-11/12/10B "AC - Cable Laying"; PSS-09/05B/08B "LT - Cable Laying".
+    ("LT Cable Laying", ["AC - Cable laying", "LT - Cable Laying", "AC - Support erection",
+                         "LT - Cable", "LT Cable"], "RM"),
     ("Aux Cable Laying", ["AUX - LT Cable Laying", "AUX Cable Laying", "AUX Cable"], "RM"),
     ("Control Cable Laying", ["AUX - Control cable laying",
                               "Control & Communication Cable Laying",
