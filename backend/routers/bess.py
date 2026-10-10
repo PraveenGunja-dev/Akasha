@@ -963,7 +963,7 @@ def _civil(db: Session, poid: int, roots: Dict[int, str],
 # in use; matching is case-insensitive (_find_res).
 ELECTRICAL_ELEMENTS = [
     ("HT Cable Laying", ["HT - Cable Laying", "HT - Cable"], "RM"),
-    ("FO Cable Laying", ["PPC - FO Cable"], "RM"),
+    ("FO Cable Laying", ["FO Cable Laying", "PPC - FO Cable"], "RM"),
     ("DC Cable Laying", ["DC - Cable laying", "DC - Support erection", "DC - Cable"], "RM"),
     ("LT Cable Laying", ["AC - Cable laying", "AC - Support erection", "LT - Cable",
                          "LT Cable"], "RM"),
@@ -974,8 +974,10 @@ ELECTRICAL_ELEMENTS = [
     ("Battery Container Erection", ["Container Erection", "Battery Container Erection",
                                     "Battery Container"], "NOS"),
     ("PCS Erection", ["PCS Erection", "PCS"], "NOS"),
-    ("CT Erection", ["Converter Transformer Erection", "Converter Transformer"], "NOS"),
-    ("CSS Erection", ["CSS - CSS Erection", "CSS"], "NOS"),
+    # Sep-26 P6 names first (PSS-11: "FO Cable Laying", "CT Erection",
+    # "CSS Erection" - the older names matched nothing, so the rows read "-").
+    ("CT Erection", ["CT Erection", "Converter Transformer Erection", "Converter Transformer"], "NOS"),
+    ("CSS Erection", ["CSS Erection", "CSS - CSS Erection", "CSS"], "NOS"),
 ]
 
 

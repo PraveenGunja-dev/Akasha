@@ -1158,7 +1158,10 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
     table = t.table
     head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
     fc_cols = [c for c, h in enumerate(head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
-    fc_months = [_add_months(as_of, i) for i in range(len(fc_cols))]
+    # The forecast schedule is the months AFTER the P6 data date's month - the
+    # pack reviewed in Oct-26 on the 21-Sep-26 update reads Oct / Nov / Dec,
+    # not Sep (user, 2026-10-10).
+    fc_months = [_add_months(as_of, i + 1) for i in range(len(fc_cols))]
     for c, ym in zip(fc_cols, fc_months):
         set_text(table.cell(1, c), _mon(ym))
 
