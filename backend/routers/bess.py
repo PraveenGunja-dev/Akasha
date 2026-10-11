@@ -94,15 +94,15 @@ TOTAL_DISPATCHABLE_MWH = sum(c["dispatchable_mwh"] for c in BESS_PROJECTS.values
 # because the codes differ by project (PSS-08(B)'s "12" is Pre-Construction,
 # PSS-11's is Commissioning Part-4).  Construction Works and the
 # "Pre-Commissioning & Commissioning Part-N" branches are separate rows so the
-# reader sees both (user, 2026-10-10).  Anything else - Contract Closure
-# (~4%), HOTO (~1%), Project Milestones, Pre-Construction - is in no bucket:
-# it stays in the baseline total, so the rows read 2 / 5 / 38 / 35 / 15 = 95%
-# on PSS-08(B), as in P6.
+# reader sees both (user, 2026-10-10).  Contract Closure (~4%) and HOTO
+# (~1%) are rows of their own, so the weightage adds up to 100% rather than
+# 95% (user, 2026-10-11).
 BUCKET_WBS_NAMES = {
     "statutory & other approvals": "statutory",
     "engineering works": "engineering",
     "procurement": "procurement",
     "construction works": "construction",
+    "hoto": "hoto",
 }
 
 
@@ -110,16 +110,21 @@ def _bucket_of_wbs(name: Optional[str]) -> Optional[str]:
     n = " ".join((name or "").split()).lower()
     if n.startswith("pre-commissioning & commissioning"):
         return "commissioning"
+    if n.startswith("contract closure"):     # "... & Project Close Out Report"
+        return "closure"
     return BUCKET_WBS_NAMES.get(n)
 
 
-BUCKET_ORDER = ["statutory", "engineering", "procurement", "construction", "commissioning"]
+BUCKET_ORDER = ["statutory", "engineering", "procurement", "construction", "commissioning",
+                "closure", "hoto"]
 BUCKET_LABELS = {
     "statutory": "Statutory Approvals",
     "engineering": "Engineering",
     "procurement": "Ordering, Manufacturing & Supply",
     "construction": "Construction (Civil), Electrical & Integration",
     "commissioning": "Pre-Commissioning & Commissioning",
+    "closure": "Contract Closure & Close-out",
+    "hoto": "HOTO",
 }
 
 # P6 package name -> SAP material_name, for joining the ordering plan to PO
@@ -575,22 +580,32 @@ def _construction(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, An
 # as Total Scope, as the pack prints it.
 CIVIL_GROUPS = [
     {
-        # Staircase & Finishing is not reported (user decision 2026-10-11).
+        # Staircase & Finishing is presently not reported (user decision
+        # 2026-10-11). To bring it back, uncomment the stage here, its resource
+        # on each element below, and its weight in STAGE_WEIGHTS.
         "stages": ["DCIS Piling", "PCC", "Footing & Column Casting",
-                   "Slab Casting"],
+                   "Slab Casting",
+                   # "Staircase & Finishing",
+                   ],
         "elements": [
             ("PCS", "PCS - Column Casting", [
                 ["PCS - Driven Cast in-situ Pile"], [],
                 ["PCS - Footing & Pile Beam Casting", "PCS - Column Casting"],
-                ["PCS - Slab casting"]]),
+                ["PCS - Slab casting"],
+                # ["PCS - Stairecase Installation"],
+                ]),
             ("SGR", "SGR - Column Casting", [
                 ["SGR - Driven Cast in-situ Piling"], ["SGR - PCC"],
                 ["SGR - Footing & Pile Beam Casting", "SGR - Column Casting"],
-                ["SGR - Slab Casting"]]),
+                ["SGR - Slab Casting"],
+                # ["SGR - Stairecase Installation"],
+                ]),
             ("MCR", "MCR - Column Casting", [
                 ["MCR - Driven Cast in-situ Piling"], ["MCR - PCC"],
                 ["MCR - Footing & Pile Beam Casting", "MCR - Column Casting"],
-                ["MCR - Slab Casting"]]),
+                ["MCR - Slab Casting"],
+                # ["MCR - Stairecase Installation"],
+                ]),
         ],
     },
     {
@@ -618,8 +633,10 @@ CIVIL_GROUPS = [
             # Harmonic Filter work is identified by its WBS (Construction
             # Works > Harmonic Filter), not by resource name - its resources
             # are unprefixed ("PCC") and other WBS reuse the same names.
-            ("HF", "HF - PCC", [
-                ["HF - Marking & Excavation", "HF - PCC"], [], [], [], ["HF - Raft"]]),
+            # HF is presently not reported (user decision 2026-10-11);
+            # uncomment to bring the row and its chart bars back.
+            # ("HF", "HF - PCC", [
+            #     ["HF - Marking & Excavation", "HF - PCC"], [], [], [], ["HF - Raft"]]),
         ],
     },
     {
@@ -849,9 +866,12 @@ def _weightage_progress(db: Session, poid: int, activity_codes, data_date):
 INFERRED_STAGES = {"PCC": "Footing & Column Casting"}
 
 # Fixed progress weights per stage; unlisted stages share the rest equally.
-# Staircase & Finishing (4%) was the only entry and the stage is no longer
-# reported (2026-10-11), so every stage now weighs the same.
-STAGE_WEIGHTS: Dict[str, float] = {}
+# Staircase & Finishing at 4% with the other stages equal reproduced the
+# pack's PCS 98 / SGR 98 / MCR 97 on PSS-11 (2026-09-30). The stage is
+# presently not reported (2026-10-11), so every stage weighs the same.
+STAGE_WEIGHTS: Dict[str, float] = {
+    # "Staircase & Finishing": 0.04,
+}
 
 
 def _infer_stages(stages, plan_row, act_row) -> List[int]:
@@ -1433,8 +1453,8 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
 
     Weightage: each bucket's share of the plan baseline's total Labor units
     (21-Sep-26 re-baseline, cpag_baseline.PLAN_BASELINE).  Work in no bucket
-    (Contract Closure, HOTO) stays in the total but off the curve and the
-    table, so both read 95% at completion, not 100 (user, 2026-10-10).  Plan: each
+    (only activities dropped from the live schedule) stays in the total but
+    off the curve and the table.  Plan: each
     baseline activity's Labor units spread over its baseline dates.  Actual:
     live P6 Actual Labor Units, spread over each activity's actual start to
     actual finish (or the data date while running).  Plan and actual share
@@ -1450,7 +1470,13 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
 
     live = _earned_units(db, poid)
     wbs_bucket = _wbs_buckets(db, poid)
-    bucket_of = {c: wbs_bucket.get(r[0]) for c, r in live.items()}
+    # Bucket by the activity's own WBS, for every activity in the live
+    # schedule: an activity whose Labor resource was since removed keeps its
+    # baseline Labor units, and was otherwise in no bucket (PSS-12's grid
+    # earthing 0.85%, PSS-05(B)'s civil 1.02%, user 2026-10-11).
+    bucket_of = {c: wbs_bucket.get(w) for c, w in db.execute(
+        text("select activity_id, wbs_object_id from p6_activity "
+             "where project_object_id = :o"), {"o": poid})}
 
     bl = baseline_rows(db, poid, WEIGHT_RESOURCE)
     if bl:
@@ -1485,7 +1511,7 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
     act_m: Dict[str, float] = defaultdict(float)
     act_b: Dict[str, float] = defaultdict(float)
     for code, r in live.items():
-        if _f(r[6]) and bucket_of[code] is not None:
+        if _f(r[6]) and bucket_of.get(code) is not None:
             _spread_monthly(act_m, r[3] or r[1], r[4] or data_date, _f(r[6]))
             act_b[bucket_of[code]] += _f(r[6])
 

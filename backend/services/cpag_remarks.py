@@ -25,6 +25,9 @@ _CACHE: Dict[str, Dict[str, Any]] = {}
 
 ON_PLAN_PTS = 0.5     # |plan - actual| within this reads "on plan"
 AI_TIMEOUT_S = 45
+# A remark longer than this wraps past its cell on the slide (user,
+# 2026-10-11); a longer AI answer falls back to the data sentence.
+MAX_WORDS = 20
 
 
 def _d(iso: Optional[str]) -> Optional[str]:
@@ -82,15 +85,12 @@ def _fallback_row(r: Dict[str, Any], data_date: Optional[str]) -> str:
     if at_dd <= ON_PLAN_PTS:
         return (f"Gap is work planned after the {data_date} data date; "
                 f"on plan at the data date.")
-    text = f"Behind by {r['varianceAtDataDatePts']} pts at the {data_date} data date"
-    if r["scheduledAfterDataDatePts"] not in ("-", "0.0"):
-        text += f" (+{r['scheduledAfterDataDatePts']} pts planned later this month)"
+    text = f"Behind {r['varianceAtDataDatePts']} pts at the {data_date} data date"
     lead = r["mostBehind"][:1]
     if lead:
         t = lead[0]
-        text += (f". Most behind: {t['activity']}" + (f" - {t['wbs']}" if t["wbs"] else "")
-                 + f", {t['actualPct']}% vs {t['plannedToDatePct']}% planned"
-                 + (f", BL finish {t['baselineFinish']}" if t["baselineFinish"] else ""))
+        name = t["activity"] if len(t["activity"]) <= 45 else t["activity"][:44].rstrip() + "…"
+        text += f"; most behind: {name} ({t['actualPct']}% vs {t['plannedToDatePct']}%)"
     return text + "."
 
 
@@ -102,15 +102,25 @@ def _fallback_total(f: Dict[str, Any]) -> str:
                 if r["scheduledAfterDataDatePts"] != "-")
     behind = [r for r in f["rows"] if r["varianceAtDataDatePts"] != "-"
               and float(r["varianceAtDataDatePts"]) > ON_PLAN_PTS]
-    text = (f"{t['variancePts']} pts behind, of which {_n(later)} pts is planned after "
-            f"the {f['dataDate']} data date")
+    if later >= float(t["variancePts"]) - ON_PLAN_PTS and not behind:
+        # The whole gap is work not yet due (PSS-11: 6.0 behind, 6.9 planned
+        # later read as a contradiction, 2026-10-11).
+        return (f"{t['variancePts']} pts behind, all of it work planned after the "
+                f"{f['dataDate']} data date; on plan at the data date.")
+    text = f"{t['variancePts']} pts behind; {_n(min(later, float(t['variancePts'])))} pts of it is planned after the {f['dataDate']} data date"
     if behind:
         worst = max(behind, key=lambda r: float(r["varianceAtDataDatePts"]))
-        text += f"; largest real gap in {worst['row']} ({worst['varianceAtDataDatePts']} pts)"
+        text += f". Largest delay: {worst['row']} ({worst['varianceAtDataDatePts']} pts)"
     return text + "."
 
 
 _NUM = re.compile(r"\d+(?:\.\d+)?")
+
+
+# A JSON key echoed into the prose ("varianceAtDataDatePts -0.8", seen on
+# PSS-11, 2026-10-11): any camelCase word, or a field's tail split off by a
+# space ("variance AtDataDatePts").
+_FIELD = re.compile(r"[a-z][A-Z][a-z]+[A-Z]|\b[A-Z][a-z]+[A-Z][a-z]+[A-Z]")
 
 
 def _grounded(text: str, facts_json: str) -> bool:
@@ -118,6 +128,12 @@ def _grounded(text: str, facts_json: str) -> bool:
     pre-formatted, so their day/year digits are in there too)."""
     have = set(_NUM.findall(facts_json))
     return all(n in have for n in _NUM.findall(text))
+
+
+def _usable(text: str, facts_json: str) -> bool:
+    """Grounded, short enough for its cell, and plain prose."""
+    return (bool(text) and _grounded(text, facts_json)
+            and len(text.split()) <= MAX_WORDS and not _FIELD.search(text))
 
 
 SYSTEM = """You write the "Variance Remark" column of a construction progress \
@@ -131,7 +147,8 @@ activities furthest behind plan at the data date, with their WBS.
 
 Rules:
 - One remark per row, in the same order, plus one for the Total row.
-- At most 25 words each. Plain, factual, management tone. No bullet points.
+- At most 18 words each. Plain, factual, management tone. No bullet points.
+- Never write a JSON field name (such as varianceAtDataDatePts or scheduledAfterDataDatePts); say "at the data date" or "planned later" instead.
 - Use ONLY the facts given. Copy numbers and dates exactly as written in the \
 facts; do not compute new numbers, round differently or add units other than % and pts.
 - When a row is behind, name the 1-2 activities driving the gap with their \
@@ -175,12 +192,12 @@ def scurve_remarks(pss: str, buckets: List[Dict[str, Any]], plan: float,
         ai = _ai(facts, facts_json)
         kept = 0
         for i, txt in enumerate(ai["rows"]):
-            if txt and _grounded(txt, facts_json):
+            if _usable(txt, facts_json):
                 rows[i], kept = txt, kept + 1
             else:
-                logger.warning("CPAG remark for %s row %d not grounded, using data text: %s",
-                               pss, i, txt)
-        if ai["total"] and _grounded(ai["total"], facts_json):
+                logger.warning("CPAG remark for %s row %d unusable (ungrounded, too long "
+                               "or a field name), using data text: %s", pss, i, txt)
+        if _usable(ai["total"], facts_json):
             total, kept = ai["total"], kept + 1
         source = "ai" if kept else "data"
     except Exception as e:   # no AI configured, timeout, bad JSON

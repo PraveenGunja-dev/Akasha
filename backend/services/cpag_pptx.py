@@ -724,6 +724,55 @@ def fill_commissioning(slide, projects, d, as_of: str) -> None:
         set_text(note, man.get("note") or "Note :")
 
 
+SCURVE_TABLE_BOTTOM = Inches(7.05)    # above the slide number
+SCURVE_BODY_PT = 9
+
+
+def _fit_scurve_table(t, total_row: int) -> None:
+    """Seven bucket rows plus Total in the box the template sized for four
+    (Contract Closure and HOTO added, user 2026-10-11): body text at 9pt and
+    every row only as tall as its text, so the Total row stays on the slide.
+    Line counts are estimated from the column widths at 9pt."""
+    table = t.table
+    widths = [c.width for c in table.columns]
+
+    def lines(cell, width) -> int:
+        chars = max(1, int(width / Emu(int(914400 * 0.058))))   # ~0.058in per char at 9pt
+        return max(1, sum(-(-len(p_.text) // chars) or 1 for p_ in cell.text_frame.paragraphs))
+
+    line_h, pad = Pt(SCURVE_BODY_PT * 1.2), Emu(2 * 22860)
+    for r in range(2, total_row + 1):
+        n = 1
+        for c, w in enumerate(widths):
+            cell = table.cell(r, c)
+            cell.margin_top = cell.margin_bottom = Emu(22860)
+            if c in (0, len(widths) - 1):   # template rows pad label/remark differently
+                cell.margin_left = Emu(91440)
+            for para in cell.text_frame.paragraphs:
+                # cloned rows carry the template last row's 119% line spacing
+                para.line_spacing = 1.0
+                para.space_before = para.space_after = Pt(0)
+                for run in para.runs:
+                    run.font.size = Pt(SCURVE_BODY_PT)
+            # An empty or cloned cell keeps the template's 11pt end-of-paragraph
+            # size, which sets the row height on its own.
+            for end in cell._tc.iter(qn("a:endParaRPr")):
+                end.set("sz", str(SCURVE_BODY_PT * 100))
+            if not cell.is_spanned:
+                n = max(n, lines(cell, w - cell.margin_left - cell.margin_right))
+        table.rows[r].height = Emu(int(line_h * n + pad))
+    head_h = Emu(int(Pt(11) * 1.2 + 2 * 22860))
+    for r in (0, 1):
+        table.rows[r].height = head_h
+    room = SCURVE_TABLE_BOTTOM - t.top
+    need = sum(row.height for row in table.rows)
+    if need > room:     # still too tall: squeeze every row evenly
+        k = room / need
+        for row in table.rows:
+            row.height = Emu(int(row.height * k))
+    t.height = sum(row.height for row in table.rows)
+
+
 def fill_scurve(slide, p, d) -> None:
     t = tables(slide)[0]
     buckets = p.get("buckets") or []
@@ -769,10 +818,11 @@ def fill_scurve(slide, p, d) -> None:
     pl = (ftm or {}).get("planCumPct") or sum(b.get("planToDatePct") or 0 for b in buckets)
     ac = (ftm or {}).get("actualCumPct") or sum(b.get("earnedPct") or 0 for b in buckets)
     rem = remark(len(buckets), auto.get("total") or "")
-    # The rows' exact total, rounded: ~95%, as Contract Closure and HOTO sit
-    # in no bucket. May differ by 1 from the sum of the rounded rows.
+    # The rows' exact total, rounded (100%, less any baseline work dropped
+    # from the live schedule). May differ by 1 from the sum of the rounded rows.
     wt = round(sum(b.get("weightExactPct") or 0 for b in buckets))
     set_row(t, total_row, [_p(wt), _p(pl), _p(ac), _p(pl - ac), rem], 1)
+    _fit_scurve_table(t, total_row)
 
     pics = pictures(slide)
     if not series or not pics:
@@ -1158,10 +1208,12 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
     table = t.table
     head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
     fc_cols = [c for c, h in enumerate(head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
-    # The forecast schedule is the months AFTER the P6 data date's month - the
-    # pack reviewed in Oct-26 on the 21-Sep-26 update reads Oct / Nov / Dec,
-    # not Sep (user, 2026-10-10).
-    fc_months = [_add_months(as_of, i + 1) for i in range(len(fc_cols))]
+    # The forecast schedule is the present month and the next two (user,
+    # 2026-10-11): anchored to the month the pack is produced, not the P6 data
+    # date, which moves on its own update cycle (an Oct data date gave Nov /
+    # Dec / Jan and dropped the current month).
+    this_month = date.today().strftime("%Y-%m")
+    fc_months = [_add_months(this_month, i) for i in range(len(fc_cols))]
     for c, ym in zip(fc_cols, fc_months):
         set_text(table.cell(1, c), _mon(ym))
 
@@ -1931,6 +1983,7 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     _strip_arrows(prs)
     _strip_comments(prs)
     _strip_title_highlights(prs)
+    _center_section_titles(prs)
     _uniform_page_numbers(prs)
     if S_THANK_YOU not in drop:
         move_slide_to_end(prs, T[S_THANK_YOU])
@@ -1972,6 +2025,33 @@ def _strip_title_highlights(prs) -> None:
                 continue
             for hl in list(sh._element.iter(qn("a:highlight"))):
                 hl.getparent().remove(hl)
+
+
+# The coloured band on the section-divider layout is part of the background
+# picture; this is its extent (the layout's own Title 1 box covers it).
+SECTION_BAND_TOP, SECTION_BAND_HEIGHT = Emu(4038600), Emu(1362075)
+
+
+def _center_section_titles(prs) -> None:
+    """Section dividers (Procurement, Progress, Manpower, Ordering, Approvals):
+    the template's title boxes are top-anchored and placed slightly
+    differently per slide, so the title sat high in the band (user,
+    2026-10-11). Every divider title is fitted to the band and centred
+    both ways, as most dividers already were horizontally."""
+    for slide in prs.slides:
+        if "Section Header" not in slide.slide_layout.name:
+            continue
+        for sh in slide.shapes:
+            if (sh.has_text_frame and sh.text_frame.text.strip()
+                    and not sh.name.startswith("Slide Number")):
+                # A placeholder inherits its box from the layout; setting only
+                # top/height writes an xfrm with zero left/width, so all four
+                # are written together.
+                left, width = sh.left, sh.width
+                sh.left, sh.top, sh.width, sh.height = left, SECTION_BAND_TOP, width, SECTION_BAND_HEIGHT
+                sh.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+                for para in sh.text_frame.paragraphs:
+                    para.alignment = PP_ALIGN.CENTER
 
 
 def _polish_civil_legend(slide) -> None:
