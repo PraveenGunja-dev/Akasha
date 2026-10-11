@@ -575,21 +575,22 @@ def _construction(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, An
 # as Total Scope, as the pack prints it.
 CIVIL_GROUPS = [
     {
+        # Staircase & Finishing is not reported (user decision 2026-10-11).
         "stages": ["DCIS Piling", "PCC", "Footing & Column Casting",
-                   "Slab Casting", "Staircase & Finishing"],
+                   "Slab Casting"],
         "elements": [
             ("PCS", "PCS - Column Casting", [
                 ["PCS - Driven Cast in-situ Pile"], [],
                 ["PCS - Footing & Pile Beam Casting", "PCS - Column Casting"],
-                ["PCS - Slab casting"], ["PCS - Stairecase Installation"]]),
+                ["PCS - Slab casting"]]),
             ("SGR", "SGR - Column Casting", [
                 ["SGR - Driven Cast in-situ Piling"], ["SGR - PCC"],
                 ["SGR - Footing & Pile Beam Casting", "SGR - Column Casting"],
-                ["SGR - Slab Casting"], ["SGR - Stairecase Installation"]]),
+                ["SGR - Slab Casting"]]),
             ("MCR", "MCR - Column Casting", [
                 ["MCR - Driven Cast in-situ Piling"], ["MCR - PCC"],
                 ["MCR - Footing & Pile Beam Casting", "MCR - Column Casting"],
-                ["MCR - Slab Casting"], ["MCR - Stairecase Installation"]]),
+                ["MCR - Slab Casting"]]),
         ],
     },
     {
@@ -847,11 +848,10 @@ def _weightage_progress(db: Session, poid: int, activity_codes, data_date):
 # (PSS-11: 54 = 54), and a footing is not cast before its PCC.
 INFERRED_STAGES = {"PCC": "Footing & Column Casting"}
 
-# Progress weights per stage, matched to the pack's Progress column
-# (2026-09-30): it is not P6's weightage (PCS 85.7% vs the pack's 98%) nor a
-# plain count (88.9%). Staircase & Finishing at 4% with the other stages equal
-# reproduces PCS 98 / SGR 98 / MCR 97 on PSS-11 exactly; HF 7 of 8 = 88.
-STAGE_WEIGHTS = {"Staircase & Finishing": 0.04}
+# Fixed progress weights per stage; unlisted stages share the rest equally.
+# Staircase & Finishing (4%) was the only entry and the stage is no longer
+# reported (2026-10-11), so every stage now weighs the same.
+STAGE_WEIGHTS: Dict[str, float] = {}
 
 
 def _infer_stages(stages, plan_row, act_row) -> List[int]:
@@ -947,8 +947,7 @@ def _civil(db: Session, poid: int, roots: Dict[int, str],
                  "by the data date on the plan baseline. A stage P6 has no "
                  "activity for is inferred from its prerequisite (PCS PCC = "
                  "Footing & Pile Beam) and listed in `inferred`. Progress is "
-                 "stage-weighted (Staircase & Finishing 4%, the other stages "
-                 "equal), matched to the pack; P6's own weightage is kept in "
+                 "the stages weighted equally; P6's own weightage is kept in "
                  "p6PlanPct / p6ActualPct.",
     }
 

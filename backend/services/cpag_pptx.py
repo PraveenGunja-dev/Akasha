@@ -1334,14 +1334,21 @@ def fill_civil(slide, p) -> None:
     main_pic, bcf_pic = (pics + [None, None])[:2]
 
     if main_pic is not None and len(groups) >= 2:
-        rows, heads, fills, spans = [], [], {}, []
+        rows, heads, fills, spans, short = [], [], {}, [], []
+        # One table for both groups: a group with fewer stages has its last
+        # stage widened over the spare columns so Progress stays aligned.
+        width = max(len(g["stages"]) for g in groups[:2])
         for g in groups[:2]:
+            pad = width - len(g["stages"])
+            start = len(rows)
             heads.append(len(rows))
-            rows.append(["", "", "Total Scope", *g["stages"], "Progress"])
+            rows.append(["", "", "Total Scope", *g["stages"], *[""] * pad, "Progress"])
             for e in g["elements"]:
                 fills[len(rows)] = PEACH
                 spans.append(len(rows))
-                rows.extend(_civil_rows([e]))
+                rows.extend(r[:-1] + [""] * pad + r[-1:] for r in _civil_rows([e]))
+            if pad:
+                short.append((start, len(rows), 2 + len(g["stages"]), 2 + width))
         x, y, cx, cy = main_pic.left, main_pic.top, main_pic.width, main_pic.height
         remove_shape(main_pic)
         gf = new_table(slide, x, y, cx, cy, rows, [0.6, 0.65, 0.7, 0.95, 1.1, 0.95, 0.95, 0.95, 0.8],
@@ -1352,10 +1359,13 @@ def fill_civil(slide, p) -> None:
             tb.cell(r, 0).merge(tb.cell(r + 1, 0))
         for r in heads:
             tb.cell(r, 0).merge(tb.cell(r, 1))
+        for r0, r1, c0, c1 in short:
+            for r in range(r0, r1):
+                tb.cell(r, c0).merge(tb.cell(r, c1))
         notes = []
         if any(e.get("inferred") for g in groups[:2] for e in g["elements"]):
             notes.append("* No P6 activity - taken from Footing & Pile Beam Casting.")
-        notes.append("Progress: stage-weighted (Staircase & Finishing 4%, other stages equal).")
+        notes.append("Progress: stages weighted equally.")
         cap = slide.shapes.add_textbox(x, y + cy, cx, Inches(0.22))
         cap.text_frame.margin_top = cap.text_frame.margin_bottom = 0
         run = cap.text_frame.paragraphs[0].add_run()
