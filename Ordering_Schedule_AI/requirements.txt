@@ -1,0 +1,15 @@
+pandas>=2.2
+numpy>=2.0
+scikit-learn>=1.5
+lightgbm>=4.5
+catboost>=1.2
+xgboost>=2.1
+joblib
+mlflow>=2.16
+fastapi>=0.110
+uvicorn
+python-multipart
+pydantic>=2
+requests
+python-dotenv
+anthropic>=1.13

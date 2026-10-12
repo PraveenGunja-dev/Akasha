@@ -1,0 +1,972 @@
+Call with Praveen and 2 others-20261009_182712-Meeting Recording
+9 October 2026, 12:57pm
+31m 1s
+
+Kruti Yadav started transcription
+
+Praveen Gunja   0:03
+It is for your understanding. I have added that, and I have downloaded that Excel, and I will share it to you, so that whatever that module installation columns is there in the forecast columns that are, I mean, it is not dependent upon any data. It is our assumptions only, but whatever the planning we have doing.
+based upon the data we had. So that is only. So remaining data won't change. This data is based on whether it is TC. So as I mentioned, the orange colour represents the TC, the blue colour represent the ordering. So green colour represents what is FTC, final FTC.
+
+Kruti Yadav   0:26
+Okay.
+
+Praveen Gunja   0:41
+So in the first Excel, you did not find the blue colour and green color. So that is the reason you are asking that. In the second file, you will find that every three things, whether it is green, blue, so the green represents that. So that is the reason I shared the second file.
+
+Kruti Yadav   0:42
+Hey.
+Yes, yeah.
+Mm.
+This one.
+OK, only this data is different in both the files on these are like the predicted forecasted data, which OK.
+
+Praveen Gunja   0:58
+Yeah.
+Exactly.
+Yeah.
+So that is the difference, nothing change in this, OK?
+
+Kruti Yadav   1:07
+Okay, and these are basically actual data, right? Not the predicted one. FTC name, module date and TC date, right? Okay.
+
+Praveen Gunja   1:11
+Yeah.
+Not the predicted one, yeah.
+So if you wanted the predicted, so you will find it in these dates. So whatever the ordering we are doing, so it is based upon that. So you should see here, we are ordering 12, 9. Means this will happen, this will happen on particular month.
+
+Kruti Yadav   1:20
+Good, OK.
+Mhm.
+
+Praveen Gunja   1:33
+Yep.
+In January, we are ordering 12 modules, like 9 MW modules. So after 138 days, it might be fall on January, May or April for PC.
+
+Kruti Yadav   1:39
+This.
+For people.
+Mhm.
+
+Praveen Gunja   1:45
+After one month, so it will after 45 days it will fall for FTC.
+
+Kruti Yadav   1:46
+Okay, yeah.
+Yeah, yeah, got the difference and only this month files prediction, and that's the only difference between both the things between both the files. OK, so I'll keep this file only, so we were at.
+
+Praveen Gunja   1:51
+Mm.
+Little bit different, that's yeah.
+Yeah.
+Side productivity that is finished, that is finished.
+
+Kruti Yadav   2:04
+This is done and site productivity. Yeah, these are the physics data we have. And this is the area. And what is this code?
+
+Praveen Gunja   2:15
+So.
+
+Kruti Yadav   2:17
+Two.
+
+Praveen Gunja   2:17
+This code is not required. This is extra code which we are getting from there, like when the productivity he has given, right? So that thing. So you just need to concentrate here, the project name.
+
+Kruti Yadav   2:27
+Code of this field is not required, and this is related to the productivity schedule, Rohit Sharma.
+
+Praveen Gunja   2:30
+Yeah, not record.
+For his understanding, yeah, yeah, so...
+
+Kruti Yadav   2:37
+Okay, so I will remove this. It was not been taken.
+
+Praveen Gunja   2:39
+So you here you need to concentrate knowingly on the blocks.
+Yeah, the blocks is right.
+
+Kruti Yadav   2:47
+This is activity and this is area. OK, for this particular activity, these are the units.
+
+Praveen Gunja   2:48
+See.
+Unit is nothing but UOM.
+
+Kruti Yadav   2:55
+Okay, so...
+OK, you, you here we had one column with you, right? This one.
+
+Praveen Gunja   3:02
+Unit of measurement, yeah, yeah.
+
+Kruti Yadav   3:04
+This one, and OK.
+
+Praveen Gunja   3:08
+So, in PCs, the username UOM will be this.
+
+Kruti Yadav   3:09
+Files.
+
+Praveen Gunja   3:13
+Piles is nothing but rods.
+
+Kruti Yadav   3:16
+Okay, here we have this many units and from Ariba we are getting EA only because we have very less data here, right?
+
+Praveen Gunja   3:17
+Mm.
+Yeah.
+Yeah, no, no, EA is nothing but in Ariba what we are ordering is modules that is P6.
+
+Kruti Yadav   3:29
+So that's why for all the modules we have EA only.
+
+Praveen Gunja   3:32
+Yeah, so because models will come under structures, right? So like pens only, so you when you consider when you buy pens, so you will find 5 set, so five each. So like that, so this much of models they have ordered from the site, 1395, modules they have ordered. So I told this also like 1395 multiplied with 0.82 will give the capacity of that particular model.
+Particular project they have ordered.
+
+Kruti Yadav   3:55
+But...
+Okay.
+
+Praveen Gunja   3:57
+Okay.
+So this is regarding Ariba. This side, UOM is different.
+
+Kruti Yadav   4:00
+And here are these modules.
+
+Praveen Gunja   4:03
+This is different, that is different. So this blocks represents that how much progress has done. I mean, how many for every project, like in pieces, what happens? Like the block wise representation will happen in P6. So here you will find that block wise only.
+
+Kruti Yadav   4:25
+Any block related details we have, like block numbers or something like that? Any block ID we have?
+
+Praveen Gunja   4:29
+See, block YD won't have, so we will find only block numbers like block one, block two, block three, block 4, if one particular projects.
+
+Kruti Yadav   4:37
+Where is it?
+Where is block number is mentioned here?
+
+Praveen Gunja   4:40
+In P6 in P6 it will have in P6 in P6 it will have so we are we are showing the console data.
+
+Kruti Yadav   4:42
+In this Data.
+
+Praveen Gunja   4:49
+Consolidated.
+
+Kruti Yadav   4:51
+But here, like if I want to see, see you mentioned like this unit is block wise, right? So for block one, what is the unit of block one? Which activity is there? So like how to identify block? That's what I, for example, this code. So this is block number or what? Something like that. Identify for block.
+
+Praveen Gunja   4:51
+Yeah.
+So, you mean that?
+Oh.
+See, see.
+Rohit.
+No, no.
+No, no, no. See, here we are displaying on basis of project level.
+On project level, this much of piles are there, this much of piles are there in the here blocks done is there right in blocks pilings are done, so like after four in that is last right, so it is like progress done total actual out of four blocks the piling.
+
+Kruti Yadav   5:32
+For this particular project, 4 blocks are done, right? The space.
+
+Praveen Gunja   5:36
+Yeah, out of four, we have done four.
+
+Kruti Yadav   5:39
+Yeah.
+
+Praveen Gunja   5:40
+So, on that basis, I will implement it, so that is the header. You will find the whatever the like filing for trackers, such as inventors and robots, so you'll find it here itself.
+In 4 out of four, we have completed that. So what is the scope for the four blocks? So how much we have done? What is the percentage for that?
+
+Kruti Yadav   5:58
+For combined 4 blocks only, like we've done project, we are getting not the block we are getting, it is only based on the project for this particular project, for example, 4 blocks are needed, so four blocks are done, and the score for this completion of this four block related work is sixty-eight.
+
+Praveen Gunja   6:01
+Yeah, yeah.
+M.
+You.
+Hmm.
+
+Kruti Yadav   6:17
+And...
+Done 16, that means this is basically calculation based on this scope and done work, right?
+
+Praveen Gunja   6:26
+Yes, yeah, yeah, so below you will find that, so that is.
+
+Kruti Yadav   6:27
+Hundred percent calculation.
+
+Praveen Gunja   6:30
+The top one is there, right? That is MWP like modules. The modules ordered 68 is the modules for that particular project. Below you will find the scope. This scope will be converted into DC. So while converting it to the DC, you will find it as 68.
+You just need to consider this below one, like whatever that 13901 is there, right? So that is the tracker structure for that particular project. So for all blogs, you need to consider these items. So what are the items which below the header?
+
+Kruti Yadav   7:01
+Okay.
+
+Praveen Gunja   7:07
+Anderson.
+
+Kruti Yadav   7:07
+OK, yeah, these these blog details right, and this is the combined one for this project, the bold one, OK.
+
+Praveen Gunja   7:11
+Exactly, yeah.
+Combined one, so that is the header.
+Yeah.
+
+Kruti Yadav   7:20
+Okay, now after done we have planned P6 baseline.
+
+Praveen Gunja   7:20
+And.
+Baseline is nothing but like every project before starting off anything. So there will be set of baselines like we need to complete this project, these models on this particular date. So it is based upon that only. So as we are completing that total, so the baseline will be also completed. So sometimes what happens, like see below. So we have.
+The baselines are is crossed here, so when it comes to 19th and 20th.
+So, yeah, second one, no, see, 20, see here, the baseline, I mean, the whatever the projects baselines are completed, but the progress is there, right? 1.0, so the site progress has only 1.0, so it is beyond schedule.
+
+Kruti Yadav   7:50
+19th and this one.
+Wait, where is the site progress I didn't get it? For example, this is plan baseline here, 100, 100, 100%. We have after that behind.
+
+Praveen Gunja   8:09
+Absolutely.
+Mm.
+
+Kruti Yadav   8:13
+So, what, like, I didn't understand what you were trying to say.
+
+Praveen Gunja   8:15
+Behind is nothing but a minus.
+Plan minus done is new will use up behind.
+
+Kruti Yadav   8:24
+Okay, so for example, for this project, we can consider it. So here, because we have 133.
+
+Praveen Gunja   8:28
+So what is the scope for that?
+What is the scope for that?
+
+Kruti Yadav   8:32
+Scope is 4141, this one, right? Sorry, 202, the combine one.
+
+Praveen Gunja   8:36
+Yeah.
+No, no, no, no combine one, no, just go with the individual.
+
+Kruti Yadav   8:40
+OK, this one 41 OK, so 41840 is for this one particular project that's the scope.
+
+Praveen Gunja   8:43
+Okay.
+Yeah, how much we have completed for that?
+
+Kruti Yadav   8:49
+27683
+
+Praveen Gunja   8:50
+So, based upon the actual completion will be, we will get that.
+but the baseline is completed. So then we will get that how much behind.
+
+Kruti Yadav   9:01
+Correct, correct.
+
+Praveen Gunja   9:02
+Is it relevant?
+
+Kruti Yadav   9:03
+How much we are basically behind? OK.
+
+Praveen Gunja   9:06
+M.
+
+Kruti Yadav   9:06
+For this particular project, and...
+
+Praveen Gunja   9:09
+So, pays per day.
+
+Kruti Yadav   9:10
+These per Ltd OK.
+
+Praveen Gunja   9:12
+So, it is Rohit has shared that file, right? So, in that you will find that how much we need to do some modules per day. So, on that on that basis, I have added this column.
+
+Kruti Yadav   9:22
+Which file the productivity one?
+
+Praveen Gunja   9:24
+Rohit has shared, yeah, productivity file along with productivity file, he has shared the productivity, solar productivity.
+
+Kruti Yadav   9:27
+Here, share to file, yes.
+
+Praveen Gunja   9:31
+So, in that, you will find that, so what is the average progress for that particular activity by structures and like that?
+Based on that.
+
+Kruti Yadav   9:41
+Okay, so based on that, you have derived this column details, right?
+
+Praveen Gunja   9:45
+Yeah.
+
+Kruti Yadav   9:47
+Okay.
+and needed per day to finalise FTC.
+
+Praveen Gunja   9:54
+The final FTC to, in order to match that FTC, we need to do this much, but so this is the average. See, this is the main thing: 106.0 is there. It is based upon the calculation, Rohit has given, but we, as we are short of the progress has delayed, so we need to do this much.
+
+Kruti Yadav   9:59
+So, how we are calculating this?
+
+Praveen Gunja   10:15
+In order to match that FTC, whatever the FTC we had, so we need to do this much, but on daily basis we can do only one or six, but so due to that, that the days will be delayed.
+
+Kruti Yadav   10:18
+Mm.
+Mhm.
+
+Praveen Gunja   10:31
+whatever the date delay will happen.
+
+Kruti Yadav   10:35
+M.
+So, basically, for which parameters you are considering for calculating this?
+
+Praveen Gunja   10:42
+So, the phase per day is there, right? So, that is the main, and in order to match that FTC needed per day that is required, so...
+
+Kruti Yadav   10:46
+M.
+M.
+No, for this only, for example, needed for DFTC for this, for example, if you want, how you are deriving this 283, what's the calculation?
+
+Praveen Gunja   10:56
+Sohel.
+So for every project, we will have the FTC, right?
+
+Kruti Yadav   11:02
+M.
+
+Praveen Gunja   11:02
+So, with that FTC, we will match that. So, as we are considering the block wise, so we will take that final FTC for that particular block. So, based on that, we will like that. So, what is the final FTC for that particular project?
+And where are we, like, we, how much we have completed? So, did we, like, if we are doing on the same day, this is the daily progress, right? Face per day, average since start average progress. So, like, if you are going with the average progress on day basis, we can't achieve.
+
+Kruti Yadav   11:29
+M.
+
+Praveen Gunja   11:36
+Because in order to achieve that FTC.
+
+Kruti Yadav   11:37
+We need to add some more, yeah, more manpower.
+
+Praveen Gunja   11:40
+In order to add, yeah, so that is the reason this is the required thing. So in order to achieve that FTC, so we need to do per day average this much.
+
+Kruti Yadav   11:50
+Okay.
+
+Praveen Gunja   11:52
+The.
+
+Kruti Yadav   11:52
+You are using AI model for this or manual calculation?
+
+Praveen Gunja   11:55
+It is, it is manual television, no.
+
+Kruti Yadav   11:58
+Okay.
+Next.
+
+Praveen Gunja   12:03
+How much days it will complete to that? So how many days it is based upon the estimation dates?
+
+Kruti Yadav   12:11
+Okay.
+
+Praveen Gunja   12:12
+Mondays.
+
+Kruti Yadav   12:16
+What is this norm?
+
+Praveen Gunja   12:20
+Normal man days, like what are the...
+I think so, just scroll, I mean, extend that.
+The.
+Extended column.
+
+Kruti Yadav   12:30
+This one?
+
+Praveen Gunja   12:31
+Yeah.
+No, OK, so it is on a daily basis how many mandates we are taking that units per mandate, whatever the units are there.
+Man.
+In the productivity sheet, you will find this, whatever the man is. So it is a man is left is nothing but how many man is left we left for that.
+
+Kruti Yadav   12:57
+Okay.
+
+Praveen Gunja   12:59
+Yeah.
+On.
+
+Kruti Yadav   13:04
+Basically, in order to achieve this FTC, we how much manpower we needed this right?
+
+Praveen Gunja   13:08
+You need it.
+
+Kruti Yadav   13:11
+Stupid Reddy, no modules.
+
+Praveen Gunja   13:12
+Normal.
+Is it open to come?
+This is one.
+
+Kruti Yadav   13:21
+This is same as this only right? Here we had this column.
+
+Praveen Gunja   13:23
+Yeah, model order, model deliveries, in model deliveries, we had right, so in that.
+
+Kruti Yadav   13:29
+Okay, yeah, we had that call. Okay, then.
+What modules apply versus site?
+
+Praveen Gunja   13:37
+Mm.
+
+Kruti Yadav   13:38
+This column also we had in that sheet, right?
+
+Praveen Gunja   13:40
+That, yes, yes, exactly. So, the remarks will be generated on the side.
+
+Kruti Yadav   13:48
+Okay.
+You send me instead of screenshot, you send me the some sample that texture data, like sample one, sample two, keep for supplement side what was the explanation for this, not the screenshot, just give me the text so that I can document it in my side.
+
+Praveen Gunja   13:55
+Nikitha.
+I have shared you, I have shared you, right?
+
+Kruti Yadav   14:10
+Like I can add it here or somewhere like that.
+Here we have reason, right? Why this particular? OK, what is this? Why? What is this? Why is all about FTC?
+
+Praveen Gunja   14:24
+Why is nothing but see, as we are having some structure is reddy, no models, so the models in...
+Under the yard, and as the structures are in the reddy and the speed, there will be no shortage, no access needed, so models are ready and we are having this models, like the structure is ready and we are having enough models at the site, so there is no need of extra models at the site.
+And the progress is going on, so it is it is just a simple thing.
+
+Kruti Yadav   14:54
+Also, for this, this is based on module only, right? Why means why means what question it is answering?
+
+Praveen Gunja   14:57
+Exactly.
+Mhm.
+You can consider it as a remark.
+
+Kruti Yadav   15:05
+Okay, based on this data, it is in a degree mark.
+
+Praveen Gunja   15:06
+So here it is, you see, here we are saying that supply matches side. Why it is saying that supply matches side? So this is the reason.
+
+Kruti Yadav   15:16
+Okay. For this also, this is the reason. Okay.
+
+Praveen Gunja   15:19
+Yeah, yeah.
+
+Kruti Yadav   15:22
+And these things are coming correctly or how is it? Because for this you used the GPT like models, right? So then like the number, a numerical representation, whatever you are getting here, so that is coming correct.
+
+Praveen Gunja   15:24
+Find me.
+M.
+Yeah, it is coming.
+Yeah.
+
+Kruti Yadav   15:41
+OK, for all the keys this.
+
+Praveen Gunja   15:43
+Hmm.
+
+Kruti Yadav   15:44
+For all the cases.
+
+Praveen Gunja   15:45
+Yes, this is.
+
+Kruti Yadav   15:46
+Put all the projects and...
+
+Praveen Gunja   15:48
+Yeah, I just need to verify again, presently, as you require more data, right? So, that's the reason I just given you. I will re-verify this, and mostly it is right, mostly in it, almost, almost it is right. I just need to re-verify like some some data mismatch due to project mapping or everything, so there will be some...
+
+Kruti Yadav   15:49
+Okay.
+
+Praveen Gunja   16:09
+And also, and there is a some sort of data missing in Ariba also, so I just need to configure that also.
+Yeah.
+
+Kruti Yadav   16:18
+OK, OK, next order sheet we have.
+
+Praveen Gunja   16:23
+Okay.
+
+Kruti Yadav   16:25
+Here we have project name. OK.
+Plot detail. OK, we are extracting plot is same. Here we have plot that is the same, right? This plot and that.
+Yeah.
+Order month.
+Order month means module order delivery month or which order month it is.
+
+Praveen Gunja   16:50
+Uh, uh, Kruti, this is not required, plan phase orders and planning orders. This is based upon the orders we are doing on a monthly basis.
+
+Kruti Yadav   16:59
+No, no, actually this is required for AI model training because I have used this phase order sheet.
+
+Praveen Gunja   17:01
+Mhm.
+This is forecast, this is forecast.
+
+Kruti Yadav   17:09
+And this is not the actual model, this is not the actual module order date.
+
+Praveen Gunja   17:09
+I did not use any AI model.
+No, this is the plan orders which we are doing in the model deliveries.
+
+Kruti Yadav   17:19
+Men's on.
+This one, like this related data, this month-wise model requirement side data is here in the fees orders.
+
+Praveen Gunja   17:23
+This one, yeah, this one.
+Yeah.
+Yeah, exactly, yes, yes.
+
+Kruti Yadav   17:32
+All the columns are related to that.
+
+Praveen Gunja   17:34
+That only.
+And what are the planning rules we are mentioning that that?
+
+Kruti Yadav   17:36
+Guru.
+
+Praveen Gunja   17:41
+Yeah.
+
+Kruti Yadav   17:42
+Okay.
+Training rules, okay, this is the same as from the UI, I just seen it.
+Okay.
+Good then.
+
+Praveen Gunja   17:57
+Good.
+
+Kruti Yadav   17:58
+You send me that sample, only that texture data for this.
+
+Praveen Gunja   17:59
+Okay.
+I, I shared you right, like you can take from that.
+
+Kruti Yadav   18:07
+But I didn't understand what is this. For example, this is only for one column, right? Let me open that.
+
+Praveen Gunja   18:15
+You asked for one column only.
+
+Kruti Yadav   18:17
+Wait, wait.
+I asked for FTC as well, right?
+
+Praveen Gunja   18:22
+No, no, you asked for this particular.
+
+Kruti Yadav   18:24
+FTC, like I told you, we forecasted FTC for that also, you when we clicked that, so you were showcasing some message or something like that, right?
+
+Praveen Gunja   18:34
+In present UI, you will find that, right?
+
+Kruti Yadav   18:38
+Where I find it?
+
+Praveen Gunja   18:40
+Yeah.
+In present, I will share my screen, whatever the things you needed, you just ask me.
+
+Kruti Yadav   18:48
+Yeah, yeah, share your screen, yes.
+
+Praveen Gunja   19:03
+Yeah.
+
+Kruti Yadav   19:16
+Scroll down.
+
+Praveen Gunja   19:27
+So what do you?
+
+Kruti Yadav   19:28
+Yeah, this deliveries, wait, this deliveries column we had here in the Excel sheet.
+
+Praveen Gunja   19:30
+What?
+This one?
+
+Kruti Yadav   19:37
+Hmm, I mean, yeah, these data.
+
+Praveen Gunja   19:38
+This is related to data. This data you will find in the set progress.
+Here on the speed per day, needed per day, so everything there from there only, I'm showing it here.
+
+Kruti Yadav   19:51
+From where a site productivity sheet or some OK.
+
+Praveen Gunja   19:55
+Yeah, side product, so this is same, so you are finding that the scope percentage complete and planned behind speed per day, so these things you are finding in that.
+
+Kruti Yadav   19:58
+Okay.
+
+Praveen Gunja   20:08
+It's.
+
+Kruti Yadav   20:12
+Click on the supplement site.
+
+Praveen Gunja   20:14
+Good.
+Supplement.
+OK, this one.
+
+Kruti Yadav   20:21
+Yeah, just copy this content.
+
+Praveen Gunja   20:23
+Yeah, like.
+
+Kruti Yadav   20:25
+Yeah, yeah, this.
+
+Praveen Gunja   20:28
+Yeah, it does.
+
+Kruti Yadav   20:28
+Uh, with the on control C and control V into her.
+
+Praveen Gunja   20:31
+Yes.
+
+Kruti Yadav   20:35
+Also, don't send just, yeah, add some more samples as well.
+In this, okay.
+
+Praveen Gunja   20:43
+Thank you.
+
+Kruti Yadav   20:44
+Wait, yeah, go to that page, yeah, click on that, yeah, filing in progress, like two, three samples you can share, yeah, for all the different statuses.
+
+Praveen Gunja   20:57
+Okay, okay.
+Mhm.
+Sing a song.
+Yeah.
+Mhm.
+Yeah.
+
+Kruti Yadav   21:34
+OK, now just send me that FTC pool first when you click on that FTC pool first, then yeah.
+
+Praveen Gunja   21:37
+I.C.P.A.
+There will be, there will be, I will be.
+
+Kruti Yadav   22:07
+Okay, yeah, okay, yeah, no worries. I think these numbers are enough.
+
+Praveen Gunja   22:08
+Do you want to?
+
+Kruti Yadav   22:12
+And Praveen, when the dashboard gets updated, like daily, like how we are updating this dashboard at particular time stamp, like any scheduler is set, like you have.
+
+Praveen Gunja   22:13
+What is this?
+Daily.
+I think.
+This ordering won't be updated because ordering will update it when we receive that milestones, like what are the things from the PCC, so it won't happen in a day, so it will takes time actually, so, so, but daily, daily we are syncing in the data on daily basis, we are updating that.
+
+Kruti Yadav   22:42
+So, once daily this module is updated or not, like how we are doing this.
+
+Praveen Gunja   22:43
+Yeah.
+Yeah.
+Presently, it won't update because the daily, the SAP data won't update it. It will take 15 to 20 days to update.
+
+Kruti Yadav   22:53
+Means right now data is same, but you are still like taking the latest data from the different sources. Is it like that?
+
+Praveen Gunja   22:59
+Physics, so it's exactly, exactly, exactly.
+So if the data changes, so then ordering also will change.
+
+Kruti Yadav   23:04
+Sohel.
+
+Praveen Gunja   23:07
+So, if if you are getting this 338 has been ordered from the SAP, so it on the next time when the data is updated, so there there is no need of this 3338 not.
+
+Kruti Yadav   23:19
+Okay.
+
+Praveen Gunja   23:21
+And.
+Mm.
+
+Kruti Yadav   23:23
+Okay, and for displaying this, like you have your integrated API endpoint on how you are displaying all these things.
+We have API for this.
+
+Praveen Gunja   23:33
+I did not get you.
+But we had API for the.
+
+Kruti Yadav   23:36
+You have created API endpoint for displaying this.
+
+Praveen Gunja   23:41
+for module installation.
+
+Kruti Yadav   23:44
+Yeah, this dashboard.
+
+Praveen Gunja   23:46
+Yeah, we had that.
+
+Kruti Yadav   23:49
+OK, I'm sharing my screen. I need to wait.
+Yeah, I think.
+
+Praveen Gunja   24:00
+For model, I think so they we have not created a Rohit. I mean, is there a store like we need to create only certain APIs to get the data?
+
+Kruti Yadav   24:09
+Okay, so you can share me your screen and in the code you can showcase that to me, how you are displaying the dashboard data, like APIs or whatever you guys have done.
+Just share your screen and just because I need to set up the code in my system now. I have taken the latest pull from Git. Like today you have given me access to that Git repo, right?
+Hello!
+
+Praveen Gunja   24:40
+I'm not able to get you Kruti.
+
+Kruti Yadav   24:42
+Praveen, how you are displaying the dashboard, like you have created API endpoint or like how you are loading any Excel file, CSV file, so that I want to see in code.
+
+Praveen Gunja   24:50
+So in in the yeah.
+You can find it in the module deliveries.py.
+Yes, I'm sure.
+
+Kruti Yadav   25:01
+Yeah, that's what I was thinking. Just give me some brief about the code. You can share your screen so that I can modify the code accordingly.
+
+Praveen Gunja   25:01
+Yeah.
+Yes, you can.
+But.
+Please tell me.
+So, here you will find them.
+
+Kruti Yadav   25:23
+Your screen is not visible, you wanna share it.
+
+Praveen Gunja   25:35
+So, in this file, you will find that all the model related things in this.
+Model deliveries, so we will find out all the things, whatever we have done.
+
+Kruti Yadav   25:48
+These are conference, right? Where is the main API endpoint for this? Which endpoint is called?
+
+Praveen Gunja   25:55
+Here only we have created endpoints, Kruti, in this one we have created.
+
+Kruti Yadav   26:00
+Just scroll up, where is the definition of this function?
+
+Praveen Gunja   26:20
+Yeah.
+Yeah.
+
+Kruti Yadav   26:23
+Wait, wait, wait, where was this function? Which one is main function and which is like API endpoint?
+
+Praveen Gunja   26:28
+Mhm.
+
+Kruti Yadav   26:34
+You have used Flask KPI here.
+
+Praveen Gunja   26:39
+No, I don't; I did not use the screening.
+
+Kruti Yadav   26:39
+Hello!
+Flask API is not at, you are not used, so which like Flask framework is used.
+
+Praveen Gunja   26:42
+It's.
+So, yeah, the prefix is an API order, is there it? So, from here, we are taking them.
+
+Kruti Yadav   26:53
+If fast API is already used, so you are using fast API.
+
+Praveen Gunja   26:55
+Mm.
+Hmm.
+
+Kruti Yadav   26:58
+Scroll down. This is only router. This is only the definition you said. Where is the API endpoint? Where is it? Scroll down.
+
+Praveen Gunja   27:00
+Mmh.
+For this module, we did not expose that API.
+
+Kruti Yadav   27:10
+So, how you are displaying it if you don't do if you didn't?
+
+Praveen Gunja   27:13
+So, from the data from the database.
+
+Kruti Yadav   27:17
+Array, but see in the front end how the dashboard we can see the data in the dashboard.
+
+Praveen Gunja   27:20
+Okay.
+So.
+So, we are creating that, so we I closed it.
+
+Kruti Yadav   27:27
+Your screen is not visible.
+Yeah, showcase that to me in code.
+
+Praveen Gunja   27:32
+I can check.
+So, open your code, actually, so in that I'll...
+
+Kruti Yadav   27:38
+Okay, I'm sharing my screen.
+
+Praveen Gunja   27:39
+So, like, if you go through that, so you if you go through that right, so you will find it everything as you are doing the POC, so that you just ask me to the data I have provided you to that.
+
+Kruti Yadav   27:50
+But I need to see, Athira told me to integrate that in the existing Asha platform, OK.
+
+Praveen Gunja   27:56
+But, Abhishek, you know.
+
+Kruti Yadav   27:58
+What me?
+
+Praveen Gunja   27:58
+For now, it is not recorded, but for now, they don't like a...
+
+Kruti Yadav   28:01
+Right now, it is required. I need to give demo to uh, the Adani Data team on Monday.
+That's why we only told right that this is in priority.
+Home.
+My screen visible?
+Hello?
+Narwa.
+
+Sree Charan Gaddameedi   28:30
+This is for the yesterday.
+
+Kruti Yadav   28:31
+You are on mute. My screen is visible.
+
+Sree Charan Gaddameedi   28:34
+Mm.
+
+Kruti Yadav   28:35
+Yeah, tell me which file I need to open.
+Router.
+This one, you are on mute, Praveen.
+
+Sree Charan Gaddameedi   28:50
+Yeah, he got called.
+
+Kruti Yadav   28:54
+Okay.
+
+Sree Charan Gaddameedi   29:15
+One school in security, Sreeja Kappaganti.
+
+Kruti Yadav   29:20
+What?
+
+Sree Charan Gaddameedi   29:21
+Once scroll it, once scroll it, if we get any AI.
+You can cheque in there, right, and scroll it.
+
+Kruti Yadav   29:31
+Well, Praveen mentioned that we have not created API for this.
+Uh, Sree, you aware with all those things? I mean, like, have you worked on this code base?
+
+Sree Charan Gaddameedi   29:51
+Biyo Kruti, no more than any of this.
+
+Kruti Yadav   29:54
+Yeah, because I need to run this as well in my system, so...
+Where is the requirement file?
+What all dependencies should I install?
+Meanwhile, Sree, can you tell me what all commands I need to run for the front end?
+We can until Praveen, since Praveen is on call.
+
+Sree Charan Gaddameedi   30:28
+Yeah, yeah, Praveen has some other work, so we'll finish it first, and we'll talk later about those all commands.
+
+Kruti Yadav   30:28
+What?
+
+Sree Charan Gaddameedi   30:35
+And we need to live together.
+
+Kruti Yadav   30:36
+Okay, so right now, Praveen is talking with somebody else, so what is it?
+
+Sree Charan Gaddameedi   30:41
+Yes, yes, exactly. Yeah, he's talking somewhere.
+
+Kruti Yadav   30:44
+OK, so we can. OK, so we can drop this call. We can connect separately for the setting of the front end code in my system. OK.
