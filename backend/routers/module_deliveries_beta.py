@@ -8,7 +8,7 @@ import json
 import os
 from typing import Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request, Response
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -115,3 +115,34 @@ def get_ai_results():
             "by_name": by_name,
         })
     return _ai_results_cache["data"]
+
+
+# ── AI prediction service (Ordering_Schedule_AI) ─────────────────────────────
+# The Beta's prediction panels call the separate AI service (FastAPI, port
+# 8000). The browser cannot reach it directly on the server, so its requests
+# come here - under /akasha/api, behind the same login as the rest of Akasha -
+# and are passed on unchanged. AI_SERVICE_URL points at the service's /api/ai/v1.
+AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:8000/api/ai/v1").rstrip("/")
+
+
+@router.api_route("/ai-proxy/{path:path}", methods=["GET", "POST"])
+async def ai_proxy(path: str, request: Request):
+    """Forward a prediction request to the AI service and return its answer."""
+    import httpx
+    url = f"{AI_SERVICE_URL}/{path}"
+    try:
+        # The explanation is written by an LLM, which can take a while.
+        async with httpx.AsyncClient(timeout=180, trust_env=False) as client:
+            r = await client.request(
+                request.method, url, params=request.query_params,
+                content=await request.body(),
+                headers={"Content-Type": request.headers.get("content-type", "application/json")},
+            )
+    except httpx.HTTPError as e:
+        return Response(
+            content=json.dumps({"detail": f"The AI service is not reachable at {AI_SERVICE_URL} "
+                                          f"({type(e).__name__}). Start it: python -m uvicorn "
+                                          f"service.app:app --port 8000 in Ordering_Schedule_AI."}),
+            status_code=502, media_type="application/json")
+    return Response(content=r.content, status_code=r.status_code,
+                    media_type=r.headers.get("content-type", "application/json"))
