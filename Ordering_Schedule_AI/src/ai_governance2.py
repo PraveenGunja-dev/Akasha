@@ -403,6 +403,17 @@ def diff_paths(before, after, path: str) -> list[dict]:
     return [] if before == after else [{"field": path, "before": before, "after": after}]
 
 
+REVIEW_KEYS = ("ai_priority", "ai_monthly_order_tc_forecast",
+               "ai_review_status", "ai_review_reason", "ai_review_changes")
+
+
+def save(data: dict, path: Path) -> None:
+    """Write via a temp file + rename, so the JSON on disk is never half-written."""
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+    os.replace(tmp, path)
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--provider", default="openrouter",
@@ -411,19 +422,47 @@ def main() -> None:
     ap.add_argument("--output", type=Path, default=OUTPUT_JSON)
     ap.add_argument("--limit", type=int, default=None, help="review only the first N projects (testing)")
     ap.add_argument("--sleep", type=float, default=1.0, help="seconds between calls")
+    ap.add_argument("--fresh", action="store_true",
+                    help="ignore results already in --output and review every project again")
+    ap.add_argument("--retry-errors", action="store_true",
+                    help="when resuming, also re-review projects whose last result was ERROR")
     args = ap.parse_args()
 
     data = json.loads(args.input.read_text(encoding="utf-8"))
     projects = data["ordering_schedule"]["projects"]
     todo = projects[: args.limit] if args.limit else projects
 
+    # Resume: copy reviewed results from an earlier (possibly interrupted) run of the same output file.
+    done_ids: set = set()
+    if args.output.exists() and not args.fresh:
+        prev = json.loads(args.output.read_text(encoding="utf-8"))
+        prev_by_id = {p.get("id"): p for p in prev["ordering_schedule"]["projects"]}
+        for project in projects:
+            old = prev_by_id.get(project.get("id"))
+            if not old or "ai_review_status" not in old:
+                continue
+            if old["ai_review_status"] == "ERROR" and args.retry_errors:
+                continue
+            for k in REVIEW_KEYS:
+                if k in old:
+                    project[k] = old[k]
+            done_ids.add(project.get("id"))
+
     model = {"anthropic": ANTHROPIC_MODEL, "openrouter": OPENROUTER_MODEL}.get(args.provider, "")
+    pending = [p for p in todo if p.get("id") not in done_ids]
     print(f"\nProvider        : {args.provider} {model}")
-    print(f"Projects Loaded : {len(projects)} (reviewing {len(todo)})\n")
+    print(f"Projects Loaded : {len(projects)} (reviewing {len(todo)}; "
+          f"{len(todo) - len(pending)} already done, {len(pending)} to go)")
+    print(f"Output (saved after every project) : {args.output}\n")
 
-    for idx, project in enumerate(todo):
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    save(data, args.output)   # carries resumed results forward immediately
 
-        print(f"[{idx + 1}/{len(todo)}] {project.get('project_name')}")
+    for idx, project in enumerate(pending):
+
+        print(f"[{idx + 1}/{len(pending)}] {project.get('project_name')} (id {project.get('id')}) ...",
+              end="", flush=True)
+        t0 = time.time()
 
         try:
             result = call_llm(args.provider, SYSTEM_PROMPT, build_project_prompt(project))
@@ -446,16 +485,24 @@ def main() -> None:
             project["ai_review_changes"] = changes  # audit trail: every value the model changed
 
         except Exception as ex:
-            print(f"  ERROR : {ex}")
             project["ai_review_status"] = "ERROR"
             project["ai_review_reason"] = f"Validation failed - manual review required: {ex}"
+            project["ai_review_changes"] = []
+
+        save(data, args.output)
+        status = project["ai_review_status"]
+        detail = f" - {project['ai_review_reason'][:200]}" if status == "ERROR" else \
+            f" ({len(project['ai_review_changes'])} field changes)" if status == "CORRECTED" else ""
+        print(f" {status} in {time.time() - t0:.0f}s{detail}", flush=True)
 
         time.sleep(args.sleep)
 
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    args.output.write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
-
-    print(f"\nSaved Final JSON : {args.output}")
+    counts: dict = {}
+    for p in todo:
+        s = p.get("ai_review_status", "NOT REVIEWED")
+        counts[s] = counts.get(s, 0) + 1
+    print(f"\nDone: {counts}")
+    print(f"Saved Final JSON : {args.output}")
 
 
 if __name__ == "__main__":

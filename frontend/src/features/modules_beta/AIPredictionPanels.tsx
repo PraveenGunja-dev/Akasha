@@ -559,8 +559,18 @@ function ExplainBlock({ icon, title, children }: { icon: React.ReactNode; title:
 }
 
 /** The model's written explanation, section by section; empty sections are skipped. */
-function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanation; driversTitle?: string }) {
-  if (!ex) return null;
+function ExplanationView({ ex, driversTitle = 'Key drivers', rootCause }: {
+  ex?: Explanation; driversTitle?: string;
+  /** The forecast's root cause. When given it takes the first grid slot and
+   *  Rule engine vs AI moves down, directly above Recommended actions. */
+  rootCause?: React.ReactNode;
+}) {
+  if (!ex) return rootCause ? <>{rootCause}</> : null;
+  const ruleVsAi = ex.rule_vs_ai_assessment ? (
+    <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Rule engine vs AI">
+      <BulletList items={sentences(ex.rule_vs_ai_assessment)} />
+    </ExplainBlock>
+  ) : null;
   const risks = labelled(ex.risks_identified);
   const impact = labelled(ex.business_impact);
   const unverified = ex.unverified_numbers ?? [];
@@ -575,11 +585,7 @@ function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanatio
         </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {ex.rule_vs_ai_assessment && (
-          <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Rule engine vs AI">
-            <BulletList items={sentences(ex.rule_vs_ai_assessment)} />
-          </ExplainBlock>
-        )}
+        {rootCause ?? ruleVsAi}
         {ex.key_drivers && ex.key_drivers.length > 0 && (
           <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title={driversTitle}>
             <BulletList items={ex.key_drivers} />
@@ -596,6 +602,7 @@ function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanatio
           </ExplainBlock>
         )}
       </div>
+      {rootCause && ruleVsAi}
       {ex.recommended_actions && ex.recommended_actions.length > 0 && (
         <ExplainBlock icon={<ListChecks className="w-3.5 h-3.5" />} title="Recommended actions">
           <ol className="flex flex-col gap-1.5">
@@ -662,7 +669,7 @@ function RootCauseBlock({ rc }: { rc?: RootCause }) {
   const total = days(rc.predicted_ftc_shift_days);
   const maxAbs = Math.max(1, ...rows.map(b => Math.abs(days(b.days) ?? 0)));
   return (
-    <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title="Why the FTC moves">
+    <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title="Root cause">
       {total != null && (
         <p className="mb-2 text-[12px] text-foreground">
           Predicted FTC shift <span className={cx('font-semibold tabular-nums', total > 0 && 'text-status-critical-fg')}>{signedDays(total)}</span>
@@ -867,14 +874,11 @@ function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: Parti
           </>} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <RootCauseBlock rc={r.root_cause} />
-        <LeadTimeBlock lt={r.lead_time} />
-      </div>
+      <LeadTimeBlock lt={r.lead_time} />
 
       <MonthlyRequirementBlock mr={r.monthly_requirement} />
 
-      <ExplanationView ex={r.explanation} />
+      <ExplanationView ex={r.explanation} rootCause={<RootCauseBlock rc={r.root_cause} />} />
 
       <ModelDetails rows={[
         ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],
@@ -1175,6 +1179,9 @@ export interface ReviewChange { field: string; before: unknown; after: unknown }
 /** One dashboard row's AI results, as served by GET /module-deliveries/ai-results. */
 export interface RowAI {
   p6_name?: string | null;
+  /** Used with p6_name to match a row when the ids come from another database. */
+  plot?: string | null;
+  project_name?: string | null;
   ai_priority?: PriorityPredictResponse | null;
   ai_monthly_order_tc_forecast?: OrderTcForecastResponse | null;
   /** A governance review checked the two answers against the planning flags:

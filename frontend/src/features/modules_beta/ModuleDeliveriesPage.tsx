@@ -1006,7 +1006,6 @@ export default function ModuleDeliveriesPage() {
      /module-deliveries/ai-results. Merged by row id, and only while the id
      still points at the project the AI scored. */
   const [aiById, setAiById] = useState<Record<string, RowAI>>({});
-  const [aiByName, setAiByName] = useState<Record<string, RowAI>>({});
   const [aiMeta, setAiMeta] = useState<{ generated_at?: string; label?: string; summary?: Record<string, unknown> } | null>(null);
   const [aiForecastRow, setAiForecastRow] = useState<ModuleProject | null>(null);
   const [aiPriorityRow, setAiPriorityRow] = useState<ModuleProject | null>(null);
@@ -1023,20 +1022,36 @@ export default function ModuleDeliveriesPage() {
       })
       .then(d => {
         if (!alive) return;
-        if (d?.available) { setAiById(d.by_id || {}); setAiByName(d.by_name || {}); setAiMeta(d.meta || null); setAiLoadError(null); }
+        if (d?.available) { setAiById(d.by_id || {}); setAiMeta(d.meta || null); setAiLoadError(null); }
         else setAiLoadError(d?.reason || 'no AI results file on the server');
       })
       .catch((e: unknown) => { if (alive) setAiLoadError(e instanceof Error ? e.message : 'the AI results could not be loaded'); });
     return () => { alive = false; };
   }, []);
-  /* By id while the id still points at the project the AI scored; otherwise by
-     P6 name (unique names only), since another server's database can number the
-     same projects differently. */
+  /* The export is keyed by the scoring database's project_mapping ids. Another
+     database (UAT / production) numbers projects differently, so fall back to
+     the P6 name, which is the same everywhere; a P6 name shared by several
+     rows is told apart by plot + project name. */
+  const aiByP6 = useMemo(() => {
+    const m = new Map<string, RowAI[]>();
+    for (const a of Object.values(aiById)) {
+      if (!a.p6_name) continue;
+      const k = a.p6_name.trim().toLowerCase();
+      m.set(k, [...(m.get(k) ?? []), a]);
+    }
+    return m;
+  }, [aiById]);
   const aiFor = useCallback((p: ModuleProject): RowAI | null => {
     const a = aiById[String(p.id)];
-    if (a && !(a.p6_name && p.p6_name && a.p6_name !== p.p6_name)) return a;
-    return (p.p6_name && aiByName[p.p6_name]) || null;
-  }, [aiById, aiByName]);
+    if (a && (!a.p6_name || !p.p6_name || a.p6_name === p.p6_name)) return a;
+    const cands = p.p6_name ? aiByP6.get(p.p6_name.trim().toLowerCase()) : undefined;
+    if (!cands?.length) return null;
+    if (cands.length === 1) return cands[0];
+    const norm = (s?: string | null) => (s || '').trim().toLowerCase();
+    return cands.find(c => norm(c.plot) === norm(p.plot) && norm(c.project_name) === norm(p.project_name))
+      ?? cands.find(c => norm(c.project_name) === norm(p.project_name))
+      ?? null;
+  }, [aiById, aiByP6]);
   const aiAsOf = aiMeta?.generated_at;
   /* Rows the AI scored, re-expressed on the AI's ordering plan (see
      buildAIRowView). Everything that reads the month grid goes through pvOf,
@@ -2300,15 +2315,6 @@ export default function ModuleDeliveriesPage() {
                                           {aiF.explanation.order_schedule_status_msg}
                                         </span>
                                       )}
-                                      {rowAI?.ai_review_status && (
-                                        <span title={rowAI.ai_review_reason || undefined}
-                                          className={`rounded border px-1.5 py-px text-[9.5px] font-semibold ${
-                                            /corrected/i.test(rowAI.ai_review_status)
-                                              ? 'border-status-risk-border bg-status-risk-bg text-status-risk-fg'
-                                              : 'border-status-healthy-border bg-status-healthy-bg text-status-healthy-fg'}`}>
-                                          Review: {rowAI.ai_review_status}
-                                        </span>
-                                      )}
                                     </div>
                                   ) : (
                                     <div className="text-[10px] text-fg-tertiary mt-0.5">{theme.tag}</div>
@@ -2514,7 +2520,6 @@ export default function ModuleDeliveriesPage() {
                                   /* The milestones in view, and the gap label that sits between
                                      each pair. Built as data so the grid can size itself: the
                                      Unit and Milestone selectors both change how many there are. */
-                                  const lead = p.type === 'China' || p.type === 'SEA' ? 136 : 98;
                                   type Milestone = {
                                     title: string; text: string; border: string; bg: string;
                                     field?: 'order' | 'tc' | 'ftc'; gapBefore?: string;
@@ -2528,17 +2533,16 @@ export default function ModuleDeliveriesPage() {
                                      2026-09-24: selecting the module filter must not drop TC/FTC from
                                      here — only the calendar chips narrow). */
                                   const milestones: Milestone[] = [];
-                                  const aiLead = aiF?.lead_time?.ai_p50_days != null ? Math.round(aiF.lead_time.ai_p50_days) : null;
                                   milestones.push({ title: aiF ? 'Module Ordering (AI)' : 'Module Ordering', field: 'order',
                                     text: aiF ? AI_TEXT : 'text-primary',
                                     border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
                                   milestones.push({ title: aiF ? 'TC Delivery (AI)' : 'TC Delivery', field: 'tc',
                                     text: aiF ? AI_TEXT : 'text-status-risk-fg',
                                     border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
-                                    gapBefore: aiF && aiLead != null ? `${aiLead}d AI lead` : `${lead}d Lead` });
+                                    gapBefore: ' ' });
                                   milestones.push({ title: 'FTC Date', field: 'ftc', text: 'text-status-healthy-fg',
                                     border: 'border-status-healthy-border', bg: 'bg-status-healthy-bg/60',
-                                    gapBefore: '45d Install' });
+                                    gapBefore: ' ' });
                                   if (p.lta) {
                                     // One date for the whole project, so it spans every phase row.
                                     milestones.push({ title: 'LTA Date', text: 'text-status-ai-fg',

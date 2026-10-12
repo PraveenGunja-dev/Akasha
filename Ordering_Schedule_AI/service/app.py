@@ -22,7 +22,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from . import explain
+from . import explain, governance
 from .engine import CLASSES, ORIGIN, Engine, _d, phrase
 import monthly
 from features import RULE_LEAD_DAYS, TC_BUFFER_DAYS
@@ -278,17 +278,32 @@ def run_priority(req: dict, contract: Optional[str], today: date, ftc_risk_flag:
 
 # ── UC1 ──────────────────────────────────────────────────────────────────────
 
-@app.post(f"{PREFIX}/order-tc-forecast")
-def order_tc_forecast(body: OrderTcRequest, explain_: bool = Query(False, alias="explain")):
+@app.post(f"{PREFIX}/order-tc-forecast_v1")
+def order_tc_forecast_v1(body: OrderTcRequest, explain_: bool = Query(False, alias="explain")):
+    """UC1 without the LLM governance review (the original logic, kept for reuse)."""
     return uc1(body, explain_)
 
 
+@app.post(f"{PREFIX}/order-tc-forecast")
+def order_tc_forecast(body: OrderTcRequest, explain_: bool = Query(False, alias="explain")):
+    """UC1 + LLM governance review: the ML result is reviewed against the planning rules and the
+    project's Module Deliveries row, corrections are applied inside the computation, and the
+    explanation is written from the reviewed result. Same request and response as _v1;
+    model.llm_review says what the review did."""
+    first = uc1(body, False, use_llm=False)
+    rv = governance.review("uc1", body.model_dump(mode="json"), first)
+    return uc1(body, explain_, review=rv, reviewed=True)
+
+
 def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[float] = None,
-        use_llm: bool = True) -> dict:
+        use_llm: bool = True, review=None, reviewed: bool = False) -> dict:
     """UC1. matched: (project, phase) rows when the caller already knows them
     (batch). order_mwp: this phase's own share of the balance (Planning Rules
     funding); body.balance_ordering stays the project balance, as in training
-    and in the monthly plan."""
+    and in the monthly plan. review: governance corrections to apply (reviewed
+    marks the response with model.llm_review, also when no review came back)."""
+    ov = review.corrections if review else {}
+    applied, rejected = [], []
     req = body.model_dump()
     req["vendor_type"] = next((k for k in RULE_LEAD_DAYS if k.lower() == body.vendor_type.lower()), body.vendor_type)
     vendor = req["vendor_type"]
@@ -340,7 +355,49 @@ def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[
         order_by = recommended = None
         order_now = False
         pred_tc, pred_tc_p90 = need_tc, None
+
+    # Governance corrections (proposals): applied here so every derived value follows them.
+    if "order_by_date" in ov:
+        new = ov["order_by_date"]
+        if not to_order:
+            rejected.append("order_by_date: nothing left to order")
+        elif new != order_by:
+            applied.append(("order_by_date", iso(order_by), iso(new)))
+            order_by, order_now, recommended = new, new <= today, max(new, today)
+            pred_tc = recommended + timedelta(days=round(p50))
+            pred_tc_p90 = recommended + timedelta(days=round(p90))
+    if "predicted_tc_date" in ov and ov["predicted_tc_date"] != pred_tc:
+        new = ov["predicted_tc_date"]
+        # Physical floor: an order placed on `recommended` (never before today) needs the measured
+        # typical lead time to reach site.
+        earliest = recommended + timedelta(days=round(p50)) if to_order else None
+        if to_order and new < earliest:
+            rejected.append(f"predicted_tc_date {iso(new)}: earlier than an order placed {iso(recommended)} can "
+                            f"reach site with the measured {round(p50)}-day lead time ({iso(earliest)})")
+        else:
+            applied.append(("predicted_tc_date", iso(pred_tc), iso(new)))
+            pred_tc = new
+            if pred_tc_p90 and pred_tc_p90 < pred_tc:
+                pred_tc_p90 = pred_tc
+    if "predicted_tc_date_p90" in ov and ov["predicted_tc_date_p90"] != pred_tc_p90:
+        new = ov["predicted_tc_date_p90"]
+        if not to_order:
+            rejected.append("predicted_tc_date_p90: nothing left to order")
+        elif new < pred_tc:
+            rejected.append(f"predicted_tc_date_p90 {iso(new)}: earlier than the typical TC {iso(pred_tc)}")
+        else:
+            applied.append(("predicted_tc_date_p90", iso(pred_tc_p90), iso(new)))
+            pred_tc_p90 = new
+
     projected_ftc = max(target_ftc, pred_tc + timedelta(days=TC_BUFFER_DAYS))
+    if "projected_ftc_date" in ov and ov["projected_ftc_date"] != projected_ftc:
+        new, floor = ov["projected_ftc_date"], max(ftc, pred_tc + timedelta(days=TC_BUFFER_DAYS))
+        if new < floor:
+            rejected.append(f"projected_ftc_date {iso(new)}: earlier than TC + {TC_BUFFER_DAYS} days or the P6 FTC "
+                            f"({iso(floor)})")
+        else:
+            applied.append(("projected_ftc_date", iso(projected_ftc), iso(new)))
+            projected_ftc = new
     breach = (projected_ftc - dl).days if dl else None
 
     # Root cause: parts partition the total shift (no double counting).
@@ -348,6 +405,10 @@ def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[
     transmission_days = min(trans_shift, total)
     progress_days = max(0, round(site_shift) - trans_shift)
     material_days = (projected_ftc - target_ftc).days
+    if applied:   # reviewed dates: keep the parts non-negative and partitioning the total
+        material_days = max(0, material_days)
+        transmission_days = max(0, min(trans_shift, total - material_days))
+        progress_days = max(0, total - transmission_days - material_days)
     breakdown = [
         {"reason": "Progress delay (site readiness, ML)", "days": progress_days},
         {"reason": "Material delay (ordering vs measured lead time)", "days": material_days},
@@ -369,6 +430,9 @@ def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[
         risk = "MEDIUM"
     else:
         risk = "LOW"
+    if "risk_level" in ov and ov["risk_level"] != risk:
+        applied.append(("risk_level", risk, ov["risk_level"]))
+        risk = ov["risk_level"]
     coverage = float(X.iloc[0].notna().mean())
     confidence = round(coverage * E().site_skill, 2)
 
@@ -461,6 +525,8 @@ def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[
                   "label_provenance": "site shift: inferred (sheet's site-pace forecast); lead time: measured (Ariba)",
                   "assumptions": notes, "as_of": iso(today)},
     }
+    if reviewed:
+        response["model"]["llm_review"] = governance.record(review, applied, rejected)
     if explain_:
         template = {
             "executive_summary": (
@@ -476,7 +542,9 @@ def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[
                    f"differ by {abs(shift_vs_rule)} days - the AI " + ("orders earlier" if shift_vs_rule < 0
                                                                         else "can order later")
                    + " because it uses measured lead times and the realistic FTC." if shift_vs_rule is not None
-                   else "cannot be compared (nothing left to order).")),
+                   else "cannot be compared (nothing left to order).")
+                + (f" The governance review corrected {', '.join(f for f, _, _ in applied)}"
+                   + (f": {review.reason}" if review and review.reason else ".") if applied else "")),
             "key_drivers": key_drivers, "risks_identified": risks, "business_impact": impact,
             "recommended_actions": actions,
         }
@@ -524,18 +592,36 @@ def uc1(body: OrderTcRequest, explain_: bool, matched=None, order_mwp: Optional[
             "Computed actions (consistent with the AI result)": actions,
             "Ordering schedule signals": signals,
         }
+        if applied:
+            facts["Governance review (applied to the AI Outputs above)"] = {
+                "corrected": {f: {"ML value": a, "reviewed value": b} for f, a, b in applied},
+                "reason": review.reason if review else None}
         response["explanation"] = explain.build(template, facts, "uc1", use_llm=use_llm)
     return response
 
 
 # ── UC2 ──────────────────────────────────────────────────────────────────────
 
-@app.post(f"{PREFIX}/priority-predict")
-def priority_predict(body: PriorityRequest, explain_: bool = Query(False, alias="explain")):
+@app.post(f"{PREFIX}/priority-predict_v1")
+def priority_predict_v1(body: PriorityRequest, explain_: bool = Query(False, alias="explain")):
+    """UC2 without the LLM governance review (the original logic, kept for reuse)."""
     return uc2(body, explain_)
 
 
-def uc2(body: PriorityRequest, explain_: bool, matched=None, use_llm: bool = True) -> dict:
+@app.post(f"{PREFIX}/priority-predict")
+def priority_predict(body: PriorityRequest, explain_: bool = Query(False, alias="explain")):
+    """UC2 + LLM governance review: the priority is reviewed against the planning flags and the
+    project's Module Deliveries row; a correction is applied before reasons and explanation are
+    written. Same request and response as _v1; model.llm_review says what the review did."""
+    first = uc2(body, False, use_llm=False)
+    rv = governance.review("uc2", body.model_dump(mode="json"), first)
+    return uc2(body, explain_, review=rv, reviewed=True)
+
+
+def uc2(body: PriorityRequest, explain_: bool, matched=None, use_llm: bool = True, review=None,
+        reviewed: bool = False) -> dict:
+    ov = review.corrections if review else {}
+    applied, rejected = [], []
     req = body.model_dump()
     contract = body.category.strip().upper() or None
     if contract and contract not in ("PPA", "MERCHANT", "GROUP"):
@@ -556,6 +642,13 @@ def uc2(body: PriorityRequest, explain_: bool, matched=None, use_llm: bool = Tru
     slack = (dl - realistic).days if dl else None
     cls, guard = penalty_guardrail(cls, ctype, realistic, dl, body.lta_date)
     tx_binds = transmission_binds(body.lta_date, dl, realistic)
+    if "priority_class" in ov and ov["priority_class"] != cls:
+        new = ov["priority_class"]
+        if guard and cls == "P1":
+            rejected.append(f"priority_class {new}: the PPA penalty rule sets P1 ({guard['reason']})")
+        else:
+            applied.append(("priority_class", cls, new))
+            cls = new
 
     # Business reasons first (what the priority rests on), then the model's
     # other strongest drivers; at most 5, one line per signal.
@@ -599,6 +692,8 @@ def uc2(body: PriorityRequest, explain_: bool, matched=None, use_llm: bool = Tru
                                       "no planner-recorded priority exists yet",
                   "assumptions": notes, "as_of": iso(today)},
     }
+    if reviewed:
+        response["model"]["llm_review"] = governance.record(review, applied, rejected)
     if explain_:
         same = cls == rule_cls
         template = {
@@ -613,7 +708,10 @@ def uc2(body: PriorityRequest, explain_: bool, matched=None, use_llm: bool = Tru
                                          "They differ because the realistic date is later than the P6 date."
                                          if realistic > ftc else "They differ.")
                                       + (f" The model alone said {guard['model_class']}; the PPA penalty rule "
-                                         f"sets P1." if guard else "")),
+                                         f"sets P1." if guard else "")
+                                      + (f" The governance review changed {applied[0][1]} to {cls}"
+                                         + (f": {review.reason}" if review and review.reason else ".")
+                                         if applied else "")),
             "key_drivers": reasons, "risks_identified": risks,
             "business_impact": {
                 "scod_impact": (f"Realistic charging is {-slack} days after the {dl_src}." if slack is not None
@@ -638,9 +736,12 @@ def uc2(body: PriorityRequest, explain_: bool, matched=None, use_llm: bool = Tru
             "Current Project Data": project_data(proj, prow, req, base),
             "Rule Engine Priority (planned P6 dates)": rule_cls,
             "final_priority": cls,
-            "ML Predicted Priority (before business rule)": guard["model_class"] if guard else cls,
+            "ML Predicted Priority (before business rule)": (guard["model_class"] if guard else
+                                                             applied[0][1] if applied else cls),
             "Business rule override": guard["reason"] if guard else None,
-            "Who set the final priority": ("business rule (PPA penalty) over the AI model's "
+            "Who set the final priority": (f"governance review (changed {applied[0][1]} to {cls}): "
+                                           f"{review.reason if review else ''}" if applied else
+                                           "business rule (PPA penalty) over the AI model's "
                                            f"{guard['model_class']}" if guard else "the AI model"),
             "Status": status_facts(ctype, dl_src, dl, -slack if slack is not None else None, body.lta_date, tx_binds),
             "Priority Score (0-100)": score,
