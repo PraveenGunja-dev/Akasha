@@ -558,12 +558,18 @@ function ExplainBlock({ icon, title, children }: { icon: React.ReactNode; title:
 }
 
 /** The model's written explanation, section by section; empty sections are skipped. */
-function ExplanationView({ ex, driversTitle = 'Key drivers', beforeActions }: {
+function ExplanationView({ ex, driversTitle = 'Key drivers', rootCause }: {
   ex?: Explanation; driversTitle?: string;
-  /** Shown directly above Recommended actions (the forecast's root cause). */
-  beforeActions?: React.ReactNode;
+  /** The forecast's root cause. When given it takes the first grid slot and
+   *  Rule engine vs AI moves down, directly above Recommended actions. */
+  rootCause?: React.ReactNode;
 }) {
-  if (!ex) return beforeActions ? <>{beforeActions}</> : null;
+  if (!ex) return rootCause ? <>{rootCause}</> : null;
+  const ruleVsAi = ex.rule_vs_ai_assessment ? (
+    <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Rule engine vs AI">
+      <BulletList items={sentences(ex.rule_vs_ai_assessment)} />
+    </ExplainBlock>
+  ) : null;
   const risks = labelled(ex.risks_identified);
   const impact = labelled(ex.business_impact);
   const unverified = ex.unverified_numbers ?? [];
@@ -578,11 +584,7 @@ function ExplanationView({ ex, driversTitle = 'Key drivers', beforeActions }: {
         </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {ex.rule_vs_ai_assessment && (
-          <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Rule engine vs AI">
-            <BulletList items={sentences(ex.rule_vs_ai_assessment)} />
-          </ExplainBlock>
-        )}
+        {rootCause ?? ruleVsAi}
         {ex.key_drivers && ex.key_drivers.length > 0 && (
           <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title={driversTitle}>
             <BulletList items={ex.key_drivers} />
@@ -599,7 +601,7 @@ function ExplanationView({ ex, driversTitle = 'Key drivers', beforeActions }: {
           </ExplainBlock>
         )}
       </div>
-      {beforeActions}
+      {rootCause && ruleVsAi}
       {ex.recommended_actions && ex.recommended_actions.length > 0 && (
         <ExplainBlock icon={<ListChecks className="w-3.5 h-3.5" />} title="Recommended actions">
           <ol className="flex flex-col gap-1.5">
@@ -875,7 +877,7 @@ function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: Parti
 
       <MonthlyRequirementBlock mr={r.monthly_requirement} />
 
-      <ExplanationView ex={r.explanation} beforeActions={<RootCauseBlock rc={r.root_cause} />} />
+      <ExplanationView ex={r.explanation} rootCause={<RootCauseBlock rc={r.root_cause} />} />
 
       <ModelDetails rows={[
         ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],

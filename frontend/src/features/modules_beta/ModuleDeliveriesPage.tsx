@@ -2187,15 +2187,6 @@ export default function ModuleDeliveriesPage() {
                                           {aiF.explanation.order_schedule_status_msg}
                                         </span>
                                       )}
-                                      {rowAI?.ai_review_status && (
-                                        <span title={rowAI.ai_review_reason || undefined}
-                                          className={`rounded border px-1.5 py-px text-[9.5px] font-semibold ${
-                                            /corrected/i.test(rowAI.ai_review_status)
-                                              ? 'border-status-risk-border bg-status-risk-bg text-status-risk-fg'
-                                              : 'border-status-healthy-border bg-status-healthy-bg text-status-healthy-fg'}`}>
-                                          Review: {rowAI.ai_review_status}
-                                        </span>
-                                      )}
                                     </div>
                                   ) : (
                                     <div className="text-[10px] text-fg-tertiary mt-0.5">{theme.tag}</div>
