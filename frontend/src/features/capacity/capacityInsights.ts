@@ -1,7 +1,7 @@
 import type { CapacityData, CapacityFilters, CapacityInsight } from './types';
 import {
   filterProjects, filterMonths, computeTotals, periodDelta, computeUpcoming, aggregate,
-  decumulate,
+  decumulate, stageKeys,
 } from './capacityCalculations';
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -41,26 +41,27 @@ export function generateCapacityInsights(
   const out: CapacityInsight[] = [];
 
   /* 1 ── Commissioning momentum, window against the window before it. */
-  const delta = periodDelta(data.monthly_trends || [], filters, ['Solar COD', 'Wind COD'], now);
-  if (delta.deltaPct !== null && delta.current > 0) {
-    const up = delta.deltaPct >= 0;
+  const delta = periodDelta(data.monthly_trends || [], filters, stageKeys('COD', filters.segment), now);
+  if (delta.previous !== null && delta.current > 0) {
+    const up = delta.current >= delta.previous;
     out.push({
       id: 'momentum',
       severity: up ? 'success' : 'warning',
       category: 'Commissioning',
       source: 'calculated',
+      // In MW, not %: against a small prior window a % change reads as +11,000%.
       title: up
-        ? `COD additions up ${Math.abs(delta.deltaPct).toFixed(0)}% on the previous period`
-        : `COD additions down ${Math.abs(delta.deltaPct).toFixed(0)}% on the previous period`,
+        ? `${MW(delta.current)} reached COD - more than the previous period`
+        : `${MW(delta.current)} reached COD - less than the previous period`,
       summary: `${MW(delta.current)} reached COD in this window, against ${MW(delta.previous)} in the one before it.`,
       detail:
         `The comparison uses the same monthly series either side of the selected range — ` +
-        `${months.length} months in view against the ${months.length} immediately preceding. ` +
+        `${months.length} calendar months in view against the same number immediately before. ` +
         `No stored "previous period" figure exists in the payload, so it is computed from the series itself.`,
       metric: {
         label: 'COD added this period',
         value: MW(delta.current),
-        comparison: `${up ? '+' : ''}${delta.deltaPct.toFixed(1)}% vs previous`,
+        comparison: `${MW(delta.previous)} in the previous period`,
       },
       affectedProjects: [],
       affectedMW: delta.current,

@@ -65,20 +65,50 @@ export function cumulativeTotal(months: MonthPoint[]): number {
 
 /* ── Filtering ───────────────────────────────────────────────────────────── */
 
+/* monthly_trends only carries months in which something was commissioned, so
+   "last 3 months" must be counted on the calendar, not as the last three
+   entries - those could reach back a year. Windows are calendar months up to
+   and including the current one; months with nothing are filled with zero. */
+const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const addMonths = (name: string, n: number) => {
+  const d = parseMonth(name) as Date;
+  return ym(new Date(d.getFullYear(), d.getMonth() + n, 1));
+};
+const monthRange = (from: string, to: string): string[] => {
+  const out: string[] = [];
+  for (let m = from; m <= to; m = addMonths(m, 1)) out.push(m);
+  return out;
+};
+
+/** First and last month ("YYYY-MM") of the selected window and of the window
+ *  before it. No prior window for "All time". */
+export function windowBounds(filters: CapacityFilters, now = new Date()) {
+  const end = ym(now);
+  if (filters.dateRange === 'ALL') return { start: null, end, prevStart: null, prevEnd: null };
+  if (filters.dateRange === 'FY') {
+    // Financial year to date against the same months of the previous FY.
+    const start = ym(currentFYStart(now));
+    return { start, end, prevStart: addMonths(start, -12), prevEnd: addMonths(end, -12) };
+  }
+  const n = MONTHS_FOR[filters.dateRange] ?? 12;
+  const start = addMonths(end, -(n - 1));
+  return { start, end, prevStart: addMonths(start, -n), prevEnd: addMonths(start, -1) };
+}
+
+/** Months from `from` to `to`, zero-filled where the series has no entry. */
+function fillMonths(byName: Map<string, MonthPoint>, from: string, to: string): MonthPoint[] {
+  return monthRange(from, to).map((name) => byName.get(name)
+    || { name, 'Solar COD': 0, 'Solar Trial Run': 0, 'Wind COD': 0, 'Wind Trial Run': 0 });
+}
+
+/** Per-month additions (a decumulated series) inside the selected window. */
 export function filterMonths(months: MonthPoint[], filters: CapacityFilters, now = new Date()): MonthPoint[] {
   if (!months?.length) return [];
   const sorted = [...months].sort((a, b) => a.name.localeCompare(b.name));
-
-  if (filters.dateRange === 'ALL') return sorted;
-  if (filters.dateRange === 'FY') {
-    const start = currentFYStart(now);
-    return sorted.filter((m) => {
-      const d = parseMonth(m.name);
-      return d ? d >= start : false;
-    });
-  }
-  const n = MONTHS_FOR[filters.dateRange] ?? 12;
-  return sorted.slice(-n);
+  const byName = new Map(sorted.map((m) => [m.name, m]));
+  const { start, end } = windowBounds(filters, now);
+  const last = sorted[sorted.length - 1].name;
+  return fillMonths(byName, start ?? sorted[0].name, start ? end : (last > end ? last : end));
 }
 
 export function filterProjects(projects: ProjectBreakdown[], segment: Segment): ProjectBreakdown[] {
@@ -125,17 +155,18 @@ export function computeTotals(projects: ProjectBreakdown[]): CapacityTotals {
 }
 
 /* ── Period-over-period ──────────────────────────────────────────────────
-   The KPI trend compares the visible window against the window immediately
-   before it, from the same monthly series — not a stored "previous period"
-   figure, which does not exist in this payload. */
+   MW added in the selected calendar window against the same number of
+   calendar months before it, from the same monthly series - not a stored
+   "previous period" figure, which does not exist in this payload.
+   The KPI cards show these MW, not a percentage: a small prior window turns
+   a % change into +11,000%, which says nothing. */
 
 export interface PeriodDelta {
-  current: number;
-  previous: number;
+  current: number;           // MW added in the window
+  previous: number | null;   // MW added in the window before it (null: none, "All time")
   deltaPct: number | null;   // null when there is no comparable prior window
-  series: number[];
+  series: number[];          // MW added per month of the window
 }
-
 
 export function periodDelta(
   allMonths: MonthPoint[],
@@ -146,18 +177,25 @@ export function periodDelta(
   const sorted = decumulate(allMonths || []);
   const window = filterMonths(sorted, filters, now);
   const sum = (m: MonthPoint) => keys.reduce((s, k) => s + (Number(m[k]) || 0), 0);
-
   const current = window.reduce((s, m) => s + sum(m), 0);
-  const startIdx = sorted.findIndex((m) => m.name === window[0]?.name);
-  const prior = startIdx > 0 ? sorted.slice(Math.max(0, startIdx - window.length), startIdx) : [];
-  const previous = prior.reduce((s, m) => s + sum(m), 0);
+
+  const { prevStart, prevEnd } = windowBounds(filters, now);
+  const previous = prevStart && prevEnd
+    ? sorted.filter((m) => m.name >= prevStart && m.name <= prevEnd).reduce((s, m) => s + sum(m), 0)
+    : null;
 
   return {
     current,
     previous,
-    deltaPct: prior.length && previous > 0 ? ((current - previous) / previous) * 100 : null,
+    deltaPct: previous ? ((current - previous) / previous) * 100 : null,
     series: window.map(sum),
   };
+}
+
+/** Which series measure MW reaching a stage in the selected segment. */
+export function stageKeys(stage: 'COD' | 'Trial Run', segment: Segment): SeriesKey[] {
+  const segs = segment === 'All' ? ['Solar', 'Wind'] : [segment];
+  return segs.map((s) => `${s} ${stage}` as SeriesKey);
 }
 
 /* ── Aggregation for the trajectory chart ───────────────────────────────── */
