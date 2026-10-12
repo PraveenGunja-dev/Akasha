@@ -1,0 +1,9 @@
+.env
+mlruns/
+mlflow.db
+train_log.txt
+__pycache__/
+catboost_info/
+uvicorn_ai.log
+mlflow_ui.log
+data/output/

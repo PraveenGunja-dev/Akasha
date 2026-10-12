@@ -1,0 +1,229 @@
+{
+  "trained_at": "2026-10-10T07:57:08",
+  "data_as_of": "2026-10-09",
+  "features": [
+    "days_to_phase_ftc",
+    "lta_gap_vs_phase_ftc",
+    "scod_gap_vs_phase_ftc",
+    "aop_gap_vs_phase_ftc",
+    "deadline_gap_vs_phase_ftc",
+    "lta_after_deadline_days",
+    "ftc_risk_flag",
+    "transmission_binding_flag",
+    "category_rank",
+    "rule_lead_days",
+    "is_hsat",
+    "rule_priority_rank",
+    "supply_shortfall_est",
+    "balance_share",
+    "inventory_share",
+    "receipt_share",
+    "transit_share",
+    "erection_share",
+    "piles_pct",
+    "structure_pct",
+    "modules_pct",
+    "piles_behind_pts",
+    "structure_behind_pts",
+    "modules_behind_pts",
+    "behind_plan_pts",
+    "data_age_days",
+    "n_phases",
+    "phase_idx"
+  ],
+  "uc1_site_shift": {
+    "params": {
+      "objective": "l1",
+      "num_leaves": 3,
+      "min_child_samples": 6,
+      "n_estimators": 150,
+      "learning_rate": 0.05,
+      "reg_lambda": 0.0
+    },
+    "metrics": {
+      "rows": 45,
+      "train_rows": 36,
+      "test_rows": 9,
+      "cv_mae_days": 137.7,
+      "cv_mae_rule_days": 174.8,
+      "cv_mae_median_days": 125.4,
+      "test_mae_median_days": 75.3,
+      "test_mae_days": 39.1,
+      "test_mae_rule_days": 178.3,
+      "residual_p50_days": 67.3,
+      "residual_p90_days": 247.5
+    },
+    "baseline": "rule engine: P6 FTC holds (shift 0)"
+  },
+  "uc1_lead_time": {
+    "features": [
+      "origin_China",
+      "origin_SEA",
+      "origin_Domestic",
+      "order_size_mwp",
+      "delivered_share_before"
+    ],
+    "rows": {
+      "train": 210,
+      "test": 49,
+      "train_pos": 13,
+      "test_pos": 4
+    },
+    "baseline": "rule engine lead time: China/SEA 136 d, ALMM/DCR (domestic) 98 d",
+    "max_order_mwp": {
+      "China": 198.1,
+      "Domestic": 81.9,
+      "SEA": 259.4
+    },
+    "p50": {
+      "params": {
+        "num_leaves": 3,
+        "min_child_samples": 15,
+        "n_estimators": 300,
+        "learning_rate": 0.05
+      },
+      "metrics": {
+        "cv_pinball": 11.2,
+        "test_pinball": 15.19,
+        "test_pinball_rule": 34.82,
+        "test_coverage": 0.65,
+        "test_mae_days": 30.4,
+        "test_mae_rule_days": 69.6,
+        "calibration_offset_days": 1.3
+      },
+      "offset": 1.2958543782136687
+    },
+    "p90": {
+      "params": {
+        "num_leaves": 3,
+        "min_child_samples": 15,
+        "n_estimators": 100,
+        "learning_rate": 0.05
+      },
+      "metrics": {
+        "cv_pinball": 5.12,
+        "test_pinball": 10.91,
+        "test_pinball_rule": 10.05,
+        "test_coverage": 0.78,
+        "calibration_offset_days": 11.6
+      },
+      "offset": 11.60655654346475
+    }
+  },
+  "uc2_priority": {
+    "kind": "catboost",
+    "params": {
+      "depth": 2,
+      "iterations": 500,
+      "learning_rate": 0.05,
+      "l2_leaf_reg": 3
+    },
+    "metrics": {
+      "chosen": "catboost",
+      "candidates": {
+        "catboost": {
+          "params": {
+            "depth": 2,
+            "iterations": 500,
+            "learning_rate": 0.05,
+            "l2_leaf_reg": 3
+          },
+          "cv_macro_f1": 0.912,
+          "cv_logloss": 0.232,
+          "cv_accuracy": 0.915
+        },
+        "xgboost": {
+          "params": {
+            "max_depth": 2,
+            "n_estimators": 300,
+            "learning_rate": 0.05,
+            "reg_lambda": 10.0,
+            "min_child_weight": 1
+          },
+          "cv_macro_f1": 0.72,
+          "cv_logloss": 0.834,
+          "cv_accuracy": 0.766
+        }
+      },
+      "rows": 68,
+      "train_rows": 47,
+      "test_rows": 21,
+      "class_counts": {
+        "P1": 33,
+        "P2": 18,
+        "STANDARD": 17
+      },
+      "test_macro_f1": 1.0,
+      "test_accuracy": 1.0,
+      "test_confusion (rows=true P1,P2,STD)": [
+        [
+          11,
+          0,
+          0
+        ],
+        [
+          0,
+          5,
+          0
+        ],
+        [
+          0,
+          0,
+          5
+        ]
+      ],
+      "test_macro_f1_rule": 0.87,
+      "test_accuracy_rule": 0.857,
+      "cv_macro_f1_rule": 0.866
+    },
+    "classes": [
+      "P1",
+      "P2",
+      "STANDARD"
+    ],
+    "baseline": "rule engine on the P6 FTC (realistic delay ignored)",
+    "features": [
+      "days_to_phase_ftc",
+      "lta_gap_vs_phase_ftc",
+      "scod_gap_vs_phase_ftc",
+      "aop_gap_vs_phase_ftc",
+      "deadline_gap_vs_phase_ftc",
+      "lta_after_deadline_days",
+      "ftc_risk_flag",
+      "transmission_binding_flag",
+      "category_rank",
+      "rule_lead_days",
+      "is_hsat",
+      "rule_priority_rank",
+      "supply_shortfall_est",
+      "balance_share",
+      "inventory_share",
+      "receipt_share",
+      "transit_share",
+      "erection_share",
+      "piles_pct",
+      "structure_pct",
+      "modules_pct",
+      "piles_behind_pts",
+      "structure_behind_pts",
+      "modules_behind_pts",
+      "behind_plan_pts",
+      "data_age_days",
+      "n_phases",
+      "phase_idx",
+      "site_shift_pred",
+      "realistic_slack_pred"
+    ]
+  },
+  "mlflow_runs": {
+    "uc1_site_shift_lgbm": "8a42788c72784c0bb5b2931f552f6bdc",
+    "uc1_lead_time_p50_lgbm": "b87378250beb423396591338e274dc89",
+    "uc1_lead_time_p90_lgbm": "7a8383c8785049db923bbfd2d5f397cb",
+    "uc2_priority_catboost": "df6c2dd0ba8a475684f5a2b6725739f5"
+  },
+  "label_provenance": {
+    "uc1_site_shift": "inferred - sheet's site-pace FTC forecast vs P6 FTC",
+    "uc1_lead_time": "measured - Ariba IBD / GRN dates",
+    "uc2_priority": "weak - business rule on realistic FTC, LTA, SCOD/AOP, contract category"
+  }
+}
