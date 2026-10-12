@@ -1016,9 +1016,11 @@ def get_capacity_overview(portfolio: Optional[str] = None, phase: Optional[str] 
         display_name = matching_p6.name or pm.project_name_from_p6 or pm.project
         obj_id_to_p_name[obj_id] = display_name
         
-        # Type by CLUSTER, not project name — wind projects are named like "AGE25CL PSS-11",
-        # with no "wind" text, so name-matching mis-typed them as Solar (capacity came out 0).
-        p_type = 'Wind' if 'wind' in str(pm.cluster or '').lower() else 'Solar'
+        # Type by CLUSTER or CATEGORY, not project name — wind projects are named like
+        # "AGE25CL PSS-11", with no "wind" text. Several wind projects have duplicate
+        # mapping rows tagged only by category (cluster blank); typed by cluster alone
+        # those came out Solar and, keyed by the same P6 object, overwrote the wind row.
+        p_type = 'Wind' if 'wind' in f"{pm.cluster or ''} {pm.category or ''}".lower() else 'Solar'
         total_cap = float(pm.capacity_mwac or 0)
         # Fallback: many projects (e.g. Rajasthan BANDHA_500MW) have capacity_mwac=0 but carry
         # the MW in their name. Extract it so their COD capacity isn't computed as zero.
