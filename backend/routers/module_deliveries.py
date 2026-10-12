@@ -858,6 +858,10 @@ def get_ai_results():
                 # Carried so the page can refuse a row whose id now points at a
                 # different project than the one the AI scored.
                 "p6_name": p.get("p6_name"),
+                # With p6_name, these let the page match a row when it runs
+                # against a database whose ids differ from the export's.
+                "plot": p.get("plot"),
+                "project_name": p.get("project_name"),
                 "ai_priority": p.get("ai_priority"),
                 "ai_monthly_order_tc_forecast": p.get("ai_monthly_order_tc_forecast"),
                 # Governance review of the two AI answers: VALIDATED / CORRECTED,

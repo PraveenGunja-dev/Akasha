@@ -982,12 +982,30 @@ export default function ModuleDeliveriesPage() {
       .catch(() => { /* no AI results: the table shows the rule engine alone */ });
     return () => { alive = false; };
   }, []);
+  /* The export is keyed by the scoring database's project_mapping ids. Another
+     database (UAT / production) numbers projects differently, so fall back to
+     the P6 name, which is the same everywhere; a P6 name shared by several
+     rows is told apart by plot + project name. */
+  const aiByP6 = useMemo(() => {
+    const m = new Map<string, RowAI[]>();
+    for (const a of Object.values(aiById)) {
+      if (!a.p6_name) continue;
+      const k = a.p6_name.trim().toLowerCase();
+      m.set(k, [...(m.get(k) ?? []), a]);
+    }
+    return m;
+  }, [aiById]);
   const aiFor = useCallback((p: ModuleProject): RowAI | null => {
     const a = aiById[String(p.id)];
-    if (!a) return null;
-    if (a.p6_name && p.p6_name && a.p6_name !== p.p6_name) return null;
-    return a;
-  }, [aiById]);
+    if (a && (!a.p6_name || !p.p6_name || a.p6_name === p.p6_name)) return a;
+    const cands = p.p6_name ? aiByP6.get(p.p6_name.trim().toLowerCase()) : undefined;
+    if (!cands?.length) return null;
+    if (cands.length === 1) return cands[0];
+    const norm = (s?: string | null) => (s || '').trim().toLowerCase();
+    return cands.find(c => norm(c.plot) === norm(p.plot) && norm(c.project_name) === norm(p.project_name))
+      ?? cands.find(c => norm(c.project_name) === norm(p.project_name))
+      ?? null;
+  }, [aiById, aiByP6]);
   const aiAsOf = aiMeta?.generated_at;
   /* Rows the AI scored, re-expressed on the AI's ordering plan (see
      buildAIRowView). Everything that reads the month grid goes through pvOf,

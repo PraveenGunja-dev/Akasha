@@ -1174,6 +1174,9 @@ export interface ReviewChange { field: string; before: unknown; after: unknown }
 /** One dashboard row's AI results, as served by GET /module-deliveries/ai-results. */
 export interface RowAI {
   p6_name?: string | null;
+  /** Used with p6_name to match a row when the ids come from another database. */
+  plot?: string | null;
+  project_name?: string | null;
   ai_priority?: PriorityPredictResponse | null;
   ai_monthly_order_tc_forecast?: OrderTcForecastResponse | null;
   /** A governance review checked the two answers against the planning flags:
