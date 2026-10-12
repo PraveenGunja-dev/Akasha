@@ -32,7 +32,11 @@ from pathlib import Path
 import requests
 from dotenv import load_dotenv
 
+# Own .env first; then the Akasha backend's, which already holds the same
+# AI_PROVIDER / AZURE_OPENAI_* / AKASHA_AI_API_KEY on the server. load_dotenv
+# never overrides a value already set, so the service's own .env wins.
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
+load_dotenv(Path(__file__).resolve().parents[2] / "backend" / ".env")
 log = logging.getLogger(__name__)
 
 KEYS = ["executive_summary", "rule_vs_ai_assessment", "key_drivers", "risks_identified",

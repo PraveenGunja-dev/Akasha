@@ -33,6 +33,7 @@ from dotenv import load_dotenv
 
 ROOT = Path(__file__).resolve().parents[1]
 load_dotenv(ROOT / ".env")
+load_dotenv(ROOT.parent / "backend" / ".env")  # fallback: the backend's AI keys
 
 INPUT_JSON = ROOT / "data" / "output" / "AIAkashaOrderingSchedule_final.json"
 OUTPUT_JSON = ROOT / "data" / "output" / "AIAkashaOrderingSchedule_governed.json"
