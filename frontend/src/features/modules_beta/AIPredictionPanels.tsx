@@ -12,9 +12,10 @@
    labelled that way. Any part of a response that is missing is simply not
    drawn - nothing is filled in on the client. */
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Bot, Sparkles, Loader2, AlertTriangle, CalendarClock, ListOrdered, RotateCcw,
-  ShieldAlert, Target, ListChecks, Scale, Info,
+  ShieldAlert, Target, ListChecks, Scale, Info, ChevronRight, Timer, PackageSearch, X,
 } from 'lucide-react';
 import { InfoTip, MiniMeter, StatusPill, cx } from '../../components/ui/primitives';
 import type { Tone } from '../../components/ui/primitives';
@@ -32,11 +33,82 @@ interface Explanation {
   risks_identified?: Record<string, string | null>;
   business_impact?: Record<string, string | null>;
   recommended_actions?: string[];
+  /** Forecast only: one-line ordering status ('Overdue - order immediately'). */
+  order_schedule_status_msg?: string;
+  /** Forecast only: the answer in one line, for compact places. */
+  short_insight?: string;
   text?: string;
   unverified_numbers?: unknown[];
+  consistency_flags?: unknown[];
 }
 
-interface MatchedProject { p6_name?: string; pid?: number | string }
+interface MatchedProject { p6_name?: string; pid?: number | string; project?: string; match_source?: string }
+
+/** Guardrail shape is not fixed yet: null, a message, or an object. */
+type Guardrail = string | Record<string, unknown> | null;
+
+interface RootCause {
+  predicted_ftc_shift_days?: number;
+  breakdown?: { reason: string; days: number | null; note?: string }[];
+  summary?: string;
+}
+
+interface RequirementMonth {
+  month: string;                  // 'Jun-27' - the TC month modules are needed at site
+  required_at_site_mwp?: number;
+  required_at_site_mwac?: number;
+  need_date?: string;
+  order_by_date?: string;
+  order_month?: string;
+  overdue?: boolean;
+  phases?: string[];
+}
+
+interface RequirementPlan {
+  basis?: string;
+  timed_by?: string;
+  lead_time_days?: number;        // rule engine
+  lead_time_p90_days?: number;    // AI
+  order_by_rule?: string;
+  total_mwp?: number;
+  months?: RequirementMonth[];
+}
+
+interface MonthlyRequirement {
+  unit_note?: string;
+  balance_ordering_mwp?: number;
+  balance_ordering_mwac?: number;
+  rule_engine?: RequirementPlan;
+  ai?: RequirementPlan;
+  label?: string;
+}
+
+interface LeadTime {
+  rule_engine_days?: number;
+  rule_engine_basis?: string;
+  ai_p50_days?: number;
+  ai_p90_days?: number;
+  ai_basis?: string;
+  how_used?: string;
+}
+
+/** Model metadata: shared keys plus whatever each endpoint adds. */
+interface ModelInfo {
+  site_shift_days?: number;
+  transmission_shift_days?: number;
+  supply_shortfall_days?: number;
+  lead_time_p50_days?: number;
+  lead_time_p90_days?: number;
+  deadline?: string;
+  deadline_basis?: string;
+  contract_type?: string;
+  feature_coverage?: number;
+  confidence_basis?: string;
+  score_basis?: string;
+  label_provenance?: string;
+  assumptions?: string[];
+  as_of?: string | null;
+}
 
 interface OrderTcForecastRequest {
   project_id: string;
@@ -54,7 +126,40 @@ interface OrderTcForecastRequest {
   ftc_date: string;
 }
 
-interface OrderTcForecastResponse {
+/** Batch-scored results (the dashboard JSON) wrap each response with a status
+ *  and the per-phase answers; a live API call carries none of these. */
+interface BatchEnvelope {
+  status?: 'scored' | 'not_scored' | string;
+  reason?: string;            // why it was not scored
+  phase?: string;             // the phase the top-level answer is for
+  notes?: string[];           // data caveats the scorer raised
+}
+
+export interface ForecastPhase {
+  phase: string;
+  p6_ftc_date?: string | null;
+  order_by_date?: string | null;
+  recommended_order_date?: string | null;
+  order_now?: boolean;
+  predicted_tc_date?: string | null;
+  predicted_tc_date_p90?: string | null;
+  projected_ftc_date?: string | null;
+  deadline_breach_days?: number | null;
+  risk_level?: string | null;
+  rule_engine?: { order_by_date?: string | null; tc_date?: string | null };
+}
+
+export interface PriorityPhase {
+  phase: string;
+  p6_ftc_date?: string | null;
+  priority_class?: string | null;
+  priority_score?: number | null;
+  realistic_ftc_date?: string | null;
+  rule_engine_priority?: string | null;
+}
+
+export interface OrderTcForecastResponse extends BatchEnvelope {
+  phases?: ForecastPhase[];
   recommended_order_date?: string;
   predicted_tc_date?: string;
   confidence?: number;                  // 0–1
@@ -66,8 +171,12 @@ interface OrderTcForecastResponse {
   deadline_breach_days?: number;        // > 0 = after the deadline
   rule_engine?: { order_by_date?: string; tc_date?: string };
   order_by_shift_vs_rule_days?: number; // < 0 = AI orders earlier than the rule
-  priority?: { current?: string; ai?: string; criticality_score?: number };
+  priority?: { current?: string; ai?: string; criticality_score?: number; guardrail?: Guardrail };
   project?: MatchedProject;
+  root_cause?: RootCause;
+  monthly_requirement?: MonthlyRequirement;
+  lead_time?: LeadTime;
+  model?: ModelInfo;
   explanation?: Explanation;
 }
 
@@ -88,7 +197,8 @@ interface PriorityPredictRequest {
   current_priority: string;
 }
 
-interface PriorityPredictResponse {
+export interface PriorityPredictResponse extends BatchEnvelope {
+  phases?: PriorityPhase[];
   priority_class?: string;
   priority_score?: number;              // 0–100
   reasons?: string[];
@@ -96,7 +206,9 @@ interface PriorityPredictResponse {
   class_probabilities?: Record<string, number>;
   ftc_date_used?: string;
   realistic_ftc_date?: string;
+  guardrail?: Guardrail;
   project?: MatchedProject;
+  model?: ModelInfo;
   explanation?: Explanation;
 }
 
@@ -144,6 +256,33 @@ const fmtDate = (iso?: string | null) => {
 };
 
 const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? '' : 's'}`;
+
+/** 408 -> '408', 99.6 -> '99.6', 1234.5 -> '1,234.5' */
+const fmtNum = (v?: number | null, digits = 1) =>
+  v == null || !Number.isFinite(v) ? '—' : v.toLocaleString('en-IN', { maximumFractionDigits: digits });
+
+/** Day counts arrive as floats (230.7); the UI speaks in whole days. */
+const days = (v?: number | null) => (v == null || !Number.isFinite(v) ? null : Math.round(v));
+
+const guardrailText = (g?: Guardrail) => {
+  if (g == null) return null;
+  if (typeof g === 'string') return g.trim() || null;
+  const msg = g.message ?? g.reason ?? g.note ?? g.detail;
+  return typeof msg === 'string' ? msg : JSON.stringify(g);
+};
+
+/** The guardrail as one note. An object guardrail can say it was NOT applied
+ *  (a review reversed it) and which class the model alone gave. */
+const guardrailNote = (g?: Guardrail) => {
+  const text = guardrailText(g);
+  if (!text) return null;
+  if (typeof g !== 'object' || g == null) return `Guardrail: ${text}`;
+  const applied = g.applied;
+  const modelClass = typeof g.model_class === 'string' ? ` (model alone: ${g.model_class})` : '';
+  return applied === false
+    ? `Guardrail not applied${modelClass}: ${text}`
+    : `Guardrail applied${modelClass}: ${text}`;
+};
 
 /** Whole days from a to b (b - a); null when either is missing. */
 const daysBetween = (a?: string, b?: string) => {
@@ -316,16 +455,58 @@ function Stat({ label, value, sub, tone }: {
   );
 }
 
-/** "Matched in P6: ARE55L_S03_HSAT_500MW_MERCHANT (pid 4337)" */
-function MatchedLine({ project, children }: { project?: MatchedProject; children?: React.ReactNode }) {
-  if (!project?.p6_name && !children) return null;
+/** "Matched in P6: ASEJ6PL_S07_FT_300MW_PPA (pid 16) · via Ordering Schedule snapshot · as of 10-Oct-26" */
+function MatchedLine({ project, asOf, children }: { project?: MatchedProject; asOf?: string | null; children?: React.ReactNode }) {
+  if (!project?.p6_name && !asOf && !children) return null;
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-[11px] text-muted-foreground">
       {project?.p6_name && (
-        <span>Matched in P6: <span className="font-semibold text-foreground">{project.p6_name}</span>{project.pid != null && ` (pid ${project.pid})`}</span>
+        <span>
+          Matched in P6: <span className="font-semibold text-foreground">{project.p6_name}</span>
+          {project.pid != null && ` (pid ${project.pid})`}
+          {project.match_source && ` · via ${project.match_source}`}
+        </span>
       )}
+      {asOf && <span>Model as of {fmtDate(asOf)}</span>}
       {children}
     </div>
+  );
+}
+
+/** Amber notes the model attaches to its own answer - assumptions and guardrails. */
+function ModelNotes({ assumptions, guardrail }: { assumptions?: string[]; guardrail?: Guardrail }) {
+  const g = guardrailNote(guardrail);
+  const notes = [...(g ? [g] : []), ...(assumptions ?? []).filter(Boolean)];
+  if (notes.length === 0) return null;
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-status-watch-border bg-status-watch-bg p-3 text-[11.5px] leading-relaxed text-status-watch-fg">
+      <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+      <ul className="flex flex-col gap-1">
+        {notes.map((n, i) => <li key={i}>{n}</li>)}
+      </ul>
+    </div>
+  );
+}
+
+/** Collapsed by default: how the model reached its answer, for whoever wants to audit it. */
+function ModelDetails({ rows }: { rows: [string, React.ReactNode][] }) {
+  const shown = rows.filter(([, v]) => v != null && v !== '' && v !== '—');
+  if (shown.length === 0) return null;
+  return (
+    <details className="group rounded-lg border border-border bg-card">
+      <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-primary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg">
+        <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
+        Model details
+      </summary>
+      <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 border-t border-border px-3.5 py-3">
+        {shown.map(([k, v]) => (
+          <div key={k} className="flex flex-col gap-0.5 min-w-0">
+            <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">{k}</dt>
+            <dd className="text-[12px] leading-relaxed text-foreground/90 break-words">{v}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
   );
 }
 
@@ -336,6 +517,25 @@ function BulletList({ items }: { items: string[] }) {
         <li key={i} className="flex items-start gap-2 text-[12px] leading-relaxed text-foreground/90">
           <div className="mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full bg-primary/50" />
           <span>{line}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** A paragraph as its sentences, for bullets. Splits only on ". " before a
+ *  capital, so decimals (30.4 MWp) and ISO dates stay whole. */
+const sentences = (text: string) =>
+  text.split(/(?<=[.;!?])\s+(?=[A-Z])/).map(s => s.trim()).filter(Boolean);
+
+/** "FTC risk: ..." rows as bullets, the label in bold. */
+function LabelledBullets({ rows, suffix }: { rows: [string, string][]; suffix: string }) {
+  return (
+    <ul className="flex flex-col gap-1.5">
+      {rows.map(([k, v]) => (
+        <li key={k} className="flex items-start gap-2 text-[12px] leading-relaxed">
+          <div className="mt-[7px] shrink-0 w-1.5 h-1.5 rounded-full bg-primary/50" />
+          <span><span className="font-semibold text-foreground">{humanKey(k)} {suffix}: </span><span className="text-foreground/90">{v}</span></span>
         </li>
       ))}
     </ul>
@@ -358,11 +558,23 @@ function ExplainBlock({ icon, title, children }: { icon: React.ReactNode; title:
 }
 
 /** The model's written explanation, section by section; empty sections are skipped. */
-function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanation; driversTitle?: string }) {
-  if (!ex) return null;
+function ExplanationView({ ex, driversTitle = 'Key drivers', rootCause }: {
+  ex?: Explanation; driversTitle?: string;
+  /** The forecast's root cause. When given it takes the first grid slot and
+   *  Rule engine vs AI moves down, directly above Recommended actions. */
+  rootCause?: React.ReactNode;
+}) {
+  if (!ex) return rootCause ? <>{rootCause}</> : null;
+  const ruleVsAi = ex.rule_vs_ai_assessment ? (
+    <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Rule engine vs AI">
+      <BulletList items={sentences(ex.rule_vs_ai_assessment)} />
+    </ExplainBlock>
+  ) : null;
   const risks = labelled(ex.risks_identified);
   const impact = labelled(ex.business_impact);
   const unverified = ex.unverified_numbers ?? [];
+  const flags = (ex.consistency_flags ?? []).map(f =>
+    typeof f === 'string' ? f : (f as any)?.message ?? (f as any)?.flag ?? JSON.stringify(f));
   return (
     <div className="flex flex-col gap-3">
       {ex.executive_summary && (
@@ -372,11 +584,7 @@ function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanatio
         </div>
       )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        {ex.rule_vs_ai_assessment && (
-          <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Rule engine vs AI">
-            <p className="text-[12px] leading-relaxed text-foreground/90">{ex.rule_vs_ai_assessment}</p>
-          </ExplainBlock>
-        )}
+        {rootCause ?? ruleVsAi}
         {ex.key_drivers && ex.key_drivers.length > 0 && (
           <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title={driversTitle}>
             <BulletList items={ex.key_drivers} />
@@ -384,29 +592,16 @@ function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanatio
         )}
         {risks.length > 0 && (
           <ExplainBlock icon={<ShieldAlert className="w-3.5 h-3.5" />} title="Risks identified">
-            <dl className="flex flex-col gap-1.5">
-              {risks.map(([k, v]) => (
-                <div key={k} className="text-[12px] leading-relaxed">
-                  <dt className="inline font-semibold text-foreground">{humanKey(k)} risk: </dt>
-                  <dd className="inline text-foreground/90">{v}</dd>
-                </div>
-              ))}
-            </dl>
+            <LabelledBullets rows={risks} suffix="risk" />
           </ExplainBlock>
         )}
         {impact.length > 0 && (
           <ExplainBlock icon={<AlertTriangle className="w-3.5 h-3.5" />} title="Business impact">
-            <dl className="flex flex-col gap-1.5">
-              {impact.map(([k, v]) => (
-                <div key={k} className="text-[12px] leading-relaxed">
-                  <dt className="inline font-semibold text-foreground">{humanKey(k)} impact: </dt>
-                  <dd className="inline text-foreground/90">{v}</dd>
-                </div>
-              ))}
-            </dl>
+            <LabelledBullets rows={impact} suffix="impact" />
           </ExplainBlock>
         )}
       </div>
+      {rootCause && ruleVsAi}
       {ex.recommended_actions && ex.recommended_actions.length > 0 && (
         <ExplainBlock icon={<ListChecks className="w-3.5 h-3.5" />} title="Recommended actions">
           <ol className="flex flex-col gap-1.5">
@@ -426,6 +621,15 @@ function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanatio
             The explanation mentions figures the service could not verify against its inputs:{' '}
             <span className="font-semibold">{unverified.map(n => String(n)).join(', ')}</span>. Treat those with caution.
           </span>
+        </div>
+      )}
+      {flags.length > 0 && (
+        <div className="flex items-start gap-2 rounded-lg border border-status-watch-border bg-status-watch-bg p-3 text-[11.5px] text-status-watch-fg">
+          <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+          <div>
+            The explanation may not match the model's figures:
+            <ul className="mt-1 list-disc pl-4">{flags.map((f, i) => <li key={i}>{f}</li>)}</ul>
+          </div>
         </div>
       )}
       <p className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
@@ -450,35 +654,200 @@ const EMPTY_FORECAST: ForecastForm = {
 };
 
 const SAMPLE_FORECAST: ForecastForm = {
-  project_id: 'ARE55L_S03', project_name: 'MSEDCL PPA Ph-3', phase: 'PH-1', vendor_type: 'ALMM', priority: 'STANDARD',
-  capacity_mwp: '203', balance_ordering: '203', inventory: '0', receipt: '0', under_transit: '0',
-  lta_date: '2028-06-30', scod_date: '2027-04-29', ftc_date: '2027-05-19',
+  project_id: 'ASEJ6PL_S07', project_name: 'SECI VIII PPA', phase: 'Ph-I', vendor_type: 'China', priority: 'STANDARD',
+  capacity_mwp: '408', balance_ordering: '408', inventory: '0', receipt: '0', under_transit: '0',
+  lta_date: '2027-01-31', scod_date: '2027-03-02', ftc_date: '2026-12-21',
 };
 
-function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: OrderTcForecastRequest | null }) {
+const signedDays = (d: number) => `${d > 0 ? '+' : d < 0 ? '−' : ''}${Math.abs(d)} d`;
+
+/** Which causes move the FTC, in days. A cause the model has no data for shows its note, not a zero. */
+function RootCauseBlock({ rc }: { rc?: RootCause }) {
+  const rows = rc?.breakdown ?? [];
+  if (!rc || (rows.length === 0 && !rc.summary)) return null;
+  const total = days(rc.predicted_ftc_shift_days);
+  const maxAbs = Math.max(1, ...rows.map(b => Math.abs(days(b.days) ?? 0)));
+  return (
+    <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title="Root cause">
+      {total != null && (
+        <p className="mb-2 text-[12px] text-foreground">
+          Predicted FTC shift <span className={cx('font-semibold tabular-nums', total > 0 && 'text-status-critical-fg')}>{signedDays(total)}</span>
+        </p>
+      )}
+      <div className="flex flex-col gap-2">
+        {rows.map((b, i) => {
+          const d = days(b.days);
+          return (
+            <div key={i} className="grid grid-cols-[minmax(0,1fr)_72px_52px] items-center gap-2 text-[11.5px]">
+              <span className="text-foreground/90 leading-snug">{b.reason}</span>
+              {d != null
+                ? <MiniMeter pct={(Math.abs(d) / maxAbs) * 100} tone={d > 0 ? 'critical' : 'healthy'} />
+                : <span />}
+              <span className={cx('text-right tabular-nums', d == null ? 'text-muted-foreground' : 'font-semibold text-foreground')}>
+                {d != null ? signedDays(d) : 'no data'}
+              </span>
+              {d == null && b.note && <span className="col-span-3 -mt-1 text-[10.5px] text-muted-foreground">{b.note}</span>}
+            </div>
+          );
+        })}
+      </div>
+      {rc.summary && <p className="mt-2.5 text-[11.5px] leading-relaxed text-muted-foreground">{rc.summary}</p>}
+    </ExplainBlock>
+  );
+}
+
+/** Rule-engine lead time against the measured (Ariba) AI lead times. */
+function LeadTimeBlock({ lt }: { lt?: LeadTime }) {
+  if (!lt || (lt.rule_engine_days == null && lt.ai_p50_days == null && lt.ai_p90_days == null)) return null;
+  const cell = (label: string, v: number | undefined, sub: string, tip?: string) => (
+    <div className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/20 px-2.5 py-2 min-w-0">
+      <span className="flex items-center gap-1 text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">
+        {label}{tip && <InfoTip info={tip} align="left" />}
+      </span>
+      <span className="text-[15px] font-semibold tabular-nums text-foreground">{v != null ? `${days(v)} d` : '—'}</span>
+      <span className="text-[10.5px] text-muted-foreground">{sub}</span>
+    </div>
+  );
+  return (
+    <ExplainBlock icon={<Timer className="w-3.5 h-3.5" />} title="Supplier lead time (order → at site)">
+      <div className="grid grid-cols-3 gap-2">
+        {cell('Rule engine', lt.rule_engine_days, 'Planning rules', lt.rule_engine_basis)}
+        {cell('AI typical', lt.ai_p50_days, 'P50, measured', lt.ai_basis)}
+        {cell('AI latest', lt.ai_p90_days, 'P90, measured', lt.ai_basis)}
+      </div>
+      {lt.how_used && <p className="mt-2.5 text-[11px] leading-relaxed text-muted-foreground">{lt.how_used}</p>}
+    </ExplainBlock>
+  );
+}
+
+const TH = 'px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap border-b border-border';
+const TD = 'px-2.5 py-2 text-[11.5px] align-top border-b border-border';
+
+/** One plan's month-by-month module need: when it must be at site and when it must be ordered. */
+function RequirementTable({ title, lead, plan }: { title: string; lead?: string; plan?: RequirementPlan }) {
+  const months = plan?.months ?? [];
+  if (!plan || months.length === 0) return null;
+  const info = [plan.basis, plan.order_by_rule && `Order-by: ${plan.order_by_rule}.`].filter(Boolean).join(' ');
+  return (
+    <div className="flex flex-col gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5">
+        <h5 className="text-[12px] font-semibold text-foreground">{title}</h5>
+        {lead && <span className="text-[11px] text-muted-foreground">· {lead}</span>}
+        {info && <InfoTip info={info} align="left" />}
+      </div>
+      <div className="overflow-x-auto custom-scrollbar rounded-md border border-border">
+        <table className="min-w-full border-separate border-spacing-0 text-left">
+          <thead className="bg-muted/40">
+            <tr>
+              <th className={TH}>Needed at site</th>
+              <th className={cx(TH, 'text-right')}>MWp</th>
+              <th className={cx(TH, 'text-right')}>MWac</th>
+              <th className={TH}>Order by</th>
+              <th className={TH}>Phases</th>
+            </tr>
+          </thead>
+          <tbody>
+            {months.map((m, i) => (
+              <tr key={`${m.month}-${i}`} className="hover:bg-[var(--surface-sunken)]">
+                <td className={TD}>
+                  <div className="font-semibold text-foreground">{m.month}</div>
+                  {m.need_date && <div className="text-[10.5px] text-muted-foreground">{fmtDate(m.need_date)}</div>}
+                </td>
+                <td className={cx(TD, 'text-right tabular-nums text-foreground')}>{fmtNum(m.required_at_site_mwp)}</td>
+                <td className={cx(TD, 'text-right tabular-nums text-muted-foreground')}>{fmtNum(m.required_at_site_mwac)}</td>
+                <td className={TD}>
+                  <div className={cx('tabular-nums', m.overdue ? 'text-status-critical-fg font-semibold' : 'text-foreground')}>{fmtDate(m.order_by_date)}</div>
+                  {m.overdue && <StatusPill tone="critical" className="mt-0.5">Overdue</StatusPill>}
+                </td>
+                <td className={cx(TD, 'text-[11px] text-muted-foreground min-w-[140px]')}>{(m.phases ?? []).join(', ') || '—'}</td>
+              </tr>
+            ))}
+            {plan.total_mwp != null && (
+              <tr className="bg-muted/30 font-semibold">
+                <td className="px-2.5 py-2 text-[11.5px] text-muted-foreground">Σ Total</td>
+                <td className="px-2.5 py-2 text-right text-[11.5px] tabular-nums text-foreground">{fmtNum(plan.total_mwp)}</td>
+                <td className="px-2.5 py-2 text-right text-[11.5px] tabular-nums text-muted-foreground">
+                  {fmtNum(months.reduce((s, m) => s + (m.required_at_site_mwac ?? 0), 0))}
+                </td>
+                <td colSpan={2} />
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+function MonthlyRequirementBlock({ mr }: { mr?: MonthlyRequirement }) {
+  if (!mr || (!mr.rule_engine?.months?.length && !mr.ai?.months?.length)) return null;
+  const re = mr.rule_engine, ai = mr.ai;
+  return (
+    <ExplainBlock icon={<PackageSearch className="w-3.5 h-3.5" />} title="Monthly module requirement · rule engine vs AI">
+      {(mr.balance_ordering_mwp != null || mr.balance_ordering_mwac != null) && (
+        <p className="mb-2.5 text-[11.5px] text-muted-foreground">
+          Balance to order <span className="font-semibold text-foreground tabular-nums">{fmtNum(mr.balance_ordering_mwp)} MWp</span>
+          {mr.balance_ordering_mwac != null && <> / {fmtNum(mr.balance_ordering_mwac)} MWac</>}
+          {ai?.timed_by && <> · AI timed by {ai.timed_by}</>}
+        </p>
+      )}
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-3">
+        <RequirementTable title="Rule engine" plan={re}
+          lead={re?.lead_time_days != null ? `lead ${days(re.lead_time_days)} d` : undefined} />
+        <RequirementTable title="AI" plan={ai}
+          lead={ai?.lead_time_p90_days != null ? `P90 lead ${days(ai.lead_time_p90_days)} d` : undefined} />
+      </div>
+      {(mr.label || mr.unit_note) && (
+        <p className="mt-2.5 flex items-start gap-1.5 text-[10.5px] leading-relaxed text-muted-foreground">
+          <Info className="w-3 h-3 shrink-0 mt-0.5" />
+          <span>{[mr.label && mr.label.charAt(0).toUpperCase() + mr.label.slice(1), mr.unit_note].filter(Boolean).join('. ')}.</span>
+        </p>
+      )}
+    </ExplainBlock>
+  );
+}
+
+function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: Partial<OrderTcForecastRequest> | null }) {
   const confPct = asPct(r.confidence);
   const orderBy = r.order_by_date || r.recommended_order_date;
-  // The service sends day counts as floats (71.0); whole days are what the UI says.
-  const shift = r.order_by_shift_vs_rule_days == null ? undefined : Math.round(r.order_by_shift_vs_rule_days);
-  const breach = r.deadline_breach_days == null ? undefined : Math.round(r.deadline_breach_days);
+  const shift = days(r.order_by_shift_vs_rule_days);
+  const breach = days(r.deadline_breach_days);
   const tcVsFtc = daysBetween(asked?.ftc_date, r.predicted_tc_date);
   const pr = r.priority;
+  const m = r.model;
+  const deadlineName = m?.deadline_basis || 'deadline';
 
   return (
     <div className="flex flex-col gap-3">
-      <MatchedLine project={r.project}>
+      <MatchedLine project={r.project} asOf={m?.as_of}>
         {r.risk_level && <span className="flex items-center gap-1.5">Risk <StatusPill tone={riskTone(r.risk_level)}>{r.risk_level.toUpperCase()}</StatusPill></span>}
         {confPct != null && (
           <span className="flex items-center gap-1.5">Confidence
             <MiniMeter pct={confPct} tone="ai" className="w-14" />
             <span className="font-semibold text-foreground tabular-nums">{confPct}%</span>
+            {m?.confidence_basis && <InfoTip info={`Confidence = ${m.confidence_basis}.`} align="left" />}
           </span>
         )}
         {r.order_now === true && <StatusPill tone="critical">ORDER NOW</StatusPill>}
       </MatchedLine>
 
+      {(r.explanation?.order_schedule_status_msg || r.explanation?.short_insight) && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-brand-blue/30 bg-brand-blue/[0.05] px-3 py-2 text-[12px]">
+          {r.explanation?.order_schedule_status_msg && (
+            <StatusPill tone={/overdue|passed|immediate/i.test(r.explanation.order_schedule_status_msg) ? 'critical'
+              : /quota|lta|early/i.test(r.explanation.order_schedule_status_msg) ? 'risk' : 'neutral'}>
+              {r.explanation.order_schedule_status_msg}
+            </StatusPill>
+          )}
+          {r.explanation?.short_insight && <span className="text-foreground/90">{r.explanation.short_insight}</span>}
+        </div>
+      )}
+
+      <ModelNotes assumptions={[...(r.notes ?? []), ...(m?.assumptions ?? [])]} guardrail={pr?.guardrail} />
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Stat label="Order by (AI)" value={fmtDate(orderBy)}
+        <Stat label="Order by (AI)"
+          value={!orderBy && r.monthly_requirement?.balance_ordering_mwp === 0 ? 'Nothing to order' : fmtDate(orderBy)}
           sub={r.rule_engine?.order_by_date
             ? <>Rule engine {fmtDate(r.rule_engine.order_by_date)}{shift != null && shift !== 0 && ` · AI ${plural(Math.abs(shift), 'day')} ${shift < 0 ? 'earlier' : 'later'}`}</>
             : r.order_now === false ? 'Not yet due' : undefined} />
@@ -491,17 +860,35 @@ function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: Order
         <Stat label="Projected FTC (first charging)" value={fmtDate(r.projected_ftc_date)}
           tone={breach != null ? (breach > 0 ? 'critical' : 'healthy') : undefined}
           sub={breach != null
-            ? breach > 0 ? `${plural(breach, 'day')} after the deadline` : breach < 0 ? `${plural(-breach, 'day')} ahead of the deadline` : 'On the deadline'
+            ? <>
+                {breach > 0 ? `${plural(breach, 'day')} after ${deadlineName}` : breach < 0 ? `${plural(-breach, 'day')} ahead of ${deadlineName}` : `On ${deadlineName}`}
+                {m?.deadline && ` (${fmtDate(m.deadline)})`}
+              </>
             : undefined} />
         <Stat label="Priority (AI)"
           value={pr?.ai ? <StatusPill tone={priorityTone(pr.ai)}>{pr.ai.toUpperCase()}</StatusPill> : '—'}
           sub={<>
-            {pr?.current && <>Current {pr.current}</>}
-            {pr?.criticality_score != null && <>{pr?.current ? ' · ' : ''}Criticality {Math.round(pr.criticality_score * 10) / 10}/100</>}
+            {pr?.current && <>Current {pr.current.toUpperCase()}</>}
+            {pr?.criticality_score != null && <>{pr?.current ? ' · ' : ''}Criticality {fmtNum(pr.criticality_score)}/100</>}
           </>} />
       </div>
 
-      <ExplanationView ex={r.explanation} />
+      <LeadTimeBlock lt={r.lead_time} />
+
+      <MonthlyRequirementBlock mr={r.monthly_requirement} />
+
+      <ExplanationView ex={r.explanation} rootCause={<RootCauseBlock rc={r.root_cause} />} />
+
+      <ModelDetails rows={[
+        ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],
+        ['Transmission shift', m?.transmission_shift_days != null ? signedDays(days(m.transmission_shift_days)!) : null],
+        ['Lead time P50 / P90', m?.lead_time_p50_days != null || m?.lead_time_p90_days != null
+          ? `${days(m?.lead_time_p50_days) ?? '—'} d / ${days(m?.lead_time_p90_days) ?? '—'} d` : null],
+        ['Deadline', m?.deadline ? `${fmtDate(m.deadline)}${m.deadline_basis ? ` (${m.deadline_basis})` : ''}` : null],
+        ['Feature coverage', m?.feature_coverage != null ? `${asPct(m.feature_coverage)}% of model inputs available` : null],
+        ['Confidence basis', m?.confidence_basis],
+        ['Where the labels come from', m?.label_provenance],
+      ]} />
     </div>
   );
 }
@@ -590,39 +977,73 @@ const EMPTY_PRIORITY: PriorityForm = {
 };
 
 const SAMPLE_PRIORITY: PriorityForm = {
-  project_id: 'ARE55L_S03', project_name: 'MSEDCL PPA Ph-3', phase: 'PH-1', category: 'PPA',
-  capacity_mwp: '675', balance_ordering: '675', inventory: '0', receipt: '0', under_transit: '0',
-  lta_date: '2028-06-30', scod_date: '2027-04-29', ftc_date: '2027-05-19',
-  ftc_risk_flag: true, current_priority: 'STANDARD',
+  project_id: 'ASEJ6PL_S07', project_name: 'SECI VIII PPA', phase: 'Ph-I', category: 'PPA',
+  capacity_mwp: '408', balance_ordering: '408', inventory: '0', receipt: '0', under_transit: '0',
+  lta_date: '2027-01-31', scod_date: '2027-03-02', ftc_date: '2026-12-21',
+  ftc_risk_flag: false, current_priority: 'STANDARD',
 };
 
-function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: PriorityPredictRequest | null }) {
+function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Partial<PriorityPredictRequest> | null }) {
   const tone = priorityTone(r.priority_class);
+  // One decimal: 0.004 is 0.4%, not 0%.
   const probs = Object.entries(r.class_probabilities || {})
-    .map(([k, v]) => [k, asPct(v)] as const)
-    .filter((e): e is readonly [string, number] => e[1] != null)
+    .filter((e): e is [string, number] => typeof e[1] === 'number' && Number.isFinite(e[1]))
+    .map(([k, v]) => [k, v <= 1 ? v * 100 : v] as const)
     .sort((a, b) => b[1] - a[1]);
   const ftcSlip = daysBetween(r.ftc_date_used, r.realistic_ftc_date);
+  const m = r.model;
+  const vsDeadline = daysBetween(m?.deadline, r.realistic_ftc_date);
+  const deadlineName = m?.deadline_basis || 'deadline';
   const differs = asked?.current_priority && r.priority_class
     && asked.current_priority.toUpperCase() !== r.priority_class.toUpperCase();
+  // Template explanations repeat the reasons as key drivers; LLM ones rephrase and add to them.
+  const reasonSet = new Set((r.reasons ?? []).map(x => x.trim().toLowerCase()));
+  const driversRepeat = (r.explanation?.key_drivers ?? []).every(d => reasonSet.has(d.trim().toLowerCase()));
 
   return (
     <div className="flex flex-col gap-3">
-      <MatchedLine project={r.project} />
+      <MatchedLine project={r.project} asOf={m?.as_of} />
+
+      <ModelNotes assumptions={[...(r.notes ?? []), ...(m?.assumptions ?? [])]} guardrail={r.guardrail} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <Stat label="AI priority"
           value={r.priority_class ? <StatusPill tone={tone}>{r.priority_class.toUpperCase()}</StatusPill> : '—'}
           sub={asked?.current_priority ? <>Current {asked.current_priority}{differs && <span className="text-status-risk-fg"> · changes</span>}</> : undefined} />
-        <Stat label="Priority score"
-          value={r.priority_score != null ? <>{Math.round(r.priority_score)}<span className="text-[12px] font-normal text-muted-foreground"> / 100</span></> : '—'}
-          sub={r.priority_score != null ? <MiniMeter pct={r.priority_score} tone={tone === 'neutral' ? 'ai' : tone} className="mt-1" /> : undefined} />
+        {/* The score is an URGENCY score - 100 x (P(P1) + 0.5 x P(P2)) - so a
+            STANDARD project correctly sits near 0 (0.8/100). Shown bare, that
+            reads as "the model is unsure". For STANDARD the card shows what the
+            model actually knows: how confident it is in STANDARD. */}
+        {(r.priority_class || '').toUpperCase() === 'STANDARD' && r.class_probabilities?.STANDARD != null ? (
+          <Stat label="Model confidence"
+            value={<span className="flex items-center gap-1.5">{fmtNum(r.class_probabilities.STANDARD * 100)}%
+              <InfoTip align="left" info={`How sure the model is that this project is STANDARD (class probability). The urgency score ${m?.score_basis ? `(${m.score_basis}) ` : ''}is ${fmtNum(r.priority_score)}/100 - low, as expected for a STANDARD project.`} />
+            </span>}
+            sub={<>
+              <MiniMeter pct={r.class_probabilities.STANDARD * 100} tone="ai" className="mt-1" />
+              <span className="mt-1 block">Urgency score {fmtNum(r.priority_score)} / 100 (low)</span>
+            </>} />
+        ) : <Stat label="Priority score"
+          value={r.priority_score != null
+            ? <span className="flex items-center gap-1.5">{fmtNum(r.priority_score)}<span className="text-[12px] font-normal text-muted-foreground">/ 100</span>
+                {m?.score_basis && <InfoTip info={`Score = ${m.score_basis}.`} align="left" />}
+              </span>
+            : '—'}
+          sub={r.priority_score != null ? <MiniMeter pct={r.priority_score} tone={tone === 'neutral' ? 'ai' : tone} className="mt-1" /> : undefined} />}
         <Stat label="Rule engine priority"
           value={r.rule_engine?.priority_class ? <StatusPill tone={priorityTone(r.rule_engine.priority_class)}>{r.rule_engine.priority_class.toUpperCase()}</StatusPill> : '—'}
           sub={r.rule_engine?.basis} />
         <Stat label="Realistic FTC" value={fmtDate(r.realistic_ftc_date)}
-          tone={ftcSlip != null && ftcSlip > 0 ? 'critical' : undefined}
-          sub={r.ftc_date_used ? <>FTC used {fmtDate(r.ftc_date_used)}{ftcSlip != null && ftcSlip !== 0 && ` · ${plural(Math.abs(ftcSlip), 'day')} ${ftcSlip > 0 ? 'later' : 'earlier'}`}</> : undefined} />
+          tone={vsDeadline != null ? (vsDeadline > 0 ? 'critical' : 'healthy') : ftcSlip != null && ftcSlip > 0 ? 'critical' : undefined}
+          sub={<>
+            {vsDeadline != null && (
+              <span className="block">
+                {vsDeadline > 0 ? `${plural(vsDeadline, 'day')} after ${deadlineName}` : vsDeadline < 0 ? `${plural(-vsDeadline, 'day')} ahead of ${deadlineName}` : `On ${deadlineName}`}
+                {` (${fmtDate(m?.deadline)})`}
+              </span>
+            )}
+            {r.ftc_date_used && <>P6 FTC used {fmtDate(r.ftc_date_used)}{ftcSlip != null && ftcSlip !== 0 && ` · ${plural(Math.abs(ftcSlip), 'day')} ${ftcSlip > 0 ? 'later' : 'earlier'}`}</>}
+          </>} />
       </div>
 
       {(probs.length > 0 || (r.reasons && r.reasons.length > 0)) && (
@@ -640,10 +1061,10 @@ function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Prior
             <ExplainBlock icon={<Scale className="w-3.5 h-3.5" />} title="Class probabilities">
               <div className="flex flex-col gap-2">
                 {probs.map(([k, pct]) => (
-                  <div key={k} className="grid grid-cols-[36px_minmax(0,1fr)_44px] items-center gap-2 text-[12px]">
+                  <div key={k} className="grid grid-cols-[72px_minmax(0,1fr)_48px] items-center gap-2 text-[12px]">
                     <span className="font-semibold text-foreground">{k}</span>
                     <MiniMeter pct={pct} tone={priorityTone(k) === 'neutral' ? 'ai' : priorityTone(k)} />
-                    <span className="text-right tabular-nums text-muted-foreground">{pct}%</span>
+                    <span className="text-right tabular-nums text-muted-foreground">{fmtNum(pct)}%</span>
                   </div>
                 ))}
               </div>
@@ -652,8 +1073,17 @@ function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Prior
         </div>
       )}
 
-      {/* Key drivers repeat the reasons above, so the explanation is shown without them. */}
-      <ExplanationView ex={r.explanation ? { ...r.explanation, key_drivers: undefined } : undefined} />
+      {/* Key drivers are dropped only when they just repeat the reasons above. */}
+      <ExplanationView ex={r.explanation && driversRepeat ? { ...r.explanation, key_drivers: undefined } : r.explanation} />
+
+      <ModelDetails rows={[
+        ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],
+        ['Supply shortfall', m?.supply_shortfall_days != null ? `${days(m.supply_shortfall_days)} d` : null],
+        ['Deadline', m?.deadline ? `${fmtDate(m.deadline)}${m.deadline_basis ? ` (${m.deadline_basis})` : ''}` : null],
+        ['Contract type', m?.contract_type],
+        ['Score formula', m?.score_basis],
+        ['Where the labels come from', m?.label_provenance],
+      ]} />
     </div>
   );
 }
@@ -739,6 +1169,219 @@ function PriorityPredictionPanel() {
     </PanelShell>
   );
 }
+
+/* ═══ Dashboard integration: batch-scored AI results per table row ═══════ */
+
+/** One field the governance review changed in an AI answer. */
+export interface ReviewChange { field: string; before: unknown; after: unknown }
+
+/** One dashboard row's AI results, as served by GET /module-deliveries/ai-results. */
+export interface RowAI {
+  p6_name?: string | null;
+  /** Used with p6_name to match a row when the ids come from another database. */
+  plot?: string | null;
+  project_name?: string | null;
+  ai_priority?: PriorityPredictResponse | null;
+  ai_monthly_order_tc_forecast?: OrderTcForecastResponse | null;
+  /** A governance review checked the two answers against the planning flags:
+   *  VALIDATED (left as is) or CORRECTED (fields changed, listed below). */
+  ai_review_status?: string | null;
+  ai_review_reason?: string | null;
+  ai_review_changes?: ReviewChange[];
+}
+
+export const isScored = (x?: BatchEnvelope | null) => x?.status === 'scored';
+
+/** ISO date -> '13-May-27', the table's own date style. Null stays null. */
+export const aiDate = (iso?: string | null) => (iso ? fmtDate(iso) : null);
+
+/** The table and the AI name an unphased project differently ('Main' vs
+ *  'Single phase'), and the table appends capacity / block range to a phase
+ *  label ('Ph-II (125MW) BL-01 to 14'). Both reduce to the bare phase. */
+const barePhase = (label?: string | null) =>
+  (label || '').replace(/\s*\(.*$/, '').replace(/\s+BL-.*$/i, '').trim().toLowerCase();
+
+export function aiPhaseFor<T extends { phase: string }>(phases: T[] | undefined, tableLabel?: string | null): T | undefined {
+  const list = phases ?? [];
+  if (list.length === 0) return undefined;
+  if (list.length === 1) return list[0];
+  const want = barePhase(tableLabel);
+  return list.find(ph => barePhase(ph.phase) === want);
+}
+
+/** 'Single phase' says nothing on a one-phase project; other labels stay. */
+export const phaseName = (label?: string | null) => (!label || /^single phase$/i.test(label) ? '' : label);
+
+function useEscape(onClose: () => void) {
+  React.useEffect(() => {
+    const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', h);
+    return () => window.removeEventListener('keydown', h);
+  }, [onClose]);
+}
+
+function AIModalShell({ title, subtitle, badge, onClose, children }: {
+  title: string; subtitle?: React.ReactNode; badge: string; onClose: () => void; children: React.ReactNode;
+}) {
+  useEscape(onClose);
+  // Portalled: the dashboard sits inside animated (transformed) containers,
+  // which would otherwise pin a `fixed` overlay to them instead of the window.
+  return createPortal(
+    // Above the month-cell popup (z 9999) that the AI button is clicked from.
+    <div className="fixed inset-0 z-[10000] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+      onMouseDown={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div role="dialog" aria-modal="true" aria-label={title}
+        className="relative flex w-full max-w-5xl max-h-[88vh] flex-col rounded-xl border border-border bg-card shadow-2xl">
+        <div className="flex items-start justify-between gap-4 border-b border-border px-5 py-4">
+          <div className="min-w-0">
+            <div className="mb-1 flex flex-wrap items-center gap-2">
+              <span className="inline-flex items-center gap-1 rounded-full border border-brand-blue/30 bg-brand-blue/10 px-2 py-0.5 text-[10px] font-semibold text-brand-blue">
+                <Sparkles className="h-3 w-3" />{badge}
+              </span>
+            </div>
+            <h3 className="truncate text-base font-semibold text-foreground">{title}</h3>
+            {subtitle && <p className="mt-0.5 text-xs text-muted-foreground">{subtitle}</p>}
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close"
+            className="rounded-lg p-1 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-primary">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="overflow-y-auto custom-scrollbar px-5 py-4">{children}</div>
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function NotScored({ reason, notes }: { reason?: string; notes?: string[] }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-start gap-2 rounded-lg border border-border bg-muted/30 p-3 text-[12px] text-foreground/90">
+        <Info className="mt-px h-4 w-4 shrink-0 text-muted-foreground" />
+        <span>The AI did not score this project{reason ? <>: <b>{reason}</b></> : '.'}</span>
+      </div>
+      <ModelNotes assumptions={notes} />
+    </div>
+  );
+}
+
+const PH_TH = 'px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground whitespace-nowrap border-b border-border';
+const PH_TD = 'px-2.5 py-2 text-[11.5px] border-b border-border whitespace-nowrap tabular-nums';
+
+/** Every pending phase's AI dates. The detail below is for one phase (r.phase). */
+function ForecastPhaseTable({ phases, focus }: { phases?: ForecastPhase[]; focus?: string }) {
+  if (!phases || phases.length < 2) return null;
+  return (
+    <ExplainBlock icon={<CalendarClock className="w-3.5 h-3.5" />} title="AI dates by phase">
+      <div className="overflow-x-auto custom-scrollbar rounded-md border border-border">
+        <table className="min-w-full border-separate border-spacing-0 text-left">
+          <thead className="bg-muted/40">
+            <tr>
+              {['Phase', 'P6 FTC', 'AI order by', 'Rule order by', 'AI TC', 'TC latest (P90)', 'Projected FTC', 'vs deadline', 'Risk'].map(h =>
+                <th key={h} className={PH_TH}>{h}</th>)}
+            </tr>
+          </thead>
+          <tbody>
+            {phases.map(ph => {
+              const b = days(ph.deadline_breach_days);
+              return (
+                <tr key={ph.phase} className={cx(ph.phase === focus && 'bg-brand-blue/[0.05]')}>
+                  <td className={cx(PH_TD, 'font-semibold text-foreground')}>{phaseName(ph.phase) || 'Project'}</td>
+                  <td className={cx(PH_TD, 'text-muted-foreground')}>{fmtDate(ph.p6_ftc_date)}</td>
+                  <td className={cx(PH_TD, 'font-semibold text-brand-blue')}>{ph.order_by_date ? fmtDate(ph.order_by_date) : 'Nothing to order'}</td>
+                  <td className={cx(PH_TD, 'text-muted-foreground')}>{fmtDate(ph.rule_engine?.order_by_date)}</td>
+                  <td className={cx(PH_TD, 'font-semibold text-brand-blue')}>{fmtDate(ph.predicted_tc_date)}</td>
+                  <td className={cx(PH_TD, 'text-muted-foreground')}>{fmtDate(ph.predicted_tc_date_p90)}</td>
+                  <td className={PH_TD}>{fmtDate(ph.projected_ftc_date)}</td>
+                  <td className={cx(PH_TD, b != null && b > 0 ? 'text-status-critical-fg font-semibold' : 'text-muted-foreground')}>
+                    {b == null ? '—' : b > 0 ? `${b} d late` : b < 0 ? `${-b} d early` : 'on time'}
+                  </td>
+                  <td className={PH_TD}>{ph.risk_level ? <StatusPill tone={riskTone(ph.risk_level)}>{ph.risk_level.toUpperCase()}</StatusPill> : '—'}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <p className="mt-2 text-[10.5px] text-muted-foreground">
+        The detail below is for {phaseName(focus) || 'the first pending phase'}. AI dates are model predictions, not plan or SAP figures.
+      </p>
+    </ExplainBlock>
+  );
+}
+
+function PriorityPhaseTable({ phases, focus }: { phases?: PriorityPhase[]; focus?: string }) {
+  if (!phases || phases.length < 2) return null;
+  return (
+    <ExplainBlock icon={<ListOrdered className="w-3.5 h-3.5" />} title="AI priority by phase">
+      <div className="overflow-x-auto custom-scrollbar rounded-md border border-border">
+        <table className="min-w-full border-separate border-spacing-0 text-left">
+          <thead className="bg-muted/40">
+            <tr>{['Phase', 'P6 FTC', 'AI priority', 'Score', 'Realistic FTC', 'Rule engine'].map(h => <th key={h} className={PH_TH}>{h}</th>)}</tr>
+          </thead>
+          <tbody>
+            {phases.map(ph => (
+              <tr key={ph.phase} className={cx(ph.phase === focus && 'bg-brand-blue/[0.05]')}>
+                <td className={cx(PH_TD, 'font-semibold text-foreground')}>{phaseName(ph.phase) || 'Project'}</td>
+                <td className={cx(PH_TD, 'text-muted-foreground')}>{fmtDate(ph.p6_ftc_date)}</td>
+                <td className={PH_TD}>{ph.priority_class ? <StatusPill tone={priorityTone(ph.priority_class)}>{ph.priority_class.toUpperCase()}</StatusPill> : '—'}</td>
+                <td className={PH_TD}>{fmtNum(ph.priority_score)}</td>
+                <td className={PH_TD}>{fmtDate(ph.realistic_ftc_date)}</td>
+                <td className={cx(PH_TD, 'text-muted-foreground')}>{ph.rule_engine_priority || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </ExplainBlock>
+  );
+}
+
+type RowLike = { project_name?: string; p6_name?: string; priority?: string; spv?: string };
+
+/** Use case 1 in full for one dashboard row (opened from the Remarks AI button). */
+export function AIForecastModal({ row, ai, asOf, onClose }: {
+  row: RowLike; ai?: OrderTcForecastResponse | null; asOf?: string; onClose: () => void;
+}) {
+  const focus = aiPhaseFor(ai?.phases, ai?.phase);
+  return (
+    <AIModalShell badge="AI · Module Ordering & TC Delivery Forecast" onClose={onClose}
+      title={row.project_name || row.p6_name || 'Project'}
+      subtitle={<>{row.p6_name}{ai?.phase && phaseName(ai.phase) && <> · detail for {ai.phase}</>}{asOf && <> · scored {fmtDate(asOf)}</>}</>}>
+      {!ai ? <NotScored reason="no AI result for this row" />
+        : !isScored(ai) ? <NotScored reason={ai.reason} notes={ai.notes} />
+        : (
+          <div className="flex flex-col gap-3">
+            <ForecastPhaseTable phases={ai.phases} focus={focus?.phase ?? ai.phase} />
+            <ForecastResult r={ai} asked={{ ftc_date: focus?.p6_ftc_date ?? undefined }} />
+          </div>
+        )}
+    </AIModalShell>
+  );
+}
+
+/** Use case 2 in full for one dashboard row (opened from the Priority (AI) cell). */
+export function AIPriorityModal({ row, ai, asOf, onClose }: {
+  row: RowLike; ai?: PriorityPredictResponse | null; asOf?: string; onClose: () => void;
+}) {
+  return (
+    <AIModalShell badge="AI · Priority Prediction" onClose={onClose}
+      title={row.project_name || row.p6_name || 'Project'}
+      subtitle={<>{row.p6_name}{ai?.phase && phaseName(ai.phase) && <> · detail for {ai.phase}</>}{asOf && <> · scored {fmtDate(asOf)}</>}</>}>
+      {!ai ? <NotScored reason="no AI result for this row" />
+        : !isScored(ai) ? <NotScored reason={ai.reason} notes={ai.notes} />
+        : (
+          <div className="flex flex-col gap-3">
+            <PriorityPhaseTable phases={ai.phases} focus={ai.phase} />
+            <PriorityResult r={ai} asked={{ current_priority: (row.priority || 'STANDARD').toUpperCase() }} />
+          </div>
+        )}
+    </AIModalShell>
+  );
+}
+
+export { priorityTone as aiPriorityTone };
 
 export default function AIPredictionPanels() {
   return (

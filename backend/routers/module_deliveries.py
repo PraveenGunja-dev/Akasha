@@ -818,6 +818,66 @@ class CopilotChatRequest(BaseModel):
     current_project_id: Optional[int] = None
     context_filter: Optional[str] = None
 
+# ── AI results (Ordering Schedule Beta) ──────────────────────────────────────
+# The AI team scores every project offline (UC1 order-tc-forecast, UC2
+# priority-predict) and ships the results as an export of /summary with two
+# fields added per project: ai_monthly_order_tc_forecast and ai_priority. The
+# Beta page keeps reading the LIVE /summary and merges these in by project id,
+# so a stale export never replaces live SAP/P6 figures - it only adds the AI
+# view. Re-read automatically when the file changes; AI_RESULTS_FILE overrides
+# the location.
+import os as _os
+
+_BACKEND_DIR = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+# Newest export first (the governed export, with the governance review fields);
+# the earlier exports stay as fallbacks.
+AI_RESULTS_FILE = _os.getenv("AI_RESULTS_FILE") or next(
+    (p for p in (_os.path.join(_BACKEND_DIR, n) for n in (
+        "AIAkashaOrderingSchedule_governed.json", "sampleop.json", "AIAkashaOrderingSchedule_final.json"))
+     if _os.path.isfile(p)),
+    _os.path.join(_BACKEND_DIR, "AIAkashaOrderingSchedule_governed.json"),
+)
+_ai_results_cache: dict = {"mtime": None, "data": None}
+
+
+@router.get("/ai-results")
+def get_ai_results():
+    """AI results per dashboard row, keyed by project_mapping id."""
+    path = AI_RESULTS_FILE
+    if not _os.path.isfile(path):
+        return {"available": False, "reason": "AI results file not found on the server", "meta": None, "by_id": {}}
+    mtime = _os.path.getmtime(path)
+    if _ai_results_cache["mtime"] != mtime:
+        with open(path, encoding="utf-8") as f:
+            doc = json.load(f)
+        by_id = {}
+        for p in (doc.get("ordering_schedule") or {}).get("projects") or []:
+            if p.get("id") is None:
+                continue
+            by_id[str(p["id"])] = {
+                # Carried so the page can refuse a row whose id now points at a
+                # different project than the one the AI scored.
+                "p6_name": p.get("p6_name"),
+                # With p6_name, these let the page match a row when it runs
+                # against a database whose ids differ from the export's.
+                "plot": p.get("plot"),
+                "project_name": p.get("project_name"),
+                "ai_priority": p.get("ai_priority"),
+                "ai_monthly_order_tc_forecast": p.get("ai_monthly_order_tc_forecast"),
+                # Governance review of the two AI answers: VALIDATED / CORRECTED,
+                # why, and each field it changed (before -> after).
+                "ai_review_status": p.get("ai_review_status"),
+                "ai_review_reason": p.get("ai_review_reason"),
+                "ai_review_changes": p.get("ai_review_changes") or [],
+            }
+        _ai_results_cache.update(mtime=mtime, data={
+            "available": True,
+            "meta": (doc.get("meta") or {}).get("ai"),
+            "by_id": by_id,
+        })
+    return _ai_results_cache["data"]
+
+
 @router.get("/block-plan")
 def get_block_level_plan(
     portfolio: Optional[str] = None,
