@@ -2401,7 +2401,6 @@ export default function ModuleDeliveriesPage() {
                                   /* The milestones in view, and the gap label that sits between
                                      each pair. Built as data so the grid can size itself: the
                                      Unit and Milestone selectors both change how many there are. */
-                                  const lead = p.type === 'China' || p.type === 'SEA' ? 136 : 98;
                                   type Milestone = {
                                     title: string; text: string; border: string; bg: string;
                                     field?: 'order' | 'tc' | 'ftc'; gapBefore?: string;
@@ -2415,17 +2414,16 @@ export default function ModuleDeliveriesPage() {
                                      2026-09-24: selecting the module filter must not drop TC/FTC from
                                      here — only the calendar chips narrow). */
                                   const milestones: Milestone[] = [];
-                                  const aiLead = aiF?.lead_time?.ai_p50_days != null ? Math.round(aiF.lead_time.ai_p50_days) : null;
                                   milestones.push({ title: aiF ? 'Module Ordering (AI)' : 'Module Ordering', field: 'order',
                                     text: aiF ? AI_TEXT : 'text-primary',
                                     border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
                                   milestones.push({ title: aiF ? 'TC Delivery (AI)' : 'TC Delivery', field: 'tc',
                                     text: aiF ? AI_TEXT : 'text-status-risk-fg',
                                     border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
-                                    gapBefore: aiF && aiLead != null ? `${aiLead}d AI lead` : `${lead}d Lead` });
+                                    gapBefore: ' ' });
                                   milestones.push({ title: 'FTC Date', field: 'ftc', text: 'text-status-healthy-fg',
                                     border: 'border-status-healthy-border', bg: 'bg-status-healthy-bg/60',
-                                    gapBefore: '45d Install' });
+                                    gapBefore: ' ' });
                                   if (p.lta) {
                                     // One date for the whole project, so it spans every phase row.
                                     milestones.push({ title: 'LTA Date', text: 'text-status-ai-fg',

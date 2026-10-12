@@ -558,8 +558,12 @@ function ExplainBlock({ icon, title, children }: { icon: React.ReactNode; title:
 }
 
 /** The model's written explanation, section by section; empty sections are skipped. */
-function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanation; driversTitle?: string }) {
-  if (!ex) return null;
+function ExplanationView({ ex, driversTitle = 'Key drivers', beforeActions }: {
+  ex?: Explanation; driversTitle?: string;
+  /** Shown directly above Recommended actions (the forecast's root cause). */
+  beforeActions?: React.ReactNode;
+}) {
+  if (!ex) return beforeActions ? <>{beforeActions}</> : null;
   const risks = labelled(ex.risks_identified);
   const impact = labelled(ex.business_impact);
   const unverified = ex.unverified_numbers ?? [];
@@ -595,6 +599,7 @@ function ExplanationView({ ex, driversTitle = 'Key drivers' }: { ex?: Explanatio
           </ExplainBlock>
         )}
       </div>
+      {beforeActions}
       {ex.recommended_actions && ex.recommended_actions.length > 0 && (
         <ExplainBlock icon={<ListChecks className="w-3.5 h-3.5" />} title="Recommended actions">
           <ol className="flex flex-col gap-1.5">
@@ -661,7 +666,7 @@ function RootCauseBlock({ rc }: { rc?: RootCause }) {
   const total = days(rc.predicted_ftc_shift_days);
   const maxAbs = Math.max(1, ...rows.map(b => Math.abs(days(b.days) ?? 0)));
   return (
-    <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title="Why the FTC moves">
+    <ExplainBlock icon={<Target className="w-3.5 h-3.5" />} title="Root cause">
       {total != null && (
         <p className="mb-2 text-[12px] text-foreground">
           Predicted FTC shift <span className={cx('font-semibold tabular-nums', total > 0 && 'text-status-critical-fg')}>{signedDays(total)}</span>
@@ -866,14 +871,11 @@ function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: Parti
           </>} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-        <RootCauseBlock rc={r.root_cause} />
-        <LeadTimeBlock lt={r.lead_time} />
-      </div>
+      <LeadTimeBlock lt={r.lead_time} />
 
       <MonthlyRequirementBlock mr={r.monthly_requirement} />
 
-      <ExplanationView ex={r.explanation} />
+      <ExplanationView ex={r.explanation} beforeActions={<RootCauseBlock rc={r.root_cause} />} />
 
       <ModelDetails rows={[
         ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],
