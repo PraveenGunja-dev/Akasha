@@ -1006,23 +1006,37 @@ export default function ModuleDeliveriesPage() {
      /module-deliveries/ai-results. Merged by row id, and only while the id
      still points at the project the AI scored. */
   const [aiById, setAiById] = useState<Record<string, RowAI>>({});
+  const [aiByName, setAiByName] = useState<Record<string, RowAI>>({});
   const [aiMeta, setAiMeta] = useState<{ generated_at?: string; label?: string; summary?: Record<string, unknown> } | null>(null);
   const [aiForecastRow, setAiForecastRow] = useState<ModuleProject | null>(null);
   const [aiPriorityRow, setAiPriorityRow] = useState<ModuleProject | null>(null);
+  // Why the AI layer is missing, shown on the page rather than failing silently.
+  const [aiLoadError, setAiLoadError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
     fetch(`${API}/akasha/api/module-deliveries-beta/ai-results`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (alive && d?.available) { setAiById(d.by_id || {}); setAiMeta(d.meta || null); } })
-      .catch(() => { /* no AI results: the table shows the rule engine alone */ });
+      .then(r => {
+        if (!r.ok) throw new Error(r.status === 404
+          ? 'the AI results endpoint is not on the server - restart the backend'
+          : `the AI results request failed (HTTP ${r.status})`);
+        return r.json();
+      })
+      .then(d => {
+        if (!alive) return;
+        if (d?.available) { setAiById(d.by_id || {}); setAiByName(d.by_name || {}); setAiMeta(d.meta || null); setAiLoadError(null); }
+        else setAiLoadError(d?.reason || 'no AI results file on the server');
+      })
+      .catch((e: unknown) => { if (alive) setAiLoadError(e instanceof Error ? e.message : 'the AI results could not be loaded'); });
     return () => { alive = false; };
   }, []);
+  /* By id while the id still points at the project the AI scored; otherwise by
+     P6 name (unique names only), since another server's database can number the
+     same projects differently. */
   const aiFor = useCallback((p: ModuleProject): RowAI | null => {
     const a = aiById[String(p.id)];
-    if (!a) return null;
-    if (a.p6_name && p.p6_name && a.p6_name !== p.p6_name) return null;
-    return a;
-  }, [aiById]);
+    if (a && !(a.p6_name && p.p6_name && a.p6_name !== p.p6_name)) return a;
+    return (p.p6_name && aiByName[p.p6_name]) || null;
+  }, [aiById, aiByName]);
   const aiAsOf = aiMeta?.generated_at;
   /* Rows the AI scored, re-expressed on the AI's ordering plan (see
      buildAIRowView). Everything that reads the month grid goes through pvOf,
@@ -1398,8 +1412,24 @@ export default function ModuleDeliveriesPage() {
   const orderedPct = pct(t.ordered_mwp, t.total_mwp);
   const receivedPct = pct(t.received_mwp, t.ordered_mwp);
 
+  /* AI results that loaded but match no row on screen: the export was scored
+     against another database, whose project ids differ from this one. */
+  const aiScoredCount = Object.keys(aiById).length;
+  const aiMatchedCount = (data?.projects ?? []).filter(p => aiFor(p)).length;
+  const aiNotice = aiLoadError
+    ? `AI columns are empty: ${aiLoadError}.`
+    : aiScoredCount > 0 && (data?.projects?.length ?? 0) > 0 && aiMatchedCount === 0
+      ? `AI columns are empty: none of the ${aiScoredCount} projects in the AI results match a project here by id or P6 name - the results were exported from a different database.`
+      : null;
+
   return (
     <div className="flex w-full flex-col gap-5 animate-in fade-in duration-500 pb-10">
+      {aiNotice && (
+        <div role="status" className="flex items-start gap-2 rounded-lg border border-[var(--status-watch-border)] bg-[var(--status-watch-bg)] px-3 py-2 text-[12px] text-[var(--status-watch-fg)]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{aiNotice} The rest of the page uses live data as normal.</span>
+        </div>
+      )}
 
       <motion.div variants={container} initial="hidden" animate="show"
         className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3"

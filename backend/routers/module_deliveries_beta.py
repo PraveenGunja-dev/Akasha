@@ -101,9 +101,17 @@ def get_ai_results():
                 "ai_review_reason": p.get("ai_review_reason"),
                 "ai_review_changes": p.get("ai_review_changes") or [],
             }
+        # The export's ids come from the database it was scored against; another
+        # server's project_mapping can number the same projects differently. So
+        # the page can also match on the P6 name - only names that occur once,
+        # since a name shared by two rows cannot say which row it is.
+        names = [v["p6_name"] for v in by_id.values() if v.get("p6_name")]
+        by_name = {v["p6_name"]: v for v in by_id.values()
+                   if v.get("p6_name") and names.count(v["p6_name"]) == 1}
         _ai_results_cache.update(mtime=mtime, data={
             "available": True,
             "meta": (doc.get("meta") or {}).get("ai"),
             "by_id": by_id,
+            "by_name": by_name,
         })
     return _ai_results_cache["data"]
