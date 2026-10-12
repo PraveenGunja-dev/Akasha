@@ -144,7 +144,7 @@ SCOPED_ROUTES: list[tuple[re.Pattern, str]] = [(re.compile(p), kind) for p, kind
     (r"^/api/project-360$", "portfolio"),
     (r"^/api/quality/(overview|contractors|by-project|ncs|trends)$", "portfolio"),
     (r"^/api/statutory/(dashboard-summary|compliance|epc-status|insurance)$", "portfolio"),
-    (r"^/api/module-deliveries/summary$", "portfolio"),
+    (r"^/api/module-deliveries/(summary|advanced-plan)$", "portfolio"),
     (r"^/api/intelligence/portfolio/(summary|hotspots)$", "portfolio"),   # before the per-project rule
     # One project (path segment `pid` is its project_id)
     (r"^/api/project-360/(?P<pid>[^/]+)/detail$", "project"),

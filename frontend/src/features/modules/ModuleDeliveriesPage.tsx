@@ -12,6 +12,10 @@ import type { ModuleDeliveriesSummary, ModuleProject, LtaRisk, MonthPhase } from
 import { PLANNING_RULES } from './planningRules';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
+import {
+  ADVANCED_COL_COUNT, AdvancedBlankCells, AdvancedCells, AdvancedHeader, AiDeadlineLine, AiFtcLine,
+  AiMonthCell, AiOrderLine, AiTcLine, TD_AI, aiMonths, useAdvancedPlan,
+} from './AdvancedColumns';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
@@ -749,9 +753,13 @@ const DEFAULT_VISIBLE: Set<ColumnKey> = new Set([
   'month_wise', 'remarks',
 ]);
 const ALL_COLUMN_KEYS = new Set<string>(ALL_COLUMNS.map(c => c.key));
+/** Shown while Advanced AI planning is on: they carry the original vs AI dates. */
+const ADVANCED_DATE_COLS = new Set<ColumnKey>(['ftc_date', 'module_ordering_date', 'tc_delivery_date']);
 const COLS_STORAGE_KEY = 'akasha_mod_cols_v4';
 
-export default function ModuleDeliveriesPage() {
+/** `advanced`: the Advanced AI planning switch (OrderingSchedule) - adds the
+    site-driven columns; the schedule itself is unchanged. */
+export default function ModuleDeliveriesPage({ advanced = false, weather = false }: { advanced?: boolean; weather?: boolean } = {}) {
   const [data, setData] = useState<ModuleDeliveriesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -802,7 +810,8 @@ export default function ModuleDeliveriesPage() {
   const [trackingOverrides, setTrackingOverrides] = useState<Record<number, boolean>>({});
   const colDropdownRef = React.useRef<HTMLDivElement>(null);
 
-  const isColVisible = useCallback((key: ColumnKey) => visibleCols.has(key), [visibleCols]);
+  const isColVisible = useCallback((key: ColumnKey) => visibleCols.has(key) || (advanced && ADVANCED_DATE_COLS.has(key)),
+    [visibleCols, advanced]);
   const toggleCol = useCallback((key: ColumnKey) => {
     setVisibleCols(prev => {
       const next = new Set(prev);
@@ -842,6 +851,20 @@ export default function ModuleDeliveriesPage() {
   const [searchParams] = useSearchParams();
   const portfolio = searchParams.get('portfolio');
   const phase = searchParams.get('phase');
+  const adv = useAdvancedPlan(advanced, portfolio);
+  const columnCount = TABLE_COLUMN_COUNT + (advanced ? ADVANCED_COL_COUNT : 0);
+  const advShare = useMemo(() => {
+    const total = new Map<string, number>();
+    (data?.projects ?? []).forEach(r => {
+      const pl = adv.byId.get(r.id);
+      if (pl) total.set(pl.project_id, (total.get(pl.project_id) ?? 0) + (r.capacity_mwac || 0));
+    });
+    return (r: ModuleProject) => {
+      const pl = adv.byId.get(r.id);
+      const t = pl ? total.get(pl.project_id) ?? 0 : 0;
+      return t > 0 ? (r.capacity_mwac || 0) / t : 1;
+    };
+  }, [data, adv.byId]);
 
   const loadData = React.useCallback((sc = scenario, prio = priorities) => {
     setLoading(true);
@@ -1612,11 +1635,17 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('deliveries') && <Th rowSpan={2} className="min-w-[78px]"
                   tip="Every dispatch and receipt, each on its own dates. Click a row's count to open its ledger">
                   <ThLabel label="Delivery" unit="Ledger" /></Th>}
+                {advanced && <AdvancedHeader Th={Th} ThLabel={ThLabel} />}
                 {isColVisible('balance_dispatch') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>}
                 {isColVisible('status') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>}
-                {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
-                  Month wise Module Requirement at Site ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
-                </Th>}
+                {isColVisible('month_wise') && (advanced
+                  ? <Th colSpan={FORECAST_MONTHS.length + 1} className={`${SECTION_EDGE} !bg-[var(--status-ai-solid)]`}
+                      tip="Site-driven: each block left short is ordered in the month of its order-by date (modules needed on site minus the lead time). Anything already past its order-by date sits in the current month. Click a figure for its blocks.">
+                      ✦ Month-wise order, site-driven ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
+                    </Th>
+                  : <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
+                      Month wise Module Requirement at Site ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
+                    </Th>)}
                 {isColVisible('ftc_date') && <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="FTC" unit="Date" />
@@ -1658,7 +1687,7 @@ export default function ModuleDeliveriesPage() {
                   {/* Group Header */}
                   {groupBy !== 'none' && (
                     <tr className="cursor-pointer" onClick={() => toggleGroup(group)}>
-                      <td colSpan={TABLE_COLUMN_COUNT} className="border-y border-[var(--border-default)] bg-[var(--neutral-200)] px-1.5 py-1">
+                      <td colSpan={columnCount} className="border-y border-[var(--border-default)] bg-[var(--neutral-200)] px-1.5 py-1">
                         <div className="sticky left-2 flex w-fit items-center gap-1.5">
                           {collapsed.has(group)
                             ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -1811,6 +1840,7 @@ export default function ModuleDeliveriesPage() {
                                 </Tip>
                               )}
                             </div>
+                            {advanced && <AiDeadlineLine plan={adv.byId.get(p.id)} deadline={p.lta} label="LTA" weather={weather} />}
                           </Td>
                         );
                       })()}
@@ -1846,6 +1876,7 @@ export default function ModuleDeliveriesPage() {
                             </button>
                           </Tip>
                         )}
+                        {advanced && <AiDeadlineLine plan={adv.byId.get(p.id)} deadline={p.scod} label="SCOD" weather={weather} />}
                       </td>}
                       {isColVisible('aop') && <Td>{p.aop_plan || '-'}</Td>}
                       {/* An apportioned figure is derived, not measured — mark it. */}
@@ -1909,11 +1940,29 @@ export default function ModuleDeliveriesPage() {
                           </button>
                         ) : <span className="text-muted-foreground">-</span>}
                       </Td>}
+                      {advanced && <AdvancedCells plan={adv.byId.get(p.id)} Td={Td} standardModuleDate={p.module_date}
+                        error={adv.error} loading={adv.loading} weather={weather} />}
                       {isColVisible('balance_dispatch') && <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
                       {isColVisible('status') && <Td className={SECTION_EDGE}><StatusBadge status={p.status} /></Td>}
-                      {isColVisible('month_wise') && FORECAST_MONTHS.map((mo, i) => {
+                      {isColVisible('month_wise') && advanced && (() => {
+                        const ai = aiMonths(adv.byId.get(p.id), advShare(p));
+                        const total = [...ai.values()].reduce((a, e) => a + e.mwp, 0);
+                        return <>
+                          {FORECAST_MONTHS.map((mo, i) => (
+                            <AiMonthCell key={mo} mo={mo} entry={ai.get(mo)} standard={p.month_mwp?.[mo] || 0}
+                              first={i === 0} unitToggle={unitToggle} ol={p.ol} Td={Td} plan={adv.byId.get(p.id)} quota={adv.plan?.quota} milestone={milestoneFilter}
+                              row={{ name: p.project_name || p.p6_name, capacityMwp: p.capacity_mwp, capacityMwac: p.capacity_mwac,
+                                lta: p.lta, balanceMwp: p.balance_ordering_mwp }} />
+                          ))}
+                          <Td align="right" className={`${TD_AI} font-semibold text-[var(--status-ai-fg)] tabular-nums`}
+                            tip={`Site-driven total to order. Standard plan: ${MW(Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0))} MWp`}>
+                            {total > 0.5 ? MW(total) : '-'}
+                          </Td>
+                        </>;
+                      })()}
+                      {isColVisible('month_wise') && !advanced && FORECAST_MONTHS.map((mo, i) => {
                         const val = p.month_mwp?.[mo] || 0;
                         const overdueVal = p.month_overdue_mwp?.[mo] || 0;
                         const cellPhases = p.month_phases?.[mo] ?? [];
@@ -2341,7 +2390,7 @@ export default function ModuleDeliveriesPage() {
                           </Td>
                         );
                       })}
-                      {isColVisible('month_wise') && <Td align="right" className="font-semibold text-foreground tabular-nums"
+                      {isColVisible('month_wise') && !advanced && <Td align="right" className="font-semibold text-foreground tabular-nums"
                         tip={Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0) < (p.balance_ordering_mwp || 0) ? "Total planned is less than balance to order due to missed dates or completed FTCs" : undefined}>
                         {(() => {
                           const planned = Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0);
@@ -2354,8 +2403,12 @@ export default function ModuleDeliveriesPage() {
                           : p.ftc_all_charged
                             ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
                             : '-'}
+                        {advanced && <AiFtcLine plan={adv.byId.get(p.id)} weather={weather} />}
                       </Td>}
-                      {isColVisible('module_ordering_date') && <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>}
+                      {isColVisible('module_ordering_date') && <Td>
+                        {p.module_date ? <DatedPhases value={p.module_date} /> : '-'}
+                        {advanced && <AiOrderLine plan={adv.byId.get(p.id)} />}
+                      </Td>}
                       {isColVisible('po_placed') && (proc?.po_first_date
                         ? <Td tipWide tipContent={
                             <div className="min-w-[260px] space-y-0.5 text-[10px]">
@@ -2373,7 +2426,10 @@ export default function ModuleDeliveriesPage() {
                             )}
                           </Td>
                         : <Td className="text-muted-foreground">-</Td>)}
-                      {isColVisible('tc_delivery_date') && <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>}
+                      {isColVisible('tc_delivery_date') && <Td>
+                        {p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}
+                        {advanced && <AiTcLine plan={adv.byId.get(p.id)} />}
+                      </Td>}
                       {isColVisible('remarks') && <Td align="left" className="min-w-[240px] max-w-[280px]">
                         <div className={`flex items-center justify-between gap-1.5 overflow-hidden transition-all duration-200 ${
                           p.perspectives 
@@ -2417,7 +2473,7 @@ export default function ModuleDeliveriesPage() {
                     </tr>
                     {ledgerOpen && proc && (
                       <tr>
-                        <td colSpan={TABLE_COLUMN_COUNT} className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)] p-0">
+                        <td colSpan={columnCount} className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)] p-0">
                           {/* Pinned to the viewport's left edge so the ledger stays in
                               view however far the wide table is scrolled. */}
                           <div className="sticky left-0 max-w-[min(1200px,calc(100vw-3rem))]">
@@ -2464,9 +2520,23 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('awaiting_grn') && <Td align="right" className="text-foreground tabular-nums">{MW(t.awaiting_grn_mwp)}</Td>}
                 {isColVisible('checklist_status') && <Td />}
                 {isColVisible('deliveries') && <Td />}
+                {advanced && <AdvancedBlankCells Td={Td} />}
                 {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
                 {isColVisible('status') && <Td className={SECTION_EDGE} />}
-                {isColVisible('month_wise') && <>
+                {isColVisible('month_wise') && advanced && <>
+                {FORECAST_MONTHS.map((mo, i) => {
+                  const mTotal = sum(filtered, p => aiMonths(adv.byId.get(p.id), advShare(p)).get(mo)?.mwp || 0);
+                  return (
+                    <Td key={mo} className={`${TD_AI} tabular-nums font-bold text-[var(--status-ai-fg)] ${i === 0 ? SECTION_EDGE : ''}`}>
+                      {mTotal > 0.5 ? MW(mTotal) : '-'}
+                    </Td>
+                  );
+                })}
+                <Td align="right" className={`${TD_AI} tabular-nums font-bold text-[var(--status-ai-fg)]`}>
+                  {MW(sum(filtered, p => [...aiMonths(adv.byId.get(p.id), advShare(p)).values()].reduce((a, e) => a + e.mwp, 0)))}
+                </Td>
+                </>}
+                {isColVisible('month_wise') && !advanced && <>
                 {FORECAST_MONTHS.map((mo, i) => {
                   const mTotal = sum(filtered, p => p.month_mwp?.[mo] || 0);
                   const acTotal = sum(filtered, p => {
@@ -2529,13 +2599,13 @@ export default function ModuleDeliveriesPage() {
                     Auto-Generated
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                   Monthly ordering plan by origin, respecting factory quotas.
                   <InfoTip
                     info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWac) are planning assumptions built into the engine. Orders are shown in MWp; each is converted to MWac with the project's DC/AC ratio before it counts against the quota."
                     align="left"
                   />
-                </p>
+                </div>
               </div>
               
               {data.strategic_briefing?.executive_takeaways && data.strategic_briefing.executive_takeaways.length > 0 && (

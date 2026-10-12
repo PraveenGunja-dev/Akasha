@@ -16,7 +16,7 @@ import Project360 from '../projects/Project360';
 import ProjectWorkspace from '../projects/ProjectWorkspace';
 import P6View from '../../components/dashboards/P6View';
 import CapacityOverviewPage from '../capacity/CapacityOverviewPage';
-import ModuleDeliveriesPage from '../modules/ModuleDeliveriesPage';
+import OrderingSchedule from '../modules/OrderingSchedule';
 import QualityCommandCenter from '../quality/QualityCommandCenter';
 import ComplianceDashboard from '../compliance/ComplianceDashboard';
 import TransmissionDataViewer from '../analytics/TransmissionDataViewer';
@@ -126,7 +126,7 @@ export default function RoleWorkspace({ dashboard }: { dashboard: string }) {
         ? <AkLoader size="md" label="Loading the P6 schedule…" className="min-h-[60vh] w-full" />
         : <P6View p6Data={p6} loading={loading} />;
       case 'capacity': return <CapacityOverviewPage />;
-      case 'ordering': return <ModuleDeliveriesPage />;
+      case 'ordering': return <OrderingSchedule />;
       case 'quality': return <QualityCommandCenter />;
       case 'approvals': return <ComplianceDashboard />;
       case 'transmission': return <TransmissionDataViewer dashboardData={dash} />;

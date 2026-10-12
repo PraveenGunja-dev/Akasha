@@ -946,3 +946,19 @@ def module_planning_copilot_chat(req: CopilotChatRequest, db: Session = Depends(
         portfolio_context=summary_data.get("strategic_briefing", {}),
         project_context=project_context
     )
+
+
+@router.get("/advanced-plan")
+def get_advanced_plan(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
+    """Advanced AI planning (branch orderingpoc): block-by-block module need
+    from each block's stage progress (piling -> capping -> structure ->
+    purlin -> modules), grouped by FTC phase, netted against the Ordering
+    Schedule's own supply figures. See services/advanced_planning.py."""
+    from services import advanced_planning
+    # Same projects the user can see on the Ordering Schedule (?portfolio=).
+    summary = get_module_deliveries_summary(scenario="baseline", priorities=None,
+                                            portfolio=portfolio, phase=None, db=db)
+    pid_of = {mid: pid for mid, pid in db.execute(
+        text("select id, project_id from project_mapping where project_id is not null"))}
+    rows = [{**p, "project_id": pid_of.get(p["id"])} for p in summary["projects"]]
+    return advanced_planning.build(db, rows)
