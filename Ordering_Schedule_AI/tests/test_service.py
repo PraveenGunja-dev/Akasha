@@ -198,6 +198,55 @@ def test_akasha_dashboard_export():
     assert client.post("/api/ai/v1/batch/akasha-dashboard/json", json={"x": 1}).status_code == 422
 
 
+def _fake_reviewer(monkeypatch, reply: dict):
+    """The governance LLM returns `reply`; the explanation LLM stays off (template)."""
+    from service import explain, governance
+    def fake(system, facts):
+        if system.startswith("You are Akasha Intelligence AI Governance Layer"):
+            assert "Module Deliveries data (planner sheet, as of 9 Oct 2026)" in facts
+            return reply, "test"
+        return None
+    monkeypatch.setattr(explain, "_call_llm", fake)
+    return governance
+
+
+def test_v1_routes_keep_the_original_logic():
+    for path, body in (("order-tc-forecast", UC1), ("priority-predict", UC2)):
+        v1 = client.post(f"/api/ai/v1/{path}_v1", json=body).json()
+        new = client.post(f"/api/ai/v1/{path}", json=body).json()
+        assert "llm_review" not in v1["model"]
+        assert new["model"].pop("llm_review")["status"] == "NOT_REVIEWED"     # no LLM in tests
+        assert new == v1                                                       # same structure and values
+
+
+def test_review_correction_flows_through_uc1(monkeypatch):
+    base = client.post("/api/ai/v1/order-tc-forecast_v1", json=SECI).json()
+    later = (pd.Timestamp(base["order_by_date"]) + pd.Timedelta(days=30)).date().isoformat()
+    _fake_reviewer(monkeypatch, {"ai_priority": {}, "ai_monthly_order_tc_forecast": {
+        "order_by_date": later, "predicted_tc_date": "2026-01-01"},     # TC before the order: must be rejected
+        "ai_review_status": "CORRECTED", "ai_review_reason": "Quota full in the planned month."})
+    d = client.post("/api/ai/v1/order-tc-forecast?explain=true", json=SECI).json()
+    rv = d["model"]["llm_review"]
+    assert rv["status"] == "CORRECTED" and rv["corrections"][0]["field"] == "order_by_date"
+    assert any(r.startswith("predicted_tc_date") for r in rv["rejected"])
+    assert d["order_by_date"] == later and d["recommended_order_date"] == later
+    assert d["predicted_tc_date"] > base["predicted_tc_date"]                   # TC follows the later order
+    parts = [b["days"] for b in d["root_cause"]["breakdown"] if b["days"] is not None]
+    assert sum(parts) == d["root_cause"]["predicted_ftc_shift_days"] and min(parts) >= 0
+    assert set(d) - {"explanation"} == set(base)                                # same response structure
+    assert "governance review corrected order_by_date" in d["explanation"]["rule_vs_ai_assessment"]
+
+
+def test_review_cannot_downgrade_ppa_penalty(monkeypatch):
+    _fake_reviewer(monkeypatch, {"ai_priority": {"priority_class": "P2"}, "ai_monthly_order_tc_forecast": {},
+                                 "ai_review_status": "CORRECTED", "ai_review_reason": "test"})
+    d = client.post("/api/ai/v1/priority-predict", json=UC2).json()               # PPA past SCOD -> guardrail P1
+    assert d["priority_class"] == "P1" and d["model"]["llm_review"]["status"] == "VALIDATED"
+    assert d["model"]["llm_review"]["rejected"]
+    g = client.post("/api/ai/v1/priority-predict?explain=true", json={**UC2, "category": "Group"}).json()
+    assert g["priority_class"] == "P2" and g["model"]["llm_review"]["corrections"][0]["ml_value"] == "STANDARD"
+
+
 @pytest.mark.parametrize("path,body,code", [
     ("order-tc-forecast", {**UC1, "vendor_type": "XYZ"}, 422),
     ("order-tc-forecast", {k: v for k, v in UC1.items() if k != "ftc_date"}, 422),

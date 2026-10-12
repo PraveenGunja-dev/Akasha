@@ -33,8 +33,9 @@ through the Vite proxy: run the frontend with `AI_API_TARGET=http://localhost:80
 
 | Route | Use case |
 |---|---|
-| `POST /api/ai/v1/order-tc-forecast?explain=true` | UC1 order date, TC date (P50/P90), projected FTC, root cause |
-| `POST /api/ai/v1/priority-predict?explain=true` | UC2 P1 / P2 / STANDARD with probabilities and score |
+| `POST /api/ai/v1/order-tc-forecast?explain=true` | UC1 order date, TC date (P50/P90), projected FTC, root cause - **with the LLM governance review** |
+| `POST /api/ai/v1/priority-predict?explain=true` | UC2 P1 / P2 / STANDARD with probabilities and score - **with the LLM governance review** |
+| `POST /api/ai/v1/order-tc-forecast_v1`, `/priority-predict_v1` | the same two use cases without the review (the original logic, kept for reuse) |
 | `POST /api/ai/v1/batch/module-deliveries/csv` | Upload a Module Deliveries CSV → the same CSV with UC1 + UC2 AI columns appended |
 | `POST /api/ai/v1/batch/module-deliveries/json` | The same from JSON rows keyed by the sheet's headers → JSON rows + `ai_detail` + summary |
 | `POST /api/ai/v1/batch/akasha-dashboard` (file) or `/akasha-dashboard/json` (body) | Dashboard export `akasha_ordering_schedule_full.json` → the same JSON with `ai_priority` + `ai_monthly_order_tc_forecast` on every project; saved to `data/output/AIAkashaOrderingSchedule_final.json` |
@@ -88,6 +89,33 @@ which orders all 408 MWp at once.
 curl -X POST 'http://localhost:8000/api/ai/v1/batch/akasha-dashboard' \
   -F 'file=@data/raw/akasha_ordering_schedule_full.json' -o AIAkashaOrderingSchedule_final.json
 ```
+
+## LLM governance review (`/order-tc-forecast`, `/priority-predict`)
+
+`service/governance.py`. Each call runs four steps:
+1. Compute the ML result (the `_v1` logic).
+2. Have the LLM (Groq, `AKASHA_AI_API_KEY` / `GROQ_MODEL`) review it with the Akasha AI Governance Layer prompt
+   (`src/akasha_system_prompt.txt`) against the project's row in `data/raw/Module Deliveries.csv`. The row
+   carries the planning flags read from the Remarks, the FTC / TC / Module date cells, the planner's month-wise
+   plan, stock, balance and progress.
+3. Apply any corrections inside the same computation, so derived values follow them: recommended date,
+   `order_now`, root cause and explanation.
+4. Write the explanation from the reviewed result.
+
+The request and response are the same as `_v1`. The one addition is `model.llm_review`:
+`status` (VALIDATED / CORRECTED / NOT_REVIEWED), `reason`, `corrections` (field, ML value, reviewed value), and
+`rejected`.
+
+The review can change only `order_by_date`, `predicted_tc_date`, `predicted_tc_date_p90`, `projected_ftc_date`
+and `risk_level` (UC1), and `priority_class` (UC2). A proposal is rejected and listed if it breaks a planning
+rule:
+- TC earlier than the order date (never before today) plus the measured lead time;
+- P90 earlier than TC;
+- FTC earlier than TC + 45 days or the P6 FTC;
+- a PPA penalty P1 downgraded.
+
+If no LLM is configured, or the call fails, the ML result is returned unchanged with status `NOT_REVIEWED`.
+The batch and dashboard endpoints still use the `_v1` logic.
 
 ## How a prediction is made
 
