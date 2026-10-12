@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
-  Package, Sun, Truck, CheckCircle2, Clock, Search,
+  Package, Sun, Truck, CheckCircle2, Clock, Search, ListChecks,
   AlertTriangle, ChevronDown, ChevronRight, Download, RefreshCw,
   Layers, BarChart3, Sparkles, ShieldCheck, Activity, Zap,
   Bot, X, Send, ArrowRight, Columns3, Info, Calendar
@@ -16,7 +16,165 @@ import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
 
 import { Loader as AkLoader } from '../../components/ui/primitives';
-import AIPredictionPanels from './AIPredictionPanels';
+import AIPredictionPanels, {
+  AIForecastModal, AIPriorityModal, aiDate, aiPhaseFor, aiPriorityTone, isScored, phaseName,
+} from './AIPredictionPanels';
+import type { RowAI, ForecastPhase, OrderTcForecastResponse } from './AIPredictionPanels';
+
+/* AI-predicted values are set apart in brand blue across the table and popups,
+   so a model's answer is never mistaken for a plan or SAP figure. */
+const AI_TEXT = 'text-brand-blue';
+const AI_CELL = 'bg-brand-blue/[0.06]';
+
+/* ── AI month view ────────────────────────────────────────────────────────
+   For a project the AI scored, the month grid shows the AI's own ordering plan
+   (monthly_requirement.ai: each order's month and MWp) instead of the rule
+   engine's. buildAIRowView re-expresses that plan in the row's existing shape
+   (month_mwp / month_overdue_mwp / month_phases / module_date / tc_date), so
+   every cell, chip and popup renders it with the same code. The rule-engine
+   dates it replaces are kept on the row (rule_module_date / rule_tc_date) for
+   the "Rule:" comparison. Vendor-quota levelling is a rule-engine step and
+   does not apply to the AI plan. */
+export type AIRowView = ModuleProject & {
+  ai_view: true;
+  rule_module_date: string;
+  rule_tc_date: string;
+  /** AI orders that fall after the last grid month (not drawn in a cell). */
+  ai_outside: { month: string; mwp: number }[];
+};
+
+const MON3 = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'];
+/** 'Feb-27' -> a sortable month number. NaN when unparsable. */
+const monthNum = (mo?: string | null) => {
+  const m = (mo || '').match(/^([A-Za-z]{3})-(\d{2})$/);
+  if (!m) return NaN;
+  const i = MON3.indexOf(m[1].toLowerCase());
+  return i < 0 ? NaN : (2000 + Number(m[2])) * 12 + i;
+};
+const bareLabel = (l?: string | null) => (l || '').replace(/\s*\(.*$/, '').replace(/\s+BL-.*$/i, '').trim().toLowerCase();
+const isUnphased = (l?: string | null) => !l || /^(main|project balance|single phase)$/i.test(l.trim());
+
+/** The segment of a "Ph-I (75MW): 29-Dec-26 · …" string for one phase. */
+function segFor(segs: ReturnType<typeof splitDateField>, label?: string | null) {
+  if (segs.length === 0) return undefined;
+  if (isUnphased(label)) return segs.length === 1 ? segs[0] : segs.find(s => !s.label);
+  return segs.find(s => bareLabel(s.label) === bareLabel(label)) ?? (segs.length === 1 ? segs[0] : undefined);
+}
+
+function buildAIRowView(p: ModuleProject, f: OrderTcForecastResponse): AIRowView | null {
+  const plan = f.monthly_requirement?.ai?.months;
+  if (!plan) return null;
+  const firstNum = monthNum(FORECAST_MONTHS[0]);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const month_mwp: Record<string, number> = Object.fromEntries(FORECAST_MONTHS.map(m => [m, 0]));
+  const month_overdue_mwp: Record<string, number> = Object.fromEntries(FORECAST_MONTHS.map(m => [m, 0]));
+  const month_phases: Record<string, MonthPhase[]> = Object.fromEntries(FORECAST_MONTHS.map(m => [m, []]));
+  const ai_outside: { month: string; mwp: number }[] = [];
+  const modSegs = splitDateField(p.module_date);
+  const tcSegs = splitDateField(p.tc_date);
+  const ftcSegs = splitDateField(p.ftc_date);
+  const round1 = (n: number) => Math.round(n * 10) / 10;
+
+  for (const m of plan) {
+    const mwp = m.required_at_site_mwp ?? 0;
+    if (mwp <= 0) continue;
+    const n = monthNum(m.order_month);
+    // An order whose month has already gone is placed in the first open
+    // month and flagged, as the rule engine does with its own overdue orders.
+    const target = Number.isNaN(n) ? undefined
+      : n < firstNum ? FORECAST_MONTHS[0]
+        : FORECAST_MONTHS.find(x => monthNum(x) === n);
+    if (!target) { ai_outside.push({ month: m.order_month || '?', mwp }); continue; }
+    const overdue = !!m.overdue || (!!m.order_by_date && new Date(m.order_by_date) < today) || n < firstNum;
+    month_mwp[target] += mwp;
+    if (overdue) month_overdue_mwp[target] += mwp;
+
+    // "Ph-I (75 MWac)" entries; an unphased order reads "paced by structure completion".
+    const parts = (m.phases?.length ? m.phases : ['']).map(s => {
+      const label = s.split(' (')[0].trim();
+      const ac = s.match(/\(([\d.]+)\s*MWac\)/i);
+      return { label: /^ph[-\s]/i.test(label) ? label : '', ac: ac ? parseFloat(ac[1]) : 0 };
+    });
+    const acSum = parts.reduce((a, x) => a + x.ac, 0);
+    parts.forEach(x => {
+      const share = acSum > 0 ? x.ac / acSum : 1 / parts.length;
+      const label = x.label || (f.phases?.length === 1 && !isUnphased(f.phases[0].phase) ? f.phases[0].phase : 'Main');
+      const tc = segFor(tcSegs, label)?.date || '-';
+      const ftc = segFor(ftcSegs, label)?.date || '-';
+      month_phases[target].push({
+        phase_label: label,
+        mwp: round1(mwp * share),
+        mw_ac: x.ac || round1((m.required_at_site_mwac ?? 0) * share),
+        // Rule-engine dates: the chips lead with the AI date and show these as "Rule:".
+        order_date: segFor(modSegs, label)?.date || '-',
+        tc_date: tc,
+        ftc_date: ftc,
+        order_month: target,
+        delay_months: 0,
+        ftc_reachable: true,
+        ftc_short_days: 0,
+        next_tc_date: tc,
+        next_ftc_date: ftc,
+        overdue,
+        shifted: false,
+      });
+    });
+  }
+
+  // AI date strings in the table's own format, so the calendar chips (TC
+  // milestone filter) and milestone-only months follow the AI dates too.
+  const seg = (ph: ForecastPhase, iso?: string | null) => {
+    const d = aiDate(iso);
+    if (!d) return null;
+    const lab = phaseName(ph.phase);
+    if (!lab) return d;
+    const mw = segFor(ftcSegs, lab)?.mwAc;
+    return `${lab}${mw ? ` (${mw}MW)` : ''}: ${d}`;
+  };
+  const phases = f.phases ?? [];
+  const cls = (f.priority?.ai || '').toUpperCase();
+  return {
+    ...p,
+    ai_view: true,
+    rule_module_date: p.module_date,
+    rule_tc_date: p.tc_date,
+    ai_outside,
+    month_mwp,
+    month_overdue_mwp,
+    month_phases,
+    module_date: phases.map(ph => seg(ph, ph.order_by_date)).filter(Boolean).join(' · '),
+    tc_date: phases.map(ph => seg(ph, ph.predicted_tc_date)).filter(Boolean).join(' · '),
+    // Cell colour follows the AI priority; quota-levelling flags do not apply.
+    priority: cls === 'P1' ? 'P1' : cls === 'P2' ? 'P2' : 'standard',
+    planning_flags: [],
+  } as AIRowView;
+}
+
+/** One phase of the AI forecast as the table's "Ph-I: 13-May-27 · …" segments,
+ *  for the Module Ordering / TC Delivery columns. */
+function AIDatedPhases({ phases, pick }: { phases: ForecastPhase[]; pick: (ph: ForecastPhase) => string | null | undefined }) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return (
+    <span className={`font-semibold ${AI_TEXT}`}>
+      {phases.map((ph, i) => {
+        const iso = pick(ph);
+        const shown = aiDate(iso);
+        const overdue = !!iso && new Date(iso) < today;
+        const label = phaseName(ph.phase);
+        return (
+          <React.Fragment key={ph.phase}>
+            {i > 0 && <span className="text-muted-foreground/40"> · </span>}
+            <span className={overdue ? 'text-[var(--status-critical-fg)]' : undefined}>
+              {label ? `${label}: ` : ''}{shown ?? <span className="font-normal text-muted-foreground">nothing to order</span>}
+            </span>
+          </React.Fragment>
+        );
+      })}
+    </span>
+  );
+}
 /* ═══════════════════════════════════════════════════════════════════════════
    MODULE DELIVERIES & FORECAST
    CEO-grade view replicating the PDF tracker with live SAP/P6/TC data.
@@ -46,7 +204,7 @@ const SECTION_EDGE = 'border-l border-border';
 // columns, leaving them uncoloured (user report 2026-09-20). 25 lead columns
 // (Sr..Status) + the month block (FORECAST_MONTHS + its Total) + FTC/TC/Module
 // + Remarks.
-const TABLE_COLUMN_COUNT = 26 + (FORECAST_MONTHS.length + 1) + 3 + 1;
+const TABLE_COLUMN_COUNT = 27 + (FORECAST_MONTHS.length + 1) + 3 + 1; // 27 = 26 + Priority (AI)
 
 /** '07-Mar-27' -> '2027-03-07' for an <input type="date"> value */
 function scodToInputValue(scod: string): string {
@@ -696,7 +854,7 @@ type ColumnKey =
   | 'epc' | 'priority' | 'ol' | 'capacity_mwac' | 'capacity_mwp'
   | 'ftc_completed' | 'connectivity' | 'lta' | 'scod' | 'aop'
   | 'ordered' | 'balance_ordering' | 'total_receipt' | 'erection_done'
-  | 'module_inventory' | 'under_transit' | 'balance_dispatch' | 'status'
+  | 'module_inventory' | 'under_transit' | 'balance_dispatch' | 'ai_priority' | 'status'
   | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'tc_delivery_date' | 'remarks';
 
 const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
@@ -708,7 +866,8 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'type', label: 'Type' },
   { key: 'mms_type', label: 'MMS Type' },
   { key: 'epc', label: 'AGEL / EPC' },
-  { key: 'priority', label: 'Priority' },
+  // Beta: the visible "Priority" column is the AI one; this is the planner's own toggle.
+  { key: 'priority', label: 'Priority (Plan)' },
   { key: 'ol', label: 'OL' },
   { key: 'capacity_mwac', label: 'Capacity (MWac)' },
   { key: 'capacity_mwp', label: 'Capacity (MWp)' },
@@ -724,6 +883,7 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'module_inventory', label: 'Module Inventory' },
   { key: 'under_transit', label: 'Under Transit' },
   { key: 'balance_dispatch', label: 'Balance Dispatch' },
+  { key: 'ai_priority', label: 'Priority' },
   { key: 'status', label: 'Status' },
   { key: 'month_wise', label: 'Month Wise Allocation' },
   { key: 'ftc_date', label: 'FTC Date' },
@@ -738,6 +898,7 @@ const DEFAULT_VISIBLE: Set<ColumnKey> = new Set([
   'lta', 'scod', 'aop',
   'ordered', 'balance_ordering', 'total_receipt',
   'erection_done', 'module_inventory', 'under_transit', 'balance_dispatch',
+  'ai_priority',
   'month_wise', 'remarks',
 ]);
 
@@ -805,6 +966,45 @@ export default function ModuleDeliveriesPage() {
   ]);
   const [copilotLoading, setCopilotLoading] = useState(false);
   const [activePerspectiveProject, setActivePerspectiveProject] = useState<ModuleProject | null>(null);
+
+  /* AI results (UC1 forecast + UC2 priority), scored offline and served by
+     /module-deliveries/ai-results. Merged by row id, and only while the id
+     still points at the project the AI scored. */
+  const [aiById, setAiById] = useState<Record<string, RowAI>>({});
+  const [aiMeta, setAiMeta] = useState<{ generated_at?: string; label?: string; summary?: Record<string, unknown> } | null>(null);
+  const [aiForecastRow, setAiForecastRow] = useState<ModuleProject | null>(null);
+  const [aiPriorityRow, setAiPriorityRow] = useState<ModuleProject | null>(null);
+  useEffect(() => {
+    let alive = true;
+    fetch(`${API}/akasha/api/module-deliveries/ai-results`)
+      .then(r => (r.ok ? r.json() : null))
+      .then(d => { if (alive && d?.available) { setAiById(d.by_id || {}); setAiMeta(d.meta || null); } })
+      .catch(() => { /* no AI results: the table shows the rule engine alone */ });
+    return () => { alive = false; };
+  }, []);
+  const aiFor = useCallback((p: ModuleProject): RowAI | null => {
+    const a = aiById[String(p.id)];
+    if (!a) return null;
+    if (a.p6_name && p.p6_name && a.p6_name !== p.p6_name) return null;
+    return a;
+  }, [aiById]);
+  const aiAsOf = aiMeta?.generated_at;
+  /* Rows the AI scored, re-expressed on the AI's ordering plan (see
+     buildAIRowView). Everything that reads the month grid goes through pvOf,
+     so a row's cells, its total, the column totals and the Planned-by-Month
+     chart all agree. */
+  const aiViewById = useMemo(() => {
+    const m = new Map<number, AIRowView>();
+    for (const p of data?.projects ?? []) {
+      const f = aiFor(p)?.ai_monthly_order_tc_forecast;
+      if (f && isScored(f)) {
+        const v = buildAIRowView(p, f);
+        if (v) m.set(p.id, v);
+      }
+    }
+    return m;
+  }, [data, aiFor]);
+  const pvOf = useCallback((p: ModuleProject): ModuleProject | AIRowView => aiViewById.get(p.id) ?? p, [aiViewById]);
 
   const [searchParams] = useSearchParams();
   const portfolio = searchParams.get('portfolio');
@@ -1101,9 +1301,9 @@ export default function ModuleDeliveriesPage() {
 
   const plannedByMonth = useMemo(() => {
     return FORECAST_MONTHS.map(mo => {
-      return sum(filtered, p => p.month_mwp?.[mo] || 0);
+      return sum(filtered, p => pvOf(p).month_mwp?.[mo] || 0);
     });
-  }, [filtered]);
+  }, [filtered, pvOf]);
 
   const plannedByMonthChart = useMemo(() => {
     if (!data) return {};
@@ -1542,7 +1742,7 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('type') && <Th rowSpan={2} className="min-w-[52px]">Type</Th>}
                 {isColVisible('mms_type') && <Th rowSpan={2} className="min-w-[46px]"><ThLabel label="MMS" unit="Type" /></Th>}
                 {isColVisible('epc') && <Th rowSpan={2} className="min-w-[124px] text-left">AGEL / EPC</Th>}
-                {isColVisible('priority') && <Th rowSpan={2} className="min-w-[62px]">Priority</Th>}
+                {isColVisible('priority') && <Th rowSpan={2} className="min-w-[62px]"><ThLabel label="Priority" unit="(Plan)" /></Th>}
                 {isColVisible('ol') && <Th rowSpan={2} className={`min-w-[38px] ${SECTION_EDGE}`}>OL</Th>}
                 {isColVisible('capacity_mwac') && <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWac)" /></Th>}
                 {isColVisible('capacity_mwp') && <Th rowSpan={2} className="min-w-[58px]"><ThLabel label="Capacity" unit="(MWp)" /></Th>}
@@ -1563,8 +1763,18 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('module_inventory') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>}
                 {isColVisible('under_transit') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>}
                 {isColVisible('balance_dispatch') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>}
+                {isColVisible('ai_priority') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE} !bg-brand-blue`}>
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <ThLabel label="Priority" />
+                    <InfoTip align="center" info={<span>
+                      AI-predicted ordering priority (Priority Prediction model). Click a value for the reasons, score and rule-engine comparison.
+                      {aiAsOf && <><br /><b>Scored:</b> {aiDate(aiAsOf.slice(0, 10))}</>}
+                      <br />A model prediction, not the priority set in the plan.
+                    </span>} />
+                  </div>
+                </Th>}
                 {isColVisible('status') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>}
-                {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI Leveled Monthly Requirement: Backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits to protect COD milestones">
+                {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI-scored projects: placed in the month of the AI order-by date (need date minus measured lead time). Other projects: rule engine - backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits">
                   Month wise Module Requirement at Site ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
                 </Th>}
                 {isColVisible('ftc_date') && <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
@@ -1573,16 +1783,16 @@ export default function ModuleDeliveriesPage() {
                     <InfoTip info="First Time Charging. Base date mapped for the project." align="center" />
                   </div>
                 </Th>}
-                {isColVisible('module_ordering_date') && <Th rowSpan={2} className="min-w-[76px]">
+                {isColVisible('module_ordering_date') && <Th rowSpan={2} className="min-w-[96px] !bg-brand-blue">
                   <div className="flex flex-col items-center justify-center gap-0.5">
-                    <ThLabel label="Module Ordering" unit="Date" />
-                    <InfoTip info={<span>Trial Commissioning.<br/><b>Calculation:</b> FTC Date - 45 days.</span>} align="center" />
+                    <ThLabel label="Module Ordering" unit="Date (AI)" />
+                    <InfoTip info={<span>AI order-by date per phase: the TC need date minus the measured P90 supplier lead time (Ariba).<br/>Projects the AI did not score show the rule-engine date (TC − 98/136 d) in grey.</span>} align="center" />
                   </div>
                 </Th>}
-                {isColVisible('tc_delivery_date') && <Th rowSpan={2} className="min-w-[76px]">
+                {isColVisible('tc_delivery_date') && <Th rowSpan={2} className="min-w-[96px] !bg-brand-blue">
                   <div className="flex flex-col items-center justify-center gap-0.5">
-                    <ThLabel label="TC Delivery" unit="Date" />
-                    <InfoTip info={<span>Target delivery date at site.<br/><b>Calculation:</b> TC Date - Lead Time (98 or 136 days based on origin).</span>} align="center" />
+                    <ThLabel label="TC Delivery" unit="Date (AI)" />
+                    <InfoTip info={<span>AI-predicted date modules reach site per phase: order date + measured P50 lead time.<br/>Projects the AI did not score show the rule-engine date (FTC − 45 d) in grey.</span>} align="center" />
                   </div>
                 </Th>}
                 {isColVisible('remarks') && <Th rowSpan={2} className="min-w-[210px] text-left">Remarks</Th>}
@@ -1621,6 +1831,8 @@ export default function ModuleDeliveriesPage() {
                       columns, so any alpha lets that content bleed through. */}
                   {!collapsed.has(group) && projects.map((p, idx) => {
                     const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : (p.is_tracked !== false);
+                    // The row as the month grid draws it: on the AI plan where the AI scored it.
+                    const pv = pvOf(p);
                     return (
                     <tr key={p.id} className="group hover:bg-[var(--surface-sunken)]">
                       <Td stickyLeft={0} className="bg-card group-hover:bg-[var(--surface-sunken)] text-muted-foreground font-mono">{idx + 1}</Td>
@@ -1813,8 +2025,40 @@ export default function ModuleDeliveriesPage() {
                       {isColVisible('balance_dispatch') && <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
+                      {isColVisible('ai_priority') && (() => {
+                        const pr = aiFor(p)?.ai_priority;
+                        const review = aiFor(p)?.ai_review_status;
+                        const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
+                        const tone = aiPriorityTone(cls);
+                        const pill = tone === 'critical' ? 'bg-status-critical-bg text-status-critical-fg border-status-critical-border'
+                          : tone === 'risk' ? 'bg-status-risk-bg text-status-risk-fg border-status-risk-border'
+                          : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg border-status-watch-border'
+                          : 'bg-brand-blue/10 text-brand-blue border-brand-blue/30';
+                        return (
+                          <Td className={`${SECTION_EDGE} ${AI_CELL}`}>
+                            {!pr ? <span className="text-muted-foreground/40">-</span> : (
+                              <Tip text={(!cls ? `Not scored: ${pr?.reason || 'no reason given'}`
+                                // The score is urgency (near 0 for STANDARD by design), so a
+                                // STANDARD row reports how sure the model is instead.
+                                : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
+                                  ? `AI priority STANDARD · ${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
+                                  : `AI priority ${cls} · score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`)
+                                + (cls && review ? `\nGovernance review: ${review}` : '')
+                                + '\nClick for the details'}>
+                                <button type="button" onClick={() => setAiPriorityRow(p)}
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${cls ? pill : 'border-border bg-muted/50 text-muted-foreground'}`}>
+                                  {cls === 'P1' && <span className="h-1.5 w-1.5 rounded-full bg-status-critical-solid" />}
+                                  {cls || 'N/A'}
+                                </button>
+                              </Tip>
+                            )}
+                          </Td>
+                        );
+                      })()}
                       {isColVisible('status') && <Td className={SECTION_EDGE}><StatusBadge status={p.status} /></Td>}
                       {isColVisible('month_wise') && FORECAST_MONTHS.map((mo, i) => {
+                        // Every read below (months, dates, chips, colour) is the AI view when there is one.
+                        const p = pv;
                         const val = p.month_mwp?.[mo] || 0;
                         const overdueVal = p.month_overdue_mwp?.[mo] || 0;
                         const cellPhases = p.month_phases?.[mo] ?? [];
@@ -1828,7 +2072,17 @@ export default function ModuleDeliveriesPage() {
                            always shows the real dates it can find. No delay/reachability
                            is computed for the fallback — it is a display of the existing
                            plan, not a new scheduling decision. */
-                        const displayPhases = cellPhases.length > 0 ? cellPhases : buildFallbackPhases(p, mo);
+                        const displayPhases = cellPhases.length > 0 ? cellPhases
+                          : 'ai_view' in p
+                            // On the AI view the fallback is built from the AI date strings;
+                            // put the rule-engine dates back for the chips' "Rule:" line.
+                            ? buildFallbackPhases(p, mo).map(ph => ({
+                                ...ph,
+                                order_date: segFor(splitDateField(p.rule_module_date), ph.phase_label)?.date || '-',
+                                tc_date: segFor(splitDateField(p.rule_tc_date), ph.phase_label)?.date || '-',
+                                next_tc_date: segFor(splitDateField(p.rule_tc_date), ph.phase_label)?.date || '-',
+                              }))
+                            : buildFallbackPhases(p, mo);
                         // Is this the month an order is actually placed, or only a month a
                         // milestone date lands in (module_date/tc_date/ftc_date land past
                         // this cell's own order month, shown via the date-string fallback)?
@@ -1845,7 +2099,10 @@ export default function ModuleDeliveriesPage() {
                         const ltaLate = Number.isNaN(ltaDue) ? [] : displayPhases.filter(
                           x => Date.parse(x.ftc_date.replace(/-/g, ' ')) > ltaDue);
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags, overdueVal > 0);
-                        
+                        // The AI forecast for this row, when the AI scored it.
+                        const rowAI = aiFor(p);
+                        const aiF = isScored(rowAI?.ai_monthly_order_tc_forecast) ? rowAI!.ai_monthly_order_tc_forecast! : null;
+
                         const getShiftMonths = () => {
                           if (!p.module_date) return 0;
                           const match = p.module_date.match(/(\d{1,2})-([A-Za-z]{3})-(\d{2,4})/);
@@ -1886,7 +2143,45 @@ export default function ModuleDeliveriesPage() {
                                       Project Total: <span className="text-fg-primary font-bold">{MW(p.capacity_mwp)} MWp</span> {p.capacity_mwac ? `(${p.capacity_mwac} MWac)` : ''}
                                     </div>
                                   </div>
-                                  <div className="text-[10px] text-fg-tertiary mt-0.5">{theme.tag}</div>
+                                  {/* AI rows: the forecast's risk and confidence, as in the AI popup. */}
+                                  {aiF ? (
+                                    <div className="mt-1 flex items-center gap-3 text-[10px] text-fg-tertiary">
+                                      {aiF.risk_level && (
+                                        <span className="flex items-center gap-1.5">Risk
+                                          <span className={`rounded border px-1.5 py-px text-[9.5px] font-bold ${
+                                            /high|critical/i.test(aiF.risk_level) ? 'border-status-critical-border bg-status-critical-bg text-status-critical-fg'
+                                              : /medium/i.test(aiF.risk_level) ? 'border-status-risk-border bg-status-risk-bg text-status-risk-fg'
+                                              : 'border-status-healthy-border bg-status-healthy-bg text-status-healthy-fg'}`}>
+                                            {aiF.risk_level.toUpperCase()}
+                                          </span>
+                                        </span>
+                                      )}
+                                      {aiF.confidence != null && (
+                                        <span>Confidence <span className="font-semibold tabular-nums text-fg-primary">
+                                          {Math.round(aiF.confidence <= 1 ? aiF.confidence * 100 : aiF.confidence)}%
+                                        </span></span>
+                                      )}
+                                      {aiF.explanation?.order_schedule_status_msg && (
+                                        <span className={`rounded border px-1.5 py-px text-[9.5px] font-semibold ${
+                                          /overdue|passed|immediate/i.test(aiF.explanation.order_schedule_status_msg)
+                                            ? 'border-status-critical-border bg-status-critical-bg text-status-critical-fg'
+                                            : 'border-brand-blue/30 bg-brand-blue/10 text-brand-blue'}`}>
+                                          {aiF.explanation.order_schedule_status_msg}
+                                        </span>
+                                      )}
+                                      {rowAI?.ai_review_status && (
+                                        <span title={rowAI.ai_review_reason || undefined}
+                                          className={`rounded border px-1.5 py-px text-[9.5px] font-semibold ${
+                                            /corrected/i.test(rowAI.ai_review_status)
+                                              ? 'border-status-risk-border bg-status-risk-bg text-status-risk-fg'
+                                              : 'border-status-healthy-border bg-status-healthy-bg text-status-healthy-fg'}`}>
+                                          Review: {rowAI.ai_review_status}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <div className="text-[10px] text-fg-tertiary mt-0.5">{theme.tag}</div>
+                                  )}
                                 </div>
 
                                 {/* Dynamic Planned / Milestone Section */}
@@ -1904,7 +2199,9 @@ export default function ModuleDeliveriesPage() {
                                           <span className={`inline-flex items-center px-2 py-0.5 rounded font-mono font-bold ${
                                             overdueVal > 0
                                               ? 'text-status-critical-fg bg-status-critical-bg border border-status-critical-solid'
-                                              : 'text-status-healthy-fg bg-status-healthy-bg border border-status-healthy-border'
+                                              : aiF
+                                                ? `${AI_TEXT} bg-brand-blue/10 border border-brand-blue/40`
+                                                : 'text-status-healthy-fg bg-status-healthy-bg border border-status-healthy-border'
                                           }`}>
                                             {isMilestoneOnly 
                                               ? `${monthChips.map(c => `${c.label} MW`).join(', ')} · ${mo}`
@@ -1918,15 +2215,38 @@ export default function ModuleDeliveriesPage() {
 
                                       {isMilestoneOnly && (
                                         <div className="text-[10px] text-fg-tertiary leading-snug">
-                                          Target milestone scheduled in <span className="font-semibold text-fg-primary">{mo}</span>. Related module procurement orders are scheduled <span className="font-semibold text-fg-primary">{p.type === 'China' || p.type === 'SEA' ? '136' : '98'} days earlier</span>.
+                                          Target milestone scheduled in <span className="font-semibold text-fg-primary">{mo}</span>.{' '}
+                                          {aiF
+                                            ? <>The related module order follows the AI order-by date (measured supplier lead time).</>
+                                            : <>Related module procurement orders are scheduled <span className="font-semibold text-fg-primary">{p.type === 'China' || p.type === 'SEA' ? '136' : '98'} days earlier</span>.</>}
                                         </div>
                                       )}
                                     </div>
                                   );
                                 })()}
 
-                                {/* Say plainly how much of the figure is already late */}
-                                {overdueVal > 0 && (
+                                {/* AI rows: the guardrail the AI applied (where it applied one),
+                                    else - only if an AI order date has already gone - say so.
+                                    Rule rows: how much of the figure is already late. */}
+                                {aiF ? (() => {
+                                  // The forecast's own guardrail (the one its AI popup shows) first.
+                                  const g = aiF.priority?.guardrail ?? rowAI?.ai_priority?.guardrail;
+                                  const gText = !g ? null
+                                    : typeof g === 'string' ? g
+                                      : (g as any).applied === false ? null
+                                        : String((g as any).reason ?? (g as any).message ?? '');
+                                  if (gText) return (
+                                    <div className="flex items-start gap-1.5 rounded-md border border-status-watch-border bg-status-watch-bg px-2 py-1.5 text-[10.5px] leading-relaxed text-status-watch-fg">
+                                      <AlertTriangle className="mt-px h-3 w-3 shrink-0" />
+                                      <span>Guardrail applied: {gText}</span>
+                                    </div>
+                                  );
+                                  return overdueVal > 0 ? (
+                                    <div className="text-[10.5px] leading-relaxed text-status-critical-fg">
+                                      <b>{MW(overdueVal)} MWp</b> of this has an AI order-by date that has already passed &mdash; order now.
+                                    </div>
+                                  ) : null;
+                                })() : overdueVal > 0 && (
                                   <div className="text-[10.5px] leading-relaxed text-status-critical-fg">
                                     <b>{MW(overdueVal)} MWp</b> of this is overdue — its ordering date has already passed.{' '}
                                     {mo} is the earliest month still open.
@@ -1976,6 +2296,39 @@ export default function ModuleDeliveriesPage() {
                                        the main date — fall back to the projected date, the
                                        Original only if it isn't missed"). */
                                     const delayed = ph.delay_months > 0;
+                                    /* Module Ordering and TC Delivery are the AI's predicted
+                                       dates when the AI scored this phase; the rule-engine
+                                       date they replace stays underneath for comparison. FTC
+                                       is still the P6 plan. */
+                                    const aiPh = aiF && (field === 'order' || field === 'tc')
+                                      ? aiPhaseFor(aiF.phases, ph.phase_label) : undefined;
+                                    if (aiPh) {
+                                      const ruleDate = field === 'order' ? ph.order_date : (delayed ? ph.next_tc_date : ph.tc_date);
+                                      const aiShown = field === 'order'
+                                        ? (aiPh.order_by_date ? aiDate(aiPh.order_by_date) : 'Nothing to order')
+                                        : (aiDate(aiPh.predicted_tc_date) ?? '-');
+                                      const named = ph.phase_label && !/^(main|project balance)$/i.test(ph.phase_label);
+                                      return (
+                                        <div className="flex h-full flex-col rounded-md border border-brand-blue/40 bg-brand-blue/[0.07] px-1.5 py-1">
+                                          <div className="flex items-baseline justify-between gap-1.5">
+                                            {named ? <span className={`text-[9px] font-semibold ${AI_TEXT}`}>{ph.phase_label}</span> : <span />}
+                                            <span className="rounded-sm bg-brand-blue px-1 text-[8px] font-bold tracking-wide text-white">AI</span>
+                                          </div>
+                                          <div className={`font-mono text-[10.5px] font-bold tabular-nums ${AI_TEXT}`}>{aiShown}</div>
+                                          {field === 'order' && aiPh.order_now && (
+                                            <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-critical-fg">order now</div>
+                                          )}
+                                          {field === 'tc' && aiPh.predicted_tc_date_p90 && (
+                                            <div className="mt-0.5 text-[9px] leading-tight text-fg-tertiary">
+                                              latest <span className="font-mono tabular-nums">{aiDate(aiPh.predicted_tc_date_p90)}</span>
+                                            </div>
+                                          )}
+                                          <div className="mt-0.5 text-[9px] leading-tight text-fg-tertiary">
+                                            Rule: <span className="font-mono tabular-nums">{ruleDate}</span>
+                                          </div>
+                                        </div>
+                                      );
+                                    }
                                     const date = field === 'order' ? ph.order_date
                                       : field === 'tc' ? (delayed ? ph.next_tc_date : ph.tc_date)
                                         : (delayed ? ph.next_ftc_date : ph.ftc_date);
@@ -2044,11 +2397,14 @@ export default function ModuleDeliveriesPage() {
                                      2026-09-24: selecting the module filter must not drop TC/FTC from
                                      here — only the calendar chips narrow). */
                                   const milestones: Milestone[] = [];
-                                  milestones.push({ title: 'Module Ordering', field: 'order', text: 'text-primary',
+                                  const aiLead = aiF?.lead_time?.ai_p50_days != null ? Math.round(aiF.lead_time.ai_p50_days) : null;
+                                  milestones.push({ title: aiF ? 'Module Ordering (AI)' : 'Module Ordering', field: 'order',
+                                    text: aiF ? AI_TEXT : 'text-primary',
                                     border: 'border-primary/30', bg: 'bg-primary/[0.07]' });
-                                  milestones.push({ title: 'TC Delivery', field: 'tc', text: 'text-status-risk-fg',
+                                  milestones.push({ title: aiF ? 'TC Delivery (AI)' : 'TC Delivery', field: 'tc',
+                                    text: aiF ? AI_TEXT : 'text-status-risk-fg',
                                     border: 'border-status-risk-border', bg: 'bg-status-risk-bg/60',
-                                    gapBefore: `${lead}d Lead` });
+                                    gapBefore: aiF && aiLead != null ? `${aiLead}d AI lead` : `${lead}d Lead` });
                                   milestones.push({ title: 'FTC Date', field: 'ftc', text: 'text-status-healthy-fg',
                                     border: 'border-status-healthy-border', bg: 'bg-status-healthy-bg/60',
                                     gapBefore: '45d Install' });
@@ -2167,8 +2523,10 @@ export default function ModuleDeliveriesPage() {
 
                                 {/* One verdict for this month, read off the phases above. An
                                     unreachable FTC outranks everything else: it is the fact that
-                                    decides whether the order, as scheduled, still works. */}
-                                {unreachable.length > 0 ? (
+                                    decides whether the order, as scheduled, still works.
+                                    AI rows replace this rule-engine verdict with the AI's own
+                                    executive summary (below). */}
+                                {aiF ? null : unreachable.length > 0 ? (
                                   <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-status-critical-fg">
                                     Ordering in <span className="font-semibold">{mo}</span> cannot meet the FTC for{' '}
                                     <span className="font-semibold">
@@ -2205,6 +2563,47 @@ export default function ModuleDeliveriesPage() {
                                     material on site in time to support every FTC above.
                                   </div>
                                 )}
+
+                                {/* AI rows: the AI's executive summary in neutral text (not an
+                                    alarm colour), the AI button that opens the full forecast,
+                                    then the AI's recommended actions. */}
+                                {aiF ? (
+                                  <>
+                                    <div className="border-t border-border-subtle pt-2 text-[10.5px] leading-relaxed text-fg-secondary">
+                                      {aiF.explanation?.executive_summary || 'The AI scored this project but returned no summary.'}{' '}
+                                      <button
+                                        type="button"
+                                        onClick={() => setAiForecastRow(p)}
+                                        title="Open the full AI forecast: why the FTC moves, lead time, monthly requirement, risks"
+                                        className="ml-1 inline-flex translate-y-[1px] items-center gap-1 rounded border border-brand-blue/40 bg-brand-blue/10 px-1.5 py-px align-baseline text-[9px] font-bold tracking-wide text-brand-blue shadow-sm transition-colors hover:bg-brand-blue hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50"
+                                      >
+                                        <Bot className="h-2.5 w-2.5" />
+                                        AI
+                                      </button>
+                                    </div>
+                                    {(aiF.explanation?.recommended_actions?.length ?? 0) > 0 && (
+                                      <div className="rounded-md border border-brand-blue/30 bg-brand-blue/[0.05] px-2.5 py-2">
+                                        <div className={`flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider ${AI_TEXT}`}>
+                                          <ListChecks className="h-3 w-3" />
+                                          Recommended actions
+                                        </div>
+                                        <ol className="mt-1.5 flex flex-col gap-1">
+                                          {aiF.explanation!.recommended_actions!.map((a, k) => (
+                                            <li key={k} className="flex items-start gap-1.5 text-[10.5px] leading-relaxed text-fg-secondary">
+                                              <span className="mt-px flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full bg-brand-blue/15 text-[8.5px] font-bold text-brand-blue">{k + 1}</span>
+                                              <span>{a}</span>
+                                            </li>
+                                          ))}
+                                        </ol>
+                                      </div>
+                                    )}
+                                  </>
+                                ) : rowAI?.ai_monthly_order_tc_forecast ? (
+                                  <div className="border-t border-border-subtle pt-2 text-[10px] text-fg-tertiary">
+                                    AI forecast not available for this project
+                                    {rowAI.ai_monthly_order_tc_forecast.reason ? <> &mdash; {rowAI.ai_monthly_order_tc_forecast.reason}</> : ''}. Dates above are the rule engine&apos;s.
+                                  </div>
+                                ) : null}
                               </div>
                             ) : undefined}
                           >
@@ -2242,13 +2641,20 @@ export default function ModuleDeliveriesPage() {
                           </Td>
                         );
                       })}
-                      {isColVisible('month_wise') && <Td align="right" className="font-semibold text-foreground tabular-nums"
-                        tip={Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0) < (p.balance_ordering_mwp || 0) ? "Total planned is less than balance to order due to missed dates or completed FTCs" : undefined}>
-                        {(() => {
-                          const planned = Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0);
-                          return planned > 0 ? MW(planned) : '-';
-                        })()}
-                      </Td>}
+                      {isColVisible('month_wise') && (() => {
+                        const v = pvOf(p);
+                        const planned = Object.values(v.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0);
+                        const outside = 'ai_view' in v ? v.ai_outside : [];
+                        const tip = outside.length > 0
+                          ? `AI plan: ${outside.map(o => `${MW(o.mwp)} MWp ordered ${o.month}`).join(', ')} - after the last month shown, so not in a cell`
+                          : planned < (p.balance_ordering_mwp || 0) ? 'Total planned is less than balance to order due to missed dates or completed FTCs' : undefined;
+                        return (
+                          <Td align="right" className="font-semibold text-foreground tabular-nums" tip={tip}>
+                            {planned > 0 ? MW(planned) : '-'}
+                            {outside.length > 0 && <span className={`ml-0.5 text-[8px] align-super ${AI_TEXT}`}>+{MW(outside.reduce((a, o) => a + o.mwp, 0))}</span>}
+                          </Td>
+                        );
+                      })()}
                       {isColVisible('ftc_date') && <Td className={SECTION_EDGE}>
                         {p.ftc_date
                           ? <DatedPhases value={p.ftc_date} />
@@ -2256,8 +2662,26 @@ export default function ModuleDeliveriesPage() {
                             ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
                             : '-'}
                       </Td>}
-                      {isColVisible('module_ordering_date') && <Td>{p.tc_date ? <DatedPhases value={p.tc_date} /> : '-'}</Td>}
-                      {isColVisible('tc_delivery_date') && <Td>{p.module_date ? <DatedPhases value={p.module_date} /> : '-'}</Td>}
+                      {/* AI dates where the AI scored the row; otherwise the rule
+                          engine's own (module_date = TC - lead, tc_date = FTC - 45 d),
+                          greyed so the two are never confused. */}
+                      {(isColVisible('module_ordering_date') || isColVisible('tc_delivery_date')) && (() => {
+                        const f = aiFor(p)?.ai_monthly_order_tc_forecast;
+                        const aiPhases = isScored(f) ? f?.phases ?? [] : [];
+                        const fallback = (v: string) => v
+                          ? <Tip text={f && !isScored(f) ? `Rule engine date - AI not scored: ${f.reason || 'no reason given'}` : 'Rule engine date - no AI result for this row'}>
+                              <span className="text-muted-foreground"><DatedPhases value={v} /></span>
+                            </Tip>
+                          : '-';
+                        return <>
+                          {isColVisible('module_ordering_date') && <Td className={AI_CELL}>
+                            {aiPhases.length > 0 ? <AIDatedPhases phases={aiPhases} pick={ph => ph.order_by_date} /> : fallback(p.module_date)}
+                          </Td>}
+                          {isColVisible('tc_delivery_date') && <Td className={AI_CELL}>
+                            {aiPhases.length > 0 ? <AIDatedPhases phases={aiPhases} pick={ph => ph.predicted_tc_date} /> : fallback(p.tc_date)}
+                          </Td>}
+                        </>;
+                      })()}
                       {isColVisible('remarks') && <Td align="left" className="min-w-[240px] max-w-[280px]">
                         <div className={`flex items-center justify-between gap-1.5 overflow-hidden transition-all duration-200 ${
                           p.perspectives 
@@ -2276,7 +2700,19 @@ export default function ModuleDeliveriesPage() {
                               </Tip>
                             )}
                             <Tip 
-                              text={p.remarks ? `${p.remarks}${p.ai_suggestion ? `\n\n💡 Suggested action:\n${p.ai_suggestion}` : ''}` : undefined}
+                              text={(() => {
+                                if (!p.remarks) return undefined;
+                                // The AI's recommended actions go under the suggested action.
+                                const f = aiFor(p)?.ai_monthly_order_tc_forecast;
+                                const actions = isScored(f) ? f?.explanation?.recommended_actions ?? [] : [];
+                                const aiBlock = actions.length > 0
+                                  ? `${p.ai_suggestion ? '\n\n' : ''}AI recommended actions:\n${actions.map((a, k) => `${k + 1}. ${a}`).join('\n')}`
+                                  : '';
+                                const suggestion = p.ai_suggestion || aiBlock
+                                  ? `\n\n💡 Suggested action:\n${p.ai_suggestion ?? ''}${aiBlock}`
+                                  : '';
+                                return `${p.remarks}${suggestion}`;
+                              })()}
                               className="overflow-hidden flex-1"
                             >
                               <span className={`block truncate text-[10px] ${p.remarks ? (p.perspectives ? 'text-primary/90 font-medium' : 'text-foreground/90') : 'text-muted-foreground'}`}>
@@ -2284,18 +2720,26 @@ export default function ModuleDeliveriesPage() {
                               </span>
                             </Tip>
                           </div>
-                          {p.perspectives && (
-                            <Tip text="View 360° AI Multi-Perspective Strategy">
-                              <button
-                                type="button"
-                                onClick={() => setActivePerspectiveProject(p)}
-                                className="shrink-0 flex items-center gap-1 rounded border border-primary/30 bg-primary/10 px-1.5 py-0.5 text-[9px] font-bold tracking-wide text-primary shadow-sm hover:bg-primary hover:text-primary-foreground transition-colors"
-                              >
-                                <Bot className="w-2.5 h-2.5" />
-                                <span>AI</span>
-                              </button>
-                            </Tip>
-                          )}
+                          {/* Beta: opens the AI's full Module Ordering & TC Delivery
+                              forecast - the same popup as the AI button in the month cell. */}
+                          {aiFor(p)?.ai_monthly_order_tc_forecast && (() => {
+                            const f = aiFor(p)!.ai_monthly_order_tc_forecast!;
+                            return (
+                              <Tip text={isScored(f) ? 'AI forecast: why the FTC moves, lead time, monthly requirement, actions' : `AI did not score this project: ${f.reason || 'no reason given'}`}>
+                                <button
+                                  type="button"
+                                  onClick={() => setAiForecastRow(p)}
+                                  className={`shrink-0 flex items-center gap-1 rounded border px-1.5 py-0.5 text-[9px] font-bold tracking-wide shadow-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${
+                                    isScored(f)
+                                      ? 'border-brand-blue/40 bg-brand-blue/10 text-brand-blue hover:bg-brand-blue hover:text-white'
+                                      : 'border-border bg-muted/50 text-muted-foreground hover:text-foreground'}`}
+                                >
+                                  <Bot className="w-2.5 h-2.5" />
+                                  <span>AI</span>
+                                </button>
+                              </Tip>
+                            );
+                          })()}
                         </div>
                       </Td>}
                     </tr>
@@ -2333,12 +2777,17 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('module_inventory') && <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>}
                 {isColVisible('under_transit') && <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>}
                 {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
+                {isColVisible('ai_priority') && (() => {
+                  // How many of the rows on screen the AI put at P1 - a count, so it adds up.
+                  const p1 = filtered.filter(p => isScored(aiFor(p)?.ai_priority) && (aiFor(p)?.ai_priority?.priority_class || '').toUpperCase() === 'P1').length;
+                  return <Td className={`${SECTION_EDGE} ${AI_CELL} ${AI_TEXT}`} tip={`${p1} of ${filtered.length} projects shown are AI P1`}>{p1 > 0 ? `${p1} × P1` : '-'}</Td>;
+                })()}
                 {isColVisible('status') && <Td className={SECTION_EDGE} />}
                 {isColVisible('month_wise') && <>
                 {FORECAST_MONTHS.map((mo, i) => {
-                  const mTotal = sum(filtered, p => p.month_mwp?.[mo] || 0);
+                  const mTotal = sum(filtered, p => pvOf(p).month_mwp?.[mo] || 0);
                   const acTotal = sum(filtered, p => {
-                    const v = p.month_mwp?.[mo] || 0;
+                    const v = pvOf(p).month_mwp?.[mo] || 0;
                     return p.ol > 0 ? v / p.ol : v / 1.35;
                   });
                   return (
@@ -2356,7 +2805,7 @@ export default function ModuleDeliveriesPage() {
                   );
                 })}
                 <Td align="right" className="text-foreground tabular-nums font-bold">
-                  {MW(sum(filtered, p => Object.values(p.month_mwp || {}).reduce((s: number, v: any) => s + (v as number), 0)))}
+                  {MW(sum(filtered, p => Object.values(pvOf(p).month_mwp || {}).reduce((s: number, v: any) => s + (v as number), 0)))}
                 </Td>
                 </>}
                 {isColVisible('ftc_date') && <Td className={SECTION_EDGE} />}
@@ -2397,7 +2846,7 @@ export default function ModuleDeliveriesPage() {
                   </span>
                 </div>
                 <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                  Monthly ordering plan by origin, respecting factory quotas.
+                  Monthly ordering plan by origin, respecting factory quotas (rule engine). The grid above places AI-scored projects in their AI order month.
                   <InfoTip
                     info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWac) are planning assumptions built into the engine. Orders are shown in MWp; each is converted to MWac with the project's DC/AC ratio before it counts against the quota."
                     align="left"
@@ -2495,6 +2944,15 @@ export default function ModuleDeliveriesPage() {
       </motion.div>
 
       {/* ── 360° MULTI-PERSPECTIVE MODAL ────────────────────────────────────── */}
+      {aiForecastRow && (
+        <AIForecastModal row={aiForecastRow} ai={aiFor(aiForecastRow)?.ai_monthly_order_tc_forecast}
+          asOf={aiAsOf?.slice(0, 10)} onClose={() => setAiForecastRow(null)} />
+      )}
+      {aiPriorityRow && (
+        <AIPriorityModal row={aiPriorityRow} ai={aiFor(aiPriorityRow)?.ai_priority}
+          asOf={aiAsOf?.slice(0, 10)} onClose={() => setAiPriorityRow(null)} />
+      )}
+
       {activePerspectiveProject && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="relative w-full max-w-2xl rounded-xl border border-border bg-card p-6 shadow-2xl">

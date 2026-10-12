@@ -1,28 +1,48 @@
-fastapi
-uvicorn
-pydantic
-python-multipart
-SQLAlchemy
-celery
-redis
-python-dotenv
-openai
-langchain-openai
-langchain-community
-groq
-requests
-httpx
-psycopg[binary]
-psycopg2-binary
+# Akasha backend dependencies (Python 3.12).
+# Install: pip install -r requirements.txt
+# Pinned to the versions the backend is known to run with.
 
-msal
-pandas
-openpyxl
+# --- Web server / API ---
+fastapi==0.142.4
+uvicorn==0.54.0
+pydantic==2.13.5
+python-multipart==0.0.32
+python-dotenv==1.2.4
 
-alembic
+# --- Database (PostgreSQL) ---
+SQLAlchemy==2.1.4
+psycopg2-binary==2.9.13          # driver used by postgresql:// URLs
 
-PyMuPDF
-matplotlib
+# --- HTTP / integrations (P6, SharePoint, Pulse, E-Invoice, Spectra) ---
+requests==2.34.2
+urllib3==2.8.0
+httpx==0.28.1
+msal==1.39.0                     # SharePoint (Microsoft Graph) auth
+
+# --- AI / LLM ---
+openai==3.26.0                   # Azure OpenAI / OpenRouter
+groq==1.7.0
+langchain-core==1.6.7
+langchain-community==0.4.2
+
+# --- Data processing ---
+pandas==3.0.6
+numpy==2.5.3
+python-dateutil==2.9.0.post0
+openpyxl==3.1.5                  # Excel read/write
+
+# --- Reports / documents ---
 python-pptx==1.0.2
-python-docx
-pdfplumber
+python-docx==1.2.0
+lxml==6.1.3
+matplotlib==3.11.2
+pdfplumber==0.11.10
+
+# --- Listed previously, not imported anywhere in the backend ---
+# Uncomment if a feature that needs them comes back.
+# celery
+# redis
+# alembic                        # replaced by auto_migrate.py (Jul 2026)
+# langchain-openai
+# PyMuPDF
+# psycopg[binary]                # psycopg 3; postgresql:// uses psycopg2
