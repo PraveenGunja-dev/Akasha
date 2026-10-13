@@ -304,6 +304,7 @@ def get_portfolio_cpag(db: Session = Depends(get_db)) -> Dict[str, Any]:
             "commissioning": commissioning,
             "quality": quality,
             "manpower": man["series"],
+            "manpowerForward": man["forward"],
         })
 
 
@@ -1537,11 +1538,19 @@ def _weightage(db: Session, poid: int, roots: Dict[int, str]) -> Dict[str, Any]:
         weight = sum(plan_b[key].values())
         to_date = sum(v for m, v in plan_b[key].items() if as_of and m <= as_of)
         plan_pct, earned_pct = _pct(to_date, plan_total), _pct(act_b[key], plan_total)
+        # Whole percent, as the site states weightage (2 / 5 / 38 / 35 on
+        # PSS-08(B)); the unrounded share is kept for audit.
+        wtg = None if exact[key] is None else float(round(exact[key]))
+        # When plan or earned reaches or exceeds the rounded weightage, round to
+        # match the weightage so plan/actual does not appear greater than weightage.
+        if wtg is not None:
+            if plan_pct is not None and plan_pct >= wtg:
+                plan_pct = float(min(round(plan_pct), wtg))
+            if earned_pct is not None and earned_pct >= wtg:
+                earned_pct = float(min(round(earned_pct), wtg))
         buckets.append({
             "key": key, "label": BUCKET_LABELS[key],
-            # Whole percent, as the site states weightage (2 / 5 / 38 / 35 on
-            # PSS-08(B)); the unrounded share is kept for audit.
-            "weightPct": None if exact[key] is None else float(round(exact[key])),
+            "weightPct": wtg,
             "weightExactPct": exact[key],
             "planToDatePct": plan_pct, "earnedPct": earned_pct,
             "variancePct": (round(plan_pct - earned_pct, 2)
@@ -1904,7 +1913,14 @@ def _manpower(db: Session, poid: int, roots: Optional[Dict[int, str]] = None) ->
                        "earnedCum": round(ce), "earnedPct": _pct(ce, total),
                        "planManpower": round(plan_m[m] / days),
                        "earnedManpower": round(earn_m[m] / days)})
-    return {"series": series, "totalPlannedMandays": round(total),
+    # Plan only, for the months after the data date - the CPAG look-ahead
+    # table (user, 2026-10-12: next three months, plan, no actuals). The
+    # baseline phasing above; no weekly snapshot exists for a future month.
+    forward = [{"month": m, "planBasis": "baseline",
+                "planMonth": round(plan_m[m]),
+                "planManpower": round(plan_m[m] / _days(m))}
+               for m in sorted(plan_m) if as_of and m > as_of]
+    return {"series": series, "forward": forward, "totalPlannedMandays": round(total),
             "earnedMandays": round(ce), "postedActualUnits": round(posted),
             "asOf": as_of, "derived": derived > 0,
             "basis": "Plan: P6 Labor hours / 8 spread over plan-baseline dates. "

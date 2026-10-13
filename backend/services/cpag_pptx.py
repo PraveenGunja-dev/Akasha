@@ -1499,71 +1499,56 @@ def fill_electrical(slide, p) -> None:
 MANPOWER_STACK = ["11", "12", "05B", "08B", "09", "10B"]
 
 
-# Actual-vs-plan text colour on white. The legend's yellow is a bar fill and
-# unreadable as text, so the 40-80% band reads in dark amber.
-AMBER_TEXT = RGBColor(0xB8, 0x86, 0x0B)
-
-
-def _achieved_text(actual, plan) -> RGBColor:
-    r = (actual / plan) if plan else 1.0
-    return GREEN if r >= 0.8 else AMBER_TEXT if r >= 0.4 else RED
-
-
 def fill_manpower_table(slide, projects, d, label_suffix: str, key_plan: str = "planManpower",
-                        key_act: str = "earnedManpower", size: float = 9,
-                        max_months: int = 12) -> None:
-    """Manpower / Mandays Deployment as a table (user, 2026-09-30): one row
-    per BESS project plus Total, one Plan / Actual column pair per month.
-    Manpower is average daily manpower (mandays in the month / days in it);
-    Mandays is the month's total. Construction activities only, plan phased
-    on each project's plan baseline.
-    Styled like the pack's other tables: purple header, peach Plan columns,
-    Actual coloured by the pack's legend (80%+ of plan green, 40-80% amber,
-    below 40% red)."""
+                        size: float = 9, months_ahead: int = 3) -> None:
+    """Manpower / Mandays Deployment as a look-ahead table (user, 2026-10-12:
+    the next three months, plan only - no past months, no actuals): one row
+    per BESS project plus Total, one Plan column per month from the current
+    month on. Manpower is average daily manpower (mandays in the month / days
+    in it); Mandays is the month's total. Construction activities only.
+    Styled like the pack's other tables: purple header, peach Plan cells."""
     pics = pictures(slide)
     by = {pss_key(p["pss"]): p for p in projects}
-    months = sorted({s["month"] for p in projects for s in (p.get("manpower") or [])
-                     if s.get(key_plan) or s.get(key_act)})[-max_months:]
-    if not pics or not months:
+    start = date.today().strftime("%Y-%m")
+    months = [_add_months(start, i) for i in range(months_ahead)]
+    if not pics:
         return
     order = [k for k in PSS_KEYS if k in by]
 
+    # A month up to a project's data date is in its series; later months are
+    # in its forward (plan-only) series.
+    def _plan_rows(p):
+        return {s["month"]: s for s in (p.get("manpower") or []) + (p.get("manpowerForward") or [])}
+
     head0, head1 = ["Project"], [""]
     for m in months:
-        head0 += [_mon(m), ""]
-        head1 += ["Plan", "Actual"]
+        head0.append(_mon(m))
+        head1.append("Plan")
     rows = [head0, head1]
-    tot_p, tot_a = [0.0] * len(months), [0.0] * len(months)
+    tot_p = [0.0] * len(months)
+    plan_by = {k: _plan_rows(by[k]) for k in order}
     for k in order:
-        s_by = {s["month"]: s for s in by[k].get("manpower") or []}
         row = [by[k]["pss"]]
         for i, m in enumerate(months):
-            s = s_by.get(m) or {}
-            pv, av = s.get(key_plan) or 0, s.get(key_act) or 0
+            pv = (plan_by[k].get(m) or {}).get(key_plan) or 0
             tot_p[i] += pv
-            tot_a[i] += av
-            row += [_n(pv) if pv else "-", (_n(av), _achieved_text(av, pv)) if av else "-"]
+            row.append(_n(pv) if pv else "-")
         rows.append(row)
-    total = ["Total"]
-    for i in range(len(months)):
-        total += [_n(round(tot_p[i])), (_n(round(tot_a[i])), _achieved_text(tot_a[i], tot_p[i]))]
-    rows.append(total)
+    rows.append(["Total"] + [_n(round(v)) if v else "-" for v in tot_p])
 
     box = pics[0]
     x, y, cx, cy = box.left, box.top, box.width, box.height
     remove_shape(box)
     height = min(cy, int(Inches(0.36)) * len(rows))
-    gf = new_table(slide, x, y, cx, height, rows, [1.25] + [0.6] * (2 * len(months)),
+    gf = new_table(slide, x, y, cx, height, rows, [1.6] + [1.0] * len(months),
                    size=size, header_rows=(0, 1), header_fill=HEADER_PURPLE, header_color=WHITE,
                    bold_cols=(0,))
     tb = gf.table
     tb.cell(0, 0).merge(tb.cell(1, 0))
-    for i in range(len(months)):
-        tb.cell(0, 1 + 2 * i).merge(tb.cell(0, 2 + 2 * i))
     last = len(rows) - 1
     for r in range(2, len(rows)):
         for i in range(len(months)):
-            cell = tb.cell(r, 1 + 2 * i)
+            cell = tb.cell(r, 1 + i)
             cell.fill.solid()
             cell.fill.fore_color.rgb = PEACH
         if r == last:
@@ -1572,17 +1557,15 @@ def fill_manpower_table(slide, projects, d, label_suffix: str, key_plan: str = "
                     for run in para.runs:
                         run.font.bold = True
 
-    # Say which months follow the site's weekly method and which are rebuilt,
-    # so the two are never read as the same measurement.
+    # Say which months follow the site's weekly method and which come from
+    # the baseline, so the two are never read as the same measurement.
     weekly = [m for m in months if any(
-        s.get("month") == m and s.get("planBasis") == "weekly"
-        for p in projects for s in (p.get("manpower") or []))]
-    basis = ("Plan: P6 construction labour phased on the plan baseline. Actual: P6 actual "
-             "labour over activity actual dates. 8 h = 1 manday.")
+        (plan_by[k].get(m) or {}).get("planBasis") == "weekly" for k in order)]
+    basis = "Plan: P6 construction labour phased on the plan baseline. 8 h = 1 manday."
     if weekly:
-        basis = (f"From {_mon(weekly[0])}: average of weekly P6 updates (Plan = labour "
-                 f"scheduled in the next 7 days; Actual = labour booked between updates). "
-                 f"Earlier months: " + basis[0].lower() + basis[1:])
+        basis = (f"{', '.join(_mon(m) for m in weekly)}: average of weekly P6 updates "
+                 f"(labour scheduled in the next 7 days). Other months: "
+                 + basis[6:])
     cap = slide.shapes.add_textbox(x, y + height + Inches(0.08), cx, Inches(0.3))
     cap.text_frame.word_wrap = True
     run = cap.text_frame.paragraphs[0].add_run()
@@ -1939,7 +1922,7 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     fill_financial(T[45], d)
     # Manpower / Mandays from our own P6 data (user, 2026-09-28), not the
     # reference deck's contractor averages.
-    fill_manpower_table(T[35], projects, d, scope_label or "", "planMonth", "earnedMonth", size=8)
+    fill_manpower_table(T[35], projects, d, scope_label or "", "planMonth", size=8)
     fill_manpower_table(T[36], projects, d, scope_label or "")
 
     for key in PSS_KEYS:
@@ -2142,6 +2125,7 @@ def _project_from_single(d: Dict[str, Any]) -> Dict[str, Any]:
         "approvalsDone": d["approvals"]["completed"], "approvalsTotal": d["approvals"]["total"],
         "civil": d.get("civil") or {}, "electrical": d.get("electrical") or {},
         "manpower": (d.get("manpower") or {}).get("series") or [],
+        "manpowerForward": (d.get("manpower") or {}).get("forward") or [],
     }
 
 

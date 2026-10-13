@@ -5,7 +5,7 @@ import L from 'leaflet';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   RefreshCw, Search, X, ChevronDown, ChevronRight, Zap, MapPin, Layers,
-  AlertTriangle, CheckCircle2, Clock, Loader2, Database, Calendar, Package,
+  AlertTriangle, CheckCircle2, Clock, Loader2, Database, Calendar, Package, ExternalLink,
 } from 'lucide-react';
 import {
   type TcEdge, statusMeta, voltageWeight, parseStageProgress, edgeCompletionPct, parseLengthKm,
@@ -20,6 +20,13 @@ interface NetworkPayload {
 }
 
 const EMPTY_NETWORK: NetworkPayload = { nodes: [], edges: [] };
+
+// Unada's transmission portal (testing). A sign-in link (with its #lt= login
+// token) is set per server in VITE_TRANSMISSION_PORTAL_URL (frontend/.env, not
+// committed) so the token never lands in git; without it the portal's own login
+// page opens.
+const TRANSMISSION_PORTAL_URL: string = import.meta.env.VITE_TRANSMISSION_PORTAL_URL
+  || 'https://adani-transmission-testing.unada.in';
 
 // Carto retired the /rastertiles/positron path (404s), which left the map as a blank
 // grey panel. These are the current styles, all verified reachable without a key.
@@ -365,14 +372,26 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
             Live substation network &amp; line status across Rajasthan and Khavda corridors
           </p>
         </div>
-        <button
-          onClick={fetchTransmissionData}
-          className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/30 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-60"
-          disabled={loading}
-        >
-          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-          {loading ? 'Refreshing...' : 'Refresh Data'}
-        </button>
+        <div className="flex flex-wrap items-center justify-end gap-2">
+          <a
+            href={TRANSMISSION_PORTAL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            title="Open the Unada transmission portal in a new tab"
+            className="flex items-center gap-2 px-4 py-2 bg-card text-foreground border border-border rounded-full hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <ExternalLink className="w-4 h-4" />
+            Unada Portal
+          </a>
+          <button
+            onClick={fetchTransmissionData}
+            className="flex items-center gap-2 px-4 py-2 bg-primary/10 text-primary border border-primary/30 rounded-full hover:bg-primary/20 transition-colors disabled:opacity-60"
+            disabled={loading}
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            {loading ? 'Refreshing...' : 'Refresh Data'}
+          </button>
+        </div>
       </div>
 
       {error && (

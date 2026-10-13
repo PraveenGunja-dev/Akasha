@@ -1,0 +1,1794 @@
+Call with Praveen and 1 other-20261009_172155-Meeting Recording
+9 October 2026, 11:51am
+1h 1m 28s
+
+Kruti Yadav started transcription
+
+Praveen Gunja   0:03
+So I'll push to that itself.
+
+Kruti Yadav   0:07
+Okay, yeah, yeah, basically the hiding of the column that we discussed, right?
+
+Praveen Gunja   0:09
+OK, yeah, open that file which I've shared, because in that only there is more columns, so here it is thirty-five, so there's...
+
+Kruti Yadav   0:14
+OK.
+Yes, yes, yeah, yeah, I was just, I just wanted to confirm that you have given me the data with all the columns, columns details, along with this productivity data sheet, the Arima GRN data, and the actual PO related data, which I need for my AML model, right? OK.
+
+Praveen Gunja   0:23
+Yes.
+Yes, exactly.
+Thank you.
+Exactly, exactly.
+So I downloaded it from my file and I give it to given to you. So in that you will find exactly whatever the data you need in that.
+
+Kruti Yadav   0:37
+Okay, I still coming.
+Okay, okay.
+Okay, okay, yeah, okay, so can we, yeah, can you just see my main use case? You asked me for that use case document, right? You have you checked that?
+
+Praveen Gunja   0:47
+Yeah, I'm not. I, yeah, just I, I did not review, but we took meeting, meeting, I had not reviewed, but I could only I received the document.
+
+Kruti Yadav   1:04
+No, so basically you...
+
+Praveen Gunja   1:04
+I don't have that particular document.
+I'm not aware of that argument.
+
+Kruti Yadav   1:09
+I have shared that with you, right? You asked me today.
+
+Praveen Gunja   1:10
+Okay.
+
+Kruti Yadav   1:13
+And that document was already presented. I already shared that in the group as well. This document I'm talking about the use case document.
+
+Praveen Gunja   1:15
+Give up.
+Yeah, that is document now, because I did not receive that actually, so student I received, I will review that, so if I, if it is good.
+
+Kruti Yadav   1:31
+No, no, you don't need to review it. It's just that, see, my main use case for EA is the model ordering and TC rate forecasting and the priority prediction. Okay, so all these two things, like right now what we are doing, like we have some predefined deterministic calculation. Like last time you told me.
+
+Praveen Gunja   1:37
+Yeah, yeah, yeah.
+Thank you. No problem. Thank you.
+One 1000.
+
+Kruti Yadav   1:51
+that we are basically predicting the modules with FTC date, like FTC minus 45 days. So that will give us the module ordering date and module ordering date minus the region, the time like China for China it is 130 or something like that. So minus that.
+
+Praveen Gunja   1:53
+It's pretty much all the days, like, from the first two to long list, and second, that will go on to meeting, the time to go.
+How to fix this? Yeah, yeah, thank you.
+
+Kruti Yadav   2:11
+This many days will will give us TC date, right? So, right now we are we are we are basically predicting all this module delivery and forecasting based on this calculation, but now basically I'm doing it with the with the help of AI, so I'm going to train the AI model for this data. OK, so for that.
+
+Praveen Gunja   2:14
+Yes, yes, yes.
+Yeah, no, we just wanted to do all the documents in one folder. See, Kruti, Kruti, previous also there is 3-4 scenarios to order the module, so if the LTA date is crossed, then the delay will happen, so we will order the material, so it is not about the FTC all the time.
+
+Kruti Yadav   2:31
+Yes.
+
+Praveen Gunja   2:41
+So previous also we have that scenarios to order late also to order early also. So we have scenarios for that also in earlier. So there is not a vote only FTCs. See, so if the LTA date is crossed, like I mean if LTA is above of.
+
+Kruti Yadav   2:51
+So, how many?
+Okay, so how many scenarios you were considering?
+
+Praveen Gunja   3:02
+Hey, see what he.
+So, the transmission transmission is getting delayed, so we can delay the models because the transmission gets delayed. The side progress also might it can delay many it can it can prolong delay, so as the because the transmission lines are main, so the transmission data you will get from the Ltd, so if the transmission data.
+is above of SCOD and ECOD. So we can delay the models for that particular project. That is, we can delay for the one, two months if it is having a priority of other projects. So we can for this, we can delay. If the LTA is above of SCOD and ECOD. So that is 1 case.
+And another case is like if the particular project is PPA and non-PPA, and non-PPA is nothing but group and merchant. So if the priority should be given to the PPA projects, so because if we miss that FTC for that PPA projects, then there will be a penalty to pay to the government or anything. So that also will be consider, I mean, will be comes into consideration while ordering the modules.
+
+Kruti Yadav   3:44
+And.
+M.
+Mm.
+
+Praveen Gunja   4:08
+So that is the second case. So the last case is the FTC.
+
+Kruti Yadav   4:12
+Mm.
+
+Praveen Gunja   4:13
+So, and every time you are speaking in a we are build only FTC, FTC, FTC is not that previous also mentioned this only.
+
+Kruti Yadav   4:19
+Yeah, because you told me, yeah, yeah, see, FTC is one of the main factor because I had discussion with Rohit as well after our call. So you told me like right now we are taking FTC and some other this scenario. So there can be multiple scenario as well, like for example, weather constraint will also be there.
+
+Praveen Gunja   4:22
+Previous image.
+Yeah.
+
+Kruti Yadav   4:39
+Some other manpower related scenarios are also there, so all these things basically see like there are a number of scenarios, right? As of now, you mentioned 3 scenarios based on three scenarios, you are basically predicting this, right?
+
+Praveen Gunja   4:43
+Yes.
+Yeah, yes.
+Yes, presently we are having the three scenarios, yeah, and we what I have built in that I have added the productivity, like site progress, also manpower progress, also regarding the model dispatch, like is there any enough modules at the site, like it is based upon the construction, like are we are we constructed structures?
+
+Kruti Yadav   4:55
+Yeah.
+Mm.
+
+Praveen Gunja   5:13
+So after constructing of the structures only, user will able to order like a, you can order that modules because if the structure is not ready, then there is no use of ordering the modules.
+So, that is the main constraint in that. So, presently, Abinash, who...
+
+Kruti Yadav   5:29
+Productivity data for this data set you need created, means now you created, right?
+
+Praveen Gunja   5:32
+Yeah, presently I build with that only.
+Yeah, present I build with that only. So I've added this construct also in that module ordering.
+
+Kruti Yadav   5:41
+Based on your data set, prepare productivity sheet according to you, you have added this scenario, right?
+
+Praveen Gunja   5:48
+This is.
+
+Kruti Yadav   5:49
+Okay, okay, okay.
+
+Praveen Gunja   5:51
+So, regarding the columns which I have, I had, I didn't know, so I will go with that. So, can you...
+
+Kruti Yadav   5:56
+Yeah, so Praveen, is it fine? Like, can you just give me a important, important for use, like, as well, like, to remind existing for use important?
+
+Praveen Gunja   5:59
+Singh.
+Call Devi.
+Another near.
+Yes.
+
+Kruti Yadav   6:13
+So, P6 name says that we are retrieving this, um, some details from this site.
+So can we start with this?
+Hello?
+
+Praveen Gunja   6:24
+Yeah, so see, I will tell you every column. So, this is considered it as so, so the project name, whatever the project name, the first it is the local name which the site people are using. So, that is used for like a for transmission projects, you will find that name. So, that is a common name. This P6 name is considered as a universal line and everywhere we are using that only.
+
+Kruti Yadav   6:27
+Yeah.
+M.
+M.
+
+Praveen Gunja   6:46
+So from now onwards. So and this SPV will be derived from the P6. The first letters of that project name is SPV. SPV is nothing but special purpose vehicle which is for every project like if one particular project is I sent. So for that particular project SPV will be saved. So if you are finding that ARE 55L is there right? So these three projects are considered as one project actually. They are grouped as one project. So that is the reason.
+
+Kruti Yadav   6:48
+Mm-hmm.
+Mm.
+M.
+Thank you.
+Hmm.
+
+Praveen Gunja   7:10
+and the SPV is same, but plots will be different, like whatever the plots is there, that will be different.
+
+Kruti Yadav   7:12
+Mm.
+M.
+
+Praveen Gunja   7:17
+Plot and blocks will be different, so S.P.V. is considered like for project with like if it is like above 500 or 600, so users will might like we will go with three projects, like if you are considering so one, so here it is 50, 150, two, 125, so they will split the higher capacity into lower capacity and they will group.
+Actually, so I'll tell you so.
+
+Kruti Yadav   7:40
+On this 50 is the capacity, right?
+
+Praveen Gunja   7:42
+Now, 50 is the capacity, so if you are considering, like, consider one project of 500, yeah, so 500 capacity, so how then it will consider, like, so they will split that 500 capacity into four projects, like 125, 125, like that, right, for that all SPV is same because...
+
+Kruti Yadav   7:59
+Mm.
+
+Praveen Gunja   8:01
+The project is only one, yes, but blocks will be different because they are putting as one 125 as a separate block, so 125 separate block like that, so blocks blocks means nothing but plot, so this will be different, OK?
+
+Kruti Yadav   8:02
+Mm.
+Mhm.
+Yeah.
+Okay.
+
+Praveen Gunja   8:17
+This is regarding the category you will find it that so what?
+
+Kruti Yadav   8:19
+So Praveen, this after underscore, so first we have SPV and after this we have plot 9, right? So here it is, plot number is A15, but why it is like here it is written as A01.
+
+Praveen Gunja   8:23
+Page it on.
+Lot, yes, so it might, yeah, it may, it might be due to the project mapping sheet, like, actually, so in the project mapping it is long, I think, so I just need to verify, so you just need to cheque that A15B.
+
+Kruti Yadav   8:41
+We need to correct to this, right?
+
+Praveen Gunja   8:45
+So, the logic is same, so you just need to understand the logic.
+
+Kruti Yadav   8:49
+I'm just correcting it higher.
+
+Praveen Gunja   8:51
+OK, sure, sure, we can see, and after that, H.S.A.D. is the right, H.S.A.D. is the M.M.S. type.
+
+Kruti Yadav   8:53
+Okay.
+Hmm.
+
+Praveen Gunja   9:00
+So, it is it is nothing but, like, see, you know that solar panels will revolve and it will be fixed due to that, and with respect to sun, so it is it is nothing but if it will revolve around the sun direction of sun, so if the sun rotates, so the solar panels also will rotate stuff.
+
+Kruti Yadav   9:08
+M.
+Hmm.
+
+Praveen Gunja   9:19
+Okay, so that comes under HSAT. FT is nothing but fixed tilt. Fixed tilt means they won't change the direction of the modules. So it will set up in a standard position, so it won't change with respect to sun. That is FT. You will find it here.
+
+Kruti Yadav   9:34
+Where is FT?
+
+Praveen Gunja   9:36
+Yeah, 4th column in Bondata F.T.
+
+Sree Charan Gaddameedi   9:38
+Sir.
+
+Kruti Yadav   9:39
+OK, OK, like meaning of these two, you are saying like this is fixed, OK, OK.
+
+Praveen Gunja   9:41
+Yeah, these two, so, because if...
+
+Kruti Yadav   9:56
+M.
+Mhm.
+Okay.
+
+Praveen Gunja   10:08
+So, and after that, you will find the capacity, which is in AAC.
+
+Kruti Yadav   10:09
+Hmm.
+
+Praveen Gunja   10:14
+Okay.
+So, after project, no, no, no, yeah.
+
+Kruti Yadav   10:15
+Okay, so this okay, this space category is different.
+
+Praveen Gunja   10:20
+Category, you will find it here, so after capacity, so like go to the project, I mean P6 only after HSAT, you will finding M50MW, so that is capacity AEC.
+
+Kruti Yadav   10:21
+That is.
+Okay, yes, yes, this one on capacity in MWA, right? Okay.
+
+Praveen Gunja   10:34
+Yes, yes, and PPA is the right last, so that is the category, yes, that is the category, understand, so this a EPC is nothing but you will find that, so this type also, the user will give that, so this type and fix this EPC is fixed, and this priority is it is.
+
+Kruti Yadav   10:37
+M.
+Category this one.
+Yeah.
+M.
+Yeah, PPA is basically kind of like from for PPA Project, we are basically having penalty if we don't complete it, right? So that is PPA. And what is this group? Like was...
+
+Praveen Gunja   10:56
+I think.
+Yes.
+In.
+Yeah, so it is group projects, Adani group projects.
+
+Kruti Yadav   11:08
+And we have only these two options for category like PP and group.
+
+Praveen Gunja   11:11
+No, no, merchant will be there. Merchant also will be there.
+
+Kruti Yadav   11:13
+So, what is what was what is merchant? OK, merchant projects. OK, OK, OK.
+
+Praveen Gunja   11:17
+So, it is like a secondary, secondary, so OK.
+So, and this will, you know, that will, right?
+
+Kruti Yadav   11:22
+Big.
+
+Praveen Gunja   11:26
+overloading, overloading. So in order to get that DC power, we need to multiply OL with the capacity, so you will get that capacity in DC, MWP.
+
+Kruti Yadav   11:26
+Overloading, overloading something, right?
+Okay, 15 to 1.35 for this, okay, MWP, okay.
+
+Praveen Gunja   11:39
+Three 5 is is 68, so this why it is useful is starting when whatever the models we have ordered, so that will comes under this one only MWP only 68 in that way only, because there it will mention the capacity in like watts, so we will convert that watts into DC.
+
+Kruti Yadav   11:53
+M.
+
+Praveen Gunja   11:59
+So, in 2000, if you do that, so we will get that for.
+
+Kruti Yadav   12:00
+Okay.
+
+Praveen Gunja   12:03
+So in that way, we will calculate that MWP. OK, I mean, it is useful for that calculation of the models which we are ordering.
+
+Kruti Yadav   12:11
+Okay.
+
+Praveen Gunja   12:11
+Okay.
+
+Kruti Yadav   12:13
+M.
+
+Praveen Gunja   12:13
+And this connecting phase and LTA and SCOD, you will find it will come from the transmission for every project. There will be phases. So according to the phases, LTA will be designed and SCOD and ECOD. I think CCOD is missed, I think. So I hope it is ECOD. OK.
+
+Kruti Yadav   12:21
+M.
+What is missed?
+
+Praveen Gunja   12:31
+AEC OD.
+
+Kruti Yadav   12:33
+Where is it? I mean, it is missing from this data set, or...
+
+Praveen Gunja   12:38
+I think so.
+Just a minute, I will see.
+
+Kruti Yadav   12:43
+Yeah.
+
+Praveen Gunja   12:48
+Yeah, just a minute, I just need to verify, like it is like AOP consider as EOP, it is, yeah, there is no ECOD, ACOD is nothing but AOP.
+
+Kruti Yadav   12:50
+What's the data field name you mentioned?
+Okay.
+AOP. OK, can you tell me difference between all this space? I.T.S.U.D.A.O.P.
+
+Praveen Gunja   13:07
+So, OK, I think March L.T.A.L.T.A. is see L.T.A. is nothing but the transmission completion date is considered as L.T.A.
+
+Kruti Yadav   13:18
+Means, OK, in due till this time, this project must be completed, right?
+
+Praveen Gunja   13:23
+The transmission, transmission lines will be completed.
+
+Kruti Yadav   13:26
+Okay.
+
+Praveen Gunja   13:28
+So, SCOD is nothing.
+
+Kruti Yadav   13:29
+For this particular phase, right? OK.
+
+Praveen Gunja   13:31
+particular phase for that particular project.
+
+Kruti Yadav   13:35
+M.
+
+Praveen Gunja   13:36
+I see what he is nothing but the before like whatever the construction reddy and everything. So you will find it from here, the construction progress. So like FTC, similar to like FTC only.
+The milestone from the milestones, we will get this.
+
+Kruti Yadav   13:51
+Okay.
+
+Praveen Gunja   13:52
+OK, this AOP is the final project closure of that particular project we will get from P6.
+
+Kruti Yadav   13:53
+And...
+Okay.
+
+Praveen Gunja   14:00
+OK, this ordered column column is there, right? This ordered column.
+Whatever the order column, this are the this data we are getting from the SAP for only modules only, so here whatever the data which we are showing, it's our it's for modules.
+
+Kruti Yadav   14:05
+M.
+Mm.
+
+Praveen Gunja   14:18
+OK, so these are the data, these are the dates which we have given, I mean, these are this much models of the order, so we are able to get this data from the SAP.
+
+Kruti Yadav   14:18
+It's.
+Okay.
+
+Praveen Gunja   14:27
+From files called MV2J and everything, so in that way, MV25 MV5152 with that, so this balance ordering is nothing but.
+
+Kruti Yadav   14:31
+M.
+
+Praveen Gunja   14:38
+So, ordered minus the capacity of MWP, so that is a balance.
+See.
+
+Kruti Yadav   14:45
+Ordered minus capacity MWAC or MWP.
+
+Praveen Gunja   14:50
+At the end of it.
+
+Kruti Yadav   14:52
+OK, balancing order minus the city, OK.
+
+Praveen Gunja   14:52
+As you also, we are discussing.
+So that is a value. So total receipt is nothing but the site how much we have received. That is total receipt.
+
+Kruti Yadav   14:57
+The.
+Hmm.
+Okay.
+
+Praveen Gunja   15:03
+Okay, so erection is nothing but every project will have the erection. Erection means putting up the rods like pre-request further model installation.
+So, that thing you'll find it here, like this much of Erection is nothing but the model installation at site only. You can consider it in that way also. So, in P6, all whatever the models they are ordering, so they will install at the site, right? The installations progress, you will find it in the Erection done.
+
+Kruti Yadav   15:32
+Okay.
+
+Praveen Gunja   15:33
+So, OK, so this is not required. This is not required for you.
+
+Kruti Yadav   15:34
+Okay, Praveen, just a minute, what is it? Balance ordering is what?
+
+Praveen Gunja   15:39
+Balance ordering is nothing but the amount of modules you need to order.
+
+Kruti Yadav   15:45
+Okay.
+
+Praveen Gunja   15:45
+for that particular site.
+
+Kruti Yadav   15:47
+And this is ordered is also OK. These are the what is the difference between both this ordered and balancing ordered?
+
+Praveen Gunja   15:52
+See this art.
+Ordered, we have ordered, like in the past, we have ordered this much of modules for that. So this is the data of ordered. Yeah, ordered data. This is the balance it to ordered.
+
+Kruti Yadav   16:00
+OK, already ordered data, and these are.
+Yeah, OK.
+
+Praveen Gunja   16:06
+In the.
+Okay.
+
+Kruti Yadav   16:09
+Is next.
+
+Praveen Gunja   16:11
+So this model inventory is nothing but the models regarding the models only. So the minus, so it is nothing but total received minus erection done is the model inventory.
+
+Kruti Yadav   16:23
+Okay.
+
+Praveen Gunja   16:24
+Okay.
+This under transit you will get from MB 50 with 52. So whatever the models which are in the transit, I mean on day two reach that particular site. So you will find out how much models are there in that.
+
+Kruti Yadav   16:35
+In progress when, yeah.
+
+Praveen Gunja   16:37
+In progress, in transit, not in progress, in transit. OK, so this is regarding the Ariba, yeah, from here it is new, so Ariba, so can you go down?
+
+Kruti Yadav   16:41
+Data.
+This is new field, huh?
+
+Praveen Gunja   16:51
+So actually we need to have that data, but we are not able to find that. So that is the reason it is showing not in Narwa. So it might be due to the planned code. We are looking for that.
+
+Kruti Yadav   17:02
+For example, yeah.
+
+Praveen Gunja   17:03
+So here, so if you're having that, so you will find it like this.
+
+Kruti Yadav   17:07
+PO51Z6 So what is?
+
+Praveen Gunja   17:09
+51Z6 is the plant code.
+51Z6 is the planned code. Out of 6 pivots, we are able to find 4 pivots.
+
+Kruti Yadav   17:13
+Okay.
+
+Praveen Gunja   17:19
+OK, so and received.
+
+Kruti Yadav   17:19
+Okay, PO basically is what? Purchase order.
+
+Praveen Gunja   17:23
+Purchase order, yeah, purchase order, so...
+
+Kruti Yadav   17:25
+Okay, purchase order, out of 6 purchase order, we have 4, four are already done, right?
+
+Praveen Gunja   17:30
+Matched, yeah, so Ariba received is that right? So this is the capacity which we are received at site, so which is marked as ZRN. You can consider as ZRN received at site.
+
+Kruti Yadav   17:42
+M.
+
+Praveen Gunja   17:43
+Out of 50.
+
+Kruti Yadav   17:43
+Okay.
+
+Praveen Gunja   17:44
+So, there we have received 646, so the at last in the last next column is last received GRN date, so it is a maximum date of that particular PO's the last date of GRN happened at that site.
+
+Kruti Yadav   17:47
+Hmm.
+Last to receive this one, right? Last received GRN date. That means, okay, on this date, we have received this particular module order, right?
+
+Praveen Gunja   18:02
+Yeah.
+Thank you.
+It.
+Last, last.
+The last order.
+Means after June 13th, there is no dispatch has happened at the site. You can consider it like that, OK? Dispatch, but no GRN is nothing, but if any particular activity is dispatched, but it is not received at site, so you will track it here, like in transit.
+
+Kruti Yadav   18:15
+Okay.
+M.
+Okay.
+
+Praveen Gunja   18:32
+In transit, you will see it here, so if we are having any particular values, so can you?
+
+Kruti Yadav   18:37
+This and this both are same under transit and.
+
+Praveen Gunja   18:39
+No, no, might be mostly, but it is comes under GRN. It is a proof, so here in under transit mostly, can you cheque that both values having both values in that fields like having both?
+
+Kruti Yadav   18:54
+Don't have any data.
+Ohh, you already informed to Nitish right for this data? OK, no, we don't have, yeah, we don't have any data where both the fields are, yeah.
+
+Praveen Gunja   19:00
+Yes, it's mostly, yeah, regarding this, I own funnel.
+So, the finance checklist is nothing but after listing of the GRN at the site, so the site people like who are that receipted site, they will tell the finance team to release the PO for that particular vendor. So that checklist you will find it here.
+So there are raised checklist is nothing but the received it said is 514 and we have.
+Made, I mean, all the checklist, like finance checklist is nothing but informing to the financer to release the Pivo, or it is regarding the checklist.
+
+Kruti Yadav   19:40
+Okay.
+
+Praveen Gunja   19:41
+Files like this is the construction progress. You can track it as a construction progress from your productivity will happen.
+Piles is nothing, you know, the right piles, piles, so they will dig the whatever holes or something that comes under piles, so for the so this is the progress of piles happened at the site.
+
+Kruti Yadav   19:48
+Mhm.
+Hmm.
+Basically, yeah, in that the site, the manual work, whatever is required at the site, right? OK.
+
+Praveen Gunja   20:04
+Yeah.
+Yeah, yeah.
+Yeah, yeah, so this piles, after this pile, the construction structure will be different. I mean, will be built after completing of piles only, they will do that, and then after like 50 to 60% like that.
+
+Kruti Yadav   20:19
+All these details, for example, install this details. So, basically, we have other team portal or any portal. They are basically adding, filling up all these details right to to the form or some somewhere, and based on that, it's it is all these details are getting stored to database and we are.
+
+Praveen Gunja   20:20
+Yeah.
+Big.
+Just want this.
+M.
+That's right.
+
+Kruti Yadav   20:41
+basically retrieving the data from the data set, right, database, right? So do we have this timestamp wise data? Like for example, today I have added this data. Tomorrow, if I'm updating the data, then I will have another value. So time wise data we don't have.
+
+Praveen Gunja   20:44
+Exactly, yes.
+Yeah.
+Okay.
+Yeah, we will have that. It is in P6. What happens is like, so on daily basis we are syncing the data. Like at night, we at night we will sync the data for P6. As morning they will use and update the data for in the P6. So we are using at the night sync. So every night we will have that data stamp like a time stamp.
+of changing the data.
+
+Kruti Yadav   21:16
+So, can I get the time stamp based data?
+
+Praveen Gunja   21:21
+Times, Abhishek, from, from, if you wanted, we need to try from in from now on, sir, yeah, because previous times we are not have.
+
+Kruti Yadav   21:32
+Yeah, okay, because times and these data will be very useful for M model training, that's why.
+
+Praveen Gunja   21:38
+See, see, Kruti, like in pieces, what happens, like if the particular project does not complete it, so it automatically shift the dates.
+
+Kruti Yadav   21:44
+Mhm.
+
+Praveen Gunja   21:46
+Without information on it will ship the dates, then how the timestamp will track the dates as shipped.
+
+Kruti Yadav   21:47
+And.
+So as you mentioned, like every day you are like every day or like for example in 24 hours you are getting the latest data from all the sources, right? You are basically updating it, right? So for that only like you will, for example, today I have this data set file. OK, tomorrow there will be update.
+
+Praveen Gunja   22:01
+Mm.
+Yes.
+People.
+
+Kruti Yadav   22:10
+in any of the fields from this data, right? So that way, time stamp and see for that also, like created, updated, all this, like the time stamp, at what time that particular entry got updated, all these details we have in the database, right? So those details I can get it, right? We're already storing the data.
+
+Praveen Gunja   22:13
+M.
+Mum.
+What's the name?
+Hey, point.
+So what happens like what happens is like there is so much of data in physics. So we are not updating on cell to cell because we just need to like if we are updating on activity basis, so we will have almost 5000 activities in every project. So now how much time will it take to update to 40 projects?
+
+Kruti Yadav   22:31
+And.
+M.
+
+Praveen Gunja   22:46
+which is having 5000 activities every month.
+
+Kruti Yadav   22:49
+So that is also less data. See we have big data technologies so we can do these things. I mean this latency and all that is not the issue. We can have even 10,000 rows data, 10,000 projects, 10 million billions of data as well. That is not the that is not the case. Yeah.
+
+Praveen Gunja   23:03
+We can, we can, we can.
+
+Kruti Yadav   23:08
+But it's just that, okay, that like we can discuss it on upcoming phase for that, okay, but basically timestamp data will be really helpful for AI model training and we don't have that much data right now, so I can add the timestamp based data so that the model, the machine learning model, can learn the patterns.
+
+Praveen Gunja   23:10
+Excellent.
+M.
+Yeah.
+
+Kruti Yadav   23:27
+From the historical data, OK, fine.
+
+Praveen Gunja   23:28
+OK, OK, OK, so, so models mounted is nothing, but how many models are installed at the site?
+
+Kruti Yadav   23:31
+Yeah.
+The structure structure built.
+
+Praveen Gunja   23:36
+structure build is nothing but before of the model bounds, the structure should be built.
+Structure is nothing but the before models there will be some procedure, like so they need to add the piles, I mean whatever the columns need to be installed, so everything need to be installed, right? So that activities comes under structure, so this after building of this structure only the pending is like models, they will just need to.
+install the models models like in the top top what they the solar panels will add, right? So that one only.
+Before the solar panels, so the remaining part comes under structured.
+
+Kruti Yadav   24:08
+Okay.
+
+Praveen Gunja   24:12
+These models will be mounted upon the structure.
+
+Kruti Yadav   24:18
+Okay.
+
+Praveen Gunja   24:19
+Understand?
+
+Kruti Yadav   24:20
+M.
+
+Praveen Gunja   24:21
+In.
+So, this is the thing, and models modern, so big plan, so every project will have the P6 baseline points, baseline dates.
+
+Kruti Yadav   24:25
+Behind, yeah.
+
+Praveen Gunja   24:32
+So, based on that, we are generating the baseline behind, like, if one particular project is going outside of the baseline, so we will track the punch.
+It is not required actually, so it is for FTC. It is indirectly linked with FTC. That is the reason I just skipped that. So there is no need of understanding.
+
+Kruti Yadav   24:49
+Okay.
+Yeah, for FTC prediction is also we have as third use case, but for now I'm building 2 use case only. I utilise this for further.
+
+Praveen Gunja   24:52
+Sohel.
+Yeah, you can skip that, you can, yeah, you can skip that, as if you're not required, no, so models apply versus model et cetera, so because this activity or whatever, why exactly?
+
+Kruti Yadav   25:06
+Wait, the structure reddy, no module, what is this?
+
+Praveen Gunja   25:10
+So, if the structure is under comes under cut.
+
+Kruti Yadav   25:11
+Empty.
+
+Praveen Gunja   25:14
+Indian money.
+
+Kruti Yadav   25:15
+Almost empty data we have, then we have few column data here.
+
+Praveen Gunja   25:20
+Singh.
+See, I will tell you why exactly. So you just, if you understand the, I mean, if you read the column name, you will understand that the structure is ready, but no models at the site means what exactly it represents, so you need to order that models.
+
+Kruti Yadav   25:25
+M.
+Structure is reddy and no modules means what? No modules means.
+
+Praveen Gunja   25:38
+Understand.
+The models are not present at the site.
+
+Kruti Yadav   25:47
+So what does number represent? Like one structure is reddy and no modules are present. Is it like that?
+
+Praveen Gunja   25:48
+And see.
+Singh.
+
+Kruti Yadav   25:56
+One minute squad, yeah.
+
+Praveen Gunja   25:57
+Next.
+Yeah, yeah, it is like one need to be installed in that, so it might be that one. Can you go to that one project?
+
+Kruti Yadav   26:08
+Good.
+
+Praveen Gunja   26:10
+Just scroll down, right? Sorry, left, left, yeah, scroll left.
+Here it is, one represents, right? See, one is in model inventory, so one is present at the site. So, in this particular site, the one model is reddy, I think so, in that way.
+
+Kruti Yadav   26:20
+Mhm.
+Okay.
+
+Praveen Gunja   26:29
+Yeah, these three, these three things you you did not need it. It is for that model supply, so it is it is based upon the is is our model supply is.
+Yeah, just I'm just confused. Hello.
+
+Kruti Yadav   26:44
+Hello!
+Yes, yes.
+
+Praveen Gunja   26:49
+So, you here in the models of versus site, you will find that what exactly the portion of that particular model. So, is models available at the site is required or we need to order or is the excess of models are there, because if the excess models is there right, so here excess models are there, but the site progress is delayed, so there is no need of keeping this, there is no need of what we call ordering in this particular site.
+because we are having excess models in that particular site as the physical progress is low.
+In that way, we will try this.
+See, you have the excess model in the in the particular site. There are three, I mean, 308 mega, 308 DC models are there, but the structure build is 2.9%, so this particular project does when site progress is very low.
+
+Kruti Yadav   27:23
+M.
+
+Praveen Gunja   27:41
+Understand.
+
+Kruti Yadav   27:41
+Yeah, because only 2%, like almost 3% is only billed.
+
+Praveen Gunja   27:45
+Yeah, so, but we have having the models at that site, so there is no need of ordering for that particular site because we are having access model and the site progress is not there, so we can skip that not required because, yes, exactly, yeah.
+
+Kruti Yadav   27:55
+Yeah, ordering is not required, basically, right? Model ordering is not required for me.
+Supply matches side, that means whatever modules we need to order. Yeah, so how it is matching which module? This module inventory, right?
+
+Praveen Gunja   28:06
+So that has matched it.
+Just go, just scroll left again.
+So, you see, 6868, order 68, model total is 68.
+So, direction is done, so the required direction for that particular set is done, so that is the reason there is no required of odd supplies there.
+
+Kruti Yadav   28:21
+Okay.
+Okay.
+
+Praveen Gunja   28:33
+OK.
+Okay.
+
+Kruti Yadav   28:35
+Apart from that, we have any other filing in progress.
+
+Praveen Gunja   28:37
+So, piling in progress, so, so your success is not built, so piling is progress, no, after completing a piling only, so we can order that, so it is getting delayed, it should get, it will get, OK.
+Models complete is nothing but the particular project as installed every model.
+So there is no point.
+
+Kruti Yadav   28:55
+What is this data mismatch?
+
+Praveen Gunja   28:57
+Data mismatch is nothing but see particular project, whatever the data for that particular.
+
+Kruti Yadav   29:03
+Which data mismatch module, which fields, which data field is mismatch?
+
+Praveen Gunja   29:08
+Well, see if some particular project does not have the OL.
+So, in order to, in order of see, can you go to this particular project?
+Left one, well, this particular project does have any OL date.
+
+Kruti Yadav   29:25
+1.35 this one.
+
+Praveen Gunja   29:25
+Dance.
+Yeah, it does.
+I see what they also not there, right? So it might be that in PCs we don't have the data. So in that way.
+We are not matching the data for this particular project.
+
+Kruti Yadav   29:40
+Okay.
+Yeah, SCOD we don't have for many projects. See, here also we don't have SCOD data.
+
+Praveen Gunja   29:47
+I mean, PCs also, we don't have the data, I think so. So might be, it is regarding that.
+Let A mismatch.
+
+Kruti Yadav   29:55
+Okay.
+
+Praveen Gunja   29:56
+Okay.
+
+Kruti Yadav   30:00
+Okay, and like you, while showcasing this in the dashboard, there was this one option where you were showcasing some details as well, right, about this module supply.
+
+Praveen Gunja   30:01
+And.
+Mm.
+Anubhav.
+No.
+Exactly.
+
+Kruti Yadav   30:15
+So, where is that?
+
+Praveen Gunja   30:17
+You can't find that, that is the AI part, I mean that is in the UI, you can see that, so in the Excel we can do, we can display that, that is the suggestions only.
+
+Kruti Yadav   30:28
+So, how you generated that suggestion?
+
+Praveen Gunja   30:30
+It is based upon this piling and the structure and the models mounted that, so based on that.
+
+Kruti Yadav   30:36
+So, basically, like you have passed in this particular raw data to AI model with prompt, and based on that, you asked to generate one summary or.
+
+Praveen Gunja   30:41
+M.
+It is not, it, yeah, it is, it is not based upon the particular, it is based upon the pile structure and modules, it is based upon these three only.
+
+Kruti Yadav   30:46
+And.
+
+Praveen Gunja   30:55
+Because these three are required for the modules, or whatever the productivity which at the site, so these three are mean.
+
+Kruti Yadav   30:55
+Okay, so...
+
+Praveen Gunja   31:02
+So, that is still.
+
+Kruti Yadav   31:04
+Okay, so you just pass those three fields data and one prompt to generate one insight for this, right?
+
+Praveen Gunja   31:05
+Okay.
+M.
+Yes.
+
+Kruti Yadav   31:12
+Okay.
+And this FTC forecast too.
+
+Praveen Gunja   31:17
+So, that is it is based upon the construction, like if if particular project baselines are sleeping, so the FTC also will change. So, I just mentioned like these are the required FTCs which will get delayed, so on based upon construction.
+
+Kruti Yadav   31:30
+Okay, so yeah, yeah, yeah, I think you explained this in that meeting. So in that you have added the detail, right? Like you have, you like just added the description, right? When we click here. So send me that as well. Yeah, send me that as well. Like 2-3 samples for this and 2-3 samples for this.
+
+Praveen Gunja   31:38
+Yes.
+Is it there? Yes, I have added that.
+
+Kruti Yadav   31:50
+for like this access module supply mesh and how like basically how this FTC forecasting are done. Right. Just send me that sample as well after this call, OK? OK.
+
+Praveen Gunja   31:57
+Okay. Okay.
+Okay, sure.
+I'll send now only, like I will forgot.
+
+Kruti Yadav   32:03
+Next to your monthly.
+What?
+
+Praveen Gunja   32:09
+I'll forgot, easily forgot, I will send now itself.
+
+Kruti Yadav   32:12
+Okay yeah you can do that in the group only you can share that then.
+
+Praveen Gunja   32:20
+Uh, remaining it is old only, so whatever that three years, it is that on.
+There is no nothing new.
+
+Kruti Yadav   32:28
+Monthly plan timeline. OK, OK. And here also on like.
+
+Praveen Gunja   32:31
+That is not bigger.
+
+Kruti Yadav   32:35
+OK, so here also, like, we are basically displaying the module only, right? I think what?
+
+Praveen Gunja   32:39
+Yes.
+Yeah.
+
+Kruti Yadav   32:42
+So, how we are generating this number?
+
+Praveen Gunja   32:46
+So that you need to generate based upon the data. You need to order that, right? So that is the AI model.
+
+Kruti Yadav   32:49
+No, no, no. Here, as of now, how? Yes, yes. As of now, for example, you are like 30, 34 something number is there, right? If I click that, then there will be that FTC, TC modular during date on this details are there, right? So that basically these are like 30.
+
+Praveen Gunja   32:57
+M.
+Yeah.
+Mm.
+
+Kruti Yadav   33:08
+30 modules. We need to basically in this particular month we need to order that 30 modules like that, right?
+
+Praveen Gunja   33:13
+Order.
+Exactly, so like that only.
+
+Kruti Yadav   33:20
+So as of now, how that number is coming, like based on any calculation you are generating from this.
+
+Praveen Gunja   33:26
+So, so, as you know, that right balance, we will get that, so the balance represent the number of models we need to order to to generate that capacity of that balance. So, with that balance, we are able to map that, so while considering the vendor allocation also.
+
+Kruti Yadav   33:42
+Yeah.
+So, how the that calculation is done right now?
+
+Praveen Gunja   33:47
+So it is, I just mentioned that it is based upon the balance.
+
+Kruti Yadav   33:53
+So for example, for this, okay, so for this per second, I don't have any balance. Here it is 30 balance.
+
+Praveen Gunja   33:59
+And...
+
+Kruti Yadav   34:00
+Right, so here in this dashboard, like that 30 modules in which month I need to order, that will be coming here, for example, right?
+
+Praveen Gunja   34:08
+Like.
+Yes, exactly.
+
+Kruti Yadav   34:12
+So that is for this project. Like here we have only 30 data, 30, where is the 30 balancing order here. Now for this project we have 203 here, 34 here, 675 here. OK, so for this, how the data will be here?
+
+Praveen Gunja   34:13
+S.
+That's for it.
+Yeah, yeah.
+34, 203.
+670.
+
+Kruti Yadav   34:36
+So what this represents, basically, I want to understand how how you are like getting this.
+
+Praveen Gunja   34:44
+All we are getting is nothing. I can't understand. So that 203 is the DC and 150 is the AEC.
+
+Kruti Yadav   34:51
+Hmm.
+
+Praveen Gunja   34:52
+So it represent only single, you can differentiate that.
+
+Kruti Yadav   34:52
+Sohel.
+So, for example, see, it is present here in May 27, okay? That means, what is this? I mean, like, module, order modelling date, PC date, or what is this?
+
+Praveen Gunja   34:59
+M.
+That is see if orange colour is represents the TC.
+
+Kruti Yadav   35:11
+Mm.
+
+Praveen Gunja   35:12
+Or, in color, the present that is, wait, I will give you all considering all, I think, so it is good to give that.
+To people, always.
+
+Kruti Yadav   35:21
+Okay, yeah, share me that overshare it.
+
+Praveen Gunja   35:24
+Some card on all projects, so...
+AA.
+So, I'm sharing you.
+One group, where it is.
+Cheque that.
+
+Kruti Yadav   36:05
+Six.
+
+Praveen Gunja   36:08
+Just.
+
+Kruti Yadav   36:12
+This Data.
+
+Praveen Gunja   36:14
+Yeah.
+Thank you.
+
+Kruti Yadav   36:26
+Okay, I opened it now.
+
+Praveen Gunja   36:28
+Okay.
+M.
+M.
+
+Kruti Yadav   36:32
+So, what is this data? I mean, this is different from that file.
+
+Praveen Gunja   36:33
+No.
+Just go to model ordering months.
+Okay.
+
+Kruti Yadav   36:48
+For the false project.
+
+Praveen Gunja   36:50
+Open, just go to the model, see, so...
+So here you are finding that that is the right. So this 30 is represents.
+
+Kruti Yadav   37:02
+Hey.
+
+Praveen Gunja   37:03
+In your head.
+
+Kruti Yadav   37:09
+Hello!
+Praveen.
+Hello!
+Sree, you both are in go.
+
+Sree Charan Gaddameedi   40:06
+Yeah, yeah, yeah, I think.
+
+Praveen Gunja   40:07
+Hello.
+Good, so.
+
+Kruti Yadav   40:09
+What happened?
+
+Praveen Gunja   40:10
+Information.
+
+Kruti Yadav   40:12
+Yes.
+
+Praveen Gunja   40:12
+Like, in general, I mean, I need to not try to do that.
+
+Kruti Yadav   40:14
+Yes.
+What happened should we continue now, right?
+
+Praveen Gunja   40:20
+Restrictions, hyper restrictions.
+In the same.
+Yeah, Kruti, you can, we can continue, you can continue this.
+
+Kruti Yadav   40:43
+Yes.
+Okay.
+
+Praveen Gunja   40:48
+Just go down, just go down. So, yeah, 203 is there, right? So, AGL, Merchant Solar, TT, that is, that is regarding that is different, so it is ordered actually, so it is making the false, I think, so this go down the second one, so 203.
+
+Kruti Yadav   40:49
+Yeah.
+You were saying something about this 30 and 23.
+
+Praveen Gunja   41:08
+So here we are ordering the 203 DC and 153 AEC. It means both are same. 150 we are mentioning in the phase on 2003 DC something. So we are ordering in the January. So that will be received at cited, like May 27th, it will be received at cited. On June, you will have that FTC for that mod.
+
+Kruti Yadav   41:14
+M.
+Yeah.
+
+Praveen Gunja   41:28
+Models you have ordered.
+That thing you, you are dragging that.
+
+Kruti Yadav   41:32
+So basically this different current, different colour represent different date span, right? Like for example, green.
+
+Praveen Gunja   41:38
+Yes, blue, blue is model ordering, blue is model model ordering, orange is the TC date which received that site, so the models received that site that is FTC green is the FTC mean charging date, that is the final date actually, OK.
+
+Kruti Yadav   41:42
+M.
+Mhm.
+Mm.
+Mm.
+Okay, so for this particular, okay, and this is basically on the balancing capacity, right, the rebalancing order, 203 for that particular and for this 30 foods.
+
+Praveen Gunja   41:59
+OK, goodnight.
+Yes.
+Which we have already, yeah, so just go for 700, 700, 650 something, is that right? Just go for that, 675, yeah, 675, yeah, just go there.
+
+Kruti Yadav   42:14
+Six Project, OK.
+
+Praveen Gunja   42:18
+See here, you're having the two order orderings.
+So, we have ordered 225 one time, 2275 one time. So, out of 225 one in happening at 171 or one like in on particular date, two or three on one particular date.
+So, in that way, how much we have ordered based upon that one, 60 minutes?
+
+Kruti Yadav   42:36
+Like, OK. In some phases, we order, right?
+
+Praveen Gunja   42:41
+Yeah, so you can restructure this, because in the AI, you will restructure this particular thing only, so the material ordering only with the you will restructure that.
+
+Kruti Yadav   42:53
+M.
+
+Praveen Gunja   42:53
+You will need to restructure this itself. OK, and so it is because I mean it is based upon that, so these are the dates for that particular, so it is I had mentioned earlier only in this one, so in the you will find that regarding whatever the which I shown there, so you will find it in the in the site productivity you will find regarding the progress in the nature sheets.
+
+Kruti Yadav   42:57
+Mhm.
+
+Praveen Gunja   43:14
+What?
+
+Kruti Yadav   43:17
+This FTC date. So basically when from the UI when we click here, so at the time the FTCD, TCD, model rate, whatever we can see in the UI. So for this that is mentioned here right in this columns.
+
+Praveen Gunja   43:24
+People.
+Yes, this is this is the actuals like whatever the actuals which in the P6, but like when we are clicking right, so we are showing the product I mean projected also like what will be the changes because if the particular models are delayed by three months, so then the FTC will be also changes by three months.
+
+Kruti Yadav   43:33
+Okay.
+These are predicted.
+Okay.
+Mm.
+Yeah.
+
+Praveen Gunja   43:50
+That we are not displaying it here, so we are displaying it in the UI. This is the original dates FTC is everything.
+
+Kruti Yadav   43:55
+Okay, okay, okay, so these are the actual ones, FPC module and TC dates, and these are here in this module. We are basically showcasing the forecast trade, whatever dates we have, right? Okay, okay, okay, okay. These are like remarks, right?
+
+Praveen Gunja   43:58
+If this is.
+Hmm.
+Yeah.
+This is the focus.
+Yeah, in Max.
+
+Kruti Yadav   44:17
+So these remarks, how like on what we use, we are generating these remarks, I mean, for a module delivery date and TC date, is it related to this or?
+
+Praveen Gunja   44:30
+It is based upon PC, I mean, FTC only. So, as, as can you say, can you see the second one, FTC address? So, so PCs, FTC from the month can can be placed upon two, so, so it is based upon the FTCs only, so mostly this is the old one, so I did not updated that, so this logic, this remark, whatever the remarks, so it is based upon the old data.
+
+Kruti Yadav   44:37
+Hmm. Hmm.
+
+Praveen Gunja   44:51
+So that is the reason I did not change.
+
+Kruti Yadav   44:52
+That's how we are generating this remark that's what I want to know, like what data you are passing here.
+
+Praveen Gunja   44:56
+So if the FTC, see if the FTC is getting delayed, like it is, if it is LTA, we are having some PRTs, right? So if LTA is getting delayed, so the, what are the models which we are ordering? So might, I mean, we can delay that. So, but if the FTC is below the SCOD.
+and construction is going on and if we are not ordering the models that will be the effect. So that's the reason if we are it is FTC at risk from the site speed because the site speed is going on but FTC is FTC the structure we have not received at the site. So based upon this.
+The site, I mean, the FTC will slip right, because the models are not there, so the site, whatever the site progress required for that model installation is done, but the models at the site is not there.
+
+Kruti Yadav   45:46
+OK, so. So basically you have passed this particular projects data, raw data, the activity related data, the LTA, SCOD and TC and everything and based on that you are generating the mark right with the help of AI models.
+
+Praveen Gunja   45:49
+Yeah.
+M.
+Is.
+Yeah.
+
+Kruti Yadav   46:04
+OK, and OK.
+
+Praveen Gunja   46:04
+I would.
+
+Kruti Yadav   46:07
+This, the what is this was dispatch Ariba I.B.D. Madlab?
+
+Praveen Gunja   46:12
+IBD is nothing but the date.
+
+Kruti Yadav   46:16
+Which date?
+
+Praveen Gunja   46:16
+First to dispatch is nothing but as we are having GRN data as the first last date. So IBD is nothing but the first date.
+See, first dispatch will be there, right?
+
+Kruti Yadav   46:26
+Pause date when project started, okay?
+
+Praveen Gunja   46:28
+Yeah.
+That is not required. I was just mentioning that.
+
+Kruti Yadav   46:30
+Oh.
+And this.
+
+Praveen Gunja   46:36
+Deliver with the people's dispatch deliverance.
+
+Kruti Yadav   46:41
+Okay, based on plant, okay, you can cheque this. Okay, now next is Ariba leaders ledger. Okay, Ariba ledgers shift, okay.
+
+Praveen Gunja   46:43
+Yeah.
+So, you will find that related to project name I mentioned, so everything you will find it there itself.
+
+Kruti Yadav   46:56
+This project name and this project name are matching.
+
+Praveen Gunja   46:59
+Yeah, my.
+
+Kruti Yadav   47:02
+For example, I have, where is this project, this project?
+
+Praveen Gunja   47:02
+Bahar Hainan Project, no.
+
+Kruti Yadav   47:09
+Okay, here it is.
+Group cement, what is this?
+
+Praveen Gunja   47:16
+In Anubhav.
+
+Kruti Yadav   47:16
+That is not mentioned here.
+
+Praveen Gunja   47:19
+That is also not matching, not in, so that is the reason we are not in, so AGL merchant, you will find that rest.
+
+Kruti Yadav   47:26
+Okay, like some projects data we don't have.
+
+Praveen Gunja   47:26
+If you want, I will, I will give that P6 also. I can add that P6 also in that, if you need it.
+
+Kruti Yadav   47:33
+P6 means which data? We already are getting data from P6, right? Which data is missing?
+
+Praveen Gunja   47:35
+Physics.
+No, no, Phase 6 Project name, Phase 6 name, I'm saying.
+
+Kruti Yadav   47:41
+Yes, yes, add this, this P6 name, bro, here, right? No, no, but I think project name is there and project names are matching, so then no need to do that. This name you are talking about, right? P6 names. No, no, no, I think project name is enough. If it's matching, then you.
+
+Praveen Gunja   47:41
+Here.
+Yeah, yeah, yeah, yeah.
+Hey.
+Okay.
+
+Kruti Yadav   47:59
+MS, but you have cross-checked with like this project name and this project names are matching, right? That is linking with this. Okay, okay, okay, okay, then no need to add it.
+
+Praveen Gunja   48:04
+It will match, it will match.
+Okay.
+Yeah.
+
+Kruti Yadav   48:10
+Okay, so project wise, this is PO purchase order, right?
+
+Praveen Gunja   48:13
+People.
+That is PO date for that particular purchase.
+
+Kruti Yadav   48:19
+Okay.
+
+Praveen Gunja   48:19
+That lines is not required. That is the extra column which I extracted. So next to the vendor, vendor name of like who is the vendor for that particular purchase order. So IBD is nothing but the dispatch date. So GRN date is nothing but the GM, the receipted site date, and how many days it has taken to, it has taken, you will mention in that transit date.
+So what is the quantity of the dispatch? You will find the UOM, like is it each? Each is nothing but the numbers. So you will find the UOM for that particular thing and how much modules.
+
+Kruti Yadav   48:49
+What is UN? What was the full form of it? I didn't understand this column.
+
+Praveen Gunja   48:54
+Unit of measurement, numbers, tables, so...
+kilometers, meters, so that will consider as a UOM.
+
+Kruti Yadav   49:03
+Humans.
+
+Praveen Gunja   49:05
+For each.
+
+Kruti Yadav   49:07
+What EE means?
+
+Praveen Gunja   49:08
+For each.
+Yeah, yeah, means each one, three, 9, for each month, if you are considering one plan, so it is having one each, like one one year.
+
+Kruti Yadav   49:19
+Okay, 11395 each fan. Okay.
+
+Praveen Gunja   49:22
+Modules, yeah.
+1395 into 0.82 gives the total MWP for that particular volume. OK, OK.
+
+Kruti Yadav   49:31
+Okay, UOM into MWP will give us total.
+But, do they what?
+
+Praveen Gunja   49:39
+MWP.
+How much generator for that, so you will get that?
+
+Kruti Yadav   49:46
+Okay.
+
+Praveen Gunja   49:47
+Okay.
+
+Kruti Yadav   49:49
+Okay.
+
+Praveen Gunja   49:49
+So this is the checklist number. You'll find this is not required checklist number, I think so.
+
+Kruti Yadav   49:55
+But what does what does this mean like checklist as in?
+
+Praveen Gunja   50:00
+That is the number, like it has informed to the user, like a to release the PO for the particular vendor.
+
+Kruti Yadav   50:09
+But we have any checklist data like checklist. This is only checklist number that is any like task checklist name or something like that.
+
+Praveen Gunja   50:14
+We had we had the checklist number.
+Yeah, no, no, they will mention only created checklist status created. What is the number for the checklist? What is the date for the checklist date?
+
+Kruti Yadav   50:19
+Where is it?
+But what that particular checklist represents, that details we have?
+
+Praveen Gunja   50:26
+Then...
+
+Kruti Yadav   50:33
+Mhm.
+
+Praveen Gunja   50:33
+To give some amount to them, right? So, as they are...
+
+Kruti Yadav   50:35
+Okay, confirmation kind of.
+
+Praveen Gunja   50:38
+Yeah, so as see sometimes like when we buy a book, so we will give the amount after receiving. So in that way only same.
+
+Kruti Yadav   50:44
+Mm.
+Okay.
+
+Praveen Gunja   50:47
+So they will cheque that and they will release the amount for that particular modules, whatever the models they have received. So they will create, they will tell the financer to release the amount for that particular delivery. So that is the checklist.
+
+Kruti Yadav   50:59
+Guru.
+Okay.
+
+Praveen Gunja   51:01
+The site will cheque that actually, so it any damage has happened or anything, so how much we have received, so in the on that basis, the checklist will happen.
+Good.
+That is not required.
+
+Kruti Yadav   51:18
+What was this columns? WBS means what?
+
+Praveen Gunja   51:20
+It is not required.
+That is that is for every project will be linked with the SAP with the WBS itself.
+What breakdown structure is about that?
+
+Kruti Yadav   51:32
+Okay, take care.
+
+Praveen Gunja   51:32
+OK, this Ariba plant is nothing but plant code of that particular project.
+
+Kruti Yadav   51:37
+Mm.
+
+Praveen Gunja   51:37
+OK.
+and matched by is nothing but it is for our understanding how we are matching with the data. So it is based upon the WBS. So okay.
+
+Kruti Yadav   51:48
+Take care.
+These are rules how we mentioned that you have mentioned here, right?
+
+Praveen Gunja   51:55
+Yeah.
+
+Kruti Yadav   51:58
+Okay.
+So, actual this period is actual period, right? And this is actual PO number. Purchase order visible.
+
+Praveen Gunja   52:08
+Just.
+Yeah.
+
+Kruti Yadav   52:11
+And.
+
+Praveen Gunja   52:14
+Yeah.
+
+Kruti Yadav   52:17
+Your project name is mentioned, right? OK, this is project name. OK.
+
+Praveen Gunja   52:18
+Seven can demo on, I think it's the you can.
+Mm.
+
+Kruti Yadav   52:25
+What happened?
+
+Praveen Gunja   52:26
+Yeah.
+Yeah, nothing, nothing, 7 at 7. I have another demo for that. I need to develop some code.
+
+Kruti Yadav   52:35
+Okay, so we can tap this up till 6:30, I think.
+
+Praveen Gunja   52:35
+The.
+No, no, no, no, as we are completing overall, so there should not be any delay on me, so I will tell this one on the site for activity. OK, so here you will find in the MMS type, so this is the PC data data. PC data data is nothing but the every project will have the schedulers runs, so with respect to this date.
+These are the progress happened, so this is the fixed date for that particular project. Might it will change every like week, everything. So, with respect to this date, this all progress we are taking with respect to PC data date.
+For every project, the Data.
+
+Kruti Yadav   53:12
+Yeah, I didn't understand what, what, what this date means. P6 data date means, what is it? Can you repeat?
+
+Praveen Gunja   53:17
+So, in like in PCs, what happens in PCs, what happens? Like, we are having schedulers, right? You know what is the task of the scheduler? As scheduler, what will what it what it will do? So, it will schedule it one particular time on particular day or whatever it is, so it will extract the data, what it will verify everything, whether it is right or wrong, everything. So, in PCs also, we are having the schedulers, so...
+On this particular day, this data is verified with the P6 scheduler. So all this data is entered is correct. So this is the data that is represented the verification date of scheduler, which is running in the P6.
+Hey.
+
+Kruti Yadav   53:56
+Okay. And what kind of data it is validating?
+
+Praveen Gunja   53:57
+M.
+Everything construction, construction progress, everything.
+
+Kruti Yadav   54:05
+So, OK.
+
+Praveen Gunja   54:05
+See, if someone, someone, see if someone has for one particular activity, there is some modules like materials, so yes, just simply entered the finish date, activity is finished, but whatever the materials are there, it is leftover, it is the balance is there, but he mentioned that.
+
+Kruti Yadav   54:11
+M.
+Mmh.
+Yeah.
+Mm.
+
+Praveen Gunja   54:24
+Now I finished it. What scheduler will do is like it will reject that because as we are having the balance, how the finish date will happen.
+
+Kruti Yadav   54:25
+AEC.
+
+Praveen Gunja   54:33
+So, it, it just leave it class verify that, so whatever the programme which are daily entering.
+
+Kruti Yadav   54:37
+Okay, okay, yeah, yeah, kind of validation.
+
+Praveen Gunja   54:40
+Yeah.
+
+Kruti Yadav   54:42
+Okay.
+
+Praveen Gunja   54:43
+Okay.
+
+Kruti Yadav   54:44
+Next final FTC.
+
+Praveen Gunja   54:45
+Final FTC is nothing but the P6FTC for that particular project.
+
+Kruti Yadav   54:50
+OK, so this is basically different from this FTCD, right? This actual one.
+
+Praveen Gunja   54:57
+Yeah, might be it will be different. Sometimes it will match acting so mostly.
+
+Kruti Yadav   54:58
+This FTC.
+We are not getting this directly from P6 right? Because here we are getting it from P6 and here we are.
+
+Praveen Gunja   55:06
+Oh, yeah, yeah, yeah, no, no, that is also that is also we are getting from P6 only, whatever the FTC.
+
+Kruti Yadav   55:12
+This is also, so then it will be seen then.
+Site.
+
+Praveen Gunja   55:16
+But, but when, like in the models, when I when we are clicking right, so there I'm showing the forecast F.T.C. These are the fixed F.T.C. just before also I mentioned these are the fixed.
+
+Kruti Yadav   55:25
+Yeah, yeah, I'm talking about fixed. I'm talking about this fixed FTC only. This prediction too, that is fine. Here and you're talking about this, right? Here we are basically forecasting FTC. That is different. That will always be different. But this is just I wanted to confirm that this FTC date
+
+Praveen Gunja   55:33
+This is a fix.
+1.
+
+Kruti Yadav   55:44
+This is actual one which we are getting from P6 right?
+
+Praveen Gunja   55:45
+Is AA.
+Exactly, so this minus 45 gives that TC, this minus 12138 gives it, so in that way.
+
+Kruti Yadav   55:50
+Okay.
+I think FTC minus 45 gives us module ordering date, right?
+
+Praveen Gunja   56:03
+No, no, 138.
+That is TC 45 gives the TC.
+
+Kruti Yadav   56:06
+You sure? Because in our initial call you mentioned that model ordering date equals FTC minus 45.
+
+Praveen Gunja   56:13
+No, no. DC is the FTC minus 45.
+
+Kruti Yadav   56:17
+Okay, you are sure about it, right? Based on that only I will, okay, work on that, okay.
+
+Praveen Gunja   56:19
+Yeah.
+
+Kruti Yadav   56:24
+Next, Devi.
+Hello?
+
+Praveen Gunja   56:30
+Ohh.
+I have given the document also like what the formula we are using that so you just reflect that.
+
+Kruti Yadav   56:32
+Yes.
+
+Praveen Gunja   56:37
+I have given earlier also.
+
+Kruti Yadav   56:39
+But.
+That how it is build that particular section, right? You wanna share me any?
+
+Praveen Gunja   56:43
+Yeah, yeah, yeah, exactly.
+Yeah, I have shared you.
+
+Kruti Yadav   56:47
+Okay, yeah, from the UI. I have taken that how basically these planning rules, right? You are talking about this planning rules, right?
+
+Praveen Gunja   56:50
+Not.
+No, no, just go to the my chat so you will find it there.
+Not this is group chat.
+
+Kruti Yadav   57:02
+In my personal, yeah, yeah, I'm opening.
+
+Praveen Gunja   57:07
+Starting.
+A shared on, yes, you go to shared on, so you'll find it there, since.
+
+Kruti Yadav   57:14
+You shared my document.
+
+Praveen Gunja   57:17
+Yeah, I have shared you.
+
+Kruti Yadav   57:18
+This document, we only have 3 documents.
+
+Praveen Gunja   57:23
+No, I have shared you right. You also repeat.
+
+Kruti Yadav   57:23
+And this is my document, no, no, you are not shared.
+
+Praveen Gunja   57:28
+Huh?
+
+Kruti Yadav   57:28
+Because I have taken the rules from the planning one, so you are not shared recent files.
+
+Praveen Gunja   57:32
+No.
+Shared.
+
+Kruti Yadav   57:35
+This is our share, Sree. You can share right now, like a...
+
+Praveen Gunja   57:37
+No, I have shared, actually.
+I should.
+
+Kruti Yadav   57:42
+I cannot see her.
+
+Praveen Gunja   57:50
+The.
+I think you and some other in the group, so the three numbers, Pallavi, I think so, Pallavi, V, and Nikitha are there, right? So in that I have given.
+Hello.
+Hello?
+
+Kruti Yadav   58:12
+You can share that again. I'm not sure about which document you're talking about.
+
+Praveen Gunja   58:15
+Yeah.
+See, just go to the mention Nikitha in your chat.
+
+Kruti Yadav   58:20
+I don't know.
+
+Praveen Gunja   58:24
+In the search bar, search bar chat after search is there. See, you're finding it there, right? Model ordering, model ordering PDF.
+
+Kruti Yadav   58:25
+Technology.
+Just a minute.
+Okay, this I know.
+
+Praveen Gunja   58:36
+You know all, but you are asking again.
+Yeah.
+
+Kruti Yadav   58:40
+No, but this is basically you have shared because I asked you to send me the prompt, right? I asked you to see here all the prompts are mentioned.
+
+Praveen Gunja   58:41
+Thank you.
+But here I mentioned the logic also TC, what exactly TC and everything I have mentioned here itself. Just go down. Oh, Kruti, Kruti. So this is almost one hour is completed.
+
+Kruti Yadav   58:54
+Yeah, because you told me that these are the things you have passed in the AI prompt along with the data, right?
+
+Praveen Gunja   59:02
+OK, just make sure, like, I will cause me this.
+
+Kruti Yadav   59:05
+Yeah, let's see if I need to understand the data. Without it, I won't be able to work for the right, so.
+
+Praveen Gunja   59:08
+Rather.
+
+Kruti Yadav   59:15
+Also, like you have shared me another data file right now, so in there we have some other data, so which one should I consider?
+See, what is this file? You will be last May you shared, right? This file, what is this file?
+
+Praveen Gunja   59:27
+Gunja.
+That it so in in previous file there is only TC dates. See here you will find the TC everything. So it is you asked me for three.
+
+Kruti Yadav   59:42
+Yeah, but which one should I, which one should I use? That's what I want to know.
+
+Praveen Gunja   59:44
+Both are same. Both are same.
+
+Kruti Yadav   59:47
+But both has different data, right?
+
+Praveen Gunja   59:50
+Why it will have different data? Just open and compare both files.
+
+Kruti Yadav   59:52
+Reddy, so why you send me this? Yeah, see.
+OK, let me close another.
