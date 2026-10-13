@@ -9,19 +9,20 @@ import { Loader as AkLoader } from '../../components/ui/primitives';
 type ViewState = 'directory' | 'portfolio_select' | 'region_select' | 'viewer';
 type Scope = 'solar' | 'wind' | 'bess' | null;
 
-/* What each portfolio's pack covers today. Solar is the Rajasthan pack
-   (routers/solar.py) and Wind the Mundra North pack (routers/wind.py); the
-   other regions are named so it is clear they are coming, not missing. */
+/* What each portfolio's pack covers today. Solar Rajasthan is routers/solar.py,
+   Wind Mundra North routers/wind.py, and Khavda (solar and wind) the Khavda
+   packs in routers/khavda.py (/api/solar-khavda, /api/wind-khavda); the other
+   regions are named so it is clear they are coming, not missing. */
 type Region = { name: string; live: boolean; detail?: string };
 const REGIONS: Record<'bess' | 'solar' | 'wind', Region[]> = {
   bess: [{ name: '6 projects', live: true }],
   solar: [
     { name: 'Rajasthan', live: true, detail: 'Rajasthan solar projects' },
-    { name: 'Khavda', live: false, detail: 'Pack in preparation' },
+    { name: 'Khavda', live: true, detail: 'Khavda solar projects' },
   ],
   wind: [
     { name: 'Mundra', live: true, detail: 'Mundra North wind project' },
-    { name: 'Khavda', live: false, detail: 'Pack in preparation' },
+    { name: 'Khavda', live: true, detail: 'Khavda wind projects' },
     { name: 'Mandvi', live: false, detail: 'Pack in preparation' },
   ],
 };
@@ -98,7 +99,9 @@ export default function ReportsInsights(props: any) {
 
   /* The pack is the downloadable deck's own pages, rendered by the
      backend from the approved template. */
-  const pack = useCPAGPack(view === 'viewer' && (scope === 'bess' || scope === 'wind' || scope === 'solar'), scope);
+  // Khavda has its own packs (routers/khavda.py) beside Rajasthan solar / Mundra wind.
+  const packScope = scope && scope !== 'bess' && region === 'Khavda' ? (`${scope}-khavda` as const) : scope;
+  const pack = useCPAGPack(view === 'viewer' && (scope === 'bess' || scope === 'wind' || scope === 'solar'), packScope);
   const { loading, error, retry } = pack;
 
   // Seconds the pack has been building, so a long render reads as progress,
