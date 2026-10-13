@@ -2,57 +2,20 @@
 (frontend/src/features/modules_beta), kept apart from the live
 routers/module_deliveries.py so the live Ordering Schedule is untouched.
 
-The Beta page reads the live /api/module-deliveries/summary as-is; only the
-block-level plan below is Beta-specific."""
+The Beta page reads the live /api/module-deliveries/summary as-is; the AI
+results, the AI-service proxy and Advanced AI planning below are Beta-specific."""
 import json
 import os
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Request, Response
-from pydantic import BaseModel
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from database import get_db
 from routers.module_deliveries import get_module_deliveries_summary
 
 router = APIRouter(prefix="/api/module-deliveries-beta", tags=["Module Deliveries (Beta)"])
-
-
-@router.get("/block-plan")
-def get_block_level_plan(
-    portfolio: Optional[str] = None,
-    phase: Optional[str] = "ongoing",
-    buffer_days: int = 15,
-    db: Session = Depends(get_db),
-):
-    """Construction-level (block-by-block) module ordering plan
-    (services/block_ordering.py): each block's P6 Module Installation window,
-    held back by its MMS erection and checked against SCOD / LTA, netted
-    against SAP's module pipeline and moved back by supplier lead time.
-    Same projects and SAP figures as /api/module-deliveries/summary."""
-    from services.block_ordering import build_block_plan
-    summary = get_module_deliveries_summary(scenario="baseline", priorities=None,
-                                            portfolio=portfolio, phase=phase, db=db)
-    return build_block_plan(db, summary.get("projects") or [], buffer_days=buffer_days)
-
-
-class BlockPlanExplainRequest(BaseModel):
-    """What to explain: the whole plan, or one project of it. The page sends
-    back the plan it is showing, so the words match the screen exactly."""
-    scope: str = "portfolio"            # portfolio | project
-    plan: Optional[dict] = None
-    project: Optional[dict] = None
-
-
-@router.post("/block-plan/explain")
-def explain_block_plan(req: BlockPlanExplainRequest):
-    """Plain-language explanation of the block plan (services/block_plan_ai.py):
-    written by the AI model from the plan's own figures, or by a fixed template
-    when no model is reachable."""
-    from services.block_plan_ai import explain_portfolio, explain_project
-    if req.scope == "project" and req.project:
-        return explain_project(req.project)
-    return explain_portfolio(req.plan or {})
 
 
 # ── AI results ────────────────────────────────────────────────────────────────
@@ -142,3 +105,20 @@ async def ai_proxy(path: str, request: Request):
             status_code=502, media_type="application/json")
     return Response(content=r.content, status_code=r.status_code,
                     media_type=r.headers.get("content-type", "application/json"))
+
+
+@router.get("/advanced-plan")
+def get_advanced_plan(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
+    """Advanced AI planning (from branch orderingpoc), shown on the Beta's
+    "Advanced AI planning" tab: block-by-block module need from each block's
+    stage progress (piling -> capping -> structure -> purlin -> modules),
+    grouped by FTC phase, netted against the Ordering Schedule's own supply
+    figures. See services/advanced_planning.py."""
+    from services import advanced_planning
+    # Same projects the user can see on the Ordering Schedule (?portfolio=).
+    summary = get_module_deliveries_summary(scenario="baseline", priorities=None,
+                                            portfolio=portfolio, phase=None, db=db)
+    pid_of = {mid: pid for mid, pid in db.execute(
+        text("select id, project_id from project_mapping where project_id is not null"))}
+    rows = [{**p, "project_id": pid_of.get(p["id"])} for p in summary["projects"]]
+    return advanced_planning.build(db, rows)
