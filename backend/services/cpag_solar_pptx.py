@@ -4,6 +4,7 @@ CPAG Solar PPTX builder.
 Takes the approved template deck and injects live data from P6 + SAP into
 the correct table cells while preserving all formatting.
 """
+import re
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from io import BytesIO
@@ -22,6 +23,7 @@ from services.cpag_pptx import (
     _add_months, _light_gridlines, _mon, _move_to_line, _span_blanks,
     _p, _series_fill, LINE_GREEN, SERIES_BLUE, SERIES_GREEN, set_row,
 )
+from services.cpag_solar_progress import fetch_construction_rows, fetch_procurement_rows
 
 REFERENCE = Path(__file__).resolve().parent.parent / "assets" / "cpag_solar_reference.pptx"
 
@@ -232,6 +234,18 @@ def fetch_scurve_data(db: Session, p6_name: str) -> Dict[str, Any]:
     }
 
 
+def fetch_procurement_data(db: Session, p6_name: str) -> List[Optional[Dict[str, Any]]]:
+    """Per-row supply status for the Procurement slide (see cpag_solar_progress)."""
+    obj_id = _solar_project_object_id(db, p6_name)
+    return fetch_procurement_rows(db, obj_id) if obj_id else []
+
+
+def fetch_construction_data(db: Session, p6_name: str) -> List[Optional[Dict[str, Any]]]:
+    """Per-row installation progress for the Construction Progress slide."""
+    obj_id = _solar_project_object_id(db, p6_name)
+    return fetch_construction_rows(db, obj_id) if obj_id else []
+
+
 # P6 resource Units are stored in hours, not days - verified platform-wide
 # (CLAUDE.md), flat-divided to mandays.
 HOURS_PER_DAY = 8.0
@@ -426,6 +440,81 @@ def _remove_shape(shape):
     sp = shape._element
     sp.getparent().remove(sp)
 
+# Units that are legitimately fractional; counts (Nos, Tables, Blocks) are not.
+_FRACTIONAL_UOMS = {"km", "kms", "mw", "mwp", "mwdc"}
+
+
+def _fmt_qty(v: Optional[float], zero: str = "-", whole: bool = False) -> str:
+    """Indian digit grouping, as the template prints its own scopes
+    ("2,47,030"); one decimal only where the quantity is fractional and the
+    unit allows it."""
+    if v is None:
+        return "-"
+    if whole:
+        v = float(round(v))
+    if abs(v) < 0.05:
+        return zero
+    head, _, frac = (f"{abs(v):.0f}" if abs(v - round(v)) < 0.05 else f"{abs(v):.1f}").partition(".")
+    if len(head) > 3:
+        head = re.sub(r"(\d)(?=(\d\d)+$)", r"\1,", head[:-3]) + "," + head[-3:]
+    return ("-" if v < 0 else "") + head + (f".{frac}" if frac else "")
+
+
+def _scope_of(table, row: int, col: int) -> Optional[float]:
+    try:
+        return float(table.cell(row, col).text_frame.text.replace(",", "").strip())
+    except ValueError:
+        return None
+
+
+def _fill_procurement_table(tbl, rows: list):
+    """Rows follow the template's package order; a None row (P6 cannot back
+    it) stays '-'. Columns: 3 Scope, 4 Ordered, 5 Balance, 6 Delivered,
+    7-9 forecast months."""
+    for i, r in enumerate(rows):
+        row = 2 + i
+        if r is None or row >= len(tbl.rows):
+            continue
+        if r.get("uom"):
+            _set_cell_text(tbl, row, 2, r["uom"])
+        whole = tbl.cell(row, 2).text_frame.text.strip().lower() not in _FRACTIONAL_UOMS
+        _set_cell_text(tbl, row, 3, _fmt_qty(r["scope"], whole=whole))
+        _set_cell_text(tbl, row, 4, _fmt_qty(r["ordered"], zero="0", whole=whole))
+        _set_cell_text(tbl, row, 5, _fmt_qty(r["balance"], zero="0", whole=whole))
+        _set_cell_text(tbl, row, 6, _fmt_qty(r["delivered"], zero="0", whole=whole))
+        for k, v in enumerate(r["forecast"]):
+            _set_cell_text(tbl, row, 7 + k, _fmt_qty(v, whole=whole))
+
+
+def _fill_construction_table(tbl, rows: list):
+    """Scope (col 2) is the template's own; balance is scope - completed.
+    Columns: 3 Completed, 4 Balance, 5 Month Plan, 6 Month Actual,
+    7-9 forecast months, 10 Completion Target."""
+    from pptx.enum.text import PP_ALIGN
+    for row in range(2, len(tbl.rows)):  # the template's value cells are left-aligned; Scope is not
+        for col in range(3, 11):
+            for para in tbl.cell(row, col).text_frame.paragraphs:
+                para.alignment = PP_ALIGN.CENTER
+    for i, r in enumerate(rows):
+        row = 2 + i
+        if r is None or row >= len(tbl.rows):
+            continue
+        scope = _scope_of(tbl, row, 2)
+        whole = tbl.cell(row, 1).text_frame.text.strip().lower() not in _FRACTIONAL_UOMS
+        _set_cell_text(tbl, row, 3, _fmt_qty(r["completed"], zero="0", whole=whole))
+        balance = None if scope is None else max(scope - r["completed"], 0.0)
+        if balance is not None:
+            _set_cell_text(tbl, row, 4, _fmt_qty(balance, zero="0", whole=whole))
+        _set_cell_text(tbl, row, 5, _fmt_qty(r["month_plan"], whole=whole))
+        _set_cell_text(tbl, row, 6, _fmt_qty(r["month_actual"], whole=whole))
+        for k, v in enumerate(r["forecast"]):
+            _set_cell_text(tbl, row, 7 + k, _fmt_qty(v, whole=whole))
+        # P6 closing the row while the template scope still leaves a balance
+        # (scope is the template's own, P6's plan can differ) is not a target.
+        done = r["target"] == "Completed" and balance is not None and balance >= 0.5
+        _set_cell_text(tbl, row, 10, "-" if done else r["target"])
+
+
 def _populate_project_slides(prs, start_idx: int, proj: dict):
     """Populate a single project's slide sequence with live data."""
     # 1. Salient Features (start_idx + 1)
@@ -529,6 +618,7 @@ def _populate_project_slides(prs, start_idx: int, proj: dict):
             if getattr(sh, "has_table", False):
                 tbl = sh.table
                 _clear_table_data(tbl, start_row=2, start_col=3)
+                _fill_procurement_table(tbl, proj.get("procurement") or [])
                 # Update headers in reverse order to prevent cascading overwrites
                 _replace_text_in_table(tbl, "Nov-26", m3)
                 _replace_text_in_table(tbl, "Oct-26", m2)
@@ -552,6 +642,7 @@ def _populate_project_slides(prs, start_idx: int, proj: dict):
             if getattr(sh, "has_table", False):
                 tbl = sh.table
                 _clear_table_data(tbl, start_row=2, start_col=3)
+                _fill_construction_table(tbl, proj.get("construction") or [])
                 # Update headers in reverse order to prevent cascading overwrites
                 _replace_text_in_table(tbl, "Nov-26", m3)
                 _replace_text_in_table(tbl, "Oct-26", m2)

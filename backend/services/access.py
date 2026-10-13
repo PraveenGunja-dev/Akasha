@@ -161,7 +161,7 @@ SCOPED_ROUTES: list[tuple[re.Pattern, str]] = [(re.compile(p), kind) for p, kind
      r"|trial-run|einvoice|activities|resources|wbs|notifications)$", "portfolio"),
     (r"^/api/v1/dictionary$", "open"),
     # A portfolio's own API
-    (r"^/api/(?P<ns>solar|wind|bess)(/|$)", "namespace"),
+    (r"^/api/(?P<ns>solar-khavda|wind-khavda|solar|wind|bess)(/|$)", "namespace"),
 ]]
 
 # Reachable with an API key: the read-only integration API, nothing else.
@@ -203,8 +203,12 @@ def audited_write(method: str, path: str) -> str | None:
 # project outside their portfolios. Checked against the routers:
 #   /api/solar - the Solar CPAG pack: Bandha + Baiya, both Solar Rajasthan
 #   /api/wind  - the Wind CPAG pack: Mundra North (Wind)
+#   /api/solar-khavda, /api/wind-khavda - the Khavda packs (routers/khavda.py);
+#                kept out of /api/solar so a Khavda-only user is not refused for
+#                lacking Rajasthan, and a Rajasthan-only user cannot open Khavda
 #   /api/bess  - BESS projects and their CPAG
-NAMESPACE_CLUSTERS = {"solar": {"solar rajasthan"}, "wind": {"wind"}, "bess": {"bess"}}
+NAMESPACE_CLUSTERS = {"solar": {"solar rajasthan"}, "wind": {"wind"}, "bess": {"bess"},
+                      "solar-khavda": {"solar khavda"}, "wind-khavda": {"wind"}}
 
 
 def namespace_open(ns: str, scope: list[str]) -> bool:
@@ -288,6 +292,6 @@ def portfolio_access(db: Session, user) -> dict:
     return {
         "all": scope is None,
         "clusters": every if scope is None else [c for c in every if c in scope],
-        # Portfolio APIs (CPAG packs) the user may open: solar / wind / bess.
+        # Portfolio APIs (CPAG packs) the user may open: solar / wind / bess, and the Khavda packs.
         "apis": [ns for ns in NAMESPACE_CLUSTERS if scope is None or namespace_open(ns, scope)],
     }

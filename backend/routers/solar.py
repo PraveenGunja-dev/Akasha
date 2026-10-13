@@ -7,7 +7,10 @@ from typing import Dict, Any, List
 
 from datetime import date
 from database import get_db
-from services.cpag_solar_pptx import build_portfolio_pptx, fetch_scurve_data, fetch_manpower_data
+from services.cpag_solar_pptx import (
+    build_portfolio_pptx, fetch_scurve_data, fetch_manpower_data,
+    fetch_procurement_data, fetch_construction_data,
+)
 from services.cpag_solar_render import render, page_path, deck_path
 
 router = APIRouter(prefix="/api/solar", tags=["solar"])
@@ -53,6 +56,8 @@ def _build_project_list(db: Session) -> List[Dict[str, Any]]:
             "progress_plan": f"{p.progress_plan * 100:.0f}%" if p.progress_plan else "0%",
             "scurve": fetch_scurve_data(db, p.name),
             "manpower": fetch_manpower_data(db, p.name),
+            "procurement": fetch_procurement_data(db, p.name),
+            "construction": fetch_construction_data(db, p.name),
         })
     return proj_list
 
