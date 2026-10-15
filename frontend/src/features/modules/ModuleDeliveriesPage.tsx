@@ -15,6 +15,9 @@ import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from '.
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from './DateChange';
+import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval } from './OrderApproval';
+import { DateChangeReason } from './DateChangeReason';
+import type { PendingDate } from './DateChangeReason';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
 
 import { Loader as AkLoader } from '../../components/ui/primitives';
@@ -406,8 +409,15 @@ function Tip({
         setShow(false);
       }
     };
+    // An action inside the popover that opens a dialog closes the popover
+    // first (OrderApproval: closePopovers), so the two never stack.
+    const close = () => setShow(false);
     document.addEventListener('mousedown', handleGlobalClick);
-    return () => document.removeEventListener('mousedown', handleGlobalClick);
+    window.addEventListener(CLOSE_POPOVERS, close);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      window.removeEventListener(CLOSE_POPOVERS, close);
+    };
   }, [show]);
 
   if (!text && !content) return <>{children}</>;
@@ -908,19 +918,15 @@ export default function ModuleDeliveriesPage() {
     }
   };
 
+  // A changed LTA / SCOD is saved only with a reason (DateChangeReason): it
+  // goes into the date history and the schedule-change email.
+  const [pendingDate, setPendingDate] = useState<PendingDate | null>(null);
+  const [approvalsKey, setApprovalsKey] = useState(0);   // reloads "waiting for your approval"
+  const [approvalTarget, setApprovalTarget] = useState<{ mapping: ModuleProject; month: string; id?: number } | null>(null);
   const saveScod = async (id: number, isoDateOrNull: string | null) => {
-    setSavingScodId(id);
-    try {
-      await fetch(`${API}/akasha/api/mappings/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manual_scod: isoDateOrNull }),
-      });
-      await loadData();
-    } finally {
-      setSavingScodId(null);
-      setEditingScodId(null);
-    }
+    const row = data?.projects.find(x => x.id === id);
+    setEditingScodId(null);
+    setPendingDate({ id, field: 'scod', project: row?.project_name ?? '', from: row?.scod ?? '', to: isoDateOrNull });
   };
 
   // LTA has the same "sometimes there is no source date at all" problem SCOD
@@ -929,18 +935,9 @@ export default function ModuleDeliveriesPage() {
   // check-it-yourself editing rather than being stuck blank until the master
   // sheet catches up.
   const saveLta = async (id: number, isoDateOrNull: string | null) => {
-    setSavingLtaId(id);
-    try {
-      await fetch(`${API}/akasha/api/mappings/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lta_date: isoDateOrNull }),
-      });
-      await loadData();
-    } finally {
-      setSavingLtaId(null);
-      setEditingLtaId(null);
-    }
+    const row = data?.projects.find(x => x.id === id);
+    setEditingLtaId(null);
+    setPendingDate({ id, field: 'lta', project: row?.project_name ?? '', from: row?.lta ?? '', to: isoDateOrNull });
   };
 
   const toggleTracking = async (id: number, is_tracked: boolean) => {
@@ -1240,6 +1237,8 @@ export default function ModuleDeliveriesPage() {
           </div>
         </div>
       </motion.div>
+
+      {data && <WaitingForApproval projects={data.projects} refreshKey={approvalsKey} onOpen={setApprovalTarget} />}
 
       {/* ── Notification Banner ──────────────────────────────────────────────
           Two tiers, matching what the planning engine actually distinguishes
@@ -2313,6 +2312,9 @@ export default function ModuleDeliveriesPage() {
                                     material on site in time to support every FTC above.
                                   </div>
                                 )}
+                                {(val > 0 || (p.approvals ?? []).some(a => a.month === mo)) && (
+                                  <ApprovalSummary p={p} month={mo} planned={val} onOpen={setApprovalTarget} />
+                                )}
                               </div>
                             ) : undefined}
                           >
@@ -2331,6 +2333,7 @@ export default function ModuleDeliveriesPage() {
                                         />
                                       )}
                                       {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5 relative z-20`} />}
+                                      {c.type === 'module' && <span className="relative z-20 inline-flex"><ApprovalMark p={p} month={mo} /></span>}
                                       <span className="tabular-nums text-[11px] tracking-tight font-extrabold relative z-20">
                                         {c.label.split(' / ')[0]}
                                         {c.label.includes(' / ') && (
@@ -2984,6 +2987,9 @@ export default function ModuleDeliveriesPage() {
           </div>
         </div>
       )}
+      <DateChangeReason pending={pendingDate} onClose={() => setPendingDate(null)} onSaved={() => loadData()} />
+      <ApprovalDialog target={approvalTarget} onClose={() => setApprovalTarget(null)}
+        onChanged={() => { loadData(); setApprovalsKey(k => k + 1); }} />
     </div>
   );
 }

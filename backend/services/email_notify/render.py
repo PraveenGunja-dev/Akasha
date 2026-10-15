@@ -10,7 +10,7 @@ table-based, 640px) with the no-reply notice and the data dates in the footer.
 """
 import html
 import re
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 from .catalogue import HTML_VARIABLES, VARIABLES
 
@@ -124,7 +124,28 @@ def body_text(text: str, ctx: Dict) -> str:
     return re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx))
 
 
-def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "") -> str:
+def ack_block(ack: Optional[Dict]) -> str:
+    """The acknowledgement panel: the level this email went out at, why,
+    and the button to acknowledge in Akasha. Sign-in identifies who
+    acknowledges, and the page needs a deliberate click - a link scanner
+    opening the URL acknowledges nothing."""
+    if not ack:
+        return ""
+    e = html.escape
+    why = f'<div style="{FONT}font-size:12.5px;color:#4b5563;margin:0 0 10px;line-height:1.5;">{e(ack["why"])}</div>' if ack.get("why") else ""
+    button = (f'<table role="presentation" cellspacing="0" cellpadding="0"><tr><td style="border-radius:6px;background:#0b74b1;">'
+              f'<a href="{e(ack["url"])}" style="{FONT}display:inline-block;padding:9px 18px;font-size:13px;font-weight:600;'
+              f'color:#ffffff;text-decoration:none;border-radius:6px;">{e(ack.get("button") or "Acknowledge in Akasha")}</a></td></tr></table>') if ack.get("url") else (
+              f'<div style="{FONT}font-size:12px;color:#b45309;">AKASHA_PUBLIC_URL is not set - acknowledge from the Alerts page in Akasha.</div>')
+    return (f'<tr><td style="padding:0 24px 18px;"><table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
+            f'style="border:1px solid #d6e6f2;background:#f4f9fc;border-radius:8px;"><tr><td style="padding:12px 14px;">'
+            f'<div style="{FONT}font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#0b74b1;margin:0 0 6px;">'
+            f'Level {e(str(ack.get("level", 1)))} of 3 · {e(ack.get("title") or "acknowledgement required")}</div>{why}'
+            f'<div style="{FONT}font-size:12.5px;color:#1f2937;margin:0 0 10px;line-height:1.5;">{e(ack.get("ask") or "")}</div>'
+            f'{button}</td></tr></table></td></tr>')
+
+
+def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Optional[Dict] = None) -> str:
     label, colour, wash = SEVERITY.get(severity, SEVERITY["info"])
     support = ctx.get("support_contact")
     asof = " · ".join(x for x in (
@@ -146,6 +167,7 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "") -> str:
 </td></tr>
 {banner}
 <tr><td style="padding:22px 24px 8px;{FONT}font-size:14px;color:#1f2937;">{inner}</td></tr>
+{ack_block(ack)}
 <tr><td style="{FONT}padding:14px 24px 18px;background:#f9fafb;border-top:1px solid #e5e7eb;font-size:11.5px;line-height:1.55;color:#6b7280;">
   This is an automated message from Akasha. Replies to this address are not monitored.
   To act, use the link above{f"; for questions contact {html.escape(support)}" if support else ""}.<br>
@@ -156,11 +178,16 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "") -> str:
 </body></html>"""
 
 
-def render(template, ctx: Dict, test_banner: str = "") -> Tuple[str, str, str]:
+def render(template, ctx: Dict, test_banner: str = "", ack: Optional[Dict] = None) -> Tuple[str, str, str]:
     """(subject, html, text) for a template object or dict."""
     get = (lambda k: template.get(k)) if isinstance(template, dict) else (lambda k: getattr(template, k))
     subj = subject(get("subject"), ctx)
-    html_out = layout(body_html(get("body"), ctx), get("severity") or "info", ctx, test_banner)
-    text_out = body_text(get("body"), ctx) + (
+    html_out = layout(body_html(get("body"), ctx), get("severity") or "info", ctx, test_banner, ack)
+    ack_text = ""
+    if ack:
+        ack_text = (f"\n\nLevel {ack.get('level', 1)} of 3 - {ack.get('title') or 'acknowledgement required'}. "
+                    f"{ack.get('why') or ''} {ack.get('ask') or ''}\n"
+                    f"{ack.get('button') or 'Acknowledge in Akasha'}: {ack.get('url') or 'the Alerts page in Akasha'}")
+    text_out = body_text(get("body"), ctx) + ack_text + (
         "\n\n--\nThis is an automated message from Akasha. Replies to this address are not monitored.")
     return subj, html_out, text_out

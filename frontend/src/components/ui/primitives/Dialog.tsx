@@ -27,6 +27,14 @@ export const Dialog = ({ open, onClose, title, description, children, footer, si
   const ref = useRef<HTMLDivElement>(null);
   const titleId = useId();
   const descId = useId();
+  // Latest close handler / busy state, read inside the effect without being
+  // its dependencies: callers pass inline `onClose={() => ...}`, a new function
+  // every render, and re-running the effect on each keystroke moved focus back
+  // to the first field (typing stopped after one character).
+  const closeRef = useRef(onClose);
+  const busyRef = useRef(busy);
+  closeRef.current = onClose;
+  busyRef.current = busy;
 
   useEffect(() => {
     if (!open) return;
@@ -37,7 +45,7 @@ export const Dialog = ({ open, onClose, title, description, children, footer, si
     ) ?? []);
     (focusables().find(el => el.dataset.autofocus !== undefined) ?? focusables()[1] ?? node)?.focus();
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !busy) { e.stopPropagation(); onClose(); }
+      if (e.key === 'Escape' && !busyRef.current) { e.stopPropagation(); closeRef.current(); }
       if (e.key === 'Tab') {
         const els = focusables();
         if (!els.length) return;
@@ -48,7 +56,7 @@ export const Dialog = ({ open, onClose, title, description, children, footer, si
     };
     document.addEventListener('keydown', onKey);
     return () => { document.removeEventListener('keydown', onKey); opener?.focus?.(); };
-  }, [open, busy, onClose]);
+  }, [open]);
 
   if (!open) return null;
   return (

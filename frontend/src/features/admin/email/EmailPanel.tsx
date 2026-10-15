@@ -11,11 +11,14 @@ import type { EmailStatus, RunResult } from './emailApi';
 import TemplatesView from './TemplatesView';
 import RecipientsView from './RecipientsView';
 import LogView from './LogView';
+import AlertsView from './AlertsView';
+import { LevelBadge } from '../../alerts/AlertDetail';
 
-type View = 'overview' | 'templates' | 'recipients' | 'log';
+type View = 'overview' | 'templates' | 'alerts' | 'recipients' | 'log';
 const VIEWS: { id: View; label: string }[] = [
   { id: 'overview', label: 'Overview' },
   { id: 'templates', label: 'Templates' },
+  { id: 'alerts', label: 'Alerts' },
   { id: 'recipients', label: 'Distribution groups' },
   { id: 'log', label: 'Email log' },
 ];
@@ -25,7 +28,7 @@ export default function EmailPanel() {
   return (
     <div className="space-y-4">
       <PageHeader title="Email notifications"
-        subtitle="Module ordering alerts, escalations and digests - templates, recipients and every email sent" />
+        subtitle="Module ordering alerts, escalations and digests - templates, acknowledgements, recipients and every email sent" />
       <div role="tablist" aria-label="Email notifications" className="flex flex-wrap gap-1 border-b border-border">
         {VIEWS.map(v => (
           <button key={v.id} type="button" role="tab" aria-selected={view === v.id} onClick={() => setView(v.id)}
@@ -38,6 +41,7 @@ export default function EmailPanel() {
       </div>
       {view === 'overview' && <Overview onOpenLog={() => setView('log')} />}
       {view === 'templates' && <TemplatesView />}
+      {view === 'alerts' && <AlertsView />}
       {view === 'recipients' && <RecipientsView />}
       {view === 'log' && <LogView />}
     </div>
@@ -164,7 +168,7 @@ function RunTable({ result }: { result: RunResult }) {
         <div className="max-h-[360px] overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[720px] text-[12px]">
             <thead className="sticky top-0 bg-[var(--neutral-100)] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>Status</th><th>Subject</th><th>To</th><th>Cc</th></tr>
+              <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>Status</th><th>Level</th><th>Subject</th><th>To</th><th>Cc</th></tr>
             </thead>
             <tbody>
               {result.items.map((it, i) => {
@@ -172,7 +176,8 @@ function RunTable({ result }: { result: RunResult }) {
                 return (
                   <tr key={i} className="border-t border-[var(--border-subtle)] align-top">
                     <td className="whitespace-nowrap px-3 py-1.5"><StatusPill tone={m.tone}>{m.label}</StatusPill></td>
-                    <td className="px-3 py-1.5">{it.subject ?? it.template}{it.detail && <span className="block text-[11px] text-muted-foreground">{it.detail}</span>}</td>
+                    <td className="whitespace-nowrap px-3 py-1.5">{it.level ? <span className="inline-flex items-center gap-1.5"><LevelBadge level={it.level} />{it.escalation === 'escalated' && <span className="text-[11px] text-[var(--status-risk-fg)]">escalated</span>}{it.escalation === 'held' && <span className="text-[11px] text-muted-foreground">held</span>}</span> : '—'}</td>
+                    <td className="px-3 py-1.5">{it.subject ?? it.template}{(it.why || it.detail) && <span className="block text-[11px] text-muted-foreground">{it.why || it.detail}</span>}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{(it.to ?? []).join(', ') || '—'}</td>
                     <td className="px-3 py-1.5 text-muted-foreground">{(it.cc ?? []).join(', ') || '—'}</td>
                   </tr>

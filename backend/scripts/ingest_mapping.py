@@ -150,6 +150,15 @@ def ingest_mapping():
 
             if project_id in existing_by_pid:
                 mapping = existing_by_pid[project_id]
+                # LTA belongs to the transmission portal sync and to edits made
+                # in Akasha (each kept in the date history with its reason).
+                # The sheet's ECOD only fills a project that has no LTA yet -
+                # overwriting would silently undo both every day.
+                sheet_lta = fields.pop('lta_date')
+                if mapping.lta_date is None and sheet_lta is not None:
+                    from services import date_history
+                    date_history.record(db, mapping, 'lta', None, sheet_lta, 'mapping', 'sync')
+                    mapping.lta_date = sheet_lta
                 for k, v in fields.items():
                     setattr(mapping, k, v)
             else:

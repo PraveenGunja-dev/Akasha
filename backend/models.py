@@ -1296,6 +1296,12 @@ class EmailTemplate(Base):
     config = Column(JSON, nullable=False, default=dict)          # trigger settings, escalation steps
     attach_snapshot = Column(Boolean, nullable=False, default=False)
     enabled = Column(Boolean, nullable=False, default=False)
+    # Level of intimation this email goes out at: it reaches every group
+    # member whose level is at or below it (L1 people hear every level).
+    # NULL on rows from before the column existed = the catalogue default.
+    level = Column(Integer, nullable=True)
+    # The To recipients must acknowledge it in Akasha (email_alert).
+    ack_required = Column(Boolean, nullable=True)
     version = Column(Integer, nullable=False, default=1)
     updated_by = Column(String, nullable=True)
     updated_at = Column(DateTime, nullable=True)
@@ -1316,6 +1322,8 @@ class EmailTemplateVersion(Base):
     config = Column(JSON, nullable=False, default=dict)
     attach_snapshot = Column(Boolean, nullable=False, default=False)
     enabled = Column(Boolean, nullable=False, default=False)
+    level = Column(Integer, nullable=True)
+    ack_required = Column(Boolean, nullable=True)
     note = Column(String, nullable=True)
     changed_by = Column(String, nullable=True)
     changed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
@@ -1331,6 +1339,9 @@ class EmailRecipient(Base):
     name = Column(String, nullable=True)
     email = Column(String, nullable=False)
     portfolios = Column(JSON, nullable=True)
+    # Level of intimation: 1 = every alert from the first notice; 2 / 3 = only
+    # once an alert has escalated to that step (overdue orders: 7 / 14 days).
+    level = Column(Integer, nullable=False, default=1)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     created_by = Column(String, nullable=True)
@@ -1360,6 +1371,73 @@ class EmailLog(Base):
     attempts = Column(Integer, nullable=False, default=1)
     triggered_by = Column(String, nullable=True)            # scheduler / <username> (manual, test, resend)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    level = Column(Integer, nullable=True)                  # level of intimation it went out at
+    alert_id = Column(Integer, nullable=True, index=True)   # the email_alert it belongs to
+
+
+class EmailAlert(Base):
+    """One thing someone must act on (an order to place, a date to validate),
+    followed across every email about it. Module ordering is one alert per
+    project phase from the 30-day notice to the PO: the 30 / 15 / 7-day
+    emails go at L1 / L2 / L3, unless a To recipient has acknowledged it in
+    Akasha and committed an expected date that has not passed - then the
+    next email stays at the alert's current level (held, not escalated).
+
+    Closes on its own when the data says the work is done (the order is in
+    SAP, the condition cleared) or, for one-off alerts, on acknowledgement."""
+    __tablename__ = "email_alert"
+
+    id = Column(Integer, primary_key=True)
+    case_key = Column(String, nullable=False, index=True)
+    kind = Column(String, nullable=False)                   # order / condition / one_off
+    template_key = Column(String, nullable=False)           # the latest email's template
+    project_id = Column(String, nullable=True, index=True)
+    project_name = Column(String, nullable=True)
+    phase = Column(String, nullable=True)
+    due_date = Column(String, nullable=True)                # ordering date it is about (dd-Mon-yy)
+    level = Column(Integer, nullable=False, default=1)      # highest level emailed so far
+    status = Column(String, nullable=False, default="open", index=True)   # open / resolved
+    test = Column(Boolean, nullable=False, default=False)   # raised in EMAIL_TEST_MODE
+    opened_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_sent_at = Column(DateTime, nullable=True)
+    emails = Column(Integer, nullable=False, default=0)
+    acknowledged_at = Column(DateTime, nullable=True)
+    acknowledged_by = Column(String, nullable=True)          # name <email>
+    ack_level = Column(Integer, nullable=True)               # the level it was acknowledged at
+    update_note = Column(Text, nullable=True)                # what is being done
+    expected_date = Column(DateTime, nullable=True)          # committed date; holds escalation until then
+    updated_at = Column(DateTime, nullable=True)
+    resolved_at = Column(DateTime, nullable=True)
+    resolved_reason = Column(String, nullable=True)
+
+
+class EmailAlertRecipient(Base):
+    """Who an alert was sent to (To) and at which level - the people who can
+    acknowledge it - and whether each one has."""
+    __tablename__ = "email_alert_recipient"
+
+    id = Column(Integer, primary_key=True)
+    alert_id = Column(Integer, nullable=False, index=True)
+    email = Column(String, nullable=False)
+    level = Column(Integer, nullable=False, default=1)       # level of the first email that reached them
+    first_sent_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    last_sent_at = Column(DateTime, nullable=True)
+    acknowledged_at = Column(DateTime, nullable=True)
+
+
+class EmailAlertEvent(Base):
+    """The alert's timeline: emailed, escalated, held, acknowledged, updated,
+    resolved - who, when, at which level and why."""
+    __tablename__ = "email_alert_event"
+
+    id = Column(Integer, primary_key=True)
+    alert_id = Column(Integer, nullable=False, index=True)
+    at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    kind = Column(String, nullable=False)    # opened / sent / escalated / held / acknowledged / updated / resolved
+    level = Column(Integer, nullable=True)
+    actor = Column(String, nullable=True)
+    detail = Column(Text, nullable=True)
+    log_id = Column(Integer, nullable=True)
 
 
 class EmailWatch(Base):
@@ -1388,6 +1466,58 @@ class ProjectDateChange(Base):
     field = Column(String, nullable=False)                  # 'lta' | 'scod'
     old_value = Column(DateTime, nullable=True)
     new_value = Column(DateTime, nullable=True)
-    source = Column(String, nullable=False)                 # 'portal' | 'manual'
+    source = Column(String, nullable=False)                 # 'portal' | 'manual' | 'mapping'
     changed_by = Column(String, nullable=True)
     changed_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    remarks = Column(Text, nullable=True)                   # why - required for a manual edit
+
+
+class ModuleOrderApproval(Base):
+    """A request to approve one month's module order for a project, raised
+    from the Ordering Schedule and decided by the approval email's To
+    recipients (TC Head) in Akasha.
+
+    Approved, the quantity is FROZEN in its month: the planner places it
+    there before vendor levelling, so quota shifts and the overdue carry-
+    forward never move it. It stays frozen until SAP shows POs for it -
+    measured as the project's ordered MWp rising past `ordered_at_request` -
+    then the approval is 'ordered' and the freeze is released."""
+    __tablename__ = "module_order_approval"
+
+    id = Column(Integer, primary_key=True)
+    mapping_id = Column(Integer, nullable=False, index=True)
+    project_id = Column(String, nullable=True, index=True)
+    project_name = Column(String, nullable=True)
+    month = Column(String, nullable=False)                  # 'Jan-27' - the Ordering Schedule month
+    mwp = Column(Float, nullable=False)                     # quantity asked for
+    phases = Column(JSON, nullable=True)                    # [{phase_label, mwp, order_date, tc_date, ftc_date, ftc_reachable, ...}]
+    # What the approver decides on, as the plan stood when it was requested:
+    # LTA, capacity, ordered, balance, vendor, and the risks the plan found.
+    basis = Column(JSON, nullable=True)
+    vendor_type = Column(String, nullable=True)
+    ordered_at_request = Column(Float, nullable=False, default=0.0)   # project's ordered MWp when requested
+    status = Column(String, nullable=False, default="pending", index=True)   # pending / approved / returned / cancelled / ordered
+    request_note = Column(Text, nullable=True)
+    requested_by = Column(String, nullable=False)           # username
+    requested_by_name = Column(String, nullable=True)
+    requested_by_email = Column(String, nullable=True)
+    requested_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    decided_by = Column(String, nullable=True)
+    decided_by_name = Column(String, nullable=True)
+    decided_at = Column(DateTime, nullable=True)
+    decision_note = Column(Text, nullable=True)
+    ordered_at = Column(DateTime, nullable=True)             # when SAP POs covered it
+    alert_id = Column(Integer, nullable=True)
+
+
+class ModuleOrderApprovalEvent(Base):
+    """An approval's history: requested, emailed, approved / returned,
+    cancelled, ordered - who, when and the remarks."""
+    __tablename__ = "module_order_approval_event"
+
+    id = Column(Integer, primary_key=True)
+    approval_id = Column(Integer, nullable=False, index=True)
+    at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    kind = Column(String, nullable=False)
+    actor = Column(String, nullable=True)
+    detail = Column(Text, nullable=True)

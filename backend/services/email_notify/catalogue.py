@@ -74,10 +74,19 @@ VARIABLES = {
     "awaiting_grn_mwp":      ("Dispatched, no GRN (MWp)", "Ariba: dispatched with no goods receipt", "35.0"),
     "oldest_awaiting_days":  ("Oldest dispatch without GRN (days)", "Ariba", "41"),
     "checklist_pending":     ("Receipts without finance checklist", "Ariba GRNs with no checklist raised", "3"),
-    # Approval (filled once the approval workflow is in Akasha)
-    "approval_status":       ("Approval status", "Approval workflow - not in Akasha yet", ""),
-    "approved_by":           ("Approved by", "Approval workflow - not in Akasha yet", ""),
-    "approval_date":         ("Approval date", "Approval workflow - not in Akasha yet", ""),
+    # Approval (Ordering Schedule -> Request approval; decided in Akasha)
+    "order_month":           ("Order month", "The Ordering Schedule month the approval is for", "Jan-27"),
+    "requested_by":          ("Requested by", "Who raised the approval request", "Ravi Kumar"),
+    "request_note":          ("Requester's note", "What the requester wrote", "Vendor slot confirmed for January"),
+    "approval_status":       ("Approval status", "Pending / Approved / Returned", "Pending"),
+    "approval_decision":     ("Decision", "Approved or Returned", "Approved"),
+    "approved_by":           ("Decided by", "Who approved or returned the request", "Suresh Patel"),
+    "approval_date":         ("Decision date", "When it was decided (IST)", "16-Oct-26 11:20 IST"),
+    "decision_note":         ("Decision remarks", "The approver's remarks", "Approved - place the PO this week"),
+    "approval_next_step":    ("Next step", "What happens after the decision (a 'Required Action' line)", ""),
+    # Schedule changes
+    "change_source":         ("Changed by", "Where the change came from: a sync, or a person in Akasha", "Edited in Akasha by Ravi Kumar"),
+    "change_remarks":        ("Reason given", "The reason the person gave (manual edits)", "Connectivity revised by CTUIL letter"),
     "order_value":           ("Order value", "From the SAP PO once placed - never estimated", ""),
     # System
     "source_name":           ("Data source", "Sync feed", "Primavera P6"),
@@ -90,15 +99,15 @@ VARIABLES = {
     "generated_at":          ("Generated", "When Akasha produced this email (IST)", "15-Oct-26 09:00 IST"),
     "akasha_project_link":   ("View in Akasha", "Link to the project in Akasha (AKASHA_PUBLIC_URL)", "https://host/akasha/ceo-dashboard/project/FY26-P05"),
     "akasha_link":           ("Open Akasha", "Link to Akasha", "https://host/akasha"),
-    "akasha_approval_link":  ("Review and approve", "Approval screen - not in Akasha yet", ""),
+    "akasha_approval_link":  ("Review and approve", "The approval in Akasha", "https://host/akasha/alerts/12"),
 }
 HTML_VARIABLES = {"digest_table"}
 
 # ── Triggers ─────────────────────────────────────────────────────────────────
 TRIGGERS = {
-    "ordering_due":     "Days before a phase's ordering date (config: days_before, and stops at days_until)",
+    "ordering_due":     "Days before a phase's ordering date for each level (config: levels {level: days}); each phase gets the nearest one it has reached",
     "ordering_today":   "On the ordering date, with balance still to order",
-    "ordering_overdue": "Ordering date passed, balance still to order; escalates by days overdue (config: escalation)",
+    "ordering_overdue": "Ordering date passed, balance still to order; L1 / L2 / L3 by days overdue (config: escalation)",
     "date_change":      "A watched P6 / connectivity date changed since the last check (config: fields)",
     "ftc_unreachable":  "An order can no longer reach the phase's P6 FTC",
     "vendor_shift":     "Vendor allocation moved an order out of its target month",
@@ -111,21 +120,40 @@ TRIGGERS = {
     "manual":           "Sent from the admin screen for a chosen project (no automatic trigger yet)",
 }
 
-LEVELS = [  # default overdue escalation: who is added at each step
-    {"after_days": 0, "label": "Level 1 - overdue", "add_to": [], "add_cc": []},
-    {"after_days": 7, "label": "Level 2 - 7 days overdue", "add_to": ["tc_head"], "add_cc": ["pmag"]},
-    {"after_days": 14, "label": "Level 3 - 14 days overdue", "add_to": [], "add_cc": ["executive"]},
+LEVELS = [  # overdue reminders: each step emails again and adds these groups
+    {"after_days": 0, "label": "Overdue", "add_to": [], "add_cc": []},
+    {"after_days": 7, "label": "7 days overdue", "add_to": ["tc_head"], "add_cc": ["pmag"]},
+    {"after_days": 14, "label": "14 days overdue", "add_to": [], "add_cc": ["executive"]},
 ]
+
+# Level of intimation each template goes out at, and whether its To
+# recipients must acknowledge it. Module ordering climbs one level per
+# reminder: 30 days before the ordering date L1, 15 days L2, 7 days L3.
+# An administrator changes both per template; these are the defaults (and
+# fill templates saved before the columns existed).
+LEVEL_DEFAULT = {"ordering_due_today": 3}
+ACK_DEFAULT = {"ordering_due_30", "ordering_due_today", "ordering_overdue",
+               "date_change", "ftc_unreachable", "vendor_shift", "awaiting_grn", "site_stock_low",
+               "approval_request", "sync_failed"}
+
+# How an alert closes: "order" when the phase has nothing left to order in
+# the Ordering Schedule (the PO is in SAP); "condition" when its trigger no
+# longer finds it; "one_off" (a date change, a moved order, a manual
+# request) when a To recipient acknowledges it.
+CASE_KIND = {"ordering_due": "order", "ordering_today": "order", "ordering_overdue": "order",
+             "ftc_unreachable": "condition", "awaiting_grn": "condition", "site_stock_low": "condition",
+             "sync_failed": "condition"}
 
 # ── Starting templates ───────────────────────────────────────────────────────
 def _t(key, name, category, trigger, severity, to, cc, subject, body, description, config=None, attach=False):
     return {"key": key, "name": name, "category": category, "trigger": trigger, "severity": severity,
             "to_groups": to, "cc_groups": cc, "subject": subject, "body": body.strip("\n"),
-            "description": description, "config": config or {}, "attach_snapshot": attach}
+            "description": description, "config": config or {}, "attach_snapshot": attach,
+            "level": LEVEL_DEFAULT.get(key, 1), "ack_required": key in ACK_DEFAULT}
 
 
 TEMPLATES = [
-    _t("ordering_due_30", "Module ordering - due in 30 days", "Reminder", "ordering_due", "info",
+    _t("ordering_due_30", "Module ordering - due", "Reminder", "ordering_due", "action",
        ["tc_ordering"], ["projects", "pmag"],
        "Akasha Reminder | Module Ordering Due in {{days_to_ordering}} Days | {{project_name}} {{phase}}",
        """
@@ -144,27 +172,7 @@ Module Origin: {{vendor_type}}
 Required Action: Validate the requirement and start the ordering process (PR / vendor slot).
 
 View in Akasha: {{akasha_project_link}}
-""", "30 days before the phase's ordering date", {"days_before": 30, "days_until": 8}, attach=True),
-
-    _t("ordering_due_7", "Module ordering - due in 7 days", "Reminder", "ordering_due", "action",
-       ["tc_ordering"], ["projects", "pmag"],
-       "Akasha Action Alert | Module Ordering Due in {{days_to_ordering}} Days | {{project_name}} {{phase}}",
-       """
-Dear Team,
-
-Module ordering for **{{project_name}}** ({{phase}}) is due in {{days_to_ordering}} days. A late order delays site delivery and puts the FTC at risk.
-
-Quantity to Order: {{module_quantity_mwp}} MWp
-Ordering Date: {{module_ordering_date}}
-Modules Needed at Site: {{tc_delivery_date}}
-FTC Date (P6): {{ftc_date}}
-Ordering Status: {{ordering_status}}
-Approval Status: {{approval_status}}
-
-Required Action: Raise the PR and confirm the vendor slot this week so the order is placed by {{module_ordering_date}}.
-
-View in Akasha: {{akasha_project_link}}
-""", "7 days before the phase's ordering date", {"days_before": 7, "days_until": 1}, attach=True),
+""", "L1 30, L2 15 and L3 7 days before the phase's ordering date", {"levels": {"1": 30, "2": 15, "3": 7}}, attach=True),
 
     _t("ordering_due_today", "Module ordering - due today", "Reminder", "ordering_today", "action",
        ["tc_ordering"], ["projects"],
@@ -197,6 +205,8 @@ Date Changed: {{changed_date_field}}
 Previous Date: {{previous_date}}
 Revised Date: {{revised_date}}
 Variance: {{date_variance_days}} days
+Changed By: {{change_source}}
+Reason Given: {{change_remarks}}
 Ordering Date (recalculated): {{module_ordering_date}}
 Modules Needed at Site (recalculated): {{tc_delivery_date}}
 FTC Date (P6): {{ftc_date}}
@@ -205,7 +215,7 @@ Impact: {{risk_reason}}
 Required Action: Projects and TC teams to validate the revised date and update the ordering plan if required.
 
 Review in Akasha: {{akasha_project_link}}
-""", "When FTC, LTA, SCOD, AOP or the ordering date changes after a P6 / connectivity update",
+""", "When FTC, LTA, SCOD, AOP or the ordering date changes - after a sync, or an edit in Akasha (with the reason)",
        {"fields": ["ftc_date", "lta", "scod", "aop_plan", "module_date"]}),
 
     _t("ordering_overdue", "Module ordering - overdue (escalating)", "Alert", "ordering_overdue", "critical",
@@ -235,29 +245,53 @@ Review in Akasha: {{akasha_project_link}}
 
     _t("approval_request", "Module ordering - approval request", "Approval", "manual", "action",
        ["tc_head"], ["tc_ordering", "projects", "pmag"],
-       "Akasha Approval Required | Module Ordering | {{project_name}} {{phase}}",
+       "Akasha Approval Required | Module Ordering {{order_month}} | {{project_name}} {{phase}}",
        """
 Dear Sir/Ma'am,
 
-Approval is requested to order modules for **{{project_name}}** ({{phase}}). The order must be released within the planned window to protect site delivery and the FTC.
+{{requested_by}} requests approval to order **{{module_quantity_mwp}} MWp** of modules for **{{project_name}}** ({{phase}}) in **{{order_month}}**. Once approved, this quantity is frozen in {{order_month}} in the Ordering Schedule until its PO is in SAP.
 
-Project Capacity: {{capacity_mwp}} MWp
-Quantity to Order: {{module_quantity_mwp}} MWp
-Ordered Till Now: {{ordered_mwp}} MWp
-Ordering Date: {{module_ordering_date}}
+Quantity to Approve: {{module_quantity_mwp}} MWp
+Order Month: {{order_month}}
+Phase: {{phase}}
+Ordering Date (planned): {{module_ordering_date}}
 Modules Needed at Site: {{tc_delivery_date}}
 FTC Date (P6): {{ftc_date}}
 LTA Date: {{lta_date}}
-Ordering Status: {{ordering_status}}
+Module Origin: {{vendor_type}}
+Ordered Till Now: {{ordered_mwp}} MWp
+Balance to Order: {{balance_ordering_mwp}} MWp
 Schedule Risk: {{risk_reason}}
-Erected: {{erected_mwp}} MWp ({{erection_pct}})
-Construction Progress: {{construction_progress}}
-Order Value: {{order_value}}
+Requested By: {{requested_by}}
+Requester's Note: {{request_note}}
 
-Required Action: Review and approve, or return the request with remarks.
+Required Action: Approve, or return the request with remarks, in Akasha.
 
-Review in Akasha: {{akasha_project_link}}
-""", "Sent by TC Ordering from the admin screen until the approval workflow is built into Akasha", attach=True),
+Project in Akasha: {{akasha_project_link}}
+""", "Sent when someone requests approval for a month's order from the Ordering Schedule", attach=True),
+
+    _t("approval_decision", "Module ordering - approval decision", "Approval", "manual", "info",
+       ["tc_ordering"], ["projects", "pmag"],
+       "Akasha Approval {{approval_decision}} | Module Ordering {{order_month}} | {{project_name}} {{phase}}",
+       """
+Dear Team,
+
+The request to order **{{module_quantity_mwp}} MWp** of modules for **{{project_name}}** ({{phase}}) in **{{order_month}}** has been **{{approval_decision}}** by {{approved_by}}.
+
+Decision: {{approval_decision}}
+Decided By: {{approved_by}}
+Decision Date: {{approval_date}}
+Remarks: {{decision_note}}
+Quantity: {{module_quantity_mwp}} MWp
+Order Month: {{order_month}}
+Ordering Date (planned): {{module_ordering_date}}
+FTC Date (P6): {{ftc_date}}
+Requested By: {{requested_by}}
+
+{{approval_next_step}}
+
+View in Akasha: {{akasha_project_link}}
+""", "Sent when an approval request is approved or returned; the requester is always on To"),
 
     _t("order_completed", "Module order completed", "Approval", "manual", "info",
        ["projects", "pmag"], ["tc_ordering", "tc_stores", "executive"],

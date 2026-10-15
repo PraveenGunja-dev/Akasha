@@ -20,6 +20,7 @@ Rules that keep it trustworthy:
 """
 import html as html_mod
 import logging
+import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -28,7 +29,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 import models
-from . import catalogue, context as C, render, sender, snapshot
+from . import alerts, catalogue, context as C, render, sender, snapshot
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,19 @@ MAX_ATTEMPTS = 3
 
 
 # ── Templates ────────────────────────────────────────────────────────────────
+
+_OLD_OVERDUE_STEPS = [
+    {"after_days": 0, "label": "Level 1 - overdue", "add_to": [], "add_cc": []},
+    {"after_days": 7, "label": "Level 2 - 7 days overdue", "add_to": ["tc_head"], "add_cc": ["pmag"]},
+    {"after_days": 14, "label": "Level 3 - 14 days overdue", "add_to": [], "add_cc": ["executive"]},
+]
+_DEFAULT_UPGRADES = [
+    ("ordering_due_30", {"days_before": 30, "days_until": 8}, {"days_before": 30, "days_until": 16},
+     "The 15-day reminder takes over at 15 days: the 30-day window now ends at 16"),
+    ("ordering_overdue", {"escalation": _OLD_OVERDUE_STEPS}, {"escalation": catalogue.LEVELS},
+     "Overdue steps renamed - levels of intimation are now set per template"),
+]
+
 
 def seed_templates(db: Session) -> int:
     """Add catalogue templates that are not in the database yet. Never
@@ -49,6 +63,66 @@ def seed_templates(db: Session) -> int:
         db.add(row)
         db.add(version_row(row, "system", "Initial template"))
         added += 1
+    # Shipped settings that changed: a template still holding the exact old
+    # default gets the new one (as a new version, with a note); anything an
+    # administrator changed is left alone.
+    for key, old, new, note in _DEFAULT_UPGRADES:
+        t = db.get(models.EmailTemplate, key)
+        if t and (t.config or {}) == old:
+            t.config, t.version = new, (t.version or 1) + 1
+            t.updated_by, t.updated_at = "system", datetime.utcnow()
+            db.add(version_row(t, "system", note))
+            added += 1
+    # Module ordering reminders became one template with L1 / L2 / L3 days.
+    # The 30-day template takes the three stages; the separate 15- and 7-day
+    # templates go, but only while nobody has edited them and they have never
+    # sent anything (otherwise they stay for an administrator to retire).
+    due = db.get(models.EmailTemplate, "ordering_due_30")
+    if due and "levels" not in (due.config or {}):
+        src = next(x for x in catalogue.TEMPLATES if x["key"] == "ordering_due_30")
+        due.config = dict(src["config"])
+        due.name, due.description = src["name"], src["description"]
+        due.version, due.updated_by, due.updated_at = (due.version or 1) + 1, "system", datetime.utcnow()
+        db.add(version_row(due, "system", "One reminder with L1 / L2 / L3 days (30 / 15 / 7 days before the ordering date)"))
+        added += 1
+    for key in ("ordering_due_15", "ordering_due_7"):
+        t = db.get(models.EmailTemplate, key)
+        if t and (t.updated_by or "system") == "system" and not t.enabled and not db.query(models.EmailLog).filter(
+                models.EmailLog.template_key == key).first():
+            db.query(models.EmailTemplateVersion).filter(models.EmailTemplateVersion.template_key == key).delete()
+            db.delete(t)
+            added += 1
+    ov = db.get(models.EmailTemplate, "ordering_overdue")
+    if ov and ov.level == 3 and ov.updated_by == "system" and ov.version <= 2:
+        ov.level = 1      # its steps set the level: L1 when missed, L2 at 7 days, L3 at 14
+        added += 1
+    # Shipped text that changed, for templates nobody has edited.
+    for key, note in (("approval_request", "Approval requests now come from the Ordering Schedule"),
+                      ("date_change", "Says who changed the date and the reason given")):
+        t = db.get(models.EmailTemplate, key)
+        src = next((x for x in catalogue.TEMPLATES if x["key"] == key), None)
+        if t and src and (t.updated_by or "system") == "system" and (t.body != src["body"] or t.subject != src["subject"]):
+            t.subject, t.body, t.description = src["subject"], src["body"], src["description"]
+            t.version, t.updated_at = (t.version or 1) + 1, datetime.utcnow()
+            db.add(version_row(t, "system", note))
+            added += 1
+    # days_until is no longer used (each phase gets the nearest reminder it
+    # has reached), so it is dropped rather than left to mislead.
+    for t in db.query(models.EmailTemplate).filter(models.EmailTemplate.trigger == "ordering_due").all():
+        if "days_until" in (t.config or {}):
+            t.config = {k: v for k, v in t.config.items() if k != "days_until"}
+            t.version, t.updated_by, t.updated_at = (t.version or 1) + 1, "system", datetime.utcnow()
+            db.add(version_row(t, "system", "Removed days_until - each phase now gets the nearest reminder it has reached"))
+            added += 1
+    # Level / acknowledgement arrived after the first templates were saved:
+    # fill them from the catalogue once, never over an administrator's choice.
+    for t in db.query(models.EmailTemplate).filter(
+            (models.EmailTemplate.level.is_(None)) | (models.EmailTemplate.ack_required.is_(None))).all():
+        if t.level is None:
+            t.level = catalogue.LEVEL_DEFAULT.get(t.key, 1)
+        if t.ack_required is None:
+            t.ack_required = t.key in catalogue.ACK_DEFAULT
+        added += 1
     if added:
         db.commit()
     return added
@@ -58,15 +132,23 @@ def version_row(t, who: str, note: str = "") -> "models.EmailTemplateVersion":
     return models.EmailTemplateVersion(
         template_key=t.key, version=t.version, name=t.name, subject=t.subject, body=t.body,
         to_groups=list(t.to_groups or []), cc_groups=list(t.cc_groups or []), config=dict(t.config or {}),
-        attach_snapshot=bool(t.attach_snapshot), enabled=bool(t.enabled), note=note or None,
+        attach_snapshot=bool(t.attach_snapshot), enabled=bool(t.enabled), level=t.level,
+        ack_required=t.ack_required, note=note or None,
         changed_by=who, changed_at=datetime.utcnow())
 
 
 # ── Recipients ───────────────────────────────────────────────────────────────
 
-def members(db: Session, groups: List[str], portfolio: Optional[str] = None) -> List[str]:
+# The demo project's portfolio (scripts/demo_email_project.py). Only people who
+# list it explicitly hear about it - "all portfolios" never includes the demo.
+DEMO_PORTFOLIO = "Akasha Demo"
+
+
+def members(db: Session, groups: List[str], portfolio: Optional[str] = None, level: int = 1) -> List[str]:
     """Active addresses of the groups, limited to people who cover the
-    project's portfolio (a member with no portfolios covers every one)."""
+    project's portfolio (a member with no portfolios covers every one) and
+    whose level of intimation the alert has reached: an L2 member hears of
+    an alert only once it has escalated to level 2."""
     if not groups:
         return []
     out = []
@@ -74,6 +156,10 @@ def members(db: Session, groups: List[str], portfolio: Optional[str] = None) -> 
               .filter(models.EmailRecipient.group_key.in_(groups), models.EmailRecipient.active.is_(True)).all()):
         ports = [x.lower() for x in (r.portfolios or [])]
         if portfolio and ports and portfolio.lower() not in ports:
+            continue
+        if portfolio and portfolio.lower() == DEMO_PORTFOLIO.lower() and not ports:
+            continue
+        if (r.level or 1) > level:
             continue
         out.append(r.email)
     return out
@@ -130,8 +216,13 @@ class Event:
     add_to: List[str] = field(default_factory=list)
     add_cc: List[str] = field(default_factory=list)
     to_override: Optional[List[str]] = None       # digest: one recipient
+    level: int = 1                                 # overdue step reached (1 = first notice)
     orders: List[dict] = field(default_factory=list)
     watch: Optional[tuple] = None                 # (project_id, field, value) to record after sending
+    case_key: Optional[str] = None                # the alert it belongs to (alerts.case_key)
+    case_phase: Optional[str] = None              # module ordering: the phase label
+    extra_to: List[str] = field(default_factory=list)   # addresses, not groups (an approval's requester)
+    extra_cc: List[str] = field(default_factory=list)
 
 
 # ── Watched values ───────────────────────────────────────────────────────────
@@ -160,8 +251,16 @@ def _phase_key(o):
 
 
 def ev_ordering_due(d: Data, t, dry: bool) -> List[Event]:
-    before = int((t.config or {}).get("days_before", 30))
-    until = int((t.config or {}).get("days_until", 1))
+    """The template's L1 / L2 / L3 reminders (config levels, e.g. 30 / 15 /
+    7 days before the ordering date). An order gets the nearest stage it has
+    reached - a project first seen 12 days out gets the L2 email, not the L1
+    one as well - and each stage once."""
+    mine = alerts.due_stages(t)
+    if not mine:
+        return []
+    every = {n for _, n in mine} | {n for x in d.db.query(models.EmailTemplate)
+                                    .filter(models.EmailTemplate.trigger == "ordering_due", models.EmailTemplate.enabled.is_(True),
+                                            models.EmailTemplate.key != t.key).all() for _, n in alerts.due_stages(x)}
     today, out = C.today(), []
     for p in d.projects:
         if (p.get("balance_ordering_mwp") or 0) <= 0:
@@ -172,9 +271,16 @@ def ev_ordering_due(d: Data, t, dry: bool) -> List[Event]:
             if not od or o.get("overdue"):
                 continue
             days = (od - today).days
-            if until <= days <= before:
-                ctx = C.phase_context(d.context(p, t.attach_snapshot or "construction_progress" in t.body), p, o)
-                out.append(Event(f"{t.key}:{p['project_id']}:{_phase_key(o)}", ctx, p, ctx["phase"], orders=orders))
+            reached = [s for s in mine if s[1] >= days >= 1]
+            if not reached:
+                continue
+            lv, n = min(reached, key=lambda s: s[1])
+            if min(x for x in every if x >= days) != n:
+                continue            # another reminder's nearer stage applies
+            ctx = C.phase_context(d.context(p, t.attach_snapshot or "construction_progress" in t.body), p, o)
+            # The L1 key keeps its original form, so a go-live baseline still matches.
+            key = f"{t.key}:{p['project_id']}:{_phase_key(o)}" + (f":L{lv}" if lv > 1 else "")
+            out.append(Event(key, ctx, p, ctx["phase"], orders=orders, level=lv, case_phase=o.get("phase_label")))
     return out
 
 
@@ -186,7 +292,8 @@ def ev_ordering_today(d: Data, t, dry: bool) -> List[Event]:
         for o in _orders(p):
             if C.parse_day(o.get("order_date")) == today:
                 ctx = C.phase_context(d.context(p), p, o)
-                out.append(Event(f"{t.key}:{p['project_id']}:{_phase_key(o)}", ctx, p, ctx["phase"]))
+                out.append(Event(f"{t.key}:{p['project_id']}:{_phase_key(o)}", ctx, p, ctx["phase"],
+                                 case_phase=o.get("phase_label")))
     return out
 
 
@@ -211,12 +318,33 @@ def ev_ordering_overdue(d: Data, t, dry: bool) -> List[Event]:
             ctx = C.phase_context(d.context(p, t.attach_snapshot), p, o)
             ctx["escalation_level"] = reached[-1].get("label") or f"Level {idx}"
             out.append(Event(f"{t.key}:{p['project_id']}:{_phase_key(o)}:L{idx}", ctx, p, ctx["phase"],
-                             add_to, add_cc, orders=orders))
+                             add_to, add_cc, orders=orders, level=min(idx, 3), case_phase=o.get("phase_label")))
     return out
 
 
 FIELD_LABEL = {"ftc_date": "FTC date", "lta": "LTA date", "scod": "SCOD", "aop_plan": "AOP date",
                "module_date": "Module ordering date"}
+
+
+FIELD_ORIGIN = {"ftc_date": "Primavera P6 sync", "aop_plan": "Primavera P6 sync (baseline COD)",
+                "module_date": "Recalculated from the P6 dates"}
+
+
+def _change_origin(db, p: dict, f: str, new_day) -> tuple:
+    """(who / what changed it, the reason given) - from the LTA / SCOD
+    history for those two; the sync that feeds the others."""
+    if f in ("lta", "scod") and p.get("id"):
+        q = (db.query(models.ProjectDateChange)
+             .filter(models.ProjectDateChange.mapping_id == p["id"], models.ProjectDateChange.field == f)
+             .order_by(models.ProjectDateChange.changed_at.desc(), models.ProjectDateChange.id.desc()))
+        for r in q.limit(5).all():
+            if (r.new_value.date() if r.new_value else None) == new_day:
+                from services.date_history import SOURCE_LABEL
+                label = SOURCE_LABEL.get(r.source, r.source)
+                who = f"{label} by {r.changed_by}" if r.source == "manual" and r.changed_by else label
+                return who, (r.remarks or ("Automatic update - no reason recorded" if r.source != "manual" else ""))
+        return "Transmission portal / project mapping", "Automatic update - no reason recorded"
+    return FIELD_ORIGIN.get(f, "Data sync"), "Automatic update - no reason recorded"
 
 
 def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
@@ -235,10 +363,16 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
                 continue
             b, a = C.parse_day(before), C.parse_day(now_v)
             ctx = d.context(p)
+            src, why = _change_origin(d.db, p, f, a)
+            w = d.db.get(models.EmailWatch, (str(pid), f"date:{f}"))
+            since = w.updated_at.strftime("%Y%m%d%H%M%S") if w and w.updated_at else ""
             ctx.update({"changed_date_field": FIELD_LABEL.get(f, f), "previous_date": before or "Not set",
                         "revised_date": now_v or "Removed",
-                        "date_variance_days": (f"{(a - b).days:+d}" if a and b else "")})
-            out.append(Event(f"{t.key}:{pid}:{f}:{now_v}", ctx, p, watch=(pid, f"date:{f}", now_v)))
+                        "date_variance_days": (f"{(a - b).days:+d}" if a and b else ""),
+                        "change_source": src, "change_remarks": why})
+            # One email per transition: the key carries the value it moved
+            # from and when that value was recorded, so A -> B -> A is two.
+            out.append(Event(f"{t.key}:{pid}:{f}:{before}>{now_v}:{since}", ctx, p, watch=(pid, f"date:{f}", now_v)))
     return out
 
 
@@ -252,7 +386,8 @@ def ev_ftc_unreachable(d: Data, t, dry: bool) -> List[Event]:
                 continue
             ctx = C.phase_context(d.context(p), p, o)
             out.append(Event(f"{t.key}:{p['project_id']}:{_phase_key(o)}:{o.get('ftc_date')}:{ctx['revised_ordering_month']}",
-                             ctx, p, ctx["phase"]))
+                             ctx, p, ctx["phase"],
+                             case_key=f"{t.key}:{p['project_id']}:{alerts.phase_id(o.get('phase_label'))}"))
     return out
 
 
@@ -278,7 +413,8 @@ def ev_awaiting_grn(d: Data, t, dry: bool) -> List[Event]:
         pr = p.get("procurement") or {}
         days = pr.get("oldest_awaiting_days") or 0
         if (pr.get("awaiting_grn_mwp") or 0) > 0 and days >= min_days:
-            out.append(Event(f"{t.key}:{p['project_id']}:{(days - min_days) // every}", d.context(p), p))
+            out.append(Event(f"{t.key}:{p['project_id']}:{(days - min_days) // every}", d.context(p), p,
+                             case_key=f"{t.key}:{p['project_id']}"))
     return out
 
 
@@ -301,7 +437,7 @@ def ev_site_stock_low(d: Data, t, dry: bool) -> List[Event]:
         stock = p.get("module_inventory_mwp") or 0
         if (p.get("ordered_mwp") or 0) > 0 and cap - erected > 1 and stock <= floor:
             out.append(Event(f"{t.key}:{p['project_id']}:{week[0]}-W{week[1]}",
-                             d.context(p, True), p, orders=_orders(p)))
+                             d.context(p, True), p, orders=_orders(p), case_key=f"{t.key}:{p['project_id']}"))
     return out
 
 
@@ -365,7 +501,7 @@ def ev_sync_failed(d: Data, t, dry: bool) -> List[Event]:
                     "sync_error": (last.message or "")[:300] if failed else f"No successful run for over {stale_h} hours",
                     "last_success": (ok.finished_at + C.IST).strftime("%d-%b-%y %H:%M IST") if ok and ok.finished_at else "Never"})
         day = (now + C.IST).strftime("%Y-%m-%d")
-        out.append(Event(f"{t.key}:{src}:{day}", ctx))
+        out.append(Event(f"{t.key}:{src}:{day}", ctx, case_key=f"{t.key}:{src}"))
     return out
 
 
@@ -385,7 +521,8 @@ def ev_weekly_digest(d: Data, t, dry: bool, force: bool = False) -> List[Event]:
             continue
         seen.add(r.email.lower())
         ports = {x.lower() for x in (r.portfolios or [])}
-        projects = [p for p in d.projects if not ports or (p.get("cluster") or "").lower() in ports]
+        projects = [p for p in d.projects if (not ports and (p.get("cluster") or "").lower() != DEMO_PORTFOLIO.lower())
+                    or (p.get("cluster") or "").lower() in ports]
         ctx = d.context({"project_name": ""})
         ctx.update({"digest_period": period, "digest_table": digest_table(projects, d.cfg.public_url)})
         out.append(Event(f"{t.key}:{r.email.lower()}:{week[0]}-W{week[1]}", ctx, to_override=[r.email]))
@@ -461,16 +598,21 @@ def _blocked(db: Session, key: str, test_mode: bool) -> Optional["models.EmailLo
 
 def deliver(db: Session, t, ev: Event, d: Data, triggered_by: str, dry_run: bool = False,
             force_to: Optional[List[str]] = None, test_banner: str = "") -> dict:
-    """Render, address, send and log one email. Returns a summary row."""
+    """Decide the level, render, address, send and log one email, and record
+    it on its alert. Returns a summary row."""
     cfg = d.cfg
     portfolio = (ev.project or {}).get("cluster")
+    tracked = force_to is None and ev.to_override is None and alerts.ack_required(t)
+    test = bool(cfg.test_mode or test_banner)
+    level, alert, what, why = alerts.decide(db, t, ev, test) if force_to is None else (alerts.template_level(t), None, "sent", "")
+    add_to, add_cc = (ev.add_to, ev.add_cc) if what != "held" else ([], [])   # a held alert keeps its audience
     if force_to is not None:
         to, cc = list(force_to), []
     elif ev.to_override is not None:
         to, cc = list(ev.to_override), []
     else:
-        to = members(db, list(t.to_groups or []) + ev.add_to, portfolio)
-        cc = members(db, list(t.cc_groups or []) + ev.add_cc, portfolio)
+        to = members(db, list(t.to_groups or []) + add_to, portfolio, level) + list(ev.extra_to)
+        cc = members(db, list(t.cc_groups or []) + add_cc, portfolio, level) + list(ev.extra_cc)
     to, dropped_to = sender.allowed(to, cfg.allowed_domains)
     cc, dropped_cc = sender.allowed([a for a in cc if a.lower() not in {x.lower() for x in to}], cfg.allowed_domains)
 
@@ -480,15 +622,29 @@ def deliver(db: Session, t, ev: Event, d: Data, triggered_by: str, dry_run: bool
         banner = banner or f"TEST MODE - would have gone to: {', '.join(to + cc) or 'nobody (no recipients)'}"
         to, cc = sender.allowed(cfg.test_recipients, cfg.allowed_domains)[0], []
 
-    subject, html_body, text_body = render.render(t, ev.ctx, banner)
-    if cfg.test_mode or test_banner:
-        subject = f"[TEST] {subject}"
-
     row = {"template": t.key, "event_key": ev.key, "project_id": (ev.project or {}).get("project_id"),
            "project_name": (ev.project or {}).get("project_name") or ev.ctx.get("source_name"),
-           "phase": ev.phase, "to": real_to, "cc": real_cc, "subject": subject}
+           "phase": ev.phase, "to": real_to, "cc": real_cc, "level": level, "escalation": what, "why": why}
     if dry_run:
-        return {**row, "status": "would_send" if real_to else "no_recipients"}
+        subject, _, _ = render.render(t, ev.ctx, banner)
+        return {**row, "subject": f"[TEST] {subject}" if test else subject,
+                "status": "would_send" if real_to else "no_recipients"}
+
+    ack = None
+    if tracked and real_to:
+        alert = alert or alerts.ensure(db, t, ev, level, test)
+        ack = {"level": level, "why": why, "ask": alerts.ask_text(t),
+               "url": f"{cfg.public_url}/alerts/{alert.id}" if cfg.public_url else ""}
+        if alert.kind == "approval":
+            ack.update(title="approval required", button="Review and approve in Akasha")
+            ev.ctx["akasha_approval_link"] = ack["url"]
+    elif force_to is not None and alerts.ack_required(t):
+        ack = {"level": level, "why": "", "ask": alerts.ask_text(t) + " (Test copy - the real email links to its alert.)",
+               "url": f"{cfg.public_url}/alerts" if cfg.public_url else ""}
+    subject, html_body, text_body = render.render(t, ev.ctx, banner, ack)
+    if test:
+        subject = f"[TEST] {subject}"
+    row["subject"] = subject
 
     attachments = []
     if t.attach_snapshot and ev.project is not None:
@@ -510,9 +666,11 @@ def deliver(db: Session, t, ev: Event, d: Data, triggered_by: str, dry_run: bool
     else:
         try:
             sender.send(cfg, to, cc, subject, html_body, text_body, attachments, tag=t.key)
-            status = "test" if (cfg.test_mode or test_banner) else "sent"
+            status = "test" if test else "sent"
         except sender.SendError as e:
             status, detail = "failed", str(e)
+    if why:
+        detail = f"{why} {detail}" if detail else why
 
     prev = (db.query(models.EmailLog).filter(models.EmailLog.event_key == ev.key, models.EmailLog.status == "failed")
             .order_by(models.EmailLog.id.desc()).first()) if status != "test" else None
@@ -522,12 +680,20 @@ def deliver(db: Session, t, ev: Event, d: Data, triggered_by: str, dry_run: bool
         to_addrs=real_to if cfg.test_mode else to, cc_addrs=real_cc if cfg.test_mode else cc,
         subject=subject, body_html=html_body, attachments=[a[0] for a in attachments] or None,
         status=status, detail=detail, attempts=((prev.attempts or 1) + 1) if prev else 1,
-        triggered_by=triggered_by, created_at=datetime.utcnow())
+        triggered_by=triggered_by, created_at=datetime.utcnow(), level=level,
+        alert_id=alert.id if (alert is not None and ack is not None and status in ("sent", "test")) else None)
     db.add(log)
+    db.flush()
+    if alert is not None and ack is not None:
+        if status in ("sent", "test"):
+            alerts.note_sent(db, alert, t, ev, level, what, why, real_to, log.id, triggered_by)
+        else:
+            alerts.discard_if_unsent(db, alert)
     if ev.watch and status in ("sent", "test", "no_recipients"):
         _watch_set(db, *ev.watch)
     db.commit()
-    return {**row, "status": status, "detail": detail, "log_id": log.id}
+    return {**row, "status": status, "detail": detail, "log_id": log.id,
+            "alert_id": log.alert_id}
 
 
 def run(db: Session, triggered_by: str = "scheduler", dry_run: bool = False, only: Optional[List[str]] = None) -> dict:
@@ -544,6 +710,7 @@ def run(db: Session, triggered_by: str = "scheduler", dry_run: bool = False, onl
         return {"message": "No enabled email templates", "sent": 0, "items": []}
     d = Data(db)
     items, counts = [], {}
+    ran, found = {}, set()     # triggers that ran cleanly, and every alert they still find
     for t in templates:
         fn = TRIGGERS.get(t.trigger)
         if not fn:
@@ -553,17 +720,26 @@ def run(db: Session, triggered_by: str = "scheduler", dry_run: bool = False, onl
         except Exception as e:  # noqa: BLE001 - one bad trigger must not stop the others
             logger.exception(f"Email trigger {t.key} failed")
             items.append({"template": t.key, "status": "error", "detail": str(e)})
+            ran[t.trigger] = False
             continue
+        ran.setdefault(t.trigger, True)
         for ev in events:
+            found.add(alerts.case_key(t, ev))
             if _blocked(db, ev.key, cfg.test_mode):
                 continue
             r = deliver(db, t, ev, d, triggered_by, dry_run)
             items.append(r)
             counts[r["status"]] = counts.get(r["status"], 0) + 1
+    closed = 0
     if not dry_run:
-        db.commit()     # first-sighting records from the date / PO watches
+        closed = alerts.close_finished(db, d, ran, found, cfg.test_mode)
+        from services import order_approvals
+        order_approvals.refresh_ordered(db, d.projects)     # POs in SAP release approved freezes
+        db.commit()     # first-sighting records from the date / PO watches, closed alerts
     msg = ", ".join(f"{v} {k.replace('_', ' ')}" for k, v in sorted(counts.items())) or "Nothing new to send"
-    return {"message": msg, "counts": counts, "items": items, "dry_run": dry_run,
+    if closed:
+        msg += f"; {closed} alert(s) closed - the work is done"
+    return {"message": msg, "counts": counts, "items": items, "dry_run": dry_run, "closed": closed,
             "sent": counts.get("sent", 0) + counts.get("test", 0)}
 
 
@@ -639,7 +815,9 @@ def sample_event(d: Data, t, project_id: Optional[str] = None) -> Event:
 # the catalogue sample, marked as an example - a real email never does.
 EVENT_ONLY = {"changed_date_field", "previous_date", "revised_date", "date_variance_days", "escalation_level",
               "shift_reason", "source_name", "sync_error", "last_success", "po_numbers", "po_date",
-              "po_quantity_mwp", "vendor_name", "digest_period"}
+              "po_quantity_mwp", "vendor_name", "digest_period", "order_month", "requested_by", "request_note",
+              "approval_status", "approval_decision", "approved_by", "approval_date", "decision_note",
+              "approval_next_step", "change_source", "change_remarks", "akasha_approval_link"}
 
 
 def preview(db: Session, t, project_id: Optional[str] = None) -> dict:
@@ -648,13 +826,18 @@ def preview(db: Session, t, project_id: Optional[str] = None) -> dict:
     for v in render.used_variables(t.subject, t.body):
         if v in EVENT_ONLY and not str(ev.ctx.get(v) or "").strip() and catalogue.VARIABLES[v][2]:
             ev.ctx[v] = f"{catalogue.VARIABLES[v][2]} (example)"
-    subj, html_body, _ = render.render(t, ev.ctx)
+    ack = None
+    if alerts.ack_required(t):
+        ack = {"level": alerts.template_level(t), "why": "", "ask": alerts.ask_text(t),
+               "url": f"{d.cfg.public_url}/alerts" if d.cfg.public_url else ""}
+    subj, html_body, _ = render.render(t, ev.ctx, "", ack)
     used = render.used_variables(t.subject, t.body)
     return {"subject": subj, "html": html_body, "problems": render.validate(t.subject, t.body),
             "project_id": (ev.project or {}).get("project_id"), "project_name": (ev.project or {}).get("project_name"),
             "empty": [v for v in used if not str(ev.ctx.get(v) or "").strip()],
-            "to": members(db, list(t.to_groups or []), (ev.project or {}).get("cluster")),
-            "cc": members(db, list(t.cc_groups or []), (ev.project or {}).get("cluster"))}
+            "level": alerts.template_level(t),
+            "to": members(db, list(t.to_groups or []), (ev.project or {}).get("cluster"), alerts.template_level(t)),
+            "cc": members(db, list(t.cc_groups or []), (ev.project or {}).get("cluster"), alerts.template_level(t))}
 
 
 def send_test(db: Session, t, to: str, project_id: Optional[str], who: str) -> dict:
@@ -695,7 +878,91 @@ def resend(db: Session, log_id: int, who: str) -> dict:
                           project_id=row.project_id, project_name=row.project_name, phase=row.phase,
                           to_addrs=row.to_addrs, cc_addrs=row.cc_addrs, subject=row.subject, body_html=row.body_html,
                           attachments=None, status=status, detail=detail or f"Resend of email #{row.id}",
-                          triggered_by=f"{who} (resend)", created_at=datetime.utcnow())
+                          triggered_by=f"{who} (resend)", created_at=datetime.utcnow(), level=row.level,
+                          alert_id=row.alert_id if status in ("sent", "test") else None)
     db.add(log)
     db.commit()
     return {"status": status, "detail": detail, "log_id": log.id}
+
+
+# ── Sends that something in Akasha causes ───────────────────────────────────
+
+_notify_lock = threading.Lock()
+
+
+def notify_date_changes(cause: str) -> None:
+    """Send the schedule-change email now - after a sync or an edit in
+    Akasha - instead of waiting for the daily run. Only when email is on and
+    the template is switched on; never raises (the sync or save has already
+    succeeded)."""
+    from database import SessionLocal
+    if not settings().enabled:
+        return
+    with _notify_lock:      # two quick edits must not both send the same change
+        db = SessionLocal()
+        try:
+            t = db.get(models.EmailTemplate, "date_change")
+            if t and t.enabled:
+                r = run(db, triggered_by=cause, only=["date_change"])
+                logger.info(f"Email after {cause}: {r.get('message')}")
+        except Exception:  # noqa: BLE001
+            logger.exception(f"Email after {cause} failed")
+        finally:
+            db.close()
+
+
+def _approval_event(d: "Data", a, key: str) -> Event:
+    """An approval's email context: the project's figures plus exactly what
+    was asked - the month, the quantity, the phases in it."""
+    p = d.project(a.project_id) or {"project_name": a.project_name, "project_id": a.project_id}
+    ctx = d.context(p, True)
+    phases = list(a.phases or [])
+    labels = [x.get("phase_label") or "" for x in phases]
+    ctx.update({
+        "phase": ", ".join(l for l in labels if l.strip().lower() not in C.UNPHASED),
+        "module_quantity_mwp": C.mw(a.mwp), "order_month": a.month,
+        "module_ordering_date": ", ".join(x.get("order_date") or "" for x in phases if x.get("order_date")),
+        "tc_delivery_date": ", ".join(x.get("tc_date") or "" for x in phases if x.get("tc_date")),
+        "ftc_date": ", ".join(x.get("ftc_date") or "" for x in phases if x.get("ftc_date")) or ctx.get("ftc_date", ""),
+        "requested_by": a.requested_by_name or a.requested_by, "request_note": a.request_note or "No note",
+        "approval_status": a.status.title(),
+    })
+    return Event(key, ctx, p, ctx["phase"], case_key=f"approval:{a.id}")
+
+
+def send_approval_request(db: Session, a, who: str) -> dict:
+    """The approval email for a request, to the template's groups (TC Head)
+    with the requester on Cc; it opens the alert approvers decide on."""
+    t = db.get(models.EmailTemplate, "approval_request")
+    if not t:
+        seed_templates(db)
+        t = db.get(models.EmailTemplate, "approval_request")
+    d = Data(db)
+    ev = _approval_event(d, a, f"approval:{a.id}:request")
+    if a.requested_by_email:
+        ev.extra_cc = [a.requested_by_email]
+    return deliver(db, t, ev, d, f"{who} (approval request)")
+
+
+def send_approval_decision(db: Session, a, who: str) -> dict:
+    """Approved or returned: to TC Ordering and the requester."""
+    t = db.get(models.EmailTemplate, "approval_decision")
+    if not t:
+        seed_templates(db)
+        t = db.get(models.EmailTemplate, "approval_decision")
+    d = Data(db)
+    ev = _approval_event(d, a, f"approval:{a.id}:{a.status}")
+    ev.case_key = None
+    approved = a.status == "approved"
+    ev.ctx.update({
+        "approval_decision": "Approved" if approved else "Returned",
+        "approved_by": a.decided_by_name or a.decided_by or "",
+        "approval_date": (a.decided_at + C.IST).strftime("%d-%b-%y %H:%M IST") if a.decided_at else "",
+        "decision_note": a.decision_note or "No remarks",
+        "approval_next_step": (f"Required Action: TC Ordering to raise the PO. {C.mw(a.mwp)} MWp stays frozen in {a.month} "
+                               f"in the Ordering Schedule until the PO is in SAP.") if approved else
+                              "Required Action: Read the remarks, then raise a fresh request from the Ordering Schedule if it is still needed.",
+    })
+    if a.requested_by_email:
+        ev.extra_to = [a.requested_by_email]
+    return deliver(db, t, ev, d, f"{who} (approval {a.status})")

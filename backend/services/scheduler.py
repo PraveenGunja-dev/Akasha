@@ -199,6 +199,11 @@ def _execute(source: str):
         db.close()
         _running.pop(source, None)
         lock.release()
+    # A feed that can move LTA / SCOD / AOP / FTC: send the schedule-change
+    # email now rather than at the next daily run.
+    if source in ("p6", "tc", "mapping"):
+        from services.email_notify.engine import notify_date_changes
+        notify_date_changes(f"{source} sync")
     # Any sync can change what the CPAG pack shows; rebuild its preview now
     # (a no-op when the pack is unchanged) so nobody waits on a click.
     try:

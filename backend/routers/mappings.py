@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from pydantic import BaseModel
@@ -47,7 +47,9 @@ class ProjectMappingCreate(ProjectMappingBase):
     pass
 
 class ProjectMappingUpdate(ProjectMappingBase):
-    pass
+    # Why the LTA / SCOD is being changed - required when either changes; it
+    # is kept in the date history and sent in the schedule-change email.
+    remarks: Optional[str] = None
 
 class ProjectMappingResponse(ProjectMappingBase):
     id: int
@@ -126,25 +128,38 @@ def create_mapping(mapping: ProjectMappingCreate, db: Session = Depends(get_db))
     return db_mapping
 
 @router.put("/{mapping_id}", response_model=ProjectMappingResponse)
-def update_mapping(mapping_id: int, mapping: ProjectMappingUpdate, db: Session = Depends(get_db),
-                   user: models.AkashaUser = Depends(current_user)):
-    """Update an existing project mapping. A change to LTA or SCOD is kept in
-    the date history (services/date_history.py) with who made it."""
+def update_mapping(mapping_id: int, mapping: ProjectMappingUpdate, background: BackgroundTasks,
+                   db: Session = Depends(get_db), user: models.AkashaUser = Depends(current_user)):
+    """Update an existing project mapping. A change to LTA or SCOD needs a
+    reason; it is kept in the date history (services/date_history.py) with
+    who made it, and the schedule-change email goes out straight away."""
     db_mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.id == mapping_id).first()
     if not db_mapping:
         raise HTTPException(status_code=404, detail="Mapping not found")
     
     update_data = mapping.model_dump(exclude_unset=True)
+    remarks = (update_data.pop("remarks", None) or "").strip()
     from services import date_history
+    label = {"lta": "LTA", "scod": "SCOD"}
+    changing = [f for k, f in (("lta_date", "lta"), ("manual_scod", "scod"))
+                if k in update_data and date_history._day(getattr(db_mapping, k)) != date_history._day(update_data[k])]
+    if changing and len(remarks) < 5:
+        raise HTTPException(status_code=400,
+                            detail=f"Give the reason for changing the {' and '.join(label[f] for f in changing)} (at least 5 characters)")
+    changed = False
     for key, field in (("lta_date", "lta"), ("manual_scod", "scod")):
         if key in update_data:
-            date_history.record(db, db_mapping, field, getattr(db_mapping, key), update_data[key], "manual",
-                                getattr(user, "username", None))
+            changed |= date_history.record(db, db_mapping, field, getattr(db_mapping, key), update_data[key], "manual",
+                                           getattr(user, "display_name", None) or getattr(user, "username", None),
+                                           remarks[:1000])
     for key, value in update_data.items():
         setattr(db_mapping, key, value)
-        
+
     db.commit()
     db.refresh(db_mapping)
+    if changed:
+        from services.email_notify import engine as email_engine
+        background.add_task(email_engine.notify_date_changes, f"edit by {user.username}")
     return db_mapping
 
 @router.delete("/{mapping_id}")

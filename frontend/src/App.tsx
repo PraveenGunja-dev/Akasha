@@ -11,6 +11,7 @@ import WindDashboard from './pages/WindDashboard';
 import RequireAuth from './components/auth/RequireAuth';
 import DashboardPicker from './pages/auth/DashboardPicker';
 import ChangePassword from './pages/auth/ChangePassword';
+import { AlertPage, MyAlertsPage } from './features/alerts/AlertPages';
 import { Toaster } from 'sonner';
 import { SecurityAlertWatcher } from './features/admin/securityAlerts';
 
@@ -30,6 +31,9 @@ function App() {
                 that opens the page. The server enforces the same on every API call. */}
             <Route path="/workspaces" element={<RequireAuth><DashboardPicker /></RequireAuth>} />
             <Route path="/account/password" element={<RequireAuth><ChangePassword /></RequireAuth>} />
+            {/* Alerts emailed to the user - the email's "Acknowledge in Akasha" button lands here */}
+            <Route path="/alerts" element={<RequireAuth><MyAlertsPage /></RequireAuth>} />
+            <Route path="/alerts/:id" element={<RequireAuth><AlertPage /></RequireAuth>} />
             {/* Executive / CEO */}
             <Route path="/ceo-dashboard" element={<RequireAuth anyOf={['dashboard.executive']}><CEODashboard /></RequireAuth>} />
             <Route path="/ceo-dashboard/project/:projectId" element={<RequireAuth anyOf={['dashboard.executive']}><CEODashboard /></RequireAuth>} />

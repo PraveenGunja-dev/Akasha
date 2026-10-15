@@ -10,7 +10,7 @@ from database import engine
 
 # Import Routers
 from routers import admin as admin_router
-from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations, module_deliveries, module_deliveries_beta, bess, wind, solar, khavda, email_admin
+from routers import projects, logistics, financials, ai, sync, tc_router, dashboard, mappings, auth, pmag, notifications, quality, einvoice, intelligence, metrics, v1, v1_sources, statutory, sap, integrations, module_deliveries, module_deliveries_beta, bess, wind, solar, khavda, email_admin, alerts, order_approvals
 
 logging.basicConfig(level=logging.INFO, force=True)
 logger = logging.getLogger(__name__)
@@ -108,6 +108,8 @@ app.include_router(integrations.router)
 app.include_router(module_deliveries.router)
 app.include_router(module_deliveries_beta.router)  # Ordering Schedule Beta only
 app.include_router(email_admin.router)  # Email notifications (admin)
+app.include_router(alerts.router)  # Alerts the signed-in user must acknowledge
+app.include_router(order_approvals.router)  # Module order approvals (Ordering Schedule)
 app.include_router(bess.router)
 app.include_router(wind.router)
 app.include_router(solar.router)

@@ -18,6 +18,14 @@ def sync_sharepoint_data(db: Session = Depends(get_db)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"SharePoint sync failed: {str(e)}")
 
+def _after_sync(cause: str) -> None:
+    """Schedule-change emails for what the sync moved, without holding up
+    the response (services/email_notify/engine.notify_date_changes)."""
+    import threading
+    from services.email_notify.engine import notify_date_changes
+    threading.Thread(target=notify_date_changes, args=(cause,), daemon=True).start()
+
+
 @router.post("/p6/sync")
 def sync_p6_data(db: Session = Depends(get_db)):
     from services.sync_log_util import run_logged
@@ -30,7 +38,9 @@ def sync_p6_data(db: Session = Depends(get_db)):
             **result
         }
     try:
-        return run_logged(db, "p6", _do)
+        out = run_logged(db, "p6", _do)
+        _after_sync("p6 sync")
+        return out
     except Exception as e:
         logger.error(f"P6 sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"P6 sync failed: {str(e)}")
@@ -53,7 +63,10 @@ def sync_individual_p6_data(project_object_id: int, db: Session = Depends(get_db
 def sync_tc_data():
     from services.tc_sync import run_sync
     import threading
-    threading.Thread(target=run_sync).start()
+    def _job():
+        run_sync()
+        _after_sync("tc sync")
+    threading.Thread(target=_job).start()
     return {"status": "success", "message": "Transmission Data Sync started in background."}
 
 @router.post("/tc/sync/{project_id}")
@@ -63,6 +76,7 @@ def sync_tc_project(project_id: str):
     from services.tc_sync import sync_single_project
     try:
         result = sync_single_project(project_id)
+        _after_sync("tc sync")
         return {"status": "success", "message": f"Synced transmission data for {project_id}", **result}
     except Exception as e:
         logger.error(f"TC project sync failed for {project_id}: {e}")
@@ -73,7 +87,9 @@ def sync_mapping_data(db: Session = Depends(get_db)):
     from scripts.ingest_mapping import ingest_mapping
     from services.sync_log_util import run_logged
     try:
-        return run_logged(db, "mapping", lambda: (ingest_mapping(), {"status": "success", "message": "Synced Mappings"})[1])
+        out = run_logged(db, "mapping", lambda: (ingest_mapping(), {"status": "success", "message": "Synced Mappings"})[1])
+        _after_sync("mapping sync")
+        return out
     except Exception as e:
         logger.error(f"Mapping sync failed: {e}")
         raise HTTPException(status_code=500, detail=f"Mapping sync failed: {str(e)}")

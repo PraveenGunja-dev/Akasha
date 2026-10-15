@@ -11,7 +11,7 @@ from typing import Dict, Iterable, Optional
 
 IST = timedelta(hours=5, minutes=30)
 FIELDS = ("lta", "scod")
-SOURCE_LABEL = {"portal": "Transmission portal sync", "manual": "Edited in Akasha"}
+SOURCE_LABEL = {"portal": "Transmission portal sync", "manual": "Edited in Akasha", "mapping": "Project mapping sheet"}
 
 
 def _day(v) -> Optional[datetime]:
@@ -20,15 +20,17 @@ def _day(v) -> Optional[datetime]:
     return datetime(v.year, v.month, v.day)
 
 
-def record(db, mapping, field: str, old, new, source: str, by: Optional[str] = None) -> bool:
-    """Add a history row when the date really changed (by calendar day)."""
+def record(db, mapping, field: str, old, new, source: str, by: Optional[str] = None,
+           remarks: Optional[str] = None) -> bool:
+    """Add a history row when the date really changed (by calendar day).
+    A manual edit carries the reason the person gave."""
     old_d, new_d = _day(old), _day(new)
     if old_d == new_d:
         return False
     import models
     db.add(models.ProjectDateChange(mapping_id=mapping.id, project_id=mapping.project_id, field=field,
                                     old_value=old_d, new_value=new_d, source=source, changed_by=by,
-                                    changed_at=datetime.utcnow()))
+                                    changed_at=datetime.utcnow(), remarks=(remarks or None)))
     return True
 
 
@@ -56,7 +58,7 @@ def for_mappings(db, mapping_ids: Iterable[int], per_field: int = 20) -> Dict[in
         delta = (r.new_value - r.old_value).days if r.old_value and r.new_value else None
         h[r.field].append({
             "from": _fmt(r.old_value), "to": _fmt(r.new_value), "days": delta,
-            "source": SOURCE_LABEL.get(r.source, r.source), "by": r.changed_by or "",
+            "source": SOURCE_LABEL.get(r.source, r.source), "by": r.changed_by or "", "remarks": r.remarks or "",
             "at": r.changed_at.isoformat() + "Z", "at_ist": when_ist.strftime("%d-%b-%y %H:%M IST"),
         })
         if when_ist.date() == today_ist:

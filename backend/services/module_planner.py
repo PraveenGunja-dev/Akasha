@@ -184,6 +184,9 @@ def run_module_planning_engine(
         p['month_mwp'] = {mo: 0.0 for mo in forecast_months}
         p['month_overdue_mwp'] = {mo: 0.0 for mo in forecast_months}
         p['month_phases'] = {mo: [] for mo in forecast_months}
+        # Of each month's MWp, how much is an approved order frozen there
+        # (services/order_approvals.py) - placed before levelling below.
+        p['month_frozen_mwp'] = {mo: 0.0 for mo in forecast_months}
         p['planning_flags'] = []
         p['perspectives'] = {}
         # MWp needing an immediate exception order, outside this plan, because
@@ -298,8 +301,12 @@ def run_module_planning_engine(
             if not ref_dt:
                 ref_dt = base_month_dt + timedelta(days=TC_OFFSET_DAYS + lead_time + 30)
 
-            tc_dt = ref_dt - timedelta(days=TC_OFFSET_DAYS)
-            mod_dt = tc_dt - timedelta(days=lead_time)
+            # Same chronology as the FTC branch above: modules on site 45 days
+            # before the reference date, ordered a lead time before that.
+            # (These two were swapped, which put the ordering date AFTER the
+            # site-delivery date for every project without P6 phases.)
+            mod_dt = ref_dt - timedelta(days=TC_OFFSET_DAYS)
+            tc_dt = mod_dt - timedelta(days=lead_time)
             phases.append({
                 'phase_label': 'Project Balance',
                 'ftc_dt': ref_dt,
@@ -422,6 +429,55 @@ def run_module_planning_engine(
     project_pulled_details: Dict[int, List[Dict[str, Any]]] = {}
     project_capacity_delayed_details: Dict[int, List[Dict[str, Any]]] = {}
     project_lta_extended_details: Dict[int, List[Dict[str, Any]]] = {}
+
+    # 1b. Approved orders are frozen in their month. They are placed first,
+    # taking that month's vendor quota, so neither the levelling below nor the
+    # overdue carry-forward can move them. The approved phases are matched
+    # first, then any phase of the project (if P6 renamed a phase since).
+    # A frozen month that has already passed with no PO stays an overdue
+    # order in the current month - it is still owed, and still approved.
+    project_frozen_alloc: Dict[int, Dict[int, float]] = {}
+    for p in projects:
+        frozen = [dict(f) for f in (p.get('frozen_allocations') or [])]
+        if not frozen:
+            continue
+        pid = p['id']
+        mine = [d for d in demands if d['project_id'] == pid]
+        for any_phase in (False, True):
+            for fz in frozen:
+                try:
+                    fz_dt = datetime.strptime(fz['month'], '%b-%y')
+                except (KeyError, ValueError):
+                    continue
+                if fz['month'] in forecast_months:
+                    m, late = forecast_months.index(fz['month']), False
+                elif fz_dt < base_month_dt:
+                    m, late = 0, True
+                else:
+                    m, late = num_months - 1, False
+                for d in mine:
+                    if fz['mwp'] <= 1e-4:
+                        break
+                    if d['mwp'] <= 1e-4 or (not any_phase and d['phase_label'] not in (fz.get('phases') or [])):
+                        continue
+                    take = min(fz['mwp'], d['mwp'])
+                    src, ol = d['source'], d.get('ol', 1.35)
+                    monthly_alloc_by_source.setdefault(src, [0.0] * num_months)[m] += take / ol
+                    monthly_alloc_mwp_by_source.setdefault(src, [0.0] * num_months)[m] += take
+                    project_allocations.setdefault(pid, {m_i: 0.0 for m_i in range(num_months)})[m] += take
+                    project_overdue_alloc.setdefault(pid, {m_i: 0.0 for m_i in range(num_months)})
+                    overdue = bool(d.get('overdue')) or late
+                    if overdue:
+                        project_overdue_alloc[pid][m] += take
+                    rec = _phase_record(d, m, take, base_month_dt, overdue, forecast_months)
+                    rec['shifted'] = False          # it is where the approver put it
+                    rec['frozen_mwp'] = round(take, 1)
+                    rec['approval_id'] = fz.get('approval_id')
+                    project_phase_alloc.setdefault(pid, {}).setdefault(m, []).append(rec)
+                    project_frozen_alloc.setdefault(pid, {}).setdefault(m, 0.0)
+                    project_frozen_alloc[pid][m] += take
+                    d['mwp'] -= take
+                    fz['mwp'] -= take
 
     for source, s_demands in by_source.items():
         cap = CAP_LIMITS.get(source, DEFAULT_CAP)
@@ -575,6 +631,7 @@ def run_module_planning_engine(
             # has already closed — the cell shows the same MWp either way, and
             # this is what lets the grid mark it rather than imply it is on plan.
             p['month_overdue_mwp'][mo] = round(overdue_allocs.get(m_i, 0.0), 1)
+            p['month_frozen_mwp'][mo] = round(project_frozen_alloc.get(pid, {}).get(m_i, 0.0), 1)
             # One entry per phase, in ordering sequence, so the cell's MWp can
             # be read as the orders that make it up.
             merged: Dict[str, Dict[str, Any]] = {}
@@ -587,6 +644,8 @@ def run_module_planning_engine(
                     cur['mwp'] = round(cur['mwp'] + part['mwp'], 1)
                     cur['overdue'] = cur['overdue'] or part['overdue']
                     cur['shifted'] = cur['shifted'] or part['shifted']
+                    cur['frozen_mwp'] = round(cur.get('frozen_mwp', 0.0) + part.get('frozen_mwp', 0.0), 1)
+                    cur['approval_id'] = cur.get('approval_id') or part.get('approval_id')
                     # Worst case across the passes: the longest delay, and
                     # unreachable wins over reachable. next_tc/next_ftc travel
                     # with whichever pass is the longer delay, since that is

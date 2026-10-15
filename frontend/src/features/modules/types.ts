@@ -38,6 +38,9 @@ export interface MonthPhase {
   ftc_reachable: boolean;
   /** How many days short, when it cannot. */
   ftc_short_days: number;
+  /** MWp of this phase that is an approved order frozen in this month. */
+  frozen_mwp?: number;
+  approval_id?: number | null;
   /** Where TC and FTC actually land if the order goes in this late — the
    *  mechanical result of the same lead time and 45-day install run from the
    *  month the order can really be placed. Not a new commitment (the P6 dates
@@ -119,6 +122,10 @@ export interface ModuleProject {
    *  date had already passed. Same units as month_mwp and never larger than
    *  it — it marks a cell as overdue without changing the figure shown. */
   month_overdue_mwp?: Record<string, number>;
+  /** Of each month's MWp, the approved order frozen there (Request approval). */
+  month_frozen_mwp?: Record<string, number>;
+  /** Approvals raised for this project, newest first, with their history. */
+  approvals?: import('./OrderApproval').OrderApprovalRow[];
   planning_flags?: string[];
   /** MWp needing an immediate exception order, outside the monthly plan,
    *  because its module date already passed — authoritative from the

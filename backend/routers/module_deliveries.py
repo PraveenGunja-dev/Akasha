@@ -890,6 +890,11 @@ def get_module_deliveries_summary(
         except Exception:
             pass
 
+    # Approvals raised from this screen, and the quantities they froze in
+    # their month - the planner places those before it levels anything.
+    from services import order_approvals
+    order_approvals.attach(db, projects)
+
     # Run Intelligent Module Planning & Optimization Engine
     planning_results = run_module_planning_engine(
         projects,

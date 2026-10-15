@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { Download, Paperclip, RefreshCw, Search } from 'lucide-react';
 import { Dialog, StatusPill } from '../../../components/ui/primitives';
 import { btn, field, fmtWhen } from '../adminApi';
+import { LevelBadge } from '../../alerts/AlertDetail';
 import { emailApi, STATUS_META } from './emailApi';
 import type { EmailTemplate, LogEntry, LogFilters, LogStatus } from './emailApi';
 
@@ -103,7 +104,7 @@ export default function LogView() {
       <div className="bento-card overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-[12px]">
           <thead className="border-b border-border bg-[var(--neutral-100)] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-            <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>When</th><th>Status</th><th>Email</th><th>Project</th><th>Recipients</th><th>By</th></tr>
+            <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>When</th><th>Status</th><th>Email</th><th>Project</th><th>Level</th><th>Recipients</th><th>By</th></tr>
           </thead>
           <tbody>
             {rows.map(r => (
@@ -120,11 +121,12 @@ export default function LogView() {
                   {r.detail && <span className="block text-[11px] text-[var(--status-watch-fg)]">{r.detail}</span>}
                 </td>
                 <td className="px-3 py-2">{r.project_name ?? '—'}{r.phase && <span className="block text-[11px] text-muted-foreground">{r.phase}</span>}</td>
+                <td className="px-3 py-2">{r.level ? <LevelBadge level={r.level} /> : <span className="text-muted-foreground">—</span>}</td>
                 <td className="px-3 py-2 text-muted-foreground">{r.to.length + r.cc.length > 0 ? `${r.to.length} to · ${r.cc.length} cc` : '—'}</td>
                 <td className="px-3 py-2 text-muted-foreground">{r.triggered_by ?? ''}</td>
               </tr>
             ))}
-            {!loading && rows.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No emails match.</td></tr>}
+            {!loading && rows.length === 0 && <tr><td colSpan={7} className="px-3 py-6 text-center text-muted-foreground">No emails match.</td></tr>}
           </tbody>
         </table>
       </div>

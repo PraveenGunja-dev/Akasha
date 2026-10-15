@@ -21,7 +21,7 @@ import models
 from database import get_db
 from routers.auth import client_ip, require_permission
 from services import portfolio, security
-from services.email_notify import catalogue, engine, render
+from services.email_notify import alerts as A, catalogue, engine, render
 from services.email_notify.config import settings
 
 router = APIRouter(prefix="/api/admin/email", tags=["Email notifications"])
@@ -42,8 +42,9 @@ def _tpl_or_404(db: Session, key: str) -> models.EmailTemplate:
     return t
 
 
-def _tpl(t: models.EmailTemplate, last: Optional[datetime] = None) -> dict:
-    return {"key": t.key, "name": t.name, "category": t.category, "trigger": t.trigger,
+def _tpl(t: models.EmailTemplate, last: Optional[datetime] = None, open_alerts: Optional[dict] = None) -> dict:
+    return {"level": A.template_level(t), "ack_required": A.ack_required(t),
+            "alerts": open_alerts or {"open": 0, "awaiting": 0, "acknowledged": 0, "by_level": {}, "last_ack": None},"key": t.key, "name": t.name, "category": t.category, "trigger": t.trigger,
             "trigger_label": catalogue.TRIGGERS.get(t.trigger, t.trigger), "description": t.description,
             "severity": t.severity, "subject": t.subject, "body": t.body,
             "to_groups": t.to_groups or [], "cc_groups": t.cc_groups or [], "config": t.config or {},
@@ -102,7 +103,17 @@ def list_templates(db: Session = Depends(get_db), _: models.AkashaUser = Depends
                 .filter(models.EmailLog.status.in_(["sent", "test"])).group_by(models.EmailLog.template_key).all())
     order = {t["key"]: i for i, t in enumerate(catalogue.TEMPLATES)}
     rows = sorted(db.query(models.EmailTemplate).all(), key=lambda t: (order.get(t.key, 999), t.name))
-    return [_tpl(t, last.get(t.key)) for t in rows]
+    test = settings().test_mode
+    open_by = {}
+    for a in db.query(models.EmailAlert).filter(models.EmailAlert.status == "open", models.EmailAlert.test.is_(test)).all():
+        o = open_by.setdefault(a.template_key, {"open": 0, "awaiting": 0, "acknowledged": 0, "by_level": {}, "last_ack": None})
+        o["open"] += 1
+        o["awaiting" if not a.acknowledged_at else "acknowledged"] += 1
+        o["by_level"][str(a.level or 1)] = o["by_level"].get(str(a.level or 1), 0) + 1
+        if a.acknowledged_at and (not o["last_ack"] or _ist(a.acknowledged_at) > o["last_ack"]["at"]):
+            o["last_ack"] = {"by": a.acknowledged_by, "at": _ist(a.acknowledged_at), "level": a.ack_level,
+                             "project": a.project_name}
+    return [_tpl(t, last.get(t.key), open_by.get(t.key)) for t in rows]
 
 
 class TemplateIn(BaseModel):
@@ -115,7 +126,38 @@ class TemplateIn(BaseModel):
     config: dict = {}
     attach_snapshot: bool = False
     enabled: bool = False
+    level: int = Field(default=1, ge=1, le=3)
+    ack_required: bool = False
     note: Optional[str] = Field(default=None, max_length=300)
+
+
+def _check_timing(trigger: str, config: dict) -> None:
+    """L1 / L2 / L3 days must be whole days and climb in the right order."""
+    def bad(msg):
+        raise HTTPException(status_code=400, detail=msg)
+    if trigger == "ordering_due":
+        levels = config.get("levels")
+        if not isinstance(levels, dict) or not levels:
+            bad("Set the days before the ordering date for at least one level")
+        try:
+            days = {int(k): int(v) for k, v in levels.items()}
+        except (TypeError, ValueError):
+            bad("Days must be whole numbers")
+        if any(k not in (1, 2, 3) for k in days) or any(not 1 <= v <= 365 for v in days.values()):
+            bad("Levels are 1-3 and days 1-365")
+        order = [days[k] for k in sorted(days)]
+        if any(a <= b for a, b in zip(order, order[1:])):
+            bad("Each level must come later than the one before - e.g. L1 30, L2 15, L3 7 days before")
+    elif trigger == "ordering_overdue":
+        steps = config.get("escalation")
+        if not isinstance(steps, list) or not steps:
+            bad("Set at least one overdue reminder")
+        try:
+            days = [int(s.get("after_days", 0)) for s in steps]
+        except (TypeError, ValueError, AttributeError):
+            bad("Days overdue must be whole numbers")
+        if any(not 0 <= d <= 180 for d in days) or any(a >= b for a, b in zip(days, days[1:])):
+            bad("Days overdue must rise from L1 to L3 - e.g. 0, 7, 14")
 
 
 @router.put("/templates/{key}")
@@ -127,13 +169,15 @@ def save_template(key: str, body: TemplateIn, request: Request, db: Session = De
         raise HTTPException(status_code=400, detail="; ".join(problems))
     if body.severity not in render.SEVERITY:
         raise HTTPException(status_code=400, detail="Severity must be info, action or critical")
+    _check_timing(t.trigger, body.config)
     unknown = [g for g in body.to_groups + body.cc_groups if g not in catalogue.GROUPS]
     if unknown:
         raise HTTPException(status_code=400, detail=f"Unknown group(s): {', '.join(unknown)}")
     if body.enabled and not body.to_groups and t.trigger not in ("manual",):
         raise HTTPException(status_code=400, detail="An enabled template needs at least one 'To' group")
+    t.level, t.ack_required = A.template_level(t), A.ack_required(t)   # NULL -> the default it was using
     changed = [f for f in ("name", "severity", "subject", "body", "to_groups", "cc_groups", "config",
-                           "attach_snapshot", "enabled") if getattr(t, f) != getattr(body, f)]
+                           "attach_snapshot", "enabled", "level", "ack_required") if getattr(t, f) != getattr(body, f)]
     if not changed:
         return _tpl(t)
     for f in changed:
@@ -155,12 +199,15 @@ def versions(key: str, db: Session = Depends(get_db), _: models.AkashaUser = Dep
     return [{"version": v.version, "name": v.name, "subject": v.subject, "body": v.body,
              "to_groups": v.to_groups or [], "cc_groups": v.cc_groups or [], "config": v.config or {},
              "attach_snapshot": bool(v.attach_snapshot), "enabled": bool(v.enabled), "note": v.note,
+             "level": v.level, "ack_required": v.ack_required,
              "changed_by": v.changed_by, "changed_at": _ist(v.changed_at)} for v in rows]
 
 
 def _apply(t, src, user, note, request, db, action):
-    for f in ("name", "subject", "body", "to_groups", "cc_groups", "config", "attach_snapshot"):
-        setattr(t, f, src[f] if isinstance(src, dict) else getattr(src, f))
+    for f in ("name", "subject", "body", "to_groups", "cc_groups", "config", "attach_snapshot", "level", "ack_required"):
+        v = src.get(f) if isinstance(src, dict) else getattr(src, f, None)
+        if v is not None or f not in ("level", "ack_required"):   # versions saved before levels keep the current one
+            setattr(t, f, v)
     t.version = (t.version or 1) + 1
     t.updated_by, t.updated_at = user.username, datetime.utcnow()
     db.add(engine.version_row(t, user.username, note))
@@ -195,6 +242,8 @@ class PreviewIn(BaseModel):
     subject: Optional[str] = None
     body: Optional[str] = None
     severity: Optional[str] = None
+    level: Optional[int] = Field(default=None, ge=1, le=3)
+    ack_required: Optional[bool] = None
 
 
 @router.post("/templates/{key}/preview")
@@ -205,6 +254,9 @@ def preview(key: str, body: PreviewIn, db: Session = Depends(get_db),
     draft = models.EmailTemplate(**{c.name: getattr(t, c.name) for c in models.EmailTemplate.__table__.columns})
     for f in ("subject", "body", "severity"):
         if getattr(body, f):
+            setattr(draft, f, getattr(body, f))
+    for f in ("level", "ack_required"):
+        if getattr(body, f) is not None:
             setattr(draft, f, getattr(body, f))
     return engine.preview(db, draft, body.project_id)
 
@@ -254,19 +306,35 @@ def export_templates(db: Session = Depends(get_db), _: models.AkashaUser = Depen
     rows = []
     for t in db.query(models.EmailTemplate).all():
         rows.append([t.key, t.name, t.category, t.trigger, t.severity, "yes" if t.enabled else "no",
+                     f"L{A.template_level(t)}", "yes" if A.ack_required(t) else "no",
                      ", ".join(t.to_groups or []), ", ".join(t.cc_groups or []), t.version, t.updated_by or "",
                      (t.updated_at + IST).strftime("%Y-%m-%d %H:%M") if t.updated_at else "", t.subject, t.body])
-    return _csv(["key", "name", "category", "trigger", "severity", "enabled", "to_groups", "cc_groups", "version",
+    return _csv(["key", "name", "category", "trigger", "severity", "enabled", "level", "acknowledge", "to_groups", "cc_groups", "version",
                  "updated_by", "updated_at_ist", "subject", "body"], rows, "akasha-email-templates")
 
 
 # ── Recipients ───────────────────────────────────────────────────────────────
 
+@router.get("/users")
+def users(db: Session = Depends(get_db), _: models.AkashaUser = Depends(require_permission(PERM))):
+    """Active Akasha users with an email address - to pick recipients from."""
+    roles = {r.key: r.name for r in db.query(models.AkashaRole).all()}
+    rows = (db.query(models.AkashaUser).filter(models.AkashaUser.is_active.is_(True), models.AkashaUser.email.isnot(None))
+            .order_by(models.AkashaUser.display_name, models.AkashaUser.username).all())
+    return [{"id": u.id, "username": u.username, "name": u.display_name or u.username, "email": u.email,
+             "role": roles.get(u.role, u.role), "department": u.department or "",
+             "portfolios": [] if u.role == "superadmin" else list(u.portfolios or [])}
+            for u in rows if (u.email or "").strip()]
+
+
 @router.get("/recipients")
 def list_recipients(db: Session = Depends(get_db), _: models.AkashaUser = Depends(require_permission(PERM))):
     rows = db.query(models.EmailRecipient).order_by(models.EmailRecipient.group_key, models.EmailRecipient.email).all()
-    return [{"id": r.id, "group_key": r.group_key, "group": catalogue.GROUPS.get(r.group_key, r.group_key),
-             "name": r.name or "", "email": r.email, "portfolios": r.portfolios or [], "active": bool(r.active),
+    akasha = {(u.email or "").strip().lower() for u in db.query(models.AkashaUser)
+              .filter(models.AkashaUser.is_active.is_(True), models.AkashaUser.email.isnot(None)).all()}
+    return [{"akasha_user": r.email.strip().lower() in akasha, "id": r.id, "group_key": r.group_key, "group": catalogue.GROUPS.get(r.group_key, r.group_key),
+             "name": r.name or "", "email": r.email, "portfolios": r.portfolios or [], "level": r.level or 1,
+             "active": bool(r.active),
              "created_at": _ist(r.created_at), "created_by": r.created_by} for r in rows]
 
 
@@ -275,6 +343,7 @@ class RecipientIn(BaseModel):
     email: str = Field(max_length=200)
     name: Optional[str] = Field(default=None, max_length=120)
     portfolios: List[str] = []
+    level: int = Field(default=1, ge=1, le=3)
     active: bool = True
 
 
@@ -304,10 +373,10 @@ def add_recipient(body: RecipientIn, request: Request, db: Session = Depends(get
     if dup:
         raise HTTPException(status_code=400, detail=f"{email} is already in {catalogue.GROUPS[body.group_key]}")
     r = models.EmailRecipient(group_key=body.group_key, email=email, name=(body.name or "").strip() or None,
-                              portfolios=ports, active=body.active, created_by=user.username)
+                              portfolios=ports, level=body.level, active=body.active, created_by=user.username)
     db.add(r)
     security.audit(db, "email.recipient_added", actor=user, target=email,
-                   detail={"group": body.group_key, "portfolios": ports}, ip=client_ip(request))
+                   detail={"group": body.group_key, "level": body.level, "portfolios": ports}, ip=client_ip(request))
     db.commit()
     return {"id": r.id}
 
@@ -320,9 +389,10 @@ def update_recipient(rid: int, body: RecipientIn, request: Request, db: Session 
         raise HTTPException(status_code=404, detail="No such recipient")
     ports = _check_recipient(db, body)
     r.group_key, r.email, r.name = body.group_key, body.email.strip(), (body.name or "").strip() or None
-    r.portfolios, r.active = ports, body.active
+    r.portfolios, r.active, r.level = ports, body.active, body.level
     security.audit(db, "email.recipient_changed", actor=user, target=r.email,
-                   detail={"group": r.group_key, "active": r.active, "portfolios": ports}, ip=client_ip(request))
+                   detail={"group": r.group_key, "level": r.level, "active": r.active, "portfolios": ports},
+                   ip=client_ip(request))
     db.commit()
     return {"id": r.id}
 
@@ -369,7 +439,7 @@ def _log_row(r: models.EmailLog) -> dict:
             "severity": r.severity, "project_id": r.project_id, "project_name": r.project_name, "phase": r.phase,
             "to": r.to_addrs or [], "cc": r.cc_addrs or [], "subject": r.subject, "status": r.status,
             "detail": r.detail, "attempts": r.attempts, "attachments": r.attachments or [],
-            "triggered_by": r.triggered_by}
+            "triggered_by": r.triggered_by, "level": r.level, "alert_id": r.alert_id}
 
 
 @router.get("/log")
@@ -425,12 +495,13 @@ def export_log(request: Request, db: Session = Depends(get_db),
             names.get(r.template_key, r.template_key), r.template_version or "", r.severity or "",
             r.project_id or "", r.project_name or "", r.phase or "", "; ".join(r.to_addrs or []),
             "; ".join(r.cc_addrs or []), r.subject or "", ", ".join(r.attachments or []), r.attempts or 1,
-            r.triggered_by or "", r.detail or ""] for r in rows]
+            r.triggered_by or "", r.detail or "", f"L{r.level}" if r.level else "", r.alert_id or ""] for r in rows]
     security.audit(db, "email.log_exported", actor=user, target="email log", detail={"rows": len(out)},
                    ip=client_ip(request))
     db.commit()
     return _csv(["time_ist", "status", "template", "template_version", "severity", "project_id", "project", "phase",
-                 "to", "cc", "subject", "attachments", "attempts", "triggered_by", "detail"], out, "akasha-email-log")
+                 "to", "cc", "subject", "attachments", "attempts", "triggered_by", "detail", "level", "alert_id"], out,
+                "akasha-email-log")
 
 
 # ── Run ──────────────────────────────────────────────────────────────────────
@@ -466,3 +537,64 @@ def run_now(body: RunIn, request: Request, db: Session = Depends(get_db),
                        ip=client_ip(request))
         db.commit()
     return r
+
+
+# ── Alerts (acknowledgement and escalation) ──────────────────────────────────
+
+@router.get("/alerts")
+def list_alerts(db: Session = Depends(get_db), _: models.AkashaUser = Depends(require_permission(PERM)),
+                status: Optional[str] = Query("open", pattern="^(open|resolved|)$"),
+                level: Optional[int] = Query(None, ge=1, le=3), template: Optional[str] = None, q: Optional[str] = None,
+                ack: Optional[str] = Query(None, pattern="^(awaiting|acknowledged|)$"),
+                limit: int = Query(200, ge=1, le=1000)):
+    """Alerts in the current mode (test alerts while EMAIL_TEST_MODE is on),
+    with counts for the filter chips."""
+    from routers import alerts as alerts_router
+    test = settings().test_mode
+    counts = {"open": 0, "awaiting": 0, "acknowledged": 0, "resolved": 0, "by_level": {"1": 0, "2": 0, "3": 0}}
+    for a in db.query(models.EmailAlert).filter(models.EmailAlert.test.is_(test)).all():
+        if a.status == "open":
+            counts["open"] += 1
+            counts["acknowledged" if a.acknowledged_at else "awaiting"] += 1
+            counts["by_level"][str(a.level or 1)] = counts["by_level"].get(str(a.level or 1), 0) + 1
+        else:
+            counts["resolved"] += 1
+    query = (alerts_router.admin_query(db, status or None, level, template, q, ack or None)
+             .filter(models.EmailAlert.test.is_(test)))
+    names = alerts_router._names(db)
+    rows = query.order_by(models.EmailAlert.last_sent_at.desc().nullslast(), models.EmailAlert.id.desc()).limit(limit).all()
+    return {"test_mode": test, "counts": counts, "total": query.count(),
+            "alerts": [alerts_router.serialize(db, a, names) for a in rows]}
+
+
+@router.get("/alerts-export")
+def export_alerts(request: Request, db: Session = Depends(get_db), user: models.AkashaUser = Depends(require_permission(PERM)),
+                  status: Optional[str] = None, level: Optional[int] = None, template: Optional[str] = None,
+                  q: Optional[str] = None, ack: Optional[str] = None):
+    from routers import alerts as alerts_router
+    test = settings().test_mode
+    names = alerts_router._names(db)
+    rows = (alerts_router.admin_query(db, status or None, level, template, q, ack or None)
+            .filter(models.EmailAlert.test.is_(test)).order_by(models.EmailAlert.id.desc()).limit(50000).all())
+    tnames = {t.key: t.name for t in db.query(models.EmailTemplate).all()}
+
+    def fmt(dt):
+        return (dt + IST).strftime("%Y-%m-%d %H:%M") if dt else ""
+
+    out = []
+    for a in rows:
+        rec = A.recipients(db, a)
+        out.append([a.id, a.status, tnames.get(a.template_key, a.template_key), a.project_id or "", a.project_name or "",
+                    a.phase or "", a.due_date or "", f"L{a.level or 1}", a.emails or 0, fmt(a.opened_at), fmt(a.last_sent_at),
+                    "; ".join(f"{names.get(r.email.lower(), r.email)} (L{r.level})"
+                              f"{' - acknowledged' if r.acknowledged_at else ''}" for r in rec),
+                    fmt(a.acknowledged_at), a.acknowledged_by or "", f"L{a.ack_level}" if a.ack_level else "",
+                    a.update_note or "", a.expected_date.date().isoformat() if a.expected_date else "",
+                    fmt(a.resolved_at), a.resolved_reason or ""])
+    security.audit(db, "email.alerts_exported", actor=user, target="email alerts", detail={"rows": len(out)},
+                   ip=client_ip(request))
+    db.commit()
+    return _csv(["alert_id", "status", "latest_email", "project_id", "project", "phase", "ordering_date", "level", "emails",
+                 "opened_ist", "last_email_ist", "to_recipients", "acknowledged_ist", "acknowledged_by",
+                 "acknowledged_at_level", "update", "expected_date", "closed_ist", "closed_because"], out,
+                "akasha-email-alerts")

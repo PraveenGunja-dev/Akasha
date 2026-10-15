@@ -12,7 +12,7 @@ import { createPortal } from 'react-dom';
 import { History } from 'lucide-react';
 
 export interface DateChangeEntry {
-  from: string; to: string; days: number | null; source: string; by: string; at: string; at_ist: string;
+  from: string; to: string; days: number | null; source: string; by: string; at: string; at_ist: string; remarks?: string;
 }
 export interface DateHistory {
   lta: DateChangeEntry[]; scod: DateChangeEntry[];
@@ -99,6 +99,7 @@ function HistoryPopover({ anchor, field, entries, projectName, onClose }: {
               )}
             </div>
             <div className="mt-0.5 text-[10.5px] text-fg-tertiary">{e.source}{e.by && e.by !== 'sync' ? ` · ${e.by}` : ''} · {e.at_ist}</div>
+            {e.remarks && <div className="mt-0.5 text-[10.5px] italic text-fg-secondary">“{e.remarks}”</div>}
           </li>
         ))}
       </ol>

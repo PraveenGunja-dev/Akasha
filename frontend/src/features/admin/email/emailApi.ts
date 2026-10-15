@@ -1,5 +1,6 @@
 /* Client for /api/admin/email (backend/routers/email_admin.py). */
 import type { Tone } from '../../../components/ui/primitives';
+import type { Alert, Level } from '../../alerts/alertsApi';
 
 const BASE = '/akasha/api/admin/email';
 
@@ -32,29 +33,42 @@ export interface EmailTemplate {
   to_groups: string[]; cc_groups: string[]; config: Record<string, unknown>;
   attach_snapshot: boolean; enabled: boolean; version: number;
   updated_by: string | null; updated_at: string | null; last_sent_at: string | null; problems: string[];
+  level: Level; ack_required: boolean; alerts: TemplateAlerts;
+}
+
+/** Open alerts whose latest email was this template. */
+export interface TemplateAlerts {
+  open: number; awaiting: number; acknowledged: number; by_level: Partial<Record<'1' | '2' | '3', number>>;
+  last_ack: { by: string | null; at: string | null; level: Level | null; project: string | null } | null;
 }
 
 export interface TemplateVersion {
   version: number; name: string; subject: string; body: string; to_groups: string[]; cc_groups: string[];
   config: Record<string, unknown>; attach_snapshot: boolean; enabled: boolean; note: string | null;
+  level: Level | null; ack_required: boolean | null;
   changed_by: string | null; changed_at: string | null;
 }
 
 export interface Preview {
   subject: string; html: string; problems: string[]; empty: string[];
-  project_id: string | null; project_name: string | null; to: string[]; cc: string[];
+  project_id: string | null; project_name: string | null; to: string[]; cc: string[]; level: Level;
 }
 
 export interface Recipient {
   id: number; group_key: string; group: string; name: string; email: string;
-  portfolios: string[]; active: boolean; created_at: string | null; created_by: string | null;
+  portfolios: string[]; level: Level; active: boolean; created_at: string | null; created_by: string | null;
+  akasha_user: boolean;
+}
+
+export interface UserOption {
+  id: number; username: string; name: string; email: string; role: string; department: string; portfolios: string[];
 }
 
 export interface LogEntry {
   id: number; at: string | null; template_key: string; template_version: number | null; severity: Severity | null;
   project_id: string | null; project_name: string | null; phase: string | null; to: string[]; cc: string[];
   subject: string | null; status: LogStatus; detail: string | null; attempts: number; attachments: string[];
-  triggered_by: string | null;
+  triggered_by: string | null; level: Level | null; alert_id: number | null;
 }
 
 export interface LogFilters { since?: string; until?: string; status?: string; template?: string; q?: string }
@@ -62,6 +76,13 @@ export interface LogFilters { since?: string; until?: string; status?: string; t
 export interface RunItem {
   template: string; event_key?: string; project_id?: string | null; project_name?: string | null; phase?: string;
   to?: string[]; cc?: string[]; subject?: string; status: LogStatus | 'error'; detail?: string | null;
+  level?: Level; escalation?: 'sent' | 'escalated' | 'held'; why?: string;
+}
+
+export interface AlertFilters { status?: 'open' | 'resolved' | ''; level?: number; template?: string; q?: string; ack?: 'awaiting' | 'acknowledged' | '' }
+export interface AlertList {
+  test_mode: boolean; total: number; alerts: Alert[];
+  counts: { open: number; awaiting: number; acknowledged: number; resolved: number; by_level: Record<'1' | '2' | '3', number> };
 }
 export interface RunResult { message: string; items: RunItem[]; counts?: Record<string, number>; dry_run?: boolean }
 
@@ -109,11 +130,12 @@ export const emailApi = {
   versions: (key: string) => call<TemplateVersion[]>(`/templates/${key}/versions`),
   restore: (key: string, version: number) => send<EmailTemplate>('POST', `/templates/${key}/restore/${version}`),
   reset: (key: string) => send<EmailTemplate>('POST', `/templates/${key}/reset`),
-  preview: (key: string, draft: { project_id?: string; subject?: string; body?: string; severity?: string }) =>
+  preview: (key: string, draft: { project_id?: string; subject?: string; body?: string; severity?: string; level?: number; ack_required?: boolean }) =>
     send<Preview>('POST', `/templates/${key}/preview`, draft),
   test: (key: string, to: string, project_id?: string) => send<RunItem>('POST', `/templates/${key}/test`, { to, project_id }),
   sendFor: (key: string, project_id: string) => send<RunItem>('POST', `/templates/${key}/send`, { project_id }),
   exportTemplates: () => download('/templates/export'),
+  users: () => call<UserOption[]>('/users'),
   recipients: () => call<Recipient[]>('/recipients'),
   addRecipient: (r: Partial<Recipient>) => send<{ id: number }>('POST', '/recipients', r),
   updateRecipient: (id: number, r: Partial<Recipient>) => send<{ id: number }>('PUT', `/recipients/${id}`, r),
@@ -125,6 +147,8 @@ export const emailApi = {
   exportLog: (f: LogFilters) => download(`/log-export?${query(f)}`),
   run: (dry_run: boolean) => send<RunResult>('POST', '/run', { dry_run }),
   baseline: () => send<RunResult>('POST', '/baseline'),
+  alerts: (f: AlertFilters) => call<AlertList>(`/alerts?${query(f)}`),
+  exportAlerts: (f: AlertFilters) => download(`/alerts-export?${query(f)}`),
 };
 
 export const STATUS_META: Record<string, { label: string; tone: Tone }> = {
