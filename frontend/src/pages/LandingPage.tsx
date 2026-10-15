@@ -399,7 +399,7 @@ export default function LandingPage() {
               onKeyDown={(e) => { if (e.key === 'Escape') closeLogin(); }}>
 
               {/* Header: close, then theme toggle last */}
-              <header className="flex shrink-0 items-center justify-end gap-3 px-8 pt-7 sm:px-12">
+              <header className="relative z-10 flex shrink-0 items-center justify-end gap-3 px-8 pt-7 sm:px-12">
                 <button type="button" onClick={closeLogin} aria-label="Close sign-in"
                   className={`rounded-full p-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4aa3dd]/50
                               ${isDark ? 'text-white/40 hover:bg-white/10 hover:text-white' : 'text-slate-400 hover:bg-slate-100 hover:text-slate-700'}`}>
@@ -410,8 +410,10 @@ export default function LandingPage() {
                 </button>
               </header>
 
-              {/* Form, centred in the remaining height */}
-              <div className="flex flex-1 items-center px-8 py-10 sm:px-12">
+              {/* Form. On desktop it is centred on the same line as the hero beside it
+                  (full height, raised 70px like .lp-hero), so the two read as one row;
+                  below lg it is centred in the height left under the header. */}
+              <div className="flex flex-1 items-center px-8 py-10 sm:px-12 lg:absolute lg:inset-0 lg:-mt-[70px] lg:py-0">
                 <motion.div className="mx-auto w-full max-w-[380px]"
                   initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }}
                   transition={{ duration: 0.45, delay: 0.2, ease: 'easeOut' }}>
