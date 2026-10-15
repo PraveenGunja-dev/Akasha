@@ -1007,39 +1007,6 @@ export default function ModuleDeliveriesPage() {
       ?? null;
   }, [aiById, aiByP6]);
   const aiAsOf = aiMeta?.generated_at;
-
-  /* AI Priority is editable: a manual choice (saved on the backend, so it
-     survives a refresh) replaces the AI's class in the column and the totals.
-     The AI's own answer is kept and still shown in the details popup. */
-  const aiClassOf = (a?: RowAI | null) =>
-    isScored(a?.ai_priority) ? (a?.ai_priority?.priority_class || '').toUpperCase() : '';
-  const effectivePriority = useCallback((a?: RowAI | null) =>
-    (a?.priority_override?.priority || '').toUpperCase() || aiClassOf(a), []);
-  const [savingPriorityKey, setSavingPriorityKey] = useState<string | null>(null);
-  const saveAiPriority = useCallback(async (a: RowAI, priority: string | null) => {
-    const key = a.key;
-    if (!key) return;
-    const before = aiById[key]?.priority_override ?? null;
-    const apply = (ov: RowAI['priority_override']) =>
-      setAiById(prev => (prev[key] ? { ...prev, [key]: { ...prev[key], priority_override: ov } } : prev));
-    apply(priority ? { priority } : null);  // optimistic
-    setSavingPriorityKey(key);
-    try {
-      const res = await fetch(`${API}/akasha/api/module-deliveries/ai-results/${encodeURIComponent(key)}/priority`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ priority }),
-      });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const d = await res.json();
-      apply(d.priority_override ?? null);
-    } catch (e) {
-      apply(before);  // roll back so the screen never shows a value that was not saved
-      window.alert(`Could not save the priority: ${e instanceof Error ? e.message : e}`);
-    } finally {
-      setSavingPriorityKey(null);
-    }
-  }, [aiById]);
   /* Rows the AI scored, re-expressed on the AI's ordering plan (see
      buildAIRowView). Everything that reads the month grid goes through pvOf,
      so a row's cells, its total, the column totals and the Planned-by-Month
@@ -1291,35 +1258,6 @@ export default function ModuleDeliveriesPage() {
     });
     return groups;
   }, [filtered, groupBy]);
-
-  /* Vendor quota check per month column. Walking the rows top to bottom in
-     the order the table draws them, add up each vendor's MWac (the module
-     box's second number) against that vendor's monthly quota from
-     capacity_summary (ALMM 500, China 750, SEA 500 ...). Once a vendor has
-     reached its quota in a month, every LATER box of that vendor in that
-     month is over the quota and is highlighted; the box that reaches it is not. */
-  const quotaOver = useMemo(() => {
-    const over = new Map<string, { vendor: string; cap: number }>();
-    const cs = data?.capacity_summary;
-    if (!cs) return over;
-    const rows = Object.values(grouped).flat();
-    for (const mo of FORECAST_MONTHS) {
-      const used: Record<string, number> = {};
-      for (const p of rows) {
-        const cap = cs[p.type]?.monthly_cap_mwac;
-        if (!cap) continue;
-        const v = pvOf(p);
-        const val = v.month_mwp?.[mo] || 0;
-        // Same box as the cell draws (getChipsForMonth): an order this month.
-        if (val <= 0 || !(v.balance_ordering_mwp > 0)) continue;
-        const ac = Math.round(v.ol > 0 ? val / v.ol : val / 1.35);
-        const before = used[p.type] || 0;
-        if (before >= cap) over.set(`${p.id}|${mo}`, { vendor: p.type, cap });
-        used[p.type] = before + ac;
-      }
-    }
-    return over;
-  }, [data, grouped, pvOf]);
 
   const toggleGroup = (g: string) => {
     setCollapsed(prev => {
@@ -2106,56 +2044,31 @@ export default function ModuleDeliveriesPage() {
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
                       {isColVisible('ai_priority') && (() => {
-                        const rowAi = aiFor(p);
-                        const pr = rowAi?.ai_priority;
-                        const review = rowAi?.ai_review_status;
-                        const aiCls = aiClassOf(rowAi);             // the AI's own answer
-                        const cls = effectivePriority(rowAi);        // what the column shows
-                        const edited = !!rowAi?.priority_override?.priority;
-                        const saving = !!rowAi?.key && savingPriorityKey === rowAi.key;
+                        const pr = aiFor(p)?.ai_priority;
+                        const review = aiFor(p)?.ai_review_status;
+                        const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
                         const tone = aiPriorityTone(cls);
                         const pill = tone === 'critical' ? 'bg-status-critical-bg text-status-critical-fg border-status-critical-border'
                           : tone === 'risk' ? 'bg-status-risk-bg text-status-risk-fg border-status-risk-border'
                           : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg border-status-watch-border'
                           : 'bg-brand-blue/10 text-brand-blue border-brand-blue/30';
-                        const aiLine = !aiCls ? `AI did not score this project: ${pr?.reason || 'no reason given'}`
-                          // The score is urgency (near 0 for STANDARD by design), so a
-                          // STANDARD row reports how sure the model is instead.
-                          : aiCls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
-                            ? `AI priority STANDARD · ${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
-                            : `AI priority ${aiCls} · score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`;
                         return (
                           <Td className={`${SECTION_EDGE} ${AI_CELL}`}>
-                            {!rowAi || !pr ? <span className="text-muted-foreground/40">-</span> : (
-                              <div className="inline-flex items-center gap-1">
-                                <Tip text={(edited ? `Set manually to ${cls}\n` : '') + aiLine
-                                  + (aiCls && review ? `\nGovernance review: ${review}` : '')
-                                  + '\nClick to change the priority'}>
-                                  <span className="relative inline-flex items-center">
-                                    {cls === 'P1' && <span className="pointer-events-none absolute left-1.5 h-1.5 w-1.5 rounded-full bg-status-critical-solid" />}
-                                    <select
-                                      aria-label={`AI priority for ${p.project_name || p.p6_name}`}
-                                      value={cls}
-                                      disabled={saving || !rowAi.key}
-                                      onChange={e => {
-                                        const v = e.target.value;
-                                        // Picking the AI's own class (or "reset") clears the manual edit.
-                                        saveAiPriority(rowAi, v === '__ai__' || (v === aiCls && edited) ? null : v);
-                                      }}
-                                      className={`cursor-pointer appearance-none rounded-full border py-0.5 pr-2 text-center text-[9px] font-bold tracking-wider focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 disabled:cursor-wait disabled:opacity-60 ${cls === 'P1' ? 'pl-4' : 'pl-2'} ${edited ? 'border-dashed' : ''} ${cls ? pill : 'border-border bg-muted/50 text-muted-foreground'}`}>
-                                      {!cls && <option value="" disabled>N/A</option>}
-                                      {['P1', 'P2', 'STANDARD'].map(o => <option key={o} value={o}>{o}</option>)}
-                                      {edited && <option value="__ai__">Reset to AI ({aiCls || 'not scored'})</option>}
-                                    </select>
-                                  </span>
-                                </Tip>
-                                <Tip text="AI priority details">
-                                  <button type="button" onClick={() => setAiPriorityRow(p)} aria-label="AI priority details"
-                                    className="rounded p-0.5 text-muted-foreground transition-colors hover:text-brand-blue focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50">
-                                    <Info className="h-3 w-3" />
-                                  </button>
-                                </Tip>
-                              </div>
+                            {!pr ? <span className="text-muted-foreground/40">-</span> : (
+                              <Tip text={(!cls ? `Not scored: ${pr?.reason || 'no reason given'}`
+                                // The score is urgency (near 0 for STANDARD by design), so a
+                                // STANDARD row reports how sure the model is instead.
+                                : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
+                                  ? `AI priority STANDARD · ${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
+                                  : `AI priority ${cls} · score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`)
+                                + (cls && review ? `\nGovernance review: ${review}` : '')
+                                + '\nClick for the details'}>
+                                <button type="button" onClick={() => setAiPriorityRow(p)}
+                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${cls ? pill : 'border-border bg-muted/50 text-muted-foreground'}`}>
+                                  {cls === 'P1' && <span className="h-1.5 w-1.5 rounded-full bg-status-critical-solid" />}
+                                  {cls || 'N/A'}
+                                </button>
+                              </Tip>
                             )}
                           </Td>
                         );
@@ -2207,8 +2120,6 @@ export default function ModuleDeliveriesPage() {
                         // The AI forecast for this row, when the AI scored it.
                         const rowAI = aiFor(p);
                         const aiF = isScored(rowAI?.ai_monthly_order_tc_forecast) ? rowAI!.ai_monthly_order_tc_forecast! : null;
-                        // This month's order comes after its vendor's monthly quota was already used up.
-                        const quota = quotaOver.get(`${p.id}|${mo}`);
 
                         const getShiftMonths = () => {
                           if (!p.module_date) return 0;
@@ -2305,11 +2216,6 @@ export default function ModuleDeliveriesPage() {
                                               ? `${monthChips.map(c => `${c.label} MW`).join(', ')} · ${mo}`
                                               : `${MW(val)} MWp · ${mo}`}
                                           </span>
-                                          {quota && !isMilestoneOnly && (
-                                            <span className="text-[10.5px] font-semibold text-emerald-700 dark:text-emerald-300">
-                                              (For {quota.vendor} the quota is {MW(quota.cap)} MWac, but it is exceeding the quota)
-                                            </span>
-                                          )}
                                         </div>
                                         <div className="text-[10px] text-fg-tertiary font-mono">
                                           Balance to Order: <span className={`font-semibold ${p.balance_ordering_mwp > 0 ? 'text-status-risk-fg' : 'text-status-healthy-fg'}`}>{p.balance_ordering_mwp > 0 ? `${MW(p.balance_ordering_mwp)} MWp` : '0 MWp'}</span>
@@ -2713,8 +2619,7 @@ export default function ModuleDeliveriesPage() {
                                 <div className="flex flex-col items-end gap-1 w-full">
                                   {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
                                     <div key={idx} className={`relative px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
-                                      ${c.type === 'module' && quota ? 'bg-emerald-100 text-emerald-800 border border-emerald-500 ring-1 ring-emerald-500/40 dark:bg-emerald-500/20 dark:text-emerald-200' :
-                                        c.type === 'module' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' :
+                                      ${c.type === 'module' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' :
                                         c.type === 'tc' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border shadow-status-risk-fg/20' :
                                         'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border shadow-status-healthy-fg/20'}`}>
                                       {isShifted && (
@@ -2722,9 +2627,6 @@ export default function ModuleDeliveriesPage() {
                                           className={`absolute top-0 right-0 w-0 h-0 border-t-[10px] border-l-[10px] border-l-transparent ${shiftTriangleColor} opacity-100 z-10 drop-shadow-sm`}
                                           title={shiftLabel}
                                         />
-                                      )}
-                                      {c.type === 'module' && quota && (
-                                        <span className="absolute left-0 top-0 z-10 h-0 w-0 border-r-[8px] border-t-[8px] border-r-transparent border-t-emerald-600" />
                                       )}
                                       {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5 relative z-20`} />}
                                       <span className="tabular-nums text-[11px] tracking-tight font-extrabold relative z-20">
@@ -2884,9 +2786,8 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
                 {isColVisible('ai_priority') && (() => {
                   // How many of the rows on screen the AI put at P1 - a count, so it adds up.
-                  // Counts the priority the column shows, manual edits included.
-                  const p1 = filtered.filter(p => effectivePriority(aiFor(p)) === 'P1').length;
-                  return <Td className={`${SECTION_EDGE} ${AI_CELL} ${AI_TEXT}`} tip={`${p1} of ${filtered.length} projects shown are P1 (AI priority, including manual changes)`}>{p1 > 0 ? `${p1} × P1` : '-'}</Td>;
+                  const p1 = filtered.filter(p => isScored(aiFor(p)?.ai_priority) && (aiFor(p)?.ai_priority?.priority_class || '').toUpperCase() === 'P1').length;
+                  return <Td className={`${SECTION_EDGE} ${AI_CELL} ${AI_TEXT}`} tip={`${p1} of ${filtered.length} projects shown are AI P1`}>{p1 > 0 ? `${p1} × P1` : '-'}</Td>;
                 })()}
                 {isColVisible('status') && <Td className={SECTION_EDGE} />}
                 {isColVisible('month_wise') && <>

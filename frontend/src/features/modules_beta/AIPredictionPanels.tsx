@@ -1177,10 +1177,6 @@ export interface ReviewChange { field: string; before: unknown; after: unknown }
 
 /** One dashboard row's AI results, as served by GET /module-deliveries/ai-results. */
 export interface RowAI {
-  /** This row's key in the AI export; manual priority edits are saved under it. */
-  key?: string;
-  /** A priority set by hand on the dashboard, shown in place of the AI's class. */
-  priority_override?: { priority: string; updated_at?: string } | null;
   p6_name?: string | null;
   /** Used with p6_name to match a row when the ids come from another database. */
   plot?: string | null;

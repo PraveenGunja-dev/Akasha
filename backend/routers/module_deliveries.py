@@ -839,76 +839,10 @@ AI_RESULTS_FILE = _os.getenv("AI_RESULTS_FILE") or next(
 )
 _ai_results_cache: dict = {"mtime": None, "data": None}
 
-# Manual AI-priority edits made on the Beta page. Kept apart from the AI
-# export (which is replaced whenever the AI team re-scores) and keyed by the
-# export's own project key, which is the same in every environment.
-AI_PRIORITY_OVERRIDES_FILE = _os.getenv("AI_PRIORITY_OVERRIDES_FILE") or _os.path.join(
-    _BACKEND_DIR, "ai_priority_overrides.json")
-_AI_PRIORITY_CLASSES = ("P1", "P2", "STANDARD")
-import threading as _threading
-_overrides_lock = _threading.Lock()
-
-
-def _read_priority_overrides() -> dict:
-    try:
-        with open(AI_PRIORITY_OVERRIDES_FILE, encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
-def _write_priority_overrides(data: dict) -> None:
-    tmp = AI_PRIORITY_OVERRIDES_FILE + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as f:
-        json.dump(data, f, indent=2)
-    _os.replace(tmp, AI_PRIORITY_OVERRIDES_FILE)  # atomic: a crash never leaves half a file
-
 
 @router.get("/ai-results")
 def get_ai_results():
-    """AI results per dashboard row, keyed by project_mapping id, with any
-    manual priority edits merged in as priority_override."""
-    data = _load_ai_results()
-    overrides = _read_priority_overrides()
-    if not data.get("available") or not overrides:
-        return data
-    by_id = {k: ({**v, "priority_override": overrides[k]} if k in overrides else v)
-             for k, v in data["by_id"].items()}
-    return {**data, "by_id": by_id}
-
-
-class AIPriorityOverrideRequest(BaseModel):
-    # P1 / P2 / STANDARD, or null to go back to the AI's own class.
-    priority: Optional[str] = None
-
-
-@router.put("/ai-results/{key}/priority")
-def set_ai_priority(key: str, body: AIPriorityOverrideRequest):
-    """Set (or clear) the priority shown for one AI-scored row. Persists across
-    refreshes and restarts; the AI's own answer is left untouched."""
-    from fastapi import HTTPException
-    data = _load_ai_results()
-    row = (data.get("by_id") or {}).get(key)
-    if row is None:
-        raise HTTPException(status_code=404, detail=f"No AI result with key {key}")
-    pr = (body.priority or "").strip().upper() or None
-    if pr is not None and pr not in _AI_PRIORITY_CLASSES:
-        raise HTTPException(status_code=400, detail=f"priority must be one of {', '.join(_AI_PRIORITY_CLASSES)} or null")
-    with _overrides_lock:
-        overrides = _read_priority_overrides()
-        if pr is None:
-            overrides.pop(key, None)
-            entry = None
-        else:
-            entry = {"priority": pr, "p6_name": row.get("p6_name"),
-                     "updated_at": datetime.now().isoformat(timespec="seconds")}
-            overrides[key] = entry
-        _write_priority_overrides(overrides)
-    return {"key": key, "priority_override": entry}
-
-
-def _load_ai_results():
+    """AI results per dashboard row, keyed by project_mapping id."""
     path = AI_RESULTS_FILE
     if not _os.path.isfile(path):
         return {"available": False, "reason": "AI results file not found on the server", "meta": None, "by_id": {}}
@@ -921,8 +855,6 @@ def _load_ai_results():
             if p.get("id") is None:
                 continue
             by_id[str(p["id"])] = {
-                # This row's key in the export; manual priority edits are saved under it.
-                "key": str(p["id"]),
                 # Carried so the page can refuse a row whose id now points at a
                 # different project than the one the AI scored.
                 "p6_name": p.get("p6_name"),
