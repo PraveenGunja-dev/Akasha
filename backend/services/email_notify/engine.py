@@ -139,8 +139,9 @@ def version_row(t, who: str, note: str = "") -> "models.EmailTemplateVersion":
 
 # ── Recipients ───────────────────────────────────────────────────────────────
 
-# The demo project's portfolio (scripts/demo_email_project.py). Only people who
-# list it explicitly hear about it - "all portfolios" never includes the demo.
+# The demo projects' portfolio (scripts/demo_email_project.py; the self-test
+# uses "Akasha Demo Selftest"). Only people who list it explicitly hear about
+# it - "all portfolios" never includes a demo.
 DEMO_PORTFOLIO = "Akasha Demo"
 
 
@@ -157,7 +158,7 @@ def members(db: Session, groups: List[str], portfolio: Optional[str] = None, lev
         ports = [x.lower() for x in (r.portfolios or [])]
         if portfolio and ports and portfolio.lower() not in ports:
             continue
-        if portfolio and portfolio.lower() == DEMO_PORTFOLIO.lower() and not ports:
+        if portfolio and portfolio.lower().startswith(DEMO_PORTFOLIO.lower()) and not ports:
             continue
         if (r.level or 1) > level:
             continue
@@ -604,7 +605,7 @@ def ev_weekly_digest(d: Data, t, dry: bool, force: bool = False) -> List[Event]:
             continue
         seen.add(r.email.lower())
         ports = {x.lower() for x in (r.portfolios or [])}
-        projects = [p for p in d.projects if (not ports and (p.get("cluster") or "").lower() != DEMO_PORTFOLIO.lower())
+        projects = [p for p in d.projects if (not ports and not (p.get("cluster") or "").lower().startswith(DEMO_PORTFOLIO.lower()))
                     or (p.get("cluster") or "").lower() in ports]
         ctx = d.context({"project_name": ""})
         ctx.update({"digest_period": period, "digest_table": digest_table(projects, d.cfg.public_url)})

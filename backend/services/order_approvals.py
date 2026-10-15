@@ -153,7 +153,7 @@ def _role_covers(user, role_key: str, cluster: Optional[str]) -> bool:
         return False
     ports = [x.lower() for x in (user.portfolios or [])]
     c = (cluster or "").lower()
-    return c in ports if ports else c != DEMO
+    return c in ports if ports else not c.startswith(DEMO)
 
 
 def role_users(db: Session, role_key: str, cluster: Optional[str]) -> List[str]:

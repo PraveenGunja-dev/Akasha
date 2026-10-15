@@ -49,13 +49,15 @@ import demo_email_project as demo  # noqa: E402
 
 DEMO = demo.PROJECT_ID
 TESTER, HEAD = "selftest_orderer", "selftest_head"
+# Its own portfolio and marker: it never sees, nor removes, a demo set up for manual testing.
+PORTFOLIO, MARK = "Akasha Demo Selftest", "email-selftest"
 fails = []
 
 
 def check(name, ok, info=""):
     print(("  PASS  " if ok else "  FAIL  ") + name + (f"   [{info}]" if info and not ok else ""))
     if not ok:
-        fails.append(name)
+        fails.append(name + (f" - got: {info}" if info else ""))
 
 
 def main():
@@ -72,8 +74,8 @@ def main():
 
     db = SessionLocal()
     if demo.mapping(db):
-        print("A demo project already exists. Remove it first (python scripts/demo_email_project.py --remove)\n"
-              "and run the self-test before creating your own demo for manual testing.")
+        print("The created demo project (DEMO - Akasha Email Test) exists - the self-test needs it for itself.\n"
+              "Remove it first: python scripts/demo_email_project.py --remove")
         return 2
 
     # ── Stubs: capture instead of send; the engine sees only the demo ──────
@@ -109,14 +111,14 @@ def main():
     req = Request({"type": "http", "headers": [], "client": ("127.0.0.1", 0)})
     print("Akasha email self-test\n")
     try:
-        demo.create(db, 30, ["selftest.l1@adani.com"])
+        demo.create(db, 30, ["selftest.l1@adani.com"], mark=MARK, portfolio=PORTFOLIO)
         for email, lv in (("selftest.l2@adani.com", 2), ("selftest.l3@adani.com", 3)):
             db.add(models.EmailRecipient(group_key="tc_ordering", name=f"Self-test L{lv}", email=email, level=lv,
-                                         portfolios=[demo.PORTFOLIO], active=True, created_by=demo.MARK))
+                                         portfolios=[PORTFOLIO], active=True, created_by=MARK))
         orderer = models.AkashaUser(username=TESTER, password_hash="x", display_name="Self-test Orderer", role="tc_ordering",
-                                    email="selftest.l1@adani.com", is_active=True, portfolios=[demo.PORTFOLIO])
+                                    email="selftest.l1@adani.com", is_active=True, portfolios=[PORTFOLIO])
         head = models.AkashaUser(username=HEAD, password_hash="x", display_name="Self-test Head", role="tc_head",
-                                 email="selftest.head@adani.com", is_active=True, portfolios=[demo.PORTFOLIO])
+                                 email="selftest.head@adani.com", is_active=True, portfolios=[PORTFOLIO])
         db.add_all([orderer, head])
         db.commit()
         engine.seed_templates(db)
@@ -125,30 +127,41 @@ def main():
         p = engine.Data(db).projects[0]
         due = C.parse_day(next(ph for rows in p["month_phases"].values() for ph in rows)["order_date"])
         month = next(k for k, v in p["month_mwp"].items() if v)
-        print(f"\n  Demo project: ordering date {C.fmt_day(due)}, {p['month_mwp'][month]} MWp in {month}\n")
+        # The days this server's template really uses (editable per template).
+        stage = {lv: n for lv, n in A.due_stages(db.get(models.EmailTemplate, "ordering_due_30"))}
+        d1, d2, d3 = stage.get(1), stage.get(2), stage.get(3)
+        print(f"\n  Demo project: ordering date {C.fmt_day(due)}, {p['month_mwp'][month]} MWp in {month}")
+        print(f"  'Module ordering - due' sends L1 at {d1}, L2 at {d2}, L3 at {d3} days before\n")
+        if not (d1 and d2 and d3 and 30 >= d1 > d2 > d3 >= 1):
+            check("The template has L1 > L2 > L3 days with L1 at most 30 (the self-test project is 30 days out)", False, stage)
+            return 1
 
         print("1. Module ordering ladder")
-        at(due - timedelta(days=30)); mails.clear(); engine.run(db, "selftest", only=keys)
+        at(due - timedelta(days=d1)); mails.clear(); engine.run(db, "selftest", only=keys)
         e1 = [x for x in mails if "DEMO" in x["subject"]]
-        check("30 days before: one L1 email", len(e1) == 1, [x["subject"] for x in mails])
-        check("30 days before: only L1 people", e1 and set(e1[0]["to"]) == {"selftest.l1@adani.com"}, e1 and e1[0]["to"])
+        check(f"{d1} days before: one L1 email", len(e1) == 1, [x["subject"] for x in mails])
+        check(f"{d1} days before: only L1 people", e1 and set(e1[0]["to"]) == {"selftest.l1@adani.com"}, e1 and e1[0]["to"])
         check("Acknowledge button links to the alert", e1 and "/alerts/" in e1[0]["html"])
         check("No unfilled {{variables}}", e1 and "{{" not in e1[0]["html"] + e1[0]["subject"])
         check("Adani banner in the email", e1 and f"cid:{render.BANNER_CID}" in e1[0]["html"])
         check("Project snapshot PDF attached", e1 and any(a.endswith(".pdf") for a in e1[0]["att"]), e1 and e1[0]["att"])
         al = A.find_open(db, f"order:{DEMO}:{A.phase_id('Project Balance')}", False)
         check("Alert opened at L1", al is not None and al.level == 1)
-        at(due - timedelta(days=20)); mails.clear(); engine.run(db, "selftest", only=keys)
-        check("20 days before: nothing sent twice", not [x for x in mails if "DEMO" in x["subject"]])
-        at(due - timedelta(days=15)); mails.clear(); engine.run(db, "selftest", only=keys)
+        if d1 - d2 > 1:
+            at(due - timedelta(days=d1 - 1)); mails.clear(); engine.run(db, "selftest", only=keys)
+            check("The next day: nothing sent twice", not [x for x in mails if "DEMO" in x["subject"]], [x["subject"] for x in mails])
+        at(due - timedelta(days=d2)); mails.clear(); engine.run(db, "selftest", only=keys)
         e2 = [x for x in mails if "DEMO" in x["subject"]]
-        check("15 days, not acknowledged: escalates to L2", e2 and set(e2[0]["to"]) == {"selftest.l1@adani.com", "selftest.l2@adani.com"}, e2 and e2[0]["to"])
+        check(f"{d2} days, not acknowledged: escalates to L2",
+              bool(e2) and set(e2[0]["to"]) == {"selftest.l1@adani.com", "selftest.l2@adani.com"},
+              e2[0]["to"] if e2 else f"no email; sent: {[x['subject'] for x in mails] or 'nothing'}")
         check("L2 email says why and is tagged in the subject", e2 and "not acknowledged at level 1" in e2[0]["html"] and "[L2" in e2[0]["subject"])
         det = AR.acknowledge(al.id, AR.AckIn(note="PR raised", expected_date=due - timedelta(days=2)), req, db, orderer)
         check("A To recipient acknowledges with an expected date", det["acknowledged_by"] == "Self-test Orderer" and det["holds"])
-        at(due - timedelta(days=7)); mails.clear(); engine.run(db, "selftest", only=keys)
+        at(due - timedelta(days=d3)); mails.clear(); engine.run(db, "selftest", only=keys)
         e3 = [x for x in mails if "DEMO" in x["subject"]]
-        check("7 days, acknowledged: held at L2 (L3 not told)", e3 and "selftest.l3@adani.com" not in e3[0]["to"], e3 and e3[0]["to"])
+        check(f"{d3} days, acknowledged: held at L2 (L3 not told)", bool(e3) and "selftest.l3@adani.com" not in e3[0]["to"],
+              e3[0]["to"] if e3 else "no email")
         at(due); mails.clear(); engine.run(db, "selftest", only=keys)
         e4 = [x for x in mails if "DEMO" in x["subject"]]
         check("Ordering date, expected date passed: escalates to L3", e4 and "selftest.l3@adani.com" in e4[0]["to"], e4 and e4[0]["to"])
@@ -255,10 +268,15 @@ def main():
         db.rollback()
         db.query(models.AkashaUser).filter(models.AkashaUser.username.in_([TESTER, HEAD])).delete(synchronize_session=False)
         db.commit()
-        demo.remove(db)
+        demo.remove_created(db, MARK)
         db.close()
 
-    print("\n" + ("ALL CHECKS PASSED" if not fails else f"{len(fails)} CHECK(S) FAILED: " + "; ".join(fails)))
+    if fails:
+        print(f"\n{len(fails)} CHECK(S) FAILED:")
+        for f in fails:
+            print("  - " + f)
+    else:
+        print("\nALL CHECKS PASSED")
     return 0 if not fails else 1
 
 

@@ -73,7 +73,7 @@ const DEMO_PORTFOLIO = 'akasha demo';   // never covered by "all portfolios" (en
 export function covers(r: { all: boolean; portfolios: string[] }, cluster: string | null | undefined): boolean {
   const c = (cluster ?? '').toLowerCase();
   if (r.portfolios.some(x => x.toLowerCase() === c)) return true;
-  return r.all && c !== DEMO_PORTFOLIO;
+  return r.all && !c.startsWith(DEMO_PORTFOLIO);
 }
 
 export function useApprovalRole(refreshKey = 0): ApprovalRole | null {
