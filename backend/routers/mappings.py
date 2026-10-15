@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from datetime import datetime
 import models
 from database import get_db
+from routers.auth import current_user
 
 router = APIRouter(prefix="/api/mappings", tags=["mappings"])
 
@@ -125,13 +126,20 @@ def create_mapping(mapping: ProjectMappingCreate, db: Session = Depends(get_db))
     return db_mapping
 
 @router.put("/{mapping_id}", response_model=ProjectMappingResponse)
-def update_mapping(mapping_id: int, mapping: ProjectMappingUpdate, db: Session = Depends(get_db)):
-    """Update an existing project mapping"""
+def update_mapping(mapping_id: int, mapping: ProjectMappingUpdate, db: Session = Depends(get_db),
+                   user: models.AkashaUser = Depends(current_user)):
+    """Update an existing project mapping. A change to LTA or SCOD is kept in
+    the date history (services/date_history.py) with who made it."""
     db_mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.id == mapping_id).first()
     if not db_mapping:
         raise HTTPException(status_code=404, detail="Mapping not found")
     
     update_data = mapping.model_dump(exclude_unset=True)
+    from services import date_history
+    for key, field in (("lta_date", "lta"), ("manual_scod", "scod")):
+        if key in update_data:
+            date_history.record(db, db_mapping, field, getattr(db_mapping, key), update_data[key], "manual",
+                                getattr(user, "username", None))
     for key, value in update_data.items():
         setattr(db_mapping, key, value)
         

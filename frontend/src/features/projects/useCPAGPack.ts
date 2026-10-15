@@ -15,7 +15,7 @@ export interface CPAGPack {
   retry: () => void;
 }
 
-export function useCPAGPack(enabled: boolean, scope: 'solar' | 'wind' | 'bess' | null): CPAGPack {
+export function useCPAGPack(enabled: boolean, scope: 'solar' | 'wind' | 'bess' | 'solar-khavda' | 'wind-khavda' | null): CPAGPack {
   const API = scope ? `/akasha/api/${scope}` : '/akasha/api/bess';
   const [key, setKey] = useState<string | null>(null);
   const [pages, setPages] = useState<PackPage[]>([]);

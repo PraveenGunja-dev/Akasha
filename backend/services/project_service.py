@@ -6,6 +6,7 @@ import json
 import re
 import ast
 from services.progress import nonlabor_units_by_project, project_progress
+from services.ariba_service import load_ariba_allocations
 logger = logging.getLogger(__name__)
 
 def filter_tc_edges_by_kps(edges, project_entries):
@@ -1128,6 +1129,50 @@ def get_project_360_detail(db: Session, project_id: str):
     vendor_breakdown.sort(key=lambda x: x["totalOrderedQty"], reverse=True)
 
     # ── In-Transit (Calculated from PO still_to_deliver) ──
+    
+    # ── Ariba: dispatched, awaiting GRN ──
+    # Where Ariba covers a PO it is the proof of what is actually on the way:
+    # a dispatch (IBD) with no GR posting yet. SAP's open quantity on that PO
+    # also counts what has not left the vendor, so it is replaced, not added
+    # to. Rows reach this project through their own PO line's WBS (see
+    # services/ariba_service.py) — a PO shared with another project
+    # contributes only this project's lines. IBD quantity is taken from rows
+    # with no GR date only: subtracting GRN per row double-counts a shipment
+    # received in two lots.
+    po_numbers = {str(po.purchasing_document).strip() for po in po_records_all if po.purchasing_document}
+    if po_numbers and wbs_prefixes:
+        def _in_project(wbs) -> bool:
+            return any(str(wbs or "").startswith(p) for p in wbs_prefixes)
+
+        ariba_rows = [r for r in load_ariba_allocations(db, po_numbers)["rows"]
+                      if any(_in_project(w) for w, _ in r["allocations"])]
+        covered = {r["po_number"] for r in ariba_rows}
+        total_transit_qty -= sum(t["inTransitQty"] for t in sap_intransit if t["poNumber"] in covered)
+        sap_intransit = [t for t in sap_intransit if t["poNumber"] not in covered]
+        from datetime import date as _date
+        today = _date.today()
+        for r in ariba_rows:
+            if r["gr_posting_date"] is not None:
+                continue
+            share = sum(s for w, s in r["allocations"] if _in_project(w))
+            qty = (r["inbound_delivery_quantity"] or 0.0) * share
+            if qty <= 0:
+                continue
+            dispatched = r["ibd_creation_date"]
+            sap_intransit.append({
+                "poNumber": r["po_number"],
+                "materialCode": r["material_number"],
+                "materialName": r["material_description"],
+                "inTransitQty": qty,
+                "inTransitINR": 0.0,
+                "plantCode": r["plant"],
+                "wbsElement": next((w for w, _ in r["allocations"] if _in_project(w)), None),
+                "vendorName": r["vendor_name"],
+                "source": "ariba",
+                "dispatchDate": dispatched.date().isoformat() if dispatched else None,
+                "ageDays": (today - dispatched.date()).days if dispatched else None,
+            })
+            total_transit_qty += qty
 
     # ── Inventory (MB52) ──
     inv_records = []

@@ -39,7 +39,7 @@ class FeedbackRequest(BaseModel):
     projectId: str = None
     questionPattern: str = None
 
-def call_azure_openai_curl(messages, temperature, max_tokens, json_response=False):
+def call_azure_openai_curl(messages, temperature, max_tokens, json_response=False, timeout=None):
     endpoint = os.environ.get("AZURE_OPENAI_ENDPOINT")
     api_key = os.environ.get("AZURE_OPENAI_API_KEY")
     api_version = os.environ.get("AZURE_OPENAI_API_VERSION")
@@ -77,6 +77,8 @@ def call_azure_openai_curl(messages, temperature, max_tokens, json_response=Fals
         "-d", f"@{temp_file}",
         "-s"
     ]
+    if timeout:
+        cmd += ["-m", str(int(timeout))]
     
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")

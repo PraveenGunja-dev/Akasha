@@ -19,6 +19,7 @@ BACKEND = Path(__file__).resolve().parent.parent
 CACHE = BACKEND / "cache" / "cpag_solar"
 SCRIPT = BACKEND / "scripts" / "render_pptx.ps1"
 _BUILDER_FILES = [BACKEND / "services" / "cpag_solar_pptx.py", BACKEND / "services" / "cpag_solar_render.py",
+                  BACKEND / "services" / "cpag_solar_progress.py",
                   BACKEND / "assets" / "cpag_solar_reference.pptx"]
 _lock = threading.Lock()
 
@@ -55,11 +56,10 @@ SOURCES = [
     ]),
     ("procurement status", "", ["Section divider from the approved template."]),
     ("procurement", "", [
-        "Packages through PO Date: the WBS/ZPS021 mapping uploaded on this page (BESS PMAG, 2026-09-22/26) - Package, Manufacturer, UOM, Scope and PO Date all come from that upload, never from P6 or the live SAP sync. One PO under a package is one row; CSS has no WBS mapping yet and stays on P6, marked manual provision until it does.",
-        "Expected Delivery Start/Finish, MDCC Date, Delivered At Site and the forecast months stay P6 (Procurement > Ordering & Delivery): Start/Finish = each 'Receipt at Site' lot, MDCC Date = latest 'MDCC LOT', forecast months = lots whose forecast receipt falls in that month.",
-        
-        "Remarks are manual entry - blank until the reviewer writes one.",
-        _STAR,
+        "P6 Material resources '<item> - Supply' (units received at site, per 'Receipt at Site' lot). Scope = planned units; Delivered = actual units as of the P6 data date; forecast months = units still due on lots not yet received, by P6 forecast finish. Lots due this month or overdue sit in the first forecast month.",
+        "Ordering Completed / Balance: the whole scope counts as ordered once the package's 'LOI / PO Release' milestone is complete in P6; until then the ordered quantity is not recorded, so both show '-'.",
+        "A row shows '-' where P6's supply quantity disagrees with the same item's construction quantity by more than 10% (the units are on a different basis). SAP is not used: its delivered quantity equals ordered on every line and its units do not convert to the pack's.",
+        "MMS follows the component furthest behind (rafter, purlin, bracing) and is counted in tables.",
     ]),
     ("civil construction", "", [
         "P6 Material resources (installed quantity) under Construction, by element and stage, as of the P6 data date.",
@@ -68,10 +68,10 @@ SOURCES = [
         "Since the Sep-26 P6 update civil work is booked as Labor (man-hours), not quantity, so each stage is counted in activities: one activity = one unit (BCF: containers per activity). Actual = completed activities plus the done share of those in progress; Plan = activities due by the data date on the plan baseline.",
     ]),
     ("construction progress", "", [
-        "P6 Material resources (installed quantity) under Construction, by element and stage, as of the P6 data date.",
-        "Plan = quantity due by the data date on the plan baseline; Actual = P6 actual quantity.",
-        "Progress % = P6 weightage of the element's activities. Colours: 80%+ of plan green, 40-80% yellow, below 40% red.",
-        "'-' = this project's P6 has no such work.",
+        "Scope and UOM are the approved template's. Completed = P6 Material '<item> - Construction' actual units (installed); block rows are counted in blocks, one P6 activity per block. Balance = scope - completed.",
+        "Month Plan = units with a baseline finish in the month. Month Actual = units completed in the month; '-' when the P6 data date is before the month began (no actuals reported yet, not zero).",
+        "Next 3 months = units still open in P6 by forecast finish; work due this month or overdue sits in the first month. Completion Target = latest P6 forecast finish of open work.",
+        "MC4 & VOC counts a block only when both steps are done, in that block's module MWdc. Piling, CEA Inspection and Commissioning show '-': P6 does not quantify piles or record block capacity in MW.",
     ]),
     ("electrical", "", [
         "P6 Material resources under Construction: Scope, Plan (quantity due by the P6 data date on the plan baseline) and Actual.",

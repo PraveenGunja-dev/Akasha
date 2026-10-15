@@ -175,3 +175,65 @@ def get_coverage(
         filters={"portfolio": portfolio, "phase": normalised},
         sources=["P6", "SAP", "TC", "Pulse"],
     )
+
+
+@router.get("/dictionary")
+def get_dictionary(db: Session = Depends(get_db)):
+    """Field meanings, units and allowed values for /api/v1, read live from the
+    data where a value list exists. `basis` says how each answer is known:
+    "verified" (checked against the data), "observed" (seen in the data, the
+    business meaning still to be confirmed) or "source" (the system does not
+    provide it)."""
+    from sqlalchemy import text
+
+    def values(sql):
+        return [{"value": r[0], "label": r[1] if len(r) > 2 else None, "count": r[-1]}
+                for r in db.execute(text(sql)).fetchall()]
+
+    return envelope({
+        "units": {
+            "p6.planned_duration / actual_duration / remaining_duration / baseline_duration / *_variance":
+                {"unit": "hours", "basis": "verified",
+                 "note": "Activity calendars run 8 h a day (e.g. 96 h = 11.3 calendar days). Divide by 8 for working days."},
+            "p6.finish_variance_days_derived / start_variance_days_derived":
+                {"unit": "calendar days", "basis": "verified",
+                 "note": "Baseline date minus current date; negative = later than baseline. Derived because P6's own variance fields are filled for few projects."},
+            "p6.*_activity_count": {"unit": "count of activities", "basis": "verified"},
+            "resources (Labor, Nonlabor)": {"unit": "hours", "basis": "verified", "note": "Labor also carries mandays = hours / 8."},
+            "resources (Material)": {"unit": "the P6 resource unit of measure (row field `unit`)", "basis": "verified"},
+            "activities.planned_duration": {"unit": "hours", "basis": "verified"},
+            "sap.net_order_value_inr / still_to_deliver_inr": {"unit": "INR", "basis": "verified"},
+            "sap.delivered_value_inr_cr": {"unit": "INR crore", "basis": "verified"},
+            "pulse_nc.debit": {"unit": "INR (penalty on the contractor)", "basis": "observed",
+                               "note": "Set on few NCs; blank means no debit was raised."},
+            "transmission.mw": {"unit": "MW", "basis": "observed", "note": "Same on every row of a pooling substation: the substation capacity."},
+            "transmission.breakup": {"unit": "MW", "basis": "observed",
+                                     "note": "The project block's capacity connected at that substation. Totals per substation do not reconcile with `mw`; confirm with the TC team."},
+            "trial_run.tr_quantity_mw": {"unit": "MW", "basis": "observed", "note": "Capacity put on trial run in that activity."},
+        },
+        "values": {
+            "pulse_nc.status (status_label)": values("select status, status_label, count(*) from pulse_nc group by 1,2 order by 3 desc"),
+            "pulse_rfi.status (status_label)": values("select status, status_label, count(*) from pulse_rfi group by 1,2 order by 3 desc"),
+            "pulse_nc.category": values("select category, count(*) from pulse_nc group by 1 order by 2 desc"),
+            "einvoice.stage (statusDesc)": values('select stage, "statusDesc", count(*) from einvoice_records group by 1,2 order by 1,2'),
+            "trial_run.portfolio_type (column unit_of_measure)": values("select unit_of_measure, count(*) from mt_trialrun group by 1 order by 2 desc"),
+            "transmission.phase": values("select phase, count(*) from tc_project_entry group by 1 order by 1"),
+            "slr.type": values("select type, count(*) from mt_slr_data group by 1 order by 2 desc"),
+        },
+        "definitions": {
+            "pulse status vs status_label": {"basis": "verified",
+                "text": "`status` is the workflow key, `status_label` its display name. raised -> submitted (In Review EE) -> approved (In Review QI: engineer approved, quality inspector pending) -> completed (Approved); rejected sends it back to the contractor."},
+            "pulse version": {"basis": "observed", "text": "Revision number of the NC (1-7 seen; 295 NCs above 1). Every newly raised NC is version 1, consistent with a new version per resubmission - confirm with the Pulse team."},
+            "pulse_project_uuid": {"basis": "verified", "text": "Pulse's own project id. Mapped to the canonical project in project_mapping.pulse_project_uuid; the API joins on it."},
+            "rfi_label": {"basis": "observed", "text": "RFI-<site/project>-<capacity or package>-<block or WTG>-<discipline, e.g. CIV>-<running number>. Confirm the convention with the Pulse team."},
+            "einvoice stage": {"basis": "observed", "text": "Approval level, as seen against statusDesc: 0 only with Cancelled; 1 with Pending for Approval / Rejected; 2 mostly Completed (202 of 217); 3 seen once, Completed. 96 rows carry neither stage nor statusDesc. Confirm the level names with the e-invoice team."},
+            "slr blank type": {"basis": "verified", "text": "2 logistics commitment lines with no reference category; PReq lines have no vendor until a PO is placed."},
+            "sap order_quantity vs po_quantities": {"basis": "verified", "text": "Identical by construction (both = commitment + actual quantity); po_quantities is kept for older clients."},
+            "inventory quantity_inv vs unrestricted_qty": {"basis": "verified", "text": "Equal on every row: the MB52 unrestricted stock."},
+            "activities total_float": {"basis": "verified", "text": "Blank only on completed activities - P6 does not compute float for finished work."},
+            "activities is_critical": {"basis": "verified", "text": "P6's own critical flag, populated on all but 66 of 141k activities. Every activity with total float <= 0 is flagged (3,415), and so are 740 with positive float, so P6 is set to a longest-path or float-threshold rule - confirm the setting with the planning team before deriving it from float."},
+            "projects linked / unlinked": {"basis": "verified", "text": "The source systems the project could be joined to. An empty result for an unlinked system means 'not connected', not 'no data'."},
+            "coverage pct": {"basis": "verified", "text": "Share of projects in scope that link to each system (linked / total)."},
+            "projects portfolio": {"basis": "verified", "text": "The project_mapping cluster (Solar Khavda, Solar Rajasthan, Wind, BESS); a Wind project with no cluster takes it from its category."},
+        },
+    }, sources=["P6", "SAP", "TC", "Pulse"])

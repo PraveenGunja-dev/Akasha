@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
 import { formatProjectName } from '../../lib/projectName';
 import {
@@ -91,10 +92,10 @@ const WorkflowStage = ({ label, count, total, color, isLast, onClick }: any) => 
 const NC_PAGE_SIZE = 200;
 const NC_MAX_PAGES = 25;
 
-async function fetchAllNCs(): Promise<any[]> {
+async function fetchAllNCs(scope: string): Promise<any[]> {
   const collected: any[] = [];
   for (let page = 1; page <= NC_MAX_PAGES; page++) {
-    const res = await fetch(`/akasha/api/quality/ncs?page=${page}&page_size=${NC_PAGE_SIZE}`);
+    const res = await fetch(`/akasha/api/quality/ncs?page=${page}&page_size=${NC_PAGE_SIZE}${scope ? `&${scope}` : ''}`);
     if (!res.ok) break;
     const body = await res.json();
     const items = body.items || [];
@@ -105,6 +106,12 @@ async function fetchAllNCs(): Promise<any[]> {
 }
 
 export default function QualityCommandCenter() {
+  // The header's portfolio filter (?portfolio=), passed to every quality call so
+  // the screen shows the portfolio selected - and only the user's own when
+  // their access is portfolio-scoped (the server enforces that too).
+  const [searchParams] = useSearchParams();
+  const portfolio = searchParams.get('portfolio') || '';
+  const scope = portfolio ? `portfolio=${encodeURIComponent(portfolio)}` : '';
   const [overview, setOverview] = useState<any>(null);
   const [contractors, setContractors] = useState<any[]>([]);
   const [ncList, setNcList] = useState<any[]>([]);
@@ -134,14 +141,14 @@ export default function QualityCommandCenter() {
     setLoading(true);
     try {
       const [ovRes, conRes, projRes] = await Promise.all([
-        fetch('/akasha/api/quality/overview'),
-        fetch('/akasha/api/quality/contractors'),
-        fetch('/akasha/api/quality/by-project'),
+        fetch(`/akasha/api/quality/overview${scope ? `?${scope}` : ''}`),
+        fetch(`/akasha/api/quality/contractors${scope ? `?${scope}` : ''}`),
+        fetch(`/akasha/api/quality/by-project${scope ? `?${scope}` : ''}`),
       ]);
       setOverview(await ovRes.json());
       setContractors(await conRes.json());
       setProjectScorecard(await projRes.json());
-      setNcList(await fetchAllNCs());
+      setNcList(await fetchAllNCs(scope));
     } catch (e) {
       console.error('Failed to load quality data:', e);
     } finally {
@@ -161,7 +168,7 @@ export default function QualityCommandCenter() {
     }
   };
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [scope]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const ov = overview || {};
   const byStatus = ov.by_status || {};
@@ -283,12 +290,7 @@ export default function QualityCommandCenter() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-[500px]">
-        <div className="flex flex-col items-center gap-3">
-          <AkLoader size="md" />
-          <span className="text-sm text-muted-foreground">Loading Quality Data...</span>
-        </div>
-      </div>
+      <AkLoader size="md" label="Loading quality data…" className="min-h-[60vh] w-full" />
     );
   }
 

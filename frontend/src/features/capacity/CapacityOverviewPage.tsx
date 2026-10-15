@@ -11,9 +11,10 @@ import { cx } from '../../components/ui/primitives/cx';
 import { formatProjectName } from '../../lib/projectName';
 
 import type { CapacityData, CapacityFilters, CapacityInsight, ProjectBreakdown, ChartSeriesKey, Aggregation } from './types';
-import { DEFAULT_FILTERS } from './types';
+import { DEFAULT_FILTERS, DATE_RANGE_LABELS } from './types';
+import type { PeriodDelta } from './capacityCalculations';
 import {
-  filterProjects, filterMonths, filterMilestones, computeTotals, periodDelta,
+  filterProjects, filterMonths, filterMilestones, computeTotals, periodDelta, stageKeys,
   aggregate, seriesForFilter, computeUpcoming, computeSegmentMix, computeMilestones,
   decumulate,
 } from './capacityCalculations';
@@ -47,14 +48,22 @@ const MWs = (n: number) => n.toLocaleString('en-IN', { maximumFractionDigits: 1 
 
 /* ── KPI card ────────────────────────────────────────────────────────────── */
 
+/* The headline is capacity to date. The line under it is the MW that reached
+   the stage inside the selected window - it is what the date filter changes.
+   The previous window's MW is in its tooltip; the arrow says which is larger.
+   A card without `period` (Trial run only) shows no window line: no series
+   gives trial-run-only additions without counting blocks since at COD. */
 function KpiCard({
-  title, value, unit, sub, delta, spark, icon: Icon, tint, onClick,
+  title, value, unit, sub, period, periodLabel, spark = [], icon: Icon, tint, onClick,
 }: {
   title: string; value: number; unit: string; sub: string;
-  delta: number | null; spark: number[]; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; tint: string; onClick: () => void;
+  period?: PeriodDelta; periodLabel?: string; spark?: number[]; icon: React.ComponentType<{ className?: string; style?: React.CSSProperties }>; tint: string; onClick: () => void;
 }) {
-  const Trend = delta === null ? Minus : delta >= 0 ? TrendingUp : TrendingDown;
-  const trendTone = delta === null ? 'text-fg-tertiary' : delta >= 0 ? 'text-status-healthy-fg' : 'text-status-critical-fg';
+  const current = period?.current ?? 0;
+  const previous = period?.previous ?? null;
+  const Trend = previous === null || current === previous ? Minus : current > previous ? TrendingUp : TrendingDown;
+  const trendTone = previous === null || current === previous ? 'text-fg-tertiary'
+    : current > previous ? 'text-status-healthy-fg' : 'text-status-critical-fg';
 
   const sparkOption = spark.length > 1 ? {
     grid: { left: 0, right: 0, top: 2, bottom: 0 },
@@ -86,10 +95,13 @@ function KpiCard({
             <span className="metric-lg leading-none">{MWs(value)}</span>
             <span className="text-[10px] font-medium text-fg-tertiary">{unit}</span>
           </div>
-          <div className={cx('mt-1 flex items-center gap-1 text-[10.5px] font-semibold', trendTone)}>
-            <Trend className="h-3 w-3" />
-            {delta === null ? 'No prior period' : `${delta >= 0 ? '+' : ''}${delta.toFixed(1)}% vs previous`}
-          </div>
+          {period && (
+            <div className={cx('mt-1 flex items-center gap-1 text-[10.5px] font-semibold', trendTone)}
+              title={previous === null ? undefined : `${MWs(previous)} MW in the previous period`}>
+              <Trend className="h-3 w-3 shrink-0" />
+              <span className="truncate">+{MWs(current)} MW · {periodLabel}</span>
+            </div>
+          )}
           <div className="mt-0.5 text-[10px] text-fg-tertiary">{sub}</div>
         </div>
         {sparkOption && (
@@ -172,10 +184,14 @@ export default function CapacityOverviewPage() {
     return m;
   }, [data]);
 
-  const codDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, ['Solar COD', 'Wind COD']), [data, filters]);
-  const trDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, ['Solar Trial Run', 'Wind Trial Run']), [data, filters]);
-  const solarDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, ['Solar COD', 'Solar Trial Run']), [data, filters]);
-  const windDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, ['Wind COD', 'Wind Trial Run']), [data, filters]);
+  /* MW reaching each stage in the window. The trial-run series includes
+     blocks that have since reached COD, so COD and Trial Run are never added
+     together - that would count those blocks twice. The Solar / Wind cards
+     therefore track COD only. */
+  const codDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, stageKeys('COD', filters.segment)), [data, filters]);
+  const solarDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, ['Solar COD']), [data, filters]);
+  const windDelta = useMemo(() => periodDelta(data?.monthly_trends || [], filters, ['Wind COD']), [data, filters]);
+  const periodLabel = DATE_RANGE_LABELS[filters.dateRange].toLowerCase();
 
   /* ── Trajectory chart ── */
   const trajectory = useMemo(() => {
@@ -329,7 +345,7 @@ export default function CapacityOverviewPage() {
             <KpiCard
               title="COD done" value={totals.codMW} unit="MW" icon={Zap} tint="#12b76a"
               sub={`${totals.codPct.toFixed(1)}% of portfolio`}
-              delta={codDelta.deltaPct} spark={codDelta.series}
+              period={codDelta} periodLabel={periodLabel} spark={codDelta.series}
               onClick={() => setDrill({
                 title: 'COD done', subtitle: 'Projects with commissioned capacity',
                 projects: projects.filter((p) => p.cod_mw > 0),
@@ -338,7 +354,6 @@ export default function CapacityOverviewPage() {
             <KpiCard
               title="Trial run only" value={totals.trMW} unit="MW" icon={Activity} tint="#f59e0b"
               sub="Energised, not yet at COD"
-              delta={trDelta.deltaPct} spark={trDelta.series}
               onClick={() => setDrill({
                 title: 'Trial run only', subtitle: 'Blocks energised but not yet at COD',
                 projects: projects.filter((p) => p.tr_mw > 0),
@@ -347,7 +362,7 @@ export default function CapacityOverviewPage() {
             <KpiCard
               title="Solar portfolio" value={totals.solarMW} unit="MW" icon={Sun} tint="#f59e0b"
               sub={`${projects.filter((p) => p.type === 'Solar').length} projects`}
-              delta={solarDelta.deltaPct} spark={solarDelta.series}
+              period={solarDelta} periodLabel={periodLabel} spark={solarDelta.series}
               onClick={() => setDrill({
                 title: 'Solar portfolio', subtitle: 'All mapped solar projects',
                 projects: projects.filter((p) => p.type === 'Solar'),
@@ -356,7 +371,7 @@ export default function CapacityOverviewPage() {
             <KpiCard
               title="Wind portfolio" value={totals.windMW} unit="MW" icon={Wind} tint="#0b74b1"
               sub={`${projects.filter((p) => p.type === 'Wind').length} projects`}
-              delta={windDelta.deltaPct} spark={windDelta.series}
+              period={windDelta} periodLabel={periodLabel} spark={windDelta.series}
               onClick={() => setDrill({
                 title: 'Wind portfolio', subtitle: 'All mapped wind projects',
                 projects: projects.filter((p) => p.type === 'Wind'),

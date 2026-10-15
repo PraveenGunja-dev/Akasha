@@ -724,25 +724,105 @@ def fill_commissioning(slide, projects, d, as_of: str) -> None:
         set_text(note, man.get("note") or "Note :")
 
 
+SCURVE_TABLE_BOTTOM = Inches(7.05)    # above the slide number
+SCURVE_BODY_PT = 9
+
+
+def _fit_scurve_table(t, total_row: int) -> None:
+    """Seven bucket rows plus Total in the box the template sized for four
+    (Contract Closure and HOTO added, user 2026-10-11): body text at 9pt and
+    every row only as tall as its text, so the Total row stays on the slide.
+    Line counts are estimated from the column widths at 9pt."""
+    table = t.table
+    widths = [c.width for c in table.columns]
+
+    def lines(cell, width) -> int:
+        chars = max(1, int(width / Emu(int(914400 * 0.058))))   # ~0.058in per char at 9pt
+        return max(1, sum(-(-len(p_.text) // chars) or 1 for p_ in cell.text_frame.paragraphs))
+
+    line_h, pad = Pt(SCURVE_BODY_PT * 1.2), Emu(2 * 22860)
+    for r in range(2, total_row + 1):
+        n = 1
+        for c, w in enumerate(widths):
+            cell = table.cell(r, c)
+            cell.margin_top = cell.margin_bottom = Emu(22860)
+            if c in (0, len(widths) - 1):   # template rows pad label/remark differently
+                cell.margin_left = Emu(91440)
+            for para in cell.text_frame.paragraphs:
+                # cloned rows carry the template last row's 119% line spacing
+                para.line_spacing = 1.0
+                para.space_before = para.space_after = Pt(0)
+                for run in para.runs:
+                    run.font.size = Pt(SCURVE_BODY_PT)
+            # An empty or cloned cell keeps the template's 11pt end-of-paragraph
+            # size, which sets the row height on its own.
+            for end in cell._tc.iter(qn("a:endParaRPr")):
+                end.set("sz", str(SCURVE_BODY_PT * 100))
+            if not cell.is_spanned:
+                n = max(n, lines(cell, w - cell.margin_left - cell.margin_right))
+        table.rows[r].height = Emu(int(line_h * n + pad))
+    head_h = Emu(int(Pt(11) * 1.2 + 2 * 22860))
+    for r in (0, 1):
+        table.rows[r].height = head_h
+    room = SCURVE_TABLE_BOTTOM - t.top
+    need = sum(row.height for row in table.rows)
+    if need > room:     # still too tall: squeeze every row evenly
+        k = room / need
+        for row in table.rows:
+            row.height = Emu(int(row.height * k))
+    t.height = sum(row.height for row in table.rows)
+
+
 def fill_scurve(slide, p, d) -> None:
     t = tables(slide)[0]
     buckets = p.get("buckets") or []
     man = _manual(d, f"scurve.{pss_key(p['pss'])}") or {}
-    # Remarks are the reviewer's own commentary on the variance - manual
-    # entry only, blank until someone writes one.
+    # A reviewer's own remark wins; otherwise the remark drafted from the P6
+    # variance facts (routers.bess._scurve_remarks).
     remarks = man.get("remarks") or []
-    for i, b in enumerate(buckets[:4]):
+    auto = p.get("scurveRemarks") or {}
+    auto_rows = auto.get("rows") or []
+
+    # The template has four body rows (2-5) and Total at 6; clone the last
+    # body row for each extra bucket (Construction and Commissioning are
+    # separate rows), all at the template's shortest body-row height.
+    trs = t.table._tbl.findall(qn("a:tr"))
+    body_h = min(int(tr.get("h")) for tr in trs[2:6] if tr.get("h"))
+    for _ in range(len(buckets) - 4):
+        trs[5].addnext(copy.deepcopy(trs[5]))
+    body = t.table._tbl.findall(qn("a:tr"))[2:2 + len(buckets)]
+    first_pr = body[0].find(qn("a:tc")).find(qn("a:tcPr"))
+    for tr in body:
+        tr.set("h", str(body_h))
+        # the template's last row pads its label differently; align to row 1
+        pr = tr.find(qn("a:tc")).find(qn("a:tcPr"))
+        if first_pr is not None and pr is not None:
+            for k in ("marL", "marR", "anchor"):
+                if k in first_pr.attrib:
+                    pr.set(k, first_pr.get(k))
+                elif k in pr.attrib:
+                    del pr.attrib[k]
+    total_row = 2 + len(buckets)
+
+    def remark(i: int, fallback: str) -> str:
+        return remarks[i] if i < len(remarks) and remarks[i] else fallback
+
+    for i, b in enumerate(buckets):
         w, pp, aa = b.get("weightPct") or 0, b.get("planToDatePct") or 0, b.get("earnedPct") or 0
-        rem = remarks[i] if i < len(remarks) and remarks[i] else ""
-        set_row(t, 2 + i, [_p(w), _p(pp), _p(aa), _p(pp - aa), rem], 1)
+        rem = remark(i, auto_rows[i] if i < len(auto_rows) else "")
+        set_row(t, 2 + i, [b["label"], _p(w), _p(pp), _p(aa), _p(pp - aa), rem])
     # The Total row is the graph's own FTM point, so the table and the curve
     # above it cannot disagree by a rounding step.
     series = p.get("sCurve") or []
     ftm = next((s for s in series if s["month"] == p.get("lastActualMonth")), None)
     pl = (ftm or {}).get("planCumPct") or sum(b.get("planToDatePct") or 0 for b in buckets)
     ac = (ftm or {}).get("actualCumPct") or sum(b.get("earnedPct") or 0 for b in buckets)
-    rem = remarks[4] if len(remarks) > 4 and remarks[4] else ""
-    set_row(t, 6, [_p(100), _p(pl), _p(ac), _p(pl - ac), rem], 1)
+    rem = remark(len(buckets), auto.get("total") or "")
+    # The rows' exact total, rounded (100%, less any baseline work dropped
+    # from the live schedule). May differ by 1 from the sum of the rounded rows.
+    wt = round(sum(b.get("weightExactPct") or 0 for b in buckets))
+    set_row(t, total_row, [_p(wt), _p(pl), _p(ac), _p(pl - ac), rem], 1)
+    _fit_scurve_table(t, total_row)
 
     pics = pictures(slide)
     if not series or not pics:
@@ -1128,7 +1208,12 @@ def fill_procurement(prs, slide, p, d, as_of: str) -> None:
     table = t.table
     head = [re.sub(r"\s+", " ", table.cell(1, c).text).strip() for c in range(len(table.columns))]
     fc_cols = [c for c, h in enumerate(head) if re.fullmatch(r"[A-Z][a-z]{2}-\d{2}", h)]
-    fc_months = [_add_months(as_of, i) for i in range(len(fc_cols))]
+    # The forecast schedule is the present month and the next two (user,
+    # 2026-10-11): anchored to the month the pack is produced, not the P6 data
+    # date, which moves on its own update cycle (an Oct data date gave Nov /
+    # Dec / Jan and dropped the current month).
+    this_month = date.today().strftime("%Y-%m")
+    fc_months = [_add_months(this_month, i) for i in range(len(fc_cols))]
     for c, ym in zip(fc_cols, fc_months):
         set_text(table.cell(1, c), _mon(ym))
 
@@ -1301,14 +1386,21 @@ def fill_civil(slide, p) -> None:
     main_pic, bcf_pic = (pics + [None, None])[:2]
 
     if main_pic is not None and len(groups) >= 2:
-        rows, heads, fills, spans = [], [], {}, []
+        rows, heads, fills, spans, short = [], [], {}, [], []
+        # One table for both groups: a group with fewer stages has its last
+        # stage widened over the spare columns so Progress stays aligned.
+        width = max(len(g["stages"]) for g in groups[:2])
         for g in groups[:2]:
+            pad = width - len(g["stages"])
+            start = len(rows)
             heads.append(len(rows))
-            rows.append(["", "", "Total Scope", *g["stages"], "Progress"])
+            rows.append(["", "", "Total Scope", *g["stages"], *[""] * pad, "Progress"])
             for e in g["elements"]:
                 fills[len(rows)] = PEACH
                 spans.append(len(rows))
-                rows.extend(_civil_rows([e]))
+                rows.extend(r[:-1] + [""] * pad + r[-1:] for r in _civil_rows([e]))
+            if pad:
+                short.append((start, len(rows), 2 + len(g["stages"]), 2 + width))
         x, y, cx, cy = main_pic.left, main_pic.top, main_pic.width, main_pic.height
         remove_shape(main_pic)
         gf = new_table(slide, x, y, cx, cy, rows, [0.6, 0.65, 0.7, 0.95, 1.1, 0.95, 0.95, 0.95, 0.8],
@@ -1319,10 +1411,13 @@ def fill_civil(slide, p) -> None:
             tb.cell(r, 0).merge(tb.cell(r + 1, 0))
         for r in heads:
             tb.cell(r, 0).merge(tb.cell(r, 1))
+        for r0, r1, c0, c1 in short:
+            for r in range(r0, r1):
+                tb.cell(r, c0).merge(tb.cell(r, c1))
         notes = []
         if any(e.get("inferred") for g in groups[:2] for e in g["elements"]):
             notes.append("* No P6 activity - taken from Footing & Pile Beam Casting.")
-        notes.append("Progress: stage-weighted (Staircase & Finishing 4%, other stages equal).")
+        notes.append("Progress: stages weighted equally.")
         cap = slide.shapes.add_textbox(x, y + cy, cx, Inches(0.22))
         cap.text_frame.margin_top = cap.text_frame.margin_bottom = 0
         run = cap.text_frame.paragraphs[0].add_run()
@@ -1404,71 +1499,56 @@ def fill_electrical(slide, p) -> None:
 MANPOWER_STACK = ["11", "12", "05B", "08B", "09", "10B"]
 
 
-# Actual-vs-plan text colour on white. The legend's yellow is a bar fill and
-# unreadable as text, so the 40-80% band reads in dark amber.
-AMBER_TEXT = RGBColor(0xB8, 0x86, 0x0B)
-
-
-def _achieved_text(actual, plan) -> RGBColor:
-    r = (actual / plan) if plan else 1.0
-    return GREEN if r >= 0.8 else AMBER_TEXT if r >= 0.4 else RED
-
-
 def fill_manpower_table(slide, projects, d, label_suffix: str, key_plan: str = "planManpower",
-                        key_act: str = "earnedManpower", size: float = 9,
-                        max_months: int = 12) -> None:
-    """Manpower / Mandays Deployment as a table (user, 2026-09-30): one row
-    per BESS project plus Total, one Plan / Actual column pair per month.
-    Manpower is average daily manpower (mandays in the month / days in it);
-    Mandays is the month's total. Construction activities only, plan phased
-    on each project's plan baseline.
-    Styled like the pack's other tables: purple header, peach Plan columns,
-    Actual coloured by the pack's legend (80%+ of plan green, 40-80% amber,
-    below 40% red)."""
+                        size: float = 9, months_ahead: int = 3) -> None:
+    """Manpower / Mandays Deployment as a look-ahead table (user, 2026-10-12:
+    the next three months, plan only - no past months, no actuals): one row
+    per BESS project plus Total, one Plan column per month from the current
+    month on. Manpower is average daily manpower (mandays in the month / days
+    in it); Mandays is the month's total. Construction activities only.
+    Styled like the pack's other tables: purple header, peach Plan cells."""
     pics = pictures(slide)
     by = {pss_key(p["pss"]): p for p in projects}
-    months = sorted({s["month"] for p in projects for s in (p.get("manpower") or [])
-                     if s.get(key_plan) or s.get(key_act)})[-max_months:]
-    if not pics or not months:
+    start = date.today().strftime("%Y-%m")
+    months = [_add_months(start, i) for i in range(months_ahead)]
+    if not pics:
         return
     order = [k for k in PSS_KEYS if k in by]
 
+    # A month up to a project's data date is in its series; later months are
+    # in its forward (plan-only) series.
+    def _plan_rows(p):
+        return {s["month"]: s for s in (p.get("manpower") or []) + (p.get("manpowerForward") or [])}
+
     head0, head1 = ["Project"], [""]
     for m in months:
-        head0 += [_mon(m), ""]
-        head1 += ["Plan", "Actual"]
+        head0.append(_mon(m))
+        head1.append("Plan")
     rows = [head0, head1]
-    tot_p, tot_a = [0.0] * len(months), [0.0] * len(months)
+    tot_p = [0.0] * len(months)
+    plan_by = {k: _plan_rows(by[k]) for k in order}
     for k in order:
-        s_by = {s["month"]: s for s in by[k].get("manpower") or []}
         row = [by[k]["pss"]]
         for i, m in enumerate(months):
-            s = s_by.get(m) or {}
-            pv, av = s.get(key_plan) or 0, s.get(key_act) or 0
+            pv = (plan_by[k].get(m) or {}).get(key_plan) or 0
             tot_p[i] += pv
-            tot_a[i] += av
-            row += [_n(pv) if pv else "-", (_n(av), _achieved_text(av, pv)) if av else "-"]
+            row.append(_n(pv) if pv else "-")
         rows.append(row)
-    total = ["Total"]
-    for i in range(len(months)):
-        total += [_n(round(tot_p[i])), (_n(round(tot_a[i])), _achieved_text(tot_a[i], tot_p[i]))]
-    rows.append(total)
+    rows.append(["Total"] + [_n(round(v)) if v else "-" for v in tot_p])
 
     box = pics[0]
     x, y, cx, cy = box.left, box.top, box.width, box.height
     remove_shape(box)
     height = min(cy, int(Inches(0.36)) * len(rows))
-    gf = new_table(slide, x, y, cx, height, rows, [1.25] + [0.6] * (2 * len(months)),
+    gf = new_table(slide, x, y, cx, height, rows, [1.6] + [1.0] * len(months),
                    size=size, header_rows=(0, 1), header_fill=HEADER_PURPLE, header_color=WHITE,
                    bold_cols=(0,))
     tb = gf.table
     tb.cell(0, 0).merge(tb.cell(1, 0))
-    for i in range(len(months)):
-        tb.cell(0, 1 + 2 * i).merge(tb.cell(0, 2 + 2 * i))
     last = len(rows) - 1
     for r in range(2, len(rows)):
         for i in range(len(months)):
-            cell = tb.cell(r, 1 + 2 * i)
+            cell = tb.cell(r, 1 + i)
             cell.fill.solid()
             cell.fill.fore_color.rgb = PEACH
         if r == last:
@@ -1477,17 +1557,15 @@ def fill_manpower_table(slide, projects, d, label_suffix: str, key_plan: str = "
                     for run in para.runs:
                         run.font.bold = True
 
-    # Say which months follow the site's weekly method and which are rebuilt,
-    # so the two are never read as the same measurement.
+    # Say which months follow the site's weekly method and which come from
+    # the baseline, so the two are never read as the same measurement.
     weekly = [m for m in months if any(
-        s.get("month") == m and s.get("planBasis") == "weekly"
-        for p in projects for s in (p.get("manpower") or []))]
-    basis = ("Plan: P6 construction labour phased on the plan baseline. Actual: P6 actual "
-             "labour over activity actual dates. 8 h = 1 manday.")
+        (plan_by[k].get(m) or {}).get("planBasis") == "weekly" for k in order)]
+    basis = "Plan: P6 construction labour phased on the plan baseline. 8 h = 1 manday."
     if weekly:
-        basis = (f"From {_mon(weekly[0])}: average of weekly P6 updates (Plan = labour "
-                 f"scheduled in the next 7 days; Actual = labour booked between updates). "
-                 f"Earlier months: " + basis[0].lower() + basis[1:])
+        basis = (f"{', '.join(_mon(m) for m in weekly)}: average of weekly P6 updates "
+                 f"(labour scheduled in the next 7 days). Other months: "
+                 + basis[6:])
     cap = slide.shapes.add_textbox(x, y + height + Inches(0.08), cx, Inches(0.3))
     cap.text_frame.word_wrap = True
     run = cap.text_frame.paragraphs[0].add_run()
@@ -1844,7 +1922,7 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     fill_financial(T[45], d)
     # Manpower / Mandays from our own P6 data (user, 2026-09-28), not the
     # reference deck's contractor averages.
-    fill_manpower_table(T[35], projects, d, scope_label or "", "planMonth", "earnedMonth", size=8)
+    fill_manpower_table(T[35], projects, d, scope_label or "", "planMonth", size=8)
     fill_manpower_table(T[36], projects, d, scope_label or "")
 
     for key in PSS_KEYS:
@@ -1888,6 +1966,7 @@ def _compose(projects: List[Dict[str, Any]], d: Dict[str, Any], single: bool) ->
     _strip_arrows(prs)
     _strip_comments(prs)
     _strip_title_highlights(prs)
+    _center_section_titles(prs)
     _uniform_page_numbers(prs)
     if S_THANK_YOU not in drop:
         move_slide_to_end(prs, T[S_THANK_YOU])
@@ -1929,6 +2008,33 @@ def _strip_title_highlights(prs) -> None:
                 continue
             for hl in list(sh._element.iter(qn("a:highlight"))):
                 hl.getparent().remove(hl)
+
+
+# The coloured band on the section-divider layout is part of the background
+# picture; this is its extent (the layout's own Title 1 box covers it).
+SECTION_BAND_TOP, SECTION_BAND_HEIGHT = Emu(4038600), Emu(1362075)
+
+
+def _center_section_titles(prs) -> None:
+    """Section dividers (Procurement, Progress, Manpower, Ordering, Approvals):
+    the template's title boxes are top-anchored and placed slightly
+    differently per slide, so the title sat high in the band (user,
+    2026-10-11). Every divider title is fitted to the band and centred
+    both ways, as most dividers already were horizontally."""
+    for slide in prs.slides:
+        if "Section Header" not in slide.slide_layout.name:
+            continue
+        for sh in slide.shapes:
+            if (sh.has_text_frame and sh.text_frame.text.strip()
+                    and not sh.name.startswith("Slide Number")):
+                # A placeholder inherits its box from the layout; setting only
+                # top/height writes an xfrm with zero left/width, so all four
+                # are written together.
+                left, width = sh.left, sh.width
+                sh.left, sh.top, sh.width, sh.height = left, SECTION_BAND_TOP, width, SECTION_BAND_HEIGHT
+                sh.text_frame.vertical_anchor = MSO_ANCHOR.MIDDLE
+                for para in sh.text_frame.paragraphs:
+                    para.alignment = PP_ALIGN.CENTER
 
 
 def _polish_civil_legend(slide) -> None:
@@ -2010,6 +2116,7 @@ def _project_from_single(d: Dict[str, Any]) -> Dict[str, Any]:
         "dispatchableMwh": decl["dispatchableMwh"], "containers": decl["containers"],
         "batteryOem": decl["batteryOem"],
         "buckets": d["progress"]["buckets"], "sCurve": d["sCurve"]["series"],
+        "scurveRemarks": d["progress"].get("remarks"),
         "lastActualMonth": d["sCurve"].get("lastActualMonth"),
         "packages": d["procurement"]["packages"],
         "servicePackages": d["procurement"].get("servicePackages") or [],
@@ -2018,6 +2125,7 @@ def _project_from_single(d: Dict[str, Any]) -> Dict[str, Any]:
         "approvalsDone": d["approvals"]["completed"], "approvalsTotal": d["approvals"]["total"],
         "civil": d.get("civil") or {}, "electrical": d.get("electrical") or {},
         "manpower": (d.get("manpower") or {}).get("series") or [],
+        "manpowerForward": (d.get("manpower") or {}).get("forward") or [],
     }
 
 

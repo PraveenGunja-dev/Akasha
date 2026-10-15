@@ -2,13 +2,16 @@
 P6 baselines behind the CPAG pack.
 
 Every CPAG slide that shows a "baseline" date, or phases plan quantity over
-baseline dates, reads the baseline named per project in PLAN_BASELINE
-(decided 2026-09-28): the March re-baseline B2 for PSS-11, PSS-12 and
-PSS-10(B); the November original B1 for PSS-09, PSS-05(B) and PSS-08(B),
-which have no B2.
+baseline dates, reads the baseline named per project in PLAN_BASELINE: the
+re-baseline with data date 21-Sep-26, added in P6 on 08/09-Oct-26 (switched
+2026-10-09; previously the March B2 / November B1).
+
+Baselines are matched on their exact P6 Baseline Name, not a "- B1"/"- B2"
+suffix: the 21-Sep-26 baselines are all *named* "<project> - B1", which also
+matches the November "(DD 15 Nov) - B1" baselines.
 
 The live schedule's baseline_* dates are the project's *assigned* P6 baseline
-- B1 on all six projects (checked 2026-09-28). A baseline activity's
+- the November B1 on all six projects (checked 2026-09-28). A baseline activity's
 PlannedStartDate/PlannedFinishDate is exactly what P6 reports as the live
 activity's BaselineStartDate/FinishDate (3,445 of 3,445 on PSS-09 B1, 3,335 of
 3,335 on PSS-11 B1), so reading the chosen baseline's planned dates is the
@@ -29,14 +32,15 @@ from sqlalchemy.orm import Session
 
 logger = logging.getLogger(__name__)
 
-# Live P6 project id -> the baseline tag its CPAG slides plan against.
+# Live P6 project id -> exact P6 Baseline Name its CPAG slides plan against
+# (all data date 21-Sep-26).
 PLAN_BASELINE: Dict[str, str] = {
-    "AGE27BL_PSS11_FINAL": "B2",
-    "AGE27CL_PSS12_FINAL": "B2",
-    "ARE35L_PSS10B_FINAL": "B2",
-    "AGE27AL_PSS09_FINAL": "B1",
-    "AGE44L_PSS5B_FINAL": "B1",
-    "AGE35L_PSS8B_FINAL": "B1",
+    "AGE27BL_PSS11_FINAL": "AGES11_PSS11 - B1",
+    "AGE27CL_PSS12_FINAL": "AGE27CL_PSS12 - B1",
+    "ARE35L_PSS10B_FINAL": "ARE35L_PSS10B - B1",
+    "AGE27AL_PSS09_FINAL": "AGE27AL_PSS09 - B1",
+    "AGE44L_PSS5B_FINAL": "AGE44L_PSS5B - B1",
+    "AGE35L_PSS8B_FINAL": "AGE35L_PSS8B - B1",
 }
 
 
@@ -52,13 +56,16 @@ def _parse(ts: Optional[str]) -> Optional[datetime]:
     return datetime.fromisoformat(ts[:19]) if ts else None
 
 
-def choose_baseline(baselines: List[Dict[str, Any]], tag: str) -> Optional[Dict[str, Any]]:
-    """The baseline named "... - <tag>". No fallback to another tag: a
-    project planned on B2 must not silently read B1."""
-    for b in baselines:
-        if (b.get("Name") or "").strip().endswith(f"- {tag}"):
-            return b
-    return None
+def _norm(name: Optional[str]) -> str:
+    return " ".join((name or "").split()).upper()
+
+
+def choose_baseline(baselines: List[Dict[str, Any]], name: str) -> Optional[Dict[str, Any]]:
+    """The one baseline whose name is exactly `name` (whitespace/case
+    insensitive). None when it is missing or ambiguous - no fallback, so a
+    new baseline in P6 can never be picked up silently."""
+    hits = [b for b in baselines if _norm(b.get("Name")) == _norm(name)]
+    return hits[0] if len(hits) == 1 else None
 
 
 def sync_cpag_baselines(db: Session, project_object_ids: List[int], p6=None) -> Dict[str, Any]:
@@ -67,23 +74,24 @@ def sync_cpag_baselines(db: Session, project_object_ids: List[int], p6=None) -> 
         from services.p6_service import P6Service
         p6 = P6Service()
 
-    tag_of = {r[0]: PLAN_BASELINE.get(r[1]) for r in db.execute(
+    name_of = {r[0]: PLAN_BASELINE.get(r[1]) for r in db.execute(
         text("select p6_object_id, project_id from p6_project "
              "where p6_object_id = any(:o)"), {"o": list(project_object_ids)})}
 
     summary: Dict[str, Any] = {}
     for poid in project_object_ids:
-        tag = tag_of.get(poid)
-        if not tag:
+        want = name_of.get(poid)
+        if not want:
             summary[poid] = "no plan baseline configured"
             continue
         baselines = _p6_get(p6, "baselineProject", "ObjectId,Name,DataDate",
                             f"OriginalProjectObjectId={poid}")
-        chosen = choose_baseline(baselines, tag)
+        chosen = choose_baseline(baselines, want)
         if not chosen:
             # Keep whatever was stored before rather than wiping the plan.
-            summary[poid] = f"no '- {tag}' baseline in P6"
-            logger.error("CPAG baseline %s not found in P6 for project %s", tag, poid)
+            summary[poid] = f"baseline '{want}' missing or ambiguous in P6"
+            logger.error("CPAG baseline '%s' missing or ambiguous in P6 for project %s "
+                         "(found: %s)", want, poid, [b.get("Name") for b in baselines])
             continue
         bl_id = int(chosen["ObjectId"])
         acts = _p6_get(p6, "activity",

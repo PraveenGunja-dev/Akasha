@@ -202,22 +202,11 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
 
     critical_activities.sort(key=lambda x: -x["delay_days"])
 
-    # ─── DPR Submission Tracker (mock with realistic structure) ───
+    # ─── DPR Submission Tracker ───
+    # No DPR-submission source is connected, so this is empty. It used to be
+    # filled with random statuses (random.seed per project), which put
+    # invented "submitted / missing" days on screen; removed 2026-10-09.
     dpr_sites = []
-    for m in mappings[:10]:
-        days = []
-        for d in range(7):
-            dt = now - timedelta(days=6 - d)
-            # Simulate: most days submitted, some pending/missing
-            import random
-            random.seed(hash(m.project or "") + d)
-            r = random.random()
-            status = "submitted" if r > 0.2 else ("pending" if r > 0.1 else "missing")
-            days.append({"date": dt.strftime("%Y-%m-%d"), "day": dt.strftime("%a"), "status": status})
-        dpr_sites.append({
-            "project": (p6_map.get(m.project_id).name if p6_map.get(m.project_id) else m.project_name_from_p6 or "Site")[:35],
-            "days": days,
-        })
 
     # ─── Connectivity Readiness ───
     connectivity = []
@@ -308,73 +297,6 @@ def get_pmag_dashboard(portfolio: str = None, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/reports")
-def get_pmag_reports():
-    """Mock endpoint for PMAG Tab 3 (Reports & Analytics)"""
-    return {
-        "kpis": {
-            "generated_this_month": 42,
-            "scheduled_tasks": 8,
-            "storage_used_gb": 1.2
-        },
-        "reports": [
-            {"date": "2023-10-27", "name": "Weekly Governance Review - W43", "category": "Governance", "format": "PDF", "status": "Ready"},
-            {"date": "2023-10-25", "name": "Monthly Progress Report - Sep '23", "category": "Progress", "format": "PDF", "status": "Ready"},
-            {"date": "2023-10-24", "name": "Q4 Financial Forecasts - Revised", "category": "Financial", "format": "XLSX", "status": "Processing"},
-            {"date": "2023-10-20", "name": "Weekly Governance Review - W42", "category": "Governance", "format": "PDF", "status": "Ready"},
-            {"date": "2023-10-18", "name": "Grid Stability Analysis - Q3", "category": "Analysis", "format": "PDF", "status": "Ready"},
-        ],
-        "schedules": [
-            {"name": "Weekly Governance", "schedule": "Every Monday, 08:00", "active": True},
-            {"name": "Monthly Progress", "schedule": "Last Day of Month, 17:00", "active": True},
-        ]
-    }
-
-
-@router.get("/team")
-def get_pmag_team():
-    """Mock endpoint for PMAG Tab 4 (Team Management)"""
-    return {
-        "kpis": {
-            "total_personnel": 142,
-            "active_projects": 18,
-            "avg_allocation_pct": 86,
-            "dpr_submission_rate_pct": 94
-        },
-        "members": [
-            {"name": "Sarah Jenkins", "email": "s.jenkins@akasha.com", "role": "Project Director", "level": "L4 Management", "assignment": "Alpha Grid Expansion", "allocation": 100, "status": "Active"},
-            {"name": "David Chen", "email": "d.chen@akasha.com", "role": "Lead Engineer", "level": "L3 Technical", "assignment": "Beta Substation", "allocation": 60, "status": "Active"},
-            {"name": "Maria Rodriguez", "email": "m.rodriguez@akasha.com", "role": "Risk Analyst", "level": "L2 Analyst", "assignment": "Multi-Project", "allocation": 110, "status": "Overallocated"},
-            {"name": "James Lin", "email": "j.lin@akasha.com", "role": "Field Inspector", "level": "L1 Operations", "assignment": "Gamma Wind Farm", "allocation": 80, "status": "Leave Pending"}
-        ],
-        "activity_log": [
-            {"user": "System Admin", "action": "updated permissions", "target": "David Chen", "details": "Granted write access to 'Beta Substation' financial modules.", "time": "10 mins ago", "type": "admin"},
-            {"user": "Sarah Jenkins", "action": "allocated", "target": "Maria Rodriguez", "details": "Allocation set to 30% for Phase 1 Risk Assessment.", "time": "2 hours ago", "type": "assignment"},
-            {"user": "Automated Alert", "action": "detected conflict", "target": "Field Ops", "details": "Field Ops team allocation exceeds 100% capacity for Week 2.", "time": "Yesterday", "type": "alert"}
-        ]
-    }
-
-
-@router.get("/site-monitoring")
-def get_pmag_site_monitoring():
-    """Mock endpoint for PMAG Tab 5 (Site Monitoring)"""
-    return {
-        "telemetry": {
-            "total_output_mw": 428.5,
-            "avg_irradiance_wm2": 840,
-            "wind_speed_ms": 12.4,
-            "grid_sync_pct": 99.8
-        },
-        "equipment_health": [
-            {"id": "SF-A-001", "type": "Solar", "focus": "Inverter Array B", "efficiency": 98.2, "status": "OPERATIONAL"},
-            {"id": "WP-B-042", "type": "Wind", "focus": "Turbine T-14 Gearbox", "efficiency": 72.0, "status": "MAINTENANCE REQ"},
-            {"id": "HE-C-011", "type": "Hydro", "focus": "Generator Unit 2", "efficiency": 94.5, "status": "DEGRADED"},
-            {"id": "SF-A-088", "type": "Solar", "focus": "Tracker Sys Sub-Z", "efficiency": 99.1, "status": "OPERATIONAL"},
-            {"id": "WP-B-015", "type": "Wind", "focus": "Turbine T-02 Blades", "efficiency": 0.0, "status": "OFFLINE"}
-        ],
-        "alerts": [
-            {"title": "Turbine Pitch Fault", "time": "10:42 AM", "desc": "WP-B-042: Pitch angle mismatch detected on blade A. Auto-curtailment initiated to prevent stress.", "level": "critical"},
-            {"title": "Inverter Temp High", "time": "09:15 AM", "desc": "SF-A-001: Inv-B ambient temp approaching upper threshold (42°C). Cooling sys active.", "level": "warning"},
-            {"title": "Scheduled Maintenance", "time": "Yesterday", "desc": "HE-C-011: Generator unit 2 scheduled for routine lubrication check at 14:00 UTC tomorrow.", "level": "info"}
-        ]
-    }
+# The /reports, /team and /site-monitoring endpoints that stood here returned
+# fixed sample data (invented people, a hydro plant, 2023 report dates) for
+# PMAG tabs that are gone. Removed 2026-10-09; nothing calls them.

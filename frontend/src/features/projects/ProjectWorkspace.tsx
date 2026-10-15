@@ -1777,6 +1777,7 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                           <th className="text-left">Vendor</th>
                                           <th className="text-right">In-Transit Qty</th>
                                           <th className="text-left">WBS Element</th>
+                                          <th className="text-left">Source</th>
                                         </tr>
                                       )}
                                     </thead>
@@ -1913,6 +1914,18 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                                           <td className="text-left text-foreground/70 max-w-[150px] truncate" title={t.vendorName}>{t.vendorName || '—'}</td>
                                           <td className="text-right font-mono font-semibold text-warning">{Number(t.inTransitQty || 0).toLocaleString('en-IN')} {unifiedMaterialsMap[t.materialCode]?.baseUnit && unifiedMaterialsMap[t.materialCode]?.baseUnit !== '—' && <span className="text-[10px] text-muted-foreground ml-1">{unifiedMaterialsMap[t.materialCode].baseUnit}</span>}</td>
                                           <td className="text-left font-mono text-foreground/50 text-[10px]">{t.wbsElement || '—'}</td>
+                                          <td className="text-left text-[10px] whitespace-nowrap">
+                                            {t.source === 'ariba' ? (
+                                              <span title="Ariba: dispatched (IBD created), no GR posting yet">
+                                                Dispatched {t.dispatchDate ? new Date(t.dispatchDate).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: '2-digit' }).replace(/ /g, '-') : '—'}
+                                                {t.ageDays != null && (
+                                                  <span className={t.ageDays > 30 ? 'ml-1 font-medium text-[var(--status-risk-fg)]' : 'ml-1 text-muted-foreground'}>· {t.ageDays}d</span>
+                                                )}
+                                              </span>
+                                            ) : (
+                                              <span className="text-muted-foreground" title="SAP open order quantity; this PO has no Ariba dispatch record">SAP open qty</span>
+                                            )}
+                                          </td>
                                         </tr>
                                       ))}
                                     </tbody>

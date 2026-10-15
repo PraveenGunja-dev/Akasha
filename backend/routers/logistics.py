@@ -5,6 +5,7 @@ from typing import Optional
 from database import get_db
 import models
 import time
+from services import portfolio as portfolio_svc
 
 _LOG_CACHE = {}
 _LOG_TTL = 300  # 5 minutes
@@ -23,11 +24,7 @@ def get_logistics(project_name: Optional[str] = None, portfolio: Optional[str] =
     transit_query = db.query(func.sum(models.MTPOAmount.still_to_deliver_qty))
     
     map_query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        map_query = map_query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    map_query = portfolio_svc.filter_mappings(map_query, portfolio)
         
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":
@@ -77,11 +74,7 @@ def get_logistics_details(project_name: Optional[str] = None, portfolio: Optiona
     query = db.query(models.MTPOAmount).filter(models.MTPOAmount.still_to_deliver_qty > 0)
     
     map_query = db.query(models.ProjectMapping)
-    if portfolio and portfolio.lower() != "all portfolios":
-        map_query = map_query.filter(
-            (models.ProjectMapping.cluster.ilike(f"%{portfolio}%")) |
-            (models.ProjectMapping.category.ilike(f"%{portfolio}%"))
-        )
+    map_query = portfolio_svc.filter_mappings(map_query, portfolio)
         
     normalised = (phase or "all").strip().lower()
     if normalised == "ongoing":

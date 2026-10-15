@@ -88,8 +88,15 @@ def _fetch_capacity_milestones(db):
         logger.info(f"Syncing Project: {proj['name']} (ID: {p6_obj_id}) - {proj['type']}")
         
         if proj["type"] == "Wind":
-            # Automatically insert into ProjectMapping if missing
-            pm = db.query(ProjectMapping).filter(ProjectMapping.project_name_from_p6 == proj["p6_proj_id_str"]).first()
+            # Automatically insert into ProjectMapping if missing. Look it up the
+            # way it is stored: by P6 project code (the master sheet's row) or by
+            # the P6 name this job writes below. Matching project_name_from_p6
+            # against the code never hit, so every run added another copy of
+            # every wind project.
+            pm = db.query(ProjectMapping).filter(
+                (ProjectMapping.project_id == proj["p6_proj_id_str"])
+                | (ProjectMapping.project_name_from_p6 == proj["name"])
+            ).first()
             if not pm:
                 import re
                 locs = re.findall(r'(\d+)\s*Loc', proj["name"], flags=re.IGNORECASE)

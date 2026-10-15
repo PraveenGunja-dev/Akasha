@@ -3,10 +3,9 @@
    1. Module Ordering & TC Delivery Forecasting -> POST /api/ai/v1/order-tc-forecast?explain=true
    2. Priority Prediction                        -> POST /api/ai/v1/priority-predict?explain=true
 
-   The AI service is separate from the Akasha backend (it runs on :8000). In dev
-   the Vite proxy forwards /akasha/ai-api/* to it (see vite.config.ts), which
-   keeps the browser on one origin; elsewhere set VITE_AI_API_BASE to the
-   service's /api/ai/v1 address.
+   The AI service is separate from the Akasha backend (it runs on :8000). The
+   page calls it through the Akasha backend's ai-proxy route, which forwards to
+   AI_SERVICE_URL (default http://localhost:8000/api/ai/v1).
 
    Everything returned is a model prediction, not a plan or SAP figure, and is
    labelled that way. Any part of a response that is missing is simply not
@@ -20,7 +19,9 @@ import {
 import { InfoTip, MiniMeter, StatusPill, cx } from '../../components/ui/primitives';
 import type { Tone } from '../../components/ui/primitives';
 
-const AI_API_BASE: string = import.meta.env.VITE_AI_API_BASE || '/akasha/ai-api';
+// Through the Akasha backend (routers/module_deliveries_beta.py ai_proxy), which
+// forwards to the AI service - same origin and login, no web-server setup needed.
+const AI_API_BASE: string = import.meta.env.VITE_AI_API_BASE || '/akasha/api/module-deliveries-beta/ai-proxy';
 
 /* ── API contracts ─────────────────────────────────────────────────────── */
 

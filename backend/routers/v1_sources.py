@@ -18,6 +18,7 @@ Omit `project_id` and the endpoint returns the whole portfolio under the
 standard portfolio/phase scoping.
 """
 
+import re
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -47,6 +48,9 @@ class Scope:
         column of the same name (Pulse rows carry their own `project_name`)."""
         ctx = {i.project_id: i.context() for i in self.identities}
         for item in data:
+            if "project" in item and not isinstance(item["project"], dict):
+                # Never overwrite a source column of the same name.
+                item["source_project"] = item.pop("project")
             item["project"] = ctx.get(item.get("project_id"))
         return data
 
@@ -79,13 +83,32 @@ def scope(
     )
 
 
+def _day_diff(baseline, current):
+    """Calendar days baseline - current (negative = later than baseline)."""
+    if not baseline or not current:
+        return None
+    return (baseline.date() - current.date()).days
+
+
 def _page(rows: list, page: int, page_size: int):
     start = (page - 1) * page_size
     return rows[start : start + page_size], len(rows)
 
 
+# Text placeholders some extracts carry instead of a blank ("nan" is what
+# pandas writes for an empty Excel cell). The API returns null for all of them,
+# so a caller never has to tell "nan" from a real value.
+_NULL_TEXT = {"", "nan", "none", "null", "nat"}
+
+
+def _clean(v):
+    if isinstance(v, str) and v.strip().lower() in _NULL_TEXT:
+        return None
+    return v
+
+
 def _dict(row) -> dict:
-    return {c.name: getattr(row, c.name) for c in row.__table__.columns}
+    return {c.name: _clean(getattr(row, c.name)) for c in row.__table__.columns}
 
 
 def _wbs_owners(sc: Scope) -> dict:
@@ -150,6 +173,14 @@ def get_p6(
     for row in window:
         item = _dict(row)
         item["project_id"] = wanted.get(row.project_id, row.project_id)
+        # P6 durations and variances are in working HOURS (8 h a day on the
+        # activity calendars). The day-based variances below are derived from
+        # the dates themselves - calendar days, negative = later than baseline -
+        # because P6's own *_variance fields are filled for few projects.
+        item["duration_unit"] = "hours"
+        item["hours_per_day"] = 8
+        item["finish_variance_days_derived"] = _day_diff(row.baseline_finish_date, row.finish_date)
+        item["start_variance_days_derived"] = _day_diff(row.baseline_start_date, row.start_date)
         data.append(item)
     return envelope(
         sc.attach(data), filters=sc.filters, sources=["P6"],
@@ -264,11 +295,25 @@ def get_transmission(
         if owners
         else []
     )
-    window, total = _page(sorted(rows, key=lambda r: r.id), page, page_size)
+    # The tracker load writes some entries twice: rows identical in every
+    # column except id (85 groups on 2026-10-09, e.g. 7475/7476). One copy is
+    # returned; the ids of its twins are listed so nothing is hidden.
+    unique, twins = {}, {}
+    for row in sorted(rows, key=lambda r: r.id):
+        sig = (row.region, row.project, row.phase, row.kps, row.pss, row.block, row.breakup, row.mw, row.mapping_id)
+        if sig in unique:
+            twins.setdefault(unique[sig].id, []).append(row.id)
+        else:
+            unique[sig] = row
+    window, total = _page(list(unique.values()), page, page_size)
     data = []
     for row in window:
         item = _dict(row)
+        # The tracker's own project name; renamed because `project` on every
+        # /api/v1 row is the project-master block (it used to overwrite this).
+        item["tc_project_name"] = item.pop("project", None)
         item["project_id"] = owners.get(row.mapping_id)
+        item["duplicate_ids"] = twins.get(row.id, [])
         data.append(item)
     return envelope(
         sc.attach(data), filters=sc.filters, sources=["TC"],
@@ -323,12 +368,13 @@ def get_trial_run(
     This table carries the P6 project name rather than a code, so it is joined
     on `project_name_p6`, falling back to the SPV plant code.
     """
-    by_name, by_plant = {}, {}
+    by_name, by_plant, plant_of = {}, {}, {}
     for identity in sc.identities:
         if identity.name:
             by_name[identity.name] = identity.project_id
         if identity.sap_plant_code:
             by_plant[identity.sap_plant_code] = identity.project_id
+            plant_of[identity.project_id] = identity.sap_plant_code
 
     rows = []
     if by_name:
@@ -352,6 +398,18 @@ def get_trial_run(
     for row in window:
         item = _dict(row)
         item["project_id"] = by_name.get(row.project_name_p6) or by_plant.get(row.spv_plant_code)
+        # 41% of trial-run rows carry no SPV plant code. Where the row's project
+        # is known, the code comes from the project master and is marked so.
+        if item.get("spv_plant_code"):
+            item["spv_plant_code_source"] = "trial run"
+        elif plant_of.get(item["project_id"]):
+            item["spv_plant_code"] = plant_of[item["project_id"]]
+            item["spv_plant_code_source"] = "project master"
+        else:
+            item["spv_plant_code_source"] = None
+        # The extract's "unit_of_measure" column holds the portfolio (Solar /
+        # Wind), not a unit; tr_quantity_mw is the MW put on trial run.
+        item["portfolio_type"] = item.get("unit_of_measure")
         data.append(item)
     return envelope(
         sc.attach(data), filters=sc.filters, sources=["SAP"],
@@ -419,6 +477,7 @@ def get_activities(
     for row in window:
         item = _dict(row)
         item["project_id"] = owners.get(row.project_object_id)
+        item["duration_unit"] = "hours"
         data.append(item)
     return envelope(
         sc.attach(data), filters=sc.filters, sources=["P6"],
@@ -506,3 +565,107 @@ def get_resources(
         sc.attach(data), filters={**sc.filters, "resource_type": wanted_type}, sources=["P6"],
         page=page, page_size=page_size, total=total,
     )
+
+
+# ── Tables previously reachable only through the SQL dump ───────────────────
+
+
+@router.get("/p6-baselines")
+def get_p6_baselines(
+    sc: Scope = Depends(scope),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
+    db: Session = Depends(get_db),
+):
+    """P6 baseline projects (the plan a schedule is measured against), linked to
+    their live project through `original_project_object_id`. Durations in hours."""
+    owners = {i.p6_object_id: i.project_id for i in sc.linked("p6") if i.p6_object_id is not None}
+    B = models.P6BaselineProject
+    rows = db.query(B).filter(B.original_project_object_id.in_(list(owners))).all() if owners else []
+    window, total = _page(sorted(rows, key=lambda r: r.id), page, page_size)
+    data = []
+    for row in window:
+        item = _dict(row)
+        item["project_id"] = owners.get(row.original_project_object_id)
+        item["duration_unit"] = "hours"
+        data.append(item)
+    return envelope(sc.attach(data), filters=sc.filters, sources=["P6"],
+                    page=page, page_size=page_size, total=total)
+
+
+_BLOCK = re.compile(r"\bblock[\s_-]*0*(\d+)", re.I)
+
+
+@router.get("/wbs")
+def get_wbs(
+    sc: Scope = Depends(scope),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(200, ge=1, le=MAX_PAGE_SIZE),
+    db: Session = Depends(get_db),
+):
+    """P6 WBS tree (code, name, parent) per project.
+
+    P6's own `is_block` flag is not maintained (false on every node), so
+    `block_number_derived` reads the block from the WBS name ("Block-07" -> 7)
+    and is labelled as derived."""
+    owners = {i.p6_object_id: i.project_id for i in sc.linked("p6") if i.p6_object_id is not None}
+    W = models.P6WBSNode
+    q = db.query(W).filter(W.project_object_id.in_(list(owners))) if owners else None
+    total = q.count() if q is not None else 0
+    window = q.order_by(W.id).offset((page - 1) * page_size).limit(page_size).all() if q is not None else []
+    data = []
+    for row in window:
+        item = _dict(row)
+        item["project_id"] = owners.get(row.project_object_id)
+        m = _BLOCK.search(row.wbs_name or "")
+        item["block_number_derived"] = int(m.group(1)) if m else None
+        data.append(item)
+    return envelope(sc.attach(data), filters=sc.filters, sources=["P6"],
+                    page=page, page_size=page_size, total=total)
+
+
+@router.get("/transmission-network")
+def get_transmission_network(
+    region: Optional[str] = Query(None, description="Khavda | Rajasthan. Omit for both."),
+    db: Session = Depends(get_db),
+):
+    """The transmission network: substations (nodes) and lines (edges), with
+    construction progress (foundation / erection / stringing %), voltage, status
+    and delay flag. Read readiness from `normalized_status` (charged /
+    in_progress / under_bidding); node x/y are schematic layout positions, not
+    coordinates. Both Khavda and Rajasthan are included."""
+    N, E = models.TcNetworkNode, models.TcNetworkEdge
+    nq, eq = db.query(N), db.query(E)
+    if region:
+        nq, eq = nq.filter(N.region.ilike(region)), eq.filter(E.region.ilike(region))
+    edges = [_dict(e) for e in eq.order_by(E.id).all()]
+    owners = {i.mapping_id: i.project_id for i in project_identity.resolve_all(db)}
+    for e in edges:
+        e["project_id"] = owners.get(e.get("mapping_id"))
+    return envelope({"nodes": [_dict(n) for n in nq.order_by(N.id).all()], "edges": edges},
+                    filters={"region": region}, sources=["TC"])
+
+
+@router.get("/notifications")
+def get_notifications(
+    sc: Scope = Depends(scope),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=MAX_PAGE_SIZE),
+    db: Session = Depends(get_db),
+):
+    """Change notifications (P6 date / progress changes etc.), newest first,
+    with old -> new values, action status and suggestion. Linked to a project
+    by its P6 name."""
+    by_name = {i.name: i.project_id for i in sc.identities if i.name}
+    N = models.Notification
+    q = db.query(N).filter(N.project_name.in_(list(by_name))) if by_name else None
+    total = q.count() if q is not None else 0
+    window = (q.order_by(N.created_at.desc(), N.id.desc()).offset((page - 1) * page_size).limit(page_size).all()
+              if q is not None else [])
+    data = []
+    for row in window:
+        item = _dict(row)
+        item["project_id"] = by_name.get(row.project_name)
+        data.append(item)
+    return envelope(sc.attach(data), filters=sc.filters, sources=["P6"],
+                    page=page, page_size=page_size, total=total)

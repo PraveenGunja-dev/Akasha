@@ -12,7 +12,16 @@ import type { ModuleDeliveriesSummary, ModuleProject, LtaRisk, MonthPhase } from
 import { PLANNING_RULES } from './planningRules';
 import { useChartTheme } from '../../lib/chartTheme';
 import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from './export';
+import {
+  ADVANCED_COL_COUNT, AdvancedBlankCells, AdvancedCells, AdvancedHeader, AiDeadlineLine, AiFtcLine,
+  AiMonthCell, AiOrderLine, AiTcLine, TD_AI, aiMonths, useAdvancedPlan,
+} from './AdvancedColumns';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
+import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
+import { DateHistoryButton, changedToday, changedTodayCell } from '../modules/DateChange';
+import { levelVendorQuota, VENDOR_CAP_MWAC, type LeveledPhase } from './vendorLeveling';
+import PriorityMenu, { type PlanPriority } from './PriorityMenu';
+import { formatProjectName } from '../../lib/projectName';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
 
 import { Loader as AkLoader } from '../../components/ui/primitives';
@@ -202,9 +211,9 @@ const SECTION_EDGE = 'border-l border-border';
 // A hardcoded 40 here silently went stale when FTC/TC/Module moved after the
 // month block — the grouped-by-EPC header row then stopped short of the new
 // columns, leaving them uncoloured (user report 2026-09-20). 25 lead columns
-// (Sr..Status) + the month block (FORECAST_MONTHS + its Total) + FTC/TC/Module
-// + Remarks.
-const TABLE_COLUMN_COUNT = 27 + (FORECAST_MONTHS.length + 1) + 3 + 1; // 27 = 26 + Priority (AI)
+// (Sr..Status) + the 4 Ariba proof columns + Priority (AI) + the month block
+// (FORECAST_MONTHS + its Total) + FTC / Module Ordering / PO Placed / TC + Remarks.
+const TABLE_COLUMN_COUNT = 26 + 4 + 1 + (FORECAST_MONTHS.length + 1) + 4 + 1;
 
 /** '07-Mar-27' -> '2027-03-07' for an <input type="date"> value */
 function scodToInputValue(scod: string): string {
@@ -854,8 +863,10 @@ type ColumnKey =
   | 'epc' | 'priority' | 'ol' | 'capacity_mwac' | 'capacity_mwp'
   | 'ftc_completed' | 'connectivity' | 'lta' | 'scod' | 'aop'
   | 'ordered' | 'balance_ordering' | 'total_receipt' | 'erection_done'
-  | 'module_inventory' | 'under_transit' | 'balance_dispatch' | 'ai_priority' | 'status'
-  | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'tc_delivery_date' | 'remarks';
+  | 'module_inventory' | 'under_transit'
+  | 'ariba_grn' | 'awaiting_grn' | 'checklist_status' | 'deliveries'
+  | 'balance_dispatch' | 'ai_priority' | 'status'
+  | 'month_wise' | 'ftc_date' | 'module_ordering_date' | 'po_placed' | 'tc_delivery_date' | 'remarks';
 
 const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'project', label: 'Project' },
@@ -882,12 +893,17 @@ const ALL_COLUMNS: { key: ColumnKey; label: string }[] = [
   { key: 'erection_done', label: 'Erection Done' },
   { key: 'module_inventory', label: 'Module Inventory' },
   { key: 'under_transit', label: 'Under Transit' },
+  { key: 'ariba_grn', label: 'Ariba GRN (proof)' },
+  { key: 'awaiting_grn', label: 'Awaiting GRN' },
+  { key: 'checklist_status', label: 'Finance Checklist' },
+  { key: 'deliveries', label: 'Delivery Ledger' },
   { key: 'balance_dispatch', label: 'Balance Dispatch' },
   { key: 'ai_priority', label: 'Priority' },
   { key: 'status', label: 'Status' },
   { key: 'month_wise', label: 'Month Wise Allocation' },
   { key: 'ftc_date', label: 'FTC Date' },
-  { key: 'module_ordering_date', label: 'Module Ordering Date' },
+  { key: 'module_ordering_date', label: 'Module Ordering Date (Plan)' },
+  { key: 'po_placed', label: 'PO Placed (Actual)' },
   { key: 'tc_delivery_date', label: 'TC Delivery Date' },
   { key: 'remarks', label: 'Remarks' },
 ];
@@ -897,12 +913,20 @@ const DEFAULT_VISIBLE: Set<ColumnKey> = new Set([
   'capacity_mwac', 'capacity_mwp', 'ftc_completed',
   'lta', 'scod', 'aop',
   'ordered', 'balance_ordering', 'total_receipt',
-  'erection_done', 'module_inventory', 'under_transit', 'balance_dispatch',
+  'erection_done', 'module_inventory', 'under_transit',
+  'ariba_grn', 'awaiting_grn', 'checklist_status', 'deliveries', 'balance_dispatch',
   'ai_priority',
   'month_wise', 'remarks',
 ]);
+const ALL_COLUMN_KEYS = new Set<string>(ALL_COLUMNS.map(c => c.key));
+/** Shown while Advanced AI planning is on: they carry the original vs AI dates. */
+const ADVANCED_DATE_COLS = new Set<ColumnKey>(['ftc_date', 'module_ordering_date', 'tc_delivery_date']);
+// Beta keeps its own saved layout, so saving columns here never changes the live page.
+const COLS_STORAGE_KEY = 'akasha_mod_cols_beta_v1';
 
-export default function ModuleDeliveriesPage() {
+/** `advanced`: the Advanced AI planning switch (OrderingSchedule) - adds the
+    site-driven columns; the schedule itself is unchanged. */
+export default function ModuleDeliveriesPage({ advanced = false, weather = false }: { advanced?: boolean; weather?: boolean } = {}) {
   const [data, setData] = useState<ModuleDeliveriesSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -922,7 +946,30 @@ export default function ModuleDeliveriesPage() {
   const [milestoneFilter, setMilestoneFilter] = useState<'all' | 'module' | 'tc' | 'ftc'>('module');
   const [unitToggle, setUnitToggle] = useState<'both' | 'mwp' | 'mwac'>('mwp');
   const [rulesOpen, setRulesOpen] = useState(false);
-  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => new Set(DEFAULT_VISIBLE));
+  const [visibleCols, setVisibleCols] = useState<Set<ColumnKey>>(() => {
+    try {
+      const saved = localStorage.getItem(COLS_STORAGE_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        // Drop keys of columns that no longer exist, so a saved layout cannot
+        // hide a renamed column or reference a removed one.
+        const keys = Array.isArray(parsed) ? parsed.filter((k): k is ColumnKey => ALL_COLUMN_KEYS.has(k)) : [];
+        if (keys.length > 0) return new Set(keys);
+      }
+    } catch { /* storage unavailable — fall back to the defaults */ }
+    return new Set(DEFAULT_VISIBLE);
+  });
+
+  const saveColumnsLayout = () => {
+    try { localStorage.setItem(COLS_STORAGE_KEY, JSON.stringify(Array.from(visibleCols))); } catch { /* not persisted */ }
+  };
+  // Projects whose delivery ledger is open under their row.
+  const [openLedgers, setOpenLedgers] = useState<Set<number>>(new Set());
+  const toggleLedger = (id: number) => setOpenLedgers(prev => {
+    const next = new Set(prev);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    return next;
+  });
   const [colDropdownOpen, setColDropdownOpen] = useState(false);
   const [isLegendOpen, setIsLegendOpen] = useState(false);
   const [insightsOpen, setInsightsOpen] = useState(false);
@@ -930,7 +977,8 @@ export default function ModuleDeliveriesPage() {
   const [trackingOverrides, setTrackingOverrides] = useState<Record<number, boolean>>({});
   const colDropdownRef = React.useRef<HTMLDivElement>(null);
 
-  const isColVisible = useCallback((key: ColumnKey) => visibleCols.has(key), [visibleCols]);
+  const isColVisible = useCallback((key: ColumnKey) => visibleCols.has(key) || (advanced && ADVANCED_DATE_COLS.has(key)),
+    [visibleCols, advanced]);
   const toggleCol = useCallback((key: ColumnKey) => {
     setVisibleCols(prev => {
       const next = new Set(prev);
@@ -974,12 +1022,25 @@ export default function ModuleDeliveriesPage() {
   const [aiMeta, setAiMeta] = useState<{ generated_at?: string; label?: string; summary?: Record<string, unknown> } | null>(null);
   const [aiForecastRow, setAiForecastRow] = useState<ModuleProject | null>(null);
   const [aiPriorityRow, setAiPriorityRow] = useState<ModuleProject | null>(null);
+  // The Priority (AI) pill's menu: which row, and the pill it opens from.
+  const [prioMenu, setPrioMenu] = useState<{ row: ModuleProject; anchor: HTMLElement } | null>(null);
+  // Why the AI layer is missing, shown on the page rather than failing silently.
+  const [aiLoadError, setAiLoadError] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
-    fetch(`${API}/akasha/api/module-deliveries/ai-results`)
-      .then(r => (r.ok ? r.json() : null))
-      .then(d => { if (alive && d?.available) { setAiById(d.by_id || {}); setAiMeta(d.meta || null); } })
-      .catch(() => { /* no AI results: the table shows the rule engine alone */ });
+    fetch(`${API}/akasha/api/module-deliveries-beta/ai-results`)
+      .then(r => {
+        if (!r.ok) throw new Error(r.status === 404
+          ? 'the AI results endpoint is not on the server - restart the backend'
+          : `the AI results request failed (HTTP ${r.status})`);
+        return r.json();
+      })
+      .then(d => {
+        if (!alive) return;
+        if (d?.available) { setAiById(d.by_id || {}); setAiMeta(d.meta || null); setAiLoadError(null); }
+        else setAiLoadError(d?.reason || 'no AI results file on the server');
+      })
+      .catch((e: unknown) => { if (alive) setAiLoadError(e instanceof Error ? e.message : 'the AI results could not be loaded'); });
     return () => { alive = false; };
   }, []);
   /* The export is keyed by the scoring database's project_mapping ids. Another
@@ -1007,6 +1068,17 @@ export default function ModuleDeliveriesPage() {
       ?? null;
   }, [aiById, aiByP6]);
   const aiAsOf = aiMeta?.generated_at;
+  /* The priority that drives the allocation: the user's own choice when they
+     changed it, else the AI's priority class, else the plan's (standard). */
+  const planPriority = useCallback((p: ModuleProject): string => {
+    if (priorities[p.id]) return priorities[p.id];
+    const pr = aiFor(p)?.ai_priority;
+    const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
+    if (cls === 'P1' || cls === 'P2') return cls;
+    if (cls === 'STANDARD') return 'standard';
+    return p.priority || 'standard';
+  }, [priorities, aiFor]);
+  const prioritySource = (p: ModuleProject) => (priorities[p.id] ? 'set by you' : isScored(aiFor(p)?.ai_priority) ? 'from the AI' : 'plan default');
   /* Rows the AI scored, re-expressed on the AI's ordering plan (see
      buildAIRowView). Everything that reads the month grid goes through pvOf,
      so a row's cells, its total, the column totals and the Planned-by-Month
@@ -1022,40 +1094,69 @@ export default function ModuleDeliveriesPage() {
     }
     return m;
   }, [data, aiFor]);
-  const pvOf = useCallback((p: ModuleProject): ModuleProject | AIRowView => aiViewById.get(p.id) ?? p, [aiViewById]);
+  /* Then one vendor-quota levelling pass over the whole grid (rule-engine and
+     AI rows together), in priority order - see vendorLeveling.ts. Without it
+     AI rows sat on months the engine had already filled and the vendor's
+     monthly limit was crossed, and a priority change could not move them. */
+  const leveled = useMemo(() => {
+    const caps: Record<string, number> = { ...VENDOR_CAP_MWAC };
+    Object.entries(data?.capacity_summary ?? {}).forEach(([src, v]) => { if (v.monthly_cap_mwac) caps[src] = v.monthly_cap_mwac; });
+    const rows = (data?.projects ?? []).map(p => aiViewById.get(p.id) ?? p);
+    return levelVendorQuota<ModuleProject | AIRowView>(rows, FORECAST_MONTHS, r => 'ai_view' in r, caps, planPriority);
+  }, [data, aiViewById, planPriority]);
+  const pvOf = useCallback((p: ModuleProject): ModuleProject | AIRowView =>
+    leveled.rows.get(p.id) ?? aiViewById.get(p.id) ?? p, [leveled, aiViewById]);
 
   const [searchParams] = useSearchParams();
   const portfolio = searchParams.get('portfolio');
   const phase = searchParams.get('phase');
+  const adv = useAdvancedPlan(advanced, portfolio);
+  const columnCount = TABLE_COLUMN_COUNT + (advanced ? ADVANCED_COL_COUNT : 0);
+  const advShare = useMemo(() => {
+    const total = new Map<string, number>();
+    (data?.projects ?? []).forEach(r => {
+      const pl = adv.byId.get(r.id);
+      if (pl) total.set(pl.project_id, (total.get(pl.project_id) ?? 0) + (r.capacity_mwac || 0));
+    });
+    return (r: ModuleProject) => {
+      const pl = adv.byId.get(r.id);
+      const t = pl ? total.get(pl.project_id) ?? 0 : 0;
+      return t > 0 ? (r.capacity_mwac || 0) / t : 1;
+    };
+  }, [data, adv.byId]);
 
-  const loadData = React.useCallback((sc = scenario, prio = priorities) => {
-    setLoading(true);
+  /* Priorities are NOT part of this fetch: the Beta applies them in the
+     browser (vendorLeveling.ts), so changing one re-levels the grid in place.
+     Sending them here re-fetched the whole summary on every change and put the
+     full-page loader up. The loader shows only for the first load; a later
+     refresh (an LTA edit, a scenario change) keeps the table on screen. */
+  const loadedOnce = React.useRef(false);
+  const loadData = React.useCallback((sc = scenario) => {
+    if (!loadedOnce.current) setLoading(true);
     const params = new URLSearchParams();
     if (sc) params.append('scenario', sc);
     if (portfolio) params.append('portfolio', portfolio);
     if (phase) params.append('phase', phase);
-    if (Object.keys(prio).length > 0) {
-      params.append('priorities', JSON.stringify(prio));
-    }
     return fetch(`${API}/akasha/api/module-deliveries/summary?${params.toString()}`)
       .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
+      .then(d => { setData(d); loadedOnce.current = true; setLoading(false); })
       .catch(e => { setError(e.message); setLoading(false); });
-  }, [scenario, priorities, portfolio, phase]);
+  }, [scenario, portfolio, phase]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Changing a priority re-levels the grid on the spot (vendorLeveling.ts),
+  // starting from the priority currently in force - the AI's, unless changed.
   const cyclePriority = (projectId: number) => {
-    const current = priorities[projectId] || data?.projects.find(p => p.id === projectId)?.priority || 'standard';
-    const next = current === 'standard' || current === 'std' ? 'P1' : current === 'P1' ? 'P2' : 'standard';
-    const updated = { ...priorities, [projectId]: next };
-    setPriorities(updated);
-    loadData(scenario, updated);
+    const row = data?.projects.find(p => p.id === projectId);
+    const current = (row ? planPriority(row) : 'standard').toLowerCase();
+    const next = current === 'standard' || current === 'std' ? 'P1' : current === 'p1' ? 'P2' : 'standard';
+    setPriorities({ ...priorities, [projectId]: next });
   };
 
   const handleScenarioChange = (newSc: 'v1_baseline' | 'v2_strategic' | 'v3_commercial') => {
     setScenario(newSc);
-    loadData(newSc, priorities);
+    loadData(newSc);
   };
 
   const handleCopilotSubmit = async (queryText?: string) => {
@@ -1139,9 +1240,7 @@ export default function ModuleDeliveriesPage() {
       // Silently refresh data in background without showing loading state
       const params = new URLSearchParams();
       if (scenario) params.append('scenario', scenario);
-      if (Object.keys(priorities).length > 0) {
-        params.append('priorities', JSON.stringify(priorities));
-      }
+      // Priorities are applied in the browser (vendorLeveling.ts), not sent.
       fetch(`${API}/akasha/api/module-deliveries/summary?${params.toString()}`)
         .then(r => r.json())
         .then(d => {
@@ -1242,6 +1341,8 @@ export default function ModuleDeliveriesPage() {
     erection_mwp: sum(filtered, p => p.erection_done_mwp),
     inventory_mwp: sum(filtered, p => p.module_inventory_mwp),
     under_transit_mwp: sum(filtered, p => p.under_transit_mwp),
+    ariba_received_mwp: sum(filtered, p => p.procurement?.received_mwp ?? 0),
+    awaiting_grn_mwp: sum(filtered, p => p.procurement?.awaiting_grn_mwp ?? 0),
     balance_dispatch_mwp: sum(filtered, p => p.balance_dispatch_mwp),
     completed_ftc_mwp: sum(filtered, p => p.completed_ftc_mwp),
   }), [filtered]);
@@ -1352,19 +1453,28 @@ export default function ModuleDeliveriesPage() {
 
   // Source rows for the AI capacity-plan table below the grid: only sources
   // the engine actually allocated anything to, largest total first.
+  // Built from the levelled grid, so the table shows what the grid orders.
   const capacitySources = useMemo(() => {
-    const cs = data?.capacity_summary;
-    if (!cs) return [];
+    const cs = Object.fromEntries(Object.entries(leveled.vendors).map(([src, v]) => {
+      const peak = v.mwac.reduce((bi, x, i, a) => (x > a[bi] ? i : bi), 0);
+      const base = data?.capacity_summary?.[src];
+      return [src, {
+        monthly_cap_mwp: v.cap_mwac, monthly_cap_mwac: v.cap_mwac,
+        lead_time_days: base?.lead_time_days ?? 0,
+        allocated_by_month: v.mwp.map(x => Math.round(x * 10) / 10),
+        allocated_by_month_mwac: v.mwac.map(x => Math.round(x * 10) / 10),
+        utilization_pct_by_month: v.mwac.map(x => (v.cap_mwac > 0 ? Math.round((x / v.cap_mwac) * 1000) / 10 : 0)),
+        peak_month: FORECAST_MONTHS[peak], peak_mwp: v.mwp[peak], peak_mwac: v.mwac[peak],
+      }];
+    })) as NonNullable<typeof data>['capacity_summary'] & object;
+    if (Object.keys(cs).length === 0) return [];
     return Object.entries(cs)
       .sort(([, a], [, b]) => b.allocated_by_month.reduce((s, x) => s + x, 0) - a.allocated_by_month.reduce((s, x) => s + x, 0));
-  }, [data]);
+  }, [data, leveled]);
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px] gap-3">
-        <AkLoader size="sm" />
-        <span className="text-muted-foreground text-sm">Loading module deliveries data...</span>
-      </div>
+      <AkLoader size="md" label="Loading module deliveries…" className="min-h-[60vh] w-full" />
     );
   }
 
@@ -1382,8 +1492,24 @@ export default function ModuleDeliveriesPage() {
   const orderedPct = pct(t.ordered_mwp, t.total_mwp);
   const receivedPct = pct(t.received_mwp, t.ordered_mwp);
 
+  /* AI results that loaded but match no row on screen: the export was scored
+     against another database, whose project ids differ from this one. */
+  const aiScoredCount = Object.keys(aiById).length;
+  const aiMatchedCount = (data?.projects ?? []).filter(p => aiFor(p)).length;
+  const aiNotice = aiLoadError
+    ? `AI columns are empty: ${aiLoadError}.`
+    : aiScoredCount > 0 && (data?.projects?.length ?? 0) > 0 && aiMatchedCount === 0
+      ? `AI columns are empty: none of the ${aiScoredCount} projects in the AI results match a project here by id or P6 name - the results were exported from a different database.`
+      : null;
+
   return (
     <div className="flex w-full flex-col gap-5 animate-in fade-in duration-500 pb-10">
+      {aiNotice && (
+        <div role="status" className="flex items-start gap-2 rounded-lg border border-[var(--status-watch-border)] bg-[var(--status-watch-bg)] px-3 py-2 text-[12px] text-[var(--status-watch-fg)]">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span>{aiNotice} The rest of the page uses live data as normal.</span>
+        </div>
+      )}
 
       <motion.div variants={container} initial="hidden" animate="show"
         className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-3"
@@ -1606,10 +1732,16 @@ export default function ModuleDeliveriesPage() {
               <div className="absolute right-0 top-full mt-1 z-50 w-56 max-h-[400px] overflow-y-auto rounded-lg border border-border bg-card shadow-xl custom-scrollbar animate-in fade-in slide-in-from-top-1 duration-150">
                 <div className="sticky top-0 bg-card border-b border-border px-3 py-2 flex items-center justify-between z-10">
                   <span className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">Show / Hide Columns</span>
-                  <button
-                    onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
-                    className="text-[10px] text-primary hover:underline font-medium"
-                  >Reset</button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setVisibleCols(new Set(DEFAULT_VISIBLE))}
+                      className="text-[10px] text-muted-foreground hover:text-foreground font-medium transition-colors"
+                    >Reset</button>
+                    <button
+                      onClick={saveColumnsLayout}
+                      className="text-[10px] text-primary hover:text-primary/80 font-semibold transition-colors"
+                    >Save</button>
+                  </div>
                 </div>
                 {ALL_COLUMNS.map(col => (
                   <label
@@ -1681,6 +1813,11 @@ export default function ModuleDeliveriesPage() {
             <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-status-healthy-border bg-status-healthy-bg text-status-healthy-fg dark:text-status-healthy-fg font-medium">
               <span className="w-1.5 h-1.5 rounded-full bg-status-healthy-bg" />
               Standard P6 Scheduled
+            </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[color-mix(in_srgb,var(--brand-blue)_35%,transparent)] bg-[color-mix(in_srgb,var(--brand-blue)_9%,transparent)] text-[var(--brand-blue)] font-semibold"
+              title="LTA or SCOD changed in today's transmission sync or by an edit - click the history icon in the cell for from / to">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)]" />
+              LTA / SCOD changed today
             </span>
           </div>
 
@@ -1780,6 +1917,19 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('erection_done') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Erection done" unit="(MWp)" /></Th>}
                 {isColVisible('module_inventory') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Module Inventory" unit="(MWp)" /></Th>}
                 {isColVisible('under_transit') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Under Transit" unit="(MWp)" /></Th>}
+                {isColVisible('ariba_grn') && <Th rowSpan={2} className={`min-w-[70px] ${SECTION_EDGE}`}
+                  tip="Ariba proof of receipt: GRN posted at site on this project's module PO lines, in MWp, with its share of SAP's Total Receipt underneath">
+                  <ThLabel label="Ariba GRN" unit="(MWp)" /></Th>}
+                {isColVisible('awaiting_grn') && <Th rowSpan={2} className="min-w-[64px]"
+                  tip="Dispatched in Ariba (IBD created) with no GR posting yet: on the way or not yet booked at site">
+                  <ThLabel label="Awaiting GRN" unit="(MWp)" /></Th>}
+                {isColVisible('checklist_status') && <Th rowSpan={2} className="min-w-[64px]"
+                  tip="Finance checklist raised after receipt, the handover for PO release: raised / receipts">
+                  <ThLabel label="Checklist" unit="(Raised)" /></Th>}
+                {isColVisible('deliveries') && <Th rowSpan={2} className="min-w-[78px]"
+                  tip="Every dispatch and receipt, each on its own dates. Click a row's count to open its ledger">
+                  <ThLabel label="Delivery" unit="Ledger" /></Th>}
+                {advanced && <AdvancedHeader Th={Th} ThLabel={ThLabel} />}
                 {isColVisible('balance_dispatch') && <Th rowSpan={2} className="min-w-[64px]"><ThLabel label="Balance Dispatch" unit="(MWp)" /></Th>}
                 {isColVisible('ai_priority') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE} !bg-brand-blue`}>
                   <div className="flex flex-col items-center justify-center gap-0.5">
@@ -1792,9 +1942,14 @@ export default function ModuleDeliveriesPage() {
                   </div>
                 </Th>}
                 {isColVisible('status') && <Th rowSpan={2} className={`min-w-[78px] ${SECTION_EDGE}`}>Status</Th>}
-                {isColVisible('month_wise') && <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI-scored projects: placed in the month of the AI order-by date (need date minus measured lead time). Other projects: rule engine - backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits">
+                {isColVisible('month_wise') && (advanced
+                  ? <Th colSpan={FORECAST_MONTHS.length + 1} className={`${SECTION_EDGE} !bg-[var(--status-ai-solid)]`}
+                      tip="Site-driven: each block left short is ordered in the month of its order-by date (modules needed on site minus the lead time). Anything already past its order-by date sits in the current month. Click a figure for its blocks.">
+                      ✦ Month-wise order, site-driven ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
+                    </Th>
+                  : <Th colSpan={FORECAST_MONTHS.length + 1} className={SECTION_EDGE} tip="AI-scored projects: placed in the month of the AI order-by date (need date minus measured lead time). Other projects: rule engine - backward-scheduled from FTC (-45d TC, -lead time) and leveled against vendor origin limits">
                   Month wise Module Requirement at Site ({unitToggle === 'both' ? 'MWp / MWac' : unitToggle === 'mwp' ? 'MWp' : 'MWac'})
-                </Th>}
+                </Th>)}
                 {isColVisible('ftc_date') && <Th rowSpan={2} className={`min-w-[76px] ${SECTION_EDGE}`}>
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="FTC" unit="Date" />
@@ -1805,6 +1960,12 @@ export default function ModuleDeliveriesPage() {
                   <div className="flex flex-col items-center justify-center gap-0.5">
                     <ThLabel label="Module Ordering" unit="Date (AI)" />
                     <InfoTip info={<span>AI order-by date per phase: the TC need date minus the measured P90 supplier lead time (Ariba).<br/>Projects the AI did not score show the rule-engine date (TC − 98/136 d) in grey.</span>} align="center" />
+                  </div>
+                </Th>}
+                {isColVisible('po_placed') && <Th rowSpan={2} className="min-w-[76px]">
+                  <div className="flex flex-col items-center justify-center gap-0.5">
+                    <ThLabel label="PO Placed" unit="(Actual)" />
+                    <InfoTip info={<span>Document date of the first module PO in SAP, against the earliest pending ordering date. Hover a cell for every PO.</span>} align="center" />
                   </div>
                 </Th>}
                 {isColVisible('tc_delivery_date') && <Th rowSpan={2} className="min-w-[96px] !bg-brand-blue">
@@ -1830,7 +1991,7 @@ export default function ModuleDeliveriesPage() {
                   {/* Group Header */}
                   {groupBy !== 'none' && (
                     <tr className="cursor-pointer" onClick={() => toggleGroup(group)}>
-                      <td colSpan={TABLE_COLUMN_COUNT} className="border-y border-[var(--border-default)] bg-[var(--neutral-200)] px-1.5 py-1">
+                      <td colSpan={columnCount} className="border-y border-[var(--border-default)] bg-[var(--neutral-200)] px-1.5 py-1">
                         <div className="sticky left-2 flex w-fit items-center gap-1.5">
                           {collapsed.has(group)
                             ? <ChevronRight className="h-3 w-3 text-muted-foreground" />
@@ -1849,10 +2010,13 @@ export default function ModuleDeliveriesPage() {
                       columns, so any alpha lets that content bleed through. */}
                   {!collapsed.has(group) && projects.map((p, idx) => {
                     const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : (p.is_tracked !== false);
+                    const proc = p.procurement;
+                    const ledgerOpen = openLedgers.has(p.id);
                     // The row as the month grid draws it: on the AI plan where the AI scored it.
                     const pv = pvOf(p);
                     return (
-                    <tr key={p.id} className="group hover:bg-[var(--surface-sunken)]">
+                    <React.Fragment key={p.id}>
+                    <tr className="group hover:bg-[var(--surface-sunken)]">
                       <Td stickyLeft={0} className="bg-card group-hover:bg-[var(--surface-sunken)] text-muted-foreground font-mono">{idx + 1}</Td>
                       {isColVisible('project') && <Td stickyLeft={34} align="left" className="bg-card group-hover:bg-[var(--surface-sunken)] font-medium text-foreground shadow-[1px_0_0_0_var(--border-default)]">
                         <div className="flex items-center gap-2">
@@ -1878,22 +2042,22 @@ export default function ModuleDeliveriesPage() {
                       {isColVisible('mms_type') && <Td className="font-mono">{p.mms_type || '-'}</Td>}
                       {isColVisible('epc') && <Td align="left" className="font-medium">{p.epc || '-'}</Td>}
                       {isColVisible('priority') && <Td align="center">
-                        <Tip text={`Click to toggle priority: Std → P1 → P2\nCurrent: ${p.priority || 'standard'}`}>
+                        <Tip text={`Priority used for vendor allocation: ${planPriority(p).toUpperCase()} (${prioritySource(p)})\nClick to change: P1 → P2 → Standard`}>
                           <button
                             type="button"
                             onClick={() => cyclePriority(p.id)}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold tracking-wider transition-all transform active:scale-95 ${
-                              (p.priority || 'standard').toLowerCase() === 'p1'
+                              planPriority(p).toLowerCase() === 'p1'
                                 ? 'bg-status-critical-bg text-status-critical-fg dark:text-status-critical-fg border border-status-critical-border shadow-sm shadow-status-critical-fg/20'
-                                : (p.priority || 'standard').toLowerCase() === 'p2'
+                                : planPriority(p).toLowerCase() === 'p2'
                                   ? 'bg-status-risk-bg text-status-risk-fg dark:text-status-risk-fg border border-status-risk-border'
                                   : 'bg-muted/60 text-muted-foreground hover:text-foreground border border-border/60'
                             }`}
                           >
-                            {(p.priority || 'standard').toLowerCase() === 'p1' && (
+                            {planPriority(p).toLowerCase() === 'p1' && (
                               <span className="w-1.5 h-1.5 rounded-full bg-status-critical-bg" />
                             )}
-                            {(p.priority || 'standard').toUpperCase()}
+                            {planPriority(p).toUpperCase()}
                           </button>
                         </Tip>
                       </Td>}
@@ -1932,7 +2096,8 @@ export default function ModuleDeliveriesPage() {
                           );
                         }
                         return (
-                          <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-semibold relative" : ""}>
+                          <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-semibold relative"
+                            : changedToday(p.date_history, 'lta') ? changedTodayCell : ""}>
                             <div className="flex items-center justify-center gap-1 w-full h-full">
                               {savingLtaId === p.id ? (
                                 <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -1948,6 +2113,7 @@ export default function ModuleDeliveriesPage() {
                                   </button>
                                 </Tip>
                               )}
+                              <DateHistoryButton history={p.date_history} field="lta" projectName={p.project_name} />
                               {delayed && r && (
                                 <Tip wide content={
                                   <div className="w-[300px] max-w-[calc(100vw-48px)] text-left">
@@ -1982,10 +2148,11 @@ export default function ModuleDeliveriesPage() {
                                 </Tip>
                               )}
                             </div>
+                            {advanced && <AiDeadlineLine plan={adv.byId.get(p.id)} deadline={p.lta} label="LTA" weather={weather} />}
                           </Td>
                         );
                       })()}
-                      {isColVisible('scod') && <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE}`}>
+                      {isColVisible('scod') && <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE} ${changedToday(p.date_history, 'scod') ? changedTodayCell : ''}`}>
                         {editingScodId === p.id ? (
                           <input
                             type="date"
@@ -2017,6 +2184,8 @@ export default function ModuleDeliveriesPage() {
                             </button>
                           </Tip>
                         )}
+                        {editingScodId !== p.id && <span className="ml-0.5 inline-flex align-middle"><DateHistoryButton history={p.date_history} field="scod" projectName={p.project_name} /></span>}
+                        {advanced && <AiDeadlineLine plan={adv.byId.get(p.id)} deadline={p.scod} label="SCOD" weather={weather} />}
                       </td>}
                       {isColVisible('aop') && <Td>{p.aop_plan || '-'}</Td>}
                       {/* An apportioned figure is derived, not measured — mark it. */}
@@ -2040,6 +2209,48 @@ export default function ModuleDeliveriesPage() {
                         {p.module_inventory_mwp > 0 ? MW(p.module_inventory_mwp) : '-'}
                       </Td>}
                       {isColVisible('under_transit') && <Td align="right">{p.under_transit_mwp > 0 ? MW(p.under_transit_mwp) : '-'}</Td>}
+                      {isColVisible('ariba_grn') && (() => {
+                        if (!proc?.lots) {
+                          return p.total_receipt_mwp > 0
+                            ? <Td align="right" className={`text-muted-foreground ${SECTION_EDGE}`}
+                                tip={`SAP shows ${MW(p.total_receipt_mwp)} MWp received, but none of this project's ${proc?.pos.length ?? 0} module PO(s) appear in the Ariba extract, so the receipt is unproven`}>No record</Td>
+                            : <Td align="right" className={`text-muted-foreground ${SECTION_EDGE}`}>-</Td>;
+                        }
+                        const cov = p.total_receipt_mwp > 0 ? proc.received_mwp / p.total_receipt_mwp : null;
+                        return (
+                          <Td align="right" className={SECTION_EDGE}
+                            tip={`Ariba GRN ${MW(proc.received_mwp)} MWp against SAP Total Receipt ${MW(p.total_receipt_mwp)} MWp${cov != null ? ` (${Math.round(cov * 100)}%)` : ''}. Last receipt ${fmtIsoDate(proc.last_receipt)}`}>
+                            {MW(proc.received_mwp)}
+                            {cov != null && <span className={`ml-1 text-[9px] ${cov < 0.9 ? 'text-[var(--status-watch-fg)]' : 'text-muted-foreground'}`}>{Math.round(cov * 100)}%</span>}
+                          </Td>
+                        );
+                      })()}
+                      {isColVisible('awaiting_grn') && (proc && proc.awaiting_grn_mwp > 0
+                        ? <Td align="right"
+                            className={(proc.oldest_awaiting_days ?? 0) > 30 ? 'text-[var(--status-risk-fg)] font-medium' : 'text-[var(--status-watch-fg)]'}
+                            tip={`${proc.awaiting_grn_lots} consignment(s) dispatched with no GRN; oldest dispatched ${proc.oldest_awaiting_days} days ago`}>
+                            {MW(proc.awaiting_grn_mwp)}
+                          </Td>
+                        : <Td align="right" className="text-muted-foreground">-</Td>)}
+                      {isColVisible('checklist_status') && (proc && proc.checklist_due > 0
+                        ? <Td className={proc.checklist_created < proc.checklist_due ? 'text-[var(--status-risk-fg)] font-medium' : 'text-muted-foreground'}
+                            tip={proc.checklist_created < proc.checklist_due
+                              ? `${proc.checklist_due - proc.checklist_created} receipt(s) without a finance checklist`
+                              : 'A checklist is raised for every receipt'}>
+                            {proc.checklist_created}/{proc.checklist_due}
+                          </Td>
+                        : <Td className="text-muted-foreground">-</Td>)}
+                      {isColVisible('deliveries') && <Td>
+                        {proc && (proc.lots > 0 || proc.pos.length > 0) ? (
+                          <button type="button" onClick={() => toggleLedger(p.id)} aria-expanded={ledgerOpen}
+                            className="inline-flex items-center gap-0.5 rounded px-1 py-px font-medium text-primary hover:bg-primary/10 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+                            {ledgerOpen ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            {proc.lots > 0 ? `${proc.lots} lot${proc.lots > 1 ? 's' : ''}` : 'POs'}
+                          </button>
+                        ) : <span className="text-muted-foreground">-</span>}
+                      </Td>}
+                      {advanced && <AdvancedCells plan={adv.byId.get(p.id)} Td={Td} standardModuleDate={p.module_date}
+                        error={adv.error} loading={adv.loading} weather={weather} />}
                       {isColVisible('balance_dispatch') && <Td align="right" className={p.balance_dispatch_mwp > 0 ? 'text-[var(--status-risk-fg)]' : 'text-muted-foreground'}>
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
@@ -2047,34 +2258,55 @@ export default function ModuleDeliveriesPage() {
                         const pr = aiFor(p)?.ai_priority;
                         const review = aiFor(p)?.ai_review_status;
                         const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
-                        const tone = aiPriorityTone(cls);
+                        // What the allocation uses: the user's choice, else the AI's.
+                        const eff = planPriority(p).toUpperCase();
+                        const changed = !!priorities[p.id];
+                        const tone = aiPriorityTone(eff);
                         const pill = tone === 'critical' ? 'bg-status-critical-bg text-status-critical-fg border-status-critical-border'
                           : tone === 'risk' ? 'bg-status-risk-bg text-status-risk-fg border-status-risk-border'
                           : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg border-status-watch-border'
                           : 'bg-brand-blue/10 text-brand-blue border-brand-blue/30';
+                        const aiDetail = !cls ? undefined
+                          // The score is urgency (near 0 for STANDARD by design), so a
+                          // STANDARD row reports how sure the model is instead.
+                          : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
+                            ? `${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
+                            : `score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`;
                         return (
                           <Td className={`${SECTION_EDGE} ${AI_CELL}`}>
-                            {!pr ? <span className="text-muted-foreground/40">-</span> : (
-                              <Tip text={(!cls ? `Not scored: ${pr?.reason || 'no reason given'}`
-                                // The score is urgency (near 0 for STANDARD by design), so a
-                                // STANDARD row reports how sure the model is instead.
-                                : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
-                                  ? `AI priority STANDARD · ${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
-                                  : `AI priority ${cls} · score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`)
+                            <Tip text={(changed ? `Priority ${eff} · changed by you${cls ? ` (AI: ${cls})` : ''}`
+                                : cls ? `AI priority ${cls} · ${aiDetail}` : `Not scored by the AI: ${pr?.reason || 'plan default used'}`)
                                 + (cls && review ? `\nGovernance review: ${review}` : '')
-                                + '\nClick for the details'}>
-                                <button type="button" onClick={() => setAiPriorityRow(p)}
-                                  className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${cls ? pill : 'border-border bg-muted/50 text-muted-foreground'}`}>
-                                  {cls === 'P1' && <span className="h-1.5 w-1.5 rounded-full bg-status-critical-solid" />}
-                                  {cls || 'N/A'}
-                                </button>
-                              </Tip>
-                            )}
+                                + '\nClick to change the priority'}>
+                              <button type="button" aria-haspopup="dialog" aria-expanded={prioMenu?.row.id === p.id}
+                                onClick={e => { const a = e.currentTarget; setPrioMenu(m => (m?.row.id === p.id ? null : { row: p, anchor: a })); }}
+                                className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${pill} ${changed ? 'ring-1 ring-offset-1 ring-fg-tertiary/60' : ''}`}>
+                                {eff === 'P1' && <span className="h-1.5 w-1.5 rounded-full bg-status-critical-solid" />}
+                                {eff}
+                                {changed && <span className="text-[8px] font-semibold opacity-70" aria-label="changed by you">✎</span>}
+                              </button>
+                            </Tip>
                           </Td>
                         );
                       })()}
                       {isColVisible('status') && <Td className={SECTION_EDGE}><StatusBadge status={p.status} /></Td>}
-                      {isColVisible('month_wise') && FORECAST_MONTHS.map((mo, i) => {
+                      {isColVisible('month_wise') && advanced && (() => {
+                        const ai = aiMonths(adv.byId.get(p.id), advShare(p));
+                        const total = [...ai.values()].reduce((a, e) => a + e.mwp, 0);
+                        return <>
+                          {FORECAST_MONTHS.map((mo, i) => (
+                            <AiMonthCell key={mo} mo={mo} entry={ai.get(mo)} standard={p.month_mwp?.[mo] || 0}
+                              first={i === 0} unitToggle={unitToggle} ol={p.ol} Td={Td} plan={adv.byId.get(p.id)} quota={adv.plan?.quota} milestone={milestoneFilter}
+                              row={{ name: p.project_name || p.p6_name, capacityMwp: p.capacity_mwp, capacityMwac: p.capacity_mwac,
+                                lta: p.lta, balanceMwp: p.balance_ordering_mwp }} />
+                          ))}
+                          <Td align="right" className={`${TD_AI} font-semibold text-[var(--status-ai-fg)] tabular-nums`}
+                            tip={`Site-driven total to order. Standard plan: ${MW(Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0))} MWp`}>
+                            {total > 0.5 ? MW(total) : '-'}
+                          </Td>
+                        </>;
+                      })()}
+                      {isColVisible('month_wise') && !advanced && FORECAST_MONTHS.map((mo, i) => {
                         // Every read below (months, dates, chips, colour) is the AI view when there is one.
                         const p = pv;
                         const val = p.month_mwp?.[mo] || 0;
@@ -2519,7 +2751,10 @@ export default function ModuleDeliveriesPage() {
                                           ))}
                                           {phases.filter(x => !x.overdue && x.shifted).map((x, i) => (
                                             <span key={`s${i}`} className="rounded bg-status-risk-bg px-1.5 py-0.5 text-[9px] font-bold text-status-risk-fg">
-                                              {x.phase_label && !/^(main|project balance)$/i.test(x.phase_label) ? `${x.phase_label} ` : ''}moved by vendor quota
+                                              {x.phase_label && !/^(main|project balance)$/i.test(x.phase_label) ? `${x.phase_label} ` : ''}shifted due to vendor allocation
+                                              {(x as LeveledPhase).shift_reason && (
+                                                <span className="font-normal"> - {(x as LeveledPhase).shift_reason}{(x as LeveledPhase).target_month ? `, moved from ${(x as LeveledPhase).target_month}` : ''}</span>
+                                              )}
                                             </span>
                                           ))}
                                         </div>
@@ -2648,7 +2883,7 @@ export default function ModuleDeliveriesPage() {
                           </Td>
                         );
                       })}
-                      {isColVisible('month_wise') && (() => {
+                      {isColVisible('month_wise') && !advanced && (() => {
                         const v = pvOf(p);
                         const planned = Object.values(v.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0);
                         const outside = 'ai_view' in v ? v.ai_outside : [];
@@ -2668,6 +2903,11 @@ export default function ModuleDeliveriesPage() {
                           : p.ftc_all_charged
                             ? <Tip text="Every FTC phase for this project is already charged, so no delivery date is pending"><span className="text-muted-foreground">No pending FTC</span></Tip>
                             : '-'}
+                        {advanced && <AiFtcLine plan={adv.byId.get(p.id)} weather={weather} />}
+                      </Td>}
+                      {isColVisible('module_ordering_date') && <Td>
+                        {p.module_date ? <DatedPhases value={p.module_date} /> : '-'}
+                        {advanced && <AiOrderLine plan={adv.byId.get(p.id)} />}
                       </Td>}
                       {/* AI dates where the AI scored the row; otherwise the rule
                           engine's own (module_date = TC - lead, tc_date = FTC - 45 d),
@@ -2684,8 +2924,26 @@ export default function ModuleDeliveriesPage() {
                           {isColVisible('module_ordering_date') && <Td className={AI_CELL}>
                             {aiPhases.length > 0 ? <AIDatedPhases phases={aiPhases} pick={ph => ph.order_by_date} /> : fallback(p.module_date)}
                           </Td>}
+                          {isColVisible('po_placed') && (proc?.po_first_date
+                              ? <Td tipWide tipContent={
+                                  <div className="min-w-[260px] space-y-0.5 text-[10px]">
+                                    <div className="mb-1 font-semibold">Module POs (SAP)</div>
+                                    {proc.pos.map(po => (
+                                      <div key={po.po} className="flex justify-between gap-3 tabular-nums">
+                                        <span><span className="font-mono">{po.po}</span> <span className="text-muted-foreground">{po.vendor}</span></span>
+                                        <span className="whitespace-nowrap">{fmtIsoDate(po.po_date)} · {MW(po.ordered_mwp)} MWp</span>
+                                      </div>
+                                    ))}
+                                  </div>}>
+                                  {fmtIsoDate(proc.po_first_date)}
+                                  {proc.order_variance_days != null && proc.order_variance_days > 0 && (
+                                    <span className="ml-1 text-[9px] font-medium text-[var(--status-risk-fg)]">+{proc.order_variance_days}d</span>
+                                  )}
+                                </Td>
+                              : <Td className="text-muted-foreground">-</Td>)}
                           {isColVisible('tc_delivery_date') && <Td className={AI_CELL}>
                             {aiPhases.length > 0 ? <AIDatedPhases phases={aiPhases} pick={ph => ph.predicted_tc_date} /> : fallback(p.tc_date)}
+                            {advanced && <AiTcLine plan={adv.byId.get(p.id)} />}
                           </Td>}
                         </>;
                       })()}
@@ -2750,6 +3008,18 @@ export default function ModuleDeliveriesPage() {
                         </div>
                       </Td>}
                     </tr>
+                    {ledgerOpen && proc && (
+                      <tr>
+                        <td colSpan={columnCount} className="border-b border-[var(--border-default)] bg-[var(--surface-sunken)] p-0">
+                          {/* Pinned to the viewport's left edge so the ledger stays in
+                              view however far the wide table is scrolled. */}
+                          <div className="sticky left-0 max-w-[min(1200px,calc(100vw-3rem))]">
+                            <DeliveryLedger proc={proc} sapReceivedMwp={p.total_receipt_mwp} sharePct={p.po_apportioned ? p.po_share_pct : null} />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                   );})}
 
                 </React.Fragment>
@@ -2783,6 +3053,11 @@ export default function ModuleDeliveriesPage() {
                 {isColVisible('erection_done') && <Td align="right" className="text-foreground tabular-nums">{MW(t.erection_mwp)}</Td>}
                 {isColVisible('module_inventory') && <Td align="right" className="text-foreground tabular-nums">{MW(t.inventory_mwp)}</Td>}
                 {isColVisible('under_transit') && <Td align="right" className="text-foreground tabular-nums">{MW(t.under_transit_mwp)}</Td>}
+                {isColVisible('ariba_grn') && <Td align="right" className={`text-foreground tabular-nums ${SECTION_EDGE}`}>{MW(t.ariba_received_mwp)}</Td>}
+                {isColVisible('awaiting_grn') && <Td align="right" className="text-foreground tabular-nums">{MW(t.awaiting_grn_mwp)}</Td>}
+                {isColVisible('checklist_status') && <Td />}
+                {isColVisible('deliveries') && <Td />}
+                {advanced && <AdvancedBlankCells Td={Td} />}
                 {isColVisible('balance_dispatch') && <Td align="right" className="text-foreground tabular-nums">{MW(t.balance_dispatch_mwp)}</Td>}
                 {isColVisible('ai_priority') && (() => {
                   // How many of the rows on screen the AI put at P1 - a count, so it adds up.
@@ -2790,7 +3065,20 @@ export default function ModuleDeliveriesPage() {
                   return <Td className={`${SECTION_EDGE} ${AI_CELL} ${AI_TEXT}`} tip={`${p1} of ${filtered.length} projects shown are AI P1`}>{p1 > 0 ? `${p1} × P1` : '-'}</Td>;
                 })()}
                 {isColVisible('status') && <Td className={SECTION_EDGE} />}
-                {isColVisible('month_wise') && <>
+                {isColVisible('month_wise') && advanced && <>
+                {FORECAST_MONTHS.map((mo, i) => {
+                  const mTotal = sum(filtered, p => aiMonths(adv.byId.get(p.id), advShare(p)).get(mo)?.mwp || 0);
+                  return (
+                    <Td key={mo} className={`${TD_AI} tabular-nums font-bold text-[var(--status-ai-fg)] ${i === 0 ? SECTION_EDGE : ''}`}>
+                      {mTotal > 0.5 ? MW(mTotal) : '-'}
+                    </Td>
+                  );
+                })}
+                <Td align="right" className={`${TD_AI} tabular-nums font-bold text-[var(--status-ai-fg)]`}>
+                  {MW(sum(filtered, p => [...aiMonths(adv.byId.get(p.id), advShare(p)).values()].reduce((a, e) => a + e.mwp, 0)))}
+                </Td>
+                </>}
+                {isColVisible('month_wise') && !advanced && <>
                 {FORECAST_MONTHS.map((mo, i) => {
                   const mTotal = sum(filtered, p => pvOf(p).month_mwp?.[mo] || 0);
                   const acTotal = sum(filtered, p => {
@@ -2817,6 +3105,7 @@ export default function ModuleDeliveriesPage() {
                 </>}
                 {isColVisible('ftc_date') && <Td className={SECTION_EDGE} />}
                 {isColVisible('module_ordering_date') && <Td />}
+                {isColVisible('po_placed') && <Td />}
                 {isColVisible('tc_delivery_date') && <Td />}
                 {isColVisible('remarks') && <Td />}
               </tr>
@@ -2852,13 +3141,13 @@ export default function ModuleDeliveriesPage() {
                     Auto-Generated
                   </span>
                 </div>
-                <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <div className="text-xs text-muted-foreground flex items-center gap-1.5">
                   Monthly ordering plan by origin, respecting factory quotas (rule engine). The grid above places AI-scored projects in their AI order month.
                   <InfoTip
                     info="Monthly factory/import quotas (China 750, SEA 500, ALMM 500, ALCM & DCR 100 MWac) are planning assumptions built into the engine. Orders are shown in MWp; each is converted to MWac with the project's DC/AC ratio before it counts against the quota."
                     align="left"
                   />
-                </p>
+                </div>
               </div>
               
               {data.strategic_briefing?.executive_takeaways && data.strategic_briefing.executive_takeaways.length > 0 && (
@@ -2955,6 +3244,25 @@ export default function ModuleDeliveriesPage() {
         <AIForecastModal row={aiForecastRow} ai={aiFor(aiForecastRow)?.ai_monthly_order_tc_forecast}
           asOf={aiAsOf?.slice(0, 10)} onClose={() => setAiForecastRow(null)} />
       )}
+      {prioMenu && (() => {
+        const r = prioMenu.row;
+        const pr = aiFor(r)?.ai_priority;
+        const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
+        const cur = planPriority(r).toLowerCase();
+        return (
+          <PriorityMenu anchor={prioMenu.anchor} projectName={formatProjectName(r.project_name) || r.project_name}
+            current={(cur === 'p1' ? 'P1' : cur === 'p2' ? 'P2' : 'standard') as PlanPriority}
+            aiClass={cls}
+            aiDetail={!cls ? undefined : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
+              ? `${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
+              : pr?.priority_score != null ? `score ${Math.round(pr.priority_score * 10) / 10}/100` : undefined}
+            overridden={!!priorities[r.id]}
+            onPick={v => setPriorities(prev => ({ ...prev, [r.id]: v }))}
+            onReset={() => setPriorities(prev => { const n = { ...prev }; delete n[r.id]; return n; })}
+            onDetails={cls ? () => setAiPriorityRow(r) : undefined}
+            onClose={() => setPrioMenu(null)} />
+        );
+      })()}
       {aiPriorityRow && (
         <AIPriorityModal row={aiPriorityRow} ai={aiFor(aiPriorityRow)?.ai_priority}
           asOf={aiAsOf?.slice(0, 10)} onClose={() => setAiPriorityRow(null)} />

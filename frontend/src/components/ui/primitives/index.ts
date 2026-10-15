@@ -21,3 +21,6 @@ export type { ChartFrameProps } from './ChartFrame';
 export { PageHeader } from './PageHeader';
 export { containerVariants, itemVariants } from './motion';export { Loader } from './Loader';
 export type { LoaderSize } from './Loader';
+
+export { Dialog } from './Dialog';
+export type { DialogProps } from './Dialog';

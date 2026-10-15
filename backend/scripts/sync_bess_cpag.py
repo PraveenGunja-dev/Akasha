@@ -1,8 +1,8 @@
 """
 Refresh everything the CPAG pack reads for the six BESS projects, in one go:
 the live P6 schedule (project, WBS, activities, resource assignments - with
-rows deleted in P6 removed) and each project's plan baseline (B2 for
-PSS-11/12/10(B), B1 for the rest; services.cpag_baseline.PLAN_BASELINE).
+rows deleted in P6 removed) and each project's plan baseline (the 21-Sep-26
+re-baseline on all six; services.cpag_baseline.PLAN_BASELINE).
 
     cd backend && ./venv/Scripts/python.exe scripts/sync_bess_cpag.py
 

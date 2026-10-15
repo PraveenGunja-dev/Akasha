@@ -99,10 +99,7 @@ export default function ComplianceDashboard() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-12 h-screen">
-        <AkLoader size="sm" />
-        <span className="ml-3 text-muted-foreground font-medium">Loading Compliance Data...</span>
-      </div>
+      <AkLoader size="md" label="Loading approvals…" className="min-h-[60vh] w-full" />
     );
   }
 
