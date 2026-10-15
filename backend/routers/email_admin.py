@@ -24,7 +24,11 @@ from services import portfolio, security
 from services.email_notify import alerts as A, catalogue, engine, render
 from services.email_notify.config import settings
 
-router = APIRouter(prefix="/api/admin/email", tags=["Email notifications"])
+from fastapi import Depends as _Depends
+from services.demo_scope import see_demo
+
+# Module Ordering: demo projects are visible here (services/demo_scope.py).
+router = APIRouter(prefix="/api/admin/email", tags=["Email notifications"], dependencies=[_Depends(see_demo)])
 PERM = "email.manage"
 IST = timedelta(hours=5, minutes=30)
 EMAIL_RE = r"^[^@\s]+@[^@\s]+\.[^@\s]+$"

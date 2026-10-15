@@ -24,6 +24,7 @@ def _cache_key(key: str) -> str:
 def _build_project_list(db: Session) -> List[Dict[str, Any]]:
     """The two projects currently in the Solar CPAG template (Bandha, Baiya),
     with their Salient Features fields plus the Overall S Curve data."""
+    from services.demo_scope import DEMO_SQL_CLAUSE   # not the demo Bandha / Baiya copies
     query = text("""
         SELECT p6.name,
                p6.scheduled_finish_date as cod_actual,
@@ -35,9 +36,10 @@ def _build_project_list(db: Session) -> List[Dict[str, Any]]:
         FROM p6_project p6
         LEFT JOIN project_mapping pm ON p6.name = pm.project_name_from_p6
         WHERE (p6.name ILIKE '%bandha%' OR p6.name ILIKE '%baiya%')
+          AND {demo}
           AND EXISTS (SELECT 1 FROM p6_activity a WHERE a.project_object_id = p6.p6_object_id LIMIT 1)
         ORDER BY p6.name
-    """)
+    """.replace("{demo}", DEMO_SQL_CLAUSE))
     projects = db.execute(query).fetchall()
 
     proj_list = []

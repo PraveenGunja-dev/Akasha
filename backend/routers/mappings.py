@@ -7,7 +7,11 @@ import models
 from database import get_db
 from routers.auth import current_user
 
-router = APIRouter(prefix="/api/mappings", tags=["mappings"])
+from fastapi import Depends as _Depends
+from services.demo_scope import see_demo
+
+# Module Ordering: demo projects are visible here (services/demo_scope.py).
+router = APIRouter(prefix="/api/mappings", tags=["mappings"], dependencies=[_Depends(see_demo)])
 
 # Schemas
 class ProjectMappingBase(BaseModel):

@@ -20,6 +20,11 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 Base = declarative_base()
 
+# Demo projects show in Module Ordering only (services/demo_scope.py).
+from services import demo_scope as _demo_scope  # noqa: E402
+_demo_scope.install()
+
+
 def get_db():
     """Dependency to get the database session"""
     db = SessionLocal()

@@ -20,7 +20,11 @@ from routers.auth import client_ip, current_user
 from services import access, security
 from services.email_notify import alerts as A, context as C
 
-router = APIRouter(prefix="/api/alerts", tags=["Alerts"])
+from fastapi import Depends as _Depends
+from services.demo_scope import see_demo
+
+# Module Ordering: demo projects are visible here (services/demo_scope.py).
+router = APIRouter(prefix="/api/alerts", tags=["Alerts"], dependencies=[_Depends(see_demo)])
 ADMIN_PERM = "email.manage"
 
 

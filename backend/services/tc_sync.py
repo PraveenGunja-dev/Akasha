@@ -507,6 +507,10 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
     logger.info(f"Synced {region} Data")
     return {"date_changes": date_changes}
 
+from services.demo_scope import visible as _demo_visible   # syncs see demo projects too
+
+
+@_demo_visible
 def run_sync():
     """Fired in a background thread (routers/sync.py POST /tc/sync returns
     before this finishes), so it logs its own outcome to sync_log — nothing
@@ -545,6 +549,7 @@ def run_sync():
         log_db.close()
 
 
+@_demo_visible
 def sync_single_project(project_id: str) -> dict:
     """Synchronously sync transmission data for one project (both regions).
 

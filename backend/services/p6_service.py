@@ -292,6 +292,9 @@ def _map_p6_response(raw: Dict[str, Any], field_map: Dict[str, str], date_fields
 # ==========================================
 # P6 Service Class
 # ==========================================
+from services.demo_scope import visible as _demo_visible   # syncs see demo projects too
+
+
 class P6Service:
     # Class-level flag to track auth failures and prevent account lockouts (too many 401s)
     _GLOBAL_AUTH_FAILED = False
@@ -1130,6 +1133,7 @@ class P6Service:
     # ------------------------------------------
     # 6. Full Sync: Projects + Baselines + Activities + Risks
     # ------------------------------------------
+    @_demo_visible
     def full_sync(self, db: Session) -> Dict[str, int]:
         """
         Run a full sync of both Projects and Baseline Projects.
@@ -1279,6 +1283,7 @@ class P6Service:
     # ------------------------------------------
     # 6.5. Individual Sync: Project + Baseline + Activities
     # ------------------------------------------
+    @_demo_visible
     def individual_sync(self, db: Session, project_object_id: int) -> Dict[str, int]:
         """
         Run an individual sync of Project, Baseline Project, and Activities for a specific project.

@@ -7,6 +7,10 @@ import pandas as pd
 from database import SessionLocal
 import models
 
+from services.demo_scope import visible as _demo_visible
+
+
+@_demo_visible
 def ingest_mapping():
     db = SessionLocal()
     mapping_file_old = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "Data", "Project_Name_Master.xlsx")

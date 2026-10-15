@@ -15,7 +15,11 @@ from sqlalchemy.orm import Session
 from database import get_db
 from routers.module_deliveries import get_module_deliveries_summary
 
-router = APIRouter(prefix="/api/module-deliveries-beta", tags=["Module Deliveries (Beta)"])
+from fastapi import Depends as _Depends
+from services.demo_scope import see_demo
+
+# Module Ordering: demo projects are visible here (services/demo_scope.py).
+router = APIRouter(prefix="/api/module-deliveries-beta", tags=["Module Deliveries (Beta)"], dependencies=[_Depends(see_demo)])
 
 
 # ── AI results ────────────────────────────────────────────────────────────────

@@ -12,7 +12,11 @@ from database import get_db
 from routers.auth import client_ip, current_user
 from services import order_approvals as OA, security
 
-router = APIRouter(prefix="/api/module-approvals", tags=["Module order approvals"])
+from fastapi import Depends as _Depends
+from services.demo_scope import see_demo
+
+# Module Ordering: demo projects are visible here (services/demo_scope.py).
+router = APIRouter(prefix="/api/module-approvals", tags=["Module order approvals"], dependencies=[_Depends(see_demo)])
 
 
 def _get(db: Session, approval_id: int):

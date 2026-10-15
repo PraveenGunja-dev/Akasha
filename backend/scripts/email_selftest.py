@@ -39,6 +39,9 @@ from fastapi import BackgroundTasks, HTTPException  # noqa: E402
 from starlette.requests import Request  # noqa: E402
 
 import models  # noqa: E402
+from services import demo_scope  # noqa: E402
+
+demo_scope.show_all()   # these scripts work on the demo projects
 from database import SessionLocal  # noqa: E402
 from routers import alerts as AR, mappings as MR  # noqa: E402
 from services import date_history, order_approvals as OA  # noqa: E402

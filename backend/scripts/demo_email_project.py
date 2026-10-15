@@ -52,6 +52,9 @@ from dotenv import load_dotenv  # noqa: E402
 load_dotenv(os.path.join(BACKEND, ".env"))
 
 import models  # noqa: E402
+from services import demo_scope  # noqa: E402
+
+demo_scope.show_all()   # these scripts work on the demo projects
 from database import SessionLocal  # noqa: E402
 from services.module_planner import LEAD_TIMES, TC_OFFSET_DAYS  # noqa: E402
 

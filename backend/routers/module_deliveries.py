@@ -18,7 +18,11 @@ import models
 from services.module_planner import run_module_planning_engine
 from services.ariba_service import load_ariba_allocations, delivery_events
 
-router = APIRouter(prefix="/api/module-deliveries", tags=["Module Deliveries"])
+from fastapi import Depends as _Depends
+from services.demo_scope import see_demo, visible
+
+# Module Ordering: demo projects are visible here (services/demo_scope.py).
+router = APIRouter(prefix="/api/module-deliveries", tags=["Module Deliveries"], dependencies=[_Depends(see_demo)])
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -132,6 +136,7 @@ LATEST_P6 = """
 # ── Main Endpoint ────────────────────────────────────────────────────────────
 
 @router.get("/summary")
+@visible
 def get_module_deliveries_summary(
     scenario: Optional[str] = "baseline",
     priorities: Optional[str] = None,
