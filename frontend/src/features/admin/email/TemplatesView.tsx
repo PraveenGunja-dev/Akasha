@@ -54,7 +54,7 @@ export default function TemplatesView() {
       <div className="bento-card overflow-x-auto p-0">
         <table className="w-full min-w-[900px] text-[12px]">
           <thead className="border-b border-border bg-[var(--neutral-100)] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
-            <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>Template</th><th>When it is sent</th><th>To · Cc</th><th>Severity</th><th>Level · acknowledged</th><th>State</th><th>Version</th><th>Last sent</th></tr>
+            <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>Template</th><th>When it is sent</th><th>To · Cc</th><th>Severity</th><th>Level · acknowledged</th><th>On / off</th><th>Version</th><th>Last sent</th></tr>
           </thead>
           <tbody>
             {rows.map(t => (
@@ -72,7 +72,11 @@ export default function TemplatesView() {
                 </td>
                 <td className="px-3 py-2"><StatusPill tone={SEVERITY_META[t.severity].tone}>{SEVERITY_META[t.severity].label}</StatusPill></td>
                 <td className="px-3 py-2"><LevelCell t={t} onOpen={() => setLevelOf(t)} /></td>
-                <td className="px-3 py-2">{t.enabled ? <StatusPill tone="healthy">On</StatusPill> : <StatusPill tone="neutral">Off</StatusPill>}</td>
+                <td className="px-3 py-2">
+                  {t.trigger === 'manual'
+                    ? <span className="text-[11px] text-muted-foreground" title="Sent when someone uses it (requests or decides an approval), not on a schedule">When used</span>
+                    : <EnabledSwitch t={t} onSaved={saved => setRows(rs => rs.map(r => (r.key === saved.key ? saved : r)))} />}
+                </td>
                 <td className="whitespace-nowrap px-3 py-2 text-muted-foreground">v{t.version}{t.updated_by && <span className="block text-[11px]">{t.updated_by}</span>}</td>
                 <td className="whitespace-nowrap px-3 py-2 tabular-nums text-muted-foreground">{t.last_sent_at ? fmtWhen(t.last_sent_at) : 'Never'}</td>
               </tr>
@@ -81,6 +85,41 @@ export default function TemplatesView() {
         </table>
       </div>
       <LevelDialog tpl={levelOf} onClose={() => { setLevelOf(null); load(); }} />
+    </div>
+  );
+}
+
+/* On / off from the list. Saved like any edit - a new version in History,
+   with who switched it - so a switch is never silent. Errors (e.g. no To
+   group to send to) show on the row. */
+function EnabledSwitch({ t, onSaved }: { t: EmailTemplate; onSaved: (t: EmailTemplate) => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  const flip = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setBusy(true); setErr('');
+    try {
+      onSaved(await emailApi.saveTemplate(t.key, {
+        name: t.name, severity: t.severity, subject: t.subject, body: t.body, to_groups: t.to_groups, cc_groups: t.cc_groups,
+        config: t.config, attach_snapshot: t.attach_snapshot, level: t.level, ack_required: t.ack_required,
+        enabled: !t.enabled, note: t.enabled ? 'Switched off from the template list' : 'Switched on from the template list',
+      }));
+    } catch (x) {
+      setErr((x as Error).message);
+    } finally { setBusy(false); }
+  };
+  return (
+    <div onClick={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>
+      <button type="button" role="switch" aria-checked={t.enabled} disabled={busy} onClick={flip}
+        aria-label={`${t.name}: ${t.enabled ? 'on - switch off' : 'off - switch on'}`}
+        className={cx('inline-flex items-center gap-2 rounded-full py-0.5 pl-0.5 pr-2.5 text-[11.5px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60',
+          t.enabled ? 'bg-[var(--status-healthy-bg)] text-[var(--status-healthy-fg)]' : 'bg-muted text-muted-foreground hover:text-foreground')}>
+        <span aria-hidden className={cx('relative h-4 w-7 rounded-full transition-colors', t.enabled ? 'bg-[var(--status-healthy-solid)]' : 'bg-border')}>
+          <span className={cx('absolute top-0.5 h-3 w-3 rounded-full bg-white shadow transition-[left]', t.enabled ? 'left-3.5' : 'left-0.5')} />
+        </span>
+        {busy ? '…' : t.enabled ? 'On' : 'Off'}
+      </button>
+      {err && <p role="alert" className="mt-1 max-w-[200px] text-[11px] text-[var(--status-critical-fg)]">{err}</p>}
     </div>
   );
 }
