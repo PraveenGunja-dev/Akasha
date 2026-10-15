@@ -1,7 +1,12 @@
 """Demo project for testing the email workflow end to end (VM or local).
 
-Two ways to get one:
+Three ways to get one:
 
+  --from-p6 <id>    a project that is in P6 but not yet in Akasha (e.g. the
+                    Solar demo "Demo DPR" - "Demo 25MW", EPS AGEL Solar): adds
+                    its project-mapping row (Akasha syncs only mapped P6
+                    projects), syncs its P6 data, and uses it. --remove deletes
+                    that mapping row again; the synced P6 rows stay, unused.
   --use <project>   take a project that already exists (e.g. the Solar demo
                     project). Its current portfolio, dates and flags are saved
                     first; it is then moved into its own portfolio,
@@ -22,6 +27,7 @@ for the reason, emails the change).
 
 Usage (from backend/, with the venv):
   python scripts/demo_email_project.py --find
+  python scripts/demo_email_project.py --from-p6 "Demo DPR" --recipient you@adani.com
   python scripts/demo_email_project.py --use "<project id or mapping id>" --recipient you@adani.com
   python scripts/demo_email_project.py --recipient you@adani.com            # create a new demo instead
   python scripts/demo_email_project.py --days 15     # move the ordering date (when dates are Akasha's, not P6's)
@@ -173,14 +179,68 @@ def create(db, days: int, recipients: list, mark: str = MARK, portfolio: str = P
 
 # ── Use an existing project ──────────────────────────────────────────────────
 
+def _p6_projects():
+    import logging
+    import urllib3
+    urllib3.disable_warnings()
+    logging.getLogger("services.p6_service").setLevel(logging.ERROR)
+    from services.p6_service import P6Service
+    return P6Service(), P6Service().fetch_projects()
+
+
+def from_p6(db, p6_id: str, recipients: list, capacity_mwac=None, source: str = "ALMM") -> None:
+    """Bring a P6-only project into Akasha as the demo project."""
+    import re
+    st = _state()
+    if st and st.get("ident") != p6_id:
+        print(f"Already using '{st.get('ident')}' as the demo - run --remove first.")
+        return
+    rows = _rows(db, p6_id)
+    if rows and not (st and st.get("created")):
+        print(f"'{p6_id}' is already in Akasha - use it with --use \"{p6_id}\" instead.")
+        return
+    svc, projects = _p6_projects()
+    proj = next((x for x in projects if x.get("Id") == p6_id), None)
+    if not proj:
+        hits = [f"{x.get('Id')} ({x.get('Name')})" for x in projects if re.search(r"demo|test|dummy", f"{x.get('Id')} {x.get('Name')}", re.I)]
+        print(f"P6 has no project with Id '{p6_id}'. Demo / test projects in P6: {', '.join(hits) or 'none'}")
+        return
+    name = proj.get("Name") or p6_id
+    if capacity_mwac is None:
+        m = re.search(r"(\d+(?:\.\d+)?)\s*MW", name, re.I)
+        if not m:
+            print(f"Cannot read a capacity from the P6 name '{name}' - pass --capacity <MWac>.")
+            return
+        capacity_mwac = float(m.group(1))
+    if not rows:
+        m = models.ProjectMapping(project_id=p6_id, project=f"{name} ({p6_id})", project_name_from_p6=name, spv_name="DEMO",
+                                  category="Merchant", cluster=PORTFOLIO, subcluster=PORTFOLIO, capacity_mwac=capacity_mwac,
+                                  ol=str(OL), capacity_mwdc=round(capacity_mwac * OL, 1), source_of_origin=source,
+                                  is_commissioned=False, is_tracked=True)
+        db.add(m)
+        db.commit()
+        rows = [m]
+        st = {"ident": p6_id, "since": datetime.now(timezone.utc).replace(tzinfo=None).isoformat(),
+              "project_ids": [p6_id], "mappings": {}, "created": [m.id], "p6_object_id": proj.get("ObjectId")}
+        _save_state(st)
+        print(f"Added '{name}' ({p6_id}) to Akasha: {capacity_mwac:g} MWac solar, portfolio '{PORTFOLIO}' (mapping #{m.id})")
+    print(f"Syncing it from P6 (ObjectId {proj.get('ObjectId')})...")
+    r = svc.individual_sync(db, int(proj["ObjectId"]))
+    print(f"  {r.get('activities_synced', 0)} activities, {r.get('wbs_synced', 0)} WBS nodes, {r.get('baselines_synced', 0)} baseline(s)")
+    added = _add_recipients(db, recipients, MARK)
+    db.commit()
+    if added:
+        print(f"  Added {added} demo recipient rows (L1, every group, portfolio '{PORTFOLIO}' only)")
+    _report(db, rows[0].id)
+
+
 def find(db) -> None:
     from sqlalchemy import or_
     rows = (db.query(models.ProjectMapping)
             .filter(or_(*[getattr(models.ProjectMapping, c).ilike(f"%{w}%") for c in ("project", "project_id", "project_name_from_p6")
                           for w in ("demo", "test", "dummy", "sample", "dpr")])).order_by(models.ProjectMapping.id).all())
     if not rows:
-        print("No project with demo / test / dummy / sample / dpr in its name.")
-        return
+        print("No project in Akasha with demo / test / dummy / sample / dpr in its name.")
     seen = set()
     for m in rows:
         key = (m.project_id, m.project)
@@ -192,6 +252,18 @@ def find(db) -> None:
         print(f"  {m.project_id or '-':20} mapping #{m.id:<5} {m.project[:60]:60} {m.cluster or '-':16} {why}"
               + ("  (duplicate row)" if dup else ""))
     print("\nUse one with:  python scripts/demo_email_project.py --use \"<project id>\" --recipient you@adani.com")
+    try:
+        import re
+        _, projects = _p6_projects()
+        mapped = {m.project_id for m in db.query(models.ProjectMapping.project_id)}
+        only = [x for x in projects if re.search(r"demo|test|dummy", f"{x.get('Id')} {x.get('Name')}", re.I) and x.get("Id") not in mapped]
+        if only:
+            print("\nIn P6 but not yet in Akasha:")
+            for x in only:
+                print(f"  {x.get('Id'):20} {x.get('Name')}  (EPS {x.get('ParentEPSName') or '-'})")
+            print("Bring one in with:  python scripts/demo_email_project.py --from-p6 \"<P6 Id>\" --recipient you@adani.com")
+    except Exception as e:  # noqa: BLE001 - P6 unreachable: list only what Akasha has
+        print(f"\n(P6 not reachable to list P6-only projects: {e})")
 
 
 def use(db, ident: str, days, recipients: list) -> None:
@@ -239,7 +311,7 @@ def use(db, ident: str, days, recipients: list) -> None:
 def _project_ids(db):
     st = _state()
     if st:
-        return st["project_ids"], [int(k) for k in st["mappings"]], datetime.fromisoformat(st["since"])
+        return st["project_ids"], [int(k) for k in st["mappings"]] or list(st.get("created") or []), datetime.fromisoformat(st["since"])
     m = mapping(db)
     return ([PROJECT_ID], [m.id] if m else [], None)
 
@@ -307,7 +379,12 @@ def remove(db) -> None:
         remove_created(db)
         return
     pids, mids, since = _project_ids(db)
+    mids = mids or list(st.get("created") or [])
     n = cleanup(db, pids, mids, since, MARK)
+    for mid in st.get("created") or []:
+        m = db.get(models.ProjectMapping, int(mid))
+        if m:
+            db.delete(m)
     for mid, vals in st["mappings"].items():
         m = db.get(models.ProjectMapping, int(mid))
         if not m:
@@ -318,7 +395,8 @@ def remove(db) -> None:
             setattr(m, k, v)
     db.commit()
     os.remove(STATE)
-    print(f"Put '{st['ident']}' back as it was; removed {n[0]} alert(s), {n[1]} logged email(s) and {n[2]} demo recipient "
+    what = "Removed the mapping row added for" if st.get("created") else "Put back as it was:"
+    print(f"{what} '{st['ident']}'; removed {n[0]} alert(s), {n[1]} logged email(s) and {n[2]} demo recipient "
           f"row(s) from the testing.")
 
 
@@ -326,6 +404,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--find", action="store_true", help="list demo / test projects that can be used")
     ap.add_argument("--use", metavar="PROJECT", help="use this existing project (P6 project id or mapping id)")
+    ap.add_argument("--from-p6", metavar="P6_ID", help="add this P6 project (e.g. \"Demo DPR\") to Akasha and use it")
+    ap.add_argument("--capacity", type=float, help="MWac for --from-p6 when its P6 name has none")
     ap.add_argument("--recipient", action="append", default=[], help="email to receive the demo's emails (repeatable)")
     ap.add_argument("--days", type=int, help="ordering date this many days from today (only when dates are not from P6)")
     ap.add_argument("--status", action="store_true", help="show the demo's approvals, alerts and emails")
@@ -343,6 +423,8 @@ def main():
             remove(db)
         elif a.status:
             status(db)
+        elif a.from_p6 or (st and st.get("created")):
+            from_p6(db, a.from_p6 or st["ident"], a.recipient, a.capacity)
         elif a.use or st:
             use(db, a.use or st["ident"], a.days, a.recipient)
         else:
