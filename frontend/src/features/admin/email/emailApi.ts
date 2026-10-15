@@ -88,7 +88,7 @@ export interface AlertList {
   test_mode: boolean; total: number; alerts: Alert[];
   counts: { open: number; awaiting: number; acknowledged: number; resolved: number; by_level: Record<'1' | '2' | '3', number> };
 }
-export interface RunResult { message: string; items: RunItem[]; counts?: Record<string, number>; dry_run?: boolean }
+export interface RunResult { message: string; items?: RunItem[]; counts?: Record<string, number>; dry_run?: boolean; by_template?: Record<string, number> }
 
 export interface ProjectOption { project_id: string; name: string; portfolio: string }
 

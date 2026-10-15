@@ -393,6 +393,20 @@ def cleanup(db, pids, mids, since, mark) -> tuple:
     return len(alert_ids), logs, testers
 
 
+def reset_emails(db) -> None:
+    """Forget the demos' alerts, logged emails (including "Go-live: start from
+    today" marks), approvals and date watches - the projects and testers stay -
+    so every email can be tested again from the start."""
+    pids, mids, since = _all(db)
+    if not mids:
+        print("No demo project.")
+        return
+    n = cleanup(db, pids, mids, since, "__keep-testers__")      # only what happened since the demos were set up
+    db.commit()
+    print(f"Reset the demos: removed {n[0]} alert(s) and {n[1]} logged email(s) (Go-live marks included); "
+          f"projects and testers kept. 'Send now' emails them again.")
+
+
 def remove_created(db, mark: str = MARK) -> None:
     """Remove the created demo project and everything it caused."""
     m = mapping(db)
@@ -441,6 +455,8 @@ def main():
     ap.add_argument("--days", type=int, help="ordering date this many days from today (only where dates are not from P6)")
     ap.add_argument("--status", action="store_true", help="show the demos' plans, approvals, alerts and emails")
     ap.add_argument("--remove", action="store_true", help="undo every demo and everything the testing caused")
+    ap.add_argument("--reset-emails", action="store_true",
+                    help="forget every alert and email for the demos (e.g. after Go-live) so they can be tested again")
     a = ap.parse_args()
     for e in a.recipient:
         if "@" not in e:
@@ -451,6 +467,8 @@ def main():
             find(db)
         elif a.remove:
             remove(db)
+        elif a.reset_emails:
+            reset_emails(db)
         elif a.status:
             status(db)
         elif a.from_p6 or a.use:

@@ -931,7 +931,8 @@ def baseline(db: Session, who: str) -> dict:
             n += 1
             per[t.key] = per.get(t.key, 0) + 1
     db.commit()
-    return {"message": f"{n} existing alert(s) marked as handled; only new events will be emailed", "by_template": per}
+    return {"message": f"{n} existing alert(s) marked as handled; only new events will be emailed", "by_template": per,
+            "items": [], "counts": {"baseline": n}}
 
 
 # ── Admin actions ────────────────────────────────────────────────────────────

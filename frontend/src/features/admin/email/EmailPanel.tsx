@@ -170,14 +170,14 @@ function RunTable({ result }: { result: RunResult }) {
   return (
     <div className="space-y-2">
       <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-foreground"><Mail className="h-3.5 w-3.5" />{result.dry_run ? 'Next run would: ' : ''}{result.message}</p>
-      {result.items.length > 0 && (
+      {(result.items ?? []).length > 0 && (
         <div className="max-h-[360px] overflow-auto rounded-lg border border-border">
           <table className="w-full min-w-[720px] text-[12px]">
             <thead className="sticky top-0 bg-[var(--neutral-100)] text-left text-[10px] uppercase tracking-wider text-muted-foreground">
               <tr className="[&>th]:px-3 [&>th]:py-2 [&>th]:font-semibold"><th>Status</th><th>Level</th><th>Subject</th><th>To</th><th>Cc</th></tr>
             </thead>
             <tbody>
-              {result.items.map((it, i) => {
+              {(result.items ?? []).map((it, i) => {
                 const m = STATUS_META[it.status] ?? { label: it.status, tone: 'neutral' as const };
                 return (
                   <tr key={i} className="border-t border-[var(--border-subtle)] align-top">
