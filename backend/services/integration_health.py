@@ -51,15 +51,12 @@ def check_capacity(p6_result: Tuple[bool, str] | None = None) -> Tuple[bool, str
 
 
 def check_tc() -> Tuple[bool, str]:
-    from services.tc_sync import AUTH_URL, CREDENTIALS
+    from services.tc_sync import TC_BASE_URL, TcAuthError, login
     try:
-        r = requests.post(AUTH_URL, json=CREDENTIALS, verify=False, timeout=15)
-        r.raise_for_status()
-        data = r.json()
-        token = data.get("token") or (data.get("data") or {}).get("token") or data.get("access_token")
-        if not token:
-            return False, f"Login responded but no token was returned: {str(data)[:200]}"
-        return True, "Authenticated."
+        login()
+        return True, f"Authenticated with {TC_BASE_URL} (login link)."
+    except TcAuthError as e:
+        return False, str(e)
     except Exception as e:
         return _fail(e)
 

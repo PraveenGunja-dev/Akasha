@@ -18,6 +18,7 @@ import {
 } from './AdvancedColumns';
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
+import { DateHistoryButton, changedToday, changedTodayCell } from '../modules/DateChange';
 import { levelVendorQuota, VENDOR_CAP_MWAC, type LeveledPhase } from './vendorLeveling';
 import PriorityMenu, { type PlanPriority } from './PriorityMenu';
 import { formatProjectName } from '../../lib/projectName';
@@ -1813,6 +1814,11 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
               <span className="w-1.5 h-1.5 rounded-full bg-status-healthy-bg" />
               Standard P6 Scheduled
             </span>
+            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded border border-[color-mix(in_srgb,var(--brand-blue)_35%,transparent)] bg-[color-mix(in_srgb,var(--brand-blue)_9%,transparent)] text-[var(--brand-blue)] font-semibold"
+              title="LTA or SCOD changed in today's transmission sync or by an edit - click the history icon in the cell for from / to">
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--brand-blue)]" />
+              LTA / SCOD changed today
+            </span>
           </div>
 
           {/* Every rule behind these numbers, from the same source the export
@@ -2090,7 +2096,8 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                           );
                         }
                         return (
-                          <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-semibold relative" : ""}>
+                          <Td className={delayed ? "bg-status-critical-bg text-status-critical-fg font-semibold relative"
+                            : changedToday(p.date_history, 'lta') ? changedTodayCell : ""}>
                             <div className="flex items-center justify-center gap-1 w-full h-full">
                               {savingLtaId === p.id ? (
                                 <RefreshCw className="w-3 h-3 animate-spin text-muted-foreground" />
@@ -2106,6 +2113,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                   </button>
                                 </Tip>
                               )}
+                              <DateHistoryButton history={p.date_history} field="lta" projectName={p.project_name} />
                               {delayed && r && (
                                 <Tip wide content={
                                   <div className="w-[300px] max-w-[calc(100vw-48px)] text-left">
@@ -2144,7 +2152,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                           </Td>
                         );
                       })()}
-                      {isColVisible('scod') && <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE}`}>
+                      {isColVisible('scod') && <td className={`px-1.5 py-[3px] text-center text-[10px] leading-[1.35] whitespace-nowrap ${GRID_LINE} ${changedToday(p.date_history, 'scod') ? changedTodayCell : ''}`}>
                         {editingScodId === p.id ? (
                           <input
                             type="date"
@@ -2176,6 +2184,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                             </button>
                           </Tip>
                         )}
+                        {editingScodId !== p.id && <span className="ml-0.5 inline-flex align-middle"><DateHistoryButton history={p.date_history} field="scod" projectName={p.project_name} /></span>}
                         {advanced && <AiDeadlineLine plan={adv.byId.get(p.id)} deadline={p.scod} label="SCOD" weather={weather} />}
                       </td>}
                       {isColVisible('aop') && <Td>{p.aop_plan || '-'}</Td>}

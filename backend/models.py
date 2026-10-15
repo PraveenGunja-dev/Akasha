@@ -1269,3 +1269,125 @@ class AribaInboundDelivery(Base):
     checklist_status = Column(String, index=True)
     checklist_date = Column(DateTime)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
+
+
+# ==========================================
+# Email notifications (services/email_notify, routers/email_admin.py)
+# ==========================================
+
+class EmailTemplate(Base):
+    """One notification email: when it fires (trigger + config), who gets it
+    (distribution groups) and what it says ({{variables}}). Seeded from
+    services/email_notify/catalogue.py; edited by an administrator after
+    that. Every edit bumps `version` and keeps the previous text in
+    email_template_version."""
+    __tablename__ = "email_template"
+
+    key = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    category = Column(String, nullable=False, default="Alert")   # Reminder / Alert / Approval / Digest / System
+    trigger = Column(String, nullable=False)                     # engine trigger key
+    description = Column(Text, nullable=True)                    # when it fires, in words
+    severity = Column(String, nullable=False, default="info")   # info / action / critical
+    subject = Column(Text, nullable=False)
+    body = Column(Text, nullable=False)
+    to_groups = Column(JSON, nullable=False, default=list)
+    cc_groups = Column(JSON, nullable=False, default=list)
+    config = Column(JSON, nullable=False, default=dict)          # trigger settings, escalation steps
+    attach_snapshot = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=False)
+    version = Column(Integer, nullable=False, default=1)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=True)
+
+
+class EmailTemplateVersion(Base):
+    """Every saved state of a template, so any change can be seen and undone."""
+    __tablename__ = "email_template_version"
+
+    id = Column(Integer, primary_key=True)
+    template_key = Column(String, nullable=False, index=True)
+    version = Column(Integer, nullable=False)
+    name = Column(String, nullable=False)
+    subject = Column(Text, nullable=False)
+    body = Column(Text, nullable=False)
+    to_groups = Column(JSON, nullable=False, default=list)
+    cc_groups = Column(JSON, nullable=False, default=list)
+    config = Column(JSON, nullable=False, default=dict)
+    attach_snapshot = Column(Boolean, nullable=False, default=False)
+    enabled = Column(Boolean, nullable=False, default=False)
+    note = Column(String, nullable=True)
+    changed_by = Column(String, nullable=True)
+    changed_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class EmailRecipient(Base):
+    """A member of a distribution group (TC Ordering, TC Head, Projects, ...).
+    `portfolios` limits them to those clusters; empty = every portfolio."""
+    __tablename__ = "email_recipient"
+
+    id = Column(Integer, primary_key=True)
+    group_key = Column(String, nullable=False, index=True)
+    name = Column(String, nullable=True)
+    email = Column(String, nullable=False)
+    portfolios = Column(JSON, nullable=True)
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    created_by = Column(String, nullable=True)
+
+
+class EmailLog(Base):
+    """Every email Akasha produced: sent, test, failed, or held back (no
+    recipients). `event_key` makes each alert go once per event - the same
+    reminder for the same project, phase and date is never sent twice."""
+    __tablename__ = "email_log"
+
+    id = Column(Integer, primary_key=True)
+    template_key = Column(String, nullable=False, index=True)
+    template_version = Column(Integer, nullable=True)
+    event_key = Column(String, nullable=False, index=True)
+    severity = Column(String, nullable=True)
+    project_id = Column(String, nullable=True, index=True)
+    project_name = Column(String, nullable=True)
+    phase = Column(String, nullable=True)
+    to_addrs = Column(JSON, nullable=True)
+    cc_addrs = Column(JSON, nullable=True)
+    subject = Column(Text, nullable=True)
+    body_html = Column(Text, nullable=True)
+    attachments = Column(JSON, nullable=True)
+    status = Column(String, nullable=False, index=True)    # sent / test / failed / no_recipients
+    detail = Column(Text, nullable=True)                    # error, or why it was held back
+    attempts = Column(Integer, nullable=False, default=1)
+    triggered_by = Column(String, nullable=True)            # scheduler / <username> (manual, test, resend)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+
+
+class EmailWatch(Base):
+    """Last value seen for something an alert watches (a P6 / LTA date, the
+    POs of a project), so a change can be told from the first sighting.
+    The first run only records; it never mails about values it just met."""
+    __tablename__ = "email_watch"
+
+    project_id = Column(String, primary_key=True)
+    field = Column(String, primary_key=True)
+    value = Column(String, nullable=True)
+    updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+
+
+class ProjectDateChange(Base):
+    """Every change to a project's LTA or SCOD: from what to what, when, and
+    where it came from (the transmission portal sync, or a person editing it
+    in the Ordering Schedule). The Ordering Schedule shows this history behind
+    the date and marks a date that changed today - ordering is planned
+    against these dates, so a move must never go unnoticed."""
+    __tablename__ = "project_date_change"
+
+    id = Column(Integer, primary_key=True)
+    mapping_id = Column(Integer, nullable=False, index=True)
+    project_id = Column(String, nullable=True, index=True)
+    field = Column(String, nullable=False)                  # 'lta' | 'scod'
+    old_value = Column(DateTime, nullable=True)
+    new_value = Column(DateTime, nullable=True)
+    source = Column(String, nullable=False)                 # 'portal' | 'manual'
+    changed_by = Column(String, nullable=True)
+    changed_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)

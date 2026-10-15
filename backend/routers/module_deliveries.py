@@ -497,6 +497,8 @@ def get_module_deliveries_summary(
     # Type breakdown accumulators
     type_breakdowns: dict[str, dict] = {}
 
+    from services import date_history
+    date_hist = date_history.for_mappings(db, [m.id for m in mappings])
     for i, m in enumerate(mappings):
         original_cap_mwac = _safe_float(m.capacity_mwac)
         
@@ -797,6 +799,8 @@ def get_module_deliveries_summary(
             "scod": scod.strftime("%d-%b-%y") if isinstance(scod, datetime) else (str(scod) if scod else ""),
             "scod_lta_diff_days": (scod - m.lta_date).days if isinstance(scod, datetime) and isinstance(m.lta_date, datetime) else None,
             "scod_source": scod_source,
+            # LTA / SCOD change history and "changed today" (services/date_history.py).
+            "date_history": date_hist.get(m.id) or {"lta": [], "scod": [], "lta_changed_today": False, "scod_changed_today": False},
             "aop_plan": aop_plan.strftime("%d-%b-%y") if isinstance(aop_plan, datetime) else "",
             "ftc_date": ftc_date_str,
             # Distinguishes the two reasons an FTC cell is empty: every phase

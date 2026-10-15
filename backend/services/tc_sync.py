@@ -11,6 +11,7 @@ from models import TcProjectEntry, TcNetworkEdge, TcNetworkNode, ProjectMapping
 from datetime import datetime
 
 import urllib3
+from urllib.parse import quote
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -47,41 +48,109 @@ def find_mapping_id(db: Session, project_names):
     return None
 
 
-AUTH_URL = "https://powerback-api.unada.in/api/v1/user/login"
-BASE_URL = "https://transmission-api-v3.unada.in"
-CREDENTIALS = {
-    "email": "zaid@unada.io",
-    "password": "Demo@123"
-}
+# ── Transmission Portal connection ───────────────────────────────────────────
+# The portal (Unada) backend, per its route document of 14 Oct 2026. Signing in
+# with email + password is two-step there - it emails a one-time code and
+# returns a challenge ID, never a token - so an unattended sync cannot use it.
+# The sync signs in with the portal's login link instead: POST
+# /api/v1/user/login-link with the #lt= token of an Akasha portal link, which
+# returns the session token directly. Nothing secret lives in the code; all of
+# it comes from backend/.env:
+#
+#   TC_BASE_URL            portal backend, e.g. https://transmission-backend-testing.unada.in
+#   TC_LOGIN_LINK_TOKEN    the #lt= value of the Akasha portal link
+#   TC_AUTH_TOKEN          optional: a session token pasted by hand, used as-is
+#                          (overrides the login link; expires)
+TC_BASE_URL = (os.getenv("TC_BASE_URL") or "").strip().rstrip("/")
+BASE_URL = TC_BASE_URL          # name kept for the code below
+TIMEOUT_S = 60
+
+
+class TcAuthError(RuntimeError):
+    """Why the portal sign-in failed, in words a person can act on."""
+
+
+def _token_from(body):
+    if not isinstance(body, dict):
+        return None
+    data = body.get("data") if isinstance(body.get("data"), dict) else {}
+    return body.get("token") or body.get("access_token") or data.get("token") or data.get("access_token")
+
+
+def login() -> str:
+    """A session token for the portal, or TcAuthError saying why not."""
+    if not TC_BASE_URL:
+        raise TcAuthError("TC_BASE_URL is not set in backend/.env - add the transmission portal's backend address.")
+    pasted = (os.getenv("TC_AUTH_TOKEN") or "").strip()
+    if pasted:
+        return pasted
+    lt = (os.getenv("TC_LOGIN_LINK_TOKEN") or "").strip()
+    if not lt:
+        raise TcAuthError("TC_LOGIN_LINK_TOKEN is not set in backend/.env - add the #lt= value of the "
+                          "Akasha portal link (password sign-in needs an emailed code and cannot be automated).")
+    try:
+        r = requests.post(f"{TC_BASE_URL}/api/v1/user/login-link", json={"token": lt},
+                          verify=False, timeout=TIMEOUT_S)
+    except requests.RequestException as e:
+        raise TcAuthError(f"Transmission portal not reachable at {TC_BASE_URL} ({type(e).__name__}).") from e
+    try:
+        body = r.json()
+    except ValueError:
+        body = {}
+    if r.status_code in (401, 403):
+        raise TcAuthError(f"Portal refused the login link ({r.status_code}: {body.get('message') or 'no message'}) - "
+                          "the #lt= token may have expired or been revoked; ask the portal team for a new link.")
+    if not r.ok:
+        raise TcAuthError(f"Portal login-link sign-in failed ({r.status_code}: {body.get('message') or r.text[:120]}).")
+    token = _token_from(body)
+    if not token:
+        data = body.get("data") or {}
+        if isinstance(data, dict) and (data.get("challengeId") or data.get("challenge_id")):
+            raise TcAuthError("Portal answered the login link with a one-time-code challenge "
+                              "(LOGIN_LINK_REQUIRES_OTP is on) - an unattended sync cannot complete it.")
+        raise TcAuthError(f"Portal login-link sign-in returned no token: {str(body)[:160]}")
+    return token
+
 
 def get_auth_token():
+    """The session token, or None (the reason is logged). Kept for callers that
+    test for None; new code should call login() for the reason."""
     try:
-        res = requests.post(AUTH_URL, json=CREDENTIALS, verify=False)
-        res.raise_for_status()
-        data = res.json()
-        if "token" in data: return data["token"]
-        if "data" in data and "token" in data["data"]: return data["data"]["token"]
-        if "access_token" in data: return data["access_token"]
-    except Exception as e:
-        logger.error(f"Failed to get auth token: {e}")
-    return None
+        return login()
+    except TcAuthError as e:
+        logger.error(f"Transmission portal sign-in: {e}")
+        return None
+
+
+class FetchFailed(Exception):
+    """The portal did not answer (timeout, 5xx, ...). Unlike a 404, this says
+    nothing about whether the project still exists there."""
+
+
+def fetch_json(endpoint: str, token: str, retries: int = 1):
+    """The endpoint's JSON; None when the portal answers 404 (no such
+    project); FetchFailed when it could not be read at all. One retry, for the
+    occasional connect timeout."""
+    headers = {"Authorization": f"Bearer {token}"}
+    for attempt in range(retries + 1):
+        try:
+            res = requests.get(f"{BASE_URL}{endpoint}", headers=headers, verify=False, timeout=TIMEOUT_S)
+            if res.status_code == 404:
+                return None   # expected for unmapped or non-existent projects
+            res.raise_for_status()
+            return res.json()
+        except (requests.RequestException, ValueError) as e:
+            if attempt == retries:
+                raise FetchFailed(f"{endpoint}: {e}") from e
+
 
 def fetch_data(endpoint: str, token: str):
-    headers = {"Authorization": f"Bearer {token}"}
+    """fetch_json, with a failure logged and read as None."""
     try:
-        res = requests.get(f"{BASE_URL}{endpoint}", headers=headers, verify=False)
-        res.raise_for_status()
-        return res.json()
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            # 404 is expected for unmapped or non-existent projects
-            return None
-        logger.error(f"Failed to fetch {endpoint}: {e}")
+        return fetch_json(endpoint, token)
+    except FetchFailed as e:
+        logger.error(f"Failed to fetch {e}")
         return None
-    except Exception as e:
-        logger.error(f"Failed to fetch {endpoint}: {e}")
-        return None
-
 
 def get_global_topology(token: str, region: str):
     """Fetches the global snapshot to get accurate node coordinates and edge from/to links"""
@@ -126,6 +195,52 @@ def get_global_topology(token: str, region: str):
         "nodes": network.get("nodes", []),
         "edges": global_edges
     }
+
+def _as_datetime(v):
+    """pandas Timestamp / datetime -> a plain midnight datetime, else None."""
+    if v is None:
+        return None
+    try:
+        v = v.to_pydatetime()
+    except AttributeError:
+        pass
+    return datetime(v.year, v.month, v.day) if isinstance(v, datetime) else None
+
+
+def apply_connectivity_dates(pm, rows, db=None) -> dict:
+    """LTA and SCOD from the portal's Project Blocks rows (the connectivity
+    sheet, one row per block / phase of the project):
+
+        LTA  = the latest ECOD across the project's rows
+        SCOD = the latest SCOD across them (a date, or "LTA +/- N days",
+               read against that LTA)
+
+    The latest phase governs, the same rule the connectivity export import
+    used. A project the portal has no date for keeps the date it had - this
+    never clears one. Returns what changed."""
+    from scripts.update_lta_from_123 import _parse_date, _parse_scod
+    changed = {}
+    ecods = [d for d in (_as_datetime(_parse_date(r.get("ecod"))) for r in rows or []) if d]
+    lta = max(ecods) if ecods else None
+    scod, scod_is_lta = None, False
+    for r in rows or []:
+        val, is_lta = _parse_scod(r.get("scod"), lta)
+        val = _as_datetime(val)
+        if val and (scod is None or val > scod):
+            scod, scod_is_lta = val, is_lta
+    from services import date_history
+    if lta and pm.lta_date != lta:
+        changed["lta"] = (pm.lta_date, lta)
+        if db is not None:
+            date_history.record(db, pm, "lta", pm.lta_date, lta, "portal", "sync")
+        pm.lta_date = lta
+    if scod and (pm.manual_scod != scod or bool(pm.manual_scod_is_lta) != scod_is_lta):
+        changed["scod"] = (pm.manual_scod, scod)
+        if db is not None:
+            date_history.record(db, pm, "scod", pm.manual_scod, scod, "portal", "sync")
+        pm.manual_scod, pm.manual_scod_is_lta = scod, scod_is_lta
+    return changed
+
 
 def sync_region_data(db: Session, token: str, region: str, project_ids=None):
     """Sync one region's transmission data. If project_ids is given, only those
@@ -183,6 +298,7 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
 
     seen_entry_keys = set()
     seen_edge_keys = set()
+    date_changes = {}   # project_id -> {"lta"/"scod": (old, new)}
 
     from models import Notification
 
@@ -191,7 +307,17 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
         if not pid: continue
         
         # Targeted project API Call
-        p_data = fetch_data(f"/api/{region.lower()}/project-details?project_id={pid}", token)
+        try:
+            # Encode the id: several carry "&" (FY25-P18&19&20, FY27-P01&P02), which
+            # unencoded split the query and the portal looked up "FY25-P18" instead.
+            p_data = fetch_json(f"/api/{region.lower()}/project-details?project_id={quote(pid, safe='')}", token)
+        except FetchFailed as e:
+            # Could not read it this run - keep what we already hold for this
+            # project rather than letting the stale-row cleanup below delete it.
+            logger.error(f"Failed to fetch {e} - keeping {pid}'s existing {region} data")
+            seen_entry_keys.update(k for k in existing_entries if k[0] == pm.id)
+            seen_edge_keys.update(k for k in existing_edges if k[0] == pm.id)
+            continue
 
         RAJ_EXTERNAL_MAP = {
             "FY25-BANDHA_500MW": "Siyambar"
@@ -219,6 +345,15 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
         # Insert precisely mapped project entries (blocks)
         metadata = p_data.get("metadata", {})
         all_entries = metadata.get("rows", [])
+
+        # LTA (latest ECOD) and SCOD (latest SCOD) from the same rows - the
+        # Ordering Schedule's LTA / SCOD columns read these fields.
+        changed = apply_connectivity_dates(pm, all_entries, db)
+        if changed:
+            date_changes[pm.project_id] = changed
+            logger.info(f"{region} {pm.project_id}: " + "; ".join(
+                f"{k.upper()} {old.strftime('%d-%b-%y') if old else 'none'} -> {new.strftime('%d-%b-%y')}"
+                for k, (old, new) in changed.items()))
         
         # Save rich progress metrics natively to the DB
         pm.tc_progress = p_data.get("progress", {})
@@ -370,6 +505,7 @@ def sync_region_data(db: Session, token: str, region: str, project_ids=None):
             
     db.commit()
     logger.info(f"Synced {region} Data")
+    return {"date_changes": date_changes}
 
 def run_sync():
     """Fired in a background thread (routers/sync.py POST /tc/sync returns
@@ -382,15 +518,18 @@ def run_sync():
     log_db = SessionLocal()
 
     def _do():
-        token = get_auth_token()
-        if not token:
-            raise RuntimeError("No auth token available (TC_AUTH_TOKEN / credentials not configured or login failed).")
+        token = login()   # TcAuthError carries the reason into sync_log
         db = SessionLocal()
         try:
-            sync_region_data(db, token, "Khavda")
-            sync_region_data(db, token, "Rajasthan")
+            changes = {}
+            for region in ("Khavda", "Rajasthan"):
+                changes.update((sync_region_data(db, token, region) or {}).get("date_changes") or {})
+            lta_n = sum(1 for c in changes.values() if "lta" in c)
+            scod_n = sum(1 for c in changes.values() if "scod" in c)
             logger.info("Transmission Data Sync Complete!")
-            return {"status": "success", "message": "Synced Khavda and Rajasthan transmission data."}
+            return {"status": "success",
+                    "message": f"Synced Khavda and Rajasthan transmission data. "
+                               f"LTA updated for {lta_n} project(s), SCOD for {scod_n} (from the portal's Project Blocks)."}
         except Exception as e:
             logger.error(f"Error during sync: {e}")
             db.rollback()
@@ -414,9 +553,7 @@ def sync_single_project(project_id: str) -> dict:
     await it and know the DB actually reflects fresh data before reloading,
     unlike the portfolio-wide run_sync() which fires in a background thread.
     """
-    token = get_auth_token()
-    if not token:
-        raise RuntimeError("Transmission portal auth failed - no token.")
+    token = login()
 
     db = SessionLocal()
     try:

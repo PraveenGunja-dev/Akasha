@@ -73,6 +73,8 @@ export interface ModuleProject {
   scod: string;
   scod_lta_diff_days?: number | null;
   scod_source: 'manual' | 'manual_lta' | 'trial_run' | 'tc' | null;
+  /** LTA / SCOD change history and "changed today" (backend services/date_history.py). */
+  date_history?: import('./DateChange').DateHistory;
   aop_plan: string;
   ftc_date: string;
   /** True when every FTC phase is already charged — distinct from P6 simply having no FTC milestone. */
