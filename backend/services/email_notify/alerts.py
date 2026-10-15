@@ -63,6 +63,20 @@ def due_stages(t) -> List[Tuple[int, int]]:
     return [(template_level(t), int(cfg.get("days_before", 30)))]
 
 
+def config_stages(t, default: dict) -> List[Tuple[int, int]]:
+    """(level, days) from config {"levels": {"1": n1, "2": n2, "3": n3}}."""
+    lv = (t.config or {}).get("levels")
+    out = []
+    for k, v in (lv if isinstance(lv, dict) and lv else default).items():
+        try:
+            L, n = int(k), int(v)
+        except (TypeError, ValueError):
+            continue
+        if 1 <= L <= 3 and n >= 0:
+            out.append((L, n))
+    return out
+
+
 def overdue_steps(t) -> List[dict]:
     """The overdue reminders in day order; step 1 goes at L1, 2 at L2, 3+ at L3."""
     return sorted((t.config or {}).get("escalation") or catalogue.LEVELS, key=lambda x: int(x.get("after_days", 0)))

@@ -136,7 +136,7 @@ def project_context(p: dict, cfg, plan: Optional[dict] = None, dates: Optional[d
         "oldest_awaiting_days": procurement.get("oldest_awaiting_days") or "",
         "checklist_pending": max(0, (procurement.get("checklist_due") or 0) - (procurement.get("checklist_created") or 0)) or "",
         "akasha_link": base,
-        "akasha_project_link": f"{base}/ceo-dashboard/project/{pid}" if base and pid else "",
+        "akasha_project_link": f"{base}/project/{pid}" if base and pid else "",
         "support_contact": cfg.support_contact,
         "generated_at": now_ist().strftime("%d-%b-%y %H:%M IST"),
     }

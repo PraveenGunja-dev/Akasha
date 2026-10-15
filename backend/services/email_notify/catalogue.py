@@ -84,9 +84,19 @@ VARIABLES = {
     "approval_date":         ("Decision date", "When it was decided (IST)", "16-Oct-26 11:20 IST"),
     "decision_note":         ("Decision remarks", "The approver's remarks", "Approved - place the PO this week"),
     "approval_next_step":    ("Next step", "What happens after the decision (a 'Required Action' line)", ""),
+    # Project delay / AOP (P6 COD milestones)
+    "aop_date":              ("AOP date", "Baseline finish of the COD milestone in P6 (the plan of record)", "31-Mar-27"),
+    "forecast_cod_date":     ("Forecast COD (P6)", "Current finish of the COD milestone in P6 - a forecast", "30-Jun-27"),
+    "cod_delay_days":        ("Days late against AOP", "Forecast COD (or today, if that forecast has passed) minus the AOP", "91"),
+    "days_to_aop":           ("Days to AOP", "Days from today to the AOP", "28"),
+    "progress_pct":          ("Progress (P6)", "Completed / total P6 activities, with the counts", "62% (812 of 1,310 activities completed)"),
+    "activities_remaining":  ("Activities remaining", "P6 activities not completed", "498"),
+    "forecast_note":         ("Forecast note", "What P6 forecasts, or that its forecast has gone stale", "P6 forecasts COD on 30-Jun-27"),
     # Schedule changes
     "change_source":         ("Changed by", "Where the change came from: a sync, or a person in Akasha", "Edited in Akasha by Ravi Kumar"),
     "change_remarks":        ("Reason given", "The reason the person gave (manual edits)", "Connectivity revised by CTUIL letter"),
+    "change_impact":         ("Impact of the change", "Worked out from the plan and P6 for the date that moved (AOP: forecast COD vs AOP; LTA: FTCs after it; ...)",
+                              "P6 forecast COD 30-Jun-27 is 35 days after the new AOP (it was 140 days after the old AOP)"),
     "order_value":           ("Order value", "From the SAP PO once placed - never estimated", ""),
     # System
     "source_name":           ("Data source", "Sync feed", "Primavera P6"),
@@ -97,7 +107,7 @@ VARIABLES = {
     "p6_as_of":              ("P6 data as of", "Last successful P6 sync", "15-Oct-26 06:00 IST"),
     "sap_as_of":             ("SAP data as of", "Data date of the last SAP extract", "15-Oct-26"),
     "generated_at":          ("Generated", "When Akasha produced this email (IST)", "15-Oct-26 09:00 IST"),
-    "akasha_project_link":   ("View in Akasha", "Link to the project in Akasha (AKASHA_PUBLIC_URL)", "https://host/akasha/ceo-dashboard/project/FY26-P05"),
+    "akasha_project_link":   ("View in Akasha", "Link to the project in Akasha (AKASHA_PUBLIC_URL)", "https://host/akasha/project/FY26-P05"),
     "akasha_link":           ("Open Akasha", "Link to Akasha", "https://host/akasha"),
     "akasha_approval_link":  ("Review and approve", "The approval in Akasha", "https://host/akasha/alerts/12"),
 }
@@ -116,6 +126,8 @@ TRIGGERS = {
     "site_stock_low":   "Modules on site at or below config.min_stock_mwp while erection is still to do",
     "po_detected":      "A new module PO appears in SAP for the project",
     "sync_failed":      "A data feed failed, or has had no success for config.stale_hours",
+    "project_delay":    "COD later than the AOP; L1 / L2 / L3 at the days late in config levels",
+    "aop_due":          "AOP approaching with COD not achieved; L1 / L2 / L3 at the days before in config levels",
     "weekly_digest":    "Once a week (config.weekday, 0 = Monday) - one summary per group",
     "manual":           "Sent from the admin screen for a chosen project (no automatic trigger yet)",
 }
@@ -134,7 +146,7 @@ LEVELS = [  # overdue reminders: each step emails again and adds these groups
 LEVEL_DEFAULT = {"ordering_due_today": 3}
 ACK_DEFAULT = {"ordering_due_30", "ordering_due_today", "ordering_overdue",
                "date_change", "ftc_unreachable", "vendor_shift", "awaiting_grn", "site_stock_low",
-               "approval_request", "sync_failed"}
+               "approval_request", "sync_failed", "project_delay", "aop_due"}
 
 # How an alert closes: "order" when the phase has nothing left to order in
 # the Ordering Schedule (the PO is in SAP); "condition" when its trigger no
@@ -142,7 +154,7 @@ ACK_DEFAULT = {"ordering_due_30", "ordering_due_today", "ordering_overdue",
 # request) when a To recipient acknowledges it.
 CASE_KIND = {"ordering_due": "order", "ordering_today": "order", "ordering_overdue": "order",
              "ftc_unreachable": "condition", "awaiting_grn": "condition", "site_stock_low": "condition",
-             "sync_failed": "condition"}
+             "sync_failed": "condition", "project_delay": "condition", "aop_due": "condition"}
 
 # ── Starting templates ───────────────────────────────────────────────────────
 def _t(key, name, category, trigger, severity, to, cc, subject, body, description, config=None, attach=False):
@@ -210,7 +222,8 @@ Reason Given: {{change_remarks}}
 Ordering Date (recalculated): {{module_ordering_date}}
 Modules Needed at Site (recalculated): {{tc_delivery_date}}
 FTC Date (P6): {{ftc_date}}
-Impact: {{risk_reason}}
+Impact: {{change_impact}}
+Ordering Impact: {{risk_reason}}
 
 Required Action: Projects and TC teams to validate the revised date and update the ordering plan if required.
 
@@ -439,6 +452,54 @@ FTC Date (P6): {{ftc_date}}
 
 Track in Akasha: {{akasha_project_link}}
 """, "A module PO for the project appears in SAP for the first time"),
+
+    _t("project_delay", "Project delayed against AOP", "Alert", "project_delay", "critical",
+       ["projects", "pmag"], ["executive", "tc_ordering"],
+       "Akasha Critical Alert | Project {{cod_delay_days}} Days Behind AOP | {{project_name}}",
+       """
+Dear Team,
+
+**{{project_name}}** is running **{{cod_delay_days}} days behind its AOP**. {{forecast_note}}.
+
+AOP (P6 baseline COD): {{aop_date}}
+Forecast COD (P6): {{forecast_cod_date}}
+Days Late Against AOP: {{cod_delay_days}}
+Progress (P6): {{progress_pct}}
+Activities Remaining: {{activities_remaining}}
+Construction Progress: {{construction_progress}}
+Erected: {{erected_mwp}} MWp ({{erection_pct}})
+Modules on Site: {{on_site_stock_mwp}} MWp
+Balance to Order: {{balance_ordering_mwp}} MWp
+LTA Date: {{lta_date}}
+SCOD: {{scod_date}}
+
+Required Action: Projects to confirm the recovery plan and the revised COD in P6; PMAG to review it against the AOP and the LTA.
+
+View in Akasha: {{akasha_project_link}}
+""", "COD later than the AOP: L1 at 15, L2 at 30, L3 at 60 days late", {"levels": {"1": 15, "2": 30, "3": 60}}, attach=True),
+
+    _t("aop_due", "AOP approaching - COD not achieved", "Alert", "aop_due", "action",
+       ["projects", "pmag"], ["executive"],
+       "Akasha Alert | AOP in {{days_to_aop}} Days, COD Not Achieved | {{project_name}}",
+       """
+Dear Team,
+
+The AOP for **{{project_name}}** is **{{days_to_aop}} days away** and COD is not yet achieved. {{forecast_note}}.
+
+AOP (P6 baseline COD): {{aop_date}}
+Days to AOP: {{days_to_aop}}
+Forecast COD (P6): {{forecast_cod_date}}
+Progress (P6): {{progress_pct}}
+Activities Remaining: {{activities_remaining}}
+Construction Progress: {{construction_progress}}
+Erected: {{erected_mwp}} MWp ({{erection_pct}})
+Modules on Site: {{on_site_stock_mwp}} MWp
+Balance to Order: {{balance_ordering_mwp}} MWp
+
+Required Action: Projects to confirm the AOP can still be met, or raise the risk with PMAG now with a recovery plan.
+
+View in Akasha: {{akasha_project_link}}
+""", "AOP near with COD not achieved: L1 at 60, L2 at 30, L3 at 15 days before", {"levels": {"1": 60, "2": 30, "3": 15}}, attach=True),
 
     _t("sync_failed", "Data sync failed", "System", "sync_failed", "critical",
        ["admin"], [],

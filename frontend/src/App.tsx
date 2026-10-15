@@ -12,6 +12,8 @@ import RequireAuth from './components/auth/RequireAuth';
 import DashboardPicker from './pages/auth/DashboardPicker';
 import ChangePassword from './pages/auth/ChangePassword';
 import { AlertPage, MyAlertsPage } from './features/alerts/AlertPages';
+import ApprovalsPage from './features/modules/ApprovalsPage';
+import ProjectPage from './pages/ProjectPage';
 import { Toaster } from 'sonner';
 import { SecurityAlertWatcher } from './features/admin/securityAlerts';
 
@@ -34,6 +36,10 @@ function App() {
             {/* Alerts emailed to the user - the email's "Acknowledge in Akasha" button lands here */}
             <Route path="/alerts" element={<RequireAuth><MyAlertsPage /></RequireAuth>} />
             <Route path="/alerts/:id" element={<RequireAuth><AlertPage /></RequireAuth>} />
+            {/* Module order approvals: TC Head decides here; everyone sees the history */}
+            <Route path="/approvals" element={<RequireAuth><ApprovalsPage /></RequireAuth>} />
+            {/* A project for any role (email and shared links); executives go on to /ceo-dashboard/project */}
+            <Route path="/project/:projectId" element={<RequireAuth><ProjectPage /></RequireAuth>} />
             {/* Executive / CEO */}
             <Route path="/ceo-dashboard" element={<RequireAuth anyOf={['dashboard.executive']}><CEODashboard /></RequireAuth>} />
             <Route path="/ceo-dashboard/project/:projectId" element={<RequireAuth anyOf={['dashboard.executive']}><CEODashboard /></RequireAuth>} />

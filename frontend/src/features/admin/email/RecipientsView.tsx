@@ -7,7 +7,7 @@ import { Pencil, Plus, Search, Trash2, X } from 'lucide-react';
 import { Dialog, StatusPill, cx } from '../../../components/ui/primitives';
 import { btn, field } from '../adminApi';
 import { emailApi } from './emailApi';
-import type { Catalogue, Recipient, UserOption } from './emailApi';
+import type { Catalogue, EmailTemplate, Recipient, UserOption } from './emailApi';
 
 type Level = 1 | 2 | 3;
 type Form = { id?: number; group_key: string; name: string; email: string; portfolios: string[]; level: Level; active: boolean };
@@ -21,10 +21,23 @@ const LEVELS: { value: Level; label: string; hint: string }[] = [
   { value: 3, label: 'L3 · Senior escalation', hint: 'Only at the top step - an order 14 days overdue' },
 ];
 
+/* What each group is for - who should be in it. */
+const GROUP_PURPOSE: Record<string, string> = {
+  tc_ordering: 'Places module orders and raises approval requests',
+  tc_head: 'Approves module orders',
+  projects: 'Site execution - schedule changes, delays, stock',
+  pmag: 'Governance - delays and escalations',
+  executive: 'Leadership - senior escalations',
+  tc_stores: 'Receipts, GRN and site stock',
+  finance: 'Finance checklists for payment release',
+  admin: 'Data feeds - sync failures',
+};
+
 export default function RecipientsView() {
   const [rows, setRows] = useState<Recipient[]>([]);
   const [cat, setCat] = useState<Catalogue | null>(null);
   const [users, setUsers] = useState<UserOption[]>([]);
+  const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [form, setForm] = useState<Form | null>(null);
   const [remove, setRemove] = useState<Recipient | null>(null);
   const [level, setLevel] = useState<0 | Level>(0);
@@ -40,6 +53,7 @@ export default function RecipientsView() {
     load();
     emailApi.catalogue().then(setCat).catch(() => undefined);
     emailApi.users().then(setUsers).catch(() => undefined);
+    emailApi.templates().then(setTemplates).catch(() => undefined);
   }, [load]);
 
   const save = async () => {
@@ -99,33 +113,75 @@ export default function RecipientsView() {
           const members = shown.filter(r => r.group_key === g.key).sort((a, b) => a.level - b.level || a.email.localeCompare(b.email));
           const all = rows.filter(r => r.group_key === g.key);
           if ((level || q) && members.length === 0) return null;
+          const receives = templates.filter(t => t.to_groups.includes(g.key) || t.cc_groups.includes(g.key));
+          const live = receives.filter(t => t.enabled);
+          const active = all.filter(m => m.active).length;
           return (
-            <section key={g.key} className="bento-card p-0">
-              <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
-                <h3 className="text-[13px] font-semibold text-foreground">{g.label}</h3>
-                <span className="text-[11.5px] text-muted-foreground">{all.filter(m => m.active).length} active</span>
+            <section key={g.key} className="bento-card flex flex-col p-0" aria-labelledby={`grp-${g.key}`}>
+              <header className="flex items-start justify-between gap-3 px-4 pb-2.5 pt-3">
+                <div className="min-w-0">
+                  <h3 id={`grp-${g.key}`} className="text-[13.5px] font-semibold text-foreground">{g.label}</h3>
+                  <p className="text-[11.5px] text-muted-foreground">{GROUP_PURPOSE[g.key] ?? ''}</p>
+                </div>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span className={cx('rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums',
+                    active ? 'bg-muted text-foreground' : 'bg-[var(--status-watch-bg)] text-[var(--status-watch-fg)]')}>
+                    {active} {active === 1 ? 'person' : 'people'}
+                  </span>
+                  <button type="button" className={`${btn.ghost} px-1.5`} aria-label={`Add someone to ${g.label}`} title={`Add someone to ${g.label}`}
+                    onClick={() => { setError(''); setForm({ ...EMPTY, group_key: g.key }); }}><Plus className="h-4 w-4" /></button>
+                </div>
               </header>
+
+              <div className="border-y border-[var(--border-subtle)] bg-[var(--surface-sunken)] px-4 py-2 text-[11.5px]">
+                {receives.length === 0 ? <span className="text-muted-foreground">No template sends to this group.</span> : (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="mr-0.5 text-muted-foreground">Receives</span>
+                    {receives.map(t => (
+                      <span key={t.key} title={`${t.name} - ${t.to_groups.includes(g.key) ? 'To' : 'Cc'}${t.enabled ? '' : ' (template off)'}`}
+                        className={cx('inline-flex items-center gap-1 rounded border px-1.5 py-px',
+                          t.enabled ? 'border-border bg-card text-foreground' : 'border-dashed border-border text-muted-foreground')}>
+                        {t.name.replace(/^Module ordering - /, '')}
+                        <span className="text-[10px] font-semibold text-muted-foreground">{t.to_groups.includes(g.key) ? 'To' : 'Cc'}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {members.length === 0 ? (
-                <p className="px-4 py-3 text-[12px] text-muted-foreground">No one yet - emails to this group are held back and logged as “No recipients”.</p>
+                <div className="flex flex-1 items-center justify-between gap-3 px-4 py-3">
+                  <p className={cx('text-[12px]', live.length ? 'text-[var(--status-watch-fg)]' : 'text-muted-foreground')}>
+                    {live.length ? `No one yet - ${live.length} switched-on email${live.length === 1 ? '' : 's'} to this group ${live.length === 1 ? 'is' : 'are'} held back.` : 'No one yet.'}
+                  </p>
+                  <button type="button" className={btn.secondary} onClick={() => { setError(''); setForm({ ...EMPTY, group_key: g.key }); }}>
+                    <Plus className="h-3.5 w-3.5" />Add person</button>
+                </div>
               ) : (
-                <ul>
+                <ul className="flex-1">
                   {members.map(m => (
-                    <li key={m.id} className="flex items-start justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-2 last:border-0">
-                      <div className="flex min-w-0 items-start gap-2.5 text-[12.5px]">
-                        <span title={LEVELS[m.level - 1]?.hint}
-                          className={cx('mt-px shrink-0 rounded px-1.5 py-px text-[10.5px] font-bold tabular-nums',
-                            m.level === 1 ? 'bg-muted text-foreground' : 'bg-primary/10 text-primary')}>L{m.level}</span>
-                        <div className="min-w-0">
-                          <span className="font-medium text-foreground">{m.name || m.email}</span>
-                          {m.name && <span className="ml-1.5 text-muted-foreground">{m.email}</span>}
-                          <span className="block text-[11px] text-muted-foreground">
-                            {m.portfolios.length ? m.portfolios.join(', ') : 'All portfolios'}
-                            {!m.akasha_user && <span className="text-[var(--status-watch-fg)]" title="Acknowledging needs an Akasha sign-in with this email. An administrator can record it for them from the alert."> · Not an Akasha user - cannot acknowledge</span>}
-                          </span>
+                    <li key={m.id} className="group flex items-center justify-between gap-3 border-b border-[var(--border-subtle)] px-4 py-2 last:border-0 hover:bg-[var(--surface-sunken)]">
+                      <div className="flex min-w-0 items-center gap-2.5">
+                        <Initials name={m.name || m.email} />
+                        <div className="min-w-0 leading-tight">
+                          <div className="flex items-center gap-1.5">
+                            <span className="truncate text-[12.5px] font-medium text-foreground">{m.name || m.email}</span>
+                            <span title={LEVELS[m.level - 1]?.hint}
+                              className={cx('shrink-0 rounded px-1 py-px text-[10px] font-bold tabular-nums',
+                                m.level === 1 ? 'bg-muted text-foreground' : 'bg-primary/10 text-primary')}>L{m.level}</span>
+                            {!m.active && <StatusPill tone="neutral">Paused</StatusPill>}
+                          </div>
+                          <div className="truncate text-[11.5px] text-muted-foreground">
+                            {m.name && <>{m.email} · </>}{m.portfolios.length ? m.portfolios.join(', ') : 'All portfolios'}
+                          </div>
+                          {!m.akasha_user && (
+                            <div className="text-[11px] text-[var(--status-watch-fg)]" title="Acknowledging and approving need an Akasha sign-in with this email. An administrator can record it for them from the alert.">
+                              Not an Akasha user - cannot acknowledge in Akasha
+                            </div>
+                          )}
                         </div>
                       </div>
-                      <div className="flex shrink-0 items-center gap-1">
-                        {!m.active && <StatusPill tone="neutral">Paused</StatusPill>}
+                      <div className="flex shrink-0 items-center gap-0.5 opacity-70 transition-opacity group-hover:opacity-100 focus-within:opacity-100">
                         <button type="button" className={btn.ghost} aria-label={`Edit ${m.email}`}
                           onClick={() => { setError(''); setForm({ id: m.id, group_key: m.group_key, name: m.name, email: m.email, portfolios: m.portfolios, level: m.level, active: m.active }); }}>
                           <Pencil className="h-3.5 w-3.5" /></button>
@@ -203,9 +259,17 @@ function PersonPicker({ users, name, email, onPick, onManual }: {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(0);
   const listRef = useRef<HTMLUListElement>(null);
-  const matches = useMemo(() => {
+  // Nothing until something is typed; then the best few - a name that
+  // starts with the text first - so a long user list never fills the dialog.
+  const SHOWN = 8;
+  const { matches, total } = useMemo(() => {
     const s = q.trim().toLowerCase();
-    return users.filter(u => !s || `${u.name} ${u.username} ${u.email} ${u.role} ${u.department}`.toLowerCase().includes(s)).slice(0, 50);
+    if (!s) return { matches: [] as UserOption[], total: 0 };
+    const rank = (u: UserOption) => (u.name.toLowerCase().startsWith(s) ? 0 : u.email.toLowerCase().startsWith(s) ? 1
+      : u.name.toLowerCase().includes(` ${s}`) ? 2 : 3);
+    const hits = users.filter(u => `${u.name} ${u.username} ${u.email} ${u.role} ${u.department}`.toLowerCase().includes(s))
+      .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name));
+    return { matches: hits.slice(0, SHOWN), total: hits.length };
   }, [users, q]);
   useEffect(() => { setActive(0); }, [q]);
   useEffect(() => {
@@ -289,7 +353,14 @@ function PersonPicker({ users, name, email, onPick, onManual }: {
               </li>
             ))}
             {matches.length === 0 && (
-              <li className="px-3 py-2 text-[12px] text-muted-foreground">{users.length ? `No Akasha user matches \u201c${q.trim()}\u201d.` : 'No Akasha users with an email yet.'}</li>
+              <li className="px-3 py-2 text-[12px] text-muted-foreground">
+                {!users.length ? 'No Akasha users with an email yet.'
+                  : !q.trim() ? `Type a name, email, role or department to find one of ${users.length} Akasha users.`
+                    : `No Akasha user matches \u201c${q.trim()}\u201d.`}
+              </li>
+            )}
+            {total > matches.length && (
+              <li className="px-3 py-1.5 text-[11px] text-muted-foreground">Showing {matches.length} of {total} - keep typing to narrow it down.</li>
             )}
           </ul>
           <button type="button" className="flex w-full items-center gap-1.5 border-t border-border px-3 py-2 text-left text-[12px] font-medium text-primary hover:bg-muted focus-visible:bg-muted focus-visible:outline-none"

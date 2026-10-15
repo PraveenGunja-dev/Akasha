@@ -92,6 +92,9 @@ DEFAULT_ROLES = [
      "description": "Projects execution dashboard", "permissions": ["dashboard.projects"]},
     {"key": "tc_ordering", "name": "TC Ordering", "is_system": True,
      "description": "Techno-commercial ordering dashboard", "permissions": ["dashboard.tc_ordering"]},
+    {"key": "tc_head", "name": "TC Head", "is_system": True,
+     "description": "Techno-commercial ordering dashboard; approves or returns module order requests",
+     "permissions": ["dashboard.tc_ordering"]},
     {"key": "tc_stores", "name": "TC Stores", "is_system": True,
      "description": "Techno-commercial stores dashboard", "permissions": ["dashboard.tc_stores"]},
 ]

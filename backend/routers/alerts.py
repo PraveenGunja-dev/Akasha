@@ -68,7 +68,7 @@ def serialize(db: Session, a: "models.EmailAlert", names: Optional[dict] = None,
                                "status": l.status, "to": l.to_addrs or [], "cc": l.cc_addrs or []}
                               for l in db.query(models.EmailLog).filter(models.EmailLog.alert_id == a.id)
                               .order_by(models.EmailLog.created_at).all()]
-        row["project_link"] = f"/ceo-dashboard/project/{a.project_id}" if a.project_id else None
+        row["project_link"] = f"/project/{a.project_id}" if a.project_id else None
     return row
 
 

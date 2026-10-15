@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Brain, AlertTriangle, ArrowRight, ShieldAlert, Target, Shield, Clock, Activity } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useProjectLink } from '../capacity/useProjectLink';
 import { formatProjectName } from '../../lib/projectName';
 import IntelligenceProjectsDrawer, { type IntelProject } from './IntelligenceProjectsDrawer';
 import { cx } from '../../components/ui/primitives/cx';
@@ -11,6 +12,7 @@ export default function PortfolioIntelligence() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const navigate = useNavigate();
+  const { open: openProject } = useProjectLink();
   const [drill, setDrill] = useState<{ title: string; subtitle: string; projects: IntelProject[] } | null>(null);
 
   useEffect(() => {
@@ -117,7 +119,7 @@ export default function PortfolioIntelligence() {
           <div className="space-y-3">
             {hotspots && hotspots.length > 0 ? (
               hotspots.map((hotspot: any, idx: number) => (
-                <div key={idx} onClick={() => navigate(`/ceo-dashboard/project/${hotspot.project_id}`)} className="p-4 rounded-lg border border-border bg-card hover:bg-muted/50 cursor-pointer transition-colors flex items-center justify-between">
+                <div key={idx} onClick={() => openProject(hotspot.project_id)} className="p-4 rounded-lg border border-border bg-card hover:bg-muted/50 cursor-pointer transition-colors flex items-center justify-between">
                   <div>
                     <h4 className="font-semibold text-foreground mb-1">{formatProjectName(hotspot.project_name)}</h4>
                     <div className="flex items-center gap-4 text-xs">

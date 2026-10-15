@@ -131,9 +131,79 @@ def approvers(db: Session, a) -> List[str]:
     from services.email_notify import alerts, engine
     t = db.get(models.EmailTemplate, "approval_request")
     m = db.get(models.ProjectMapping, a.mapping_id)
-    # Exactly the people the request email goes to: same groups, portfolio and level.
-    return engine.members(db, list((t.to_groups if t else None) or ["tc_head"]), getattr(m, "cluster", None),
-                          alerts.template_level(t) if t else 1)
+    # Exactly the people the request email goes to: the To group (same
+    # portfolio and level) and the users with the TC Head role for it.
+    cluster = getattr(m, "cluster", None)
+    out = engine.members(db, _approver_groups(db), cluster, alerts.template_level(t) if t else 1)
+    seen = {x.lower() for x in out}
+    return out + [e for e in role_users(db, APPROVER_ROLE, cluster) if e.lower() not in seen]
+
+
+# Who raises requests: TC Ordering places the orders, so it asks; TC Head
+# decides. Either the login role (Users & roles - for the user's portfolios)
+# or membership of the distribution group (for the member's portfolios).
+REQUESTER_GROUPS = ["tc_ordering"]
+REQUESTER_ROLE, APPROVER_ROLE = "tc_ordering", "tc_head"
+DEMO = "akasha demo"     # never covered by "all portfolios" (engine.DEMO_PORTFOLIO)
+
+
+def _role_covers(user, role_key: str, cluster: Optional[str]) -> bool:
+    """The user holds the role, active, for this project's portfolio."""
+    if user.role != role_key or user.is_active is False:
+        return False
+    ports = [x.lower() for x in (user.portfolios or [])]
+    c = (cluster or "").lower()
+    return c in ports if ports else c != DEMO
+
+
+def role_users(db: Session, role_key: str, cluster: Optional[str]) -> List[str]:
+    return [u.email for u in db.query(models.AkashaUser).filter(models.AkashaUser.role == role_key,
+                                                                 models.AkashaUser.email.isnot(None)).all()
+            if (u.email or "").strip() and _role_covers(u, role_key, cluster)]
+
+
+def _approver_groups(db: Session) -> List[str]:
+    t = db.get(models.EmailTemplate, "approval_request")
+    return list((t.to_groups if t else None) or ["tc_head"])
+
+
+def _role(db: Session, user, groups: List[str]) -> dict:
+    """The portfolios a user covers in these groups: {"all": bool, "portfolios": [...]}."""
+    email = (user.email or "").strip().lower()
+    out = {"all": False, "portfolios": []}
+    if not email:
+        return out
+    for r in (db.query(models.EmailRecipient)
+              .filter(models.EmailRecipient.group_key.in_(groups), models.EmailRecipient.active.is_(True)).all()):
+        if r.email.strip().lower() != email:
+            continue
+        if not r.portfolios:
+            out["all"] = True
+        else:
+            out["portfolios"] = sorted(set(out["portfolios"]) | set(r.portfolios))
+    return out
+
+
+def roles(db: Session, user) -> dict:
+    """What the user may do with approvals, for the Ordering Schedule."""
+    out = {"superadmin": user.role == "superadmin",
+           "request": _role(db, user, REQUESTER_GROUPS),
+           "approve": _role(db, user, _approver_groups(db))}
+    for key, role_key in (("request", REQUESTER_ROLE), ("approve", APPROVER_ROLE)):
+        if user.role == role_key:
+            if user.portfolios:
+                out[key]["portfolios"] = sorted(set(out[key]["portfolios"]) | set(user.portfolios))
+            else:
+                out[key]["all"] = True
+    return out
+
+
+def can_request(db: Session, user, mapping) -> bool:
+    if user.role == "superadmin" or _role_covers(user, REQUESTER_ROLE, getattr(mapping, "cluster", None)):
+        return True
+    from services.email_notify import engine
+    email = (user.email or "").strip().lower()
+    return bool(email) and email in {x.lower() for x in engine.members(db, REQUESTER_GROUPS, getattr(mapping, "cluster", None), 3)}
 
 
 def self_request(user, a) -> bool:
@@ -146,6 +216,9 @@ def can_decide(db: Session, user, a) -> bool:
     if self_request(user, a):
         return False
     if user.role == "superadmin":
+        return True
+    m = db.get(models.ProjectMapping, a.mapping_id)
+    if _role_covers(user, APPROVER_ROLE, getattr(m, "cluster", None)):
         return True
     email = (user.email or "").strip().lower()
     return bool(email) and email in {x.lower() for x in approvers(db, a)}
@@ -165,6 +238,9 @@ def _summary_row(db: Session, mapping_id: int) -> dict:
 def request(db: Session, user, mapping_id: int, month: str, mwp: float, note: Optional[str]) -> "models.ModuleOrderApproval":
     """Raise a request for (up to) the month's planned quantity. The phases
     and figures come from the plan itself, never from the browser."""
+    if not can_request(db, user, db.get(models.ProjectMapping, mapping_id)):
+        raise ApprovalError("Approval requests are raised by TC Ordering - ask an administrator for the TC Ordering role "
+                            "(Users & roles) or a place in the TC Ordering group for this portfolio")
     p = _summary_row(db, mapping_id)
     planned = float((p.get("month_mwp") or {}).get(month) or 0.0)
     if planned <= TOL:

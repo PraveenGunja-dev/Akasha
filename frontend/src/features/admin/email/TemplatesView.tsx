@@ -456,7 +456,7 @@ function HistoryDialog({ open, tpl, onClose, onRestored, onReset }: {
 type Cfg = Record<string, unknown>;
 interface Step { after_days: number; label?: string; add_to?: string[]; add_cc?: string[] }
 const WEEKDAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
-const STAGED = ['ordering_due', 'ordering_overdue'];   // templates whose days set L1 / L2 / L3
+const STAGED = ['ordering_due', 'ordering_overdue', 'project_delay', 'aop_due'];   // templates whose days set L1 / L2 / L3
 
 function parseCfg(text: string): Cfg | null {
   try { const v = JSON.parse(text || '{}'); return v && typeof v === 'object' && !Array.isArray(v) ? v as Cfg : null; } catch { return null; }
@@ -511,6 +511,12 @@ function stagesOf(t: Pick<EmailTemplate, 'trigger' | 'config' | 'level'>): { lev
     }
     return [{ level: t.level, when: `${num(t.config.days_before, 30)} days before the ordering date` }];
   }
+  if (t.trigger === 'project_delay' || t.trigger === 'aop_due') {
+    const lv = (t.config.levels ?? {}) as Record<string, number>;
+    const unit = t.trigger === 'project_delay' ? 'days late against the AOP' : 'days before the AOP';
+    return Object.entries(lv).map(([k, v]) => ({ level: Number(k), when: `${v} ${unit}` })).filter(x => x.level >= 1 && x.level <= 3)
+      .sort((a, b) => a.level - b.level);
+  }
   if (t.trigger === 'ordering_overdue') {
     const steps = (Array.isArray(t.config.escalation) ? t.config.escalation as Step[] : []).slice().sort((a, b) => a.after_days - b.after_days);
     return steps.slice(0, 3).map((st, i) => ({ level: Math.max(t.level, i + 1), when: st.after_days ? `${st.after_days} days overdue` : 'when the date is missed' }));
@@ -554,6 +560,22 @@ function WhenSent({ tpl, config, groupName, onConfig }: {
             ? `also ${[st.add_to?.length ? st.add_to.map(groupName).join(', ') : '', st.add_cc?.length ? `Cc ${st.add_cc.map(groupName).join(', ')}` : ''].filter(Boolean).join(' · ')}`
             : undefined,
         }))} />
+    );
+  } else if (trig === 'project_delay' || trig === 'aop_due') {
+    const late = trig === 'project_delay';
+    const lv = (cfg.levels && typeof cfg.levels === 'object' ? cfg.levels : {}) as Record<string, number>;
+    const setLevel = (l: number, n: number) => set({ levels: { ...lv, [l]: n } });
+    const vals = [1, 2, 3].map(l => lv[String(l)]);
+    const outOfOrder = vals.some((v, i) => i > 0 && v != null && vals[i - 1] != null && (late ? v <= vals[i - 1]! : v >= vals[i - 1]!));
+    body = (
+      <div className="space-y-2">
+        <p className="text-[12.5px] text-foreground">
+          {late ? 'When COD runs later than the AOP (P6 baseline COD), going by the P6 forecast - or today, if that forecast has passed without COD:'
+            : 'Before the AOP (P6 baseline COD) while COD is not achieved; once the AOP passes, the project-delay email takes over:'}
+        </p>
+        <LevelRows unit={late ? 'days late against the AOP' : 'days before the AOP'} outOfOrder={outOfOrder}
+          rows={[1, 2, 3].map(l => ({ level: l, value: lv[String(l)] ?? null, onChange: (n: number) => setLevel(l, n), min: 0, max: 730 }))} />
+      </div>
     );
   } else if (trig === 'ordering_today') {
     body = <p className="text-[12.5px] text-foreground">On the ordering date, if the phase is still not ordered.</p>;
@@ -606,7 +628,7 @@ function LevelRows({ rows, unit, outOfOrder }: {
         </label>
       ))}
       {outOfOrder && <p role="alert" className="text-[11.5px] text-[var(--status-critical-fg)]">Each level must come after the one before (L1 first, L3 last).</p>}
-      <p className="text-[11px] text-muted-foreground">If someone acknowledged with an expected date on or before the ordering date, the next email stays at the current level instead of moving up.</p>
+      <p className="text-[11px] text-muted-foreground">If someone acknowledged with an expected date that has not passed (for module orders, on or before the ordering date), the next email stays at the current level instead of moving up.</p>
     </div>
   );
 }

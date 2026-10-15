@@ -15,7 +15,8 @@ import { FORECAST_MONTHS, exportModuleDeliveriesXLSX, moduleExportName } from '.
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from './DateChange';
-import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval } from './OrderApproval';
+import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval, covers, useApprovalRole } from './OrderApproval';
+import { Link } from 'react-router-dom';
 import { DateChangeReason } from './DateChangeReason';
 import type { PendingDate } from './DateChangeReason';
 import { MiniMeter } from '../../components/ui/primitives/Meter';
@@ -922,6 +923,7 @@ export default function ModuleDeliveriesPage() {
   // goes into the date history and the schedule-change email.
   const [pendingDate, setPendingDate] = useState<PendingDate | null>(null);
   const [approvalsKey, setApprovalsKey] = useState(0);   // reloads "waiting for your approval"
+  const approvalRole = useApprovalRole(approvalsKey);
   const [approvalTarget, setApprovalTarget] = useState<{ mapping: ModuleProject; month: string; id?: number } | null>(null);
   const saveScod = async (id: number, isoDateOrNull: string | null) => {
     const row = data?.projects.find(x => x.id === id);
@@ -1448,6 +1450,14 @@ export default function ModuleDeliveriesPage() {
               </div>
             )}
           </div>
+
+          <Link to="/approvals"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+            Approvals
+            {(approvalRole?.waiting ?? 0) > 0 && (
+              <span className="rounded-full bg-[var(--status-watch-solid)] px-1.5 text-[10px] font-bold tabular-nums text-white" aria-label={`${approvalRole?.waiting} waiting for you`}>{approvalRole?.waiting}</span>
+            )}
+          </Link>
 
           <button
             onClick={handleExport}
@@ -2313,7 +2323,8 @@ export default function ModuleDeliveriesPage() {
                                   </div>
                                 )}
                                 {(val > 0 || (p.approvals ?? []).some(a => a.month === mo)) && (
-                                  <ApprovalSummary p={p} month={mo} planned={val} onOpen={setApprovalTarget} />
+                                  <ApprovalSummary p={p} month={mo} planned={val} onOpen={setApprovalTarget}
+                                    canRequest={!!approvalRole && (approvalRole.superadmin || covers(approvalRole.request, p.cluster))} />
                                 )}
                               </div>
                             ) : undefined}

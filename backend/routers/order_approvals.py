@@ -47,6 +47,16 @@ def list_approvals(mapping_id: Optional[int] = None, status: Optional[str] = Non
     return [_out(db, a, user) for a in q.order_by(models.ModuleOrderApproval.requested_at.desc()).limit(500).all()]
 
 
+@router.get("/me")
+def my_role(db: Session = Depends(get_db), user: models.AkashaUser = Depends(current_user)):
+    """May this user raise requests (TC Ordering) or decide them (TC Head),
+    and for which portfolios - drives what the Ordering Schedule offers."""
+    out = OA.roles(db, user)
+    pending = db.query(models.ModuleOrderApproval).filter(models.ModuleOrderApproval.status == "pending").all()
+    out["waiting"] = sum(1 for a in pending if OA.can_decide(db, user, a))
+    return out
+
+
 @router.get("/waiting")
 def waiting_for_me(db: Session = Depends(get_db), user: models.AkashaUser = Depends(current_user)):
     """Pending requests this user can decide - they are in the approval

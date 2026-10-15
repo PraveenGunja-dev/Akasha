@@ -182,6 +182,7 @@ class Data:
         self.projects = [p for p in self.projects if p.get("project_id")]
         self.dates = C.data_dates(db)
         self._plans: Optional[Dict[str, dict]] = None
+        self._cod: Optional[Dict[str, dict]] = None
 
     def plans(self) -> Dict[str, dict]:
         """Advanced-planning block stages per project (P6) - built only when
@@ -205,6 +206,32 @@ class Data:
     def context(self, p: dict, with_progress: bool = False) -> Dict:
         plan = self.plans().get(str(p.get("project_id"))) if with_progress else None
         return C.project_context(p, self.cfg, plan, self.dates)
+
+    def cod(self) -> Dict[str, dict]:
+        """Per P6 project: the AOP (baseline finish of the COD milestones),
+        the P6 forecast COD (current finish), whether COD is achieved (every
+        COD milestone has an actual finish) and progress as completed /
+        total activities - all from the latest P6 snapshot, never estimated.
+        A multi-phase project takes its latest phase, as the AOP column does."""
+        if self._cod is None:
+            from routers.module_deliveries import LATEST_P6
+            self._cod = {}
+            for pid, aop, fc, done in self.db.execute(text(f"""
+                WITH latest_p6 AS ({LATEST_P6})
+                SELECT p.project_id, MAX(a.baseline_finish_date), MAX(a.finish_date),
+                       BOOL_AND(a.actual_finish_date IS NOT NULL)
+                FROM p6_activity a JOIN latest_p6 p ON p.p6_object_id = a.project_object_id
+                WHERE a.name ILIKE 'COD%' AND a.type = 'Finish Milestone'
+                GROUP BY p.project_id""")):
+                self._cod[str(pid)] = {"aop": aop.date() if aop else None, "forecast": fc.date() if fc else None,
+                                       "achieved": bool(done)}
+            for pid, total, completed in self.db.execute(text(f"""
+                WITH latest_p6 AS ({LATEST_P6})
+                SELECT p.project_id, COUNT(*), COUNT(*) FILTER (WHERE a.status = 'Completed')
+                FROM p6_activity a JOIN latest_p6 p ON p.p6_object_id = a.project_object_id
+                GROUP BY p.project_id""")):
+                self._cod.setdefault(str(pid), {})["activities"] = (int(total or 0), int(completed or 0))
+        return self._cod
 
 
 @dataclass
@@ -347,6 +374,61 @@ def _change_origin(db, p: dict, f: str, new_day) -> tuple:
     return FIELD_ORIGIN.get(f, "Data sync"), "Automatic update - no reason recorded"
 
 
+def _gap(days: int, what: str) -> str:
+    return f"{days} days after {what}" if days > 0 else f"{-days} days before {what}" if days < 0 else f"on {what}"
+
+
+def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
+    """What the changed date means now, worked out from the current plan
+    and P6 - stated only where Akasha has the figures, never guessed."""
+    today, out = C.today(), []
+    info = d.cod().get(str(p.get("project_id"))) or {}
+    fc = info.get("forecast")
+    lta, scod, aop = C.parse_day(p.get("lta")), C.parse_day(p.get("scod")), C.parse_day(p.get("aop_plan"))
+    if f == "aop_plan":
+        if info.get("achieved"):
+            out.append("COD is already achieved")
+        elif fc and new:
+            exp = today if fc < today else fc
+            line = f"P6 forecast COD {C.fmt_day(fc)} is {_gap((exp - new).days, 'the new AOP')}"
+            if old:
+                line += f" (it was {_gap((exp - old).days, 'the old AOP')})"
+            out.append(line + (" - the P6 forecast date has already passed without COD" if fc < today else ""))
+        total, done = info.get("activities", (0, 0))
+        if total:
+            out.append(f"progress {round(done / total * 100)}% ({done:,} of {total:,} P6 activities completed)")
+    elif f == "lta":
+        if new:
+            ftcs = [x for x in (C.parse_day(s) for s in str(p.get("ftc_date") or "").split("·")) if x]
+            late = [x for x in ftcs if x > new]
+            if ftcs:
+                out.append(f"{len(late)} of {len(ftcs)} phase FTC date(s) fall after the new LTA" if late
+                           else "every phase FTC is on or before the new LTA")
+            if scod:
+                out.append(f"SCOD {C.fmt_day(scod)} is {_gap((scod - new).days, 'the LTA')}")
+        else:
+            out.append("the project now has no LTA - transmission readiness cannot be checked")
+    elif f == "scod":
+        parts = ([f"{_gap((new - lta).days, 'the LTA')} ({C.fmt_day(lta)})"] if new and lta else []) +                 ([f"{_gap((new - aop).days, 'the AOP')} ({C.fmt_day(aop)})"] if new and aop else [])
+        if parts:
+            out.append("the new SCOD is " + " and ".join(parts))
+    elif f in ("ftc_date", "module_date"):
+        nxt = sorted((C.parse_day(o.get("order_date")), o) for o in _orders(p) if C.parse_day(o.get("order_date")))
+        if nxt:
+            od, o = nxt[0]
+            days = (od - today).days
+            out.append(f"next order {C.mw(o.get('mwp'))} MWp by {C.fmt_day(od)} "
+                       + (f"({days} days from today)" if days >= 0 else f"({-days} days overdue)"))
+        if (p.get("ftc_at_risk_mwp") or 0) > 0:
+            out.append(f"{C.mw(p['ftc_at_risk_mwp'])} MWp can no longer reach its P6 FTC from the planned order month")
+        elif (p.get("balance_ordering_mwp") or 0) <= 0:
+            out.append("fully ordered - no module order is affected")
+    if not out:
+        return "No impact Akasha can measure from the data it holds"
+    s = "; ".join(out)
+    return s[0].upper() + s[1:]
+
+
 def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
     fields = (t.config or {}).get("fields") or list(FIELD_LABEL)
     out = []
@@ -369,7 +451,8 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
             ctx.update({"changed_date_field": FIELD_LABEL.get(f, f), "previous_date": before or "Not set",
                         "revised_date": now_v or "Removed",
                         "date_variance_days": (f"{(a - b).days:+d}" if a and b else ""),
-                        "change_source": src, "change_remarks": why})
+                        "change_source": src, "change_remarks": why,
+                        "change_impact": _change_impact(d, p, f, b, a)})
             # One email per transition: the key carries the value it moved
             # from and when that value was recorded, so A -> B -> A is two.
             out.append(Event(f"{t.key}:{pid}:{f}:{before}>{now_v}:{since}", ctx, p, watch=(pid, f"date:{f}", now_v)))
@@ -556,7 +639,7 @@ def digest_table(projects: List[dict], base: str) -> str:
     for rank, _, p, o, status in rows[:60]:
         name = e(p.get("project_name") or "")
         if base and p.get("project_id"):
-            name = f'<a href="{e(base)}/ceo-dashboard/project/{e(str(p["project_id"]))}" style="color:#0b74b1;">{name}</a>'
+            name = f'<a href="{e(base)}/project/{e(str(p["project_id"]))}" style="color:#0b74b1;">{name}</a>'
         phase = "" if (o.get("phase_label") or "").strip().lower() in C.UNPHASED else e(o.get("phase_label") or "")
         trs.append(
             f'<tr><td style="padding:6px 8px;border-bottom:1px solid #eef0f3;">{name}<br>'
@@ -572,11 +655,83 @@ def digest_table(projects: List[dict], base: str) -> str:
             f'border:1px solid #e5e7eb;border-radius:8px;margin:0 0 16px;"><tr>{head}</tr>{"".join(trs)}</table>{more}')
 
 
+def _cod_context(d: "Data", p: dict, info: dict) -> Dict:
+    """Context for the project-delay and AOP emails: dates, how late, and
+    progress with the counts behind the percentage."""
+    ctx = d.context(p, True)
+    today = C.today()
+    aop, fc = info.get("aop"), info.get("forecast")
+    total, done = info.get("activities", (0, 0))
+    stale = bool(fc and fc < today)
+    expected = today if (stale or not fc) else fc
+    ctx.update({
+        "aop_date": C.fmt_day(aop), "forecast_cod_date": C.fmt_day(fc) if fc else "",
+        "cod_delay_days": max(0, (expected - aop).days) if aop else "",
+        "days_to_aop": (aop - today).days if aop and aop >= today else "",
+        "progress_pct": (f"{round(done / total * 100)}% ({done:,} of {total:,} activities completed)" if total else ""),
+        "activities_remaining": f"{total - done:,}" if total else "",
+        "forecast_note": (f"P6 still forecasts COD on {C.fmt_day(fc)}, a date that has passed without COD - the P6 schedule needs updating"
+                          if stale else f"P6 forecasts COD on {C.fmt_day(fc)}" if fc else "P6 has no COD forecast"),
+    })
+    return ctx
+
+
+def _level_for(stages, value, before: bool):
+    """The highest level whose threshold `value` has reached. `before`: days
+    before a date (smaller is later); otherwise days late (larger is later)."""
+    hit = [(lv, n) for lv, n in stages if (value <= n if before else value >= n)]
+    return max(hit, key=lambda x: x[0]) if hit else None
+
+
+def ev_project_delay(d: Data, t, dry: bool) -> List[Event]:
+    """COD later than the AOP: L1 / L2 / L3 at the configured days late
+    (config levels, e.g. 15 / 30 / 60). Late = the P6 forecast COD after the
+    AOP, or - where that forecast has passed without COD - today."""
+    stages = alerts.config_stages(t, {"1": 15, "2": 30, "3": 60})
+    cod, today, out = d.cod(), C.today(), []
+    for p in d.projects:
+        info = cod.get(str(p.get("project_id")))
+        if not info or info.get("achieved") or not info.get("aop"):
+            continue
+        fc = info.get("forecast")
+        expected = today if (not fc or fc < today) else fc
+        late = (expected - info["aop"]).days
+        hit = _level_for(stages, late, before=False)
+        if not hit:
+            continue
+        lv, n = hit
+        ctx = _cod_context(d, p, info)
+        ctx["escalation_level"] = f"{late} days late against the AOP (level {lv} from {n} days)"
+        out.append(Event(f"{t.key}:{p['project_id']}:L{lv}", ctx, p, level=lv, case_key=f"{t.key}:{p['project_id']}"))
+    return out
+
+
+def ev_aop_due(d: Data, t, dry: bool) -> List[Event]:
+    """The AOP is near and COD is not achieved: L1 / L2 / L3 at the
+    configured days before the AOP (config levels, e.g. 60 / 30 / 15). Once
+    the AOP passes, the project-delay email takes over."""
+    stages = alerts.config_stages(t, {"1": 60, "2": 30, "3": 15})
+    cod, today, out = d.cod(), C.today(), []
+    for p in d.projects:
+        info = cod.get(str(p.get("project_id")))
+        if not info or info.get("achieved") or not info.get("aop") or info["aop"] < today:
+            continue
+        days = (info["aop"] - today).days
+        hit = _level_for(stages, days, before=True)
+        if not hit:
+            continue
+        lv, n = hit
+        out.append(Event(f"{t.key}:{p['project_id']}:{info['aop']}:L{lv}", _cod_context(d, p, info), p, level=lv,
+                         case_key=f"{t.key}:{p['project_id']}"))
+    return out
+
+
 TRIGGERS = {
     "ordering_due": ev_ordering_due, "ordering_today": ev_ordering_today, "ordering_overdue": ev_ordering_overdue,
     "date_change": ev_date_change, "ftc_unreachable": ev_ftc_unreachable, "vendor_shift": ev_vendor_shift,
     "awaiting_grn": ev_awaiting_grn, "checklist_missing": ev_checklist_missing, "site_stock_low": ev_site_stock_low,
     "po_detected": ev_po_detected, "sync_failed": ev_sync_failed, "weekly_digest": ev_weekly_digest,
+    "project_delay": ev_project_delay, "aop_due": ev_aop_due,
 }
 
 
@@ -642,6 +797,9 @@ def deliver(db: Session, t, ev: Event, d: Data, triggered_by: str, dry_run: bool
         ack = {"level": level, "why": "", "ask": alerts.ask_text(t) + " (Test copy - the real email links to its alert.)",
                "url": f"{cfg.public_url}/alerts" if cfg.public_url else ""}
     subject, html_body, text_body = render.render(t, ev.ctx, banner, ack)
+    # The level shows in the subject too, so an escalation reads as one in the inbox.
+    if ack and level >= 2:
+        subject = f"[L{level} {'Senior escalation' if level >= 3 else 'Escalation'}] {subject}"
     if test:
         subject = f"[TEST] {subject}"
     row["subject"] = subject
@@ -817,7 +975,8 @@ EVENT_ONLY = {"changed_date_field", "previous_date", "revised_date", "date_varia
               "shift_reason", "source_name", "sync_error", "last_success", "po_numbers", "po_date",
               "po_quantity_mwp", "vendor_name", "digest_period", "order_month", "requested_by", "request_note",
               "approval_status", "approval_decision", "approved_by", "approval_date", "decision_note",
-              "approval_next_step", "change_source", "change_remarks", "akasha_approval_link"}
+              "approval_next_step", "change_source", "change_remarks", "akasha_approval_link",
+              "change_impact", "aop_date", "forecast_cod_date", "cod_delay_days", "days_to_aop", "forecast_note"}
 
 
 def preview(db: Session, t, project_id: Optional[str] = None) -> dict:
@@ -832,7 +991,7 @@ def preview(db: Session, t, project_id: Optional[str] = None) -> dict:
                "url": f"{d.cfg.public_url}/alerts" if d.cfg.public_url else ""}
     subj, html_body, _ = render.render(t, ev.ctx, "", ack)
     used = render.used_variables(t.subject, t.body)
-    return {"subject": subj, "html": html_body, "problems": render.validate(t.subject, t.body),
+    return {"subject": subj, "html": render.for_browser(html_body), "problems": render.validate(t.subject, t.body),
             "project_id": (ev.project or {}).get("project_id"), "project_name": (ev.project or {}).get("project_name"),
             "empty": [v for v in used if not str(ev.ctx.get(v) or "").strip()],
             "level": alerts.template_level(t),
@@ -939,6 +1098,9 @@ def send_approval_request(db: Session, a, who: str) -> dict:
         t = db.get(models.EmailTemplate, "approval_request")
     d = Data(db)
     ev = _approval_event(d, a, f"approval:{a.id}:request")
+    # Users holding the TC Head role for the portfolio are approvers too.
+    from services import order_approvals
+    ev.extra_to = order_approvals.role_users(db, order_approvals.APPROVER_ROLE, (ev.project or {}).get("cluster"))
     if a.requested_by_email:
         ev.extra_cc = [a.requested_by_email]
     return deliver(db, t, ev, d, f"{who} (approval request)")

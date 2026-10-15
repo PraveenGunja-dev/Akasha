@@ -5,6 +5,7 @@ import { X, Layers, BarChart2, Target, AlertTriangle, Activity, Briefcase, Check
 import { AnimatePresence, motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import { useNavigate } from 'react-router-dom';
+import { useProjectLink } from '../../features/capacity/useProjectLink';
 import { formatProjectName } from '../../lib/projectName';
 
 interface KPIDetailsModalProps {
@@ -29,6 +30,7 @@ const kpiConfig: Record<string, { icon: React.ElementType, gradient: string, glo
 export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, summary }: KPIDetailsModalProps) {
   const [filterCategory, setFilterCategory] = React.useState<string | null>(null);
   const navigate = useNavigate();
+  const { open: openProject } = useProjectLink();
 
   useEffect(() => {
     if (isOpen) {
@@ -549,7 +551,7 @@ export default function KPIDetailsModal({ isOpen, onClose, activeKpi, projects, 
                             onClick={() => {
                               if (item.id) {
                                 onClose();
-                                navigate(`/ceo-dashboard/project/${encodeURIComponent(item.id)}${activeKpi === 'Remaining PO Value' || activeKpi === 'Total PO Value' ? '?tab=sap' : ''}`);
+                                openProject(item.id, activeKpi === 'Remaining PO Value' || activeKpi === 'Total PO Value' ? 'sap' : undefined);
                               }
                             }}
                             className={`group flex justify-between items-center px-5 py-4 rounded-2xl transition-all duration-300 ${item.id ? 'cursor-pointer hover:bg-muted dark:hover:bg-white/5 hover:shadow-md hover:scale-[1.02] border border-muted dark:border-border' : 'cursor-default border border-transparent'}`}

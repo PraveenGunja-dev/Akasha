@@ -58,6 +58,13 @@ def send(cfg: EmailSettings, to: List[str], cc: List[str], subject: str, html: s
         msg["X-Akasha-Template"] = tag
     msg.set_content(text)
     msg.add_alternative(html, subtype="html")
+    # The banner travels inside the email (render.BANNER_CID) so it is shown
+    # without the reader having to allow downloaded pictures.
+    from . import render
+    if f"cid:{render.BANNER_CID}" in html:
+        html_part = msg.get_payload()[1]
+        html_part.add_related(render.banner_bytes(), maintype="image", subtype="jpeg",
+                              cid=f"<{render.BANNER_CID}>", filename="adani-banner.jpg", disposition="inline")
     for name, data, mime in attachments or []:
         main, _, sub = mime.partition("/")
         msg.add_attachment(data, maintype=main, subtype=sub or "octet-stream", filename=name)

@@ -5,7 +5,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { AlertTriangle, CalendarClock, CheckCircle2, Eye, FlaskConical, Mail, MailX, PlayCircle, Rocket, Send, UserX } from 'lucide-react';
 import { Dialog, KPITile, PageHeader, StatusPill, cx } from '../../../components/ui/primitives';
-import { btn, fmtWhen } from '../adminApi';
+import { btn, field, fmtWhen } from '../adminApi';
+import { useAuth } from '../../../context/AuthContext';
 import { emailApi, STATUS_META } from './emailApi';
 import type { EmailStatus, RunResult } from './emailApi';
 import TemplatesView from './TemplatesView';
@@ -39,7 +40,7 @@ export default function EmailPanel() {
           </button>
         ))}
       </div>
-      {view === 'overview' && <Overview onOpenLog={() => setView('log')} />}
+      {view === 'overview' && <Overview onOpenLog={() => setView('log')} onGo={setView} />}
       {view === 'templates' && <TemplatesView />}
       {view === 'alerts' && <AlertsView />}
       {view === 'recipients' && <RecipientsView />}
@@ -48,7 +49,7 @@ export default function EmailPanel() {
   );
 }
 
-function Overview({ onOpenLog }: { onOpenLog: () => void }) {
+function Overview({ onOpenLog, onGo }: { onOpenLog: () => void; onGo: (v: View) => void }) {
   const [status, setStatus] = useState<EmailStatus | null>(null);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'' | 'dry' | 'run' | 'baseline'>('');
@@ -116,22 +117,27 @@ function Overview({ onOpenLog }: { onOpenLog: () => void }) {
         ))}
       </div>
 
-      <div className="bento-card space-y-3 p-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={btn.secondary} disabled={!!busy} onClick={() => act('dry')}>
-            <Eye className="h-3.5 w-3.5" />{busy === 'dry' ? 'Checking…' : 'Preview next run'}
-          </button>
-          <button type="button" className={btn.primary} disabled={!!busy || !s?.enabled} onClick={() => setConfirm('run')}
-            title={s?.enabled ? 'Send everything that is due now' : 'Turn on EMAIL_ENABLED in backend/.env first'}>
-            <Send className="h-3.5 w-3.5" />Send now
-          </button>
-          <button type="button" className={btn.secondary} disabled={!!busy} onClick={() => setConfirm('baseline')}>
-            <Rocket className="h-3.5 w-3.5" />Go-live: start from today
-          </button>
-          <span className="text-[11.5px] text-muted-foreground">Preview sends nothing and records nothing.</span>
+      {status && <SetupChecklist status={status} onGo={onGo} onChanged={load} />}
+
+      <section className="bento-card space-y-3 p-4" aria-labelledby="run-title">
+        <div>
+          <h2 id="run-title" className="text-[13px] font-semibold text-foreground">Run the alerts by hand</h2>
+          <p className="text-[12px] text-muted-foreground">Akasha checks every switched-on template once a day (09:00-11:00 IST). These run that check now.</p>
+        </div>
+        <div className="grid gap-3 md:grid-cols-3">
+          <RunAction icon={<Eye className="h-3.5 w-3.5" />} label={busy === 'dry' ? 'Checking…' : 'Preview next run'} disabled={!!busy}
+            onClick={() => act('dry')} text="Lists what the daily check would send right now, and to whom. Sends nothing, records nothing." />
+          <RunAction primary icon={<Send className="h-3.5 w-3.5" />} label="Send now" disabled={!!busy || !s?.enabled} onClick={() => setConfirm('run')}
+            text={s?.enabled ? (s.test_mode ? `Runs the daily check now. Test mode: everything goes only to ${s.test_recipients.join(', ') || 'the test recipients'}.`
+              : 'Runs the daily check now and emails the real distribution groups.')
+              : 'Off: email sending is switched off on this server. Set EMAIL_ENABLED=true in backend/.env and restart.'}
+            warn={!s?.enabled} />
+          <RunAction icon={<Rocket className="h-3.5 w-3.5" />} label="Go-live: start from today" disabled={!!busy} onClick={() => setConfirm('baseline')}
+            text={status?.baseline_done ? 'Already done. Use once only: it marks everything already overdue as handled, so going live does not flood people.'
+              : 'Use once, on the day email goes live: marks today\'s backlog as handled so only new events are emailed.'} />
         </div>
         {result && <RunTable result={result} />}
-      </div>
+      </section>
 
       <Dialog open={confirm === 'run'} onClose={() => setConfirm('')} title="Send now?"
         description="Every enabled template is checked and each alert that is due and not yet sent goes out now."
@@ -190,3 +196,83 @@ function RunTable({ result }: { result: RunResult }) {
     </div>
   );
 }
+
+function RunAction({ icon, label, text, onClick, disabled, primary, warn }: {
+  icon: React.ReactNode; label: string; text: string; onClick: () => void; disabled?: boolean; primary?: boolean; warn?: boolean;
+}) {
+  return (
+    <div className="flex flex-col items-start gap-1.5 rounded-lg border border-border p-3">
+      <button type="button" className={primary ? btn.primary : btn.secondary} disabled={disabled} onClick={onClick}>{icon}{label}</button>
+      <p className={cx('text-[11.5px] leading-snug', warn ? 'text-[var(--status-watch-fg)]' : 'text-muted-foreground')}>{text}</p>
+    </div>
+  );
+}
+
+/* Setting up email, in order, each step checked against the live settings and
+   data - so "is it ready?" is answered on the screen, not from memory. */
+function SetupChecklist({ status, onGo, onChanged }: { status: EmailStatus; onGo: (v: View) => void; onChanged: () => void }) {
+  const { user } = useAuth();
+  const s = status.settings;
+  const g = status.groups ?? {};
+  const [to, setTo] = useState(user?.email ?? '');
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [sending, setSending] = useState(false);
+  const sendTest = async () => {
+    setSending(true); setMsg(null);
+    try { const r = await emailApi.testSmtp(to || undefined); setMsg({ ok: true, text: r.message }); onChanged(); }
+    catch (e) { setMsg({ ok: false, text: (e as Error).message }); }
+    finally { setSending(false); }
+  };
+  const steps: { done: boolean; title: string; body: React.ReactNode }[] = [
+    { done: s.configured, title: 'Mail server settings',
+      body: <>In <code>backend/.env</code>: <code>SMTP_SERVER</code>, <code>SMTP_PORT</code>, <code>SMTP_USERNAME</code> / <code>SMTP_PASSWORD</code> (if the server needs them) and <code>EMAIL_FROM</code>. Restart the backend after any change.{s.configured && <> Now: {s.server}:{s.port}, from {s.from_addr}.</>}</> },
+    { done: status.test_sent, title: 'Send a test email',
+      body: (
+        <div className="space-y-1.5">
+          <p>Checks the mail server and the From address. Works while sending is still off - it goes only to this address.</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <input aria-label="Send the test to" type="email" className={`${field.replace('w-full ', '')} w-64 py-1.5 text-[12px]`} value={to} onChange={e => setTo(e.target.value)} placeholder="you@adani.com" />
+            <button type="button" className={btn.secondary} disabled={sending || !s.configured || !to} onClick={sendTest}><Mail className="h-3.5 w-3.5" />{sending ? 'Sending…' : 'Send test email'}</button>
+          </div>
+          {msg && <p role="status" className={msg.ok ? 'text-[var(--status-healthy-fg)]' : 'text-[var(--status-critical-fg)]'}>{msg.text}</p>}
+        </div>
+      ) },
+    { done: !!s.public_url, title: 'Link back to Akasha',
+      body: <><code>AKASHA_PUBLIC_URL</code> (e.g. <code>https://your-server/akasha</code>) - the Acknowledge and Approve buttons in emails open this address.{s.public_url && <> Now: {s.public_url}.</>}</> },
+    { done: (g.tc_ordering ?? 0) > 0 && (g.tc_head ?? 0) > 0, title: 'Put people in the distribution groups',
+      body: <>At least TC Ordering (ordering reminders; can raise approval requests) and TC Head (approves). Users with the TC Ordering or TC Head role (Users & roles) can request or approve, and approvers get the approval email, even outside the groups. Now: {
+        ['tc_ordering', 'tc_head', 'projects', 'pmag', 'executive'].map(k => `${GROUP_LABEL[k]} ${g[k] ?? 0}`).join(' · ')}. <button type="button" className="font-medium text-primary hover:underline" onClick={() => onGo('recipients')}>Distribution groups</button></> },
+    { done: status.enabled_templates > 0, title: 'Switch on the templates to use',
+      body: <>{status.enabled_templates} of {status.templates} on. Check each one's L1 / L2 / L3 days and recipients first. <button type="button" className="font-medium text-primary hover:underline" onClick={() => onGo('templates')}>Templates</button></> },
+    { done: s.enabled, title: 'Turn sending on - in test mode first',
+      body: <><code>EMAIL_ENABLED=true</code>, <code>EMAIL_TEST_MODE=true</code> and <code>EMAIL_TEST_RECIPIENTS=you@adani.com</code>: every email then goes only to you, marked [TEST], showing who it would have gone to.</> },
+    { done: false, title: 'Try it on the demo project',
+      body: <>On the server, in <code>backend/</code>: <code>python scripts/demo_email_project.py --recipient you@adani.com</code> (add <code>--days 15</code> or <code>--days 7</code> for the L2 / L3 emails), then "Preview next run" and "Send now" below. Remove it with <code>--remove</code>.</> },
+    { done: !s.test_mode && status.baseline_done, title: 'Go live',
+      body: <>Set <code>EMAIL_TEST_MODE=false</code>, restart, then "Go-live: start from today" once, so the backlog is not emailed.</> },
+  ];
+  const done = steps.filter(x => x.done).length;
+  return (
+    <details className="bento-card p-4" open={!(status.baseline_done && !s.test_mode)}>
+      <summary className="cursor-pointer text-[13px] font-semibold text-foreground">
+        Setting up email <span className="font-normal text-muted-foreground">· {done} of {steps.length - 1} done</span>
+      </summary>
+      <ol className="mt-3 space-y-2.5">
+        {steps.map((st, i) => (
+          <li key={st.title} className="flex gap-3 text-[12px]">
+            <span aria-hidden className={cx('mt-px flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10.5px] font-bold',
+              st.done ? 'bg-[var(--status-healthy-bg)] text-[var(--status-healthy-fg)]' : 'bg-muted text-muted-foreground')}>
+              {st.done ? <CheckCircle2 className="h-3.5 w-3.5" /> : i + 1}
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-foreground">{st.title}{st.done && <span className="sr-only"> (done)</span>}</p>
+              <div className="mt-0.5 leading-relaxed text-muted-foreground [&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-px [&_code]:text-[11px] [&_code]:text-foreground">{st.body}</div>
+            </div>
+          </li>
+        ))}
+      </ol>
+    </details>
+  );
+}
+
+const GROUP_LABEL: Record<string, string> = { tc_ordering: 'TC Ordering', tc_head: 'TC Head', projects: 'Projects', pmag: 'PMAG', executive: 'Executive' };

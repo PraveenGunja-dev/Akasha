@@ -59,6 +59,29 @@ const closePopovers = () => window.dispatchEvent(new Event(CLOSE_POPOVERS));
 
 const mw = (v: number | null | undefined) => (v ?? 0).toLocaleString('en-IN', { maximumFractionDigits: 1 });
 
+/** What the signed-in user may do (backend: GET /api/module-approvals/me):
+    TC Ordering raises requests, the approval template's To group (TC Head)
+    decides - each for the portfolios they cover. */
+export interface ApprovalRole {
+  superadmin: boolean;
+  request: { all: boolean; portfolios: string[] };
+  approve: { all: boolean; portfolios: string[] };
+  waiting: number;
+}
+const DEMO_PORTFOLIO = 'akasha demo';   // never covered by "all portfolios" (engine.DEMO_PORTFOLIO)
+
+export function covers(r: { all: boolean; portfolios: string[] }, cluster: string | null | undefined): boolean {
+  const c = (cluster ?? '').toLowerCase();
+  if (r.portfolios.some(x => x.toLowerCase() === c)) return true;
+  return r.all && c !== DEMO_PORTFOLIO;
+}
+
+export function useApprovalRole(refreshKey = 0): ApprovalRole | null {
+  const [role, setRole] = useState<ApprovalRole | null>(null);
+  useEffect(() => { call<ApprovalRole>('/me').then(setRole).catch(() => setRole(null)); }, [refreshKey]);
+  return role;
+}
+
 /** The month's open (or latest) approval for a project, if any. */
 export function approvalFor(p: ModuleProject, month: string): OrderApprovalRow | undefined {
   const rows = (p.approvals ?? []).filter(a => a.month === month);
@@ -75,8 +98,8 @@ export function ApprovalMark({ p, month }: { p: ModuleProject; month: string }) 
 }
 
 /* Inside the month popover: where this month's approval stands. */
-export function ApprovalSummary({ p, month, planned, onOpen }: {
-  p: ModuleProject; month: string; planned: number;
+export function ApprovalSummary({ p, month, planned, canRequest, onOpen }: {
+  p: ModuleProject; month: string; planned: number; canRequest: boolean;
   onOpen: (o: { mapping: ModuleProject; month: string; id?: number }) => void;
 }) {
   const a = approvalFor(p, month);
@@ -94,13 +117,15 @@ export function ApprovalSummary({ p, month, planned, onOpen }: {
               {a.status === 'approved' && frozen > 0 && <> · <span className="font-semibold text-foreground">{mw(frozen)} MWp frozen in {month}</span> until the PO is in SAP</>}
             </span>
           </>
+        ) : planned > 0 && canRequest ? (
+          <>Ask TC Head to approve this month's order. Once approved it is frozen in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>
         ) : planned > 0 ? (
-          <>Approve this month's order to freeze it in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>
+          <>Approval requests for this order are raised by TC Ordering.</>
         ) : null}
       </div>
       <div className="flex shrink-0 gap-1.5">
         {a && <button type="button" className={btn.secondary} onClick={() => { closePopovers(); onOpen({ mapping: p, month, id: a.id }); }}>Details</button>}
-        {!open && planned > 0 && (
+        {!open && planned > 0 && canRequest && (
           <button type="button" className={btn.primary} onClick={() => { closePopovers(); onOpen({ mapping: p, month }); }}>
             <Send className="h-3.5 w-3.5" />Request approval
           </button>
@@ -368,8 +393,8 @@ function WhoDecides({ row }: { row: OrderApprovalRow }) {
   return (
     <p className="rounded-lg border border-border bg-[var(--surface-sunken)] px-3 py-2 text-[12px] text-muted-foreground">
       {people.length > 0
-        ? <>Approvers: <span className="text-foreground">{people.join(', ')}</span> (the approval template's To group for this portfolio). </>
-        : <>No approver is set up for this portfolio - add people to the approval template's To group (TC Head) in Admin › Email notifications › Distribution groups. Until then only a superadmin can decide. </>}
+        ? <>Approvers: <span className="text-foreground">{people.join(', ')}</span> (users with the TC Head role for this portfolio, and the TC Head group). </>
+        : <>No approver for this portfolio yet - give someone the TC Head role (Admin › Users & roles) or add them to the TC Head group (Email notifications › Distribution groups). Until then only a superadmin can decide. </>}
       {row.own_request ? <span className="font-medium text-foreground">You raised this request, so another approver decides it.</span>
         : row.you_are === 'superadmin' && !people.length ? <span className="font-medium text-foreground">You can decide as superadmin.</span> : null}
     </p>

@@ -66,9 +66,56 @@ def status(db: Session = Depends(get_db), _: models.AkashaUser = Depends(require
             "templates": db.query(models.EmailTemplate).count(),
             "enabled_templates": db.query(models.EmailTemplate).filter(models.EmailTemplate.enabled.is_(True)).count(),
             "recipients": db.query(models.EmailRecipient).filter(models.EmailRecipient.active.is_(True)).count(),
+            # Setup checklist: who is in each group, and whether go-live ran.
+            "groups": {k: db.query(models.EmailRecipient).filter(models.EmailRecipient.group_key == k,
+                                                                  models.EmailRecipient.active.is_(True)).count()
+                       for k in catalogue.GROUPS},
+            "baseline_done": db.query(models.EmailLog.id).filter(models.EmailLog.status == "baseline").first() is not None,
+            "test_sent": db.query(models.EmailLog.id).filter(models.EmailLog.status == "test").first() is not None,
             "last_7_days": counts,
             "schedule": {"enabled": bool(sched.enabled), "next_run_at": _ist(sched.next_run_at),
                          "last_run_at": _ist(sched.last_run_at)} if sched else None}
+
+
+class SmtpTestIn(BaseModel):
+    to: Optional[str] = None
+
+
+@router.post("/test-smtp")
+def test_smtp(body: SmtpTestIn, request: Request, db: Session = Depends(get_db),
+              user: models.AkashaUser = Depends(require_permission(PERM))):
+    """Step 1 of setup: one plain email to check the mail server, the From
+    address and delivery. Works while EMAIL_ENABLED is still false - it goes
+    only to the address given, never to the distribution groups."""
+    import re
+    from services.email_notify import sender
+    cfg = settings()
+    to = (body.to or user.email or "").strip()
+    if not re.match(EMAIL_RE, to):
+        raise HTTPException(status_code=400, detail="Give an address to send the test to (your account has no email)")
+    kept, dropped = sender.allowed([to], cfg.allowed_domains)
+    if dropped:
+        raise HTTPException(status_code=400, detail=f"{to} is outside EMAIL_ALLOWED_DOMAINS ({', '.join(cfg.allowed_domains)})")
+    when = (datetime.utcnow() + IST).strftime("%d-%b-%y %H:%M IST")
+    html_body = (f'<p style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;">This is a test from Akasha, sent by '
+                 f'{user.display_name or user.username} at {when}.</p><p style="font-family:Segoe UI,Arial,sans-serif;'
+                 f'font-size:13px;color:#555;">If you received it, the mail server ({cfg.server}:{cfg.port}) and the '
+                 f'From address ({cfg.from_addr}) work. Replies to this address are not monitored.</p>')
+    status, detail = "test", None
+    try:
+        sender.send(cfg, kept, [], "[TEST] Akasha email settings check", html_body,
+                    f"This is a test from Akasha, sent at {when}. If you received it, email settings work.", tag="smtp_test")
+    except sender.SendError as e:
+        status, detail = "failed", str(e)
+    db.add(models.EmailLog(template_key="smtp_test", event_key=f"smtp_test:{datetime.utcnow().isoformat()}",
+                           subject="[TEST] Akasha email settings check", to_addrs=kept, cc_addrs=[], status=status,
+                           detail=detail or "Settings check from the Overview", triggered_by=f"{user.username} (settings check)",
+                           created_at=datetime.utcnow()))
+    security.audit(db, "email.smtp_test", actor=user, target=to, detail={"status": status}, ip=client_ip(request))
+    db.commit()
+    if status == "failed":
+        raise HTTPException(status_code=502, detail=f"Not sent: {detail}")
+    return {"status": status, "to": to, "message": f"Test email sent to {to} - check the inbox (and junk folder)"}
 
 
 @router.get("/catalogue")
@@ -148,6 +195,21 @@ def _check_timing(trigger: str, config: dict) -> None:
         order = [days[k] for k in sorted(days)]
         if any(a <= b for a, b in zip(order, order[1:])):
             bad("Each level must come later than the one before - e.g. L1 30, L2 15, L3 7 days before")
+    elif trigger in ("project_delay", "aop_due"):
+        levels = config.get("levels")
+        if not isinstance(levels, dict) or not levels:
+            bad("Set the days for at least one level")
+        try:
+            days = {int(k): int(v) for k, v in levels.items()}
+        except (TypeError, ValueError):
+            bad("Days must be whole numbers")
+        if any(k not in (1, 2, 3) for k in days) or any(not 0 <= v <= 730 for v in days.values()):
+            bad("Levels are 1-3 and days 0-730")
+        order = [days[k] for k in sorted(days)]
+        rising = trigger == "project_delay"     # later level = more days late; for the AOP, fewer days left
+        if any((a >= b) if rising else (a <= b) for a, b in zip(order, order[1:])):
+            bad("Each level must come later than the one before - e.g. " +
+                ("L1 15, L2 30, L3 60 days late" if rising else "L1 60, L2 30, L3 15 days before"))
     elif trigger == "ordering_overdue":
         steps = config.get("escalation")
         if not isinstance(steps, list) or not steps:
@@ -458,7 +520,7 @@ def email_log_entry(log_id: int, db: Session = Depends(get_db), _: models.Akasha
     r = db.get(models.EmailLog, log_id)
     if not r:
         raise HTTPException(status_code=404, detail="No such email")
-    return {**_log_row(r), "html": r.body_html or "", "event_key": r.event_key}
+    return {**_log_row(r), "html": render.for_browser(r.body_html or ""), "event_key": r.event_key}
 
 
 @router.post("/log/{log_id}/resend")

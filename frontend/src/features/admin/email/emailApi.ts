@@ -21,6 +21,10 @@ export interface EmailStatus {
   recipients: number;
   last_7_days: Partial<Record<LogStatus, number>>;
   schedule: { enabled: boolean; next_run_at: string | null; last_run_at: string | null } | null;
+  /** Active members per distribution group (setup checklist). */
+  groups: Record<string, number>;
+  baseline_done: boolean;
+  test_sent: boolean;
 }
 
 export interface Variable { key: string; label: string; meaning: string; sample: string }
@@ -147,6 +151,7 @@ export const emailApi = {
   exportLog: (f: LogFilters) => download(`/log-export?${query(f)}`),
   run: (dry_run: boolean) => send<RunResult>('POST', '/run', { dry_run }),
   baseline: () => send<RunResult>('POST', '/baseline'),
+  testSmtp: (to?: string) => send<{ status: string; to: string; message: string }>('POST', '/test-smtp', { to }),
   alerts: (f: AlertFilters) => call<AlertList>(`/alerts?${query(f)}`),
   exportAlerts: (f: AlertFilters) => download(`/alerts-export?${query(f)}`),
 };
