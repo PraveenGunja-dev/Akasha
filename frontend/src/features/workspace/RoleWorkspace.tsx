@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import {
   Home, Command, Calendar, BarChart2, HardHat, ShieldCheck, CheckCircle, Network,
-  Database, FileText, ListChecks, ChevronDown,
+  Database, FileText, ListChecks, ChevronDown, ClipboardCheck, BellRing,
 } from 'lucide-react';
 import { AppFrame, AppHeader, AppRail } from '../../components/layout/AppRail';
 import { Loader as AkLoader } from '../../components/ui/primitives';
@@ -17,6 +17,8 @@ import ProjectWorkspace from '../projects/ProjectWorkspace';
 import P6View from '../../components/dashboards/P6View';
 import CapacityOverviewPage from '../capacity/CapacityOverviewPage';
 import ModuleDeliveriesPage from '../modules/ModuleDeliveriesPage';
+import { ApprovalsView } from '../modules/ApprovalsPage';
+import { MyAlertsView } from '../alerts/AlertPages';
 import QualityCommandCenter from '../quality/QualityCommandCenter';
 import ComplianceDashboard from '../compliance/ComplianceDashboard';
 import TransmissionDataViewer from '../analytics/TransmissionDataViewer';
@@ -49,6 +51,8 @@ const SECTIONS: Record<SectionId, SectionDef> = {
   ordering: { label: 'Ordering Schedule', icon: <HardHat /> },
   quality: { label: 'Quality', icon: <ShieldCheck /> },
   approvals: { label: 'Approvals', icon: <CheckCircle /> },
+  order_approvals: { label: 'Order approvals', icon: <ClipboardCheck /> },
+  my_alerts: { label: 'My alerts', icon: <BellRing /> },
   transmission: { label: 'Transmission', icon: <Network />, allPortfolioOnly: true, needs: 'dash' },
   sap: { label: 'SAP Intelligence', icon: <Database />, allPortfolioOnly: true },
   einvoice: { label: 'E-Invoice', icon: <FileText />, allPortfolioOnly: true },
@@ -127,6 +131,8 @@ export default function RoleWorkspace({ dashboard }: { dashboard: string }) {
         : <P6View p6Data={p6} loading={loading} />;
       case 'capacity': return <CapacityOverviewPage />;
       case 'ordering': return <ModuleDeliveriesPage />;
+      case 'order_approvals': return <ApprovalsView />;
+      case 'my_alerts': return <MyAlertsView />;
       case 'quality': return <QualityCommandCenter />;
       case 'approvals': return <ComplianceDashboard />;
       case 'transmission': return <TransmissionDataViewer dashboardData={dash} />;

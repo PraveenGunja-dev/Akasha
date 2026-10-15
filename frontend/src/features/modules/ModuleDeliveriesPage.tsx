@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
@@ -924,6 +924,7 @@ export default function ModuleDeliveriesPage() {
   const [pendingDate, setPendingDate] = useState<PendingDate | null>(null);
   const [approvalsKey, setApprovalsKey] = useState(0);   // reloads "waiting for your approval"
   const approvalRole = useApprovalRole(approvalsKey);
+  const location = useLocation();
   const [approvalTarget, setApprovalTarget] = useState<{ mapping: ModuleProject; month: string; id?: number } | null>(null);
   const saveScod = async (id: number, isoDateOrNull: string | null) => {
     const row = data?.projects.find(x => x.id === id);
@@ -1451,7 +1452,8 @@ export default function ModuleDeliveriesPage() {
             )}
           </div>
 
-          <Link to="/approvals"
+          {/* In the TC Ordering workspace, the sidebar section; elsewhere the page. */}
+          <Link to={location.pathname === '/tc-ordering' ? { search: '?view=order_approvals' } : '/approvals'}
             className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary">
             Approvals
             {(approvalRole?.waiting ?? 0) > 0 && (
