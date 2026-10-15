@@ -8,6 +8,7 @@ variable catalogue and the templates.
 from collections import OrderedDict
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
+from urllib.parse import quote
 
 from sqlalchemy.orm import Session
 
@@ -119,7 +120,10 @@ def project_context(p: dict, cfg, plan: Optional[dict] = None, dates: Optional[d
         "ordered_mwp": mw(p.get("ordered_mwp")),
         "received_mwp": mw(p.get("total_receipt_mwp")),
         "in_transit_mwp": mw(p.get("under_transit_mwp")),
-        "on_site_stock_mwp": mw(p.get("module_inventory_mwp")),
+        # Received (SAP) minus erected (P6). Below zero the two systems
+        # disagree - more erected than received - and there is no stock
+        # figure to state, so it reads "Not available" rather than a negative.
+        "on_site_stock_mwp": mw(p.get("module_inventory_mwp")) if (p.get("module_inventory_mwp") or 0) >= 0 else "",
         "erected_mwp": mw(erected),
         "erection_pct": f"{round(erected / cap * 100)}%" if cap else "",
         "construction_progress": stage_summary(plan),
@@ -136,7 +140,7 @@ def project_context(p: dict, cfg, plan: Optional[dict] = None, dates: Optional[d
         "oldest_awaiting_days": procurement.get("oldest_awaiting_days") or "",
         "checklist_pending": max(0, (procurement.get("checklist_due") or 0) - (procurement.get("checklist_created") or 0)) or "",
         "akasha_link": base,
-        "akasha_project_link": f"{base}/project/{pid}" if base and pid else "",
+        "akasha_project_link": f"{base}/project/{quote(str(pid), safe='')}" if base and pid else "",
         "support_contact": cfg.support_contact,
         "generated_at": now_ist().strftime("%d-%b-%y %H:%M IST"),
     }

@@ -7,6 +7,7 @@ administrator recording it for one) can acknowledge, and the page needs a
 deliberate click - a mail scanner fetching the link acknowledges nothing.
 """
 from datetime import date, timedelta
+from urllib.parse import quote
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -72,7 +73,7 @@ def serialize(db: Session, a: "models.EmailAlert", names: Optional[dict] = None,
                                "status": l.status, "to": l.to_addrs or [], "cc": l.cc_addrs or []}
                               for l in db.query(models.EmailLog).filter(models.EmailLog.alert_id == a.id)
                               .order_by(models.EmailLog.created_at).all()]
-        row["project_link"] = f"/project/{a.project_id}" if a.project_id else None
+        row["project_link"] = f"/project/{quote(a.project_id, safe='')}" if a.project_id else None
     return row
 
 

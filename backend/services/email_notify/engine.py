@@ -19,6 +19,7 @@ Rules that keep it trustworthy:
   - Every email is logged with its rendered text, recipients and outcome.
 """
 import html as html_mod
+from urllib.parse import quote
 import logging
 import threading
 from dataclasses import dataclass, field
@@ -519,7 +520,8 @@ def ev_site_stock_low(d: Data, t, dry: bool) -> List[Event]:
     for p in d.projects:
         cap, erected = p.get("capacity_mwp") or 0, p.get("erection_done_mwp") or 0
         stock = p.get("module_inventory_mwp") or 0
-        if (p.get("ordered_mwp") or 0) > 0 and cap - erected > 1 and stock <= floor:
+        # Negative stock = P6 erected more than SAP received: a data conflict, not a low site stock.
+        if (p.get("ordered_mwp") or 0) > 0 and cap - erected > 1 and 0 <= stock <= floor:
             out.append(Event(f"{t.key}:{p['project_id']}:{week[0]}-W{week[1]}",
                              d.context(p, True), p, orders=_orders(p), case_key=f"{t.key}:{p['project_id']}"))
     return out
@@ -640,7 +642,7 @@ def digest_table(projects: List[dict], base: str) -> str:
     for rank, _, p, o, status in rows[:60]:
         name = e(p.get("project_name") or "")
         if base and p.get("project_id"):
-            name = f'<a href="{e(base)}/project/{e(str(p["project_id"]))}" style="color:#0b74b1;">{name}</a>'
+            name = f'<a href="{e(base)}/project/{e(quote(str(p["project_id"]), safe=""))}" style="color:#0b74b1;">{name}</a>'
         phase = "" if (o.get("phase_label") or "").strip().lower() in C.UNPHASED else e(o.get("phase_label") or "")
         trs.append(
             f'<tr><td style="padding:6px 8px;border-bottom:1px solid #eef0f3;">{name}<br>'

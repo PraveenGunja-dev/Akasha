@@ -6,7 +6,7 @@ and a missing value reads "Not available", never a blank.
 The body is light text (see catalogue.py): "Label: value" lines become a
 details table, "Required Action:" is highlighted, **bold** works, blank lines
 split paragraphs. The result is wrapped in one email-safe layout (inline CSS,
-table-based, 640px) with the no-reply notice and the data dates in the footer.
+table-based, fluid up to 960px) with the no-reply notice and the data dates in the footer.
 """
 import html
 import os
@@ -62,9 +62,13 @@ def _value(ctx: Dict, name: str, as_html: bool) -> str:
     return html.escape(str(v)) if as_html else str(v)
 
 
+# A unit after a missing value ("Not available MWp") reads as a figure - drop it.
+NA_UNIT = re.compile(r"Not available\s+(?:MWp|MWac|MW|days|d)\b")
+
+
 def fill(text: str, ctx: Dict, as_html: bool = False) -> str:
     out = VAR_RE.sub(lambda m: _value(ctx, m.group(1), as_html), text or "")
-    return EMPTY_PARENS.sub("", out)
+    return NA_UNIT.sub(NA, EMPTY_PARENS.sub("", out))
 
 
 def subject(text: str, ctx: Dict) -> str:
@@ -120,7 +124,7 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
         if rows:
             trs = "".join(
                 f'<tr><td style="{FONT}font-size:12.5px;line-height:1.45;padding:8px 14px;border-top:{"0" if n == 0 else "1px solid " + RULE};'
-                f'color:{MUTED};width:42%;vertical-align:top;">{k}</td>'
+                f'color:{MUTED};width:32%;vertical-align:top;">{k}</td>'
                 f'<td style="{FONT}font-size:13.5px;line-height:1.45;padding:8px 14px;border-top:{"0" if n == 0 else "1px solid " + RULE};'
                 f'color:{INK};font-weight:600;vertical-align:top;">{_inline(v)}</td></tr>' for n, (k, v) in enumerate(rows))
             blocks.append(f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
@@ -190,7 +194,8 @@ def _headline(subj: str) -> Tuple[str, str, str]:
 
 def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Optional[Dict] = None,
            subj: str = "", links: Optional[List[Tuple[str, str]]] = None) -> str:
-    """One email-safe page (tables, inline CSS, 640px): brand header, the
+    """One email-safe page (tables, inline CSS; fluid, filling the reading pane
+    up to 960px, a fixed 960px frame in Outlook desktop): brand header, the
     level of intimation, the headline, the body, the actions, the footer."""
     e = html.escape
     label, colour, wash = SEVERITY.get(severity, SEVERITY["info"])
@@ -236,10 +241,11 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Opt
     return f"""<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"></head>
 <body style="margin:0;padding:0;background:#eef1f4;">
-<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef1f4;padding:28px 12px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef1f4;padding:14px 6px;">
 <tr><td align="center">
-<table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#ffffff;border:1px solid #dde2e8;border-radius:12px;overflow:hidden;">
-<tr><td style="padding:0;line-height:0;font-size:0;"><img src="cid:{BANNER_CID}" width="640" alt="Adani - Growth with Goodness" style="display:block;width:100%;max-width:640px;height:auto;border:0;outline:none;text-decoration:none;"></td></tr>
+<!--[if mso]><table role="presentation" width="960" align="center" cellspacing="0" cellpadding="0"><tr><td><![endif]-->
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="width:100%;max-width:960px;background:#ffffff;border:1px solid #dde2e8;border-radius:12px;overflow:hidden;">
+<tr><td style="padding:0;line-height:0;font-size:0;"><img src="cid:{BANNER_CID}" width="960" alt="Adani - Growth with Goodness" style="display:block;width:100%;max-width:960px;height:auto;border:0;outline:none;text-decoration:none;"></td></tr>
 <tr><td style="height:4px;background:{colour};font-size:0;line-height:0;">&nbsp;</td></tr>
 <tr><td style="padding:16px 28px;border-bottom:1px solid {RULE};">
   <table role="presentation" width="100%" cellspacing="0" cellpadding="0"><tr>
@@ -258,6 +264,7 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Opt
   {e(asof + (" · " if asof else "") + "Generated " + str(ctx.get("generated_at", "")))}
 </td></tr>
 </table>
+<!--[if mso]></td></tr></table><![endif]-->
 </td></tr></table>
 </body></html>"""
 
