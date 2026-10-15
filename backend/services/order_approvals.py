@@ -235,7 +235,8 @@ def _summary_row(db: Session, mapping_id: int) -> dict:
     return p
 
 
-def request(db: Session, user, mapping_id: int, month: str, mwp: float, note: Optional[str]) -> "models.ModuleOrderApproval":
+def request(db: Session, user, mapping_id: int, month: str, mwp: float, note: Optional[str],
+            send_email: bool = True) -> "models.ModuleOrderApproval":
     """Raise a request for (up to) the month's planned quantity. The phases
     and figures come from the plan itself, never from the browser."""
     if not can_request(db, user, db.get(models.ProjectMapping, mapping_id)):
@@ -274,7 +275,8 @@ def request(db: Session, user, mapping_id: int, month: str, mwp: float, note: Op
     db.flush()
     event(db, a, "requested", a.requested_by_name, f"{a.mwp:.1f} MWp in {month}" + (f" - {a.request_note}" if a.request_note else ""))
     db.commit()
-    _email(db, a, "request", user.username)
+    if send_email:
+        _email(db, a, "request", user.username)
     return a
 
 
@@ -324,6 +326,24 @@ def _email(db: Session, a, what: str, who: str) -> None:
     db.commit()
 
 
+def email_later(approval_id: int, what: str, who: str) -> None:
+    """Send the request / decision email after the reply has gone back, so
+    the person is not kept waiting on the plan, the PDF snapshot and the mail
+    server. The outcome lands in the approval's history."""
+    from database import SessionLocal
+    from services.demo_scope import visible
+    @visible
+    def run():
+        db = SessionLocal()
+        try:
+            a = db.get(models.ModuleOrderApproval, approval_id)
+            if a:
+                _email(db, a, what, who)
+        finally:
+            db.close()
+    run()
+
+
 def _close_alert(db: Session, a, reason: str, actor: str) -> None:
     from services.email_notify import alerts
     al = db.get(models.EmailAlert, a.alert_id) if a.alert_id else None
@@ -331,7 +351,7 @@ def _close_alert(db: Session, a, reason: str, actor: str) -> None:
         alerts.resolve(db, al, reason, actor)
 
 
-def decide(db: Session, user, a, decision: str, note: Optional[str]) -> None:
+def decide(db: Session, user, a, decision: str, note: Optional[str], send_email: bool = True) -> None:
     if a.status != "pending":
         raise ApprovalError(f"This request is already {a.status}")
     if self_request(user, a):
@@ -350,7 +370,8 @@ def decide(db: Session, user, a, decision: str, note: Optional[str]) -> None:
         event(db, a, "frozen", "Akasha", f"{a.mwp:.1f} MWp frozen in {a.month} until the PO is in SAP")
     _close_alert(db, a, f"{word} by {name}" + (f": {note}" if note else ""), name)
     db.commit()
-    _email(db, a, "decision", user.username)
+    if send_email:
+        _email(db, a, "decision", user.username)
 
 
 def cancel(db: Session, user, a, note: Optional[str]) -> None:

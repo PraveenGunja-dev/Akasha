@@ -7,6 +7,7 @@
    approver approve or return it and anyone see its history. Approved, the
    quantity is frozen in its month until the PO is in SAP. */
 import { useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { CheckCircle2, Clock, Lock, Send, Undo2, XCircle } from 'lucide-react';
 import { Dialog, Loader, StatusPill, cx } from '../../components/ui/primitives';
 import type { Tone } from '../../components/ui/primitives';
@@ -145,12 +146,13 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [done, setDone] = useState<'' | 'request' | 'approve' | 'return' | 'cancel'>('');
   const p = target?.mapping;
   const month = target?.month ?? '';
   const planned = p?.month_mwp?.[month] ?? 0;
 
   useEffect(() => {
-    setRow(null); setError(''); setNote(''); setBusy('');
+    setRow(null); setError(''); setNote(''); setBusy(''); setDone('');
     setQty(planned ? String(Math.round(planned * 10) / 10) : '');
     if (target?.id) call<OrderApprovalRow>(`/${target.id}`).then(setRow).catch(e => setError((e as Error).message));
   }, [target?.id, target?.month, target?.mapping?.id, planned]);
@@ -163,8 +165,10 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
         : kind === 'cancel'
           ? await post<OrderApprovalRow>(`/${row!.id}/cancel`, { note })
           : await post<OrderApprovalRow>(`/${row!.id}/decide`, { decision: kind, note: note.trim() || undefined });
-      setRow(r); setNote('');
+      setRow(r); setNote(''); setDone(kind);
       onChanged();
+      // The email goes out in the background; its result reaches the history shortly.
+      window.setTimeout(() => { call<OrderApprovalRow>(`/${r.id}`).then(setRow).catch(() => undefined); }, 6000);
     } catch (e) {
       setError((e as Error).message);
     } finally { setBusy(''); }
@@ -220,6 +224,7 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
         <div className="flex justify-center py-8"><Loader size="md" label="Loading…" /></div>
       ) : (
         <div className="space-y-4">
+          {done && <Success kind={done} row={row} />}
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill tone={APPROVAL_META[row.status].tone}>{APPROVAL_META[row.status].label}</StatusPill>
             <span className="text-[13px] font-semibold text-foreground">{mw(row.mwp)} MWp in {row.month}</span>
@@ -398,5 +403,37 @@ function WhoDecides({ row }: { row: OrderApprovalRow }) {
       {row.own_request ? <span className="font-medium text-foreground">You raised this request, so another approver decides it.</span>
         : row.you_are === 'superadmin' && !people.length ? <span className="font-medium text-foreground">You can decide as superadmin.</span> : null}
     </p>
+  );
+}
+
+/* Confirmation after an action: a tick that draws itself, what happened and
+   who hears about it. The email itself goes out in the background. */
+function Success({ kind, row }: { kind: 'request' | 'approve' | 'return' | 'cancel'; row: OrderApprovalRow }) {
+  const still = useReducedMotion();
+  const who = row.approvers?.length ? row.approvers.join(', ') : 'TC Head';
+  const text = {
+    request: ['Request sent', `The approval email is on its way to ${who}, with you on Cc. You will see the decision here, in Order approvals and by email.`],
+    approve: ['Approved and frozen', `${mw(row.mwp)} MWp is frozen in ${row.month} until its PO is in SAP. TC Ordering and the requester are being emailed.`],
+    return: ['Returned', 'The requester is being emailed your remarks.'],
+    cancel: ['Cancelled', row.status === 'cancelled' ? 'The request is closed and any freeze released.' : ''],
+  }[kind];
+  const tone = kind === 'return' || kind === 'cancel' ? 'watch' : 'healthy';
+  return (
+    <motion.div role="status" initial={still ? false : { opacity: 0, y: -6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.25 }}
+      className={cx('flex items-start gap-3 rounded-lg border px-3.5 py-3',
+        tone === 'healthy' ? 'border-[var(--status-healthy-border)] bg-[var(--status-healthy-bg)]' : 'border-[var(--status-watch-border)] bg-[var(--status-watch-bg)]')}>
+      <svg viewBox="0 0 36 36" className="h-9 w-9 shrink-0" aria-hidden>
+        <motion.circle cx="18" cy="18" r="16" fill="none" strokeWidth="2.5"
+          className={tone === 'healthy' ? 'stroke-[var(--status-healthy-solid)]' : 'stroke-[var(--status-watch-solid)]'}
+          initial={still ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.45, ease: 'easeOut' }} />
+        <motion.path d="M11 18.5l4.5 4.5L25 13.5" fill="none" strokeWidth="2.8" strokeLinecap="round" strokeLinejoin="round"
+          className={tone === 'healthy' ? 'stroke-[var(--status-healthy-solid)]' : 'stroke-[var(--status-watch-solid)]'}
+          initial={still ? false : { pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.35, delay: 0.35, ease: 'easeOut' }} />
+      </svg>
+      <div className="min-w-0">
+        <p className={cx('text-[13.5px] font-semibold', tone === 'healthy' ? 'text-[var(--status-healthy-fg)]' : 'text-[var(--status-watch-fg)]')}>{text[0]}</p>
+        {text[1] && <p className="mt-0.5 text-[12px] leading-relaxed text-foreground">{text[1]}</p>}
+      </div>
+    </motion.div>
   );
 }

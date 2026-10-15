@@ -3,7 +3,7 @@ decided by the approval email's To recipients (services/order_approvals.py).
 Every action is audited."""
 from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -85,15 +85,18 @@ class RequestIn(BaseModel):
 
 
 @router.post("")
-def request_approval(body: RequestIn, request: Request, db: Session = Depends(get_db),
+def request_approval(body: RequestIn, request: Request, background: BackgroundTasks, db: Session = Depends(get_db),
                      user: models.AkashaUser = Depends(current_user)):
+    """Records the request and replies at once; the approval email goes out
+    straight after, in the background."""
     try:
-        a = OA.request(db, user, body.mapping_id, body.month, body.mwp, body.note)
+        a = OA.request(db, user, body.mapping_id, body.month, body.mwp, body.note, send_email=False)
     except OA.ApprovalError as e:
         raise HTTPException(status_code=400, detail=str(e))
     security.audit(db, "approval.requested", actor=user, target=f"approval #{a.id}",
                    detail={"project": a.project_name, "month": a.month, "mwp": a.mwp}, ip=client_ip(request))
     db.commit()
+    background.add_task(OA.email_later, a.id, "request", user.username)
     return _out(db, a, user)
 
 
@@ -103,16 +106,17 @@ class DecideIn(BaseModel):
 
 
 @router.post("/{approval_id}/decide")
-def decide(approval_id: int, body: DecideIn, request: Request, db: Session = Depends(get_db),
+def decide(approval_id: int, body: DecideIn, request: Request, background: BackgroundTasks, db: Session = Depends(get_db),
            user: models.AkashaUser = Depends(current_user)):
     a = _get(db, approval_id)
     try:
-        OA.decide(db, user, a, body.decision, body.note)
+        OA.decide(db, user, a, body.decision, body.note, send_email=False)
     except OA.ApprovalError as e:
         raise HTTPException(status_code=400, detail=str(e))
     security.audit(db, f"approval.{a.status}", actor=user, target=f"approval #{a.id}",
                    detail={"project": a.project_name, "month": a.month, "mwp": a.mwp}, ip=client_ip(request))
     db.commit()
+    background.add_task(OA.email_later, a.id, "decision", user.username)
     return _out(db, a, user)
 
 
