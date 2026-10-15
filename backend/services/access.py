@@ -72,6 +72,8 @@ PERMISSIONS: list[Permission] = [
                "Create roles and change the permissions each role grants"),
     Permission("audit.view", "View audit log", "Administration",
                "Sign-ins, failed attempts, lockouts and every change to users and roles"),
+    Permission("email.manage", "Manage email notifications", "Administration",
+               "Email templates and their version history, distribution groups, the email log and sending"),
 ]
 PERMISSION_KEYS = {p.key for p in PERMISSIONS}
 ALL_DASHBOARDS = [d.permission for d in DASHBOARDS]

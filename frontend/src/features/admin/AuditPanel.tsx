@@ -39,6 +39,18 @@ const LABEL: Record<string, [string, Tone]> = {
   'role.deleted': ['Deleted role', 'risk'],
   'api_key.created': ['Issued API key', 'done'],
   'api_key.revoked': ['Revoked API key', 'risk'],
+  'email.template_saved': ['Edited email template', 'done'],
+  'email.template_restored': ['Restored email template', 'done'],
+  'email.template_reset': ['Reset email template', 'done'],
+  'email.test_sent': ['Sent test email', 'ai'],
+  'email.manual_sent': ['Sent email manually', 'done'],
+  'email.recipient_added': ['Added email recipient', 'done'],
+  'email.recipient_changed': ['Changed email recipient', 'done'],
+  'email.recipient_removed': ['Removed email recipient', 'risk'],
+  'email.resent': ['Resent email', 'done'],
+  'email.log_exported': ['Exported email log', 'neutral'],
+  'email.run': ['Ran email alerts', 'done'],
+  'email.baseline': ['Email go-live baseline', 'watch'],
 };
 
 function describe(detail: AuditEntry['detail']): string {

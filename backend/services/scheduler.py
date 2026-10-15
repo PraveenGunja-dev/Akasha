@@ -41,6 +41,9 @@ DEFAULTS: Dict[str, tuple] = {
     "tc":         ("Transmission", 720, None),
     "capacity":   ("Capacity Milestones", 1440, (1, 5)),
     "mapping":    ("Project Mapping", 1440, (1, 5)),
+    # Once a day at the start of the working day (09:00-11:00 IST). Sends
+    # nothing unless EMAIL_ENABLED=true in backend/.env.
+    "email":      ("Email alerts", 1440, (9, 11)),
 }
 
 IST_OFFSET = timedelta(hours=5, minutes=30)
@@ -128,6 +131,12 @@ def _run_mapping(db):
     run_logged(db, "mapping", lambda: (ingest_mapping(), {"message": "Synced project mapping"})[1])
 
 
+def _run_email(db):
+    from services.email_notify import engine
+    from services.sync_log_util import run_logged
+    run_logged(db, "email", lambda: engine.run(db, triggered_by="scheduler"))
+
+
 def _run_tc(db):
     from services.tc_sync import run_sync
     run_sync()  # logs its own outcome to sync_log
@@ -135,7 +144,7 @@ def _run_tc(db):
 
 RUNNERS: Dict[str, Callable] = {
     "sharepoint": _run_sharepoint, "p6": _run_p6, "pulse": _run_pulse, "einvoice": _run_einvoice,
-    "capacity": _run_capacity, "mapping": _run_mapping, "tc": _run_tc,
+    "capacity": _run_capacity, "mapping": _run_mapping, "tc": _run_tc, "email": _run_email,
 }
 
 

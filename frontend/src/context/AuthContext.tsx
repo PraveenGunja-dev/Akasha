@@ -64,10 +64,10 @@ export const ROUTE_PERMISSIONS: [string, string[]][] = [
   ['/projects', ['dashboard.projects']],
   ['/tc-ordering', ['dashboard.tc_ordering']],
   ['/tc-stores', ['dashboard.tc_stores']],
-  ['/admin', ['users.manage', 'roles.manage', 'audit.view', 'data.edit']],
+  ['/admin', ['users.manage', 'roles.manage', 'audit.view', 'data.edit', 'email.manage']],
 ];
 
-export const ADMIN_PERMISSIONS = ['users.manage', 'roles.manage', 'audit.view'];
+export const ADMIN_PERMISSIONS = ['users.manage', 'roles.manage', 'audit.view', 'email.manage'];
 
 function allowedPath(u: AuthUser, path: string): boolean {
   const rule = ROUTE_PERMISSIONS.find(([prefix]) => path === prefix || path.startsWith(prefix + '/') || path.startsWith(prefix + '?'));

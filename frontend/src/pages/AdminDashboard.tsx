@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { fetchMappings, createMapping, updateMapping, deleteMapping, fetchUnmappedOptions } from '../services/mappingApi';
 import type { ProjectMapping, ProjectMappingCreate, UnmappedOptions } from '../services/mappingApi';
-import { Plus, Edit2, Trash2, X, Search, Save, AlertCircle, Map, Users, Settings, Database, ShieldCheck, ScrollText, KeyRound, Activity, LayoutGrid } from 'lucide-react';
+import { Plus, Edit2, Trash2, X, Search, Save, AlertCircle, Map, Users, Settings, Database, ShieldCheck, ScrollText, KeyRound, Activity, LayoutGrid, Mail } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { AppFrame, AppHeader, AppRail } from '../components/layout/AppRail';
 import HeroBanner from '../components/layout/HeroBanner';
@@ -11,11 +11,12 @@ import UsersPanel from '../features/admin/UsersPanel';
 import RolesPanel from '../features/admin/RolesPanel';
 import AuditPanel from '../features/admin/AuditPanel';
 import ApiKeysPanel from '../features/admin/ApiKeysPanel';
+import EmailPanel from '../features/admin/email/EmailPanel';
 
 /* Admin console. Each tab shows only for the permission behind it, and the
    server checks the same permission on every call the tab makes. The tab is
    in the URL (/admin/users) so it survives a reload and can be linked. */
-const TABS: { id: string; label: string; group: 'Access' | 'Data'; icon: React.JSX.Element; anyOf: string[] }[] = [
+const TABS: { id: string; label: string; group: 'Access' | 'Data' | 'Communication'; icon: React.JSX.Element; anyOf: string[] }[] = [
   { id: 'users', label: 'Users', group: 'Access', icon: <Users />, anyOf: ['users.manage'] },
   { id: 'roles', label: 'Roles & permissions', group: 'Access', icon: <ShieldCheck />, anyOf: ['roles.manage', 'users.manage'] },
   { id: 'api-keys', label: 'API keys', group: 'Access', icon: <KeyRound />, anyOf: ['users.manage'] },
@@ -23,6 +24,7 @@ const TABS: { id: string; label: string; group: 'Access' | 'Data'; icon: React.J
   { id: 'mappings', label: 'Project mappings', group: 'Data', icon: <Map />, anyOf: ['data.edit'] },
   { id: 'integrations', label: 'Data integrations', group: 'Data', icon: <Database />, anyOf: ['data.sync'] },
   { id: 'settings', label: 'System settings', group: 'Data', icon: <Settings />, anyOf: ['users.manage'] },
+  { id: 'email', label: 'Email notifications', group: 'Communication', icon: <Mail />, anyOf: ['email.manage'] },
 ];
 
 const TAB_SUB: Record<string, string> = {
@@ -33,6 +35,7 @@ const TAB_SUB: Record<string, string> = {
   mappings: 'The project master every dashboard joins on.',
   integrations: 'Source systems and their sync status.',
   settings: 'Platform settings.',
+  email: 'Ordering alerts, escalations and digests - templates, recipients and the email log.',
 };
 
 const AdminDashboard: React.FC = () => {
@@ -47,7 +50,7 @@ const AdminDashboard: React.FC = () => {
     if (activeTab && requested !== activeTab) navigate(`/admin/${activeTab}`, { replace: true });
   }, [activeTab, requested, navigate]);
 
-  const groups = (['Access', 'Data'] as const)
+  const groups = (['Access', 'Data', 'Communication'] as const)
     .map(g => ({ title: g, items: tabs.filter(tab => tab.group === g).map(({ id, label, icon }) => ({ id, label, icon })) }))
     .filter(g => g.items.length > 0);
   const current = tabs.find(tab => tab.id === activeTab);
@@ -75,6 +78,7 @@ const AdminDashboard: React.FC = () => {
           {activeTab === 'roles' && <RolesPanel />}
           {activeTab === 'audit' && <AuditPanel />}
           {activeTab === 'api-keys' && <ApiKeysPanel />}
+          {activeTab === 'email' && <EmailPanel />}
           {activeTab === 'mappings' && <MappingsTab />}
           {activeTab === 'settings' && <PlaceholderTab title="System Settings" />}
           {activeTab === 'integrations' && <PlaceholderTab title="Data Integrations" />}
