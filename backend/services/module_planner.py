@@ -38,6 +38,20 @@ PRIORITY_RANKS: Dict[str, int] = {
 }
 
 
+# Demo projects (portfolio "Akasha Demo...", scripts/demo_email_project.py)
+# level against their own copy of the vendor quota, so a demo can never take
+# capacity from - and so move - a real project's order.
+DEMO_POOL = " (demo)"
+
+
+def _quota_pool(source: str, p: Dict[str, Any]) -> str:
+    return source + DEMO_POOL if str(p.get('cluster') or '').lower().startswith('akasha demo') else source
+
+
+def _pool_source(pool: str) -> str:
+    return pool[:-len(DEMO_POOL)] if pool.endswith(DEMO_POOL) else pool
+
+
 def get_forecast_months(count: int = 13, now: Optional[datetime] = None) -> List[str]:
     """Rolling forecast months starting from the current month (matches frontend export.ts)."""
     if now is None:
@@ -388,7 +402,7 @@ def run_module_planning_engine(
             demands.append({
                 'project_id': p['id'],
                 'project': p,
-                'source': source,
+                'source': _quota_pool(source, p),
                 'priority': proj_priority,
                 'phase_label': ph['phase_label'],
                 'ftc_dt': ph['ftc_dt'],
@@ -480,7 +494,7 @@ def run_module_planning_engine(
                     fz['mwp'] -= take
 
     for source, s_demands in by_source.items():
-        cap = CAP_LIMITS.get(source, DEFAULT_CAP)
+        cap = CAP_LIMITS.get(_pool_source(source), DEFAULT_CAP)
         if source not in monthly_alloc_by_source:
             monthly_alloc_by_source[source] = [0.0] * num_months
             monthly_alloc_mwp_by_source[source] = [0.0] * num_months
@@ -800,6 +814,8 @@ def run_module_planning_engine(
     # received an allocation instead, so nothing is silently excluded.
     capacity_summary = {}
     for s in monthly_alloc_by_source:
+        if s.endswith(DEMO_POOL):
+            continue        # demo projects' own pool is not real vendor capacity
         cap = CAP_LIMITS.get(s, DEFAULT_CAP)
         alloc_list_mwac = monthly_alloc_by_source[s]
         alloc_list_mwp = monthly_alloc_mwp_by_source.get(s, [0.0] * num_months)

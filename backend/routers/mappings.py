@@ -163,12 +163,36 @@ def update_mapping(mapping_id: int, mapping: ProjectMappingUpdate, background: B
     return db_mapping
 
 @router.delete("/{mapping_id}")
-def delete_mapping(mapping_id: int, db: Session = Depends(get_db)):
-    """Delete a project mapping"""
+def delete_mapping(mapping_id: int, db: Session = Depends(get_db), user: models.AkashaUser = Depends(current_user)):
+    """Delete a project mapping - the project leaves the Ordering Schedule and
+    every dashboard. Its open module-order approvals are cancelled (releasing
+    any freeze) and its open email alerts closed, so nothing is left waiting
+    on a project that is gone; their history stays."""
     db_mapping = db.query(models.ProjectMapping).filter(models.ProjectMapping.id == mapping_id).first()
     if not db_mapping:
         raise HTTPException(status_code=404, detail="Mapping not found")
-        
+    from datetime import datetime
+    from services import security
+    who = getattr(user, "display_name", None) or getattr(user, "username", None)
+    reason = f"Project removed from Akasha (mapping deleted by {who})"
+    cancelled = 0
+    for a in db.query(models.ModuleOrderApproval).filter(models.ModuleOrderApproval.mapping_id == mapping_id,
+                                                          models.ModuleOrderApproval.status.in_(["pending", "approved"])).all():
+        a.status = "cancelled"
+        db.add(models.ModuleOrderApprovalEvent(approval_id=a.id, at=datetime.utcnow(), kind="cancelled", actor=who, detail=reason))
+        cancelled += 1
+    closed = 0
+    still_mapped = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == db_mapping.project_id,
+                                                          models.ProjectMapping.id != mapping_id).first()
+    if db_mapping.project_id and not still_mapped:
+        from services.email_notify import alerts as email_alerts
+        for al in db.query(models.EmailAlert).filter(models.EmailAlert.project_id == db_mapping.project_id,
+                                                      models.EmailAlert.status == "open").all():
+            email_alerts.resolve(db, al, reason, who or "Akasha")
+            closed += 1
+    security.audit(db, "mapping.deleted", actor=user, target=(db_mapping.project if (db_mapping.project_id or "") in (db_mapping.project or "")
+                           else f"{db_mapping.project} ({db_mapping.project_id})"),
+                   detail={"mapping_id": mapping_id, "approvals_cancelled": cancelled, "alerts_closed": closed})
     db.delete(db_mapping)
     db.commit()
-    return {"message": "Mapping deleted successfully"}
+    return {"message": "Mapping deleted successfully", "approvals_cancelled": cancelled, "alerts_closed": closed}
