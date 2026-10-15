@@ -18,7 +18,11 @@ from .catalogue import HTML_VARIABLES, VARIABLES
 VAR_RE = re.compile(r"\{\{\s*([^{}]*?)\s*\}\}")
 KV_RE = re.compile(r"^([A-Za-z][^:{}]{1,48}):\s*(.*)$")
 NA = "Not available"
-FONT = "font-family:'Segoe UI',Arial,Helvetica,sans-serif;"
+# The Adani typeface where the mail client loads web fonts (Apple Mail, Outlook
+# on iOS / Android / Mac); Segoe UI everywhere else. Outlook on Windows would
+# fall back to Times New Roman for a font it cannot load, so the head gives it
+# Segoe UI outright (see _head).
+FONT = "font-family:'Adani','Segoe UI',Arial,Helvetica,sans-serif;"
 # Optional parts: empty means "leave it out", not "Not available" - an
 # unphased project has no phase, which is not missing data.
 OPTIONAL = {"phase"}
@@ -192,6 +196,17 @@ def _headline(subj: str) -> Tuple[str, str, str]:
     return "", subj, ""
 
 
+def _head(ctx: Dict) -> str:
+    """The Adani font, served by the Akasha site itself (frontend/public/
+    adani.ttf at AKASHA_PUBLIC_URL), for clients that load web fonts; and the
+    Segoe UI rule that keeps Outlook on Windows off Times New Roman."""
+    base = str(ctx.get("akasha_link") or "").rstrip("/")
+    face = ("<!--[if !mso]><!--><style>@font-face{font-family:'Adani';src:url('" + html.escape(base) +
+            "/adani.ttf') format('truetype');font-weight:100 900;font-style:normal;}</style><!--<![endif]-->") if base else ""
+    return face + ("<!--[if mso]><style>body,table,td,div,p,span,a{font-family:'Segoe UI',Arial,sans-serif !important;}"
+                   "</style><![endif]-->")
+
+
 def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Optional[Dict] = None,
            subj: str = "", links: Optional[List[Tuple[str, str]]] = None) -> str:
     """One email-safe page (tables, inline CSS; fluid, filling the reading pane
@@ -239,7 +254,7 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Opt
                    f'<table role="presentation" cellspacing="0" cellpadding="0"><tr>{"".join(buttons)}</tr></table></td></tr>')
 
     return f"""<!doctype html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light"></head>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><meta name="color-scheme" content="light">{_head(ctx)}</head>
 <body style="margin:0;padding:0;background:#eef1f4;">
 <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#eef1f4;padding:14px 6px;">
 <tr><td align="center">
