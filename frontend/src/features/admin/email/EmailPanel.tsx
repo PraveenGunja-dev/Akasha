@@ -246,8 +246,18 @@ function SetupChecklist({ status, onGo, onChanged }: { status: EmailStatus; onGo
       body: <>{status.enabled_templates} of {status.templates} on. Check each one's L1 / L2 / L3 days and recipients first. <button type="button" className="font-medium text-primary hover:underline" onClick={() => onGo('templates')}>Templates</button></> },
     { done: s.enabled, title: 'Turn sending on - in test mode first',
       body: <><code>EMAIL_ENABLED=true</code>, <code>EMAIL_TEST_MODE=true</code> and <code>EMAIL_TEST_RECIPIENTS=you@adani.com</code>: every email then goes only to you, marked [TEST], showing who it would have gone to.</> },
-    { done: false, title: 'Try it on the demo project',
-      body: <>On the server, in <code>backend/</code>: <code>python scripts/demo_email_project.py --recipient you@adani.com</code> (add <code>--days 15</code> or <code>--days 7</code> for the L2 / L3 emails), then "Preview next run" and "Send now" below. Remove it with <code>--remove</code>.</> },
+    { done: false, title: 'Try it on the demo projects',
+      body: (
+        <div className="space-y-1">
+          <p>On the server, in <code>backend/</code> - the demo projects show in Module Ordering only, and only your tester address gets their emails:</p>
+          <ul className="ml-4 list-disc space-y-0.5">
+            <li><code>python scripts/demo_email_project.py --find</code> lists the demo projects (the Solar &quot;Demo DPR&quot; and the &quot;(Digital)&quot; copies in P6).</li>
+            <li><code>python scripts/demo_email_project.py --from-p6 &quot;Demo DPR&quot; --recipient you@adani.com</code> brings one in (repeat <code>--from-p6</code> for more).</li>
+            <li>Switch on <i>Module ordering - overdue</i> and <i>Project delayed against AOP</i>, then &quot;Preview next run&quot; and &quot;Send now&quot; below.</li>
+            <li>After &quot;Go-live: start from today&quot;, <code>--reset-emails</code> lets the demos email again. <code>--remove</code> takes them all out.</li>
+          </ul>
+        </div>
+      ) },
     { done: !s.test_mode && status.baseline_done, title: 'Go live',
       body: <>Set <code>EMAIL_TEST_MODE=false</code>, restart, then "Go-live: start from today" once, so the backlog is not emailed.</> },
   ];
