@@ -2328,7 +2328,7 @@ export default function ModuleDeliveriesPage() {
                                 )}
                                 {(val > 0 || (p.approvals ?? []).some(a => a.month === mo)) && (
                                   <ApprovalSummary p={p} month={mo} planned={val} onOpen={setApprovalTarget}
-                                    canRequest={!!approvalRole && (approvalRole.superadmin || covers(approvalRole.request, p.cluster))} />
+                                    canRequest={!!approvalRole && covers(approvalRole.request, p.cluster)} />
                                 )}
                               </div>
                             ) : undefined}

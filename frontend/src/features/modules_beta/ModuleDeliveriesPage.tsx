@@ -2805,7 +2805,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                 )}
                                 {(val > 0 || ((p as unknown as LiveProject).approvals ?? []).some(a => a.month === mo)) && (
                                   <ApprovalSummary p={p as unknown as LiveProject} month={mo} planned={val} onOpen={setApprovalTarget}
-                                    canRequest={!!approvalRole && (approvalRole.superadmin || covers(approvalRole.request, p.cluster))} />
+                                    canRequest={!!approvalRole && covers(approvalRole.request, p.cluster)} />
                                 )}
 
                                 {/* AI rows: the AI's executive summary in neutral text (not an

@@ -192,7 +192,8 @@ def _role(db: Session, user, groups: List[str]) -> dict:
 def roles(db: Session, user) -> dict:
     """What the user may do with approvals, for the Ordering Schedule."""
     out = {"superadmin": user.role == "superadmin",
-           "request": _role(db, user, REQUESTER_GROUPS),
+           # Requests: the TC Ordering login role only (not the email group, not superadmin).
+           "request": {"all": False, "portfolios": []},
            "approve": _role(db, user, _approver_groups(db))}
     for key, role_key in (("request", REQUESTER_ROLE), ("approve", APPROVER_ROLE)):
         if user.role == role_key:
@@ -204,11 +205,10 @@ def roles(db: Session, user) -> dict:
 
 
 def can_request(db: Session, user, mapping) -> bool:
-    if user.role == "superadmin" or _role_covers(user, REQUESTER_ROLE, getattr(mapping, "cluster", None)):
-        return True
-    from services.email_notify import engine
-    email = (user.email or "").strip().lower()
-    return bool(email) and email in {x.lower() for x in engine.members(db, REQUESTER_GROUPS, getattr(mapping, "cluster", None), 3)}
+    """Only a user with the TC Ordering role, for the project's portfolio,
+    raises an approval request. Being in the TC Ordering email group gets
+    the emails, not the right to request; a superadmin does not request either."""
+    return _role_covers(user, REQUESTER_ROLE, getattr(mapping, "cluster", None))
 
 
 def self_request(user, a) -> bool:
@@ -245,8 +245,8 @@ def request(db: Session, user, mapping_id: int, month: str, mwp: float, note: Op
     """Raise a request for (up to) the month's planned quantity. The phases
     and figures come from the plan itself, never from the browser."""
     if not can_request(db, user, db.get(models.ProjectMapping, mapping_id)):
-        raise ApprovalError("Approval requests are raised by TC Ordering - ask an administrator for the TC Ordering role "
-                            "(Users & roles) or a place in the TC Ordering group for this portfolio")
+        raise ApprovalError("Approval requests are raised by the TC Ordering role only - ask an administrator "
+                            "for the TC Ordering role (Users & roles) for this portfolio")
     p = _summary_row(db, mapping_id)
     planned = float((p.get("month_mwp") or {}).get(month) or 0.0)
     if planned <= TOL:

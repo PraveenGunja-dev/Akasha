@@ -152,7 +152,7 @@ export function ApprovalSummary({ p, month, canRequest, onOpen }: {
       {left > 0 && (
         <div className="flex flex-wrap items-center justify-between gap-2">
           <p className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
-            {!canRequest ? <>Approval requests for this order are raised by TC Ordering.</>
+            {!canRequest ? <>Approval requests for this order are raised by users with the TC Ordering role.</>
               : rows.some(isOpen) ? <><span className="font-semibold text-foreground">{mw(left)} MWp</span> of {month} is not yet requested - it can be ordered as a further part.</>
                 : <>Ask TC Head to approve this month's order. Once approved it is frozen in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>}
           </p>
