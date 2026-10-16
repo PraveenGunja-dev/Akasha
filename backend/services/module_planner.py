@@ -7,6 +7,7 @@ from P6 FTC milestones, respects source procurement quotas, levels peaks,
 supports interactive Scenario Versions and Priority Overrides, and
 synthesizes 360-degree multi-perspective AI operational recommendations.
 """
+import copy
 from datetime import datetime, timedelta
 import re
 from typing import Dict, List, Any, Optional
@@ -85,9 +86,8 @@ def _parse_date_str(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
-# A project's LTA this many days (or more) after its AOP - the SCOD for a PPA
-# contract, as in the schedule's own LTA check - moves its orders later (the
-# same threshold as the PMAG "LTA later than AOP / SCOD" alert).
+# A project's LTA this many days (or more) after its AOP moves its orders
+# later (the same threshold as the PMAG "LTA later than AOP" alert).
 LTA_MOVE_MIN_DAYS = 30
 
 
@@ -98,17 +98,18 @@ def _lta_alignment(p, ph, lead_time, base_month_dt, num_months):
     arrive for an FTC earlier than the LTA are not needed until 45 days before
     it (the same 45-day install the plan uses everywhere). The order is
     therefore placed a lead time before that. Only where the LTA breaches the
-    AOP / SCOD by LTA_MOVE_MIN_DAYS, only for a phase whose P6 FTC falls before
+    AOP by LTA_MOVE_MIN_DAYS, only for a phase whose P6 FTC falls before
     the LTA, and only when the order lands in a LATER month - the plan is
     monthly, so a shift inside one month changes nothing a reader could see.
 
     This is a calculation from the LTA, not a measurement: the P6 FTC stays as
     P6 states it, and the move is reported with the dates behind it.
     """
-    risk = p.get('lta_risk') or {}
-    lta_dt = _parse_date_str(p.get('lta'))
-    days_late = risk.get('days_late')
-    if not lta_dt or not risk.get('breached') or days_late is None or days_late < LTA_MOVE_MIN_DAYS:
+    lta_dt, aop_dt = _parse_date_str(p.get('lta')), _parse_date_str(p.get('aop_plan'))
+    if not lta_dt or not aop_dt:
+        return None
+    days_late = (lta_dt - aop_dt).days
+    if days_late < LTA_MOVE_MIN_DAYS:
         return None
     if ph['ftc_dt'] >= lta_dt:
         return None
@@ -125,7 +126,10 @@ def _lta_alignment(p, ph, lead_time, base_month_dt, num_months):
             'to_in_view': to_idx < num_months,
             'p6_order_date': f(ph['tc_dt']), 'new_order_date': f(new_tc),
             'modules_needed_by': f(lta_dt - timedelta(days=TC_OFFSET_DAYS)),
-            'lta_date': f(lta_dt), 'basis': risk.get('basis'), 'basis_date': risk.get('basis_date'),
+            # The three milestones as P6 plans them, and as revised for the LTA.
+            'p6_tc_date': f(ph['mod_dt']), 'p6_ftc_date': f(ph['ftc_dt']),
+            'new_tc_date': f(lta_dt - timedelta(days=TC_OFFSET_DAYS)), 'new_ftc_date': f(lta_dt),
+            'lta_date': f(lta_dt), 'basis': 'AOP', 'basis_date': f(aop_dt),
             'days_late': days_late,
         },
     }
@@ -199,10 +203,39 @@ def _calc_month_idx(dt: datetime, base_dt: datetime, max_months: int = 13) -> in
 
 
 def run_module_planning_engine(
-    projects: List[Dict[str, Any]], 
+    projects: List[Dict[str, Any]],
     now: Optional[datetime] = None,
     scenario_version: str = 'baseline',
     priority_overrides: Optional[Dict[int, str]] = None
+) -> Dict[str, Any]:
+    """The plan, with orders moved for a late LTA. A project whose orders
+    moved also carries `lta_base` - its months as planned WITHOUT the move -
+    so the schedule can show the original month as it was, beside the new one."""
+    now = now or datetime.now()
+    def could_move(p):
+        lta, aop = _parse_date_str(p.get('lta')), _parse_date_str(p.get('aop_plan'))
+        return bool(lta and aop and (lta - aop).days >= LTA_MOVE_MIN_DAYS)
+    base = None
+    if any(could_move(p) for p in projects):
+        base = copy.deepcopy(projects)
+        _run_engine(base, now, scenario_version, priority_overrides, align_lta=False)
+    result = _run_engine(projects, now, scenario_version, priority_overrides, align_lta=True)
+    if base:
+        by_id = {b['id']: b for b in base}
+        for p in projects:
+            b = by_id.get(p['id'])
+            if p.get('lta_moves') and b:
+                p['lta_base'] = {'month_mwp': b.get('month_mwp') or {}, 'month_overdue_mwp': b.get('month_overdue_mwp') or {},
+                                 'month_phases': b.get('month_phases') or {}}
+    return result
+
+
+def _run_engine(
+    projects: List[Dict[str, Any]],
+    now: Optional[datetime] = None,
+    scenario_version: str = 'baseline',
+    priority_overrides: Optional[Dict[int, str]] = None,
+    align_lta: bool = True,
 ) -> Dict[str, Any]:
     """
     Executes the full planning intelligence engine across all projects.
@@ -434,7 +467,7 @@ def run_module_planning_engine(
                 continue
 
             ph = dict(ph)
-            shift = _lta_alignment(p, ph, lead_time, base_month_dt, num_months)
+            shift = _lta_alignment(p, ph, lead_time, base_month_dt, num_months) if align_lta else None
             if shift:
                 ph['eff_ftc_dt'] = shift['lta_dt']
                 ph['tc_dt'] = shift['new_tc_dt']

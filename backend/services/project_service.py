@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 import models
 import logging
+from services.demo_scope import is_demo_cluster
 import json
 import re
 import ast
@@ -345,7 +346,9 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
         p6_proj = p6_by_pid.get(m.project_id)
         
         proj_name_check = p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "")
-        if "demo" in proj_name_check.lower():
+        # A project merely named "demo" is left out; one in the Akasha Demo
+        # portfolio is a deliberate test project and is shown (tagged Demo).
+        if "demo" in proj_name_check.lower() and not is_demo_cluster(m.cluster):
             continue
             
         spi = 1.0
@@ -652,6 +655,10 @@ def calculate_project_360_metrics(db: Session, portfolio_type: str = None):
             # Identifiers
             "projectId": p6_proj.project_id if p6_proj else (m.project_id or ""),
             "projectName": p6_proj.name if p6_proj else (m.project_name_from_p6 or m.project or "Unmapped Project"),
+            "isDemo": is_demo_cluster(m.cluster),
+            # A demo project reads the same here as in the Ordering Schedule
+            # (its mapping name); everything else keeps its P6 name.
+            "displayName": (m.project or None) if is_demo_cluster(m.cluster) else None,
             "sapPlantCode": m.spv_plant_code,
             "agelCode": m.agel,
             "age6lCode": m.age6l,

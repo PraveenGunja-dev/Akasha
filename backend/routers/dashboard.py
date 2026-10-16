@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from services.demo_scope import see_demo
 from sqlalchemy.orm import Session
 from sqlalchemy import func, or_
 from typing import List, Dict, Any, Optional
@@ -1298,7 +1299,7 @@ def get_capacity_overview(portfolio: Optional[str] = None, phase: Optional[str] 
     }
 
 
-@router.get("/api/projects/{mapping_id}/slr")
+@router.get("/api/projects/{mapping_id}/slr", dependencies=[Depends(see_demo)])
 def get_project_slr_data(
     mapping_id: str, 
 
@@ -1452,7 +1453,7 @@ def get_project_slr_data(
 
 
 
-@router.get("/api/projects/{mapping_id}/installation-progress")
+@router.get("/api/projects/{mapping_id}/installation-progress", dependencies=[Depends(see_demo)])
 def get_project_installation_progress(mapping_id: str, db: Session = Depends(get_db)):
     """Module installation for one project, planned vs completed, by month.
 
@@ -1775,7 +1776,7 @@ def get_installation_planner(portfolio: Optional[str] = None, phase: Optional[st
 
 
 
-@router.get("/api/projects/{mapping_id}/delay-reasons")
+@router.get("/api/projects/{mapping_id}/delay-reasons", dependencies=[Depends(see_demo)])
 def get_project_delay_reasons(mapping_id: str, db: Session = Depends(get_db)):
     """Why a project is behind, from what the platform can actually verify —
     never a guess. Three independent signals, each labelled by source:
@@ -1856,7 +1857,7 @@ def get_project_delay_reasons(mapping_id: str, db: Session = Depends(get_db)):
     }
 
 
-@router.get("/api/projects/{mapping_id}/installation-blocks")
+@router.get("/api/projects/{mapping_id}/installation-blocks", dependencies=[Depends(see_demo)])
 def get_project_installation_blocks(mapping_id: str, db: Session = Depends(get_db)):
     """Every 'Module Installation' block for one project, named, with its
     baseline / current-plan / actual dates and status — the detail behind a

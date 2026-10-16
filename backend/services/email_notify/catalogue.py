@@ -38,15 +38,18 @@ VARIABLES = {
     "module_quantity_mwp":   ("Quantity to order (MWp)", "This phase's order in the Ordering Schedule", "120.5"),
     "balance_ordering_mwp":  ("Balance to order (MWp)", "Capacity not yet on a PO (SAP)", "120.5"),
     "ordered_mwp":           ("Ordered till now (MWp)", "Module POs in SAP (ZPSPS007)", "287.5"),
+    "lta_vs_basis_flag":     ("LTA against AOP (flagged)", "The same, shown in red when the LTA is later than the AOP", "!! 92 days after the AOP (31-Mar-27)"),
+    "anticipated_impact":    ("Anticipated impact", "What a late LTA is expected to mean - labelled an estimate, never a P6 date", "Anticipated (an estimate): the project cannot export before the LTA..."),
+    "ai_aop_estimate":       ("Estimated AOP (AI)", "The AI plan's forecast of the project's last FTC, from each block's progress on site, and how it compares with the AOP", "14-Nov-26 - 139 days after the AOP"),
     "order_now":             ("Order now", "This order's quantity in MWp, or that nothing is left to order", "120.5 MWp"),
     "ordering_date_before":  ("Ordering date before this change", "The ordering date Akasha last recorded, or No change", "21-Nov-26"),
     "ordering_impact":       ("Ordering impact", "What the change does to the next order, worked out from the plan - never guessed", "Next order 120.5 MWp by 21-Nov-26 (35 days from today)"),
     "balance_after_order_mwp": ("Left to order after this order (MWp)", "Balance to order less this order's quantity", "45.0"),
     "remaining_orders":      ("Orders still to come", "The project's other orders in the Ordering Schedule - quantity and ordering date", "Phase 2: 45.0 MWp by 12-Feb-27"),
-    "lta_basis":             ("LTA compared with", "SCOD for PPA contracts, otherwise AOP - the Ordering Schedule's own LTA check", "AOP"),
-    "lta_basis_date":        ("AOP / SCOD date", "The date the LTA is judged against", "31-Mar-27"),
-    "lta_days_late":         ("LTA days after AOP / SCOD", "LTA less the AOP (or SCOD); positive = LTA later", "92"),
-    "lta_vs_basis":          ("LTA against AOP / SCOD", "The gap in words, e.g. 92 days after the AOP (31-Mar-27)", "92 days after the AOP (31-Mar-27)"),
+    "lta_basis":             ("LTA compared with", "Always the AOP", "AOP"),
+    "lta_basis_date":        ("AOP date", "The date the LTA is judged against", "31-Mar-27"),
+    "lta_days_late":         ("LTA days after AOP", "LTA less the AOP; positive = LTA later", "92"),
+    "lta_vs_basis":          ("LTA against AOP", "The gap in words, e.g. 92 days after the AOP (31-Mar-27)", "92 days after the AOP (31-Mar-27)"),
     "lta_order_note":        ("What it means for ordering", "How much is ordered and how much is still to place", "Nothing ordered yet - all 120.5 MWp is still to be placed"),
     "received_mwp":          ("Received (MWp)", "SAP total receipt", "250.0"),
     "in_transit_mwp":        ("In transit (MWp)", "SAP", "20.0"),
@@ -129,7 +132,7 @@ TRIGGERS = {
     "ordering_today":   "On the ordering date, with balance still to order",
     "ordering_overdue": "Ordering date passed, balance still to order; L1 / L2 / L3 by days overdue (config: escalation)",
     "date_change":      "A watched P6 / connectivity date changed since the last check (config: fields) - the change and its ordering impact",
-    "lta_breach":       "LTA later than the AOP (SCOD for PPA contracts); L1 / L2 / L3 at the days late in config levels",
+    "lta_breach":       "LTA later than the AOP; L1 / L2 / L3 at the days late in config levels",
     "ftc_unreachable":  "An order can no longer reach the phase's P6 FTC",
     "vendor_shift":     "Vendor allocation moved an order out of its target month",
     "awaiting_grn":     "Dispatched in Ariba with no GRN for longer than config.min_days (repeats every remind_every_days)",
@@ -239,10 +242,11 @@ Changed By: {{change_source}}
 Reason Given: {{change_remarks}}
 What It Means: {{change_impact}}
 AOP: {{aop_date}}
+Estimated AOP (AI): {{ai_aop_estimate}}
 FTC Date (P6): {{ftc_date}}
 LTA Date: {{lta_date}}
-SCOD: {{scod_date}}
-LTA Against AOP / SCOD: {{lta_vs_basis}}
+LTA Against AOP: {{lta_vs_basis_flag}}
+Anticipated Impact: {{anticipated_impact}}
 
 ## Ordering impact
 Order Now: {{order_now}}
@@ -251,17 +255,16 @@ Ordering Date Before This Change: {{ordering_date_before}}
 Modules Needed at Site: {{tc_delivery_date}}
 Ordered Till Now: {{ordered_mwp}} MWp
 Balance to Order (project): {{balance_ordering_mwp}} MWp
-Left to Order After This Order: {{balance_after_order_mwp}} MWp
 Orders Still to Come: {{remaining_orders}}
 Impact: {{ordering_impact}}
 
 Required Action: Projects and PMAG to validate the revised date and the reason given. TC Ordering to confirm the ordering plan above.
 
 Review in Akasha: {{akasha_project_link}}
-""", "When FTC, LTA, SCOD, AOP or the ordering date changes - after a sync, or an edit in Akasha (with the reason). One email, two sections: the date change with its variance and remarks, and the ordering impact (what to order, by when, what is left)",
-       {"fields": ["ftc_date", "lta", "scod", "aop_plan", "module_date"]}),
+""", "When FTC, LTA, AOP or the ordering date changes - after a sync, or an edit in Akasha (with the reason). One email, two sections: the date change with its variance and remarks, and the ordering impact (what to order, by when, what is left)",
+       {"fields": ["ftc_date", "lta", "aop_plan", "module_date"]}),
 
-    _t("lta_beyond_aop", "Transmission (LTA) later than AOP / SCOD", "Alert", "lta_breach", "action",
+    _t("lta_beyond_aop", "Transmission (LTA) later than AOP", "Alert", "lta_breach", "action",
        ["pmag"], ["projects", "tc_ordering", "executive"],
        "Akasha Alert | LTA {{lta_days_late}} Days After {{lta_basis}} | {{project_name}}",
        """
@@ -271,21 +274,20 @@ The transmission connectivity (LTA) for **{{project_name}}** is **{{lta_vs_basis
 
 Escalation: {{escalation_level}}
 AOP (P6 baseline COD): {{aop_date}}
-SCOD: {{scod_date}}
 LTA Date (connectivity): {{lta_date}}
-LTA After AOP / SCOD: {{lta_days_late}} days
-Compared Against: {{lta_basis}} ({{lta_basis_date}})
+LTA Against AOP: {{lta_vs_basis_flag}}
 FTC Date (P6): {{ftc_date}}
 Forecast COD (P6): {{forecast_cod_date}}
 Ordered Till Now: {{ordered_mwp}} MWp
 Balance to Order: {{balance_ordering_mwp}} MWp
 Orders Still to Place: {{remaining_orders}}
 Ordering: {{lta_order_note}}
+Anticipated Impact: {{anticipated_impact}}
 
 Required Action: PMAG to review the {{lta_basis}} against the LTA with Projects and TC. TC Ordering to check whether any order not yet placed can move later, to match the LTA.
 
 View in Akasha: {{akasha_project_link}}
-""", "LTA later than the AOP (the SCOD for PPA contracts): L1 at 30, L2 at 90, L3 at 180 days after. For PMAG - the plan can wait for transmission, and orders not yet placed can move later",
+""", "LTA later than the AOP: L1 at 30, L2 at 90, L3 at 180 days after. For PMAG - the plan can wait for transmission, and orders not yet placed can move later",
        {"levels": {"1": 30, "2": 90, "3": 180}}),
 
     _t("ordering_overdue", "Module ordering - overdue (escalating)", "Alert", "ordering_overdue", "critical",

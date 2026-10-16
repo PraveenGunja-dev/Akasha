@@ -198,17 +198,22 @@ def order_lines(p: dict, skip: Optional[dict] = None) -> str:
 
 
 def lta_vs_basis(p: dict) -> Dict:
-    """The LTA against what it is judged by in the Ordering Schedule: the
-    SCOD for PPA contracts, otherwise the AOP (module_deliveries lta_risk).
-    Empty where either date is missing - no date is no signal."""
-    r = p.get("lta_risk") or {}
-    days = r.get("days_late")
-    if days is None:
+    """The LTA against the AOP, in words. Empty where either date is missing
+    - no date is no signal. (Named for the basis the Ordering Schedule's own
+    LTA flag uses, which is the SCOD for PPA contracts; the emails and the
+    plan's LTA move use the AOP only.)"""
+    lta, aop = parse_day(p.get("lta")), parse_day(p.get("aop_plan"))
+    if not lta or not aop:
         return {}
-    basis, when = r.get("basis") or "AOP", r.get("basis_date") or ""
-    text = (f"{days} days after the {basis} ({when})" if days > 0
-            else f"{-days} days before the {basis} ({when})" if days < 0 else f"on the {basis} ({when})")
-    return {"lta_basis": basis, "lta_basis_date": when, "lta_days_late": days, "lta_vs_basis": text}
+    days = (lta - aop).days
+    basis, when = "AOP", fmt_day(aop)
+    n = abs(days)
+    unit = "day" if n == 1 else "days"
+    text = (f"{n} {unit} after the {basis} ({when})" if days > 0
+            else f"{n} {unit} before the {basis} ({when})" if days < 0 else f"on the {basis} ({when})")
+    return {"lta_basis": basis, "lta_basis_date": when, "lta_days_late": days, "lta_vs_basis": text,
+            # for a table row: "!! " shows it in danger red when the LTA is later than its basis
+            "lta_vs_basis_flag": ("!! " if days > 0 else "") + text}
 
 
 def lta_order_note(p: dict) -> str:

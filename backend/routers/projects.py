@@ -7,6 +7,7 @@ import models
 from services.project_service import calculate_project_360_metrics, get_project_360_detail, calculate_dynamic_evm, build_evm_index
 import time
 from services import portfolio as portfolio_svc
+from services.demo_scope import see_demo
 
 _SUMMARY_CACHE = {}
 _SUMMARY_TTL = 300  # 5 minutes
@@ -126,7 +127,7 @@ def get_project_summary(project_name: Optional[str] = None, portfolio: Optional[
 _P360_CACHE = {}
 _CACHE_TTL = 300  # 5 minutes
 
-@router.get("/project-360")
+@router.get("/project-360", dependencies=[Depends(see_demo)])
 def get_project_360(portfolio: Optional[str] = None, nocache: bool = False, db: Session = Depends(get_db)):
     global _P360_CACHE
     cache_key = str(portfolio).lower() if portfolio else "all"
@@ -140,7 +141,7 @@ def get_project_360(portfolio: Optional[str] = None, nocache: bool = False, db: 
     _P360_CACHE[cache_key] = {"data": data, "timestamp": time.time()}
     return data
 
-@router.get("/project-360/{project_id}/detail")
+@router.get("/project-360/{project_id}/detail", dependencies=[Depends(see_demo)])
 def get_project_360_detail_endpoint(project_id: str, db: Session = Depends(get_db)):
     result = get_project_360_detail(db, project_id)
     if not result:
@@ -451,7 +452,7 @@ def get_construction_units(
     }
 
 
-@router.get("/tc-network/project/{project_id}")
+@router.get("/tc-network/project/{project_id}", dependencies=[Depends(see_demo)])
 def get_project_tc_network(project_id: str, db: Session = Depends(get_db)):
     m = db.query(models.ProjectMapping).filter(models.ProjectMapping.project_id == project_id).first()
     if not m:

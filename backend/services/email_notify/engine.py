@@ -45,6 +45,8 @@ _OLD_OVERDUE_STEPS = [
     {"after_days": 14, "label": "Level 3 - 14 days overdue", "add_to": [], "add_cc": ["executive"]},
 ]
 _DEFAULT_UPGRADES = [
+    ("date_change", {"fields": ["ftc_date", "lta", "scod", "aop_plan", "module_date"]},
+     {"fields": ["ftc_date", "lta", "aop_plan", "module_date"]}, "SCOD is no longer part of the schedule date email"),
     ("ordering_due_30", {"days_before": 30, "days_until": 8}, {"days_before": 30, "days_until": 16},
      "The 15-day reminder takes over at 15 days: the 30-day window now ends at 16"),
     ("ordering_overdue", {"escalation": _OLD_OVERDUE_STEPS}, {"escalation": catalogue.LEVELS},
@@ -394,7 +396,9 @@ def _change_origin(db, p: dict, f: str, new_day) -> tuple:
 
 
 def _gap(days: int, what: str) -> str:
-    return f"{days} days after {what}" if days > 0 else f"{-days} days before {what}" if days < 0 else f"on {what}"
+    n = abs(days)
+    unit = "day" if n == 1 else "days"
+    return f"{n} {unit} after {what}" if days > 0 else f"{n} {unit} before {what}" if days < 0 else f"on {what}"
 
 
 def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
@@ -423,8 +427,6 @@ def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
             if ftcs:
                 out.append(f"{len(late)} of {len(ftcs)} phase FTC date(s) fall after the new LTA" if late
                            else "every phase FTC is on or before the new LTA")
-            if scod:
-                out.append(f"SCOD {C.fmt_day(scod)} is {_gap((scod - new).days, 'the LTA')}")
         else:
             out.append("the project now has no LTA - transmission readiness cannot be checked")
     elif f == "scod":
@@ -452,7 +454,7 @@ def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
         elif (p.get("balance_ordering_mwp") or 0) <= 0:
             out.append("fully ordered - no module order is affected")
     if not out:
-        return "No impact Akasha can measure from the data it holds"
+        return ""          # nothing measurable: the email leaves the row out
     s = "; ".join(out)
     return s[0].upper() + s[1:]
 
@@ -487,6 +489,8 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
             ctx = d.context(p)
             ctx.update(C.lta_vs_basis(p))
             ctx["aop_date"] = p.get("aop_plan") or ""
+            ctx["ai_aop_estimate"] = _ai_aop_estimate(d, p)
+            ctx["anticipated_impact"] = _anticipated_impact(p)
             ctx.update(_ordering_section(d, p, moved[1] if moved else None))
             src, why = _change_origin(d.db, p, f, a)
             w = d.db.get(models.EmailWatch, (str(pid), f"date:{f}"))
@@ -506,17 +510,79 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
     return out
 
 
+def _ai_aop_estimate(d: Data, p: dict) -> str:
+    """The AI plan's forecast of the project's last FTC - what the Advanced
+    AI planning view shows under the LTA and SCOD - against the AOP. Empty
+    when there is no forecast, or every phase is already charged (that date
+    is an actual, not an estimate), so the email leaves the row out."""
+    plan = d.plans().get(str(p.get("project_id")))
+    if not plan or not plan.get("plannable") or not plan.get("completion_forecast"):
+        return ""
+    phases = plan.get("phases") or []
+    if phases and all(x.get("charged") for x in phases):
+        return ""
+    try:
+        est = date.fromisoformat(str(plan["completion_forecast"])[:10])
+    except ValueError:
+        return ""
+    aop = C.parse_day(p.get("aop_plan"))
+    # Later than the AOP is a danger: "!! " shows the row in red (render.py).
+    return ("!! " if aop and est > aop else "") + C.fmt_day(est) + (f" - {_gap((est - aop).days, 'the AOP')}" if aop else "")
+
+
+def _anticipated_impact(p: dict) -> str:
+    """What a late LTA is expected to mean, in words - an estimate from the
+    LTA and the AOP / SCOD, labelled as one. Empty without both dates."""
+    risk = C.lta_vs_basis(p)
+    days = risk.get("lta_days_late")
+    if days is None:
+        return ""
+    basis, when, lta = "AOP", risk.get("lta_basis_date") or "", p.get("lta") or ""
+    if days > 0:
+        s = (f"Anticipated (an estimate, not a P6 date): the project cannot export before the LTA ({lta}), {days} days after the "
+             f"{basis} ({when}), so the {basis} is at risk from transmission, not construction alone")
+        if p.get("lta_moves"):
+            s += "; orders not yet placed move later to match - see the ordering impact"
+        elif (p.get("balance_ordering_mwp") or 0) > 0:
+            s += "; modules not yet ordered need not be ordered for the earlier date"
+        return s + "."
+    if days < 0:
+        return f"The LTA ({lta}) is {-days} day{'' if days == -1 else 's'} before the {basis} ({when}) - transmission is not what holds the {basis} back."
+    return f"The LTA ({lta}) is on the {basis} ({when}) - there is no slack for any other delay."
+
+
+def _lta_move_impact(p: dict) -> str:
+    """What the late LTA did to the orders: each move, with the dates."""
+    moves = p.get("lta_moves") or []
+    if not moves:
+        return ""
+    first = moves[0]
+    parts = [f"{m.get('phase_label') + ': ' if m.get('phase_label') else ''}{C.mw(m.get('mwp'))} MWp moved from {m.get('from_month')} to "
+             f"{m.get('to_month')}{'' if m.get('to_in_view') else ' (beyond the months the schedule shows)'}, order date "
+             f"{m.get('p6_order_date')} to {m.get('new_order_date')}" for m in moves]
+    return (f"The LTA ({first.get('lta_date')}) is {first.get('days_late')} days after the {first.get('basis')}, so modules are needed "
+            f"45 days before the LTA and the orders moved later - " + "; ".join(parts))
+
+
 def _ordering_section(d: Data, p: dict, ordering_date_before) -> Dict:
     """The ordering half of the date email: the next order to place, what is
     left after it and what is still to come - from the current plan."""
     orders = sorted(((C.parse_day(o.get("order_date")) or date.max, i, o) for i, o in enumerate(_orders(p))),
                     key=lambda x: (x[0], x[1]))
     sec = {"ordering_date_before": (ordering_date_before or "Not set") if ordering_date_before is not None else "No change",
-           "ordering_impact": _change_impact(d, p, "ordering", None, None)}
+           "ordering_impact": " ".join(x for x in (_lta_move_impact(p) + "." if _lta_move_impact(p) else "",
+                                                   _change_impact(d, p, "ordering", None, None)) if x)}
     if not orders:
-        sec.update(order_now="Nothing left to order", module_ordering_date="", tc_delivery_date="",
-                   balance_after_order_mwp=C.mw(p.get("balance_ordering_mwp")) or "0.0",
-                   remaining_orders="None - no further order is planned", phase="")
+        moved = [m for m in (p.get("lta_moves") or []) if not m.get("to_in_view")]
+        if moved:
+            # Not "nothing left": the orders are still to place, moved past the months on screen.
+            sec.update(order_now=f"None now - {C.mw(sum(m.get('mwp') or 0 for m in moved))} MWp moved to "
+                                 f"{moved[-1].get('to_month')} for the LTA",
+                       module_ordering_date="", tc_delivery_date="", remaining_orders=C.order_lines(p), phase="")
+        else:
+            sec.update(order_now="Nothing left to order", module_ordering_date="", tc_delivery_date="",
+                       remaining_orders="None - no further order is planned", phase="")
+        sec["balance_after_order_mwp"] = C.mw(p.get("balance_ordering_mwp")) or "0.0"
         return sec
     oc = C.phase_context({}, p, orders[0][2])
     sec.update({k: oc[k] for k in ("module_quantity_mwp", "module_ordering_date", "tc_delivery_date",
@@ -801,8 +867,8 @@ def ev_lta_breach(d: Data, t, dry: bool) -> List[Event]:
     stages = alerts.config_stages(t, {"1": 30, "2": 90, "3": 180})
     cod, out, seen = d.cod(), [], set()
     for p in d.projects:
-        risk = p.get("lta_risk") or {}
-        late = risk.get("days_late")
+        risk = C.lta_vs_basis(p)
+        late = risk.get("lta_days_late")
         pid = str(p.get("project_id"))
         if late is None or late <= 0 or pid in seen:
             continue
@@ -818,9 +884,10 @@ def ev_lta_breach(d: Data, t, dry: bool) -> List[Event]:
         ctx.update(C.lta_vs_basis(p))
         ctx["aop_date"] = p.get("aop_plan") or ctx.get("aop_date", "")
         ctx["lta_order_note"] = C.lta_order_note(p)
+        ctx["anticipated_impact"] = _anticipated_impact(p)
         ctx["remaining_orders"] = C.order_lines(p)
-        ctx["escalation_level"] = f"LTA {late} days after the {risk.get('basis')} (level {lv} from {n} days)"
-        out.append(Event(f"{t.key}:{pid}:{p.get('lta')}:{risk.get('basis_date')}:L{lv}", ctx, p, level=lv,
+        ctx["escalation_level"] = f"LTA {late} days after the AOP (level {lv} from {n} days)"
+        out.append(Event(f"{t.key}:{pid}:{p.get('lta')}:{risk.get('lta_basis_date')}:L{lv}", ctx, p, level=lv,
                          case_key=f"{t.key}:{pid}"))
     return out
 

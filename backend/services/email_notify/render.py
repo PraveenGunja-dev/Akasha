@@ -109,6 +109,13 @@ def for_browser(html_text: str) -> str:
     uri = "data:image/jpeg;base64," + base64.b64encode(banner_bytes()).decode()
     return html_text.replace(f"cid:{BANNER_CID}", uri)
 # "View in Akasha: <link>" lines become buttons, not table rows.
+def _no_data(value: str) -> bool:
+    """A value that says there is nothing to show - the row is left out."""
+    v = re.sub(r"<[^>]+>", "", value or "").strip()
+    v = (v[3:] if v.startswith("!! ") else v).strip().strip(".").strip()
+    return v == "" or v.lower() in {NA.lower(), "n/a", "-", "\u2014"}
+
+
 LINK_LINE = re.compile(r"^(?P<label>[^:]*akasha[^:]*):\s*(?P<url>https?://\S+)\s*$", re.IGNORECASE)
 
 
@@ -118,19 +125,34 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
     # Escape the template's own text, then fill values (escaped themselves).
     lines = fill(html.escape(text or "", quote=False).replace("&#x27;", "'"), ctx, as_html=True).split("\n")
     blocks, para, rows, links = [], [], [], []
+    heading = []        # a section heading waits until the section has something to show
+    shown = []          # sections already on the page
+
+    def emit_heading():
+        if heading:
+            if shown:   # a line between one section and the next
+                blocks.append('<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:6px 0 16px;">'
+                              '<tr><td style="border-top:1px solid #cfd6df;font-size:0;line-height:0;height:1px;">&nbsp;</td></tr></table>')
+            shown.append(1)
+            blocks.append(heading.pop())
 
     def flush_para():
         if para:
+            emit_heading()
             blocks.append(f'<p style="{FONT}margin:0 0 16px;font-size:14px;line-height:1.6;color:#1f2937;">{_inline(" ".join(para))}</p>')
             para.clear()
 
     def flush_rows():
         if rows:
+            emit_heading()
+            # A value starting "!! " is a danger: red text on a light red wash (the critical status colours).
             trs = "".join(
                 f'<tr><td style="{FONT}font-size:12.5px;line-height:1.45;padding:8px 14px;border-top:{"0" if n == 0 else "1px solid " + RULE};'
                 f'color:{MUTED};width:32%;vertical-align:top;">{k}</td>'
                 f'<td style="{FONT}font-size:13.5px;line-height:1.45;padding:8px 14px;border-top:{"0" if n == 0 else "1px solid " + RULE};'
-                f'color:{INK};font-weight:600;vertical-align:top;">{_inline(v)}</td></tr>' for n, (k, v) in enumerate(rows))
+                f'color:{"#b42318" if v.startswith("!! ") else INK};font-weight:600;vertical-align:top;border-left:1px solid {RULE};'
+                f'{"background:#fdecea;" if v.startswith("!! ") else ""}">{_inline(v[3:] if v.startswith("!! ") else v)}</td></tr>'
+                for n, (k, v) in enumerate(rows))
             blocks.append(f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
                           f'style="border:1px solid {RULE};border-radius:8px;border-collapse:separate;margin:0 0 18px;background:#ffffff;">{trs}</table>')
             rows.clear()
@@ -148,11 +170,13 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
             continue
         if line.startswith("## "):
             flush_para(); flush_rows()
-            blocks.append(f'<div style="{FONT}margin:6px 0 8px;font-size:11px;font-weight:700;letter-spacing:.6px;'
-                          f'text-transform:uppercase;color:{BRAND};">{_inline(line[3:].strip())}</div>')
+            heading.clear()
+            heading.append(f'<div style="{FONT}margin:6px 0 8px;font-size:11px;font-weight:700;letter-spacing:.6px;'
+                           f'text-transform:uppercase;color:{BRAND};">{_inline(line[3:].strip())}</div>')
             continue
         if line.lower().startswith("required action:"):
             flush_para(); flush_rows()
+            heading.clear()
             blocks.append(f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">'
                           f'<tr><td style="{FONT}padding:12px 16px;border-left:4px solid #b45309;background:#fdf6ec;border-radius:4px;">'
                           f'<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#92400e;margin:0 0 3px;">Required action</div>'
@@ -161,7 +185,8 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
         kv = KV_RE.match(line)
         if kv and not line.endswith(".") and len(kv.group(2)) < 300:
             flush_para()
-            rows.append((kv.group(1).strip(), kv.group(2).strip()))
+            if not _no_data(kv.group(2)):
+                rows.append((kv.group(1).strip(), kv.group(2).strip()))
             continue
         flush_rows()
         para.append(line)
@@ -170,7 +195,22 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
 
 
 def body_text(text: str, ctx: Dict) -> str:
-    return re.sub(r"^## ", "", re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx)), flags=re.M)
+    out, pending, heads = [], None, 0
+    plain = re.sub(r"(:\s*)!! ", r"\1", re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx)))      # the danger marker is for the HTML only
+    for line in plain.split("\n"):
+        kv = KV_RE.match(line.strip())
+        if kv and not line.strip().endswith(".") and _no_data(kv.group(2)):
+            continue                                   # no data: the row is left out
+        if line.startswith("## "):
+            pending = line[3:]                         # shown once the section has a row
+            continue
+        if pending is not None and line.strip():
+            if heads:
+                out.extend(["", "-" * 40])               # a line between one section and the next
+            heads += 1
+            out.append(pending.upper()); pending = None
+        out.append(line)
+    return "\n".join(out)
 
 
 # What each level of intimation means to the person reading it.

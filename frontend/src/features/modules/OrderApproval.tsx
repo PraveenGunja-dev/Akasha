@@ -101,13 +101,6 @@ export function approvalFor(p: ModuleProject, month: string): OrderApprovalRow |
   return rows.find(isOpen) ?? rows[0];
 }
 
-/** Every approval of the month, open ones first. A month can be ordered in
- *  parts, so it can hold several requests. */
-export function approvalsFor(p: ModuleProject, month: string): OrderApprovalRow[] {
-  const rows = (p.approvals ?? []).filter(a => a.month === month);
-  return [...rows.filter(isOpen), ...rows.filter(a => !isOpen(a))];
-}
-
 /** MWp of the month not yet requested or approved - what a new request may ask for. */
 export function requestableMwp(p: ModuleProject, month: string): number {
   const planned = p.month_mwp?.[month] ?? 0;
@@ -125,44 +118,39 @@ export function ApprovalMark({ p, month }: { p: ModuleProject; month: string }) 
 }
 
 /* Inside the month popover: where this month's approval stands. */
-export function ApprovalSummary({ p, month, canRequest, onOpen }: {
+export function ApprovalSummary({ p, month, planned, canRequest, onOpen }: {
   p: ModuleProject; month: string; planned: number; canRequest: boolean;
   onOpen: (o: { mapping: ModuleProject; month: string; id?: number }) => void;
 }) {
-  const rows = approvalsFor(p, month);
-  const left = requestableMwp(p, month);
+  const a = approvalFor(p, month);
+  const open = a && (a.status === 'pending' || a.status === 'approved');
   const frozen = p.month_frozen_mwp?.[month] ?? 0;
   return (
-    <div className="space-y-1.5 border-t border-border-subtle pt-2">
-      {rows.map(a => (
-        <div key={a.id} className="flex flex-wrap items-center justify-between gap-2">
-          <div className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
+    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-2">
+      <div className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
+        {a ? (
+          <>
             <StatusPill tone={APPROVAL_META[a.status].tone}>{APPROVAL_META[a.status].label}</StatusPill>
             <span className="ml-1.5">
-              #{a.id} · {mw(a.mwp)} MWp · requested by {a.requested_by} {fmtWhen(a.requested_at)}
+              {mw(a.mwp)} MWp · requested by {a.requested_by} {fmtWhen(a.requested_at)}
               {a.decided_by && <> · {a.status === 'returned' ? 'returned' : 'decided'} by {a.decided_by}</>}
+              {a.status === 'approved' && frozen > 0 && <> · <span className="font-semibold text-foreground">{mw(frozen)} MWp frozen in {month}</span> until the PO is in SAP</>}
             </span>
-          </div>
-          <button type="button" className={btn.secondary} onClick={() => { closePopovers(); onOpen({ mapping: p, month, id: a.id }); }}>Details</button>
-        </div>
-      ))}
-      {frozen > 0 && (
-        <p className="text-[10.5px] text-fg-secondary"><span className="font-semibold text-foreground">{mw(frozen)} MWp frozen in {month}</span> until the PO is in SAP</p>
-      )}
-      {left > 0 && (
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <p className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
-            {!canRequest ? <>Approval requests for this order are raised by users with the TC Ordering role.</>
-              : rows.some(isOpen) ? <><span className="font-semibold text-foreground">{mw(left)} MWp</span> of {month} is not yet requested - it can be ordered as a further part.</>
-                : <>Ask TC Head to approve this month's order. Once approved it is frozen in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>}
-          </p>
-          {canRequest && (
-            <button type="button" className={btn.primary} onClick={() => { closePopovers(); onOpen({ mapping: p, month }); }}>
-              <Send className="h-3.5 w-3.5" />{rows.some(isOpen) ? 'Request more' : 'Request approval'}
-            </button>
-          )}
-        </div>
-      )}
+          </>
+        ) : planned > 0 && canRequest ? (
+          <>Ask TC Head to approve this month's order. Once approved it is frozen in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>
+        ) : planned > 0 ? (
+          <>Approval requests for this order are raised by users with the TC Ordering role.</>
+        ) : null}
+      </div>
+      <div className="flex shrink-0 gap-1.5">
+        {a && <button type="button" className={btn.secondary} onClick={() => { closePopovers(); onOpen({ mapping: p, month, id: a.id }); }}>Details</button>}
+        {!open && planned > 0 && canRequest && (
+          <button type="button" className={btn.primary} onClick={() => { closePopovers(); onOpen({ mapping: p, month }); }}>
+            <Send className="h-3.5 w-3.5" />Request approval
+          </button>
+        )}
+      </div>
     </div>
   );
 }

@@ -21,6 +21,7 @@ import CPAGModal from './CPAGModal';
 import EACView, { useEAC, exportEAC } from './EACView';
 import ActivityInvestigationModal from '../intelligence/ActivityInvestigationModal';
 import { formatProjectName } from '../../lib/projectName';
+import DemoTag from './DemoTag';
 
 import { Loader as AkLoader } from '../../components/ui/primitives';
 /* ── Circular Gauge ── */
@@ -1163,7 +1164,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           <div className="h-5 w-px bg-border-subtle"></div>
           <div className="flex min-w-0 items-center gap-2">
             <div className={dotClass}></div>
-            <span className="truncate text-[15px] font-semibold text-fg-primary">{formatProjectName(p.projectName)}</span>
+            <span className="truncate text-[15px] font-semibold text-fg-primary">{p.displayName || formatProjectName(p.projectName)}</span>
+            {p.isDemo && <DemoTag />}
           </div>
           <div className="ml-auto flex items-center gap-4">
             <span className="hidden font-mono text-[12px] text-fg-tertiary md:inline">{p.projectId}</span>

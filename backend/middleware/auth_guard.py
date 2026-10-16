@@ -121,7 +121,7 @@ def _project_clusters(db, *, project_id: str | None = None, name: str | None = N
     can have several rows; all must be in scope)."""
     from sqlalchemy import func
     from models import ProjectMapping
-    q = db.query(ProjectMapping)
+    q = db.query(ProjectMapping).execution_options(include_demo=True)   # demo rows count as in every portfolio
     if project_id is not None:
         q = q.filter(ProjectMapping.project_id == project_id)
     else:

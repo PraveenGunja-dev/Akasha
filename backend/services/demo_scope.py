@@ -1,8 +1,9 @@
-"""Demo projects are visible in Module Ordering only.
+"""Demo projects are visible in Module Ordering and Project 360 only.
 
 Demo projects (project-mapping rows in an "Akasha Demo..." portfolio, added
 by scripts/demo_email_project.py) exist to test the Ordering Schedule, its
-approvals and its emails. Everywhere else - Project 360, the dashboards,
+approvals and its emails, and in Project 360 (the list, a project's page and its
+data). Everywhere else - the dashboards,
 KPIs, CPAG packs - they must not appear, nor their P6 data.
 
 How: every ORM SELECT on ProjectMapping or P6Project gets a criterion that
