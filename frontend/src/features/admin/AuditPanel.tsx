@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Search } from 'lucide-react';
+import { useSearchParams } from 'react-router-dom';
+import { CheckCheck, Search } from 'lucide-react';
 import { PageHeader, StatusPill } from '../../components/ui/primitives';
 import type { Tone } from '../../components/ui/primitives';
 import { adminApi, btn, field, fmtWhen } from './adminApi';
 import type { AuditEntry } from './adminApi';
+import { refreshAlerts, useAlertSummary } from './securityAlerts';
 
 /* Append-only record of sign-ins and every change to accounts and roles
    (backend: akasha_audit_log). */
@@ -70,6 +72,13 @@ export default function AuditPanel() {
   const [debounced, setDebounced] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  // Security alerts (the badge and the toast's Review): the open ones only,
+  // and marking them reviewed once someone has checked them.
+  const [params, setParams] = useSearchParams();
+  const onlyAlerts = params.get('alerts') === 'open';
+  const alerts = useAlertSummary();
+  const [acking, setAcking] = useState(false);
+  const setOnlyAlerts = (on: boolean) => setParams(on ? { alerts: 'open' } : {}, { replace: true });
 
   useEffect(() => { const t = window.setTimeout(() => setDebounced(query.trim()), 300); return () => window.clearTimeout(t); }, [query]);
 
@@ -77,7 +86,7 @@ export default function AuditPanel() {
     setLoading(true);
     setError('');
     try {
-      const r = await adminApi.audit({ action, q: debounced, limit: PAGE, offset });
+      const r = await adminApi.audit({ action, q: debounced, limit: PAGE, offset, ...(onlyAlerts ? { open_alerts: true } : {}) });
       setTotal(r.total);
       setEntries(prev => (offset ? [...prev, ...r.entries] : r.entries));
     } catch (e) {
@@ -85,13 +94,40 @@ export default function AuditPanel() {
     } finally {
       setLoading(false);
     }
-  }, [action, debounced]);
+  }, [action, debounced, onlyAlerts]);
   useEffect(() => { load(0); }, [load]);
+
+  const markReviewed = async () => {
+    setAcking(true);
+    setError('');
+    try {
+      await adminApi.acknowledge();
+      await refreshAlerts();
+      await load(0);
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setAcking(false);
+    }
+  };
 
   return (
     <div className="space-y-4">
       <PageHeader title="Audit log" subtitle={`${total.toLocaleString('en-IN')} event${total === 1 ? '' : 's'} · times in your local zone`} />
       <div className="flex flex-wrap items-center gap-2">
+        <div role="group" aria-label="Show" className="inline-flex rounded-lg border border-border p-0.5 text-[12px]">
+          {[[false, 'All events'], [true, `Open security alerts${alerts ? ` (${alerts.open})` : ''}`]].map(([on, label]) => (
+            <button key={String(on)} type="button" aria-pressed={onlyAlerts === on} onClick={() => setOnlyAlerts(on as boolean)}
+              className={`rounded-md px-2.5 py-1 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary ${onlyAlerts === on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}>
+              {label as string}
+            </button>
+          ))}
+        </div>
+        {onlyAlerts && total > 0 && (
+          <button type="button" className={btn.secondary} disabled={acking} onClick={markReviewed}>
+            <CheckCheck className="h-3.5 w-3.5" />{acking ? 'Marking…' : `Mark all ${total} reviewed`}
+          </button>
+        )}
         <select aria-label="Event type" value={action} onChange={e => setAction(e.target.value)} className={`${field.replace("w-full ", "")} w-auto py-1.5`}>
           {FILTERS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
         </select>
@@ -123,7 +159,7 @@ export default function AuditPanel() {
                 </tr>
               );
             })}
-            {!loading && entries.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">No events match.</td></tr>}
+            {!loading && entries.length === 0 && <tr><td colSpan={6} className="px-3 py-6 text-center text-muted-foreground">{onlyAlerts ? 'No open security alerts - all reviewed.' : 'No events match.'}</td></tr>}
           </tbody>
         </table>
       </div>

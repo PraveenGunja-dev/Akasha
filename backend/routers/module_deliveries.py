@@ -958,8 +958,12 @@ _ai_results_cache: dict = {"mtime": None, "data": None}
 
 
 @router.get("/ai-results")
-def get_ai_results():
+def get_ai_results(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """AI results per dashboard row, keyed by project_mapping id."""
+    return scope_ai_results(_load_ai_results(), portfolio, db)
+
+
+def _load_ai_results() -> dict:
     path = AI_RESULTS_FILE
     if not _os.path.isfile(path):
         return {"available": False, "reason": "AI results file not found on the server", "meta": None, "by_id": {}}
@@ -993,6 +997,21 @@ def get_ai_results():
             "by_id": by_id,
         })
     return _ai_results_cache["data"]
+
+
+def scope_ai_results(data: dict, portfolio: Optional[str], db: Session) -> dict:
+    """The AI results limited to the projects of ?portfolio= (a portfolio-
+    scoped user's own, set by middleware/auth_guard.py). A row is kept when
+    its mapping id, or its project / P6 name, is one of those projects."""
+    if not portfolio_svc.is_filtered(portfolio) or not data.get("by_id"):
+        return data
+    rows = portfolio_svc.filter_mappings(db.query(models.ProjectMapping), portfolio).all()
+    ids = {str(m.id) for m in rows}
+    names = {str(x).strip().lower() for m in rows for x in (m.project, m.project_name_from_p6) if x}
+    keep = {k: v for k, v in data["by_id"].items()
+            if k in ids or str(v.get("project_name") or "").strip().lower() in names
+            or str(v.get("p6_name") or "").strip().lower() in names}
+    return {**data, "by_id": keep}
 
 
 @router.get("/block-plan")
@@ -1034,7 +1053,7 @@ def explain_block_plan(req: BlockPlanExplainRequest):
 
 
 @router.post("/copilot-chat")
-def module_planning_copilot_chat(req: CopilotChatRequest, db: Session = Depends(get_db)):
+def module_planning_copilot_chat(req: CopilotChatRequest, portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """
     On-Demand LLM Planning Copilot: Answers strategic questions about
     supply quotas, priority trade-offs, shipping delays, and PPA risks.
@@ -1043,6 +1062,7 @@ def module_planning_copilot_chat(req: CopilotChatRequest, db: Session = Depends(
     summary_data = get_module_deliveries_summary(
         scenario=req.scenario or "baseline",
         priorities=json.dumps(req.priorities) if req.priorities else None,
+        portfolio=portfolio,   # a portfolio-scoped user's own (middleware/auth_guard.py)
         db=db
     )
     

@@ -64,7 +64,13 @@ def filter_mappings(query, portfolio: Optional[str]):
     clusters = parse(portfolio)
     if clusters is None:
         return query
-    return query.filter(func.lower(mapping_cluster_expr()).in_([c.lower() for c in clusters]))
+    wanted = func.lower(mapping_cluster_expr()).in_([c.lower() for c in clusters])
+    from services import demo_scope
+    if demo_scope.showing():
+        # Module Ordering: demo projects are there for everyone to test with,
+        # whatever their portfolios (services/demo_scope.py).
+        wanted = or_(wanted, func.lower(mapping_cluster_expr()).like(demo_scope.DEMO_PREFIX + "%"))
+    return query.filter(wanted)
 
 
 def all_clusters(db: Session) -> list[str]:
@@ -94,5 +100,9 @@ def filter_pulse(query, model, portfolio: Optional[str]):
 
 def cluster_in(cluster: Optional[str], clusters: Optional[list[str]]) -> bool:
     if clusters is None:
+        return True
+    from services import demo_scope
+    if demo_scope.is_demo_cluster(cluster):
+        # A demo project is in every portfolio; it only exists in Module Ordering.
         return True
     return bool(cluster) and cluster.strip().lower() in {c.lower() for c in clusters}

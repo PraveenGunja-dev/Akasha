@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 import models
 from database import get_db
 from routers.auth import client_ip, current_user
-from services import order_approvals as OA, security
+from services import access, order_approvals as OA, portfolio, security
 
 from fastapi import Depends as _Depends
 from services.demo_scope import see_demo
@@ -19,9 +19,24 @@ from services.demo_scope import see_demo
 router = APIRouter(prefix="/api/module-approvals", tags=["Module order approvals"], dependencies=[_Depends(see_demo)])
 
 
-def _get(db: Session, approval_id: int):
+def _in_scope(db: Session, user, mapping_id: int) -> bool:
+    """The project is in the user's portfolios (demo projects are in all)."""
+    scope = access.user_scope(user)
+    if scope is None:
+        return True
+    m = db.get(models.ProjectMapping, mapping_id)
+    return bool(m) and portfolio.cluster_in(portfolio.mapping_cluster(m), scope)
+
+
+def _sees(db: Session, user, a) -> bool:
+    """Who may open an approval: its portfolio's users, its requester, and
+    whoever may decide it."""
+    return a.requested_by == user.username or _in_scope(db, user, a.mapping_id) or OA.can_decide(db, user, a)
+
+
+def _get(db: Session, approval_id: int, user=None):
     a = db.get(models.ModuleOrderApproval, approval_id)
-    if not a:
+    if not a or (user is not None and not _sees(db, user, a)):
         raise HTTPException(status_code=404, detail="No such approval request")
     return a
 
@@ -37,6 +52,7 @@ def _out(db: Session, a, user) -> dict:
     row["can_cancel"] = a.status in OA.OPEN and (
         (a.requested_by == user.username and a.status == "pending") or OA.can_decide(db, user, a))
     row["approvers"] = OA.approvers(db, a)
+    row["email"] = OA.email_outcome(db, a, events)
     return row
 
 
@@ -48,7 +64,8 @@ def list_approvals(mapping_id: Optional[int] = None, status: Optional[str] = Non
         q = q.filter(models.ModuleOrderApproval.mapping_id == mapping_id)
     if status:
         q = q.filter(models.ModuleOrderApproval.status.in_(status.split(",")))
-    return [_out(db, a, user) for a in q.order_by(models.ModuleOrderApproval.requested_at.desc()).limit(500).all()]
+    rows = q.order_by(models.ModuleOrderApproval.requested_at.desc()).limit(500).all()
+    return [_out(db, a, user) for a in rows if _sees(db, user, a)]
 
 
 @router.get("/me")
@@ -74,7 +91,7 @@ def waiting_for_me(db: Session = Depends(get_db), user: models.AkashaUser = Depe
 
 @router.get("/{approval_id}")
 def get_approval(approval_id: int, db: Session = Depends(get_db), user: models.AkashaUser = Depends(current_user)):
-    return _out(db, _get(db, approval_id), user)
+    return _out(db, _get(db, approval_id, user), user)
 
 
 class RequestIn(BaseModel):
@@ -89,6 +106,8 @@ def request_approval(body: RequestIn, request: Request, background: BackgroundTa
                      user: models.AkashaUser = Depends(current_user)):
     """Records the request and replies at once; the approval email goes out
     straight after, in the background."""
+    if not _in_scope(db, user, body.mapping_id):
+        raise HTTPException(status_code=403, detail="This project is outside your portfolio access")
     try:
         a = OA.request(db, user, body.mapping_id, body.month, body.mwp, body.note, send_email=False)
     except OA.ApprovalError as e:
@@ -108,7 +127,7 @@ class DecideIn(BaseModel):
 @router.post("/{approval_id}/decide")
 def decide(approval_id: int, body: DecideIn, request: Request, background: BackgroundTasks, db: Session = Depends(get_db),
            user: models.AkashaUser = Depends(current_user)):
-    a = _get(db, approval_id)
+    a = _get(db, approval_id, user)
     try:
         OA.decide(db, user, a, body.decision, body.note, send_email=False)
     except OA.ApprovalError as e:
@@ -127,7 +146,7 @@ class CancelIn(BaseModel):
 @router.post("/{approval_id}/cancel")
 def cancel(approval_id: int, body: CancelIn, request: Request, db: Session = Depends(get_db),
            user: models.AkashaUser = Depends(current_user)):
-    a = _get(db, approval_id)
+    a = _get(db, approval_id, user)
     try:
         OA.cancel(db, user, a, body.note)
     except OA.ApprovalError as e:

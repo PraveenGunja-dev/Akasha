@@ -855,8 +855,10 @@ export default function ModuleDeliveriesPage() {
   const portfolio = searchParams.get('portfolio');
   const phase = searchParams.get('phase');
 
-  const loadData = React.useCallback((sc = scenario, prio = priorities) => {
-    setLoading(true);
+  // quiet: refresh in place (after an approval or a date change) - no full-page
+  // loader, so the open dialog and its confirmation stay on screen.
+  const loadData = React.useCallback((sc = scenario, prio = priorities, quiet = false) => {
+    if (!quiet) setLoading(true);
     const params = new URLSearchParams();
     if (sc) params.append('scenario', sc);
     if (portfolio) params.append('portfolio', portfolio);
@@ -3000,9 +3002,9 @@ export default function ModuleDeliveriesPage() {
           </div>
         </div>
       )}
-      <DateChangeReason pending={pendingDate} onClose={() => setPendingDate(null)} onSaved={() => loadData()} />
+      <DateChangeReason pending={pendingDate} onClose={() => setPendingDate(null)} onSaved={() => loadData(scenario, priorities, true)} />
       <ApprovalDialog target={approvalTarget} onClose={() => setApprovalTarget(null)}
-        onChanged={() => { loadData(); setApprovalsKey(k => k + 1); }} />
+        onChanged={() => { loadData(scenario, priorities, true); setApprovalsKey(k => k + 1); }} />
     </div>
   );
 }

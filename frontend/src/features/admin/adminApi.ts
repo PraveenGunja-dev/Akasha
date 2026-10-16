@@ -3,6 +3,12 @@
 
 const BASE = '/akasha/api/admin';
 
+/** The email with a new user's / reset password (services/email_notify/account.py). */
+export interface AccountEmail {
+  status: 'sent' | 'test' | 'failed' | 'off' | 'no_email' | 'not_allowed';
+  to: string[]; detail?: string | null;
+}
+
 export interface AdminUser {
   id: number;
   username: string;
@@ -167,10 +173,10 @@ export const adminApi = {
   users: () => call<{ users: AdminUser[] }>('/users').then(r => r.users),
   portfolios: () => call<{ portfolios: string[] }>('/portfolios').then(r => r.portfolios),
   createUser: (u: { username: string; display_name: string; email?: string; role: string; portfolios?: string[]; department?: string }) =>
-    send<{ user: AdminUser; temporary_password: string | null }>('POST', '/users', u),
+    send<{ user: AdminUser; temporary_password: string | null; email?: AccountEmail | null }>('POST', '/users', u),
   updateUser: (id: number, patch: Partial<Pick<AdminUser, 'display_name' | 'email' | 'role' | 'is_active' | 'portfolios' | 'department'>>) =>
     send<{ user: AdminUser | null; changed: boolean }>('PATCH', `/users/${id}`, patch),
-  resetPassword: (id: number) => send<{ temporary_password: string }>('POST', `/users/${id}/reset-password`),
+  resetPassword: (id: number) => send<{ temporary_password: string; email?: AccountEmail | null }>('POST', `/users/${id}/reset-password`),
   unlock: (id: number) => send<{ success: boolean }>('POST', `/users/${id}/unlock`),
   endSessions: (id: number) => send<{ sessions_ended: number }>('POST', `/users/${id}/end-sessions`),
 

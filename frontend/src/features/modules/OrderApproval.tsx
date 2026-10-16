@@ -8,7 +8,7 @@
    quantity is frozen in its month until the PO is in SAP. */
 import { useEffect, useState } from 'react';
 import { motion, useReducedMotion } from 'framer-motion';
-import { CheckCircle2, Clock, Lock, Send, Undo2, XCircle } from 'lucide-react';
+import { CheckCircle2, Clock, Loader2, Lock, Mail, Send, Undo2, XCircle } from 'lucide-react';
 import { Dialog, Loader, StatusPill, cx } from '../../components/ui/primitives';
 import type { Tone } from '../../components/ui/primitives';
 import { btn, field, fmtWhen } from '../admin/adminApi';
@@ -30,6 +30,14 @@ export interface OrderApprovalRow {
   decision_note: string | null; ordered_at: string | null; alert_id: number | null; history: ApprovalEvent[];
   can_decide?: boolean; can_cancel?: boolean; approvers?: string[];
   own_request?: boolean; you_are?: 'superadmin' | 'approver' | null;
+  /** The email for the latest request / decision: still going out, who it
+   *  reached (from the email log) or why it did not go. */
+  email?: ApprovalEmail | null;
+}
+
+export interface ApprovalEmail {
+  state: 'sending' | 'sent' | 'test' | 'failed' | 'not_sent';
+  to?: string[]; cc?: string[]; test_to?: string[]; detail?: string | null; at?: string | null;
 }
 
 export interface ApprovalPhase {
@@ -69,12 +77,14 @@ export interface ApprovalRole {
   approve: { all: boolean; portfolios: string[] };
   waiting: number;
 }
-const DEMO_PORTFOLIO = 'akasha demo';   // never covered by "all portfolios" (engine.DEMO_PORTFOLIO)
+const DEMO_PORTFOLIO = 'akasha demo';   // demo projects: anyone may test with them; emailed only if listed
 
 export function covers(r: { all: boolean; portfolios: string[] }, cluster: string | null | undefined): boolean {
   const c = (cluster ?? '').toLowerCase();
   if (r.portfolios.some(x => x.toLowerCase() === c)) return true;
-  return r.all && !c.startsWith(DEMO_PORTFOLIO);
+  // Demo projects are for testing: anyone with the role may act on them.
+  if (c.startsWith(DEMO_PORTFOLIO)) return r.all || r.portfolios.length > 0;
+  return r.all;
 }
 
 export function useApprovalRole(refreshKey = 0): ApprovalRole | null {
@@ -83,10 +93,26 @@ export function useApprovalRole(refreshKey = 0): ApprovalRole | null {
   return role;
 }
 
+const isOpen = (a: OrderApprovalRow) => a.status === 'pending' || a.status === 'approved';
+
 /** The month's open (or latest) approval for a project, if any. */
 export function approvalFor(p: ModuleProject, month: string): OrderApprovalRow | undefined {
   const rows = (p.approvals ?? []).filter(a => a.month === month);
-  return rows.find(a => a.status === 'pending' || a.status === 'approved') ?? rows[0];
+  return rows.find(isOpen) ?? rows[0];
+}
+
+/** Every approval of the month, open ones first. A month can be ordered in
+ *  parts, so it can hold several requests. */
+export function approvalsFor(p: ModuleProject, month: string): OrderApprovalRow[] {
+  const rows = (p.approvals ?? []).filter(a => a.month === month);
+  return [...rows.filter(isOpen), ...rows.filter(a => !isOpen(a))];
+}
+
+/** MWp of the month not yet requested or approved - what a new request may ask for. */
+export function requestableMwp(p: ModuleProject, month: string): number {
+  const planned = p.month_mwp?.[month] ?? 0;
+  const taken = (p.approvals ?? []).filter(a => a.month === month && isOpen(a)).reduce((s, a) => s + a.mwp, 0);
+  return Math.max(0, Math.round((planned - taken) * 10) / 10);
 }
 
 /** Lock (frozen) or clock (pending) beside a month figure. */
@@ -99,39 +125,44 @@ export function ApprovalMark({ p, month }: { p: ModuleProject; month: string }) 
 }
 
 /* Inside the month popover: where this month's approval stands. */
-export function ApprovalSummary({ p, month, planned, canRequest, onOpen }: {
+export function ApprovalSummary({ p, month, canRequest, onOpen }: {
   p: ModuleProject; month: string; planned: number; canRequest: boolean;
   onOpen: (o: { mapping: ModuleProject; month: string; id?: number }) => void;
 }) {
-  const a = approvalFor(p, month);
-  const open = a && (a.status === 'pending' || a.status === 'approved');
+  const rows = approvalsFor(p, month);
+  const left = requestableMwp(p, month);
   const frozen = p.month_frozen_mwp?.[month] ?? 0;
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border-subtle pt-2">
-      <div className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
-        {a ? (
-          <>
+    <div className="space-y-1.5 border-t border-border-subtle pt-2">
+      {rows.map(a => (
+        <div key={a.id} className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
             <StatusPill tone={APPROVAL_META[a.status].tone}>{APPROVAL_META[a.status].label}</StatusPill>
             <span className="ml-1.5">
-              {mw(a.mwp)} MWp · requested by {a.requested_by} {fmtWhen(a.requested_at)}
+              #{a.id} · {mw(a.mwp)} MWp · requested by {a.requested_by} {fmtWhen(a.requested_at)}
               {a.decided_by && <> · {a.status === 'returned' ? 'returned' : 'decided'} by {a.decided_by}</>}
-              {a.status === 'approved' && frozen > 0 && <> · <span className="font-semibold text-foreground">{mw(frozen)} MWp frozen in {month}</span> until the PO is in SAP</>}
             </span>
-          </>
-        ) : planned > 0 && canRequest ? (
-          <>Ask TC Head to approve this month's order. Once approved it is frozen in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>
-        ) : planned > 0 ? (
-          <>Approval requests for this order are raised by TC Ordering.</>
-        ) : null}
-      </div>
-      <div className="flex shrink-0 gap-1.5">
-        {a && <button type="button" className={btn.secondary} onClick={() => { closePopovers(); onOpen({ mapping: p, month, id: a.id }); }}>Details</button>}
-        {!open && planned > 0 && canRequest && (
-          <button type="button" className={btn.primary} onClick={() => { closePopovers(); onOpen({ mapping: p, month }); }}>
-            <Send className="h-3.5 w-3.5" />Request approval
-          </button>
-        )}
-      </div>
+          </div>
+          <button type="button" className={btn.secondary} onClick={() => { closePopovers(); onOpen({ mapping: p, month, id: a.id }); }}>Details</button>
+        </div>
+      ))}
+      {frozen > 0 && (
+        <p className="text-[10.5px] text-fg-secondary"><span className="font-semibold text-foreground">{mw(frozen)} MWp frozen in {month}</span> until the PO is in SAP</p>
+      )}
+      {left > 0 && (
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="min-w-0 text-[10.5px] leading-relaxed text-fg-secondary">
+            {!canRequest ? <>Approval requests for this order are raised by TC Ordering.</>
+              : rows.some(isOpen) ? <><span className="font-semibold text-foreground">{mw(left)} MWp</span> of {month} is not yet requested - it can be ordered as a further part.</>
+                : <>Ask TC Head to approve this month's order. Once approved it is frozen in <span className="font-semibold">{month}</span> - vendor levelling will no longer move it.</>}
+          </p>
+          {canRequest && (
+            <button type="button" className={btn.primary} onClick={() => { closePopovers(); onOpen({ mapping: p, month }); }}>
+              <Send className="h-3.5 w-3.5" />{rows.some(isOpen) ? 'Request more' : 'Request approval'}
+            </button>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -149,13 +180,16 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
   const [done, setDone] = useState<'' | 'request' | 'approve' | 'return' | 'cancel'>('');
   const p = target?.mapping;
   const month = target?.month ?? '';
-  const planned = p?.month_mwp?.[month] ?? 0;
+  // What a new request may ask for: the month's plan less its open requests.
+  const planned = p ? requestableMwp(p, month) : 0;
 
   useEffect(() => {
     setRow(null); setError(''); setNote(''); setBusy(''); setDone('');
     setQty(planned ? String(Math.round(planned * 10) / 10) : '');
     if (target?.id) call<OrderApprovalRow>(`/${target.id}`).then(setRow).catch(e => setError((e as Error).message));
-  }, [target?.id, target?.month, target?.mapping?.id, planned]);
+    // Not on `planned`: it drops once this request is saved, and must not reset the dialog.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [target?.id, target?.month, target?.mapping?.id]);
 
   const act = async (kind: 'request' | 'approve' | 'return' | 'cancel') => {
     setBusy(kind); setError('');
@@ -167,12 +201,26 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
           : await post<OrderApprovalRow>(`/${row!.id}/decide`, { decision: kind, note: note.trim() || undefined });
       setRow(r); setNote(''); setDone(kind);
       onChanged();
-      // The email goes out in the background; its result reaches the history shortly.
-      window.setTimeout(() => { call<OrderApprovalRow>(`/${r.id}`).then(setRow).catch(() => undefined); }, 6000);
     } catch (e) {
       setError((e as Error).message);
     } finally { setBusy(''); }
   };
+
+  // The email goes out in the background: check every 2 s until it has gone
+  // (or not), for up to a minute.
+  const sending = row?.email?.state === 'sending';
+  const [waitedOut, setWaitedOut] = useState(false);
+  useEffect(() => {
+    if (!sending || !row) return;
+    setWaitedOut(false);
+    let tries = 0;
+    const timer = window.setInterval(() => {
+      tries += 1;
+      if (tries > 30) { window.clearInterval(timer); setWaitedOut(true); return; }
+      call<OrderApprovalRow>(`/${row.id}`).then(setRow).catch(() => undefined);
+    }, 2000);
+    return () => window.clearInterval(timer);
+  }, [sending, row?.id]);
 
   const phases = (p?.month_phases?.[month] ?? []);
   const requesting = !target?.id && !row;
@@ -206,7 +254,7 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
                 value={qty} aria-invalid={qty !== '' && !qtyOk} aria-describedby="appr-qty-hint"
                 onChange={e => { if (/^\d{0,5}(\.\d?)?$/.test(e.target.value)) setQty(e.target.value); }} />
               <span id="appr-qty-hint" className={cx('mt-0.5 block text-[11px] font-normal', qty !== '' && !qtyOk ? 'text-[var(--status-critical-fg)]' : 'text-muted-foreground')}>
-                {qty !== '' && !qtyOk ? `Enter 0.1 to ${mw(planned)} MWp` : `Up to ${mw(planned)} MWp planned`}
+                {qty !== '' && !qtyOk ? `Enter 0.1 to ${mw(planned)} MWp` : `Up to ${mw(planned)} MWp not yet requested`}
               </span>
             </label>
             <label className="block text-[12px] font-medium text-foreground">Note for the approver
@@ -225,6 +273,7 @@ export function ApprovalDialog({ target, onClose, onChanged }: {
       ) : (
         <div className="space-y-4">
           {done && <Success kind={done} row={row} />}
+          {done && row.email && <EmailOutcome email={row.email} waitedOut={waitedOut} />}
           <div className="flex flex-wrap items-center gap-2">
             <StatusPill tone={APPROVAL_META[row.status].tone}>{APPROVAL_META[row.status].label}</StatusPill>
             <span className="text-[13px] font-semibold text-foreground">{mw(row.mwp)} MWp in {row.month}</span>
@@ -406,15 +455,56 @@ function WhoDecides({ row }: { row: OrderApprovalRow }) {
   );
 }
 
+/* Under the confirmation: the email's outcome - going out, who it reached,
+   or why it did not go (from the approval's email log). */
+function EmailOutcome({ email, waitedOut }: { email: ApprovalEmail; waitedOut: boolean }) {
+  const list = (xs?: string[]) => (xs ?? []).join(', ');
+  if (email.state === 'sending') {
+    return (
+      <p role="status" className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-[12px] text-muted-foreground">
+        {waitedOut
+          ? <><Clock className="h-3.5 w-3.5 shrink-0" />The email is taking longer than usual. Its outcome will appear in the history below.</>
+          : <><Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />Sending the email…</>}
+      </p>
+    );
+  }
+  const ok = email.state === 'sent' || email.state === 'test';
+  return (
+    <div role="status" className={cx('rounded-lg border px-3 py-2 text-[12px]',
+      ok ? 'border-border bg-muted/40' : 'border-[var(--status-critical-border)] bg-[var(--status-critical-bg)]')}>
+      <p className={cx('flex flex-wrap items-center gap-1.5 font-semibold', ok ? 'text-foreground' : 'text-[var(--status-critical-fg)]')}>
+        {ok ? <Mail className="h-3.5 w-3.5" /> : <XCircle className="h-3.5 w-3.5" />}
+        {email.state === 'sent' ? 'Email sent' : email.state === 'test' ? 'Email sent in test mode' : 'Email not sent'}
+        {email.at && <span className="font-normal text-muted-foreground">· {fmtWhen(email.at)}</span>}
+      </p>
+      {email.state === 'sent' && (
+        <dl className="mt-1 grid grid-cols-[28px_minmax(0,1fr)] gap-x-2 gap-y-0.5 text-foreground">
+          <dt className="text-muted-foreground">To</dt><dd className="break-words">{list(email.to) || '—'}</dd>
+          {(email.cc ?? []).length > 0 && <><dt className="text-muted-foreground">Cc</dt><dd className="break-words">{list(email.cc)}</dd></>}
+        </dl>
+      )}
+      {email.state === 'test' && (
+        <p className="mt-1 break-words leading-relaxed text-foreground">
+          Only the test inbox got it: {list(email.test_to) || '—'}. With test mode off it goes to {list(email.to) || 'nobody'}
+          {(email.cc ?? []).length > 0 && <>, Cc {list(email.cc)}</>}.
+        </p>
+      )}
+      {!ok && <p className="mt-1 break-words leading-relaxed text-[var(--status-critical-fg)]">{email.detail || 'No reason recorded.'} The request itself is saved.</p>}
+      {ok && email.detail && <p className="mt-1 break-words text-muted-foreground">{email.detail}</p>}
+    </div>
+  );
+}
+
 /* Confirmation after an action: a tick that draws itself, what happened and
-   who hears about it. The email itself goes out in the background. */
+   who hears about it. The email's own outcome shows below it (EmailOutcome). */
 function Success({ kind, row }: { kind: 'request' | 'approve' | 'return' | 'cancel'; row: OrderApprovalRow }) {
   const still = useReducedMotion();
   const who = row.approvers?.length ? row.approvers.join(', ') : 'TC Head';
+  const informed = row.email?.state === 'sent' || row.email?.state === 'test';
   const text = {
-    request: ['Request sent', `The approval email is on its way to ${who}, with you on Cc. You will see the decision here, in Order approvals and by email.`],
-    approve: ['Approved and frozen', `${mw(row.mwp)} MWp is frozen in ${row.month} until its PO is in SAP. TC Ordering and the requester are being emailed.`],
-    return: ['Returned', 'The requester is being emailed your remarks.'],
+    request: [informed ? 'Requested and informed' : 'Requested', `It is waiting for ${who}. You will see the decision here, in Order approvals and by email.`],
+    approve: ['Approved and frozen', `${mw(row.mwp)} MWp is frozen in ${row.month} until its PO is in SAP. TC Ordering and the requester are emailed.`],
+    return: ['Returned', 'The requester is emailed your remarks.'],
     cancel: ['Cancelled', row.status === 'cancelled' ? 'The request is closed and any freeze released.' : ''],
   }[kind];
   const tone = kind === 'return' || kind === 'cancel' ? 'watch' : 'healthy';

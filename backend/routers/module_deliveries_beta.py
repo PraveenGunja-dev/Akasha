@@ -43,8 +43,13 @@ _ai_results_cache: dict = {"mtime": None, "data": None}
 
 
 @router.get("/ai-results")
-def get_ai_results():
+def get_ai_results(portfolio: Optional[str] = None, db: Session = Depends(get_db)):
     """AI results per dashboard row, keyed by project_mapping id."""
+    from routers.module_deliveries import scope_ai_results
+    return scope_ai_results(_load_ai_results(), portfolio, db)
+
+
+def _load_ai_results() -> dict:
     path = AI_RESULTS_FILE
     if not os.path.isfile(path):
         return {"available": False, "reason": "AI results file not found on the server", "meta": None, "by_id": {}}

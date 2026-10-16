@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Copy, Check, Clock3, KeyRound, Lock, LockOpen, LogOut, Pencil, Plus, Search, UserX, UserCheck, Users as UsersIcon } from 'lucide-react';
+import { AlertTriangle, Copy, Check, Clock3, KeyRound, Lock, LockOpen, LogOut, Mail, Pencil, Plus, Search, UserX, UserCheck, Users as UsersIcon } from 'lucide-react';
 import { Dialog, KPITile, PageHeader, StatusPill } from '../../components/ui/primitives';
 import { useAuth } from '../../context/AuthContext';
 import { adminApi, btn, field, fmtWhen } from './adminApi';
-import type { AdminRole, AdminUser } from './adminApi';
+import type { AccountEmail, AdminRole, AdminUser } from './adminApi';
 
 /* User administration. Every rule (who may grant superadmin, last-superadmin,
    no self-demotion) is enforced by the server; this screen shows its answer. */
@@ -22,7 +22,7 @@ export default function UsersPanel() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'active' | 'inactive' | 'locked'>('active');
   const [editing, setEditing] = useState<AdminUser | 'new' | null>(null);
   const [confirm, setConfirm] = useState<Confirm>(null);
-  const [secret, setSecret] = useState<{ username: string; password: string; created: boolean } | null>(null);
+  const [secret, setSecret] = useState<{ username: string; password: string; created: boolean; email?: AccountEmail | null } | null>(null);
   const [notice, setNotice] = useState('');
 
   const load = useCallback(async () => {
@@ -159,28 +159,49 @@ export default function UsersPanel() {
           onClose={() => setEditing(null)}
           onSaved={(result) => {
             setEditing(null);
-            if (result.temp) setSecret({ username: result.username, password: result.temp, created: true });
+            if (result.temp) setSecret({ username: result.username, password: result.temp, created: true, email: result.email });
             else flash(`${result.username} saved`);
             load();
           }} />
       )}
 
       <ConfirmAction confirm={confirm} onClose={() => setConfirm(null)}
-        onDone={(msg, temp) => {
+        onDone={(msg, temp, email) => {
           const u = confirm!.user;
           setConfirm(null);
-          if (temp) setSecret({ username: u.username, password: temp, created: false });
+          if (temp) setSecret({ username: u.username, password: temp, created: false, email });
           else flash(msg);
           load();
         }} />
 
       <Dialog open={!!secret} onClose={() => setSecret(null)} size="sm"
         title={secret?.created ? 'User created' : 'Password reset'}
-        description="This temporary password is shown once. Give it to the user over a private channel; they must set their own at first sign-in."
+        description={emailed(secret?.email)
+          ? 'The user has been emailed these details. They must set their own password at first sign-in.'
+          : 'This temporary password is shown once. Give it to the user over a private channel; they must set their own at first sign-in.'}
         footer={<button type="button" className={btn.primary} onClick={() => setSecret(null)}>Done</button>}>
+        {secret?.email && <EmailNote email={secret.email} />}
         {secret && <SecretBox username={secret.username} password={secret.password} />}
       </Dialog>
     </div>
+  );
+}
+
+const emailed = (e?: AccountEmail | null) => e?.status === 'sent';
+
+/* Whether the sign-in details reached the user by email, and if not, why. */
+function EmailNote({ email }: { email: AccountEmail }) {
+  const ok = email.status === 'sent' || email.status === 'test';
+  const text = email.status === 'sent' ? `Emailed to ${email.to.join(', ')}`
+    : email.status === 'test' ? `Test mode: emailed only to the test inbox (${email.to.join(', ')}), not to the user`
+      : `Not emailed. ${email.detail ?? ''}`;
+  return (
+    <p role="status" className={`mb-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-[12px] leading-snug ${ok
+      ? 'border-[var(--status-healthy-border)] bg-[var(--status-healthy-bg)] text-[var(--status-healthy-fg)]'
+      : 'border-[var(--status-watch-border)] bg-[var(--status-watch-bg)] text-[var(--status-watch-fg)]'}`}>
+      {ok ? <Mail className="mt-px h-3.5 w-3.5 shrink-0" /> : <AlertTriangle className="mt-px h-3.5 w-3.5 shrink-0" />}
+      <span className="break-words">{text}</span>
+    </p>
   );
 }
 
@@ -203,7 +224,7 @@ function SecretBox({ username, password }: { username: string; password: string 
 
 function UserForm({ user, roles, clusters, isSuper, selfId, onClose, onSaved }: {
   user: AdminUser | null; roles: AdminRole[]; clusters: string[]; isSuper: boolean; selfId?: number;
-  onClose: () => void; onSaved: (r: { username: string; temp: string | null }) => void;
+  onClose: () => void; onSaved: (r: { username: string; temp: string | null; email?: AccountEmail | null }) => void;
 }) {
   const [username, setUsername] = useState(user?.username ?? '');
   const [name, setName] = useState(user?.display_name ?? '');
@@ -233,7 +254,7 @@ function UserForm({ user, roles, clusters, isSuper, selfId, onClose, onSaved }: 
         onSaved({ username: user.username, temp: null });
       } else {
         const r = await adminApi.createUser({ username, display_name: name, email: email || undefined, role, portfolios });
-        onSaved({ username, temp: r.temporary_password });
+        onSaved({ username, temp: r.temporary_password, email: r.email });
       }
     } catch (err) {
       setError((err as Error).message);
@@ -301,13 +322,13 @@ function UserForm({ user, roles, clusters, isSuper, selfId, onClose, onSaved }: 
 }
 
 const CONFIRM_TEXT = {
-  reset: { title: 'Reset password?', body: 'A new temporary password is generated, every session of this user ends, and they must set their own password at next sign-in.', cta: 'Reset password', danger: false },
+  reset: { title: 'Reset password?', body: 'A new temporary password is generated and emailed to the user, every session of this user ends, and they must set their own password at next sign-in.', cta: 'Reset password', danger: false },
   end: { title: 'End all sessions?', body: 'The user is signed out on every device and must sign in again.', cta: 'End sessions', danger: false },
   deactivate: { title: 'Deactivate account?', body: 'The user can no longer sign in and every session ends. The account and its history are kept and can be reactivated.', cta: 'Deactivate', danger: true },
 };
 
 function ConfirmAction({ confirm, onClose, onDone }: {
-  confirm: Confirm; onClose: () => void; onDone: (msg: string, temp?: string) => void;
+  confirm: Confirm; onClose: () => void; onDone: (msg: string, temp?: string, email?: AccountEmail | null) => void;
 }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -319,7 +340,7 @@ function ConfirmAction({ confirm, onClose, onDone }: {
     setBusy(true);
     setError('');
     try {
-      if (confirm.kind === 'reset') { const r = await adminApi.resetPassword(u.id); onDone('', r.temporary_password); }
+      if (confirm.kind === 'reset') { const r = await adminApi.resetPassword(u.id); onDone('', r.temporary_password, r.email); }
       else if (confirm.kind === 'end') { const r = await adminApi.endSessions(u.id); onDone(`${r.sessions_ended} session(s) ended for ${u.username}`); }
       else { await adminApi.updateUser(u.id, { is_active: false }); onDone(`${u.username} deactivated`); }
     } catch (e) {

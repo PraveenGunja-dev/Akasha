@@ -208,7 +208,7 @@ def _head(ctx: Dict) -> str:
 
 
 def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Optional[Dict] = None,
-           subj: str = "", links: Optional[List[Tuple[str, str]]] = None) -> str:
+           subj: str = "", links: Optional[List[Tuple[str, str]]] = None, data_note: bool = True) -> str:
     """One email-safe page (tables, inline CSS; fluid, filling the reading pane
     up to 960px, a fixed 960px frame in Outlook desktop): brand header, the
     level of intimation, the headline, the body, the actions, the footer."""
@@ -275,7 +275,7 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Opt
 {actions}
 <tr><td style="{FONT}padding:16px 28px 20px;background:#f7f8fa;border-top:1px solid {RULE};font-size:11.5px;line-height:1.6;color:#6b7280;">
   Automated message from Akasha - replies to this address are not monitored{f"; for questions contact {e(support)}" if support else ""}.<br>
-  Figures are from the source systems as of the times below; forecasts and calculated dates are labelled as such.<br>
+  {"Figures are from the source systems as of the times below; forecasts and calculated dates are labelled as such.<br>" if data_note else ""}
   {e(asof + (" · " if asof else "") + "Generated " + str(ctx.get("generated_at", "")))}
 </td></tr>
 </table>

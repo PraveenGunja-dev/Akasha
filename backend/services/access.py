@@ -151,6 +151,16 @@ SCOPED_ROUTES: list[tuple[re.Pattern, str]] = [(re.compile(p), kind) for p, kind
     (r"^/api/statutory/(dashboard-summary|compliance|epc-status|insurance)$", "portfolio"),
     (r"^/api/module-deliveries/summary$", "portfolio"),
     (r"^/api/module-deliveries-beta/advanced-plan$", "portfolio"),   # Ordering Schedule Beta
+    # Module Ordering - the rest of the Ordering Schedule
+    (r"^/api/module-deliveries/block-plan$", "portfolio"),
+    (r"^/api/module-deliveries/copilot-chat$", "portfolio"),
+    (r"^/api/module-deliveries(-beta)?/ai-results$", "portfolio"),
+    (r"^/api/module-deliveries/block-plan/explain$", "open"),       # explains the plan the page sent
+    (r"^/api/module-deliveries-beta/ai-proxy/", "open"),            # predicts from the figures the page sent
+    # Each handler checks the portfolio itself (routers/order_approvals.py,
+    # routers/alerts.py: an alert opens only for the people it was sent to).
+    (r"^/api/module-approvals(/|$)", "open"),
+    (r"^/api/alerts(/|$)", "open"),
     (r"^/api/intelligence/portfolio/(summary|hotspots)$", "portfolio"),   # before the per-project rule
     # One project (path segment `pid` is its project_id)
     (r"^/api/project-360/(?P<pid>[^/]+)/detail$", "project"),

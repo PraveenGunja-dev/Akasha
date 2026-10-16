@@ -38,7 +38,7 @@ export const DASHBOARDS: Record<string, DashboardConfig> = {
     title: 'PMAG',
     purpose: 'Governance and cross-functional oversight: risks, compliance and project health across the portfolio.',
     groups: [
-      { title: 'Dashboard', sections: ['overview', 'project360', 'my_alerts'] },
+      { title: 'Dashboard', sections: ['overview', 'project360'] },
       { title: 'Governance', sections: ['quality', 'approvals', 'schedule', 'capacity'] },
       { title: 'Output', sections: ['reports', 'kpis'] },
     ],
@@ -62,7 +62,7 @@ export const DASHBOARDS: Record<string, DashboardConfig> = {
     title: 'Projects',
     purpose: 'Execution: construction progress, material readiness and site issues for Solar, Wind and BESS.',
     groups: [
-      { title: 'Dashboard', sections: ['overview', 'project360', 'my_alerts'] },
+      { title: 'Dashboard', sections: ['overview', 'project360'] },
       { title: 'Execution', sections: ['schedule', 'capacity', 'ordering', 'transmission'] },
       { title: 'Site', sections: ['quality', 'approvals'] },
       { title: 'Output', sections: ['reports', 'kpis'] },
@@ -88,7 +88,7 @@ export const DASHBOARDS: Record<string, DashboardConfig> = {
     title: 'TC Ordering',
     purpose: 'The procurement lifecycle: requisition and ordering through cost control and vendor performance.',
     groups: [
-      { title: 'Dashboard', sections: ['overview', 'project360', 'my_alerts'] },
+      { title: 'Dashboard', sections: ['overview', 'project360'] },
       { title: 'Ordering', sections: ['ordering', 'order_approvals', 'sap', 'einvoice'] },
       { title: 'Output', sections: ['kpis'] },
     ],
@@ -114,7 +114,7 @@ export const DASHBOARDS: Record<string, DashboardConfig> = {
     title: 'TC Stores',
     purpose: 'Inventory: material availability at site and the efficiency of the stores function.',
     groups: [
-      { title: 'Dashboard', sections: ['overview', 'my_alerts'] },
+      { title: 'Dashboard', sections: ['overview'] },
       { title: 'Stores', sections: ['sap', 'ordering'] },
       { title: 'Output', sections: ['kpis'] },
     ],

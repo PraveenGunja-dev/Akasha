@@ -147,19 +147,24 @@ REQUESTER_ROLE, APPROVER_ROLE = "tc_ordering", "tc_head"
 DEMO = "akasha demo"     # never covered by "all portfolios" (engine.DEMO_PORTFOLIO)
 
 
-def _role_covers(user, role_key: str, cluster: Optional[str]) -> bool:
-    """The user holds the role, active, for this project's portfolio."""
+def _role_covers(user, role_key: str, cluster: Optional[str], for_email: bool = False) -> bool:
+    """The user holds the role, active, for this project's portfolio. Any
+    holder of the role may act on a demo project (to test with), but is
+    emailed about one only if they list the demo portfolio themselves."""
     if user.role != role_key or user.is_active is False:
         return False
     ports = [x.lower() for x in (user.portfolios or [])]
     c = (cluster or "").lower()
-    return c in ports if ports else not c.startswith(DEMO)
+    if c.startswith(DEMO):
+        return c in ports if for_email else True
+    return c in ports if ports else True
 
 
 def role_users(db: Session, role_key: str, cluster: Optional[str]) -> List[str]:
+    """Who is emailed: holders of the role for this portfolio."""
     return [u.email for u in db.query(models.AkashaUser).filter(models.AkashaUser.role == role_key,
                                                                  models.AkashaUser.email.isnot(None)).all()
-            if (u.email or "").strip() and _role_covers(u, role_key, cluster)]
+            if (u.email or "").strip() and _role_covers(u, role_key, cluster, for_email=True)]
 
 
 def _approver_groups(db: Session) -> List[str]:
@@ -246,13 +251,16 @@ def request(db: Session, user, mapping_id: int, month: str, mwp: float, note: Op
     planned = float((p.get("month_mwp") or {}).get(month) or 0.0)
     if planned <= TOL:
         raise ApprovalError(f"Nothing is planned for {month} - there is no order to approve")
-    if mwp <= TOL or mwp > planned + TOL:
-        raise ApprovalError(f"The quantity must be between 0.1 and the {planned:.1f} MWp planned for {month}")
-    clash = (db.query(models.ModuleOrderApproval)
-             .filter(models.ModuleOrderApproval.mapping_id == mapping_id, models.ModuleOrderApproval.month == month,
-                     models.ModuleOrderApproval.status.in_(OPEN)).first())
-    if clash:
-        raise ApprovalError(f"{month} already has an approval {clash.status} (#{clash.id}) for this project")
+    # Several requests may share a month (orders placed in parts), as long as
+    # together they stay within what is planned for it.
+    taken = sum(x.mwp or 0 for x in db.query(models.ModuleOrderApproval)
+                .filter(models.ModuleOrderApproval.mapping_id == mapping_id, models.ModuleOrderApproval.month == month,
+                        models.ModuleOrderApproval.status.in_(OPEN)).all())
+    left = planned - taken
+    if left <= TOL:
+        raise ApprovalError(f"All {planned:.1f} MWp planned for {month} is already requested or approved")
+    if mwp <= TOL or mwp > left + TOL:
+        raise ApprovalError(f"The quantity must be between 0.1 and the {left:.1f} MWp of {month} not yet requested")
     phases, left = [], mwp
     for ph in (p.get("month_phases") or {}).get(month) or []:
         if left <= TOL:
@@ -319,11 +327,44 @@ def _email(db: Session, a, what: str, who: str) -> None:
         if what == "request" and r.get("alert_id"):
             a.alert_id = r["alert_id"]
         to = ", ".join(r.get("to") or []) or "nobody"
-        event(db, a, "email", "Akasha", f"{'Request' if what == 'request' else 'Decision'} email {r.get('status')} - To {to}"
-              + (f" ({r.get('detail')})" if r.get("status") not in ("sent", "test") and r.get("detail") else ""))
+        label = 'Request' if what == 'request' else 'Decision'
+        if r.get("status") == "test":
+            # Test mode: only the test inbox got it - say so, not "sent to the approvers".
+            text = f"{label} email sent in test mode to {', '.join(settings().test_recipients) or 'nobody'} (would have gone to {to})"
+        else:
+            text = f"{label} email {r.get('status')} - To {to}" + (
+                f" ({r.get('detail')})" if r.get("status") != "sent" and r.get("detail") else "")
+        event(db, a, "email", "Akasha", text)
     except Exception as e:  # noqa: BLE001
         event(db, a, "email", "Akasha", f"Email failed: {e}")
     db.commit()
+
+
+EMAILED_ACTIONS = ("requested", "approved", "returned")
+
+
+def email_outcome(db: Session, a, events: List) -> Optional[dict]:
+    """What happened to the email for the latest request / decision, for the
+    screen that just raised it: still sending, or who it went to (from the
+    email log), or why it did not go. None when that action sends no email."""
+    last = next((i for i in range(len(events) - 1, -1, -1)
+                 if events[i].kind in EMAILED_ACTIONS or events[i].kind == "cancelled"), None)
+    if last is None or events[last].kind == "cancelled":
+        return None
+    done = next((e for e in events[last + 1:] if e.kind == "email"), None)
+    if done is None:
+        return {"state": "sending"}
+    from services.email_notify.config import settings
+    tag = "request" if events[last].kind == "requested" else events[last].kind
+    log = (db.query(models.EmailLog).filter(models.EmailLog.event_key == f"approval:{a.id}:{tag}",
+                                            models.EmailLog.created_at >= events[last].at)
+           .order_by(models.EmailLog.id.desc()).first())
+    if not log:      # sending is off, or it failed before reaching the mail server
+        return {"state": "not_sent", "detail": done.detail, "at": _iso(done.at)}
+    return {"state": log.status if log.status in ("sent", "test", "failed") else "not_sent",
+            "to": list(log.to_addrs or []), "cc": list(log.cc_addrs or []),
+            "test_to": settings().test_recipients if log.status == "test" else [],
+            "detail": log.detail, "at": _iso(log.created_at)}
 
 
 def email_later(approval_id: int, what: str, who: str) -> None:

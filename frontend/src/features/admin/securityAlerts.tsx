@@ -62,7 +62,7 @@ export function SecurityAlertWatcher() {
       const seen = readSeen(userId);
       if (seen !== null && s.latest.id <= seen) return;
       writeSeen(userId, s.latest.id);
-      const review = { label: 'Review', onClick: () => navigate('/admin/alerts') };
+      const review = { label: 'Review', onClick: () => navigate('/admin/audit?alerts=open') };
       const more = s.open > 1 ? ` (${s.open} open)` : '';
       const notify = s.latest.severity === 'critical' ? toast.error : toast.warning;
       notify(`Security alert${more}`, { description: alertSentence(s.latest), action: review, duration: 12_000 });

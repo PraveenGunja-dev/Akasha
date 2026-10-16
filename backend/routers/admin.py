@@ -8,7 +8,8 @@ Guard rails, all enforced here rather than trusted to the UI:
   superadmin cannot be removed.
 - Accounts are deactivated, never deleted, so the audit trail stays whole.
 - A new account or a reset gets a one-time temporary password, shown once to
-  the administrator, which the user must change at first sign-in.
+  the administrator and emailed to the user (services/email_notify/account.py),
+  which the user must change at first sign-in.
 """
 import csv
 import io
@@ -195,7 +196,10 @@ def create_user(body: UserCreate, request: Request, db: Session = Depends(get_db
                        detail={"role": [None, body.role]}, ip=client_ip(request))
     db.commit()
     roles = {r.key: r.name for r in db.query(AkashaRole)}
-    return {"user": _user_row(u, roles, {}), "temporary_password": temp}
+    # Their sign-in details by email - only for a generated password, never
+    # one the administrator typed in.
+    mail = _mail_credentials(db, u, temp, "created", actor) if temp else None
+    return {"user": _user_row(u, roles, {}), "temporary_password": temp, "email": mail}
 
 
 class UserUpdate(BaseModel):
@@ -285,7 +289,18 @@ def reset_password(user_id: int, request: Request, db: Session = Depends(get_db)
     security.audit(db, "user.password_reset", actor=actor, target=u.username,
                    detail={"sessions_ended": ended}, ip=client_ip(request))
     db.commit()
-    return {"temporary_password": temp}
+    return {"temporary_password": temp, "email": _mail_credentials(db, u, temp, "reset", actor)}
+
+
+def _mail_credentials(db: Session, u: AkashaUser, temp: str, kind: str, actor: AkashaUser) -> dict:
+    """Email the user their temporary password; the outcome is audited
+    (without the password) and returned for the screen."""
+    from services.email_notify import account
+    r = account.send_credentials(db, u, temp, kind, actor.display_name or actor.username)
+    security.audit(db, "user.credentials_emailed", actor=actor, target=u.username,
+                   detail={"kind": kind, "status": r["status"], "to": r["to"], "detail": r.get("detail")})
+    db.commit()
+    return r
 
 
 @router.post("/users/{user_id}/unlock")

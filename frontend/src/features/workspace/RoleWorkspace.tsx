@@ -16,7 +16,8 @@ import Project360 from '../projects/Project360';
 import ProjectWorkspace from '../projects/ProjectWorkspace';
 import P6View from '../../components/dashboards/P6View';
 import CapacityOverviewPage from '../capacity/CapacityOverviewPage';
-import ModuleDeliveriesPage from '../modules/ModuleDeliveriesPage';
+// The Ordering Schedule is the Beta one for everyone (features/modules_beta).
+import OrderingPlannerBeta from '../modules_beta/OrderingPlannerBeta';
 import { ApprovalsView } from '../modules/ApprovalsPage';
 import { MyAlertsView } from '../alerts/AlertPages';
 import QualityCommandCenter from '../quality/QualityCommandCenter';
@@ -130,7 +131,7 @@ export default function RoleWorkspace({ dashboard }: { dashboard: string }) {
         ? <AkLoader size="md" label="Loading the P6 schedule…" className="min-h-[60vh] w-full" />
         : <P6View p6Data={p6} loading={loading} />;
       case 'capacity': return <CapacityOverviewPage />;
-      case 'ordering': return <ModuleDeliveriesPage />;
+      case 'ordering': return <OrderingPlannerBeta />;
       case 'order_approvals': return <ApprovalsView />;
       case 'my_alerts': return <MyAlertsView />;
       case 'quality': return <QualityCommandCenter />;

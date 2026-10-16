@@ -1026,6 +1026,9 @@ def resend(db: Session, log_id: int, who: str) -> dict:
     row = db.get(models.EmailLog, log_id)
     if not row:
         raise ValueError("No such email")
+    if (row.template_key or "").startswith("account_"):
+        # Its logged copy has the password masked: reset the password instead.
+        raise ValueError("Sign-in emails cannot be resent - reset the user's password to send a new one")
     to, cc = list(row.to_addrs or []), list(row.cc_addrs or [])
     if cfg.test_mode:
         to, cc = cfg.test_recipients, []

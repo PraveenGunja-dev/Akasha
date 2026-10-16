@@ -35,7 +35,6 @@ import QualityCommandCenter from '../features/quality/QualityCommandCenter';
 import EInvoiceIntelligence from '../features/analytics/EInvoiceIntelligence';
 import PortfolioIntelligence from '../features/intelligence/PortfolioIntelligence';
 import ComplianceDashboard from '../features/compliance/ComplianceDashboard';
-import ModuleDeliveriesPage from '../features/modules/ModuleDeliveriesPage';
 import OrderingPlannerBeta from '../features/modules_beta/OrderingPlannerBeta';
 
 export default function CEODashboard() {
@@ -308,13 +307,8 @@ export default function CEODashboard() {
             onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
             onSyncData={handleSyncData}
             isSyncing={isSyncing}
-            // Beta toggle exists only on the Ordering Schedule (live or beta), and not inside a project.
-            betaToggle={!projectId && (activeTab === 'installation_planner' || activeTab === 'installation_planner_beta')
-              ? {
-                  active: activeTab === 'installation_planner_beta',
-                  onToggle: () => handleTabChange(activeTab === 'installation_planner_beta' ? 'installation_planner' : 'installation_planner_beta'),
-                }
-              : undefined}
+            // No Beta toggle: the Beta Ordering Schedule is the one shown to everyone.
+            betaToggle={undefined}
           />
         </div>
 
@@ -416,8 +410,8 @@ export default function CEODashboard() {
                     {activeTab === 'reports' && <ReportsInsights p6Data={p6Data} sapData={sapData} finDetails={finDetails} dashboardData={dashboardData} briefing={briefing} />}
                     
                     {activeTab === 'capacity_overview' && <CapacityOverviewPage />}
-                    {activeTab === 'installation_planner' && <ModuleDeliveriesPage />}
-                    {activeTab === 'installation_planner_beta' && <OrderingPlannerBeta />}
+                    {/* The Ordering Schedule is the Beta one for everyone; the old Beta tab opens it too. */}
+                    {(activeTab === 'installation_planner' || activeTab === 'installation_planner_beta') && <OrderingPlannerBeta />}
                     {/* AI Modules */}
                     {activeTab === 'executive_brief' && <ExecutiveBriefing />}
                     {activeTab === 'smart_search' && <SmartSearch onOpenProject={handleOpenProject} />}
