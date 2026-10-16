@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { TRANSMISSION_PORTAL_URL } from '../../lib/transmissionPortal';
 import { formatDate } from '../../lib/utils';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
@@ -350,7 +351,6 @@ const P6SyncEditor = ({ p6 }: { p6: any }) => {
    email and password as query parameters — which shipped in the JS bundle to
    every user. Flip this to true once the portal works AND the link is issued
    by the backend rather than embedded here. */
-const TRANSMISSION_PORTAL_ENABLED = false;
 
 export default function ProjectWorkspace({ projectId: propProjectId, onBack }: { projectId?: string, onBack?: () => void }) {
   const params = useParams();
@@ -2977,35 +2977,6 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
           {/* ════════ TRANSMISSION TAB ════════ */}
           {activeTab === 'transmission' && (
             <div className="space-y-6">
-              {/* Transmission Portal Link Banner — see TRANSMISSION_PORTAL_ENABLED */}
-              {TRANSMISSION_PORTAL_ENABLED && (
-              <div className="intelligence-card p-6 flex flex-col md:flex-row items-center justify-between gap-6 border-primary/20 bg-primary/[0.02]">
-                <div className="flex items-start gap-4">
-                  <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                    <Network className="w-5 h-5 text-primary" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-bold text-foreground">Live Transmission Commissioning Portal</h3>
-                    <p className="text-sm text-muted-foreground mt-1">Access the live Adani Transmission dashboard for deep-dive real-time metrics.</p>
-
-                    <div className="flex items-center gap-2 mt-3 text-xs bg-success/10 border border-success/20 text-success dark:text-success px-3 py-1.5 rounded-md w-fit">
-                      <div className="w-2 h-2 rounded-full bg-success/100 animate-pulse" />
-                      <span><strong>Auto-Login Enabled:</strong> You will be securely authenticated automatically.</span>
-                    </div>
-                  </div>
-                </div>
-
-                <a
-                  href={`https://adani.unada.in/transmission/v1/dashboard/${(detail?.mapping?.cluster || 'khavda').toLowerCase().includes('rajasthan') ? 'rajasthan' : 'khavda'}/commissioning-team?project=${encodeURIComponent(projectId || '')}&email=c7lj9OK6uzRLjiZLxS84y0QthSsZe7POcrGs-DIVaA0pmSPD9rlCGg2-Cg&pass=bFLZzcL7tsx1pZUJBqCXnMMkKQySqhmUDczHBCCX63aLNJ69`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-2 bg-primary hover:bg-primary/90 text-primary-foreground px-6 py-3 rounded-xl font-bold shadow-sm hover:shadow-md transition-all whitespace-nowrap shrink-0 group"
-                >
-                  Open Portal <ChevronRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                </a>
-              </div>
-              )}
-
               {detailLoading ? (
                 <div className="flex items-center justify-center h-[300px]">
                   <div className="flex items-center gap-3">
@@ -3051,7 +3022,18 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                       return <HeroMetric label="Mapped MW" value={mappedMW != null && mappedMW !== '' ? `${mappedMW}` : '—'} unit="MW" icon={Target} color="text-success" />
                     })()}
 
-                    <HeroMetric label="TC Project" value={mapping?.tcProjectName || '—'} icon={MapPin} color="text-warning" />
+                    {/* The portal, where the TC Project name used to be (it is already in the page header). */}
+                    <a href={TRANSMISSION_PORTAL_URL} target="_blank" rel="noopener noreferrer"
+                      title="Open the transmission portal in a new tab"
+                      className="kpi-card group relative flex min-h-[104px] flex-col justify-between gap-3 border border-border-subtle bg-surface-1 px-4 py-4 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                      <span className="flex items-start justify-between gap-2">
+                        <span className="text-[12px] font-medium leading-snug text-fg-secondary">Transmission portal</span>
+                        <ExternalLink className="h-4 w-4 shrink-0 text-fg-tertiary group-hover:text-primary" strokeWidth={1.5} />
+                      </span>
+                      <span className="inline-flex items-center gap-1 text-[15px] font-semibold text-primary">
+                        Open portal <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                      </span>
+                    </a>
                   </div>
 
                   {/* ── Interactive Breakdown Panel ── */}

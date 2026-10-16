@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { TRANSMISSION_PORTAL_URL } from '../../lib/transmissionPortal';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, CircleMarker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -21,12 +22,7 @@ interface NetworkPayload {
 
 const EMPTY_NETWORK: NetworkPayload = { nodes: [], edges: [] };
 
-// Unada's transmission portal (testing). A sign-in link (with its #lt= login
-// token) is set per server in VITE_TRANSMISSION_PORTAL_URL (frontend/.env, not
-// committed) so the token never lands in git; without it the portal's own login
-// page opens.
-const TRANSMISSION_PORTAL_URL: string = import.meta.env.VITE_TRANSMISSION_PORTAL_URL
-  || 'https://adani-transmission-testing.unada.in';
+// The transmission portal sign-in link: lib/transmissionPortal.ts (from frontend/.env).
 
 // Carto retired the /rastertiles/positron path (404s), which left the map as a blank
 // grey panel. These are the current styles, all verified reachable without a key.
