@@ -21,6 +21,8 @@ import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from '../modules/DateChange';
 // Module Ordering, same as the live Ordering Schedule: approvals and the LTA / SCOD reason.
 import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval, covers, useApprovalRole } from '../modules/OrderApproval';
+import { LtaArrow, LtaOriginalNote, LtaRevisedNote, ltaCell } from '../modules/ltaMoves';
+import type { LtaMoveInfo } from '../modules/ltaMoves';
 import { DateChangeReason } from '../modules/DateChangeReason';
 import type { PendingDate } from '../modules/DateChangeReason';
 import type { ModuleProject as LiveProject } from '../modules/types';
@@ -2312,9 +2314,12 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                       {isColVisible('month_wise') && !advanced && FORECAST_MONTHS.map((mo, i) => {
                         // Every read below (months, dates, chips, colour) is the AI view when there is one.
                         const p = pv;
-                        const val = p.month_mwp?.[mo] || 0;
-                        const overdueVal = p.month_overdue_mwp?.[mo] || 0;
-                        const cellPhases = p.month_phases?.[mo] ?? [];
+                        // Orders moved for a late LTA (ltaMoves.tsx): the original month shows
+                        // its order exactly as it was; the new month shows it in the AI colour.
+                        const ltaC = ltaCell(p as any, mo, FORECAST_MONTHS);
+                        const val = ltaC.original ? ltaC.originalMwp : (p.month_mwp?.[mo] || 0);
+                        const overdueVal = ltaC.original ? ltaC.originalOverdue : (p.month_overdue_mwp?.[mo] || 0);
+                        const cellPhases: MonthPhase[] = ltaC.original ? (ltaC.originalPhases as unknown as MonthPhase[]) : (p.month_phases?.[mo] ?? []);
                         /* month_phases only carries the month an ORDER is placed. A
                            milestone-only month (val<=0, this cell just marks when a
                            module/TC/FTC date lands) has no entry there at all, so the
@@ -2428,6 +2433,9 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                   )}
                                 </div>
 
+                                {ltaC.original && <LtaOriginalNote m={ltaC.move} />}
+                                {!ltaC.original && ltaC.movedIn > 0 && <LtaRevisedNote m={ltaC.move} />}
+
                                 {/* Dynamic Planned / Milestone Section */}
                                 {(() => {
                                   const monthChips = getChipsForMonth(p, mo, val, milestoneFilter, unitToggle);
@@ -2539,12 +2547,14 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                        should [put] the TC at Jan[uary], not [still show] Dec as
                                        the main date — fall back to the projected date, the
                                        Original only if it isn't missed"). */
-                                    const delayed = ph.delay_months > 0;
+                                    const ai = (ph as MonthPhase & { lta_move?: LtaMoveInfo }).lta_move;   // moved for the LTA: revised dates
+                                    const delayed = !ai && ph.delay_months > 0;
+                                    if (ai) { text = 'text-status-ai-fg'; border = 'border-brand-purple/35'; bg = 'bg-brand-purple/[0.06]'; }
                                     /* Module Ordering and TC Delivery are the AI's predicted
                                        dates when the AI scored this phase; the rule-engine
                                        date they replace stays underneath for comparison. FTC
                                        is still the P6 plan. */
-                                    const aiPh = aiF && (field === 'order' || field === 'tc')
+                                    const aiPh = !ai && aiF && (field === 'order' || field === 'tc')
                                       ? aiPhaseFor(aiF.phases, ph.phase_label) : undefined;
                                     if (aiPh) {
                                       const ruleDate = field === 'order' ? ph.order_date : (delayed ? ph.next_tc_date : ph.tc_date);
@@ -2573,7 +2583,8 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                         </div>
                                       );
                                     }
-                                    const date = field === 'order' ? ph.order_date
+                                    const date = ai ? (field === 'order' ? ai.new_order_date : field === 'tc' ? ai.new_tc_date : ai.new_ftc_date)
+                                      : field === 'order' ? ph.order_date
                                       : field === 'tc' ? (delayed ? ph.next_tc_date : ph.tc_date)
                                         : (delayed ? ph.next_ftc_date : ph.ftc_date);
                                     /* An unphased project has no phase to name: the planner calls
@@ -2596,25 +2607,30 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                           )}
                                         </div>
                                         <div className={`font-mono text-[10.5px] font-bold tabular-nums ${text}`}>
-                                          {date}
+                                          {ai && <span className="mr-0.5" aria-label="AI revised">✦</span>}{date}
                                         </div>
+                                        {ai && (
+                                          <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-ai-fg">
+                                            P6 plan: <span className="font-mono tabular-nums">{field === 'order' ? ai.p6_order_date : field === 'tc' ? ai.p6_tc_date : ai.p6_ftc_date}</span>
+                                          </div>
+                                        )}
                                         {/* Order still leads with its own delay state. TC/FTC now lead
                                             with the projected date (above), so the annotation here is
                                             the untouched P6 plan date they've slipped past — still
                                             visible, just no longer the headline, per the data-honesty
                                             rule that inference must be labelled and the P6 commitment
                                             stays auditable. */}
-                                        {field === 'order' && ph.delay_months > 0 && (
+                                        {!ai && field === 'order' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 font-mono text-[9px] font-bold leading-tight tabular-nums text-status-critical-fg">
                                             delayed to {ph.order_month} (+{ph.delay_months}mo)
                                           </div>
                                         )}
-                                        {field === 'tc' && ph.delay_months > 0 && (
+                                        {!ai && field === 'tc' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-risk-fg">
                                             P6 plan: <span className="font-mono tabular-nums">{ph.tc_date}</span>
                                           </div>
                                         )}
-                                        {field === 'ftc' && ph.delay_months > 0 && (
+                                        {!ai && field === 'ftc' && ph.delay_months > 0 && (
                                           <div className="mt-0.5 text-[9px] font-bold leading-tight text-status-critical-fg">
                                             {!ph.ftc_reachable && <div>not achievable &mdash; {ph.ftc_short_days}d short</div>}
                                             P6 plan: <span className="font-mono tabular-nums">{ph.ftc_date}</span>
@@ -2808,7 +2824,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                     material on site in time to support every FTC above.
                                   </div>
                                 )}
-                                {(val > 0 || ((p as unknown as LiveProject).approvals ?? []).some(a => a.month === mo)) && (
+                                {!ltaC.original && (val > 0 || ((p as unknown as LiveProject).approvals ?? []).some(a => a.month === mo)) && (
                                   <ApprovalSummary p={p as unknown as LiveProject} month={mo} planned={val} onOpen={setApprovalTarget}
                                     canRequest={!!approvalRole && covers(approvalRole.request, p.cluster)} />
                                 )}
@@ -2860,11 +2876,19 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                               <div className="flex flex-col items-end justify-center w-full gap-1.5">
                                 <div className="flex flex-col items-end gap-1 w-full">
                                   {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
-                                    <div key={idx} className={`relative px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
-                                      ${c.type === 'module' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' :
+                                    <div key={idx}
+                                      data-lta-src={c.type === 'module' && ltaC.original ? '' : undefined}
+                                      data-lta-dest={c.type === 'module' && !ltaC.original && ltaC.movedIn > 0 ? '' : undefined}
+                                      className={`relative px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
+                                      ${c.type === 'module' && !ltaC.original && ltaC.movedIn > 0 ? 'bg-brand-purple/15 text-status-ai-fg border border-brand-purple/40 shadow-brand-purple/20' :
+                                        c.type === 'module' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' :
                                         c.type === 'tc' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border shadow-status-risk-fg/20' :
                                         'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border shadow-status-healthy-fg/20'}`}>
-                                      {isShifted && (
+                                      {c.type === 'module' && !ltaC.original && ltaC.movedIn > 0 && (
+                                        <span aria-label="Moved by AI for the LTA" title="Moved by AI for the LTA"
+                                          className="absolute left-[1px] top-0 z-30 text-[7px] leading-none text-brand-purple">✦</span>
+                                      )}
+                                      {isShifted && !(c.type === 'module' && ltaC.movedIn > 0) && (
                                         <div
                                           className={`absolute top-0 right-0 w-0 h-0 border-t-[10px] border-l-[10px] border-l-transparent ${shiftTriangleColor} opacity-100 z-10 drop-shadow-sm`}
                                           title={shiftLabel}
@@ -2884,8 +2908,9 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                     </div>
                                   ))}
                                 </div>
+                                {ltaC.original && <LtaArrow steps={ltaC.steps} beyond={ltaC.beyond} to={ltaC.to} />}
                               </div>
-                            ) : (
+                            ) : ltaC.underArrow ? null : (
                               <span className="text-muted-foreground/30">-</span>
                             )}
                           </Td>
