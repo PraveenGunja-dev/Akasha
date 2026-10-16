@@ -1278,7 +1278,9 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
     return data.projects.filter(p => {
       // Use optimistic override if present, otherwise fall back to server value
       const effectiveTracked = trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : p.is_tracked;
-      if (scope === 'tracker' && (p.cluster !== 'Solar Khavda' || p.is_commissioned || effectiveTracked === false)) return false;
+      // The Khavda tracker: Solar Khavda projects, and the demo projects (there to test with).
+      const inTracker = p.cluster === 'Solar Khavda' || String(p.cluster ?? '').toLowerCase().startsWith('akasha demo');
+      if (scope === 'tracker' && (!inTracker || p.is_commissioned || effectiveTracked === false)) return false;
       if (statusFilter !== 'all') {
         if (statusFilter === 'exception_orders') {
           if (p.balance_ordering_mwp <= 0 || (p.excluded_module_date_mwp ?? 0) <= 0) return false;
@@ -2022,7 +2024,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                   {!collapsed.has(group) && projects.map((p, idx) => {
                     // The Khavda tracker holds only Solar Khavda projects that are not commissioned; the tick
                     // says "in the tracker", so any other project is unticked (not "tracked by default").
-                    const trackable = p.cluster === 'Solar Khavda' && !p.is_commissioned;
+                    const trackable = (p.cluster === 'Solar Khavda' || String(p.cluster ?? '').toLowerCase().startsWith('akasha demo')) && !p.is_commissioned;
                     const effectiveTracked = trackable && (trackingOverrides[p.id] !== undefined ? trackingOverrides[p.id] : (p.is_tracked !== false));
                     const proc = p.procurement;
                     const ledgerOpen = openLedgers.has(p.id);
