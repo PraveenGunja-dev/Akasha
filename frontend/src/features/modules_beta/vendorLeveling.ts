@@ -85,7 +85,18 @@ interface Part {
   target: number;
   source: string;
   ol: number;
+  /** An approved order frozen in its month (Request approval): placed there
+   *  first, never moved by the levelling. */
+  fixed?: boolean;
 }
+
+/* Same rules as the backend planner (services/module_planner.py):
+   - demo projects (portfolio "Akasha Demo...") level against their own copy
+     of the vendor quota, so they never move a real project's order;
+   - an approved, frozen quantity stays in its month. */
+const DEMO_POOL = ' (demo)';
+const isDemoRow = (r: ModuleProject) => String((r as { cluster?: string }).cluster ?? '').toLowerCase().startsWith('akasha demo');
+const frozenOf = (ph: MonthPhase) => Number((ph as { frozen_mwp?: number }).frozen_mwp) || 0;
 
 /**
  * Re-level every row of the grid against the vendor monthly limits.
@@ -117,6 +128,12 @@ export function levelVendorQuota<T extends ModuleProject>(
       }];
       for (const ph of entries) {
         if (!(ph.mwp > 0)) continue;
+        const source = (row.type || 'ALMM') + (isDemoRow(row) ? DEMO_POOL : '');
+        const ol = row.ol > 0 ? row.ol : 1.35;
+        // The frozen share stays in this month; only the rest is levelled.
+        const frozen = Math.min(frozenOf(ph), ph.mwp);
+        if (frozen > 0.05) parts.push({ row, phase: ph, mwp: frozen, target: i, source, ol, fixed: true });
+        if (ph.mwp - frozen <= 0.05) continue;
         let target = i;
         if (!ai) {
           const planned = parseDay(ph.order_date);
@@ -124,7 +141,7 @@ export function levelVendorQuota<T extends ModuleProject>(
           if (planned && planned < monthStart(months[0])) target = 0;
           else if (idx >= 0) target = idx;
         }
-        parts.push({ row, phase: ph, mwp: ph.mwp, target, source: row.type || 'ALMM', ol: row.ol > 0 ? row.ol : 1.35 });
+        parts.push({ row, phase: ph, mwp: ph.mwp - frozen, target, source, ol });
       }
     });
   }
@@ -134,7 +151,8 @@ export function levelVendorQuota<T extends ModuleProject>(
   // The rule engine's own tie-breaks (earliest FTC, then earliest order date),
   // so with no priority set the standard plan comes out as the engine made it.
   const dayNum = (s?: string) => parseDay(s)?.getTime() ?? Number.MAX_SAFE_INTEGER;
-  parts.sort((a, b) => rank(a.row) - rank(b.row)
+  parts.sort((a, b) => (a.fixed ? 0 : 1) - (b.fixed ? 0 : 1)
+    || rank(a.row) - rank(b.row)
     || (isPPA(a.row) ? 0 : 1) - (isPPA(b.row) ? 0 : 1)
     || dayNum(a.phase.ftc_date) - dayNum(b.phase.ftc_date)
     || dayNum(a.phase.order_date) - dayNum(b.phase.order_date)
@@ -142,12 +160,24 @@ export function levelVendorQuota<T extends ModuleProject>(
     || a.row.id - b.row.id);
 
   const vendors: Record<string, VendorUse> = {};
-  const use = (src: string) => (vendors[src] ??= { cap_mwac: caps[src] ?? DEFAULT_CAP, mwac: Array(N).fill(0), mwp: Array(N).fill(0) });
+  const use = (src: string) => (vendors[src] ??= {
+    cap_mwac: caps[src] ?? caps[src.endsWith(DEMO_POOL) ? src.slice(0, -DEMO_POOL.length) : src] ?? DEFAULT_CAP,
+    mwac: Array(N).fill(0), mwp: Array(N).fill(0),
+  });
   const placed = new Map<number, { month: number; part: Part; mwp: number }[]>();
   const outside = new Map<number, number>();
 
   for (const part of parts) {
     const v = use(part.source);
+    if (part.fixed) {
+      // Frozen: its month only, taking that month's quota first.
+      v.mwac[part.target] += part.mwp / part.ol;
+      v.mwp[part.target] += part.mwp;
+      const list = placed.get(part.row.id) ?? [];
+      list.push({ month: part.target, part, mwp: part.mwp });
+      placed.set(part.row.id, list);
+      continue;
+    }
     let rem = part.mwp;
     // Target, then earlier (pulled early), then later.
     const order = [part.target, ...Array.from({ length: part.target }, (_, k) => part.target - 1 - k),
@@ -175,6 +205,7 @@ export function levelVendorQuota<T extends ModuleProject>(
     const month_mwp: Record<string, number> = Object.fromEntries(months.map(m => [m, 0]));
     const month_overdue_mwp: Record<string, number> = Object.fromEntries(months.map(m => [m, 0]));
     const month_phases: Record<string, LeveledPhase[]> = Object.fromEntries(months.map(m => [m, []]));
+    const month_frozen_mwp: Record<string, number> = Object.fromEntries(months.map(m => [m, 0]));
     const flags = new Set((row.planning_flags ?? []).filter(f => !OWN_FLAGS.includes(f)));
     const lta = parseDay(row.lta);
     const lead = LEAD_DAYS[row.type] ?? DEFAULT_LEAD;
@@ -183,7 +214,9 @@ export function levelVendorQuota<T extends ModuleProject>(
       const ph = part.phase;
       month_mwp[mo] += mwp;
       if (ph.overdue) month_overdue_mwp[mo] += mwp;
-      let rec: LeveledPhase = { ...ph, mwp: round1(mwp), order_month: mo, shifted: false, shift_reason: undefined };
+      if (part.fixed) month_frozen_mwp[mo] += mwp;
+      let rec: LeveledPhase = { ...ph, mwp: round1(mwp), order_month: mo, shifted: false, shift_reason: undefined,
+        frozen_mwp: part.fixed ? round1(mwp) : 0 } as LeveledPhase;
       if (month !== part.target) {
         const cap = vendors[part.source].cap_mwac;
         const reason = `${part.source} ${Math.round(cap)} MWac/month vendor allocation full in ${months[part.target]}`;
@@ -212,14 +245,18 @@ export function levelVendorQuota<T extends ModuleProject>(
       }
       // Same phase twice in a month (two parts of one order): add them up.
       const same = month_phases[mo].find(x => x.phase_label === rec.phase_label && x.shifted === rec.shifted);
-      if (same) same.mwp = round1(same.mwp + rec.mwp);
+      if (same) {
+        same.mwp = round1(same.mwp + rec.mwp);
+        (same as { frozen_mwp?: number }).frozen_mwp = round1(frozenOf(same) + frozenOf(rec));
+      }
       else month_phases[mo].push(rec);
     }
     for (const mo of months) {
       month_mwp[mo] = round1(month_mwp[mo]);
       month_overdue_mwp[mo] = round1(month_overdue_mwp[mo]);
+      month_frozen_mwp[mo] = round1(month_frozen_mwp[mo]);
     }
-    out.set(row.id, { ...row, month_mwp, month_overdue_mwp, month_phases, planning_flags: [...flags] });
+    out.set(row.id, { ...row, month_mwp, month_overdue_mwp, month_phases, month_frozen_mwp, planning_flags: [...flags] } as T);
   }
   // Every row carries the priority it was levelled with (cell colours read it).
   for (const [id, row] of out) {

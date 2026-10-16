@@ -14,7 +14,7 @@ import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Bot, Sparkles, Loader2, AlertTriangle, CalendarClock, ListOrdered, RotateCcw,
-  ShieldAlert, Target, ListChecks, Scale, Info, ChevronRight, Timer, PackageSearch, X,
+  ShieldAlert, Target, ListChecks, Scale, Info, Timer, PackageSearch, X,
 } from 'lucide-react';
 import { InfoTip, MiniMeter, StatusPill, cx } from '../../components/ui/primitives';
 import type { Tone } from '../../components/ui/primitives';
@@ -489,28 +489,6 @@ function ModelNotes({ assumptions, guardrail }: { assumptions?: string[]; guardr
   );
 }
 
-/** Collapsed by default: how the model reached its answer, for whoever wants to audit it. */
-function ModelDetails({ rows }: { rows: [string, React.ReactNode][] }) {
-  const shown = rows.filter(([, v]) => v != null && v !== '' && v !== '—');
-  if (shown.length === 0) return null;
-  return (
-    <details className="group rounded-lg border border-border bg-card">
-      <summary className="flex cursor-pointer select-none items-center gap-1.5 px-3.5 py-2.5 text-[11px] font-semibold uppercase tracking-wider text-primary/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-lg">
-        <ChevronRight className="w-3.5 h-3.5 transition-transform group-open:rotate-90" />
-        Model details
-      </summary>
-      <dl className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 border-t border-border px-3.5 py-3">
-        {shown.map(([k, v]) => (
-          <div key={k} className="flex flex-col gap-0.5 min-w-0">
-            <dt className="text-[10.5px] font-semibold uppercase tracking-wide text-muted-foreground">{k}</dt>
-            <dd className="text-[12px] leading-relaxed text-foreground/90 break-words">{v}</dd>
-          </div>
-        ))}
-      </dl>
-    </details>
-  );
-}
-
 function BulletList({ items }: { items: string[] }) {
   return (
     <ul className="flex flex-col gap-1.5">
@@ -633,10 +611,6 @@ function ExplanationView({ ex, driversTitle = 'Key drivers', rootCause }: {
           </div>
         </div>
       )}
-      <p className="flex items-center gap-1.5 text-[10.5px] text-muted-foreground">
-        <Info className="w-3 h-3" />
-        Explanation {ex.mode ? `mode: ${ex.mode}` : ''}{ex.provider ? ` · ${ex.provider}` : ''}. Model output — verify before acting.
-      </p>
     </div>
   );
 }
@@ -879,17 +853,6 @@ function ForecastResult({ r, asked }: { r: OrderTcForecastResponse; asked: Parti
       <MonthlyRequirementBlock mr={r.monthly_requirement} />
 
       <ExplanationView ex={r.explanation} rootCause={<RootCauseBlock rc={r.root_cause} />} />
-
-      <ModelDetails rows={[
-        ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],
-        ['Transmission shift', m?.transmission_shift_days != null ? signedDays(days(m.transmission_shift_days)!) : null],
-        ['Lead time P50 / P90', m?.lead_time_p50_days != null || m?.lead_time_p90_days != null
-          ? `${days(m?.lead_time_p50_days) ?? '—'} d / ${days(m?.lead_time_p90_days) ?? '—'} d` : null],
-        ['Deadline', m?.deadline ? `${fmtDate(m.deadline)}${m.deadline_basis ? ` (${m.deadline_basis})` : ''}` : null],
-        ['Feature coverage', m?.feature_coverage != null ? `${asPct(m.feature_coverage)}% of model inputs available` : null],
-        ['Confidence basis', m?.confidence_basis],
-        ['Where the labels come from', m?.label_provenance],
-      ]} />
     </div>
   );
 }
@@ -991,10 +954,7 @@ function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Parti
     .filter((e): e is [string, number] => typeof e[1] === 'number' && Number.isFinite(e[1]))
     .map(([k, v]) => [k, v <= 1 ? v * 100 : v] as const)
     .sort((a, b) => b[1] - a[1]);
-  const ftcSlip = daysBetween(r.ftc_date_used, r.realistic_ftc_date);
   const m = r.model;
-  const vsDeadline = daysBetween(m?.deadline, r.realistic_ftc_date);
-  const deadlineName = m?.deadline_basis || 'deadline';
   const differs = asked?.current_priority && r.priority_class
     && asked.current_priority.toUpperCase() !== r.priority_class.toUpperCase();
   // Template explanations repeat the reasons as key drivers; LLM ones rephrase and add to them.
@@ -1007,7 +967,7 @@ function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Parti
 
       <ModelNotes assumptions={[...(r.notes ?? []), ...(m?.assumptions ?? [])]} guardrail={r.guardrail} />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 gap-3">
         <Stat label="AI priority"
           value={r.priority_class ? <StatusPill tone={tone}>{r.priority_class.toUpperCase()}</StatusPill> : '—'}
           sub={asked?.current_priority ? <>Current {asked.current_priority}{differs && <span className="text-status-risk-fg"> · changes</span>}</> : undefined} />
@@ -1031,20 +991,6 @@ function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Parti
               </span>
             : '—'}
           sub={r.priority_score != null ? <MiniMeter pct={r.priority_score} tone={tone === 'neutral' ? 'ai' : tone} className="mt-1" /> : undefined} />}
-        <Stat label="Rule engine priority"
-          value={r.rule_engine?.priority_class ? <StatusPill tone={priorityTone(r.rule_engine.priority_class)}>{r.rule_engine.priority_class.toUpperCase()}</StatusPill> : '—'}
-          sub={r.rule_engine?.basis} />
-        <Stat label="Realistic FTC" value={fmtDate(r.realistic_ftc_date)}
-          tone={vsDeadline != null ? (vsDeadline > 0 ? 'critical' : 'healthy') : ftcSlip != null && ftcSlip > 0 ? 'critical' : undefined}
-          sub={<>
-            {vsDeadline != null && (
-              <span className="block">
-                {vsDeadline > 0 ? `${plural(vsDeadline, 'day')} after ${deadlineName}` : vsDeadline < 0 ? `${plural(-vsDeadline, 'day')} ahead of ${deadlineName}` : `On ${deadlineName}`}
-                {` (${fmtDate(m?.deadline)})`}
-              </span>
-            )}
-            {r.ftc_date_used && <>P6 FTC used {fmtDate(r.ftc_date_used)}{ftcSlip != null && ftcSlip !== 0 && ` · ${plural(Math.abs(ftcSlip), 'day')} ${ftcSlip > 0 ? 'later' : 'earlier'}`}</>}
-          </>} />
       </div>
 
       {(probs.length > 0 || (r.reasons && r.reasons.length > 0)) && (
@@ -1076,15 +1022,6 @@ function PriorityResult({ r, asked }: { r: PriorityPredictResponse; asked: Parti
 
       {/* Key drivers are dropped only when they just repeat the reasons above. */}
       <ExplanationView ex={r.explanation && driversRepeat ? { ...r.explanation, key_drivers: undefined } : r.explanation} />
-
-      <ModelDetails rows={[
-        ['Site-readiness shift', m?.site_shift_days != null ? signedDays(days(m.site_shift_days)!) : null],
-        ['Supply shortfall', m?.supply_shortfall_days != null ? `${days(m.supply_shortfall_days)} d` : null],
-        ['Deadline', m?.deadline ? `${fmtDate(m.deadline)}${m.deadline_basis ? ` (${m.deadline_basis})` : ''}` : null],
-        ['Contract type', m?.contract_type],
-        ['Score formula', m?.score_basis],
-        ['Where the labels come from', m?.label_provenance],
-      ]} />
     </div>
   );
 }

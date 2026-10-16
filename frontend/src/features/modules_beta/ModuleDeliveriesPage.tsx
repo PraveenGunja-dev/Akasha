@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useCallback } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useLocation, useSearchParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import ReactECharts from 'echarts-for-react';
 import {
@@ -19,6 +19,11 @@ import {
 import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from '../modules/DateChange';
+// Module Ordering, same as the live Ordering Schedule: approvals and the LTA / SCOD reason.
+import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval, covers, useApprovalRole } from '../modules/OrderApproval';
+import { DateChangeReason } from '../modules/DateChangeReason';
+import type { PendingDate } from '../modules/DateChangeReason';
+import type { ModuleProject as LiveProject } from '../modules/types';
 import { levelVendorQuota, VENDOR_CAP_MWAC, type LeveledPhase } from './vendorLeveling';
 import PriorityMenu, { type PlanPriority } from './PriorityMenu';
 import { formatProjectName } from '../../lib/projectName';
@@ -572,8 +577,13 @@ function Tip({
         setShow(false);
       }
     };
+    const close = () => setShow(false);
     document.addEventListener('mousedown', handleGlobalClick);
-    return () => document.removeEventListener('mousedown', handleGlobalClick);
+    window.addEventListener(CLOSE_POPOVERS, close);
+    return () => {
+      document.removeEventListener('mousedown', handleGlobalClick);
+      window.removeEventListener(CLOSE_POPOVERS, close);
+    };
   }, [show]);
 
   if (!text && !content) return <>{children}</>;
@@ -1193,19 +1203,17 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
     }
   };
 
+  // A changed LTA / SCOD is saved only with a reason (DateChangeReason): it
+  // goes into the date history and the schedule-change email.
+  const [pendingDate, setPendingDate] = useState<PendingDate | null>(null);
+  const [approvalTarget, setApprovalTarget] = useState<{ mapping: LiveProject; month: string; id?: number } | null>(null);
+  const [approvalsKey, setApprovalsKey] = useState(0);
+  const approvalRole = useApprovalRole(approvalsKey);
+  const location = useLocation();
   const saveScod = async (id: number, isoDateOrNull: string | null) => {
-    setSavingScodId(id);
-    try {
-      await fetch(`${API}/akasha/api/mappings/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ manual_scod: isoDateOrNull }),
-      });
-      await loadData();
-    } finally {
-      setSavingScodId(null);
-      setEditingScodId(null);
-    }
+    const row = data?.projects.find(x => x.id === id);
+    setEditingScodId(null);
+    setPendingDate({ id, field: 'scod', project: row?.project_name ?? '', from: row?.scod ?? '', to: isoDateOrNull });
   };
 
   // LTA has the same "sometimes there is no source date at all" problem SCOD
@@ -1214,18 +1222,9 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
   // check-it-yourself editing rather than being stuck blank until the master
   // sheet catches up.
   const saveLta = async (id: number, isoDateOrNull: string | null) => {
-    setSavingLtaId(id);
-    try {
-      await fetch(`${API}/akasha/api/mappings/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lta_date: isoDateOrNull }),
-      });
-      await loadData();
-    } finally {
-      setSavingLtaId(null);
-      setEditingLtaId(null);
-    }
+    const row = data?.projects.find(x => x.id === id);
+    setEditingLtaId(null);
+    setPendingDate({ id, field: 'lta', project: row?.project_name ?? '', from: row?.lta ?? '', to: isoDateOrNull });
   };
 
   const toggleTracking = async (id: number, is_tracked: boolean) => {
@@ -1552,6 +1551,8 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
         </div>
       </motion.div>
 
+      {data && <WaitingForApproval projects={data.projects as unknown as LiveProject[]} refreshKey={approvalsKey} onOpen={setApprovalTarget} />}
+
       {/* ── Notification Banner ──────────────────────────────────────────────
           Two tiers, matching what the planning engine actually distinguishes
           now: a phase whose module date already passed is excluded from the
@@ -1760,6 +1761,14 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
               </div>
             )}
           </div>
+
+          <Link to={location.pathname === '/tc-ordering' ? { search: '?view=order_approvals' } : '/approvals'}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-border bg-card px-3 py-1.5 text-[11px] font-medium text-foreground shadow-sm transition-colors hover:bg-muted focus:outline-none focus-visible:ring-1 focus-visible:ring-primary">
+            Approvals
+            {(approvalRole?.waiting ?? 0) > 0 && (
+              <span className="rounded-full bg-[var(--status-watch-solid)] px-1.5 text-[10px] font-bold tabular-nums text-white" aria-label={`${approvalRole?.waiting} waiting for you`}>{approvalRole?.waiting}</span>
+            )}
+          </Link>
 
           <button
             onClick={handleExport}
@@ -2255,9 +2264,6 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
                       {isColVisible('ai_priority') && (() => {
-                        const pr = aiFor(p)?.ai_priority;
-                        const review = aiFor(p)?.ai_review_status;
-                        const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
                         // What the allocation uses: the user's choice, else the AI's.
                         const eff = planPriority(p).toUpperCase();
                         const changed = !!priorities[p.id];
@@ -2266,18 +2272,10 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                           : tone === 'risk' ? 'bg-status-risk-bg text-status-risk-fg border-status-risk-border'
                           : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg border-status-watch-border'
                           : 'bg-brand-blue/10 text-brand-blue border-brand-blue/30';
-                        const aiDetail = !cls ? undefined
-                          // The score is urgency (near 0 for STANDARD by design), so a
-                          // STANDARD row reports how sure the model is instead.
-                          : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
-                            ? `${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
-                            : `score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`;
                         return (
                           <Td className={`${SECTION_EDGE} ${AI_CELL}`}>
-                            <Tip text={(changed ? `Priority ${eff} · changed by you${cls ? ` (AI: ${cls})` : ''}`
-                                : cls ? `AI priority ${cls} · ${aiDetail}` : `Not scored by the AI: ${pr?.reason || 'plan default used'}`)
-                                + (cls && review ? `\nGovernance review: ${review}` : '')
-                                + '\nClick to change the priority'}>
+                            <Tip text={(changed ? `Priority ${eff} · changed by you\n` : '')
+                                + 'Click to change the priority'}>
                               <button type="button" aria-haspopup="dialog" aria-expanded={prioMenu?.row.id === p.id}
                                 onClick={e => { const a = e.currentTarget; setPrioMenu(m => (m?.row.id === p.id ? null : { row: p, anchor: a })); }}
                                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${pill} ${changed ? 'ring-1 ring-offset-1 ring-fg-tertiary/60' : ''}`}>
@@ -2805,6 +2803,10 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                     material on site in time to support every FTC above.
                                   </div>
                                 )}
+                                {(val > 0 || ((p as unknown as LiveProject).approvals ?? []).some(a => a.month === mo)) && (
+                                  <ApprovalSummary p={p as unknown as LiveProject} month={mo} planned={val} onOpen={setApprovalTarget}
+                                    canRequest={!!approvalRole && (approvalRole.superadmin || covers(approvalRole.request, p.cluster))} />
+                                )}
 
                                 {/* AI rows: the AI's executive summary in neutral text (not an
                                     alarm colour), the AI button that opens the full forecast,
@@ -2864,6 +2866,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                         />
                                       )}
                                       {theme.dotColor && <span className={`w-1.5 h-1.5 rounded-full ${theme.dotColor} shrink-0 mr-1.5 relative z-20`} />}
+                                      {c.type === 'module' && <span className="relative z-20 inline-flex"><ApprovalMark p={p as unknown as LiveProject} month={mo} /></span>}
                                       <span className="tabular-nums text-[11px] tracking-tight font-extrabold relative z-20">
                                         {c.label.split(' / ')[0]}
                                         {c.label.includes(' / ') && (
@@ -3253,9 +3256,6 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
           <PriorityMenu anchor={prioMenu.anchor} projectName={formatProjectName(r.project_name) || r.project_name}
             current={(cur === 'p1' ? 'P1' : cur === 'p2' ? 'P2' : 'standard') as PlanPriority}
             aiClass={cls}
-            aiDetail={!cls ? undefined : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
-              ? `${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
-              : pr?.priority_score != null ? `score ${Math.round(pr.priority_score * 10) / 10}/100` : undefined}
             overridden={!!priorities[r.id]}
             onPick={v => setPriorities(prev => ({ ...prev, [r.id]: v }))}
             onReset={() => setPriorities(prev => { const n = { ...prev }; delete n[r.id]; return n; })}
@@ -3620,6 +3620,9 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
           </div>
         </div>
       )}
+      <DateChangeReason pending={pendingDate} onClose={() => setPendingDate(null)} onSaved={() => loadData()} />
+      <ApprovalDialog target={approvalTarget} onClose={() => setApprovalTarget(null)}
+        onChanged={() => { loadData(); setApprovalsKey(k => k + 1); }} />
     </div>
   );
 }
