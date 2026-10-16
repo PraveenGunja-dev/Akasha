@@ -2255,9 +2255,6 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                         {p.balance_dispatch_mwp > 0 ? MW(p.balance_dispatch_mwp) : '-'}
                       </Td>}
                       {isColVisible('ai_priority') && (() => {
-                        const pr = aiFor(p)?.ai_priority;
-                        const review = aiFor(p)?.ai_review_status;
-                        const cls = isScored(pr) ? (pr?.priority_class || '').toUpperCase() : '';
                         // What the allocation uses: the user's choice, else the AI's.
                         const eff = planPriority(p).toUpperCase();
                         const changed = !!priorities[p.id];
@@ -2266,18 +2263,10 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                           : tone === 'risk' ? 'bg-status-risk-bg text-status-risk-fg border-status-risk-border'
                           : tone === 'watch' ? 'bg-status-watch-bg text-status-watch-fg border-status-watch-border'
                           : 'bg-brand-blue/10 text-brand-blue border-brand-blue/30';
-                        const aiDetail = !cls ? undefined
-                          // The score is urgency (near 0 for STANDARD by design), so a
-                          // STANDARD row reports how sure the model is instead.
-                          : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
-                            ? `${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
-                            : `score ${pr?.priority_score != null ? Math.round(pr.priority_score * 10) / 10 : '—'}/100`;
                         return (
                           <Td className={`${SECTION_EDGE} ${AI_CELL}`}>
-                            <Tip text={(changed ? `Priority ${eff} · changed by you${cls ? ` (AI: ${cls})` : ''}`
-                                : cls ? `AI priority ${cls} · ${aiDetail}` : `Not scored by the AI: ${pr?.reason || 'plan default used'}`)
-                                + (cls && review ? `\nGovernance review: ${review}` : '')
-                                + '\nClick to change the priority'}>
+                            <Tip text={(changed ? `Priority ${eff} · changed by you\n` : '')
+                                + 'Click to change the priority'}>
                               <button type="button" aria-haspopup="dialog" aria-expanded={prioMenu?.row.id === p.id}
                                 onClick={e => { const a = e.currentTarget; setPrioMenu(m => (m?.row.id === p.id ? null : { row: p, anchor: a })); }}
                                 className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[9px] font-bold tracking-wider transition-transform active:scale-95 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/50 ${pill} ${changed ? 'ring-1 ring-offset-1 ring-fg-tertiary/60' : ''}`}>
@@ -3253,9 +3242,6 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
           <PriorityMenu anchor={prioMenu.anchor} projectName={formatProjectName(r.project_name) || r.project_name}
             current={(cur === 'p1' ? 'P1' : cur === 'p2' ? 'P2' : 'standard') as PlanPriority}
             aiClass={cls}
-            aiDetail={!cls ? undefined : cls === 'STANDARD' && pr?.class_probabilities?.STANDARD != null
-              ? `${Math.round(pr.class_probabilities.STANDARD * 100)}% confidence`
-              : pr?.priority_score != null ? `score ${Math.round(pr.priority_score * 10) / 10}/100` : undefined}
             overridden={!!priorities[r.id]}
             onPick={v => setPriorities(prev => ({ ...prev, [r.id]: v }))}
             onReset={() => setPriorities(prev => { const n = { ...prev }; delete n[r.id]; return n; })}

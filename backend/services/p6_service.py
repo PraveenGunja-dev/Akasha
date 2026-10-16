@@ -1071,6 +1071,12 @@ class P6Service:
             
             if not act_obj_id or not proj_obj_id:
                 continue
+            # P6 can send these ids as strings; the columns are BIGINT and
+            # psycopg 3 binds a str as VARCHAR, which Postgres won't compare.
+            try:
+                act_obj_id, proj_obj_id = int(act_obj_id), int(proj_obj_id)
+            except (TypeError, ValueError):
+                continue
 
             existing = db.query(P6ActivityRisk).filter(
                 P6ActivityRisk.activity_object_id == act_obj_id,
@@ -1079,7 +1085,7 @@ class P6Service:
 
             if existing:
                 existing.risk_name = raw.get("RiskName")
-                existing.risk_object_id = raw.get("RiskObjectId")
+                existing.risk_object_id = int(raw["RiskObjectId"]) if raw.get("RiskObjectId") else None
                 existing.activity_id = raw.get("ActivityId")
                 existing.activity_name = raw.get("ActivityName")
                 existing.last_synced_at = datetime.utcnow()
@@ -1089,7 +1095,7 @@ class P6Service:
                     project_object_id=proj_obj_id,
                     risk_id=risk_id,
                     risk_name=raw.get("RiskName"),
-                    risk_object_id=raw.get("RiskObjectId"),
+                    risk_object_id=int(raw["RiskObjectId"]) if raw.get("RiskObjectId") else None,
                     activity_id=raw.get("ActivityId"),
                     activity_name=raw.get("ActivityName"),
                     last_synced_at=datetime.utcnow()
