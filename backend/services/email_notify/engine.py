@@ -52,6 +52,19 @@ _DEFAULT_UPGRADES = [
 ]
 
 
+def _text_unedited(db: Session, t) -> bool:
+    """No person has changed the subject or body: they still read as the
+    last version the system wrote. Switching a template on or off, or changing
+    its groups, saves it under the person's name but does not edit its text,
+    so `updated_by` cannot be used to tell."""
+    last = (db.query(models.EmailTemplateVersion)
+            .filter(models.EmailTemplateVersion.template_key == t.key, models.EmailTemplateVersion.changed_by == "system")
+            .order_by(models.EmailTemplateVersion.version.desc()).first())
+    if last is None:
+        return (t.updated_by or "system") == "system"
+    return last.subject == t.subject and last.body == t.body
+
+
 def seed_templates(db: Session) -> int:
     """Add catalogue templates that are not in the database yet. Never
     overwrites an administrator's edits. Returns how many were added."""
@@ -105,7 +118,7 @@ def seed_templates(db: Session) -> int:
                       ("ordering_overdue", "Shows what is left to order after this order and what is still to come")):
         t = db.get(models.EmailTemplate, key)
         src = next((x for x in catalogue.TEMPLATES if x["key"] == key), None)
-        if t and src and (t.updated_by or "system") == "system" and (t.body != src["body"] or t.subject != src["subject"]):
+        if t and src and _text_unedited(db, t) and (t.body != src["body"] or t.subject != src["subject"]):
             t.subject, t.body, t.description = src["subject"], src["body"], src["description"]
             t.version, t.updated_at = (t.version or 1) + 1, datetime.utcnow()
             db.add(version_row(t, "system", note))
