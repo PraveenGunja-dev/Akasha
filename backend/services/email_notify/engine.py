@@ -454,7 +454,7 @@ def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
         out.append("the ordering date follows the phase FTC dates, less the transmission-connect time and the supplier lead time, "
                    "so it moves when an FTC or the lead time does")
     elif f == "ordering":
-        nxt = sorted((C.parse_day(o.get("order_date")), o) for o in _orders(p) if C.parse_day(o.get("order_date")))
+        nxt = sorted(((C.parse_day(o.get("order_date")), o) for o in _orders(p) if C.parse_day(o.get("order_date"))), key=lambda x: x[0])
         if nxt:
             od, o = nxt[0]
             days = (od - today).days
