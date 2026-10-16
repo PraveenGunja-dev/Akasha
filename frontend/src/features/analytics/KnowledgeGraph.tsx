@@ -1,14 +1,11 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react';
-import { TRANSMISSION_PORTAL_URL } from '../../lib/transmissionPortal';
+import { transmissionPortalLink } from '../../lib/transmissionPortal';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Network, X, RotateCcw, ChevronDown, ChevronRight, Calendar, Package, Zap, Building2, Truck, Search, Filter } from 'lucide-react';
 import { useSearchParams } from 'react-router-dom';
 import { formatProjectName } from '../../lib/projectName';
 
 
-/* Off: the portal did not work when opened, and this deep link embedded a
-   hardcoded account email and password as query parameters, which shipped in
-   the JS bundle. Re-enable only once the link is issued by the backend. */
 
 interface GNode {
   id: string; project_id?: string; name: string; category: number; value?: string;
@@ -625,11 +622,11 @@ export default function KnowledgeGraph() {
                 {selectedNode.tc && selectedNode.tc.total_lines > 0 && (
                   <DetailSection title="Transmission Linkage" icon={<Network className="w-4 h-4" />} color="#8B5CF6">
                     
-                    {/* The transmission portal - sign-in link from frontend/.env (lib/transmissionPortal.ts). */}
+                    {/* This project's dashboard on the transmission portal, signed in (lib/transmissionPortal.ts). */}
                     {(
                     <div className="flex justify-end mb-2">
                       <a
-                        href={TRANSMISSION_PORTAL_URL}
+                        href={transmissionPortalLink({ projectId: selectedNode.project_id, region: selectedNode.tc?.region ?? selectedNode.tc?.lines?.[0]?.region })}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1.5 bg-primary hover:bg-primary/90 text-primary-foreground text-[9px] uppercase tracking-wider px-2.5 py-1.5 rounded font-bold transition-all w-fit group"

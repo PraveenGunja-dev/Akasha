@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { TRANSMISSION_PORTAL_URL } from '../../lib/transmissionPortal';
+import { transmissionPortalLink } from '../../lib/transmissionPortal';
 import { MapContainer, TileLayer, Marker, Polyline, Popup, Tooltip, CircleMarker, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
@@ -370,7 +370,7 @@ export default function TransmissionDataViewer({ dashboardData }: { dashboardDat
         </div>
         <div className="flex flex-wrap items-center justify-end gap-2">
           <a
-            href={TRANSMISSION_PORTAL_URL}
+            href={transmissionPortalLink({ region: regionFilter })}
             target="_blank"
             rel="noopener noreferrer"
             title="Open the Unada transmission portal in a new tab"

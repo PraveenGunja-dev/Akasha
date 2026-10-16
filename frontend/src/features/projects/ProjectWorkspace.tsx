@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { TRANSMISSION_PORTAL_URL } from '../../lib/transmissionPortal';
+import { transmissionPortalLink } from '../../lib/transmissionPortal';
 import { formatDate } from '../../lib/utils';
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import ReactECharts from 'echarts-for-react';
@@ -3023,8 +3023,8 @@ export default function ProjectWorkspace({ projectId: propProjectId, onBack }: {
                     })()}
 
                     {/* The portal, where the TC Project name used to be (it is already in the page header). */}
-                    <a href={TRANSMISSION_PORTAL_URL} target="_blank" rel="noopener noreferrer"
-                      title="Open the transmission portal in a new tab"
+                    <a href={transmissionPortalLink({ projectId, cluster: mapping?.cluster })} target="_blank" rel="noopener noreferrer"
+                      title="Open this project's dashboard on the transmission portal"
                       className="kpi-card group relative flex min-h-[104px] flex-col justify-between gap-3 border border-border-subtle bg-surface-1 px-4 py-4 transition-colors hover:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       <span className="flex items-start justify-between gap-2">
                         <span className="text-[12px] font-medium leading-snug text-fg-secondary">Transmission portal</span>
