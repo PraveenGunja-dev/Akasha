@@ -174,6 +174,53 @@ def phases(p: dict) -> List[dict]:
     return list(groups.values())
 
 
+def order_lines(p: dict, skip: Optional[dict] = None) -> str:
+    """The project's orders still to place, soonest first - quantity and
+    ordering date - leaving out `skip` (the order the email is about)."""
+    rows = []
+    for o in phases(p):
+        if not (o.get("mwp") or 0) > 0:
+            continue
+        if skip is not None and (o.get("phase_label"), o.get("order_date")) == (skip.get("phase_label"), skip.get("order_date")):
+            continue
+        label = (o.get("phase_label") or "").strip()
+        label = "" if label.lower() in UNPHASED else label
+        rows.append((parse_day(o.get("order_date")) or date.max,
+                     f"{label + ': ' if label else ''}{mw(o.get('mwp'))} MWp by {o.get('order_date') or 'a date not yet set'}"))
+    rows.sort(key=lambda r: r[0])
+    # Orders the LTA moved past the months on screen are still to place, later.
+    for m in p.get("lta_moves") or []:
+        if not m.get("to_in_view"):
+            lab = (m.get("phase_label") or "").strip()
+            lab = "" if lab.lower() in UNPHASED else lab
+            rows.append((date.max, f"{lab + ': ' if lab else ''}{mw(m.get('mwp'))} MWp moved to {m.get('to_month')} for the LTA"))
+    return "; ".join(text for _, text in rows) or "None - no further order is planned"
+
+
+def lta_vs_basis(p: dict) -> Dict:
+    """The LTA against what it is judged by in the Ordering Schedule: the
+    SCOD for PPA contracts, otherwise the AOP (module_deliveries lta_risk).
+    Empty where either date is missing - no date is no signal."""
+    r = p.get("lta_risk") or {}
+    days = r.get("days_late")
+    if days is None:
+        return {}
+    basis, when = r.get("basis") or "AOP", r.get("basis_date") or ""
+    text = (f"{days} days after the {basis} ({when})" if days > 0
+            else f"{-days} days before the {basis} ({when})" if days < 0 else f"on the {basis} ({when})")
+    return {"lta_basis": basis, "lta_basis_date": when, "lta_days_late": days, "lta_vs_basis": text}
+
+
+def lta_order_note(p: dict) -> str:
+    """What the LTA delay means for ordering: how much is not yet placed."""
+    bal, ordered = p.get("balance_ordering_mwp") or 0, p.get("ordered_mwp") or 0
+    if bal <= 0:
+        return "Fully ordered - there is no order left to move"
+    if ordered <= 0:
+        return f"Nothing ordered yet - all {mw(bal)} MWp is still to be placed and need not be ordered for the earlier date"
+    return f"{mw(ordered)} MWp already ordered; the remaining {mw(bal)} MWp is still to be placed and need not be ordered for the earlier date"
+
+
 def phase_context(base: Dict, p: dict, ph: dict) -> Dict:
     label = (ph.get("phase_label") or "").strip()
     order = parse_day(ph.get("order_date"))
@@ -193,5 +240,9 @@ def phase_context(base: Dict, p: dict, ph: dict) -> Dict:
         "days_to_ordering": (order - t).days if order and order >= t else "",
         "days_overdue": (t - order).days if order and order < t else "",
         "risk_reason": risk_reason(p, ph),
+        # What is left once this order is placed, and what is still to come.
+        "balance_after_order_mwp": (mw(max(0.0, float(p["balance_ordering_mwp"]) - float(ph.get("mwp") or 0)))
+                                    if p.get("balance_ordering_mwp") is not None else ""),
+        "remaining_orders": order_lines(p, ph),
     })
     return ctx

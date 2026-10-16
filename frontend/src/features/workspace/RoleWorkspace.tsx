@@ -3,7 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSearchParams } from 'react-router-dom';
 import {
   Home, Command, Calendar, BarChart2, HardHat, ShieldCheck, CheckCircle, Network,
-  Database, FileText, ListChecks, ChevronDown, ClipboardCheck, BellRing,
+  Database, FileText, ListChecks, ChevronDown, ClipboardCheck, BellRing, FlaskConical,
 } from 'lucide-react';
 import { AppFrame, AppHeader, AppRail } from '../../components/layout/AppRail';
 import { Loader as AkLoader } from '../../components/ui/primitives';
@@ -16,7 +16,7 @@ import Project360 from '../projects/Project360';
 import ProjectWorkspace from '../projects/ProjectWorkspace';
 import P6View from '../../components/dashboards/P6View';
 import CapacityOverviewPage from '../capacity/CapacityOverviewPage';
-// The Ordering Schedule is the Beta one for everyone (features/modules_beta).
+import ModuleDeliveriesPage from '../modules/ModuleDeliveriesPage';
 import OrderingPlannerBeta from '../modules_beta/OrderingPlannerBeta';
 import { ApprovalsView } from '../modules/ApprovalsPage';
 import { MyAlertsView } from '../alerts/AlertPages';
@@ -122,6 +122,10 @@ export default function RoleWorkspace({ dashboard }: { dashboard: string }) {
 
   const label = (id: SectionId) => SECTIONS[id].label;
 
+  // The Beta Ordering Schedule, from the header's Beta button (same as the Executive view); the live one is the default.
+  const beta = params.get('beta') === '1';
+  const toggleBeta = () => setParams(prev => { if (beta) { prev.delete('beta'); prev.delete('plan'); prev.delete('weather'); } else prev.set('beta', '1'); return prev; });
+
   const content = (() => {
     if (projectId) return <ProjectWorkspace projectId={projectId} onBack={() => setProjectId(null)} />;
     switch (section) {
@@ -131,7 +135,7 @@ export default function RoleWorkspace({ dashboard }: { dashboard: string }) {
         ? <AkLoader size="md" label="Loading the P6 schedule…" className="min-h-[60vh] w-full" />
         : <P6View p6Data={p6} loading={loading} />;
       case 'capacity': return <CapacityOverviewPage />;
-      case 'ordering': return <OrderingPlannerBeta />;
+      case 'ordering': return beta ? <OrderingPlannerBeta /> : <ModuleDeliveriesPage />;
       case 'order_approvals': return <ApprovalsView />;
       case 'my_alerts': return <MyAlertsView />;
       case 'quality': return <QualityCommandCenter />;
@@ -155,6 +159,13 @@ export default function RoleWorkspace({ dashboard }: { dashboard: string }) {
       rail={<AppRail subtitle={`${config.title} dashboard`} groups={railGroups} active={projectId ? 'project360' : section} onSelect={id => go(id as SectionId)} />}
       header={
         <AppHeader kicker={config.title} title={projectId ? 'Project' : label(section)}>
+          {!projectId && section === 'ordering' && (
+            <button type="button" onClick={toggleBeta} aria-pressed={beta}
+              title={beta ? 'Back to the live Ordering Schedule' : 'Open the Beta Ordering Schedule'}
+              className={`flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-[12px] font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 ${beta ? 'border-primary-400 bg-primary-100 text-primary-700' : 'border-border bg-card text-foreground hover:bg-muted'}`}>
+              <FlaskConical className="h-3.5 w-3.5" aria-hidden />Beta
+            </button>
+          )}
           <label className="relative hidden sm:block">
             <span className="sr-only">Phase</span>
             <select value={phase} className={select}

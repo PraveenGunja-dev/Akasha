@@ -16,6 +16,7 @@ import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from './DateChange';
 import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval, covers, useApprovalRole } from './OrderApproval';
+import { LtaBeyond, LtaBeyondTip, LtaMovedIn, LtaMovedOut, LtaMoveTip, movesIn, movesOut } from './LtaMove';
 import { Link } from 'react-router-dom';
 import { DateChangeReason } from './DateChangeReason';
 import type { PendingDate } from './DateChangeReason';
@@ -1966,6 +1967,9 @@ export default function ModuleDeliveriesPage() {
                         const ltaLate = Number.isNaN(ltaDue) ? [] : displayPhases.filter(
                           x => Date.parse(x.ftc_date.replace(/-/g, ' ')) > ltaDue);
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags, overdueVal > 0);
+                        // Orders moved for a late LTA: leaving this month / landing in it.
+                        const ltaOut = movesOut(p as any, mo);
+                        const ltaIn = movesIn(p as any, mo);
                         
                         const getShiftMonths = () => {
                           if (!p.module_date) return 0;
@@ -2326,14 +2330,17 @@ export default function ModuleDeliveriesPage() {
                                     material on site in time to support every FTC above.
                                   </div>
                                 )}
+                                {(ltaIn.length > 0 || ltaOut.length > 0) && <LtaMoveTip outs={ltaOut} ins={ltaIn} />}
                                 {(val > 0 || (p.approvals ?? []).some(a => a.month === mo)) && (
                                   <ApprovalSummary p={p} month={mo} planned={val} onOpen={setApprovalTarget}
                                     canRequest={!!approvalRole && covers(approvalRole.request, p.cluster)} />
                                 )}
                               </div>
+                            ) : ltaOut.length > 0 ? (
+                              <div className="w-[420px] max-w-[calc(100vw-48px)]"><LtaMoveTip outs={ltaOut} ins={ltaIn} /></div>
                             ) : undefined}
                           >
-                            {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0 ? (
+                            {(getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0 || ltaOut.length > 0) ? (
                               <div className="flex flex-col items-end justify-center w-full gap-1.5">
                                 <div className="flex flex-col items-end gap-1 w-full">
                                   {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
@@ -2360,6 +2367,8 @@ export default function ModuleDeliveriesPage() {
                                       </span>
                                     </div>
                                   ))}
+                                  {ltaIn.length > 0 && <LtaMovedIn moves={ltaIn} />}
+                                  {ltaOut.length > 0 && <LtaMovedOut moves={ltaOut} />}
                                 </div>
                               </div>
                             ) : (
@@ -2369,11 +2378,17 @@ export default function ModuleDeliveriesPage() {
                         );
                       })}
                       {isColVisible('month_wise') && <Td align="right" className="font-semibold text-foreground tabular-nums"
+                        tipContent={((p as any).lta_moved_beyond_mwp ?? 0) > 0 ? (
+                          <div className="w-[420px] max-w-[calc(100vw-48px)] space-y-2">
+                            <div className="text-[11px] text-fg-secondary">The months shown hold the rest of the balance; this much moved beyond them for the LTA.</div>
+                            <LtaBeyondTip p={p as any} />
+                          </div>) : undefined}
                         tip={Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0) < (p.balance_ordering_mwp || 0) ? "Total planned is less than balance to order due to missed dates or completed FTCs" : undefined}>
                         {(() => {
                           const planned = Object.values(p.month_mwp || {}).reduce((a: number, b: any) => a + (b as number), 0);
                           return planned > 0 ? MW(planned) : '-';
                         })()}
+                        {((p as any).lta_moved_beyond_mwp ?? 0) > 0 && <div className="flex justify-end"><LtaBeyond p={p as any} /></div>}
                       </Td>}
                       {isColVisible('ftc_date') && <Td className={SECTION_EDGE}>
                         {p.ftc_date

@@ -146,6 +146,11 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
             flush_para(); flush_rows()
             links.append((link.group("label").strip(), link.group("url")))
             continue
+        if line.startswith("## "):
+            flush_para(); flush_rows()
+            blocks.append(f'<div style="{FONT}margin:6px 0 8px;font-size:11px;font-weight:700;letter-spacing:.6px;'
+                          f'text-transform:uppercase;color:{BRAND};">{_inline(line[3:].strip())}</div>')
+            continue
         if line.lower().startswith("required action:"):
             flush_para(); flush_rows()
             blocks.append(f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">'
@@ -165,7 +170,7 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
 
 
 def body_text(text: str, ctx: Dict) -> str:
-    return re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx))
+    return re.sub(r"^## ", "", re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx)), flags=re.M)
 
 
 # What each level of intimation means to the person reading it.

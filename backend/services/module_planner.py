@@ -85,6 +85,52 @@ def _parse_date_str(date_str: Optional[str]) -> Optional[datetime]:
         return None
 
 
+# A project's LTA this many days (or more) after its AOP - the SCOD for a PPA
+# contract, as in the schedule's own LTA check - moves its orders later (the
+# same threshold as the PMAG "LTA later than AOP / SCOD" alert).
+LTA_MOVE_MIN_DAYS = 30
+
+
+def _lta_alignment(p, ph, lead_time, base_month_dt, num_months):
+    """Where an order goes when transmission is late.
+
+    A phase cannot charge, or export, before the LTA, so modules that would
+    arrive for an FTC earlier than the LTA are not needed until 45 days before
+    it (the same 45-day install the plan uses everywhere). The order is
+    therefore placed a lead time before that. Only where the LTA breaches the
+    AOP / SCOD by LTA_MOVE_MIN_DAYS, only for a phase whose P6 FTC falls before
+    the LTA, and only when the order lands in a LATER month - the plan is
+    monthly, so a shift inside one month changes nothing a reader could see.
+
+    This is a calculation from the LTA, not a measurement: the P6 FTC stays as
+    P6 states it, and the move is reported with the dates behind it.
+    """
+    risk = p.get('lta_risk') or {}
+    lta_dt = _parse_date_str(p.get('lta'))
+    days_late = risk.get('days_late')
+    if not lta_dt or not risk.get('breached') or days_late is None or days_late < LTA_MOVE_MIN_DAYS:
+        return None
+    if ph['ftc_dt'] >= lta_dt:
+        return None
+    new_tc = lta_dt - timedelta(days=TC_OFFSET_DAYS + lead_time)
+    from_idx = _calc_month_idx(ph['tc_dt'], base_month_dt, num_months)
+    to_idx = _calc_month_idx(new_tc, base_month_dt, num_months)
+    if to_idx <= from_idx or new_tc <= ph['tc_dt']:
+        return None
+    f = lambda x: x.strftime('%d-%b-%y')
+    return {
+        'new_tc_dt': new_tc, 'lta_dt': lta_dt, 'to_idx': to_idx,
+        'move': {
+            'from_month': ph['tc_dt'].strftime('%b-%y'), 'to_month': new_tc.strftime('%b-%y'),
+            'to_in_view': to_idx < num_months,
+            'p6_order_date': f(ph['tc_dt']), 'new_order_date': f(new_tc),
+            'modules_needed_by': f(lta_dt - timedelta(days=TC_OFFSET_DAYS)),
+            'lta_date': f(lta_dt), 'basis': risk.get('basis'), 'basis_date': risk.get('basis_date'),
+            'days_late': days_late,
+        },
+    }
+
+
 def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
     """One phase's share of one month's order.
 
@@ -112,7 +158,9 @@ def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
     # from month-end instead lost up to 30 days on every phase and reported
     # even on-schedule work as unreachable.
     effective_order = placed_month_start + relativedelta(day=planned_order.day)
-    days_available = (d['ftc_dt'] - effective_order).days
+    # An order moved for the LTA is judged against the LTA it was moved to,
+    # not the earlier P6 FTC it no longer has to meet.
+    days_available = ((d.get('eff_ftc_dt') or d['ftc_dt']) - effective_order).days
     days_needed = lead + TC_OFFSET_DAYS
     # Where TC and FTC actually fall if the order goes in on effective_order --
     # not a new commitment, just the mechanical result of the same lead time
@@ -140,6 +188,7 @@ def _phase_record(d, month_idx, mwp, base_month_dt, overdue, forecast_months):
         'next_ftc_date': f(next_ftc),
         'overdue': overdue,
         'shifted': month_idx != d['target_month_idx'],
+        **({'lta_move': d['lta_move']} if d.get('lta_move') else {}),
     }
 
 
@@ -202,6 +251,10 @@ def run_module_planning_engine(
         # (services/order_approvals.py) - placed before levelling below.
         p['month_frozen_mwp'] = {mo: 0.0 for mo in forecast_months}
         p['planning_flags'] = []
+        # Orders moved later because the LTA is late: where each went from and
+        # to, and what moved beyond the 13 months on screen.
+        p['lta_moves'] = []
+        p['lta_moved_beyond_mwp'] = 0.0
         p['perspectives'] = {}
         # MWp needing an immediate exception order, outside this plan, because
         # its module date already passed — set for real in part 3 once phases
@@ -380,6 +433,12 @@ def run_module_planning_engine(
             if req_mwp <= 0:
                 continue
 
+            ph = dict(ph)
+            shift = _lta_alignment(p, ph, lead_time, base_month_dt, num_months)
+            if shift:
+                ph['eff_ftc_dt'] = shift['lta_dt']
+                ph['tc_dt'] = shift['new_tc_dt']
+                ph['mod_dt'] = shift['new_tc_dt'] + timedelta(days=lead_time)
             raw_idx = _calc_month_idx(ph['tc_dt'], base_month_dt, num_months)
 
             # An ordering date that has already passed is still real demand:
@@ -411,13 +470,18 @@ def run_module_planning_engine(
                 'mwp': req_mwp,
                 'mw_ac': ph.get('mw_ac') or 0.0,
                 'raw_month_idx': raw_idx,
+                'eff_ftc_dt': ph.get('eff_ftc_dt'),
+                'lta_move': dict(shift['move']) if shift else None,
+                # Beyond the 13 months on screen: not placed in any month.
+                'lta_beyond_view': bool(shift and not shift['move']['to_in_view']),
                 'target_month_idx': max(0, min(num_months - 1, raw_idx)),
                 'overdue': is_overdue,
                 'lead_time': lead_time,
                 'ol': ol,
                 'is_ppa': is_ppa,
             })
-            project_total_demand[p['id']] = project_total_demand.get(p['id'], 0.0) + req_mwp
+            if not (shift and not shift['move']['to_in_view']):
+                project_total_demand[p['id']] = project_total_demand.get(p['id'], 0.0) + req_mwp
 
     # 2. Multi-source Leveling & Optimization with Priority Weighing
     by_source: Dict[str, List[Dict[str, Any]]] = {}
@@ -493,6 +557,20 @@ def run_module_planning_engine(
                     d['mwp'] -= take
                     fz['mwp'] -= take
 
+    # 1c. The LTA moves, after any approved (frozen) quantity has been taken
+    # out - that stays where the approver put it. What moved beyond the months
+    # on screen is not planned into one, and is reported on the project.
+    for d in demands:
+        mv = d.get('lta_move')
+        if not mv or d['mwp'] <= 0.05:
+            continue
+        pr = d['project']
+        pr['lta_moves'].append({**mv, 'phase_label': d['phase_label'], 'mwp': round(d['mwp'], 1)})
+        if d.get('lta_beyond_view'):
+            pr['lta_moved_beyond_mwp'] = round(pr['lta_moved_beyond_mwp'] + d['mwp'], 1)
+        if 'lta_moved' not in pr['planning_flags']:
+            pr['planning_flags'].append('lta_moved')
+
     for source, s_demands in by_source.items():
         cap = CAP_LIMITS.get(_pool_source(source), DEFAULT_CAP)
         if source not in monthly_alloc_by_source:
@@ -509,6 +587,8 @@ def run_module_planning_engine(
         ))
 
         for d in s_demands:
+            if d.get('lta_beyond_view'):
+                continue
             pid = d['project_id']
             project_allocations.setdefault(pid, {m_i: 0.0 for m_i in range(num_months)})
             project_overdue_alloc.setdefault(pid, {m_i: 0.0 for m_i in range(num_months)})
@@ -783,6 +863,16 @@ def run_module_planning_engine(
             diag = (f"FTC PAST LTA: {p['ftc_past_lta_mwp']:.1f} MWp reaches its FTC only after "
                     f"the LTA of {p.get('lta')}, so transmission, not supply, becomes the "
                     f"binding constraint. " + diag)
+
+        if p.get('lta_moves'):
+            moved = p['lta_moves']
+            total = sum(x['mwp'] for x in moved)
+            first = moved[0]
+            diag = (f"LTA MOVE: {total:.1f} MWp moved later because the LTA ({first['lta_date']}) is {first['days_late']} days "
+                    f"after the {first['basis']} ({first['basis_date']}) - modules are needed 45 days before the LTA, not for "
+                    f"the earlier P6 FTC. " + ", ".join(
+                        f"{x['mwp']:.1f} MWp {x['from_month']} to {x['to_month']}" + ("" if x['to_in_view'] else " (beyond this view)")
+                        for x in moved) + ". " + diag)
 
         p['remarks'] = diag
         p['ai_suggestion'] = sugg

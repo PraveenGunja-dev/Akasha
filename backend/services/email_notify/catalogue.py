@@ -38,6 +38,16 @@ VARIABLES = {
     "module_quantity_mwp":   ("Quantity to order (MWp)", "This phase's order in the Ordering Schedule", "120.5"),
     "balance_ordering_mwp":  ("Balance to order (MWp)", "Capacity not yet on a PO (SAP)", "120.5"),
     "ordered_mwp":           ("Ordered till now (MWp)", "Module POs in SAP (ZPSPS007)", "287.5"),
+    "order_now":             ("Order now", "This order's quantity in MWp, or that nothing is left to order", "120.5 MWp"),
+    "ordering_date_before":  ("Ordering date before this change", "The ordering date Akasha last recorded, or No change", "21-Nov-26"),
+    "ordering_impact":       ("Ordering impact", "What the change does to the next order, worked out from the plan - never guessed", "Next order 120.5 MWp by 21-Nov-26 (35 days from today)"),
+    "balance_after_order_mwp": ("Left to order after this order (MWp)", "Balance to order less this order's quantity", "45.0"),
+    "remaining_orders":      ("Orders still to come", "The project's other orders in the Ordering Schedule - quantity and ordering date", "Phase 2: 45.0 MWp by 12-Feb-27"),
+    "lta_basis":             ("LTA compared with", "SCOD for PPA contracts, otherwise AOP - the Ordering Schedule's own LTA check", "AOP"),
+    "lta_basis_date":        ("AOP / SCOD date", "The date the LTA is judged against", "31-Mar-27"),
+    "lta_days_late":         ("LTA days after AOP / SCOD", "LTA less the AOP (or SCOD); positive = LTA later", "92"),
+    "lta_vs_basis":          ("LTA against AOP / SCOD", "The gap in words, e.g. 92 days after the AOP (31-Mar-27)", "92 days after the AOP (31-Mar-27)"),
+    "lta_order_note":        ("What it means for ordering", "How much is ordered and how much is still to place", "Nothing ordered yet - all 120.5 MWp is still to be placed"),
     "received_mwp":          ("Received (MWp)", "SAP total receipt", "250.0"),
     "in_transit_mwp":        ("In transit (MWp)", "SAP", "20.0"),
     "on_site_stock_mwp":     ("Modules on site (MWp)", "SAP MB52 stock", "40.0"),
@@ -118,7 +128,8 @@ TRIGGERS = {
     "ordering_due":     "Days before a phase's ordering date for each level (config: levels {level: days}); each phase gets the nearest one it has reached",
     "ordering_today":   "On the ordering date, with balance still to order",
     "ordering_overdue": "Ordering date passed, balance still to order; L1 / L2 / L3 by days overdue (config: escalation)",
-    "date_change":      "A watched P6 / connectivity date changed since the last check (config: fields)",
+    "date_change":      "A watched P6 / connectivity date changed since the last check (config: fields) - the change and its ordering impact",
+    "lta_breach":       "LTA later than the AOP (SCOD for PPA contracts); L1 / L2 / L3 at the days late in config levels",
     "ftc_unreachable":  "An order can no longer reach the phase's P6 FTC",
     "vendor_shift":     "Vendor allocation moved an order out of its target month",
     "awaiting_grn":     "Dispatched in Ariba with no GRN for longer than config.min_days (repeats every remind_every_days)",
@@ -146,13 +157,13 @@ LEVELS = [  # overdue reminders: each step emails again and adds these groups
 LEVEL_DEFAULT = {"ordering_due_today": 3}
 ACK_DEFAULT = {"ordering_due_30", "ordering_due_today", "ordering_overdue",
                "date_change", "ftc_unreachable", "vendor_shift", "awaiting_grn", "site_stock_low",
-               "approval_request", "sync_failed", "project_delay", "aop_due"}
+               "approval_request", "sync_failed", "project_delay", "aop_due", "lta_beyond_aop"}
 
 # How an alert closes: "order" when the phase has nothing left to order in
 # the Ordering Schedule (the PO is in SAP); "condition" when its trigger no
 # longer finds it; "one_off" (a date change, a moved order, a manual
 # request) when a To recipient acknowledges it.
-CASE_KIND = {"ordering_due": "order", "ordering_today": "order", "ordering_overdue": "order",
+CASE_KIND = {"ordering_due": "order", "ordering_today": "order", "ordering_overdue": "order", "lta_breach": "condition",
              "ftc_unreachable": "condition", "awaiting_grn": "condition", "site_stock_low": "condition",
              "sync_failed": "condition", "project_delay": "condition", "aop_due": "condition"}
 
@@ -173,13 +184,16 @@ Dear Team,
 
 Akasha has identified an upcoming module order for **{{project_name}}** ({{phase}}). Ordering on time keeps site delivery and the FTC on plan.
 
-Quantity to Order: {{module_quantity_mwp}} MWp
-Ordering Date: {{module_ordering_date}}
+Order Now: {{module_quantity_mwp}} MWp
+Order By: {{module_ordering_date}}
 Modules Needed at Site: {{tc_delivery_date}}
+Module Origin: {{vendor_type}}
+Ordered Till Now: {{ordered_mwp}} MWp
+Balance to Order (project): {{balance_ordering_mwp}} MWp
+Left to Order After This Order: {{balance_after_order_mwp}} MWp
+Orders Still to Come: {{remaining_orders}}
 FTC Date (P6): {{ftc_date}}
 LTA Date: {{lta_date}}
-Balance to Order: {{balance_ordering_mwp}} MWp
-Module Origin: {{vendor_type}}
 
 Required Action: Validate the requirement and start the ordering process (PR / vendor slot).
 
@@ -194,9 +208,12 @@ Dear Team,
 
 Today is the last planned date to order modules for **{{project_name}}** ({{phase}}). Akasha has not yet seen a PO for this quantity in SAP.
 
-Quantity to Order: {{module_quantity_mwp}} MWp
-Ordering Date: {{module_ordering_date}}
+Order Now: {{module_quantity_mwp}} MWp
+Order By: {{module_ordering_date}} (today)
 Modules Needed at Site: {{tc_delivery_date}}
+Ordered Till Now: {{ordered_mwp}} MWp
+Left to Order After This Order: {{balance_after_order_mwp}} MWp
+Orders Still to Come: {{remaining_orders}}
 FTC Date (P6): {{ftc_date}}
 Ordering Status: {{ordering_status}}
 
@@ -211,25 +228,65 @@ View in Akasha: {{akasha_project_link}}
        """
 Dear Team,
 
-Akasha has detected a change in the **{{changed_date_field}}** for **{{project_name}}**. The revised date may change the module ordering window, site delivery or FTC feasibility.
+Akasha has detected a change in the **{{changed_date_field}}** for **{{project_name}}**. Below: the date change, and what it does to module ordering.
 
+## Date change
 Date Changed: {{changed_date_field}}
 Previous Date: {{previous_date}}
 Revised Date: {{revised_date}}
 Variance: {{date_variance_days}} days
 Changed By: {{change_source}}
 Reason Given: {{change_remarks}}
-Ordering Date (recalculated): {{module_ordering_date}}
-Modules Needed at Site (recalculated): {{tc_delivery_date}}
+What It Means: {{change_impact}}
+AOP: {{aop_date}}
 FTC Date (P6): {{ftc_date}}
-Impact: {{change_impact}}
-Ordering Impact: {{risk_reason}}
+LTA Date: {{lta_date}}
+SCOD: {{scod_date}}
+LTA Against AOP / SCOD: {{lta_vs_basis}}
 
-Required Action: Projects and TC teams to validate the revised date and update the ordering plan if required.
+## Ordering impact
+Order Now: {{order_now}}
+Order By: {{module_ordering_date}}
+Ordering Date Before This Change: {{ordering_date_before}}
+Modules Needed at Site: {{tc_delivery_date}}
+Ordered Till Now: {{ordered_mwp}} MWp
+Balance to Order (project): {{balance_ordering_mwp}} MWp
+Left to Order After This Order: {{balance_after_order_mwp}} MWp
+Orders Still to Come: {{remaining_orders}}
+Impact: {{ordering_impact}}
+
+Required Action: Projects and PMAG to validate the revised date and the reason given. TC Ordering to confirm the ordering plan above.
 
 Review in Akasha: {{akasha_project_link}}
-""", "When FTC, LTA, SCOD, AOP or the ordering date changes - after a sync, or an edit in Akasha (with the reason)",
+""", "When FTC, LTA, SCOD, AOP or the ordering date changes - after a sync, or an edit in Akasha (with the reason). One email, two sections: the date change with its variance and remarks, and the ordering impact (what to order, by when, what is left)",
        {"fields": ["ftc_date", "lta", "scod", "aop_plan", "module_date"]}),
+
+    _t("lta_beyond_aop", "Transmission (LTA) later than AOP / SCOD", "Alert", "lta_breach", "action",
+       ["pmag"], ["projects", "tc_ordering", "executive"],
+       "Akasha Alert | LTA {{lta_days_late}} Days After {{lta_basis}} | {{project_name}}",
+       """
+Dear Team,
+
+The transmission connectivity (LTA) for **{{project_name}}** is **{{lta_vs_basis}}**. The {{lta_basis}} therefore depends on transmission as well as construction.
+
+Escalation: {{escalation_level}}
+AOP (P6 baseline COD): {{aop_date}}
+SCOD: {{scod_date}}
+LTA Date (connectivity): {{lta_date}}
+LTA After AOP / SCOD: {{lta_days_late}} days
+Compared Against: {{lta_basis}} ({{lta_basis_date}})
+FTC Date (P6): {{ftc_date}}
+Forecast COD (P6): {{forecast_cod_date}}
+Ordered Till Now: {{ordered_mwp}} MWp
+Balance to Order: {{balance_ordering_mwp}} MWp
+Orders Still to Place: {{remaining_orders}}
+Ordering: {{lta_order_note}}
+
+Required Action: PMAG to review the {{lta_basis}} against the LTA with Projects and TC. TC Ordering to check whether any order not yet placed can move later, to match the LTA.
+
+View in Akasha: {{akasha_project_link}}
+""", "LTA later than the AOP (the SCOD for PPA contracts): L1 at 30, L2 at 90, L3 at 180 days after. For PMAG - the plan can wait for transmission, and orders not yet placed can move later",
+       {"levels": {"1": 30, "2": 90, "3": 180}}),
 
     _t("ordering_overdue", "Module ordering - overdue (escalating)", "Alert", "ordering_overdue", "critical",
        ["tc_ordering", "projects"], ["pmag"],
@@ -244,6 +301,9 @@ Overdue Quantity: {{module_quantity_mwp}} MWp
 Original Ordering Date: {{module_ordering_date}}
 Days Overdue: {{days_overdue}}
 Ordering Month in the Plan: {{revised_ordering_month}}
+Ordered Till Now: {{ordered_mwp}} MWp
+Left to Order After This Order: {{balance_after_order_mwp}} MWp
+Orders Still to Come: {{remaining_orders}}
 Expected Site Delivery (calculated): {{forecast_tc_date}}
 FTC Date (P6): {{ftc_date}}
 Forecast FTC (calculated): {{forecast_ftc_date}}

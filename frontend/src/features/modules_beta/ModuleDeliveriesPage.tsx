@@ -21,6 +21,7 @@ import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from '../modules/DateChange';
 // Module Ordering, same as the live Ordering Schedule: approvals and the LTA / SCOD reason.
 import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval, covers, useApprovalRole } from '../modules/OrderApproval';
+import { LtaBeyond, LtaBeyondTip, LtaMovedIn, LtaMovedOut, LtaMoveTip, movesIn, movesOut } from '../modules/LtaMove';
 import { DateChangeReason } from '../modules/DateChangeReason';
 import type { PendingDate } from '../modules/DateChangeReason';
 import type { ModuleProject as LiveProject } from '../modules/types';
@@ -2347,6 +2348,9 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                         const ltaLate = Number.isNaN(ltaDue) ? [] : displayPhases.filter(
                           x => Date.parse(x.ftc_date.replace(/-/g, ' ')) > ltaDue);
                         const theme = getMonthCellTheme(val, p.priority, p.planning_flags, overdueVal > 0);
+                        // Orders moved for a late LTA: leaving this month / landing in it.
+                        const ltaOut = movesOut(p as any, mo);
+                        const ltaIn = movesIn(p as any, mo);
                         // The AI forecast for this row, when the AI scored it.
                         const rowAI = aiFor(p);
                         const aiF = isScored(rowAI?.ai_monthly_order_tc_forecast) ? rowAI!.ai_monthly_order_tc_forecast! : null;
@@ -2803,6 +2807,7 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                     material on site in time to support every FTC above.
                                   </div>
                                 )}
+                                {(ltaIn.length > 0 || ltaOut.length > 0) && <LtaMoveTip outs={ltaOut} ins={ltaIn} />}
                                 {(val > 0 || ((p as unknown as LiveProject).approvals ?? []).some(a => a.month === mo)) && (
                                   <ApprovalSummary p={p as unknown as LiveProject} month={mo} planned={val} onOpen={setApprovalTarget}
                                     canRequest={!!approvalRole && covers(approvalRole.request, p.cluster)} />
@@ -2849,9 +2854,11 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                   </div>
                                 ) : null}
                               </div>
+                            ) : ltaOut.length > 0 ? (
+                              <div className="w-[420px] max-w-[calc(100vw-48px)]"><LtaMoveTip outs={ltaOut} ins={ltaIn} /></div>
                             ) : undefined}
                           >
-                            {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0 ? (
+                            {(getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).length > 0 || ltaOut.length > 0) ? (
                               <div className="flex flex-col items-end justify-center w-full gap-1.5">
                                 <div className="flex flex-col items-end gap-1 w-full">
                                   {getChipsForMonth(p, mo, val, milestoneFilter, unitToggle).map((c, idx) => (
@@ -2878,6 +2885,8 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                                       </span>
                                     </div>
                                   ))}
+                                  {ltaIn.length > 0 && <LtaMovedIn moves={ltaIn} />}
+                                  {ltaOut.length > 0 && <LtaMovedOut moves={ltaOut} />}
                                 </div>
                               </div>
                             ) : (
@@ -2894,8 +2903,14 @@ export default function ModuleDeliveriesPage({ advanced = false, weather = false
                           ? `AI plan: ${outside.map(o => `${MW(o.mwp)} MWp ordered ${o.month}`).join(', ')} - after the last month shown, so not in a cell`
                           : planned < (p.balance_ordering_mwp || 0) ? 'Total planned is less than balance to order due to missed dates or completed FTCs' : undefined;
                         return (
-                          <Td align="right" className="font-semibold text-foreground tabular-nums" tip={tip}>
+                          <Td align="right" className="font-semibold text-foreground tabular-nums" tip={tip}
+                            tipContent={((p as any).lta_moved_beyond_mwp ?? 0) > 0 && outside.length === 0 ? (
+                              <div className="w-[420px] max-w-[calc(100vw-48px)] space-y-2">
+                                <div className="text-[11px] text-fg-secondary">The months shown hold the rest of the balance; this much moved beyond them for the LTA.</div>
+                                <LtaBeyondTip p={p as any} />
+                              </div>) : undefined}>
                             {planned > 0 ? MW(planned) : '-'}
+                            {((p as any).lta_moved_beyond_mwp ?? 0) > 0 && <div className="flex justify-end"><LtaBeyond p={p as any} /></div>}
                             {outside.length > 0 && <span className={`ml-0.5 text-[8px] align-super ${AI_TEXT}`}>+{MW(outside.reduce((a, o) => a + o.mwp, 0))}</span>}
                           </Td>
                         );

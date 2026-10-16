@@ -23,7 +23,7 @@ from urllib.parse import quote
 import logging
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional
 
 from sqlalchemy import text
@@ -99,7 +99,10 @@ def seed_templates(db: Session) -> int:
         added += 1
     # Shipped text that changed, for templates nobody has edited.
     for key, note in (("approval_request", "Approval requests now come from the Ordering Schedule"),
-                      ("date_change", "Says who changed the date and the reason given")):
+                      ("date_change", "One email, two sections: the date change with its variance and remarks, and the ordering impact"),
+                      ("ordering_due_30", "Order now, by when, and what is left to order after it"),
+                      ("ordering_due_today", "Order now, by when, and what is left to order after it"),
+                      ("ordering_overdue", "Shows what is left to order after this order and what is still to come")):
         t = db.get(models.EmailTemplate, key)
         src = next((x for x in catalogue.TEMPLATES if x["key"] == key), None)
         if t and src and (t.updated_by or "system") == "system" and (t.body != src["body"] or t.subject != src["subject"]):
@@ -252,6 +255,7 @@ class Event:
     case_phase: Optional[str] = None              # module ordering: the phase label
     extra_to: List[str] = field(default_factory=list)   # addresses, not groups (an approval's requester)
     extra_cc: List[str] = field(default_factory=list)
+    also_watch: List[tuple] = field(default_factory=list)   # more (project_id, field, value) to record once sent
 
 
 # ── Watched values ───────────────────────────────────────────────────────────
@@ -414,7 +418,16 @@ def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
         parts = ([f"{_gap((new - lta).days, 'the LTA')} ({C.fmt_day(lta)})"] if new and lta else []) +                 ([f"{_gap((new - aop).days, 'the AOP')} ({C.fmt_day(aop)})"] if new and aop else [])
         if parts:
             out.append("the new SCOD is " + " and ".join(parts))
-    elif f in ("ftc_date", "module_date"):
+    elif f == "ftc_date":
+        ftcs = [x for x in (C.parse_day(s) for s in str(p.get("ftc_date") or "").split("·")) if x]
+        if ftcs and lta:
+            late = [x for x in ftcs if x > lta]
+            out.append(f"{len(late)} of {len(ftcs)} phase FTC date(s) fall after the LTA ({C.fmt_day(lta)})" if late
+                       else f"every phase FTC is on or before the LTA ({C.fmt_day(lta)})")
+    elif f == "module_date":
+        out.append("the ordering date follows the phase FTC dates, less the transmission-connect time and the supplier lead time, "
+                   "so it moves when an FTC or the lead time does")
+    elif f == "ordering":
         nxt = sorted((C.parse_day(o.get("order_date")), o) for o in _orders(p) if C.parse_day(o.get("order_date")))
         if nxt:
             od, o = nxt[0]
@@ -432,10 +445,17 @@ def _change_impact(d: "Data", p: dict, f: str, old, new) -> str:
 
 
 def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
+    """One email per date change, in two sections: the change (previous and
+    revised date, variance, who and why, where the dates stand) and its
+    ordering impact (what to order now, by when, what is left to order).
+    The module ordering date is derived from the others, so when it moved
+    in the same pass as another date it is shown in that email, not sent
+    on its own."""
     fields = (t.config or {}).get("fields") or list(FIELD_LABEL)
     out = []
     for p in d.projects:
         pid = p["project_id"]
+        changed = []                              # (field, before, now) in this pass
         for f in fields:
             now_v = str(p.get(f) or "").strip()
             known, before = _watch_get(d.db, pid, f"date:{f}")
@@ -443,10 +463,18 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
                 if not dry:
                     _watch_set(d.db, pid, f"date:{f}", now_v)     # first sighting: record only
                 continue
-            if (before or "") == now_v:
-                continue
+            if (before or "") != now_v:
+                changed.append((f, before, now_v))
+        moved = next((c for c in changed if c[0] == "module_date"), None)
+        others = [c for c in changed if c[0] != "module_date"]
+        # With another date in the same email, the ordering date rides with it.
+        todo = others or ([moved] if moved else [])
+        for n, (f, before, now_v) in enumerate(todo):
             b, a = C.parse_day(before), C.parse_day(now_v)
             ctx = d.context(p)
+            ctx.update(C.lta_vs_basis(p))
+            ctx["aop_date"] = p.get("aop_plan") or ""
+            ctx.update(_ordering_section(d, p, moved[1] if moved else None))
             src, why = _change_origin(d.db, p, f, a)
             w = d.db.get(models.EmailWatch, (str(pid), f"date:{f}"))
             since = w.updated_at.strftime("%Y%m%d%H%M%S") if w and w.updated_at else ""
@@ -457,8 +485,31 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
                         "change_impact": _change_impact(d, p, f, b, a)})
             # One email per transition: the key carries the value it moved
             # from and when that value was recorded, so A -> B -> A is two.
-            out.append(Event(f"{t.key}:{pid}:{f}:{before}>{now_v}:{since}", ctx, p, watch=(pid, f"date:{f}", now_v)))
+            ev = Event(f"{t.key}:{pid}:{f}:{before}>{now_v}:{since}", ctx, p, ctx.get("phase", ""),
+                       watch=(pid, f"date:{f}", now_v))
+            if moved and n == 0 and f != "module_date":
+                ev.also_watch.append((pid, "date:module_date", moved[2]))
+            out.append(ev)
     return out
+
+
+def _ordering_section(d: Data, p: dict, ordering_date_before) -> Dict:
+    """The ordering half of the date email: the next order to place, what is
+    left after it and what is still to come - from the current plan."""
+    orders = sorted(((C.parse_day(o.get("order_date")) or date.max, i, o) for i, o in enumerate(_orders(p))),
+                    key=lambda x: (x[0], x[1]))
+    sec = {"ordering_date_before": (ordering_date_before or "Not set") if ordering_date_before is not None else "No change",
+           "ordering_impact": _change_impact(d, p, "ordering", None, None)}
+    if not orders:
+        sec.update(order_now="Nothing left to order", module_ordering_date="", tc_delivery_date="",
+                   balance_after_order_mwp=C.mw(p.get("balance_ordering_mwp")) or "0.0",
+                   remaining_orders="None - no further order is planned", phase="")
+        return sec
+    oc = C.phase_context({}, p, orders[0][2])
+    sec.update({k: oc[k] for k in ("module_quantity_mwp", "module_ordering_date", "tc_delivery_date",
+                                   "balance_after_order_mwp", "remaining_orders", "phase")})
+    sec["order_now"] = f"{oc['module_quantity_mwp']} MWp" + (f" ({oc['phase']})" if oc["phase"] else "")
+    return sec
 
 
 def ev_ftc_unreachable(d: Data, t, dry: bool) -> List[Event]:
@@ -729,9 +780,41 @@ def ev_aop_due(d: Data, t, dry: bool) -> List[Event]:
     return out
 
 
+def ev_lta_breach(d: Data, t, dry: bool) -> List[Event]:
+    """The LTA is later than the AOP - the SCOD for PPA contracts, as in the
+    Ordering Schedule's own LTA check: L1 / L2 / L3 at the days late in config
+    levels. Where either date is missing there is nothing to compare, so
+    nothing is sent. Closes when the LTA is back on or before its basis."""
+    stages = alerts.config_stages(t, {"1": 30, "2": 90, "3": 180})
+    cod, out, seen = d.cod(), [], set()
+    for p in d.projects:
+        risk = p.get("lta_risk") or {}
+        late = risk.get("days_late")
+        pid = str(p.get("project_id"))
+        if late is None or late <= 0 or pid in seen:
+            continue
+        info = cod.get(pid) or {}
+        if info.get("achieved"):
+            continue            # COD done: the connectivity no longer holds anything up
+        hit = _level_for(stages, late, before=False)
+        if not hit:
+            continue
+        seen.add(pid)
+        lv, n = hit
+        ctx = _cod_context(d, p, info)
+        ctx.update(C.lta_vs_basis(p))
+        ctx["aop_date"] = p.get("aop_plan") or ctx.get("aop_date", "")
+        ctx["lta_order_note"] = C.lta_order_note(p)
+        ctx["remaining_orders"] = C.order_lines(p)
+        ctx["escalation_level"] = f"LTA {late} days after the {risk.get('basis')} (level {lv} from {n} days)"
+        out.append(Event(f"{t.key}:{pid}:{p.get('lta')}:{risk.get('basis_date')}:L{lv}", ctx, p, level=lv,
+                         case_key=f"{t.key}:{pid}"))
+    return out
+
+
 TRIGGERS = {
     "ordering_due": ev_ordering_due, "ordering_today": ev_ordering_today, "ordering_overdue": ev_ordering_overdue,
-    "date_change": ev_date_change, "ftc_unreachable": ev_ftc_unreachable, "vendor_shift": ev_vendor_shift,
+    "date_change": ev_date_change, "lta_breach": ev_lta_breach, "ftc_unreachable": ev_ftc_unreachable, "vendor_shift": ev_vendor_shift,
     "awaiting_grn": ev_awaiting_grn, "checklist_missing": ev_checklist_missing, "site_stock_low": ev_site_stock_low,
     "po_detected": ev_po_detected, "sync_failed": ev_sync_failed, "weekly_digest": ev_weekly_digest,
     "project_delay": ev_project_delay, "aop_due": ev_aop_due,
@@ -852,6 +935,8 @@ def deliver(db: Session, t, ev: Event, d: Data, triggered_by: str, dry_run: bool
             alerts.discard_if_unsent(db, alert)
     if ev.watch and status in ("sent", "test", "no_recipients"):
         _watch_set(db, *ev.watch)
+        for w in ev.also_watch:
+            _watch_set(db, *w)
     db.commit()
     return {**row, "status": status, "detail": detail, "log_id": log.id,
             "alert_id": log.alert_id}
