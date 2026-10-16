@@ -67,6 +67,14 @@ def _text_unedited(db: Session, t) -> bool:
     return last.subject == t.subject and last.body == t.body
 
 
+def _name_unedited(db: Session, t) -> bool:
+    """No person has renamed the template since the system last wrote it."""
+    last = (db.query(models.EmailTemplateVersion)
+            .filter(models.EmailTemplateVersion.template_key == t.key, models.EmailTemplateVersion.changed_by == "system")
+            .order_by(models.EmailTemplateVersion.version.desc()).first())
+    return last is None or last.name == t.name
+
+
 def seed_templates(db: Session) -> int:
     """Add catalogue templates that are not in the database yet. Never
     overwrites an administrator's edits. Returns how many were added."""
@@ -117,10 +125,13 @@ def seed_templates(db: Session) -> int:
                       ("date_change", "One email, two sections: the date change with its variance and remarks, and the ordering impact"),
                       ("ordering_due_30", "Order now, by when, and what is left to order after it"),
                       ("ordering_due_today", "Order now, by when, and what is left to order after it"),
-                      ("ordering_overdue", "Shows what is left to order after this order and what is still to come")):
+                      ("ordering_overdue", "Shows what is left to order after this order and what is still to come"),
+                      ("lta_beyond_aop", "Compared with the AOP only - no SCOD rows; Anticipated Impact added")):
         t = db.get(models.EmailTemplate, key)
         src = next((x for x in catalogue.TEMPLATES if x["key"] == key), None)
-        if t and src and _text_unedited(db, t) and (t.body != src["body"] or t.subject != src["subject"]):
+        if t and src and _text_unedited(db, t) and (t.body != src["body"] or t.subject != src["subject"] or t.name != src["name"]):
+            if _name_unedited(db, t):
+                t.name = src["name"]
             t.subject, t.body, t.description = src["subject"], src["body"], src["description"]
             t.version, t.updated_at = (t.version or 1) + 1, datetime.utcnow()
             db.add(version_row(t, "system", note))
