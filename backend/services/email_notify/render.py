@@ -109,10 +109,18 @@ def for_browser(html_text: str) -> str:
     uri = "data:image/jpeg;base64," + base64.b64encode(banner_bytes()).decode()
     return html_text.replace(f"cid:{BANNER_CID}", uri)
 # "View in Akasha: <link>" lines become buttons, not table rows.
+def _danger(value: str) -> Tuple[bool, str, str]:
+    """(is a danger, the value, why) for a value written "!! value || why"."""
+    if not (value or "").startswith("!! "):
+        return False, value, ""
+    v, _, why = value[3:].partition(" || ")
+    return True, v.strip(), why.strip()
+
+
 def _no_data(value: str) -> bool:
     """A value that says there is nothing to show - the row is left out."""
     v = re.sub(r"<[^>]+>", "", value or "").strip()
-    v = (v[3:] if v.startswith("!! ") else v).strip().strip(".").strip()
+    v = _danger(v)[1].strip().strip(".").strip()
     return v == "" or v.lower() in {NA.lower(), "n/a", "-", "\u2014"}
 
 
@@ -125,6 +133,7 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
     # Escape the template's own text, then fill values (escaped themselves).
     lines = fill(html.escape(text or "", quote=False).replace("&#x27;", "'"), ctx, as_html=True).split("\n")
     blocks, para, rows, links = [], [], [], []
+    why_list: List[Tuple[str, str]] = []      # (row, why) for each flagged row, in order
     heading = []        # a section heading waits until the section has something to show
     shown = []          # sections already on the page
 
@@ -142,16 +151,29 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
             blocks.append(f'<p style="{FONT}margin:0 0 16px;font-size:14px;line-height:1.6;color:#1f2937;">{_inline(" ".join(para))}</p>')
             para.clear()
 
+    def cell(k: str, v: str) -> str:
+        """A value cell. A danger is red on a light red wash (the critical status
+        colours) with a ⚠ that links to its reason, and gives it on hover."""
+        bad, val, why = _danger(v)
+        if not bad:
+            return _inline(val)
+        if not why:
+            return f'&#9888;&nbsp;{_inline(val)}'
+        why_list.append((k, why))
+        n = len(why_list)
+        return (f'<a href="#why-{n}" title="{html.escape(why)}" style="color:#b42318;text-decoration:none;">&#9888;</a>&nbsp;'
+                f'{_inline(val)}<div style="{FONT}font-size:11.5px;font-weight:400;line-height:1.45;color:#7a271a;margin-top:3px;">'
+                f'Why: {_inline(why)}</div>')
+
     def flush_rows():
         if rows:
             emit_heading()
-            # A value starting "!! " is a danger: red text on a light red wash (the critical status colours).
             trs = "".join(
                 f'<tr><td style="{FONT}font-size:12.5px;line-height:1.45;padding:8px 14px;border-top:{"0" if n == 0 else "1px solid " + RULE};'
                 f'color:{MUTED};width:32%;vertical-align:top;">{k}</td>'
                 f'<td style="{FONT}font-size:13.5px;line-height:1.45;padding:8px 14px;border-top:{"0" if n == 0 else "1px solid " + RULE};'
-                f'color:{"#b42318" if v.startswith("!! ") else INK};font-weight:600;vertical-align:top;border-left:1px solid {RULE};'
-                f'{"background:#fdecea;" if v.startswith("!! ") else ""}">{_inline(v[3:] if v.startswith("!! ") else v)}</td></tr>'
+                f'color:{"#b42318" if _danger(v)[0] else INK};font-weight:600;vertical-align:top;border-left:1px solid {RULE};'
+                f'{"background:#fdecea;" if _danger(v)[0] else ""}">{cell(k, v)}</td></tr>'
                 for n, (k, v) in enumerate(rows))
             blocks.append(f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" '
                           f'style="border:1px solid {RULE};border-radius:8px;border-collapse:separate;margin:0 0 18px;background:#ffffff;">{trs}</table>')
@@ -191,12 +213,26 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
         flush_rows()
         para.append(line)
     flush_para(); flush_rows()
+    if why_list:
+        # Where the ⚠ links to: each flagged row and why, in plain words.
+        items = "".join(
+            f'<div style="margin:0 0 6px;"><a id="why-{i}" name="why-{i}"></a>'
+            f'<span style="color:#b42318;font-weight:700;">&#9888; {k}</span> - {_inline(w)}</div>'
+            for i, (k, w) in enumerate(why_list, 1))
+        blocks.append(f'<table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="margin:0 0 18px;">'
+                      f'<tr><td style="{FONT}padding:12px 16px;border:1px solid #f4c7c3;background:#fff8f7;border-radius:6px;'
+                      f'font-size:12.5px;line-height:1.5;color:#1f2937;">'
+                      f'<div style="font-size:11px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#b42318;margin:0 0 6px;">'
+                      f'Why this is flagged</div>{items}</td></tr></table>')
     return "\n".join(blocks), links
 
 
 def body_text(text: str, ctx: Dict) -> str:
     out, pending, heads = [], None, 0
-    plain = re.sub(r"(:\s*)!! ", r"\1", re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx)))      # the danger marker is for the HTML only
+    # A danger reads "⚠ value (why: ...)" in plain text.
+    plain = re.sub(r"(:\s*)!! ([^\n]*?) \|\| ([^\n]*)", "\\1\u26a0 \\2 (why: \\3)",
+                   re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx)))
+    plain = re.sub(r"(:\s*)!! ", "\\1\u26a0 ", plain)
     for line in plain.split("\n"):
         kv = KV_RE.match(line.strip())
         if kv and not line.strip().endswith(".") and _no_data(kv.group(2)):

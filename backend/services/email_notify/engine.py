@@ -499,7 +499,7 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
             b, a = C.parse_day(before), C.parse_day(now_v)
             ctx = d.context(p)
             ctx.update(C.lta_vs_basis(p))
-            ctx["aop_date"] = p.get("aop_plan") or ""
+            ctx["aop_date"] = _aop_flagged(p)
             ctx["ai_aop_estimate"] = _ai_aop_estimate(d, p)
             ctx["anticipated_impact"] = _anticipated_impact(p)
             ctx.update(_ordering_section(d, p, moved[1] if moved else None))
@@ -537,8 +537,22 @@ def _ai_aop_estimate(d: Data, p: dict) -> str:
     except ValueError:
         return ""
     aop = C.parse_day(p.get("aop_plan"))
-    # Later than the AOP is a danger: "!! " shows the row in red (render.py).
-    return ("!! " if aop and est > aop else "") + C.fmt_day(est) + (f" - {_gap((est - aop).days, 'the AOP')}" if aop else "")
+    text = C.fmt_day(est) + (f" - {_gap((est - aop).days, 'the AOP')}" if aop else "")
+    if aop and est > aop:
+        # Later than the AOP is a danger, shown red with why (render.py).
+        return (f"!! {text} || The AI plan, working from each block's progress on site, forecasts the last FTC "
+                f"{(est - aop).days} days after the AOP - at today's pace the AOP will be missed. An estimate, not a P6 date.")
+    return text
+
+
+def _aop_flagged(p: dict) -> str:
+    """The AOP date, flagged as a danger with why when the LTA is later than it."""
+    aop = p.get("aop_plan") or ""
+    late = C.lta_vs_basis(p).get("lta_days_late")
+    if not aop or late is None or late <= 0:
+        return aop
+    return (f"!! {aop} || The LTA ({p.get('lta')}) is {late} days after this AOP. The plant cannot export before "
+            f"the LTA, so this AOP cannot be met unless the LTA is brought forward or the AOP is re-planned.")
 
 
 def _anticipated_impact(p: dict) -> str:
@@ -893,7 +907,7 @@ def ev_lta_breach(d: Data, t, dry: bool) -> List[Event]:
         lv, n = hit
         ctx = _cod_context(d, p, info)
         ctx.update(C.lta_vs_basis(p))
-        ctx["aop_date"] = p.get("aop_plan") or ctx.get("aop_date", "")
+        ctx["aop_date"] = _aop_flagged(p) or ctx.get("aop_date", "")
         ctx["lta_order_note"] = C.lta_order_note(p)
         ctx["anticipated_impact"] = _anticipated_impact(p)
         ctx["remaining_orders"] = C.order_lines(p)
