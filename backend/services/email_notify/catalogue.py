@@ -39,7 +39,6 @@ VARIABLES = {
     "balance_ordering_mwp":  ("Balance to order (MWp)", "Capacity not yet on a PO (SAP)", "120.5"),
     "ordered_mwp":           ("Ordered till now (MWp)", "Module POs in SAP (ZPSPS007)", "287.5"),
     "lta_vs_basis_flag":     ("LTA against AOP (flagged)", "The same, shown in red when the LTA is later than the AOP", "!! 92 days after the AOP (31-Mar-27)"),
-    "anticipated_impact":    ("Anticipated impact", "What a late LTA is expected to mean - labelled an estimate, never a P6 date", "Anticipated (an estimate): the project cannot export before the LTA..."),
     "ai_aop_estimate":       ("Estimated AOP (AI)", "The AI plan's forecast of the project's last FTC, from each block's progress on site, and how it compares with the AOP", "14-Nov-26 - 139 days after the AOP"),
     "order_now":             ("Order now", "This order's quantity in MWp, or that nothing is left to order", "120.5 MWp"),
     "ordering_date_before":  ("Ordering date before this change", "The ordering date Akasha last recorded, or No change", "21-Nov-26"),
@@ -246,7 +245,6 @@ Estimated AOP (AI): {{ai_aop_estimate}}
 FTC Date (P6): {{ftc_date}}
 LTA Date: {{lta_date}}
 LTA Against AOP: {{lta_vs_basis_flag}}
-Anticipated Impact: {{anticipated_impact}}
 
 ## Ordering impact
 Order Now: {{order_now}}
@@ -282,7 +280,6 @@ Ordered Till Now: {{ordered_mwp}} MWp
 Balance to Order: {{balance_ordering_mwp}} MWp
 Orders Still to Place: {{remaining_orders}}
 Ordering: {{lta_order_note}}
-Anticipated Impact: {{anticipated_impact}}
 
 Required Action: PMAG to review the {{lta_basis}} against the LTA with Projects and TC. TC Ordering to check whether any order not yet placed can move later, to match the LTA.
 

@@ -126,7 +126,7 @@ def seed_templates(db: Session) -> int:
                       ("ordering_due_30", "Order now, by when, and what is left to order after it"),
                       ("ordering_due_today", "Order now, by when, and what is left to order after it"),
                       ("ordering_overdue", "Shows what is left to order after this order and what is still to come"),
-                      ("lta_beyond_aop", "Compared with the AOP only - no SCOD rows; Anticipated Impact added")):
+                      ("lta_beyond_aop", "Compared with the AOP only - no SCOD rows")):
         t = db.get(models.EmailTemplate, key)
         src = next((x for x in catalogue.TEMPLATES if x["key"] == key), None)
         if t and src and _text_unedited(db, t) and (t.body != src["body"] or t.subject != src["subject"] or t.name != src["name"]):
@@ -501,7 +501,6 @@ def ev_date_change(d: Data, t, dry: bool) -> List[Event]:
             ctx.update(C.lta_vs_basis(p))
             ctx["aop_date"] = _aop_flagged(p)
             ctx["ai_aop_estimate"] = _ai_aop_estimate(d, p)
-            ctx["anticipated_impact"] = _anticipated_impact(p)
             ctx.update(_ordering_section(d, p, moved[1] if moved else None))
             src, why = _change_origin(d.db, p, f, a)
             w = d.db.get(models.EmailWatch, (str(pid), f"date:{f}"))
@@ -538,42 +537,14 @@ def _ai_aop_estimate(d: Data, p: dict) -> str:
         return ""
     aop = C.parse_day(p.get("aop_plan"))
     text = C.fmt_day(est) + (f" - {_gap((est - aop).days, 'the AOP')}" if aop else "")
-    if aop and est > aop:
-        # Later than the AOP is a danger, shown red with why (render.py).
-        return (f"!! {text} || The AI plan, working from each block's progress on site, forecasts the last FTC "
-                f"{(est - aop).days} days after the AOP - at today's pace the AOP will be missed. An estimate, not a P6 date.")
-    return text
+    return ("!! " if aop and est > aop else "") + text      # later than the AOP: shown in danger red
 
 
 def _aop_flagged(p: dict) -> str:
-    """The AOP date, flagged as a danger with why when the LTA is later than it."""
+    """The AOP date, shown in danger red when the LTA is later than it."""
     aop = p.get("aop_plan") or ""
     late = C.lta_vs_basis(p).get("lta_days_late")
-    if not aop or late is None or late <= 0:
-        return aop
-    return (f"!! {aop} || The LTA ({p.get('lta')}) is {late} days after this AOP. The plant cannot export before "
-            f"the LTA, so this AOP cannot be met unless the LTA is brought forward or the AOP is re-planned.")
-
-
-def _anticipated_impact(p: dict) -> str:
-    """What a late LTA is expected to mean, in words - an estimate from the
-    LTA and the AOP / SCOD, labelled as one. Empty without both dates."""
-    risk = C.lta_vs_basis(p)
-    days = risk.get("lta_days_late")
-    if days is None:
-        return ""
-    basis, when, lta = "AOP", risk.get("lta_basis_date") or "", p.get("lta") or ""
-    if days > 0:
-        s = (f"Anticipated (an estimate, not a P6 date): the project cannot export before the LTA ({lta}), {days} days after the "
-             f"{basis} ({when}), so the {basis} is at risk from transmission, not construction alone")
-        if p.get("lta_moves"):
-            s += "; orders not yet placed move later to match - see the ordering impact"
-        elif (p.get("balance_ordering_mwp") or 0) > 0:
-            s += "; modules not yet ordered need not be ordered for the earlier date"
-        return s + "."
-    if days < 0:
-        return f"The LTA ({lta}) is {-days} day{'' if days == -1 else 's'} before the {basis} ({when}) - transmission is not what holds the {basis} back."
-    return f"The LTA ({lta}) is on the {basis} ({when}) - there is no slack for any other delay."
+    return ("!! " if aop and late is not None and late > 0 else "") + aop
 
 
 def _lta_move_impact(p: dict) -> str:
@@ -909,7 +880,6 @@ def ev_lta_breach(d: Data, t, dry: bool) -> List[Event]:
         ctx.update(C.lta_vs_basis(p))
         ctx["aop_date"] = _aop_flagged(p) or ctx.get("aop_date", "")
         ctx["lta_order_note"] = C.lta_order_note(p)
-        ctx["anticipated_impact"] = _anticipated_impact(p)
         ctx["remaining_orders"] = C.order_lines(p)
         ctx["escalation_level"] = f"LTA {late} days after the AOP (level {lv} from {n} days)"
         out.append(Event(f"{t.key}:{pid}:{p.get('lta')}:{risk.get('lta_basis_date')}:L{lv}", ctx, p, level=lv,

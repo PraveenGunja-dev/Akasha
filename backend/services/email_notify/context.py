@@ -212,10 +212,8 @@ def lta_vs_basis(p: dict) -> Dict:
     text = (f"{n} {unit} after the {basis} ({when})" if days > 0
             else f"{n} {unit} before the {basis} ({when})" if days < 0 else f"on the {basis} ({when})")
     return {"lta_basis": basis, "lta_basis_date": when, "lta_days_late": days, "lta_vs_basis": text,
-            # for a table row: shown as a danger when the LTA is later than the AOP, with why
-            "lta_vs_basis_flag": (f"!! {text} || Connectivity comes after the AOP: construction can finish, "
-                                  f"but no power can flow before the LTA, so the AOP cannot be met unless the LTA comes forward."
-                                  if days > 0 else text)}
+            # for a table row: "!! " shows it in danger red when the LTA is later than its basis
+            "lta_vs_basis_flag": ("!! " if days > 0 else "") + text}
 
 
 def lta_order_note(p: dict) -> str:
