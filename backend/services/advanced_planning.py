@@ -164,10 +164,21 @@ def _load(db: Session, project_ids: Optional[List[str]] = None) -> Dict[str, Dic
 
 
 # ── Measured behaviour per project ──────────────────────────────────────────
+# Units logged may exceed the plan by this much (rounding) and still be read as progress. More than that
+# means the units do not describe the work (an activity can carry several assignments, or the plan quantity
+# is a placeholder), so P6's own percent complete is used instead - never "more than done".
+UNITS_TOLERANCE = 1.05
+
+
 def _frac(a: Dict[str, Any]) -> float:
+    """How far a block's stage is, 0 to 1."""
     if a["actual_finish"]:
         return 1.0
-    if a["qty_planned"] > 0:
+    # Not started is not progress, whatever units are logged against it: 85 not-started stage rows (8 projects)
+    # carry units equal to their plan, which counted work that had not begun as done.
+    if a.get("status") == "Not Started" and not a.get("actual_start"):
+        return 0.0
+    if a["qty_planned"] > 0 and a["qty_actual"] <= a["qty_planned"] * UNITS_TOLERANCE:
         return max(0.0, min(1.0, a["qty_actual"] / a["qty_planned"]))
     return max(0.0, min(1.0, a["pct"] if a["pct"] <= 1 else a["pct"] / 100))
 
@@ -644,8 +655,10 @@ def _plan_project(p: Dict[str, Any], rows: List[Dict[str, Any]],
         if not inst:
             continue
         done = sum(1 for a in inst if a["actual_finish"])
-        qp = sum(a["qty_planned"] for a in inst)
-        qa = sum(a["qty_actual"] if not a["actual_finish"] else a["qty_planned"] for a in inst)
+        # The planned-quantity weighted mean of each block's fraction (0 to 1): it can never read above 100%
+        # (a block that logged more units than planned used to push a whole stage to 135%).
+        qp = sum(a["qty_planned"] for a in inst if a["qty_planned"] > 0)
+        qa = sum(_frac(a) * a["qty_planned"] for a in inst if a["qty_planned"] > 0)
         delays = [s["delay_days"] for pl in plans for s in pl["stages"]
                   if s["key"] == k and s.get("delay_days") is not None and not s.get("done")]
         stage_summary.append({
