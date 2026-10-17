@@ -34,6 +34,23 @@ export interface AlertDetailData extends Alert {
   can_acknowledge: boolean; is_admin: boolean; you: { email: string | null; name: string };
 }
 
+/** What Akasha emailed the signed-in person (GET /api/alerts/inbox). */
+export interface InboxAction {
+  id: number; kind: AlertKind; template_name: string; severity: 'info' | 'action' | 'critical' | null;
+  project_name: string | null; phase: string | null; level: Level; due_date: string | null; last_sent_at: string | null; test: boolean;
+}
+export interface InboxMail {
+  log_id: number; at: string | null; subject: string | null; template_name: string; project_name: string | null;
+  level: Level | null; role: 'to' | 'cc'; alert_id: number | null; status: string;
+}
+export interface Inbox { email: string | null; count: number; action: InboxAction[]; recent: InboxMail[] }
+
+/** One email as sent, with its HTML for the browser (GET /api/alerts/mail/:id). */
+export interface MailData {
+  id: number; at: string | null; subject: string | null; level: Level | null; status: string; to: string[]; cc: string[];
+  alert_id: number | null; project_name: string | null; template_name: string; html: string;
+}
+
 export interface AckInput { note?: string; expected_date?: string; on_behalf_of?: string }
 
 async function call<T>(path: string, init?: RequestInit): Promise<T> {
@@ -48,6 +65,8 @@ async function call<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const alertsApi = {
   mine: (status: 'open' | 'all') => call<{ email: string | null; alerts: Alert[] }>(`/mine?status=${status}`),
+  inbox: () => call<Inbox>('/inbox'),
+  mail: (logId: number) => call<MailData>(`/mail/${logId}`),
   get: (id: number) => call<AlertDetailData>(`/${id}`),
   acknowledge: (id: number, body: AckInput) =>
     call<AlertDetailData>(`/${id}/acknowledge`, { method: 'POST', body: JSON.stringify(body) }),

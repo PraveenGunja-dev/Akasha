@@ -907,7 +907,16 @@ def get_module_deliveries_summary(
         priority_overrides=parsed_priorities
     )
 
+    # Plan versions (services/plan_versions.py): the standard view saves a new
+    # version when the plan has changed; every view flags the projects that
+    # version moved, with the old plan beside the revised one.
+    from services import plan_versions
+    if plan_versions.is_standard_view(scenario, priorities, portfolio, phase):
+        plan_versions.record(projects)
+    plan_version = plan_versions.annotate(projects)
+
     return {
+        "plan_version": plan_version,
         "generated_at": datetime.now().isoformat(),
         "totals": totals,
         "projects": projects,
@@ -922,6 +931,13 @@ def get_module_deliveries_summary(
             "with_epc": sum(1 for p in projects if p["epc"]),
         },
     }
+
+
+@router.get("/plan-versions")
+def get_plan_versions(limit: int = 30):
+    """The saved plan versions, newest first: what changed, and which projects it moved."""
+    from services import plan_versions
+    return plan_versions.history(min(max(limit, 1), 100))
 
 
 from pydantic import BaseModel

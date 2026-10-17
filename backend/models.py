@@ -1521,3 +1521,22 @@ class ModuleOrderApprovalEvent(Base):
     kind = Column(String, nullable=False)
     actor = Column(String, nullable=True)
     detail = Column(Text, nullable=True)
+
+
+class ModulePlanVersion(Base):
+    """The Ordering Schedule's plan, saved each time it changes
+    (services/plan_versions.py). The previous version is never edited: it is
+    marked superseded and kept, so everyone can see what the plan was. The
+    active version is the revised plan the rest of Akasha follows."""
+    __tablename__ = "module_plan_version"
+
+    id = Column(Integer, primary_key=True)
+    version = Column(Integer, nullable=False, index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    status = Column(String, nullable=False, default="active", index=True)    # active / superseded
+    superseded_at = Column(DateTime, nullable=True)
+    first_month = Column(String, nullable=True)       # the first month of the plan (it rolls on the 1st)
+    cause = Column(Text, nullable=True)               # what changed, in a line
+    snapshot = Column(JSON, nullable=False)           # {mapping id: {name, months, inputs, phases}}
+    diff = Column(JSON, nullable=True)                # vs the version before: {mapping id: {previous, revised, own, because, previous_phases}}
+    fingerprint = Column(String, nullable=False)

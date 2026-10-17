@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext';
 import DashboardSwitcher from '../auth/DashboardSwitcher';
 import { toast } from 'sonner';
 import NotificationDropdown from './NotificationDropdown';
+import AlertsBell from '../../features/alerts/AlertsBell';
 import PMAGThreadPanel from './PMAGThreadPanel';
 
 /* The portfolio / phase filters live in the URL, and any link that navigates to
@@ -259,6 +260,7 @@ export default function TopHeader({ selectedProject, setSelectedProject, masterP
         </button>
 
         {/* Bell */}
+        <AlertsBell />
         <div className="relative" ref={notificationRef}>
             <button onClick={() => setShowNotifications(!showNotifications)} className="relative p-2 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors">
             <Bell className="w-4 h-4" />

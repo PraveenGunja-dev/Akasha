@@ -11,6 +11,7 @@ import { useAuth } from '../../context/AuthContext';
 import { btn, fmtWhen } from '../admin/adminApi';
 import { AlertDialog } from '../admin/email/AlertsView';
 import AlertDetail, { LevelBadge, alertState } from './AlertDetail';
+import { EmailFrame } from './EmailFrame';
 import { alertsApi, fmtDay } from './alertsApi';
 import type { Alert, AlertDetailData } from './alertsApi';
 
@@ -43,6 +44,19 @@ export function AlertPage() {
         {error ? <p role="alert" className="text-[13px] text-[var(--status-critical-fg)]">{error}</p>
           : !data ? <div className="flex justify-center py-10"><Loader size="md" label="Loading the alert…" /></div>
             : <AlertDetail data={data} onChange={setData} />}
+      </div>
+    </Shell>
+  );
+}
+
+/* An email that is not an alert (a plain notice, a digest): /mail/:id, the same
+   template as it was sent. Opened from the Alerts panel. */
+export function MailPage() {
+  const id = Number(useParams().id);
+  return (
+    <Shell back={{ to: '/alerts', label: 'My alerts' }}>
+      <div className="bento-card p-4 sm:p-5">
+        {Number.isFinite(id) ? <EmailFrame logId={id} /> : <p role="alert" className="text-[13px] text-[var(--status-critical-fg)]">No such email</p>}
       </div>
     </Shell>
   );

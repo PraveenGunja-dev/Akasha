@@ -6,7 +6,7 @@ Sign-in identifies the person; only a To recipient of the alert (or an
 administrator recording it for one) can acknowledge, and the page needs a
 deliberate click - a mail scanner fetching the link acknowledges nothing.
 """
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from urllib.parse import quote
 from typing import List, Optional
 
@@ -123,6 +123,73 @@ def my_alerts(status: str = Query("open", pattern="^(open|all)$"), db: Session =
         mine = next((x for x in r["recipients"] if x["email"].lower() == email), None)
         r["my_ack"] = mine["acknowledged_at"] if mine else None
     return {"email": user.email, "alerts": rows}
+
+
+def _addressed(l: "models.EmailLog", email: str) -> Optional[str]:
+    """'to' or 'cc' when this email was addressed to `email`, else None."""
+    if email in {x.lower() for x in (l.to_addrs or [])}:
+        return "to"
+    if email in {x.lower() for x in (l.cc_addrs or [])}:
+        return "cc"
+    return None
+
+
+@router.get("/inbox")
+def inbox(days: int = Query(30, ge=1, le=120), db: Session = Depends(get_db),
+          user: models.AkashaUser = Depends(current_user)):
+    """Everything Akasha emailed this person - for the Alerts panel every
+    dashboard carries. `action`: open alerts they are a To recipient of and
+    have not acknowledged. `recent`: every email addressed to them (To or Cc)
+    in the last `days`, newest first. Sign-in emails (a temporary password)
+    are never listed."""
+    email = (user.email or "").strip().lower()
+    if not email:
+        return {"email": None, "count": 0, "action": [], "recent": []}
+    ids = [r.alert_id for r in db.query(models.EmailAlertRecipient)
+           .filter(models.EmailAlertRecipient.email.ilike(email), models.EmailAlertRecipient.acknowledged_at.is_(None)).all()]
+    open_alerts = (db.query(models.EmailAlert)
+                   .filter(models.EmailAlert.id.in_(ids or [0]), models.EmailAlert.status == "open")
+                   .order_by(models.EmailAlert.last_sent_at.desc().nullslast()).limit(100).all())
+    action = []
+    for a in open_alerts:
+        t = db.get(models.EmailTemplate, a.template_key)
+        action.append({"id": a.id, "kind": a.kind, "template_name": t.name if t else a.template_key,
+                       "severity": t.severity if t else None, "project_name": a.project_name, "phase": a.phase,
+                       "level": a.level or 1, "due_date": a.due_date, "last_sent_at": _iso(a.last_sent_at), "test": bool(a.test)})
+    since = datetime.utcnow() - timedelta(days=days)
+    logs = (db.query(models.EmailLog)
+            .filter(models.EmailLog.created_at >= since, models.EmailLog.status.in_(("sent", "test")),
+                    ~models.EmailLog.template_key.like("account_%"))
+            .order_by(models.EmailLog.id.desc()).limit(3000).all())
+    names, recent = {}, []
+    for l in logs:
+        role = _addressed(l, email)
+        if not role:
+            continue
+        if l.template_key not in names:
+            t = db.get(models.EmailTemplate, l.template_key)
+            names[l.template_key] = t.name if t else l.template_key
+        recent.append({"log_id": l.id, "at": _iso(l.created_at), "subject": l.subject, "template_name": names[l.template_key],
+                       "project_name": l.project_name, "level": l.level, "role": role, "alert_id": l.alert_id,
+                       "status": l.status})
+        if len(recent) >= 40:
+            break
+    return {"email": user.email, "count": len(action), "action": action, "recent": recent}
+
+
+@router.get("/mail/{log_id}")
+def mail(log_id: int, db: Session = Depends(get_db), user: models.AkashaUser = Depends(current_user)):
+    """One email as it was sent - the same template, in the browser - for a
+    person it was addressed to (To or Cc), or an email administrator."""
+    from services.email_notify import render
+    l = db.get(models.EmailLog, log_id)
+    email = (user.email or "").strip().lower()
+    if not l or not (email and _addressed(l, email) or (_is_admin(db, user) and not (l.template_key or "").startswith("account_"))):
+        raise HTTPException(status_code=404, detail="No such email")
+    t = db.get(models.EmailTemplate, l.template_key)
+    return {"id": l.id, "at": _iso(l.created_at), "subject": l.subject, "level": l.level, "status": l.status,
+            "to": l.to_addrs or [], "cc": l.cc_addrs or [], "alert_id": l.alert_id, "project_name": l.project_name,
+            "template_name": t.name if t else l.template_key, "html": render.for_browser(l.body_html or "")}
 
 
 @router.get("/{alert_id}")

@@ -10,6 +10,7 @@ import type { Tone } from '../../components/ui/primitives';
 import { btn, field, fmtWhen } from '../admin/adminApi';
 import { alertsApi, fmtDay, isoFromDay, todayIst } from './alertsApi';
 import { ApprovalDialog } from '../modules/OrderApproval';
+import { EmailFrame } from './EmailFrame';
 import type { ModuleProject } from '../modules/types';
 import type { AlertDetailData, AlertEvent, Level } from './alertsApi';
 
@@ -79,6 +80,8 @@ export default function AlertDetail({ data, onChange }: { data: AlertDetailData;
           </p>
         )}
 
+      <EmailSection emails={a.emails_sent} />
+
       <div className="grid gap-4 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
         <section aria-labelledby="alert-recipients">
           <h3 id="alert-recipients" className="mb-1.5 text-[12px] font-semibold text-foreground">Sent to (To)</h3>
@@ -125,6 +128,30 @@ export default function AlertDetail({ data, onChange }: { data: AlertDetailData;
         </section>
       </div>
     </div>
+  );
+}
+
+/* The email itself, in the same template it was sent in. The latest is shown;
+   an earlier one (an escalation's first notice, say) is one pick away. */
+function EmailSection({ emails }: { emails: AlertDetailData['emails_sent'] }) {
+  const sent = emails.filter(e => e.status === 'sent' || e.status === 'test');
+  const [pick, setPick] = useState<number | null>(null);
+  if (sent.length === 0) return null;
+  const current = sent.find(e => e.id === pick) ?? sent[sent.length - 1];
+  return (
+    <section aria-labelledby="alert-email">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <h3 id="alert-email" className="text-[12px] font-semibold text-foreground">The email</h3>
+        {sent.length > 1 && (
+          <label className="flex items-center gap-1.5 text-[11.5px] text-muted-foreground">Email
+            <select value={current.id} onChange={e => setPick(Number(e.target.value))} className={cx(field, 'w-auto py-1 text-[11.5px]')}>
+              {sent.slice().reverse().map(e => <option key={e.id} value={e.id}>{fmtWhen(e.at)}{e.level ? ` · L${e.level}` : ''}</option>)}
+            </select>
+          </label>
+        )}
+      </div>
+      <EmailFrame logId={current.id} />
+    </section>
   );
 }
 

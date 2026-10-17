@@ -3,6 +3,7 @@ import { motion } from 'framer-motion';
 import { Moon, Sun } from 'lucide-react';
 import { Sidebar, SidebarBody, SidebarLink, SIDEBAR_TRANSITION } from '../ui/sidebar';
 import DashboardSwitcher from '../auth/DashboardSwitcher';
+import AlertsBell from '../../features/alerts/AlertsBell';
 import { useTheme } from '../../hooks/useTheme';
 
 /* The app's left rail and top header, shared by every signed-in screen
@@ -91,6 +92,7 @@ export function AppHeader({ kicker, title, children }: { kicker: string; title: 
       </div>
       <div className="flex items-center gap-1.5 sm:gap-2">
         {children}
+        <AlertsBell />
         <button type="button" onClick={toggleTheme} aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
           className="rounded-lg p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
           {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}

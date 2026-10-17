@@ -194,10 +194,12 @@ def body_html(text: str, ctx: Dict) -> Tuple[str, List[Tuple[str, str]]]:
     return "\n".join(blocks), links
 
 
-def body_text(text: str, ctx: Dict) -> str:
+def body_text(text: str, ctx: Dict, drop_links: bool = False) -> str:
     out, pending, heads = [], None, 0
     plain = re.sub(r"(:\s*)!! ", lambda m: m.group(1) + "⚠ ", re.sub(r"\*\*(.+?)\*\*", r"\1", fill(text, ctx)))      # danger: a warning sign before the value
     for line in plain.split("\n"):
+        if drop_links and LINK_LINE.match(line.strip()):
+            continue                                   # the one button (the alert) carries the link
         kv = KV_RE.match(line.strip())
         if kv and not line.strip().endswith(".") and _no_data(kv.group(2)):
             continue                                   # no data: the row is left out
@@ -287,8 +289,11 @@ def layout(inner: str, severity: str, ctx: Dict, test_banner: str = "", ack: Opt
     buttons = []
     if ack and ack.get("url"):
         buttons.append(_button(ack.get("button") or "Acknowledge in Akasha", ack["url"], True))
-    for i, (lbl, url) in enumerate(links or []):
-        buttons.append(_button(lbl, url, primary=not buttons))
+    # One button per email. With an alert or approval it opens that section of Akasha (the project is a
+    # link from there); an email with no alert keeps just the first link its template names.
+    if not buttons:
+        for lbl, url in (links or [])[:1]:
+            buttons.append(_button(lbl, url, primary=True))
     actions = ""
     if ack or buttons:
         ask = (f'<div style="{FONT}font-size:12.5px;line-height:1.5;color:{MUTED};margin:0 0 12px;">{e(ack.get("ask") or "")}</div>'
@@ -340,6 +345,6 @@ def render(template, ctx: Dict, test_banner: str = "", ack: Optional[Dict] = Non
         lv = max(1, min(3, int(ack.get("level") or 1)))
         ack_text = (f"\n\n{LEVEL_BAND[lv][0]} - {ack.get('why') or LEVEL_BAND[lv][3]} {ack.get('ask') or ''}\n"
                     f"{ack.get('button') or 'Acknowledge in Akasha'}: {ack.get('url') or 'the Alerts page in Akasha'}")
-    text_out = body_text(get("body"), ctx) + ack_text + (
+    text_out = body_text(get("body"), ctx, drop_links=bool(ack and ack.get("url"))) + ack_text + (
         "\n\n--\nAutomated message from Akasha. Replies to this address are not monitored.")
     return subj, html_out, text_out

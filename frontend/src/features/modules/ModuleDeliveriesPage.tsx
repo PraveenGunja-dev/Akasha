@@ -16,7 +16,7 @@ import { InfoTip } from '../../components/ui/primitives/InfoTip';
 import { DeliveryLedger, fmtIsoDate } from './DeliveryLedger';
 import { DateHistoryButton, changedToday, changedTodayCell } from './DateChange';
 import { ApprovalDialog, ApprovalMark, ApprovalSummary, CLOSE_POPOVERS, WaitingForApproval, covers, useApprovalRole } from './OrderApproval';
-import { LtaArrow, LtaOriginalNote, LtaRevisedNote, ltaCell } from './ltaMoves';
+import { LtaArrow, LtaOriginalNote, LtaRevisedNote, PlanRevisedBanner, ltaCell } from './ltaMoves';
 import type { LtaMoveInfo } from './ltaMoves';
 import { Link } from 'react-router-dom';
 import { DateChangeReason } from './DateChangeReason';
@@ -1489,6 +1489,7 @@ export default function ModuleDeliveriesPage() {
 
       {/* ── MAIN DATA TABLE ───────────────────────────────────────────────── */}
       <motion.div variants={item} initial="hidden" animate="show" className="bento-card overflow-hidden">
+        {(data as any)?.plan_version && <div className="px-3 pt-2"><PlanRevisedBanner pv={(data as any).plan_version} /></div>}
         {/* Color Legend Bar */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-b border-border bg-card/60 text-[10px]">
           <div className="flex flex-wrap items-center gap-2 sm:gap-3">
@@ -2022,8 +2023,8 @@ export default function ModuleDeliveriesPage() {
                                   <div className="text-[10px] text-fg-tertiary mt-0.5">{theme.tag}</div>
                                 </div>
 
-                                {ltaC.original && <LtaOriginalNote m={ltaC.move} />}
-                                {!ltaC.original && ltaC.movedIn > 0 && <LtaRevisedNote m={ltaC.move} />}
+                                {ltaC.original && <LtaOriginalNote c={ltaC} />}
+                                {!ltaC.original && ltaC.movedIn > 0 && <LtaRevisedNote c={ltaC} phases={cellPhases as any} firstMonth={FORECAST_MONTHS[0]} />}
 
                                 {/* Dynamic Planned / Milestone Section */}
                                 {(() => {
@@ -2364,13 +2365,18 @@ export default function ModuleDeliveriesPage() {
                                       data-lta-src={c.type === 'module' && ltaC.original ? '' : undefined}
                                       data-lta-dest={c.type === 'module' && !ltaC.original && ltaC.movedIn > 0 ? '' : undefined}
                                       className={`relative px-1.5 py-[2px] rounded flex items-center font-bold whitespace-nowrap overflow-hidden max-w-full shadow-sm
-                                      ${c.type === 'module' && !ltaC.original && ltaC.movedIn > 0 ? 'bg-brand-purple/15 text-status-ai-fg border border-brand-purple/40 shadow-brand-purple/20' :
+                                      ${c.type === 'module' && ltaC.original ? 'bg-primary/10 text-primary/80 border border-dotted border-primary/60 opacity-75 shadow-none' :
+                                        c.type === 'module' && ltaC.kind === 'lta' && ltaC.movedIn > 0 ? 'bg-brand-purple/15 text-status-ai-fg border border-brand-purple/40 shadow-brand-purple/20' :
+                                        c.type === 'module' && ltaC.kind === 'plan' && ltaC.movedIn > 0 ? (ltaC.change?.own
+                                          ? 'bg-primary/20 text-primary border border-primary/40 ring-1 ring-brand-blue/70 shadow-primary/20'
+                                          : 'bg-primary/20 text-primary border border-dashed border-brand-blue/80 shadow-primary/20') :
                                         c.type === 'module' ? 'bg-primary/20 text-primary border border-primary/30 shadow-primary/20' :
                                         c.type === 'tc' ? 'bg-status-risk-bg text-status-risk-fg border border-status-risk-border shadow-status-risk-fg/20' :
                                         'bg-status-healthy-bg text-status-healthy-fg border border-status-healthy-border shadow-status-healthy-fg/20'}`}>
                                       {c.type === 'module' && !ltaC.original && ltaC.movedIn > 0 && (
-                                        <span aria-label="Moved by AI for the LTA" title="Moved by AI for the LTA"
-                                          className="absolute left-[1px] top-0 z-30 text-[7px] leading-none text-brand-purple">✦</span>
+                                        <span aria-label={ltaC.kind === 'lta' ? 'Moved by AI for the LTA' : 'Revised plan'}
+                                          title={ltaC.kind === 'lta' ? 'Moved by AI for the LTA' : (ltaC.change?.own ? 'Revised plan - its own dates changed' : 'Revised plan - moved by another project\'s change')}
+                                          className={`absolute left-[1px] top-0 z-30 text-[7px] leading-none ${ltaC.kind === 'lta' ? 'text-brand-purple' : 'text-brand-blue'}`}>{ltaC.kind === 'lta' ? '✦' : '▲'}</span>
                                       )}
                                       {isShifted && !(c.type === 'module' && ltaC.movedIn > 0) && (
                                         <div
@@ -2392,7 +2398,7 @@ export default function ModuleDeliveriesPage() {
                                     </div>
                                   ))}
                                 </div>
-                                {ltaC.original && <LtaArrow steps={ltaC.steps} beyond={ltaC.beyond} to={ltaC.to} />}
+                                {ltaC.original && <LtaArrow steps={ltaC.steps} dir={ltaC.dir} beyond={ltaC.beyond} to={ltaC.to} />}
                               </div>
                             ) : ltaC.underArrow ? null : (
                               <span className="text-muted-foreground/30">-</span>
